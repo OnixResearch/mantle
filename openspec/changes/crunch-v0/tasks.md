@@ -80,7 +80,7 @@ go through JSON export first. This is the correct path for the build pipeline.
 
 ## Phase 7: Bootstrap and self-hosting prep
 
-- [ ] Implement `crunch bootstrap` subcommand that generates seed.ncl from existing Nix store paths
-- [ ] Write hello-world.ncl: C hello world built with crunch
+- [x] Implement `crunch bootstrap` subcommand that generates seed.ncl from existing Nix store paths
+- [x] Write hello-world.ncl: C hello world built with crunch (examples/hello-world.ncl)
 - [ ] Write crunch.ncl: crunch building itself (needs rustc in seed)
-- [ ] Document bootstrap process in crunch/README.md
+- [x] Document bootstrap process in crunch/README.md
