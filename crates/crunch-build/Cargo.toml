@@ -12,6 +12,10 @@ snix-castore = { path = "../../vendor/snix-castore" }
 snix-store = { path = "../../vendor/snix-store" }
 blake3 = "=1.8.2"
 bstr = "1.10"
+digest = "=0.10.7"
+md-5 = "0.10.6"
+sha1 = "0.10.6"
+sha2 = "0.10.8"
 bytes = "1.7"
 data-encoding = "2.6"
 futures = "0.3"

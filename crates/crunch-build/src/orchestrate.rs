@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 
+use digest::Digest;
 use nix_compat::derivation::Derivation;
 use nix_compat::nixhash::{CAHash, NixHash};
 use nix_compat::store_path::StorePath;
@@ -14,6 +15,7 @@ use snix_castore::import::fs::ingest_path;
 use snix_castore::Node;
 use snix_store::nar::{NarCalculationService, SimpleRenderer};
 use snix_store::path_info::PathInfo;
+use tokio::io::AsyncReadExt;
 use tracing::{debug, info};
 
 use crunch_glue::KnownPaths;
@@ -271,7 +273,9 @@ where
                     nar_size,
                     &nar_sha256,
                     &build_output.node,
-                )?;
+                    &self.blob_service,
+                )
+                .await?;
             }
 
             // Resolve references from refscan needles
@@ -421,25 +425,40 @@ where
 }
 
 /// Verify that a fixed-output derivation produced the expected hash.
-fn verify_fod_hash(
+///
+/// Flat mode: hash the raw file bytes with the declared algorithm.
+/// NAR mode: hash the NAR serialization (only sha256 computed here;
+///           other NAR algos would need a separate NAR pass).
+/// Text mode: equivalent to NAR sha256 for verification purposes.
+async fn verify_fod_hash(
     drv_name: &str,
     _output_name: &str,
     expected_ca: &CAHash,
     _nar_size: u64,
     nar_sha256: &[u8; 32],
-    _node: &Node,
+    node: &Node,
+    blob_service: &impl BlobService,
 ) -> Result<(), Error> {
-    // For FODs, the output hash must match the declared content address.
-    // The actual verification depends on the hash mode:
-    // - Flat: hash the file contents directly
-    // - Nar (recursive): hash the NAR representation
-    //
-    // For v0 we verify NAR-hashed FODs (mode = recursive) by comparing
-    // the NAR sha256. Flat-mode FODs would need the raw file content hash,
-    // which we don't compute here yet — the sandbox already handles this.
-    //
-    // TODO: implement flat-mode FOD verification
     match expected_ca {
+        CAHash::Flat(expected_hash) => {
+            let digest = match node {
+                Node::File { digest, .. } => digest,
+                _ => {
+                    return Err(Error::FodFlatNotFile {
+                        name: drv_name.to_string(),
+                    });
+                }
+            };
+
+            let actual = hash_blob(blob_service, digest, expected_hash.algo()).await?;
+            if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
+                return Err(Error::FodHashMismatch {
+                    name: drv_name.to_string(),
+                    expected: data_encoding::HEXLOWER.encode(expected_hash.digest_as_bytes()),
+                    actual: data_encoding::HEXLOWER.encode(actual.digest_as_bytes()),
+                });
+            }
+        }
         CAHash::Nar(NixHash::Sha256(expected_digest)) => {
             if nar_sha256 != expected_digest {
                 return Err(Error::FodHashMismatch {
@@ -449,12 +468,89 @@ fn verify_fod_hash(
                 });
             }
         }
-        _ => {
-            // Other hash types / modes: trust the sandbox for now
-            tracing::debug!("FOD verification for non-NAR-sha256 not yet implemented");
+        CAHash::Text(expected_digest) => {
+            if nar_sha256 != expected_digest {
+                return Err(Error::FodHashMismatch {
+                    name: drv_name.to_string(),
+                    expected: data_encoding::HEXLOWER.encode(expected_digest),
+                    actual: data_encoding::HEXLOWER.encode(nar_sha256),
+                });
+            }
+        }
+        CAHash::Nar(_) => {
+            // NAR mode with non-sha256 algo — would need a separate NAR
+            // serialization pass with that hasher. Not yet supported.
+            tracing::warn!(
+                drv = %drv_name,
+                "FOD uses NAR mode with non-sha256 hash; verification skipped"
+            );
         }
     }
     Ok(())
+}
+
+/// Read a blob from the blob service and hash it with the given algorithm.
+async fn hash_blob(
+    blob_service: &impl BlobService,
+    digest: &snix_castore::B3Digest,
+    algo: nix_compat::nixhash::HashAlgo,
+) -> Result<NixHash, Error> {
+    use nix_compat::nixhash::HashAlgo;
+
+    let mut reader = blob_service
+        .open_read(digest)
+        .await
+        .map_err(|e| Error::Store(format!("blob read for FOD verification: {e}")))?
+        .ok_or_else(|| Error::Store(format!("blob {digest} not found for FOD verification")))?;
+
+    let mut buf = vec![0u8; 64 * 1024];
+
+    match algo {
+        HashAlgo::Md5 => {
+            let mut hasher = md5::Md5::new();
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            let hash: [u8; 16] = hasher.finalize().into();
+            Ok(NixHash::Md5(hash))
+        }
+        HashAlgo::Sha1 => {
+            let mut hasher = sha1::Sha1::new();
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            let hash: [u8; 20] = hasher.finalize().into();
+            Ok(NixHash::Sha1(hash))
+        }
+        HashAlgo::Sha256 => {
+            let mut hasher = sha2::Sha256::new();
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            let hash: [u8; 32] = hasher.finalize().into();
+            Ok(NixHash::Sha256(hash))
+        }
+        HashAlgo::Sha512 => {
+            let mut hasher = sha2::Sha512::new();
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            let hash: [u8; 64] = hasher.finalize().into();
+            Ok(NixHash::Sha512(Box::new(hash)))
+        }
+    }
 }
 
 /// Map refscan needle indices back to store path references.
@@ -482,6 +578,228 @@ fn resolve_references(
         .iter()
         .filter_map(|&idx| all_paths.get(idx as usize).cloned())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::blobservice::BlobService;
+    use tokio::io::AsyncWriteExt;
+
+    /// Insert bytes into a MemoryBlobService and return the (B3Digest, Node).
+    async fn insert_blob(bs: &MemoryBlobService, data: &[u8]) -> (snix_castore::B3Digest, Node) {
+        let mut writer = bs.open_write().await;
+        writer.write_all(data).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        let node = Node::File {
+            digest: digest.clone(),
+            size: data.len() as u64,
+            executable: false,
+        };
+        (digest, node)
+    }
+
+    /// Compute the expected NixHash for given bytes and algo.
+    fn expected_hash(data: &[u8], algo: HashAlgo) -> NixHash {
+        use digest::Digest;
+        match algo {
+            HashAlgo::Md5 => {
+                let h: [u8; 16] = md5::Md5::digest(data).into();
+                NixHash::Md5(h)
+            }
+            HashAlgo::Sha1 => {
+                let h: [u8; 20] = sha1::Sha1::digest(data).into();
+                NixHash::Sha1(h)
+            }
+            HashAlgo::Sha256 => {
+                let h: [u8; 32] = sha2::Sha256::digest(data).into();
+                NixHash::Sha256(h)
+            }
+            HashAlgo::Sha512 => {
+                let h: [u8; 64] = sha2::Sha512::digest(data).into();
+                NixHash::Sha512(Box::new(h))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn flat_sha256_match() {
+        let bs = MemoryBlobService::default();
+        let data = b"hello world";
+        let (_, node) = insert_blob(&bs, data).await;
+        let hash = expected_hash(data, HashAlgo::Sha256);
+        let ca = CAHash::Flat(hash);
+        let nar_sha256 = [0u8; 32]; // unused for flat
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &nar_sha256, &node, &bs)
+            .await
+            .expect("matching flat sha256 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_sha256_mismatch() {
+        let bs = MemoryBlobService::default();
+        let data = b"hello world";
+        let (_, node) = insert_blob(&bs, data).await;
+        let wrong = NixHash::Sha256([0xab; 32]);
+        let ca = CAHash::Flat(wrong);
+
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::FodHashMismatch { .. }));
+    }
+
+    #[tokio::test]
+    async fn flat_sha1_match() {
+        let bs = MemoryBlobService::default();
+        let data = b"sha1 test content";
+        let (_, node) = insert_blob(&bs, data).await;
+        let hash = expected_hash(data, HashAlgo::Sha1);
+        let ca = CAHash::Flat(hash);
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .expect("matching flat sha1 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_sha512_match() {
+        let bs = MemoryBlobService::default();
+        let data = b"sha512 test content";
+        let (_, node) = insert_blob(&bs, data).await;
+        let hash = expected_hash(data, HashAlgo::Sha512);
+        let ca = CAHash::Flat(hash);
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .expect("matching flat sha512 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_md5_match() {
+        let bs = MemoryBlobService::default();
+        let data = b"md5 test content";
+        let (_, node) = insert_blob(&bs, data).await;
+        let hash = expected_hash(data, HashAlgo::Md5);
+        let ca = CAHash::Flat(hash);
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .expect("matching flat md5 should pass");
+    }
+
+    /// Helper to make a dummy B3Digest for tests that don't read from the blob service.
+    fn dummy_b3() -> snix_castore::B3Digest {
+        snix_castore::B3Digest::from(&[0u8; 32])
+    }
+
+    #[tokio::test]
+    async fn flat_rejects_directory_node() {
+        let bs = MemoryBlobService::default();
+        let node = Node::Directory {
+            digest: dummy_b3(),
+            size: 0,
+        };
+        let hash = NixHash::Sha256([0; 32]);
+        let ca = CAHash::Flat(hash);
+
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::FodFlatNotFile { .. }));
+    }
+
+    #[tokio::test]
+    async fn flat_rejects_symlink_node() {
+        let bs = MemoryBlobService::default();
+        let node = Node::Symlink {
+            target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+        };
+        let hash = NixHash::Sha256([0; 32]);
+        let ca = CAHash::Flat(hash);
+
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::FodFlatNotFile { .. }));
+    }
+
+    #[tokio::test]
+    async fn nar_sha256_match() {
+        let bs = MemoryBlobService::default();
+        let expected = [0x42u8; 32];
+        let ca = CAHash::Nar(NixHash::Sha256(expected));
+        let node = Node::Directory {
+            digest: dummy_b3(),
+            size: 0,
+        };
+
+        verify_fod_hash("test-drv", "out", &ca, 100, &expected, &node, &bs)
+            .await
+            .expect("matching NAR sha256 should pass");
+    }
+
+    #[tokio::test]
+    async fn nar_sha256_mismatch() {
+        let bs = MemoryBlobService::default();
+        let expected = [0x42u8; 32];
+        let actual = [0x00u8; 32];
+        let ca = CAHash::Nar(NixHash::Sha256(expected));
+        let node = Node::Directory {
+            digest: dummy_b3(),
+            size: 0,
+        };
+
+        let err = verify_fod_hash("test-drv", "out", &ca, 100, &actual, &node, &bs)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::FodHashMismatch { .. }));
+    }
+
+    #[tokio::test]
+    async fn text_sha256_match() {
+        let bs = MemoryBlobService::default();
+        let expected = [0x42u8; 32];
+        let ca = CAHash::Text(expected);
+        let node = Node::Directory {
+            digest: dummy_b3(),
+            size: 0,
+        };
+
+        verify_fod_hash("test-drv", "out", &ca, 100, &expected, &node, &bs)
+            .await
+            .expect("matching text sha256 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_empty_blob() {
+        let bs = MemoryBlobService::default();
+        let data = b"";
+        let (_, node) = insert_blob(&bs, data).await;
+        let hash = expected_hash(data, HashAlgo::Sha256);
+        let ca = CAHash::Flat(hash);
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .expect("empty blob flat sha256 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_large_blob() {
+        let bs = MemoryBlobService::default();
+        // 256KB — larger than the 64KB read buffer
+        let data = vec![0xffu8; 256 * 1024];
+        let (_, node) = insert_blob(&bs, &data).await;
+        let hash = expected_hash(&data, HashAlgo::Sha256);
+        let ca = CAHash::Flat(hash);
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs)
+            .await
+            .expect("large blob should hash correctly across buffer boundaries");
+    }
 }
 
 

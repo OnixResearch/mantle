@@ -24,6 +24,9 @@ pub enum Error {
         actual: String,
     },
 
+    #[error("flat-mode FOD output is not a file: {name}")]
+    FodFlatNotFile { name: String },
+
     #[error("derivation not found in known_paths: {}", path.to_absolute_path())]
     DerivationNotFound { path: StorePath<String> },
 
