@@ -136,20 +136,77 @@ fn cmd_build(
     store_dir: &std::path::Path,
     verbose: bool,
 ) -> Result<(), RunError> {
+    // 0. Verify store directory exists (or explain how to create it)
+    if !store_dir.exists() {
+        return Err(RunError::Internal(format!(
+            "store directory {} does not exist.\n\
+             Create it with: sudo mkdir -p {0} && sudo chown $USER {0}",
+            store_dir.display()
+        )));
+    }
+
     // 1. Evaluate Nickel file
     info!(file = %file.display(), "evaluating");
-    let drv: crunch_glue::CrunchDerivation =
-        crunch_eval::evaluate_and_deserialize(file, import_paths)
-            .map_err(|e| RunError::Eval(format!("{e}")))?;
+    let json = crunch_eval::evaluate_to_json(file, import_paths)
+        .map_err(|e| RunError::Eval(format!("{e}")))?;
 
-    // 2. Convert to nix_compat::Derivation
+    // 2. Detect single vs multi-derivation output.
+    //    If the top-level JSON has a "name" field (String), treat as single.
+    //    Otherwise, treat each field as a named derivation.
+    let top: serde_json::Value = serde_json::from_str(&json)
+        .map_err(|e| RunError::Eval(format!("invalid JSON from Nickel: {e}")))?;
+
+    let derivations: Vec<(String, crunch_glue::CrunchDerivation)> = if top
+        .get("name")
+        .is_some_and(|v| v.is_string())
+    {
+        // Single derivation
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_value(top)
+            .map_err(|e| RunError::Eval(format!("deserializing derivation: {e}")))?;
+        let name = drv.name.clone();
+        vec![(name, drv)]
+    } else if top.is_object() {
+        // Package set — each field is a derivation
+        let mut derivations = Vec::new();
+        for (key, value) in top.as_object().unwrap() {
+            let drv: crunch_glue::CrunchDerivation = serde_json::from_value(value.clone())
+                .map_err(|e| RunError::Eval(format!(
+                    "deserializing derivation '{key}': {e}"
+                )))?;
+            derivations.push((key.clone(), drv));
+        }
+        derivations
+    } else {
+        return Err(RunError::Eval(
+            "expected a Derivation record or a record of Derivations".to_string(),
+        ));
+    };
+
+    // 3. Convert all derivations
     let mut known_paths = crunch_glue::KnownPaths::new();
-    let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut known_paths)
-        .map_err(|e| RunError::Build(format!("{e}")))?;
+    let mut drv_paths = Vec::new();
+    for (label, drv) in &derivations {
+        let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
+            .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
+        info!(drv = %drv_path, label = %label, "derivation constructed");
+        drv_paths.push((label.clone(), drv_path));
+    }
 
-    info!(drv = %drv_path, "derivation constructed");
+    // 4. Set up build log directory
+    let log_dir = std::env::var("CRUNCH_LOG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let state = std::env::var("XDG_STATE_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| {
+                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                    PathBuf::from(home).join(".local/state")
+                });
+            state.join("crunch/logs")
+        });
+    let _ = std::fs::create_dir_all(&log_dir);
 
-    // 3. Set up build services and build
+    // 5. Set up build services and build each derivation
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
 
@@ -190,17 +247,32 @@ fn cmd_build(
                 verbose,
             );
 
-            let outcome = builder
-                .build(&drv_path, &known_paths)
-                .await
-                .map_err(|e| RunError::Build(format!("{e}")))?;
+            for (label, drv_path) in &drv_paths {
+                let outcome = builder
+                    .build(drv_path, &known_paths)
+                    .await
+                    .map_err(|e| {
+                        // Write build log on failure
+                        let log_msg = format!("{e}");
+                        let log_file = log_dir.join(format!("{}.log", drv_path));
+                        let _ = std::fs::write(&log_file, &log_msg);
+                        RunError::Build(log_msg)
+                    })?;
 
-            for (output_name, path_info) in &outcome.outputs {
-                let path = path_info.store_path.to_absolute_path();
-                if outcome.cached {
-                    println!("{path} (cached)");
-                } else {
-                    println!("{path}");
+                for (_output_name, path_info) in &outcome.outputs {
+                    let path = path_info.store_path.to_absolute_path();
+                    if outcome.cached {
+                        println!("{path} (cached)");
+                    } else {
+                        println!("{path}");
+                    }
+                }
+
+                // Write success log
+                if verbose {
+                    let log_file = log_dir.join(format!("{}.log", drv_path));
+                    let msg = format!("build succeeded: {label}\n");
+                    let _ = std::fs::write(&log_file, &msg);
                 }
             }
         }
