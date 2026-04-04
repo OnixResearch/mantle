@@ -1,0 +1,19 @@
+# Build
+target/
+coverage/
+doc/
+
+# Nix
+result*
+.direnv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime
+*.redb
+*.sock
+data/
