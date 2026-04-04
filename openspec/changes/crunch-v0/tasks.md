@@ -50,16 +50,22 @@
 
 ## Phase 5: Nickel stdlib
 
-- [ ] Write lib/contracts.ncl: StorePath validator, Name validator, System enum, HashAlgo enum, HashMode enum, Sandbox enum, Input contract
-- [ ] Write lib/derivation.ncl: closed Derivation contract with enums, defaults, optional fixed_output, doc annotations on every field
-- [ ] Write lib/helpers.ncl: enum-to-string converters using match; type-annotated utility functions
-- [ ] Write lib/lib.ncl: single entry point re-exporting all contracts, enums, validators, helpers
-- [ ] Write lib/seed.ncl template: StorePath-validated record with doc annotations
-- [ ] Embed stdlib .ncl files into crunch binary at compile time
-- [ ] Write test: contract catches missing name, wrong type, extra field
-- [ ] Write test: enum tags deserialize correctly through serde
-- [ ] Write test: StorePath validator accepts valid paths, rejects malformed
-- [ ] Write test: recursive record self-references resolve (env.X = name)
+- [x] Write lib/contracts.ncl: StorePath validator, Name validator, System enum, HashAlgo enum, HashMode enum, Sandbox enum, Input contract
+- [x] Write lib/derivation.ncl: closed Derivation contract with enums, defaults, optional fixed_output, doc annotations on every field
+- [x] Write lib/helpers.ncl: enum-to-string converters using match; type-annotated utility functions
+- [x] Write lib/lib.ncl: single entry point re-exporting all contracts, enums, validators, helpers
+- [x] Write lib/seed.ncl template: StorePath-validated record with doc annotations
+- [x] Embed stdlib .ncl files into crunch binary at compile time (via include_str! in crunch-eval/src/stdlib.rs)
+- [x] Write test: contract catches missing name, wrong type, extra field (3 tests)
+- [x] Write test: enum tags deserialize correctly through serde (via JSON export path)
+- [x] Write test: StorePath validator accepts valid paths, rejects malformed (2 tests)
+- [x] Write test: recursive record self-references resolve (env.X = name)
+- [x] Write test: fixed_output contract with defaults
+- [x] Write test: full Nickel → serde → glue round-trip
+
+Note: Nickel's `Expr::to_serde()` does not convert enum tags to strings.
+Added `evaluate_str_and_deserialize()` / `evaluate_and_deserialize()` that
+go through JSON export first. This is the correct path for the build pipeline.
 
 ## Phase 6: CLI and end-to-end
 

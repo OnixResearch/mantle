@@ -1,0 +1,59 @@
+# crunch stdlib: contracts and validators.
+#
+# Validators for store paths and derivation names.
+# Enum types for categorical fields.
+
+{
+  StorePath
+    | doc "Validates a Nix store path string: /nix/store/<32 chars>-<name>"
+    = std.contract.from_validator (fun value =>
+      if std.is_string value
+        && std.string.is_match "^/nix/store/[a-z0-9]{32}-.+$" value
+      then 'Ok
+      else 'Error { message = "expected a /nix/store/<hash>-<name> path, got: %{std.serialize 'Json value}" }
+    ),
+
+  Name
+    | doc "Validates a derivation name (alphanumeric, plus . _ ? = -)"
+    = std.contract.from_validator (fun value =>
+      if std.is_string value
+        && std.string.length value > 0
+        && std.string.is_match "^[a-zA-Z0-9+._?=-][a-zA-Z0-9+._?=-]*$" value
+      then 'Ok
+      else 'Error { message = "invalid derivation name: %{std.serialize 'Json value}" }
+    ),
+
+  System
+    | doc "Target platform enum."
+    = [|
+      'x86_64-linux,
+      'aarch64-linux,
+      'x86_64-darwin,
+      'aarch64-darwin,
+    |],
+
+  HashAlgo
+    | doc "Hash algorithm for fixed-output derivations."
+    = [| 'md5, 'sha1, 'sha256, 'sha512 |],
+
+  HashMode
+    | doc "Hashing mode: flat (single file) or recursive (NAR serialization)."
+    = [| 'flat, 'recursive |],
+
+  Sandbox
+    | doc "Sandbox backend for build execution."
+    = [| 'native, 'oci, 'wasm |],
+
+  Input
+    | doc "A build input: either a StorePath string or a Derivation record."
+    = std.contract.from_validator (fun value =>
+      if std.is_string value then
+        if std.string.is_match "^/nix/store/[a-z0-9]{32}-.+$" value
+        then 'Ok
+        else 'Error { message = "input string must be a valid store path, got: %{value}" }
+      else if std.is_record value then
+        'Ok
+      else
+        'Error { message = "input must be a Derivation record or a StorePath string" }
+    ),
+}

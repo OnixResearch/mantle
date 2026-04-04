@@ -8,9 +8,11 @@
 //! `Context::expr_to_json()`.
 
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub use nickel_lang::{Context, Error as NickelError, Expr};
+
+pub mod stdlib;
 
 /// Errors from crunch-eval.
 #[derive(Debug, thiserror::Error)]
@@ -22,6 +24,9 @@ pub enum Error {
 
     #[error("reading source file: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("deserialization error: {0}")]
+    Serde(String),
 }
 
 impl From<NickelError> for Error {
@@ -65,6 +70,39 @@ pub fn evaluate_str(source: &str, import_paths: &[OsString]) -> Result<Expr, Err
 
     let expr = ctx.eval_deep_for_export(source)?;
     Ok(expr)
+}
+
+/// Evaluate and deserialize into a typed Rust struct.
+///
+/// Goes through JSON export to handle Nickel enum tags (which become
+/// strings in JSON but not through direct `to_serde()`). This is the
+/// primary way the build pipeline consumes Nickel output.
+pub fn evaluate_and_deserialize<T: serde::de::DeserializeOwned>(
+    path: &Path,
+    import_paths: &[OsString],
+) -> Result<T, Error> {
+    let json = evaluate_to_json(path, import_paths)?;
+    serde_json::from_str(&json).map_err(|e| Error::Serde(e.to_string()))
+}
+
+/// Evaluate a string and deserialize into a typed Rust struct.
+pub fn evaluate_str_and_deserialize<T: serde::de::DeserializeOwned>(
+    source: &str,
+    import_paths: &[OsString],
+) -> Result<T, Error> {
+    let json = evaluate_str_to_json(source, import_paths)?;
+    serde_json::from_str(&json).map_err(|e| Error::Serde(e.to_string()))
+}
+
+/// Evaluate a Nickel source string and export to JSON.
+pub fn evaluate_str_to_json(source: &str, import_paths: &[OsString]) -> Result<String, Error> {
+    let mut ctx = Context::new()
+        .with_added_import_paths(import_paths.to_vec())
+        .with_source_name("<input>".to_string());
+
+    let expr = ctx.eval_deep_for_export(source)?;
+    let json = ctx.expr_to_json(&expr)?;
+    Ok(json)
 }
 
 /// Evaluate and export to JSON string. For `crunch eval` debug output.
