@@ -1,0 +1,11 @@
+schema: spec-driven
+project:
+  name: crunch
+  description: Nickel build system on the Nix store protocol
+  language: rust
+
+context: |
+  Cargo workspace under crunch/. Rust nightly.
+  Vendored nix-compat, snix-build, snix-castore, snix-store.
+  BLAKE3 store paths. Bwrap sandbox on Linux.
+  See AGENTS.md for build env setup.
