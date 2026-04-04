@@ -1058,6 +1058,320 @@ mod tests {
             "nar_hash(Sha256) should produce the same digest as calculate_nar"
         );
     }
+
+    // ── Phase 2: resolve_references tests ─────────────────────
+
+    fn make_test_drv_for_refs() -> (Derivation, BTreeMap<StorePath<String>, Node>) {
+        let mut outputs = BTreeMap::new();
+        outputs.insert(
+            "out".to_string(),
+            nix_compat::derivation::Output {
+                path: Some(
+                    StorePath::from_absolute_path(
+                        b"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out",
+                    ).unwrap(),
+                ),
+                ca_hash: None,
+            },
+        );
+        let drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: BTreeMap::new(),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let input_path: StorePath<String> = StorePath::from_absolute_path(
+            b"/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input",
+        ).unwrap();
+        let mut inputs = BTreeMap::new();
+        inputs.insert(
+            input_path,
+            Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("x").unwrap(),
+            },
+        );
+        (drv, inputs)
+    }
+
+    #[test]
+    fn resolve_refs_index_zero_maps_to_output() {
+        let (drv, inputs) = make_test_drv_for_refs();
+        let found = BTreeSet::from([0u64]);
+        let needles = vec!["a".to_string(), "b".to_string()];
+
+        let refs = resolve_references(&found, &needles, &drv, &inputs);
+        assert_eq!(refs.len(), 1);
+        assert_eq!(
+            refs[0].to_absolute_path(),
+            "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out"
+        );
+    }
+
+    #[test]
+    fn resolve_refs_index_past_outputs_maps_to_input() {
+        let (drv, inputs) = make_test_drv_for_refs();
+        // Index 1 = first input (after 1 output)
+        let found = BTreeSet::from([1u64]);
+        let needles = vec!["a".to_string(), "b".to_string()];
+
+        let refs = resolve_references(&found, &needles, &drv, &inputs);
+        assert_eq!(refs.len(), 1);
+        assert_eq!(
+            refs[0].to_absolute_path(),
+            "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input"
+        );
+    }
+
+    #[test]
+    fn resolve_refs_out_of_range_ignored() {
+        let (drv, inputs) = make_test_drv_for_refs();
+        let found = BTreeSet::from([999u64]);
+        let needles = vec!["a".to_string()];
+
+        let refs = resolve_references(&found, &needles, &drv, &inputs);
+        assert!(refs.is_empty());
+    }
+
+    #[test]
+    fn resolve_refs_empty_needles() {
+        let (drv, inputs) = make_test_drv_for_refs();
+        let found = BTreeSet::new();
+        let needles: Vec<String> = vec![];
+
+        let refs = resolve_references(&found, &needles, &drv, &inputs);
+        assert!(refs.is_empty());
+    }
+
+    // ── Phase 3 & 4: MockBuildService + Builder orchestration ────
+
+    use std::sync::{Arc, Mutex};
+    use snix_build::buildservice::{BuildRequest, BuildResult, BuildOutput};
+
+    /// A mock BuildService that records requests and returns a synthetic
+    /// output node for each requested output. Uses a shared blob service
+    /// so the Builder can find the blobs during NAR calculation.
+    struct MockBuildService {
+        calls: Arc<Mutex<Vec<Vec<String>>>>,
+        blob_service: MemoryBlobService,
+    }
+
+    impl MockBuildService {
+        fn new(blob_service: MemoryBlobService) -> (Self, Arc<Mutex<Vec<Vec<String>>>>) {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            (Self { calls: calls.clone(), blob_service }, calls)
+        }
+    }
+
+    #[tonic::async_trait]
+    impl BuildService for MockBuildService {
+        async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
+            self.calls.lock().unwrap().push(request.command_args.clone());
+
+            // Write blob to the shared blob service so NAR calc can find it
+            let mut writer = BlobService::open_write(&self.blob_service).await;
+            writer.write_all(b"mock output").await.unwrap();
+            let digest = writer.close().await.unwrap();
+
+            let outputs: Vec<BuildOutput> = request
+                .outputs
+                .iter()
+                .map(|_| BuildOutput {
+                    node: Node::File {
+                        digest: digest.clone(),
+                        size: 11,
+                        executable: false,
+                    },
+                    output_needles: BTreeSet::new(),
+                })
+                .collect();
+
+            Ok(BuildResult { outputs })
+        }
+    }
+
+    /// Build a nix_compat::Derivation, compute paths, register in KnownPaths.
+    fn build_and_register(
+        name: &str,
+        input_drvs: &[(StorePath<String>, &str)], // (drv_path, output_name)
+        kp: &mut crunch_glue::KnownPaths,
+    ) -> (StorePath<String>, Derivation) {
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None, ca_hash: None,
+        });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), name.into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), "".into());
+
+        let mut input_derivations = BTreeMap::new();
+        for (dp, on) in input_drvs {
+            input_derivations
+                .entry(dp.clone())
+                .or_insert_with(BTreeSet::new)
+                .insert(on.to_string());
+        }
+
+        let mut drv = Derivation {
+            arguments: vec!["-c".into(), format!("echo {name} > $out")],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations,
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        // hdm needs to look up parent derivation modulos
+        let hdm = drv.hash_derivation_modulo(|parent_path| {
+            kp.get_hdm_by_drv_path(&parent_path.to_absolute_path())
+                .expect("parent should be in known_paths")
+        });
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+
+        let mut fake_hash = [0u8; 32];
+        for (i, b) in name.bytes().enumerate().take(32) {
+            fake_hash[i] = b;
+        }
+        kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+
+        (drv_path, drv)
+    }
+
+    #[tokio::test]
+    async fn builder_single_drv_calls_do_build_once() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::new();
+        let (drv_path, _) = build_and_register("solo", &[], &mut kp);
+
+        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        assert!(!outcome.cached);
+        assert_eq!(outcome.outputs.len(), 1);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should call do_build exactly once");
+    }
+
+    #[tokio::test]
+    async fn builder_chain_builds_dep_first() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::new();
+        let (dep_path, _) = build_and_register("dep", &[], &mut kp);
+        let (top_path, _) = build_and_register("top", &[(dep_path.clone(), "out")], &mut kp);
+
+        let outcome = builder.build(&top_path, &kp).await.unwrap();
+        assert!(!outcome.cached);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "should build dep + top");
+        // First call should be for "dep" (contains "dep" in args)
+        assert!(
+            recorded[0].iter().any(|a| a.contains("dep")),
+            "first build should be dep: {:?}", recorded[0]
+        );
+        assert!(
+            recorded[1].iter().any(|a| a.contains("top")),
+            "second build should be top: {:?}", recorded[1]
+        );
+    }
+
+    #[tokio::test]
+    async fn builder_diamond_builds_shared_dep_once() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::new();
+        // A is shared dep
+        let (a_path, _) = build_and_register("aaa", &[], &mut kp);
+        // B and C both depend on A
+        let (b_path, _) = build_and_register("bbb", &[(a_path.clone(), "out")], &mut kp);
+        let (c_path, _) = build_and_register("ccc", &[(a_path.clone(), "out")], &mut kp);
+        // D depends on B and C
+        let (d_path, _) = build_and_register(
+            "ddd",
+            &[(b_path.clone(), "out"), (c_path.clone(), "out")],
+            &mut kp,
+        );
+
+        let outcome = builder.build(&d_path, &kp).await.unwrap();
+        assert!(!outcome.cached);
+
+        let recorded = calls.lock().unwrap();
+        // A, B, C, D = 4 builds. A should appear exactly once.
+        assert_eq!(recorded.len(), 4, "should build A+B+C+D: {:?}", *recorded);
+        let a_builds = recorded.iter()
+            .filter(|args| args.iter().any(|a| a.contains("aaa")))
+            .count();
+        assert_eq!(a_builds, 1, "shared dep A should build exactly once");
+    }
+
+    // ── Phase 4: Cache tests ────────────────────────────────────
+
+    /// Test that the cache check works: if the output path exists on disk,
+    /// the builder skips the build and returns cached: true.
+    ///
+    /// This test creates a file under /nix/store which requires write access.
+    /// Skipped when /nix/store is read-only (normal NixOS).
+    #[tokio::test]
+    async fn builder_skips_build_when_output_exists() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::new();
+        let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
+
+        // Pre-create the output path on disk so the cache check passes.
+        // Store paths are always /nix/store/... — skip if we can't write there.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let abs = PathBuf::from(out_path.to_absolute_path());
+        if std::fs::create_dir_all(abs.parent().unwrap()).is_err() {
+            eprintln!("skipping cache test: cannot write to /nix/store");
+            return;
+        }
+        if std::fs::write(&abs, "cached content").is_err() {
+            eprintln!("skipping cache test: cannot write file in /nix/store");
+            return;
+        }
+
+        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        assert!(outcome.cached, "should report as cached");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "should NOT call do_build for cached output");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&abs);
+    }
 }
 
 
