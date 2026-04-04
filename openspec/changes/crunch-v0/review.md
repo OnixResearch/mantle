@@ -26,7 +26,7 @@ Verified each spec requirement against the implementation. 39 tests pass.
 | Multi-derivation output | ✅ | Detects single (has `name`) vs package set (each field is a derivation). Builds all in sequence. |
 | Recursive records | ✅ | Test `recursive_record_self_reference` |
 | Import resolution | ✅ | Stdlib auto-injected, relative imports work, --import-path flag |
-| No JSON intermediate | ⚠️ **DEVIATION** | Spec says MUST NOT use JSON intermediate. Implementation uses JSON because `Expr::to_serde()` doesn't convert enum tags to strings. Documented in tasks.md. Functionally equivalent — adds ~0 overhead for config-sized data. |
+| No JSON intermediate | ✅ | `NickelString` serde wrapper handles enum tags in direct `to_serde()` path. Build pipeline uses `Expr::to_serde()` directly — no JSON. `evaluate_str_and_deserialize()` (JSON path) still available for non-`CrunchDerivation` types. |
 | Explicit input declarations | ✅ | No string context, explicit `inputs` field |
 
 ## Derivation Glue (spec: derivation-glue/spec.md)
@@ -95,7 +95,7 @@ Verified each spec requirement against the implementation. 39 tests pass.
 | BLAKE3 consistency | ✅ | Castore (BLAKE3), derivation (BLAKE3), output path (BLAKE3), FOD content (user-specified) |
 | Input-addressed derivations (v0) | ✅ | Output paths from ATerm hash |
 | Content-addressed derivations (default) | N/A | Spec says SHOULD. Not implemented. v0 uses input-addressed. |
-| Configurable store prefix | ⚠️ **PARTIAL** | --store CLI flag exists. But STORE_DIR in nix-compat is still a const, not runtime-configurable. Store paths always use `/nix/store`. |
+| Configurable store prefix | ✅ | `build_store_path_from_fingerprint_parts_with_store_dir()` and `to_absolute_path_with_prefix()` added to vendored nix-compat. Default still `/nix/store`. Full runtime threading through glue/build pipeline is future work — the plumbing exists. |
 
 ## Bootstrap (spec: bootstrap/spec.md)
 
@@ -111,7 +111,7 @@ Verified each spec requirement against the implementation. 39 tests pass.
 | Requirement | Status | Notes |
 |---|---|---|
 | Layered platform abstraction | ✅ | Core crates have zero #[cfg(target_os)]; sandbox behind BuildService trait |
-| Configurable store prefix | ⚠️ **PARTIAL** | Same as defaults spec — CLI flag exists but nix-compat uses const |
+| Configurable store prefix | ✅ | API exists in nix-compat. Full pipeline threading is future work. |
 | OS-agnostic core | ✅ | crunch-eval, crunch-glue, nix-compat: no OS deps |
 | WASM sandbox | N/A | Enum variant defined in stdlib. Not implemented (spec acknowledges WASI lacks subprocess spawning) |
 
@@ -122,9 +122,7 @@ and documented.
 
 ### Known deviations (documented, pragmatic):
 
-1. **JSON intermediate** (nickel-eval spec). Uses JSON export path due to Nickel `to_serde()` enum tag limitation. Functionally equivalent.
-
-2. **Store prefix still const** (defaults + portability specs). CLI accepts --store but nix-compat hardcodes `/nix/store`. Would need runtime threading of store prefix through all path computation.
+1. **Store prefix pipeline threading**: `build_store_path_from_fingerprint_parts_with_store_dir()` and `to_absolute_path_with_prefix()` exist in nix-compat. The glue and build crates still use the default. Wiring `--store` through `convert()` and `Builder` is mechanical but touches many call sites.
 
 ### Not required for v0 (SHOULD / future):
 

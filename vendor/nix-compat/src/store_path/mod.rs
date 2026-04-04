@@ -216,6 +216,11 @@ where
     pub fn to_absolute_path(&self) -> String {
         format!("{STORE_DIR_WITH_SLASH}{self}")
     }
+
+    /// Returns an absolute store path string with a custom store prefix.
+    pub fn to_absolute_path_with_prefix(&self, store_dir: &str) -> String {
+        format!("{store_dir}/{self}")
+    }
 }
 
 impl<S> PartialOrd for StorePath<S>

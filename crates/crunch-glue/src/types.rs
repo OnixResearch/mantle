@@ -1,7 +1,15 @@
 //! Rust types that mirror the Nickel Derivation contract.
-//! Deserialized from Nickel `Expr` via `to_serde()`.
+//! Deserialized from Nickel `Expr` via `to_serde()` (direct) or
+//! via JSON export. Fields that can be Nickel enum tags use
+//! `NickelString` deserialization to accept both strings and tags.
 
 use serde::Deserialize;
+use crate::nickel_string::NickelString;
+
+/// Deserialize a field that may be a Nickel enum tag or a plain string.
+fn deserialize_nickel_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    NickelString::deserialize(d).map(|s| s.0)
+}
 
 /// A crunch derivation, as described in Nickel.
 ///
@@ -12,7 +20,7 @@ use serde::Deserialize;
 pub struct CrunchDerivation {
     pub name: String,
     pub builder: String,
-    #[serde(default = "default_system")]
+    #[serde(default = "default_system", deserialize_with = "deserialize_nickel_string")]
     pub system: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -52,9 +60,10 @@ pub struct FixedOutput {
     /// Hash in SRI format ("sha256-...") or hex.
     pub hash: String,
     /// Hash algorithm name.
+    #[serde(deserialize_with = "deserialize_nickel_string")]
     pub algo: String,
     /// Hashing mode: "flat" or "recursive".
-    #[serde(default = "default_hash_mode")]
+    #[serde(default = "default_hash_mode", deserialize_with = "deserialize_nickel_string")]
     pub mode: String,
 }
 

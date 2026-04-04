@@ -8,6 +8,7 @@ mod types;
 mod convert;
 mod known_paths;
 mod error;
+pub mod nickel_string;
 
 pub use convert::convert;
 pub use error::Error;

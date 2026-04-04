@@ -39,7 +39,7 @@ fn contract_catches_extra_field() {
 }
 
 #[test]
-fn enum_tags_deserialize_as_strings() {
+fn enum_tags_deserialize_via_json() {
     #[derive(serde::Deserialize, Debug)]
     struct Drv {
         system: String,
@@ -54,6 +54,24 @@ fn enum_tags_deserialize_as_strings() {
 
     assert_eq!(drv.system, "x86_64-linux");
     assert_eq!(drv.sandbox, "native");
+}
+
+#[test]
+fn enum_tags_deserialize_direct_serde() {
+    // This tests the direct to_serde() path (no JSON intermediate),
+    // using CrunchDerivation which has NickelString-aware deserialization
+    // for enum-backed fields.
+    use crunch_glue::CrunchDerivation;
+
+    let expr = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in { name = "t", builder = "/bin/sh" } | crunch.Derivation"#,
+        &stdlib_import_path(),
+    )
+    .unwrap();
+
+    let drv: CrunchDerivation = expr.to_serde().unwrap();
+    assert_eq!(drv.system, "x86_64-linux");
+    assert_eq!(drv.name, "t");
 }
 
 #[test]

@@ -154,8 +154,24 @@ fn build_store_path_from_fingerprint_parts<'a, SP>(
 where
     SP: AsRef<str> + std::convert::From<&'a str>,
 {
+    build_store_path_from_fingerprint_parts_with_store_dir(ty, inner_digest, name, STORE_DIR)
+}
+
+/// Like [build_store_path_from_fingerprint_parts] but with a custom store dir.
+///
+/// The store dir is embedded in the fingerprint hash, so changing it produces
+/// different store paths. This is the mechanism for configurable store prefixes.
+pub fn build_store_path_from_fingerprint_parts_with_store_dir<'a, SP>(
+    ty: &str,
+    inner_digest: &[u8; 32],
+    name: &'a str,
+    store_dir: &str,
+) -> Result<StorePath<SP>, Error>
+where
+    SP: AsRef<str> + std::convert::From<&'a str>,
+{
     let fingerprint_hash = sha256!(
-        "{ty}:sha256:{}:{STORE_DIR}:{name}",
+        "{ty}:sha256:{}:{store_dir}:{name}",
         HEXLOWER.encode(inner_digest)
     );
     // name validation happens in here.
