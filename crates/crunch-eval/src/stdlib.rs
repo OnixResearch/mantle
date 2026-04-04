@@ -80,3 +80,71 @@ pub fn stdlib_import_path() -> Result<PathBuf, std::io::Error> {
     }
     write_stdlib(None)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_stdlib_creates_all_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = write_stdlib(Some(dir.path())).unwrap();
+        assert_eq!(result, dir.path());
+
+        for (name, _contents) in STDLIB_FILES {
+            let path = dir.path().join(name);
+            assert!(path.exists(), "stdlib file missing: {name}");
+        }
+    }
+
+    #[test]
+    fn write_stdlib_content_matches_embedded() {
+        let dir = tempfile::tempdir().unwrap();
+        write_stdlib(Some(dir.path())).unwrap();
+
+        for (name, expected) in STDLIB_FILES {
+            let actual = std::fs::read_to_string(dir.path().join(name)).unwrap();
+            assert_eq!(actual, *expected, "content mismatch for {name}");
+        }
+    }
+
+    #[test]
+    fn write_stdlib_skips_rewrite_when_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        write_stdlib(Some(dir.path())).unwrap();
+
+        let mtime_before = std::fs::metadata(dir.path().join("lib.ncl"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        // Small sleep to ensure mtime granularity
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        write_stdlib(Some(dir.path())).unwrap();
+
+        let mtime_after = std::fs::metadata(dir.path().join("lib.ncl"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        assert_eq!(mtime_before, mtime_after, "file should not be rewritten");
+    }
+
+    #[test]
+    fn stdlib_import_path_returns_dir_with_lib_ncl() {
+        let dir = stdlib_import_path().unwrap();
+        assert!(dir.join("lib.ncl").exists());
+    }
+
+    #[test]
+    fn stdlib_is_importable() {
+        let stdlib_dir = stdlib_import_path().unwrap();
+        let import_paths = vec![stdlib_dir.into_os_string()];
+
+        let expr = crate::evaluate_str(
+            r#"let lib = import "lib.ncl" in "ok""#,
+            &import_paths,
+        ).unwrap();
+        assert_eq!(expr.as_str(), Some("ok"));
+    }
+}

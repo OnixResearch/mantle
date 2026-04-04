@@ -128,6 +128,175 @@ pub fn evaluate_to_json(path: &Path, import_paths: &[OsString]) -> Result<String
 mod tests {
     use super::*;
 
+    // ── Phase 1: File-based evaluation ──────────────────────────
+
+    #[test]
+    fn eval_file_simple_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("test.ncl");
+        std::fs::write(&file, r#"{ name = "hello", port = 8080 }"#).unwrap();
+
+        let expr = evaluate(&file, &[]).unwrap();
+        assert!(expr.is_record());
+        let record = expr.as_record().unwrap();
+        assert_eq!(record.value_by_name("name").unwrap().as_str(), Some("hello"));
+        assert_eq!(record.value_by_name("port").unwrap().as_i64(), Some(8080));
+    }
+
+    #[test]
+    fn eval_file_resolves_import_from_parent_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("dep.ncl"),
+            r#"{ greeting = "hi" }"#,
+        ).unwrap();
+        std::fs::write(
+            dir.path().join("main.ncl"),
+            r#"let dep = import "dep.ncl" in { msg = dep.greeting }"#,
+        ).unwrap();
+
+        let expr = evaluate(&dir.path().join("main.ncl"), &[]).unwrap();
+        let record = expr.as_record().unwrap();
+        assert_eq!(record.value_by_name("msg").unwrap().as_str(), Some("hi"));
+    }
+
+    #[test]
+    fn eval_file_extra_import_path() {
+        let main_dir = tempfile::tempdir().unwrap();
+        let lib_dir = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            lib_dir.path().join("util.ncl"),
+            r#"{ version = 42 }"#,
+        ).unwrap();
+        std::fs::write(
+            main_dir.path().join("app.ncl"),
+            r#"let u = import "util.ncl" in { v = u.version }"#,
+        ).unwrap();
+
+        let import_paths = vec![lib_dir.path().as_os_str().to_owned()];
+        let expr = evaluate(&main_dir.path().join("app.ncl"), &import_paths).unwrap();
+        let record = expr.as_record().unwrap();
+        assert_eq!(record.value_by_name("v").unwrap().as_i64(), Some(42));
+    }
+
+    #[test]
+    fn eval_file_nonexistent_returns_io_error() {
+        let result = evaluate(Path::new("/nonexistent/file.ncl"), &[]);
+        let err = result.err().expect("should be Err");
+        assert!(matches!(err, Error::Io(_)), "expected Io, got: {err}");
+    }
+
+    #[test]
+    fn eval_file_to_json_returns_valid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("test.ncl");
+        std::fs::write(&file, r#"{ x = 1, y = "two" }"#).unwrap();
+
+        let json = evaluate_to_json(&file, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["x"], 1);
+        assert_eq!(parsed["y"], "two");
+    }
+
+    // ── Phase 3: JSON round-trip deserialization ────────────────
+
+    #[test]
+    fn eval_str_and_deserialize_flat_record() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Item { name: String, count: i64 }
+
+        let item: Item = evaluate_str_and_deserialize(
+            r#"{ name = "widget", count = 5 }"#, &[],
+        ).unwrap();
+        assert_eq!(item.name, "widget");
+        assert_eq!(item.count, 5);
+    }
+
+    #[test]
+    fn eval_str_and_deserialize_enum_tags() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Tagged { status: String }
+
+        // Nickel enum tags become strings through the JSON export path
+        let t: Tagged = evaluate_str_and_deserialize(
+            r#"{ status = 'active }"#, &[],
+        ).unwrap();
+        assert_eq!(t.status, "active");
+    }
+
+    #[test]
+    fn eval_str_and_deserialize_nested_records() {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Inner { value: i64 }
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Outer { name: String, inner: Inner }
+
+        let o: Outer = evaluate_str_and_deserialize(
+            r#"{ name = "pkg", inner = { value = 99 } }"#, &[],
+        ).unwrap();
+        assert_eq!(o.name, "pkg");
+        assert_eq!(o.inner.value, 99);
+    }
+
+    #[test]
+    fn eval_str_and_deserialize_type_mismatch_returns_serde_error() {
+        #[derive(serde::Deserialize, Debug)]
+        struct NeedsNumber { x: i64 }
+
+        let result = evaluate_str_and_deserialize::<NeedsNumber>(
+            r#"{ x = "not a number" }"#, &[],
+        );
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::Serde(_)));
+    }
+
+    // ── Phase 4: Error paths ───────────────────────────────────
+
+    #[test]
+    fn eval_str_syntax_error_returns_eval() {
+        let result = evaluate_str("{ missing_brace = 1", &[]);
+        let err = result.err().expect("should be Err");
+        assert!(matches!(err, Error::Eval(_)), "expected Eval, got: {err}");
+    }
+
+    #[test]
+    fn eval_str_typecheck_failure_returns_eval() {
+        let result = evaluate_str(
+            r#"let f : Number -> Number = fun x => x in f "hello""#,
+            &[],
+        );
+        let err = result.err().expect("should be Err");
+        assert!(matches!(err, Error::Eval(_)), "expected Eval, got: {err}");
+    }
+
+    #[test]
+    fn eval_and_deserialize_non_record_returns_serde() {
+        // Evaluating a number and trying to deserialize as a struct
+        #[derive(serde::Deserialize, Debug)]
+        struct Rec { field: String }
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("num.ncl");
+        std::fs::write(&file, "42").unwrap();
+
+        let result = evaluate_and_deserialize::<Rec>(&file, &[]);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::Serde(_)));
+    }
+
+    #[test]
+    fn eval_error_display_has_context() {
+        let err = evaluate_str("{ x | Number = \"bad\" }", &[])
+            .err().expect("should be Err");
+        let msg = format!("{err}");
+        // The display should say more than just "Nickel evaluation error"
+        // — it wraps NickelError which has diagnostic info.
+        assert!(!msg.is_empty());
+    }
+
+    // ── Original tests ─────────────────────────────────────────
+
     #[test]
     fn eval_simple_record() {
         let expr = evaluate_str("{ name = \"hello\", port = 8080 }", &[]).unwrap();
