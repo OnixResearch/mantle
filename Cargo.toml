@@ -1,46 +1,45 @@
-[package]
-name = "crunch"
+[workspace]
+resolver = "2"
+members = [
+  "crates/crunch-eval",
+  "crates/crunch-glue",
+  "crates/crunch-build",
+  "vendor/nix-compat",
+  "vendor/nix-compat-derive",
+  "vendor/snix-build",
+  "vendor/snix-castore",
+  "vendor/snix-store",
+  "vendor/snix-tracing",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+
+[package]
+name = "crunch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [[bin]]
 name = "crunch"
 path = "src/main.rs"
 
 [dependencies]
+crunch-eval = { path = "crates/crunch-eval" }
+crunch-glue = { path = "crates/crunch-glue" }
+crunch-build = { path = "crates/crunch-build" }
+nix-compat = { path = "vendor/nix-compat" }
 tokio = { version = "1", features = ["full"] }
-futures = "0.3"
-async-trait = "0.1"
-serde = { version = "1.0", features = ["derive", "rc"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive", "env"] }
-thiserror = "2.0"
 snafu = "0.8"
-bytes = "1"
-chrono = "0.4"
-rand = "0.9"
-hex = "0.4"
-url = "2"
-parking_lot = "0.12"
-
-# Optional simulation testing
-madsim = { version = "0.2", features = ["macros"], optional = true }
-
-# Optional property-based testing
-bolero = { version = "0.13", optional = true }
-bolero-generator = { version = "0.13", optional = true }
-proptest = { version = "1.0", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.0"
 tempfile = "3"
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
-tokio-test = "0.4"
-
-[features]
-default = []
-simulation = ["dep:madsim"]
-property-testing = ["dep:bolero", "dep:bolero-generator", "dep:proptest"]

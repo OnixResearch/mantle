@@ -1,0 +1,108 @@
+[package]
+name = "snix-castore"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-compression = { version = "0.4.12", features = ["tokio", "zstd"] }
+async-stream = "0.3.5"
+auto_impl = "1.2.0"
+bigtable_rs = { version = "0.2.18", optional = true }
+blake3 = { version = "=1.8.2", features = ["rayon", "std", "traits-preview"] }
+bstr = "1.10.0"
+bytes = "1.7.1"
+clap = { version = "4.5.16", features = ["derive", "env"] }
+data-encoding = "2.6.0"
+digest = "=0.10.7"
+erased-serde = "0.4.5"
+fastcdc = { version = "3.1.0", features = ["tokio"] }
+fuse-backend-rs = { version = "=0.12.0", optional = true }
+futures = "0.3.30"
+hashbrown = "0.15.4"
+hyper-util = "0.1.7"
+libc = { version = "0.2.158", optional = true }
+object_store = { version = "0.13.1", features = ["http"] }
+parking_lot = "0.12.3"
+petgraph = "0.6.5"
+pin-project-lite = "0.2.14"
+prost = "0.13.1"
+redb = { version = "3.1.1", features = ["logging"] }
+serde = { version = "1.0.209", features = ["derive"] }
+serde_qs = "0.12.0"
+serde_tagged = "0.3.0"
+serde_with = { version = "3.9.0", default-features = false, features = ["macros"] }
+snix-tracing = { path = "../snix-tracing", features = ["clap", "tonic"] }
+thiserror = "2.0"
+threadpool = { version = "1.8.1", optional = true }
+tokio = { version = "1.39.3", features = [
+  "fs",
+  "macros",
+  "net",
+  "rt",
+  "rt-multi-thread",
+  "signal",
+] }
+tokio-stream = { version = "0.1.15", features = ["fs", "net"] }
+tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
+tokio-util = { version = "0.7.11", features = ["io", "io-util", "codec"] }
+toml = { version = "0.8.19", optional = true }
+tonic = { version = "0.13.1", features = ["tls-aws-lc", "tls-native-roots"] }
+tonic-health = { version = "0.13.1", default-features = false }
+tonic-reflection = { version = "0.13.1", optional = true }
+tower = { version = "0.4.13", features = ["util"] }
+tower-http = { version = "0.6.2", features = ["trace"] }
+tracing = "0.1.40"
+tracing-indicatif = "0.3.7"
+url = "2.5.2"
+walkdir = "2.5.0"
+wu-manber = { git = "https://github.com/tvlfyi/wu-manber.git" }
+zstd = "0.13.2"
+
+# virtiofs deps — all optional
+vhost = { version = "=0.6.1", optional = true }
+vhost-user-backend = { version = "=0.8.0", optional = true }
+virtio-bindings = { version = "=0.2.6", optional = true }
+virtio-queue = { version = "=0.7.1", optional = true }
+vm-memory = { version = "=0.10.0", optional = true }
+vmm-sys-util = { version = "=0.11.2", optional = true }
+
+[build-dependencies]
+prost-build = "0.13.1"
+tonic-build = "0.13.1"
+
+[dev-dependencies]
+async-process = "2.2.4"
+hex-literal = "0.4.1"
+rstest = { version = "0.26.1", default-features = false }
+rstest_reuse = "0.7.0"
+serde_json = "1.0"
+tempfile = "3.12.0"
+tokio-retry = "0.3.0"
+tokio-test = "0.4.4"
+xattr = "1.3.1"
+
+[features]
+default = []
+cloud = [
+  "dep:bigtable_rs",
+  "object_store/aws",
+  "object_store/azure",
+  "object_store/gcp",
+]
+fs = ["dep:fuse-backend-rs", "dep:threadpool", "dep:libc"]
+virtiofs = [
+  "fs",
+  "dep:vhost",
+  "dep:vhost-user-backend",
+  "dep:virtio-queue",
+  "dep:vm-memory",
+  "dep:vmm-sys-util",
+  "dep:virtio-bindings",
+  "fuse-backend-rs?/vhost-user-fs",
+  "fuse-backend-rs?/virtiofs",
+]
+fuse = ["fs"]
+tonic-reflection = ["dep:tonic-reflection"]
+xp-composition-cli = ["toml", "xp-composition-url-refs"]
+xp-composition-url-refs = []
+integration = []

@@ -1,0 +1,61 @@
+[package]
+name = "snix-tracing"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.16", optional = true, features = ["derive"] }
+enumset = { version = "1.1.0", optional = true }
+tracing = { version = "0.1.40", features = [
+  "max_level_trace",
+  "release_max_level_debug",
+] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-indicatif = "0.3.7"
+tokio = { version = "1.39.3", features = ["macros", "signal", "sync", "rt"] }
+thiserror = "2.0"
+
+tracing-chrome = { version = "0.7.2", optional = true }
+tracing-opentelemetry = { version = "0.31.0", optional = true }
+opentelemetry = { version = "0.30.0", optional = true }
+opentelemetry-otlp = { version = "0.30.0", features = [
+  "grpc-tonic",
+], optional = true }
+opentelemetry_sdk = { version = "0.30.0", features = [
+  "rt-tokio",
+], optional = true }
+tracing-tracy = { version = "0.11.4", features = [
+  "flush-on-exit",
+  "manual-lifetime",
+], optional = true }
+opentelemetry-http = { version = "0.30.0", optional = true }
+opentelemetry-semantic-conventions = { version = "0.30.0", optional = true }
+
+tonic = { version = "0.13.1", features = ["tls-aws-lc", "tls-native-roots"], optional = true }
+http = { version = "1.1.0", optional = true }
+
+reqwest-tracing = { version = "0.6.0", default-features = false, optional = true }
+
+axum = { version = "0.8.8", optional = true }
+clap-verbosity-flag = { version = "3.0.4", optional = true, default-features = false, features = [
+  "tracing",
+] }
+
+[features]
+default = []
+chrome = ["dep:enumset", "dep:tracing-chrome"]
+clap = ["dep:clap", "dep:clap-verbosity-flag"]
+otlp = [
+  "dep:enumset",
+  "dep:tracing-opentelemetry",
+  "dep:opentelemetry",
+  "dep:opentelemetry-otlp",
+  "dep:opentelemetry_sdk",
+  "dep:opentelemetry-http",
+  "dep:opentelemetry-semantic-conventions",
+  "reqwest-tracing?/opentelemetry_0_30",
+]
+tracy = ["dep:enumset", "dep:tracing-tracy"]
+tonic = ["dep:tonic", "dep:http"]
+reqwest = ["dep:reqwest-tracing"]
+axum = ["dep:axum"]

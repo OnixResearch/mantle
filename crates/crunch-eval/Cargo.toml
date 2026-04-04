@@ -1,0 +1,10 @@
+[package]
+name = "crunch-eval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nickel-lang = "2.0.0"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
