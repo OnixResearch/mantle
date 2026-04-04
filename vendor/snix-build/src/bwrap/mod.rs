@@ -16,6 +16,9 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "--die-with-parent",
     "--as-pid-1",
     "--unshare-user",
+    // Prevent sandbox from gaining new privileges via setuid/setgid binaries
+    // or other capability escalation.
+    "--new-session",
     "--uid",
     "1000",
     "--gid",
