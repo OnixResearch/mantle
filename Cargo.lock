@@ -2806,6 +2806,7 @@ dependencies = [
 name = "nix-compat-derive"
 version = "0.1.0"
 dependencies = [
+ "nix-compat",
  "proc-macro2",
  "quote",
  "syn",
