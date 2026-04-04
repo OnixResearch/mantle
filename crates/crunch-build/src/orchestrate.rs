@@ -93,7 +93,19 @@ where
     }
 
     /// Recursive build implementation.
-    async fn build_derivation(
+    ///
+    /// Boxed because it's a recursive async fn — Rust can't compute the
+    /// layout of the future without indirection.
+    fn build_derivation<'a>(
+        &'a mut self,
+        drv_path: &'a StorePath<String>,
+        derivation: &'a Derivation,
+        known_paths: &'a KnownPaths,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<BuildOutcome, Error>> + 'a>> {
+        Box::pin(self.build_derivation_inner(drv_path, derivation, known_paths))
+    }
+
+    async fn build_derivation_inner(
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,

@@ -69,10 +69,13 @@ go through JSON export first. This is the correct path for the build pipeline.
 
 ## Phase 6: CLI and end-to-end
 
-- [ ] Implement `crunch build <file.ncl>`: eval → derivations → build → print output paths
-- [ ] Implement store initialization with configurable prefix
-- [ ] Add --store, --verbose, --log-level flags
-- [ ] Implement exit codes: 0 success, 1 build failure, 2 eval error, 3 internal error
+- [x] Implement `crunch build <file.ncl>`: eval → derivations → build → print output paths
+- [x] Implement `crunch eval <file.ncl>`: eval → print JSON
+- [x] Implement store initialization with configurable prefix (--store flag, defaults to /nix/store)
+- [x] Add --store, --verbose, --log-level flags
+- [x] Implement exit codes: 0 success, 1 build failure, 2 eval error, 3 internal error
+- [x] Auto-inject stdlib import path (source tree or embedded extraction)
+- [x] Wire up BubblewrapBuildService with MemoryBlobService + RedbDirectoryService
 - [ ] Write end-to-end test: build a hello-world C program using seed toolchain, verify binary runs
 
 ## Phase 7: Bootstrap and self-hosting prep

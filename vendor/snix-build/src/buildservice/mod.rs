@@ -15,6 +15,9 @@ mod bwrap;
 pub use dummy::DummyBuildService;
 pub use from_addr::from_addr;
 
+#[cfg(target_os = "linux")]
+pub use bwrap::BubblewrapBuildService;
+
 #[async_trait]
 pub trait BuildService: Send + Sync {
     /// TODO: document

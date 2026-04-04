@@ -32,13 +32,15 @@ crunch-eval = { path = "crates/crunch-eval" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-build = { path = "crates/crunch-build" }
 nix-compat = { path = "vendor/nix-compat" }
+snix-build = { path = "vendor/snix-build" }
+snix-castore = { path = "vendor/snix-castore" }
+snix-store = { path = "vendor/snix-store" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive", "env"] }
-snafu = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.0"
