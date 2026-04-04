@@ -169,3 +169,385 @@ fn derivation_identity(drv: &CrunchDerivation) -> String {
     // The ATerm hash is the true identity but isn't available before conversion.
     format!("{}:{}:{}", drv.name, drv.builder, drv.system)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::known_paths::KnownPaths;
+    use crate::types::*;
+    use nix_compat::nixhash::CAHash;
+
+    fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
+        CrunchDerivation {
+            name: name.to_string(),
+            builder: builder.to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec![],
+            outputs: vec!["out".to_string()],
+            env: Default::default(),
+            inputs: vec![],
+            fixed_output: None,
+        }
+    }
+
+    // ── Phase 2: basic derivations ────────────────────────────────────
+
+    #[test]
+    fn simple_drv_exact_store_path() {
+        let drv = minimal_drv("hello", "/bin/sh");
+        let mut kp = KnownPaths::new();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+        let out_path = nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap();
+
+        assert_eq!(
+            drv_path.to_absolute_path(),
+            "/nix/store/hyvs2ylkzjddglrw4vd0kzc2dgdypwhg-hello.drv"
+        );
+        assert_eq!(
+            out_path.to_absolute_path(),
+            "/nix/store/acsr0icqcmd1yx786z9ia4l1lvg2fw5c-hello"
+        );
+    }
+
+    #[test]
+    fn builder_and_system_propagate() {
+        let drv = minimal_drv("hello", "/usr/bin/env");
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.builder, "/usr/bin/env");
+        assert_eq!(nix_drv.system, "x86_64-linux");
+    }
+
+    #[test]
+    fn environment_auto_populated() {
+        let drv = minimal_drv("hello", "/bin/sh");
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.environment.get("system").unwrap(), "x86_64-linux");
+        assert_eq!(nix_drv.environment.get("builder").unwrap(), "/bin/sh");
+        assert_eq!(nix_drv.environment.get("name").unwrap(), "hello");
+
+        // "out" env entry matches the computed output path
+        let out_path = nix_drv
+            .outputs
+            .get("out")
+            .unwrap()
+            .path
+            .as_ref()
+            .unwrap()
+            .to_absolute_path();
+        let out_env: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
+        assert_eq!(out_env, out_path.as_bytes());
+    }
+
+    #[test]
+    fn multi_output_reflected_in_derivation() {
+        let drv = CrunchDerivation {
+            outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
+            ..minimal_drv("multi", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(
+            drv_path.to_absolute_path(),
+            "/nix/store/dw47932whb0073k1m8j1lq3q8v507fsg-multi.drv"
+        );
+        assert_eq!(nix_drv.outputs.len(), 3);
+        assert!(nix_drv.outputs.contains_key("out"));
+        assert!(nix_drv.outputs.contains_key("lib"));
+        assert!(nix_drv.outputs.contains_key("dev"));
+    }
+
+    #[test]
+    fn multi_output_distinct_paths() {
+        let drv = CrunchDerivation {
+            outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
+            ..minimal_drv("multi", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        let out = nix_drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
+        let lib = nix_drv.outputs["lib"].path.as_ref().unwrap().to_absolute_path();
+        let dev = nix_drv.outputs["dev"].path.as_ref().unwrap().to_absolute_path();
+
+        assert_eq!(out, "/nix/store/87bra95jlhk67vvw4zfz8q4df850drfg-multi");
+        assert_eq!(lib, "/nix/store/q82x493bnlma6xah3bxgz4ap55f1i6bd-multi-lib");
+        assert_eq!(dev, "/nix/store/73pmhlffls3p3pyyr2cp7g53vxsbn4ar-multi-dev");
+
+        assert_ne!(out, lib);
+        assert_ne!(lib, dev);
+        assert_ne!(out, dev);
+    }
+
+    // ── Phase 3: inputs and dependencies ──────────────────────────────
+
+    #[test]
+    fn source_input_wires_to_input_sources() {
+        let drv = CrunchDerivation {
+            inputs: vec![Input::Source(
+                "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash".to_string(),
+            )],
+            ..minimal_drv("with-src", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.input_sources.len(), 1);
+        let src = nix_drv.input_sources.iter().next().unwrap();
+        assert!(src.to_string().contains("bash"));
+        assert!(nix_drv.input_derivations.is_empty());
+    }
+
+    #[test]
+    fn derivation_input_wires_to_input_derivations() {
+        let dep = minimal_drv("libfoo", "/bin/sh");
+        let drv = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(dep))],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.input_derivations.len(), 1);
+        let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(
+            dep_path.to_absolute_path(),
+            "/nix/store/zqnanhvcp038ycgaw5zxccng3b1gm136-libfoo.drv"
+        );
+        assert!(dep_outputs.contains("out"));
+    }
+
+    #[test]
+    fn nested_drv_registered_in_known_paths() {
+        let dep = minimal_drv("libfoo", "/bin/sh");
+        let drv = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(dep))],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (parent_path, _) = convert(&drv, &mut kp).unwrap();
+
+        // Both parent and dep are in KnownPaths
+        assert!(kp.get_by_drv_path(&parent_path.to_absolute_path()).is_some());
+        assert!(kp
+            .get_by_drv_path("/nix/store/zqnanhvcp038ycgaw5zxccng3b1gm136-libfoo.drv")
+            .is_some());
+    }
+
+    #[test]
+    fn diamond_dep_single_known_paths_entry() {
+        let shared = minimal_drv("shared", "/bin/sh");
+        let left = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(shared.clone()))],
+            ..minimal_drv("left", "/bin/sh")
+        };
+        let right = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(shared))],
+            ..minimal_drv("right", "/bin/sh")
+        };
+        let top = CrunchDerivation {
+            inputs: vec![
+                Input::Derivation(Box::new(left)),
+                Input::Derivation(Box::new(right)),
+            ],
+            ..minimal_drv("top", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (_, nix_drv) = convert(&top, &mut kp).unwrap();
+
+        // top depends on left and right
+        assert_eq!(nix_drv.input_derivations.len(), 2);
+
+        // shared's drv path appears once in KnownPaths (dedup via identity)
+        let shared_path = {
+            let mut kp_check = KnownPaths::new();
+            let (p, _) = convert(&minimal_drv("shared", "/bin/sh"), &mut kp_check).unwrap();
+            p.to_absolute_path()
+        };
+        assert!(kp.get_by_drv_path(&shared_path).is_some());
+    }
+
+    #[test]
+    fn cycle_returns_circular_dependency_error() {
+        // Same identity nested inside itself
+        let inner = minimal_drv("loop", "/bin/sh");
+        let outer = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(inner))],
+            ..minimal_drv("loop", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let err = convert(&outer, &mut kp).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("ircular"),
+            "expected circular dependency error, got: {msg}"
+        );
+    }
+
+    // ── Phase 4: fixed-output derivations ─────────────────────────────
+
+    #[test]
+    fn fod_flat_sha256() {
+        let drv = CrunchDerivation {
+            fixed_output: Some(FixedOutput {
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
+                    .to_string(),
+                algo: "sha256".to_string(),
+                mode: "flat".to_string(),
+            }),
+            ..minimal_drv("src-flat", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(
+            drv_path.to_absolute_path(),
+            "/nix/store/wg3bgqpvdksabf8knkj8przj71jq2jas-src-flat.drv"
+        );
+        let out = nix_drv.outputs.get("out").unwrap();
+        assert_eq!(
+            out.path.as_ref().unwrap().to_absolute_path(),
+            "/nix/store/0s3jkqjcbwm5g95k3n5mamnqd6fi7ypk-src-flat"
+        );
+        assert!(matches!(out.ca_hash, Some(CAHash::Flat(_))));
+    }
+
+    #[test]
+    fn fod_recursive_sha256() {
+        let drv = CrunchDerivation {
+            fixed_output: Some(FixedOutput {
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
+                    .to_string(),
+                algo: "sha256".to_string(),
+                mode: "recursive".to_string(),
+            }),
+            ..minimal_drv("src-rec", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(
+            drv_path.to_absolute_path(),
+            "/nix/store/gpbxkgfx2xjhq2ybi1jwsps6nd23lj7y-src-rec.drv"
+        );
+        let out = nix_drv.outputs.get("out").unwrap();
+        assert_eq!(
+            out.path.as_ref().unwrap().to_absolute_path(),
+            "/nix/store/jfpkf3icsq4vlsmg0xfly8b1rv80hcxq-src-rec"
+        );
+        assert!(matches!(out.ca_hash, Some(CAHash::Nar(_))));
+    }
+
+    #[test]
+    fn fod_sri_hash_parses() {
+        let drv = CrunchDerivation {
+            fixed_output: Some(FixedOutput {
+                hash: "sha256-CIE8vumQPGK+TFAnJqQYowoNpFALLTadOvkob0gVzro=".to_string(),
+                algo: "sha256".to_string(),
+                mode: "flat".to_string(),
+            }),
+            ..minimal_drv("src-sri", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(
+            drv_path.to_absolute_path(),
+            "/nix/store/qppxjry1mz95f8r35nx4l4dbn0yiq84g-src-sri.drv"
+        );
+        assert_eq!(
+            nix_drv
+                .outputs
+                .get("out")
+                .unwrap()
+                .path
+                .as_ref()
+                .unwrap()
+                .to_absolute_path(),
+            "/nix/store/mikp7vivga7ysvaqnj6594dm3qz3qdz5-src-sri"
+        );
+    }
+
+    #[test]
+    fn fod_hex_parses_to_flat_ca_hash() {
+        let fo = FixedOutput {
+            hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
+                .to_string(),
+            algo: "sha256".to_string(),
+            mode: "flat".to_string(),
+        };
+        let ca = parse_fixed_output(&fo).unwrap();
+        assert!(matches!(ca, CAHash::Flat(_)));
+    }
+
+    #[test]
+    fn fod_sri_parses_to_flat_ca_hash() {
+        let fo = FixedOutput {
+            hash: "sha256-CIE8vumQPGK+TFAnJqQYowoNpFALLTadOvkob0gVzro=".to_string(),
+            algo: "sha256".to_string(),
+            mode: "flat".to_string(),
+        };
+        let ca = parse_fixed_output(&fo).unwrap();
+        assert!(matches!(ca, CAHash::Flat(_)));
+    }
+
+    #[test]
+    fn fod_invalid_algo_rejected() {
+        let drv = CrunchDerivation {
+            fixed_output: Some(FixedOutput {
+                hash: "deadbeef".to_string(),
+                algo: "crc32".to_string(),
+                mode: "flat".to_string(),
+            }),
+            ..minimal_drv("bad-algo", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let err = convert(&drv, &mut kp).unwrap_err();
+        assert!(
+            err.to_string().contains("hash algorithm"),
+            "expected hash algorithm error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn fod_invalid_mode_rejected() {
+        let drv = CrunchDerivation {
+            fixed_output: Some(FixedOutput {
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
+                    .to_string(),
+                algo: "sha256".to_string(),
+                mode: "broken".to_string(),
+            }),
+            ..minimal_drv("bad-mode", "/bin/sh")
+        };
+        let mut kp = KnownPaths::new();
+        let err = convert(&drv, &mut kp).unwrap_err();
+        assert!(
+            err.to_string().contains("hash mode"),
+            "expected hash mode error, got: {err}"
+        );
+    }
+
+    // ── Private helper tests ─────────────────────────────────────────
+
+    #[test]
+    fn parse_store_path_valid() {
+        let sp = parse_store_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash").unwrap();
+        assert!(sp.to_string().contains("bash"));
+    }
+
+    #[test]
+    fn parse_store_path_invalid() {
+        assert!(parse_store_path("/tmp/not-a-store-path").is_err());
+    }
+
+    #[test]
+    fn derivation_identity_format() {
+        let drv = minimal_drv("foo", "/bin/sh");
+        assert_eq!(derivation_identity(&drv), "foo:/bin/sh:x86_64-linux");
+    }
+}
