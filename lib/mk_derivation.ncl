@@ -106,16 +106,53 @@ let make_path = fun inputs =>
     |> std.string.join ":"
 in
 
-# Generate the build script from phases.
-let make_script = fun attrs =>
-  let phase = fun name =>
-    if std.record.has_field name attrs then
+# Default phase implementations. Used when the phase field is absent.
+let default_unpackPhase = m%"
+  if [ -n "$src" ]; then
+    if [ -d "$src" ]; then
+      cp -r "$src/." .
+    elif [ -f "$src" ]; then
+      tar xf "$src"
+    fi
+    # Enter single subdirectory if one exists (standard tarball layout).
+    _dirs=$(find . -maxdepth 1 -mindepth 1 -type d)
+    if [ "$(echo "$_dirs" | wc -l)" -eq 1 ]; then
+      cd "$_dirs"
+    fi
+  fi
+"% in
+let default_configurePhase = m%"
+  if [ -x ./configure ]; then
+    ./configure --prefix="$out"
+  fi
+"% in
+let default_buildPhase = m%"
+  make -j${NIX_BUILD_CORES:-1}
+"% in
+let default_installPhase = m%"
+  make install
+"% in
+
+# Resolve a phase: if present and non-empty, use it. If present and
+# empty, skip. If absent, use the default.
+let resolve_phase = fun attrs name fallback =>
+  if std.record.has_field name attrs then
+    let val = std.record.get name attrs in
+    if std.string.length val > 0 then
       m%"
         echo "-- %{name} --"
-        %{std.record.get name attrs}
+        %{val}
       "%
     else ""
-  in
+  else
+    m%"
+      echo "-- %{name} --"
+      %{fallback}
+    "%
+in
+
+# Generate the build script from phases.
+let make_script = fun attrs =>
   let check_phase =
     if attrs.doCheck && std.record.has_field "checkPhase" attrs then
       m%"
@@ -124,14 +161,25 @@ let make_script = fun attrs =>
       "%
     else ""
   in
+  let fixup_phase =
+    if std.record.has_field "fixupPhase" attrs then
+      let val = std.record.get "fixupPhase" attrs in
+      if std.string.length val > 0 then
+        m%"
+          echo "-- fixupPhase --"
+          %{val}
+        "%
+      else ""
+    else ""
+  in
   m%"
     set -e
-    %{phase "unpackPhase"}
-    %{phase "configurePhase"}
-    %{phase "buildPhase"}
+    %{resolve_phase attrs "unpackPhase" default_unpackPhase}
+    %{resolve_phase attrs "configurePhase" default_configurePhase}
+    %{resolve_phase attrs "buildPhase" default_buildPhase}
     %{check_phase}
-    %{phase "installPhase"}
-    %{phase "fixupPhase"}
+    %{resolve_phase attrs "installPhase" default_installPhase}
+    %{fixup_phase}
   "%
 in
 
@@ -170,12 +218,20 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     if std.string.length the_path > 0 then { PATH = the_path }
     else {}
   in
+  let src_env =
+    if std.record.has_field "src" resolved then
+      let the_src = resolved.src in
+      if std.is_string the_src then { src = the_src }
+      else {}
+    else {}
+  in
+  let build_env = { NIX_BUILD_CORES = "4" } in
   let drv = {
     name = the_name,
     builder = the_builder,
     args = ["-c", the_script],
     outputs = resolved.outputs,
-    env = path_env & resolved.env,
+    env = build_env & path_env & src_env & resolved.env,
     inputs = src_inputs @ all_inputs,
     pname = resolved.pname,
     version = resolved.version,
@@ -218,6 +274,45 @@ let mkStdenv = fun seed =>
   }
 in
 
+# mkShell: create a dev environment derivation.
+#
+# The derivation passes contract validation but fails if actually built.
+# A future `crunch shell` command will inspect the record to construct
+# an interactive environment.
+let mkShell = fun params =>
+  let resolved_bash =
+    if std.record.has_field "bash" params then params.bash
+    else "/bin/sh"
+  in
+  let bi =
+    if std.record.has_field "buildInputs" params then params.buildInputs
+    else []
+  in
+  let extra_env =
+    if std.record.has_field "env" params then params.env
+    else {}
+  in
+  let the_name =
+    if std.record.has_field "name" params then params.name
+    else "shell"
+  in
+  let the_path = make_path bi in
+  let path_env =
+    if std.string.length the_path > 0 then { PATH = the_path }
+    else {}
+  in
+  {
+    name = the_name,
+    builder = "%{resolved_bash}/bin/bash" |> (fun b =>
+      if std.is_string resolved_bash then b
+      else "/bin/sh"
+    ),
+    args = ["-c", "echo 'error: this derivation is not meant to be built, use crunch shell' >&2; exit 1"],
+    inputs = bi,
+    env = path_env & extra_env,
+  } | Derivation
+in
+
 # Dependency injection: pass a package set to a package function.
 let callPackage = fun pkgs pkg_fn => pkg_fn pkgs in
 
@@ -225,5 +320,6 @@ let callPackage = fun pkgs pkg_fn => pkg_fn pkgs in
   include MkDerivationArgs,
   include mk_derivation_with_shell,
   include mkStdenv,
+  include mkShell,
   include callPackage,
 }

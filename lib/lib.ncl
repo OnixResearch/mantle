@@ -50,6 +50,7 @@ let pkg = import "mk_derivation.ncl" in
 
   # Package authoring
   mkStdenv = pkg.mkStdenv,
+  mkShell = pkg.mkShell,
   callPackage = pkg.callPackage,
   MkDerivationArgs = pkg.MkDerivationArgs,
 }

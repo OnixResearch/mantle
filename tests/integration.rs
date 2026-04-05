@@ -576,3 +576,280 @@ fn build_accepts_short_j_flag() {
         .assert()
         .stderr(predicate::str::contains("unrecognized").not());
 }
+
+#[test]
+fn build_accepts_no_substitute_flag() {
+    crunch_cmd()
+        .args(["build", "--no-substitute"])
+        .arg(fixture("simple.ncl"))
+        .assert()
+        .stderr(predicate::str::contains("unrecognized").not());
+}
+
+#[test]
+fn build_accepts_substituters_flag() {
+    crunch_cmd()
+        .args(["build", "--substituters", "https://example.com"])
+        .arg(fixture("simple.ncl"))
+        .assert()
+        .stderr(predicate::str::contains("unrecognized").not());
+}
+
+// ── mkDerivation eval tests ───────────────────────────────────
+
+#[test]
+fn eval_mkderivation_has_default_phases() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+let stdenv = crunch.mkStdenv {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
+} in
+stdenv.mkDerivation {
+  pname = "defaults-test",
+  version = "0",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "eval should succeed: {}",
+        String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Default phases should appear in the build script.
+    assert!(stdout.contains("make install"), "should have default installPhase: {stdout}");
+    assert!(stdout.contains("configure"), "should have default configurePhase: {stdout}");
+    assert!(stdout.contains("NIX_BUILD_CORES"), "should have NIX_BUILD_CORES: {stdout}");
+}
+
+#[test]
+fn eval_mkderivation_custom_phase_overrides_default() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+let stdenv = crunch.mkStdenv {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
+} in
+stdenv.mkDerivation {
+  pname = "custom-phase",
+  version = "1",
+  buildPhase = "cmake --build .",
+  installPhase = "cmake --install . --prefix $out",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("cmake --build"), "custom buildPhase: {stdout}");
+    assert!(stdout.contains("cmake --install"), "custom installPhase: {stdout}");
+    // Default make should NOT appear.
+    assert!(!stdout.contains("make -j"), "default buildPhase should be overridden: {stdout}");
+    assert!(!stdout.contains("make install"), "default installPhase should be overridden: {stdout}");
+}
+
+#[test]
+fn eval_mkderivation_empty_phase_skips() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+let stdenv = crunch.mkStdenv {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
+} in
+stdenv.mkDerivation {
+  pname = "skip-phase",
+  version = "0",
+  configurePhase = "",
+  buildPhase = "gcc -o out main.c",
+  installPhase = "cp out $out",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Empty configurePhase should not emit ./configure default.
+    assert!(!stdout.contains("./configure"), "empty configurePhase should be skipped: {stdout}");
+    assert!(stdout.contains("gcc -o out"), "custom buildPhase present: {stdout}");
+}
+
+#[test]
+fn eval_mkshell_produces_valid_derivation() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+crunch.mkShell {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  name = "test-shell",
+  buildInputs = ["/nix/store/00000000000000000000000000000001-gcc"],
+  env = { CC = "gcc" },
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "mkShell eval should succeed: {}",
+        String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("test-shell"), "name: {stdout}");
+    assert!(stdout.contains("not meant to be built"), "fail message: {stdout}");
+    assert!(stdout.contains("gcc"), "PATH should include gcc: {stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed["env"]["CC"].as_str() == Some("gcc"), "env.CC: {stdout}");
+}
+
+#[test]
+fn eval_mkderivation_src_wired_to_env() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+let stdenv = crunch.mkStdenv {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
+} in
+stdenv.mkDerivation {
+  pname = "src-test",
+  version = "0",
+  src = "/nix/store/00000000000000000000000000000002-source",
+  buildPhase = "echo building",
+  installPhase = "mkdir -p $out",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "eval should succeed: {}",
+        String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    // src should be in env
+    assert_eq!(
+        parsed["env"]["src"].as_str(),
+        Some("/nix/store/00000000000000000000000000000002-source"),
+        "$src env var: {stdout}"
+    );
+    // src should be in inputs
+    let inputs = parsed["inputs"].as_array().unwrap();
+    assert!(
+        inputs.iter().any(|v| v.as_str().unwrap().contains("source")),
+        "src should be in inputs: {stdout}"
+    );
+}
+
+#[test]
+fn eval_multi_output_derivation() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "multi-out",
+  builder = "/bin/sh",
+  args = ["-c", "mkdir -p $out $dev"],
+  outputs = ["out", "dev"],
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success());
+    let parsed: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    let outputs = parsed["outputs"].as_array().unwrap();
+    assert_eq!(outputs.len(), 2);
+    assert_eq!(outputs[0], "out");
+    assert_eq!(outputs[1], "dev");
+}
+
+#[test]
+fn eval_output_selection_with_select() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+let lib = {
+  name = "mylib",
+  builder = "/bin/sh",
+  args = ["-c", "mkdir -p $out $dev"],
+  outputs = ["out", "dev"],
+} | crunch.Derivation in
+{
+  name = "consumer",
+  builder = "/bin/sh",
+  args = ["-c", "echo > $out"],
+  inputs = [crunch.select lib "dev"],
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "select eval: {}",
+        String::from_utf8_lossy(&output.stderr));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    // inputs should contain the output selection record
+    let inputs = parsed["inputs"].as_array().unwrap();
+    assert!(
+        inputs.iter().any(|v| v.is_object() && v.get("output").is_some()),
+        "inputs should contain an output selection: {inputs:?}"
+    );
+}
