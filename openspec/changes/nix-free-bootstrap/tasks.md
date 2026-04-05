@@ -31,11 +31,9 @@
 
 - [x] Write `bootstrap/binutils.ncl`: fetch + build binutils 2.42 with musl-gcc ✅ (15 tools: as, ld, ar, nm, objcopy, etc.)
 - [x] Write `bootstrap/musl.ncl`: fetch + build musl 1.2.5 libc from source ✅ (libc.a, libc.so, ld-musl, 91 headers, 9 static libs)
-- [ ] Write `bootstrap/gcc.ncl`: fetch gcc source, build with Phase 3 tools + musl-gcc
-  - Cross-compile gcc targeting musl (avoids glibc dependency)
-  - This is the hardest step — gcc's build system is complex
-- [ ] Test: the crunch-built gcc can compile itself (3-stage bootstrap)
-- [ ] Remove the fetched musl-gcc from the dependency tree — everything traces to source
+- [x] Write `bootstrap/gcc.ncl`: build GCC 13.3.0 C-only from source with GMP/MPFR/MPC in-tree ✅
+- [~] Test: the crunch-built gcc can compile itself (3-stage bootstrap) — future work
+- [~] Remove the fetched musl-gcc from the dependency tree — future work (need to wire gcc+binutils+musl as the compiler for subsequent builds)
 
 ## Phase 5: Self-host crunch (stretch)
 

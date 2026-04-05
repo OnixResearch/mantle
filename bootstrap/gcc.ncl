@@ -1,0 +1,255 @@
+# Build GCC from source using the bootstrap toolchain.
+#
+# Part of the Nix-free bootstrap chain (Phase 4):
+#   musl-gcc (fetched) → make → dash → binutils → musl → gcc (this file)
+#
+# This builds a minimal C-only GCC targeting musl libc. Combined with
+# the from-source binutils and musl, this gives a fully from-source
+# toolchain — the fetched musl-gcc seed is no longer needed for
+# subsequent builds.
+#
+# GCC needs three math libraries (GMP, MPFR, MPC) which are fetched
+# separately and symlinked into the source tree for in-tree building.
+#
+# Usage:
+#   crunch build bootstrap/gcc.ncl -I lib --store /tmp/crunch-store
+
+let crunch = import "lib.ncl" in
+
+let toolchain = crunch.fetchTarball {
+  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
+  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
+  name = "musl-gcc",
+} in
+
+let gnumake = (import "make.ncl") in
+let dash = (import "dash.ncl") in
+let binutils = (import "binutils.ncl") in
+let musl = (import "musl.ncl") in
+
+let gcc_src = crunch.fetchTarball {
+  url = "https://ftp.gnu.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.gz",
+  hash = "sha256-WWameciUJMmYPeqfDIPa3YmPZaZUuB6r6XpwlfjRXo8=",
+  name = "gcc-src",
+} in
+
+let gmp_src = crunch.fetchTarball {
+  url = "https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2",
+  hash = "sha256-69A2yy9AY8/OFO5FfNmsvd01vTknitC/wrQSjaZq86A=",
+  name = "gmp-src",
+} in
+
+let mpfr_src = crunch.fetchTarball {
+  url = "https://ftp.gnu.org/gnu/mpfr/mpfr-4.1.0.tar.bz2",
+  hash = "sha256-Q8xRKVAvE1c0uPSWy/Kav0Hfw0UxlnWzePXE13u6sDw=",
+  name = "mpfr-src",
+} in
+
+let mpc_src = crunch.fetchTarball {
+  url = "https://ftp.gnu.org/gnu/mpc/mpc-1.2.1.tar.gz",
+  hash = "sha256-nyt5XHt58wWilbLRlIDuECmD3qBqmKTx4jiGL/7n5Ws=",
+  name = "mpc-src",
+} in
+
+{
+  name = "gcc",
+  builder = "/bin/sh",
+  args = [
+    "-c",
+    m%"
+      BB=/bin/busybox
+      $BB mkdir -p /tmp/tools
+      for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
+                 tr head tail sort wc expr test basename dirname \
+                 install find xargs readlink sleep touch date od \
+                 uname id hostname diff cmp true false tee nl \
+                 cut printf dd env seq tar gzip gunzip bzip2 \
+                 mktemp rmdir; do
+        $BB ln -sf $BB /tmp/tools/$cmd
+      done
+
+      # Find bootstrap tools.
+      TOOLCHAIN=""
+      for d in /nix/store/*-musl-gcc; do
+        if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
+      done
+      MAKE=""
+      for d in /nix/store/*-gnumake; do
+        if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
+      done
+      DASH=""
+      for d in /nix/store/*-dash; do
+        if [ -x "$d/bin/dash" ]; then DASH="$d/bin/dash"; break; fi
+      done
+      BINUTILS=""
+      for d in /nix/store/*-binutils; do
+        if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
+      done
+      MUSL=""
+      for d in /nix/store/*-musl; do
+        if [ -d "$d/include" ]; then MUSL="$d"; break; fi
+      done
+
+      for tool in TOOLCHAIN MAKE DASH BINUTILS MUSL; do
+        eval val=\$$tool
+        if [ -z "$val" ]; then
+          echo "ERROR: $tool not found" >&2; exit 1
+        fi
+        echo "$tool=$val"
+      done
+
+      $BB ln -sf "$DASH" /tmp/tools/sh
+
+      # egrep/fgrep symlinks (some sub-configures use them directly).
+      cat > /tmp/tools/egrep << 'EGEOF'
+#!/bin/sh
+exec grep -E "$@"
+EGEOF
+      chmod +x /tmp/tools/egrep
+      cat > /tmp/tools/fgrep << 'FGEOF'
+#!/bin/sh
+exec grep -F "$@"
+FGEOF
+      chmod +x /tmp/tools/fgrep
+
+      # Find source tarballs.
+      GCC_SRC="" GMP_SRC="" MPFR_SRC="" MPC_SRC=""
+      for d in /nix/store/*-gcc-src; do
+        if [ -d "$d" ]; then GCC_SRC="$d"; fi
+      done
+      for d in /nix/store/*-gmp-src; do
+        if [ -d "$d" ]; then GMP_SRC="$d"; fi
+      done
+      for d in /nix/store/*-mpfr-src; do
+        if [ -d "$d" ]; then MPFR_SRC="$d"; fi
+      done
+      for d in /nix/store/*-mpc-src; do
+        if [ -d "$d" ]; then MPC_SRC="$d"; fi
+      done
+
+      for src in GCC_SRC GMP_SRC MPFR_SRC MPC_SRC; do
+        eval val=\$$src
+        if [ -z "$val" ]; then
+          echo "ERROR: $src not found" >&2; exit 1
+        fi
+      done
+
+      # Create prefixed symlinks for the unprefixed binutils tools.
+      # libtool and sub-configures look for x86_64-linux-musl-ar etc.
+      for tool in ar as ld ld.bfd nm objcopy objdump ranlib readelf strip size strings; do
+        if [ -x "$TOOLCHAIN/bin/$tool" ]; then
+          $BB ln -sf "$TOOLCHAIN/bin/$tool" /tmp/tools/x86_64-linux-musl-$tool
+        fi
+      done
+
+      export PATH="/tmp/tools:$TOOLCHAIN/bin:$BINUTILS/bin"
+      export SHELL="$DASH"
+      export CONFIG_SHELL="$DASH"
+
+      # Copy gcc source to writable /tmp and symlink prerequisites.
+      $BB cp -r "$GCC_SRC" /tmp/gcc-src 2>/dev/null
+      $BB chmod -R u+w /tmp/gcc-src
+
+      # Handle fetchTarball not stripping top-level dir.
+      if [ -f /tmp/gcc-src/configure ]; then
+        GSRC=/tmp/gcc-src
+      else
+        for sub in /tmp/gcc-src/*/configure; do
+          GSRC=$(dirname "$sub"); break
+        done
+      fi
+
+      # Symlink in-tree prerequisites (same as download_prerequisites).
+      for lib in gmp mpfr mpc; do
+        eval srcdir=\$$(echo $lib | tr a-z A-Z)_SRC
+        # Find the actual source dir (may have version subdir)
+        if [ -f "$srcdir/configure" ]; then
+          ln -sf "$srcdir" "$GSRC/$lib"
+        else
+          for sub in $srcdir/*/configure; do
+            ln -sf "$(dirname "$sub")" "$GSRC/$lib"
+            break
+          done
+        fi
+        echo "Linked $lib -> $(readlink "$GSRC/$lib")"
+      done
+
+      mkdir -p /tmp/gcc-build
+      cd /tmp/gcc-build
+
+      # Create a CC wrapper that always passes -static. Inside the
+      # bwrap sandbox, there's no dynamic linker at /lib/ so all
+      # configure test binaries and build tools must be static.
+      cat > /tmp/tools/musl-gcc-static << WRAPEOF
+#!/bin/sh
+exec $TOOLCHAIN/bin/x86_64-linux-musl-gcc -static "\$@"
+WRAPEOF
+      chmod +x /tmp/tools/musl-gcc-static
+
+      cat > /tmp/tools/musl-g++-static << WRAPEOF
+#!/bin/sh
+exec $TOOLCHAIN/bin/x86_64-linux-musl-g++ -static "\$@"
+WRAPEOF
+      chmod +x /tmp/tools/musl-g++-static
+
+      echo "=== Configuring gcc ==="
+      "$DASH" "$GSRC/configure" \
+        --prefix=$out \
+        --build=x86_64-linux-musl \
+        --host=x86_64-linux-musl \
+        --target=x86_64-linux-musl \
+        --enable-languages=c \
+        --disable-bootstrap \
+        --disable-multilib \
+        --disable-nls \
+        --disable-werror \
+        --disable-libssp \
+        --disable-libgomp \
+        --disable-libquadmath \
+        --disable-libstdcxx \
+        --disable-libatomic \
+        --disable-libvtv \
+        --disable-libsanitizer \
+        --disable-shared \
+        --disable-threads \
+        --disable-plugin \
+        --disable-lto \
+        --disable-decimal-float \
+        --disable-fixed-point \
+        --with-sysroot="$MUSL" \
+        --with-native-system-header-dir=/include \
+        --with-build-sysroot="$MUSL" \
+        CC="/tmp/tools/musl-gcc-static" \
+        CXX="/tmp/tools/musl-g++-static" \
+
+        AR="$TOOLCHAIN/bin/ar" \
+        RANLIB="$TOOLCHAIN/bin/ranlib" \
+        AS="$BINUTILS/bin/x86_64-linux-musl-as" \
+        LD="$BINUTILS/bin/x86_64-linux-musl-ld" \
+        NM="$TOOLCHAIN/bin/nm" \
+        CFLAGS="-O2" \
+        CXXFLAGS="-O2" \
+        LDFLAGS="-static" \
+        GREP="/tmp/tools/grep" \
+        EGREP="/tmp/tools/grep -E" \
+        FGREP="/tmp/tools/grep -F" \
+        SED="/tmp/tools/sed" \
+        AWK="/tmp/tools/awk" \
+        am_cv_ar_interface=ar \
+        2>&1 || exit 1
+
+      echo "=== Building gcc ==="
+      "$MAKE" -j4 SHELL="$DASH" MAKEINFO=true \
+        2>&1 || exit 1
+
+      echo "=== Installing gcc ==="
+      "$MAKE" install SHELL="$DASH" MAKEINFO=true \
+        2>&1 || exit 1
+
+      echo "=== Verify ==="
+      $out/bin/x86_64-linux-musl-gcc --version | head -1
+      ls $out/bin/
+    "%,
+  ],
+  inputs = [toolchain, gnumake, dash, binutils, musl, gcc_src, gmp_src, mpfr_src, mpc_src],
+} | crunch.Derivation
