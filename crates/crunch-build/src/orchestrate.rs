@@ -201,16 +201,41 @@ where
             }
         }
 
-        // 3. Validate source inputs exist on disk
+        // 3. Validate source inputs exist on disk and resolve closures.
+        //    For Nix store paths, query the runtime closure so all
+        //    transitive dependencies (glibc, etc.) are mounted.
+        let mut all_source_paths: Vec<StorePath<String>> =
+            derivation.input_sources.iter().cloned().collect();
+
+        // Resolve closures for each declared source input.
         for source_path in &derivation.input_sources {
-            let abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store_dir_str));
-            if !abs.exists() {
+            let abs = source_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            if !PathBuf::from(&abs).exists() {
                 return Err(Error::SourceNotFound {
                     path: source_path.clone(),
                 });
             }
+            // Query Nix for the runtime closure.
+            let closure_paths = resolve_nix_closure(&abs);
+            for closure_abs in closure_paths {
+                if let Some(sp) = parse_store_path(&closure_abs, &self.store_dir_str) {
+                    if !all_source_paths.contains(&sp) {
+                        all_source_paths.push(sp);
+                    }
+                }
+            }
+        }
 
-            // Ingest source into castore if we don't have its node yet
+        // Ingest all source paths (declared + closure) into castore.
+        for source_path in &all_source_paths {
+            let abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store_dir_str));
+            if !abs.exists() {
+                // Closure member missing — skip silently (may have been
+                // garbage collected). The build will fail if it's actually
+                // needed at runtime.
+                debug!(path = %source_path, "closure path not found on disk, skipping");
+                continue;
+            }
             if !self.output_nodes.contains_key(source_path) {
                 let node = ingest_path::<_, _, _, &[u8]>(
                     self.blob_service.clone(),
@@ -227,8 +252,11 @@ where
             }
         }
 
-        // 4. Collect input nodes for the sandbox
-        let input_paths = collect_input_paths(derivation, known_paths)?;
+        // 4. Collect input nodes for the sandbox (declared + closure)
+        let mut input_paths = collect_input_paths(derivation, known_paths)?;
+        for sp in &all_source_paths {
+            input_paths.insert(sp.clone());
+        }
         let mut sandbox_inputs: BTreeMap<StorePath<String>, Node> = BTreeMap::new();
         for input_path in &input_paths {
             if let Some(node) = self.output_nodes.get(input_path) {
@@ -979,6 +1007,37 @@ async fn hash_blob(
 }
 
 /// Map refscan needle indices back to store path references.
+/// Query the Nix store for the runtime closure of a store path.
+///
+/// Runs `nix-store -qR <path>` and returns the list of absolute paths.
+/// Returns an empty vec if nix-store is not available or the query fails
+/// (graceful degradation — the build may still work if dependencies are
+/// statically linked or the closure is incomplete).
+fn resolve_nix_closure(abs_path: &str) -> Vec<String> {
+    let output = std::process::Command::new("nix-store")
+        .args(["-qR", abs_path])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(|l| l.to_string())
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+/// Parse an absolute store path string into a `StorePath`, given the
+/// store directory prefix. Returns `None` if the path doesn't start
+/// with the prefix or can't be parsed.
+fn parse_store_path(abs: &str, store_dir: &str) -> Option<StorePath<String>> {
+    let suffix = abs.strip_prefix(store_dir)?.strip_prefix('/')?;
+    StorePath::<String>::from_bytes(suffix.as_bytes()).ok().map(|sp| sp.to_owned())
+}
+
 fn resolve_references(
     found_needles: &BTreeSet<u64>,
     _all_needles: &[String],
