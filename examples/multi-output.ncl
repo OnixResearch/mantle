@@ -11,12 +11,15 @@
 # as $out, $dev, $man.
 
 let crunch = import "lib.ncl" in
-let seed = import "../examples/seed.ncl" in
+let seed = import "seed.ncl" in
 
 {
   name = "hello-multi",
   builder = "%{seed.bash}/bin/bash",
   outputs = ["out", "dev", "man"],
+  env = {
+    PATH = "%{seed.coreutils}/bin",
+  },
   args = ["-c", m%"
     # Create output directories
     for output in $outputs; do

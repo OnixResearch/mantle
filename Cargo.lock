@@ -982,7 +982,6 @@ dependencies = [
  "data-encoding",
  "flate2",
  "futures",
- "libc",
  "nix-compat",
  "predicates",
  "pretty_assertions",

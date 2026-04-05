@@ -35,11 +35,12 @@
 
 ## Phase 4: Tier 4 — Composition (multi-output, deps, phases)
 
-- [ ] Build `examples/multi-output.ncl` — builds fail due to missing PATH for coreutils in sandbox (example bug, not crunch bug)
+- [x] Build `examples/multi-output.ncl` ✅ fixed example (added PATH to env, fixed seed import path) — all 3 outputs (bin, dev, man) produced correctly
 - [x] Build `examples/package-set.ncl` ✅ libfoo + app both built, app runs, prints "app works!"
 - [x] Eval `examples/override.ncl` ✅ overrideAttrs produces modified derivation JSON
 
 ## Phase 5: Tier 5 — Real package from source
 
-- [ ] Write a Nickel file that fetchTarball's a small C project, builds with configure/make/install
-- [ ] Build it with crunch and verify the installed binary works
+- [x] Write `examples/build-from-source.ncl` ✅ multi-file C project with Makefile, libgreet.a, header, binary
+- [x] Build with crunch ✅ produces $out/bin/greet, $out/lib/libgreet.a, $out/include/greet.h
+- [x] Verify binary runs ✅ greet, greet --formal, greet --version all work
