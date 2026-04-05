@@ -835,7 +835,16 @@ where
             .map(|v| String::from_utf8_lossy(v).to_string())
             .unwrap_or_default();
         let provisional_bytes = provisional.as_bytes();
-        let marker = vec![0u8; provisional_bytes.len()];
+        // Use a blake3-derived marker instead of all-zeros to avoid
+        // false matches against zero-padded ELF sections, alignment
+        // padding, BSS regions, etc.
+        let marker_hash = *blake3::hash(
+            format!("crunch-ca-marker:{output_name}").as_bytes(),
+        ).as_bytes();
+        let mut marker = vec![0u8; provisional_bytes.len()];
+        for (i, b) in marker_hash.iter().cycle().enumerate().take(marker.len()) {
+            marker[i] = *b;
+        }
 
         // 2. Replace provisional with zero marker.
         let (marked_node, _has_self_refs) = crate::rewrite::rewrite_node(
