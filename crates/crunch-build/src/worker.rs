@@ -663,13 +663,14 @@ impl Worker {
             );
 
             let drv_path = goal.drv_path.clone();
+            let is_root = goal.is_root;
             let derivation = goal.derivation.as_ref()
                 .ok_or_else(|| Error::Store(format!(
                     "goal {drv_key} in Ready state but has no derivation"
                 )))?
                 .clone();
 
-            match builder.prepare_build(&drv_path, &derivation, known_paths).await {
+            match builder.prepare_build(&drv_path, &derivation, known_paths, is_root).await {
                 Ok(PrepareResult::Done(outcome)) => {
                     // Cache hit or fetcher — complete synchronously.
                     self.complete_goal(&drv_key, outcome, outcomes, failed)?;

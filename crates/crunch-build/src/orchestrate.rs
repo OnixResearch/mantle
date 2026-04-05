@@ -53,6 +53,9 @@ pub(crate) struct PreparedBuild {
     pub(crate) sandbox_inputs: BTreeMap<StorePath<String>, Node>,
     pub(crate) input_rewrites: Vec<(String, String)>,
     pub(crate) is_ca: bool,
+    /// Whether this derivation is a user-requested root.
+    /// Root outputs get exported to disk; intermediate deps stay in castore.
+    pub(crate) is_root: bool,
 }
 
 /// Result of `prepare_build`: either already done (cached/fetcher) or
@@ -249,6 +252,7 @@ where
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         known_paths: &mut KnownPaths,
+        is_root: bool,
     ) -> Result<PrepareResult, Error> {
         let drv_name = drv_path.name().to_string();
 
@@ -266,7 +270,7 @@ where
         // 2. Builtin fetcher bypass (runs inline, not dispatched).
         if crate::fetcher::is_builtin_fetcher(derivation) {
             let outcome = self
-                .build_fetcher(drv_path, derivation, known_paths)
+                .build_fetcher(drv_path, derivation, known_paths, is_root)
                 .await?;
             return Ok(PrepareResult::Done(outcome));
         }
@@ -315,6 +319,7 @@ where
             sandbox_inputs,
             input_rewrites,
             is_ca,
+            is_root,
         }))
     }
 
@@ -359,6 +364,7 @@ where
                         &prepared.derivation,
                         known_paths,
                         prepared.is_ca,
+                        prepared.is_root,
                     )
                     .await?;
 
@@ -569,6 +575,7 @@ where
                 intermediate.nar_size,
                 intermediate.nar_sha256,
                 ca_field,
+                prepared.is_root,
             ).await?;
 
             output_infos.insert(intermediate.name.clone(), path_info);
@@ -725,6 +732,7 @@ where
         derivation: &Derivation,
         known_paths: &mut KnownPaths,
         is_ca: bool,
+        is_root: bool,
     ) -> Result<PathInfo, Error> {
         let nar_renderer = SimpleRenderer::new(
             self.blob_service.clone(),
@@ -791,7 +799,7 @@ where
         // Persist and export.
         self.persist_and_export_output(
             drv_path, &output_path, final_node, references,
-            nar_size, nar_sha256, ca_field,
+            nar_size, nar_sha256, ca_field, is_root,
         ).await
     }
 
@@ -901,6 +909,7 @@ where
         nar_size: u64,
         nar_sha256: [u8; 32],
         ca: Option<nix_compat::nixhash::CAHash>,
+        is_root: bool,
     ) -> Result<PathInfo, Error> {
         // Tiger Style: assert the NAR hash is not all zeros
         // (would indicate a hashing bug or uninitialized memory).
@@ -932,7 +941,10 @@ where
         self.output_nodes
             .insert(output_path.clone(), final_node.clone());
 
-        if !PathBuf::from(&abs_path).exists() {
+        // Only export to disk for root derivations (user-requested).
+        // Intermediate deps stay in castore only — downstream builds
+        // access them via output_nodes.
+        if is_root && !PathBuf::from(&abs_path).exists() {
             match export_castore_to_disk(
                 &final_node, &abs_path,
                 &self.blob_service, &self.directory_service,
@@ -940,9 +952,10 @@ where
                 Ok(()) => {}
                 Err(e) if e.contains("Read-only file system")
                        || e.contains("Permission denied") => {
-                    debug!(
+                    tracing::warn!(
                         path = %abs_path,
-                        "store dir not writable, output stays in castore only"
+                        "could not export output to disk (read-only store), \
+                         output is available in castore"
                     );
                 }
                 Err(e) => {
@@ -966,6 +979,7 @@ where
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         _known_paths: &mut KnownPaths,
+        is_root: bool,
     ) -> Result<BuildOutcome, Error> {
         let drv_name = drv_path.name().to_string();
 
@@ -1075,6 +1089,7 @@ where
                 nar_size,
                 nar_sha256,
                 out_output.ca_hash.clone(),
+                is_root,
             )
             .await?;
 
@@ -1094,6 +1109,24 @@ where
     /// Check cache: every output must have PathInfo AND exist on disk.
     /// For CA derivations, uses ca_mappings to find the resolved path.
     /// Returns Some(outputs) on full cache hit, None on any miss.
+    /// Check whether the castore has the content referenced by a Node.
+    /// Files: probe blob_service. Directories: probe directory_service.
+    /// Symlinks: always present (target is inline in the Node).
+    async fn castore_has_content(&self, node: &Node) -> Result<bool, Error> {
+        match node {
+            Node::File { digest, .. } => {
+                self.blob_service.has(digest).await
+                    .map_err(|e| Error::Store(format!("blob existence check: {e}")))
+            }
+            Node::Directory { digest, .. } => {
+                self.directory_service.get(digest).await
+                    .map(|opt| opt.is_some())
+                    .map_err(|e| Error::Store(format!("directory existence check: {e}")))
+            }
+            Node::Symlink { .. } => Ok(true),
+        }
+    }
+
     async fn check_cache(
         &mut self,
         drv_path: &StorePath<String>,
@@ -1118,37 +1151,31 @@ where
                 }
             };
 
-            // Cache check: output must exist on host at the physical output dir.
-            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.output_dir_str));
+            // Cache check: PathInfo + castore content = cached.
+            // No filesystem existence check — the castore IS the store.
             let digest = *output_path.digest();
 
             let stored = self.pathinfo_service.get(digest).await
                 .map_err(|e| Error::Store(format!("PathInfo lookup: {e}")))?;
 
-            match (stored, abs.exists()) {
-                (Some(path_info), true) => {
-                    self.output_nodes.insert(output_path.clone(), path_info.node.clone());
-                    self.built_outputs.insert(
-                        output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                        path_info.clone(),
-                    );
-                    infos.insert(output_name.clone(), path_info);
+            match stored {
+                Some(path_info) => {
+                    if self.castore_has_content(&path_info.node).await? {
+                        self.output_nodes.insert(output_path.clone(), path_info.node.clone());
+                        self.built_outputs.insert(
+                            output_path.to_absolute_path_with_prefix(&self.output_dir_str),
+                            path_info.clone(),
+                        );
+                        infos.insert(output_name.clone(), path_info);
+                    } else {
+                        tracing::warn!(
+                            path = %output_path,
+                            "PathInfo exists but castore content missing, rebuilding"
+                        );
+                        return Ok(None);
+                    }
                 }
-                (Some(_), false) => {
-                    tracing::warn!(
-                        path = %output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                        "PathInfo exists but output missing from disk, rebuilding"
-                    );
-                    return Ok(None);
-                }
-                (None, true) => {
-                    debug!(
-                        path = %output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                        "output exists on disk but no PathInfo, rebuilding"
-                    );
-                    return Ok(None);
-                }
-                (None, false) => {
+                None => {
                     return Ok(None);
                 }
             }
@@ -1218,6 +1245,20 @@ mod tests {
             "test".to_string(),
             RedbDirectoryServiceConfig::default(),
         ).unwrap()
+    }
+
+    /// Write bytes into the blob service and return the resulting
+    /// Node::File. Used by cache tests to populate the castore so
+    /// that `castore_has_content` finds the blob.
+    async fn put_blob(bs: &MemoryBlobService, content: &[u8]) -> Node {
+        let mut writer = BlobService::open_write(bs).await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        }
     }
 
     fn test_pis() -> LruPathInfoService {
@@ -1401,32 +1442,22 @@ mod tests {
     // ── Cache tests ────────────────────────────────────────────
 
     #[tokio::test]
-    async fn builder_skips_build_when_output_exists() {
-        let output_tmp = tempfile::tempdir().unwrap();
-        let output_dir = output_tmp.path().to_str().unwrap().to_string();
-
+    async fn builder_skips_build_when_castore_cached() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        // KnownPaths uses /nix/store (logical); output_dir is the
-        // physical location where the Builder checks for cached files.
         let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
 
+        // Put content into castore (no file on disk needed).
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
-        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
-        std::fs::write(&abs, "cached content").unwrap();
+        let node = put_blob(&bs, b"cached content").await;
 
         let path_info = PathInfo {
             store_path: out_path.clone(),
-            node: Node::File {
-                digest: snix_castore::B3Digest::from(&[0u8; 32]),
-                size: 14,
-                executable: false,
-            },
+            node,
             references: vec![],
             nar_size: 0,
             nar_sha256: [0u8; 32],
@@ -1438,7 +1469,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1449,7 +1480,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cache_miss_when_pathinfo_but_no_file() {
+    async fn cache_miss_when_pathinfo_but_no_castore_content() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
@@ -1458,6 +1489,8 @@ mod tests {
         let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, drv) = build_and_register("orphan", &[], &mut kp);
 
+        // PathInfo references a blob digest that doesn't exist in the
+        // blob service — castore content is missing.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
         let path_info = PathInfo {
             store_path: out_path.clone(),
@@ -1481,32 +1514,26 @@ mod tests {
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
-        assert!(!outcome.cached, "should NOT be cached (file missing)");
+        assert!(!outcome.cached, "should NOT be cached (castore content missing)");
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1, "should call do_build");
     }
 
     #[tokio::test]
-    async fn cache_miss_when_file_but_no_pathinfo() {
-        let output_tmp = tempfile::tempdir().unwrap();
-        let output_dir = output_tmp.path().to_str().unwrap().to_string();
-
+    async fn cache_miss_when_no_pathinfo() {
+        // No PathInfo in the service at all — always a miss,
+        // regardless of what's on disk or in the castore.
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
         let mut kp = crunch_glue::KnownPaths::default();
-        let (drv_path, drv) = build_and_register("untracked", &[], &mut kp);
-
-        let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
-        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
-        std::fs::write(&abs, "untracked content").unwrap();
+        let (drv_path, _drv) = build_and_register("untracked", &[], &mut kp);
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1686,10 +1713,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn custom_output_dir_cache_hit() {
-        // Pre-populate output in a custom dir, verify cache hit.
+    async fn custom_output_dir_cache_hit_via_castore() {
+        // Cache hit works even with a custom output dir — castore content
+        // is the authority, not disk.
         let output_tmp = tempfile::tempdir().unwrap();
-        let output_dir = output_tmp.path().to_str().unwrap().to_string();
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
@@ -1699,20 +1726,13 @@ mod tests {
         let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, drv) = build_and_register("cached-custom", &[], &mut kp);
 
-        // Write the output file at output_dir, NOT /nix/store.
+        // Put content in castore, nothing on disk.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
-        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
-        std::fs::write(&abs, "cached").unwrap();
+        let node = put_blob(&bs, b"cached").await;
 
-        // Also insert PathInfo.
         let path_info = PathInfo {
             store_path: out_path.clone(),
-            node: Node::File {
-                digest: snix_castore::B3Digest::from(&[0u8; 32]),
-                size: 6,
-                executable: false,
-            },
+            node,
             references: vec![],
             nar_size: 0,
             nar_sha256: [0u8; 32],
@@ -1728,10 +1748,78 @@ mod tests {
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
-        assert!(outcome.cached, "should be cached from custom output dir");
+        assert!(outcome.cached, "should be cached via castore");
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "no build needed for cached output");
+    }
+
+    // ── Root-only export tests ──────────────────────────────────
+
+    #[tokio::test]
+    async fn only_root_output_exported_to_disk() {
+        // dep (non-root) → root. Only root's output should appear on disk.
+        let output_tmp = tempfile::tempdir().unwrap();
+        let output_dir = output_tmp.path().to_str().unwrap().to_string();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(),
+            output_tmp.path().to_path_buf(), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (dep_path, dep_drv) = build_and_register("dep-lib", &[], &mut kp);
+        let (root_path, root_drv) = build_and_register(
+            "root-app", &[(dep_path.clone(), "out")], &mut kp,
+        );
+
+        let outcomes = builder.build_all(
+            &[root_path.clone()], &mut kp, 1,
+        ).await.unwrap();
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].cached);
+
+        // Root output should exist on disk.
+        let root_out = root_drv.outputs["out"].path.as_ref().unwrap();
+        let root_abs = PathBuf::from(
+            root_out.to_absolute_path_with_prefix(&output_dir)
+        );
+        assert!(root_abs.exists(), "root output should be on disk");
+
+        // Dep output should NOT exist on disk (stays in castore).
+        let dep_out = dep_drv.outputs["out"].path.as_ref().unwrap();
+        let dep_abs = PathBuf::from(
+            dep_out.to_absolute_path_with_prefix(&output_dir)
+        );
+        assert!(!dep_abs.exists(), "dep output should stay in castore only");
+    }
+
+    #[tokio::test]
+    async fn read_only_output_dir_still_succeeds() {
+        // With a non-writable output dir, builds should still succeed
+        // (output lives in castore). No panic, no error.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+
+        // Use a path that doesn't exist and can't be created.
+        let fake_dir = PathBuf::from("/nonexistent/read-only-store");
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), fake_dir, false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, _drv) = build_and_register("ro-test", &[], &mut kp);
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+        assert!(outcome.outputs.contains_key("out"));
     }
 
     // ── build_all tests ─────────────────────────────────────────
@@ -1972,7 +2060,7 @@ mod tests {
         );
 
         let mut kp = crunch_glue::KnownPaths::default();
-        let (dep_path, dep_drv) = build_and_register_multi(
+        let (dep_path, _dep_drv) = build_and_register_multi(
             "multi-dep", &["out", "dev"], &[], &mut kp,
         );
 
@@ -2025,11 +2113,9 @@ mod tests {
 
     #[tokio::test]
     async fn multi_output_cache_requires_all_outputs() {
-        // If only some outputs are cached, it should be a cache miss.
+        // If only some outputs are cached (PathInfo + castore),
+        // the derivation is a cache miss.
         use crate::test_support::build_and_register_multi;
-
-        let output_tmp = tempfile::tempdir().unwrap();
-        let output_dir = output_tmp.path().to_str().unwrap().to_string();
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
@@ -2041,19 +2127,13 @@ mod tests {
             "partial-cache", &["out", "dev"], &[], &mut kp,
         );
 
-        // Write only the "out" output to disk + PathInfo. "dev" is missing.
+        // Put only the "out" output in castore + PathInfo. "dev" has no PathInfo.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
-        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
-        std::fs::write(&abs, "cached out").unwrap();
+        let node = put_blob(&bs, b"cached out").await;
 
         let path_info = PathInfo {
             store_path: out_path.clone(),
-            node: Node::File {
-                digest: snix_castore::B3Digest::from(&[0u8; 32]),
-                size: 10,
-                executable: false,
-            },
+            node,
             references: vec![],
             nar_size: 0,
             nar_sha256: [0u8; 32],
@@ -2065,11 +2145,11 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
-        // Cache miss because "dev" is missing.
+        // Cache miss because "dev" has no PathInfo.
         assert!(!outcome.cached, "partial cache should not count as hit");
 
         let recorded = calls.lock().unwrap();

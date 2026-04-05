@@ -276,9 +276,11 @@ crunch --store /tmp/mystore build hello.ncl
 
 ## Known Limitations
 
-- **Read-only `/nix/store`**: builds succeed (output is in the PathInfo
-  database and castore) but output files are not written to disk. Use an
-  overlay mount or a writable store.
+- **Read-only `/nix/store`**: works. The castore is the primary store.
+  Cache validation uses PathInfo + castore content probes, not
+  filesystem existence. Only root outputs (derivations you asked to
+  build) are exported to disk. Intermediate deps stay in castore.
+  If the output dir is not writable, the build succeeds with a warning.
 - **Concurrent builds**: independent derivations run in parallel (up to
   `--jobs N`, default: CPU count, max 16). The lazy goal scheduler
   dispatches builds as their dependencies complete; sandbox execution

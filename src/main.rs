@@ -26,8 +26,9 @@ struct Args {
     #[arg(long, global = true)]
     json: bool,
 
-    /// Physical directory for build outputs (source inputs always
-    /// come from /nix/store)
+    /// Where to export final build outputs on disk. Intermediate
+    /// deps stay in castore. Source inputs always come from /nix/store.
+    /// If not writable, builds still succeed (outputs in castore).
     #[arg(long, global = true, default_value = "/nix/store")]
     store: PathBuf,
 
