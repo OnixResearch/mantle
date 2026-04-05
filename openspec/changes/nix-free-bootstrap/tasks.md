@@ -29,7 +29,7 @@
 
 ## Phase 4: Rebuild gcc from source (optional, high-effort)
 
-- [ ] Write `bootstrap/binutils.ncl`: fetch + build binutils with musl-gcc
+- [x] Write `bootstrap/binutils.ncl`: fetch + build binutils 2.42 with musl-gcc ✅ (15 tools: as, ld, ar, nm, objcopy, etc.)
 - [ ] Write `bootstrap/musl.ncl`: fetch + build musl libc from source
 - [ ] Write `bootstrap/gcc.ncl`: fetch gcc source, build with Phase 3 tools + musl-gcc
   - Cross-compile gcc targeting musl (avoids glibc dependency)
