@@ -383,14 +383,17 @@ async fn execute_builds(
                 );
             }
 
-            for (_output_name, path_info) in &outcome.outputs {
+            let multi = outcome.outputs.len() > 1;
+            for (output_name, path_info) in &outcome.outputs {
                 let path = path_info.store_path
                     .to_absolute_path_with_prefix(output_dir_str);
-                if outcome.cached {
-                    println!("{path} (cached)");
-                } else {
-                    println!("{path}");
-                }
+                let suffix = match (outcome.cached, multi && output_name != "out") {
+                    (true, true) => format!(" ({output_name}, cached)"),
+                    (true, false) => " (cached)".to_string(),
+                    (false, true) => format!(" ({output_name})"),
+                    (false, false) => String::new(),
+                };
+                println!("{path}{suffix}");
             }
         }
     }
@@ -549,18 +552,38 @@ async fn execute_builds_streaming(
                 );
             }
 
-            for (_output_name, path_info) in &outcome.outputs {
+            let multi = outcome.outputs.len() > 1;
+            for (output_name, path_info) in &outcome.outputs {
                 let path = path_info.store_path
                     .to_absolute_path_with_prefix(output_dir_str);
-                if outcome.cached {
-                    println!("{path} (cached)");
-                } else {
-                    println!("{path}");
-                }
+                let suffix = match (outcome.cached, multi && output_name != "out") {
+                    (true, true) => format!(" ({output_name}, cached)"),
+                    (true, false) => " (cached)".to_string(),
+                    (false, true) => format!(" ({output_name})"),
+                    (false, false) => String::new(),
+                };
+                println!("{path}{suffix}");
             }
         }
 
         if !result.failed.is_empty() {
+            for fg in &result.failed {
+                // Check for FOD hash mismatch in the error for --fix support.
+                if fix {
+                    if let Some((name, expected, actual)) = parse_fod_mismatch_error(&fg.error) {
+                        let (label, drv_path) = drv_paths
+                            .iter()
+                            .find(|(_, sp)| sp.name().contains(name.as_str()))
+                            .unwrap_or(&drv_paths[0]);
+                        return handle_fod_mismatch(
+                            &name, &expected, &actual, drv_path, label,
+                            log_dir, source_file, fix,
+                        );
+                    }
+                }
+                eprintln!("FAILED: {}", fg.drv_key);
+                eprintln!("  {}", fg.error);
+            }
             return Err(RunError::Build(format!(
                 "{} root build(s) failed",
                 result.failed.len(),
@@ -926,6 +949,16 @@ async fn cmd_store_verify(
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────
+
+/// Parse a FOD hash mismatch from an error string.
+/// Returns `(name, expected_sri, actual_sri)` if the error matches.
+fn parse_fod_mismatch_error(err: &str) -> Option<(String, String, String)> {
+    // Format: "FOD hash mismatch for NAME: expected EXPECTED, got ACTUAL"
+    let rest = err.strip_prefix("FOD hash mismatch for ")?;
+    let (name, rest) = rest.split_once(": expected ")?;
+    let (expected, actual) = rest.split_once(", got ")?;
+    Some((name.to_string(), expected.to_string(), actual.to_string()))
+}
 
 /// Replace an old hash string with a new one in a .ncl file.
 fn auto_fix_hash(

@@ -48,13 +48,22 @@ const LOGICAL_STORE_DIR: &str = "/nix/store";
 /// tracked here for assertions.
 const MAX_IN_FLIGHT: u32 = 64;
 
+/// A root goal that failed, with error context.
+#[derive(Debug, Clone)]
+pub struct FailedGoal {
+    /// Absolute drv-path key.
+    pub drv_key: String,
+    /// Human-readable error message.
+    pub error: String,
+}
+
 /// Result of running the Worker: outcomes for root goals.
 #[derive(Debug)]
 pub struct WorkerResult {
     /// Build outcomes for root derivations that succeeded.
     pub outcomes: Vec<BuildOutcome>,
-    /// Absolute drv-path keys of root goals that failed.
-    pub failed: Vec<String>,
+    /// Root goals that failed (build error or dep failure).
+    pub failed: Vec<FailedGoal>,
 }
 
 /// Build scheduler that drives Goal state machines.
@@ -237,7 +246,7 @@ impl Worker {
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
-        let mut failed: Vec<String> = Vec::new();
+        let mut failed: Vec<FailedGoal> = Vec::new();
         let iteration_limit: u32 = total_goals.saturating_mul(4).max(16);
         let mut iterations: u32 = 0;
 
@@ -265,12 +274,9 @@ impl Worker {
                 continue;
             }
 
-            let Some(result) = join_set.join_next().await else { continue };
-            let (drv_key, build_result) = result
-                .map_err(|e| Error::Store(format!("task join: {e}")))??;
-
-            self.handle_build_completion(
-                &drv_key, build_result, builder, known_paths,
+            let Some(join_result) = join_set.join_next().await else { continue };
+            self.process_join_result(
+                join_result, builder, known_paths,
                 &mut pending_meta, &mut outcomes, &mut failed,
             ).await?;
             completed_count = completed_count.saturating_add(1);
@@ -307,7 +313,7 @@ impl Worker {
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
-        let mut failed: Vec<String> = Vec::new();
+        let mut failed: Vec<FailedGoal> = Vec::new();
         let mut eval_done = false;
         let iteration_limit: u32 = MAX_GOALS.saturating_mul(4);
         let mut iterations: u32 = 0;
@@ -353,12 +359,12 @@ impl Worker {
         &mut self,
         eval_done: &mut bool,
         rx: &mut mpsc::Receiver<EvalMessage>,
-        join_set: &mut JoinSet<Result<(String, snix_build::buildservice::BuildResult), Error>>,
+        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         builder: &mut Builder<BS, DS, BServ, PIS>,
         known_paths: &mut KnownPaths,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<String>,
+        failed: &mut Vec<FailedGoal>,
         completed_count: &mut u32,
     ) -> Result<(), Error>
     where
@@ -368,9 +374,8 @@ impl Worker {
         PIS: PathInfoService,
     {
         if *eval_done {
-            let Some(result) = join_set.join_next().await else { return Ok(()); };
-            let (key, br) = result.map_err(|e| Error::Store(format!("task join: {e}")))??;
-            self.handle_build_completion(&key, br, builder, known_paths, pending_meta, outcomes, failed).await?;
+            let Some(join_result) = join_set.join_next().await else { return Ok(()); };
+            self.process_join_result(join_result, builder, known_paths, pending_meta, outcomes, failed).await?;
             *completed_count = completed_count.saturating_add(1);
         } else if join_set.is_empty() {
             match rx.recv().await {
@@ -380,9 +385,8 @@ impl Worker {
         } else {
             tokio::select! {
                 result = join_set.join_next() => {
-                    let Some(result) = result else { return Ok(()); };
-                    let (key, br) = result.map_err(|e| Error::Store(format!("task join: {e}")))??;
-                    self.handle_build_completion(&key, br, builder, known_paths, pending_meta, outcomes, failed).await?;
+                    let Some(join_result) = result else { return Ok(()); };
+                    self.process_join_result(join_result, builder, known_paths, pending_meta, outcomes, failed).await?;
                     *completed_count = completed_count.saturating_add(1);
                 }
                 msg = rx.recv() => {
@@ -430,7 +434,51 @@ impl Worker {
         self.want(&msg.drv_path, known_paths, true)
     }
 
-    /// Handle a completed sandbox build: finish_build + notify waiters.
+    /// Process a JoinSet result: unwrap the join, then handle success
+    /// or failure. Build errors are caught and routed to 
+    /// instead of aborting the entire Worker.
+    async fn process_join_result<BS, DS, BServ, PIS>(
+        &mut self,
+        join_result: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
+        builder: &mut Builder<BS, DS, BServ, PIS>,
+        known_paths: &mut KnownPaths,
+        pending_meta: &mut HashMap<String, PreparedBuild>,
+        outcomes: &mut Vec<BuildOutcome>,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error>
+    where
+        BS: BlobService + Clone + 'static,
+        DS: DirectoryService + Clone + 'static,
+        BServ: BuildService + 'static,
+        PIS: PathInfoService,
+    {
+        match join_result {
+            Ok((drv_key, Ok(build_result))) => {
+                self.handle_build_completion(
+                    &drv_key, build_result, builder, known_paths,
+                    pending_meta, outcomes, failed,
+                ).await
+            }
+            Ok((drv_key, Err(build_err))) => {
+                // The sandbox build failed. Route to fail_goal so
+                // other independent roots can continue.
+                let err_msg = format!("{build_err}");
+                tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
+                // Remove pending metadata (won't be used).
+                pending_meta.remove(&drv_key);
+                self.fail_goal(&drv_key, &err_msg, failed)?;
+                Ok(())
+            }
+            Err(join_err) => {
+                tracing::error!(err = %join_err, "build task panicked");
+                Err(Error::Store(format!("task join: {join_err}")))
+            }
+        }
+    }
+
+    /// Handle a completed sandbox build: finish_build, detect dynamic
+    /// derivations, and notify waiters. Errors from finish_build are
+    /// caught and routed to  for partial failure.
     async fn handle_build_completion<BS, DS, BServ, PIS>(
         &mut self,
         drv_key: &str,
@@ -439,7 +487,7 @@ impl Worker {
         known_paths: &mut KnownPaths,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<String>,
+        failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error>
     where
         BS: BlobService + Clone + 'static,
@@ -451,11 +499,131 @@ impl Worker {
             Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}"))
         })?;
 
-        let outcome = builder
+        let outcome = match builder
             .finish_build(&prepared, build_result, known_paths)
-            .await?;
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                let err_msg = format!("{e}");
+                tracing::warn!(drv = drv_key, err = %err_msg, "build failed, marking goal as failed");
+                self.fail_goal(drv_key, &err_msg, failed)?;
+                return Ok(());
+            }
+        };
+
+        // Check for dynamic derivation outputs (.drv files).
+        self.detect_dynamic_derivations(
+            drv_key, &outcome, builder, known_paths,
+        ).await?;
 
         self.complete_goal(drv_key, outcome, outcomes, failed)
+    }
+
+    /// Inspect build outputs for `.drv` files. If found, parse and
+    /// register them as new goals (dynamic derivations).
+    ///
+    /// Any goals in `AwaitingDerivation` state that reference this
+    /// build as their producer are activated.
+    async fn detect_dynamic_derivations<BS, DS, BServ, PIS>(
+        &mut self,
+        producer_key: &str,
+        outcome: &BuildOutcome,
+        builder: &Builder<BS, DS, BServ, PIS>,
+        known_paths: &mut KnownPaths,
+    ) -> Result<(), Error>
+    where
+        BS: BlobService + Clone + 'static,
+        DS: DirectoryService + Clone + 'static,
+        BServ: BuildService + 'static,
+        PIS: PathInfoService,
+    {
+        // 1. Scan outputs for .drv files.
+        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::new();
+
+        for (output_name, path_info) in &outcome.outputs {
+            if !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node) {
+                continue;
+            }
+
+            // Read the blob content from castore.
+            let content = builder
+                .read_blob(&path_info.node)
+                .await?;
+
+            if let Some(drv) = crate::dynamic::parse_drv_bytes(&content)? {
+                let drv_path = crate::dynamic::register_dynamic_drv(
+                    &drv, known_paths, LOGICAL_STORE_DIR,
+                )?;
+
+                info!(
+                    producer = %outcome.drv_path.name(),
+                    dynamic_drv = %drv_path.name(),
+                    output = %output_name,
+                    "detected dynamic derivation in build output"
+                );
+
+                discovered.push(crate::dynamic::DynamicDrv {
+                    output_name: output_name.clone(),
+                    drv_store_path: drv_path,
+                    derivation: drv,
+                });
+            }
+        }
+
+        if discovered.is_empty() {
+            return Ok(());
+        }
+
+        // 2. Activate any AwaitingDerivation goals for this producer.
+        let awaiting = self.registry.awaiting_producer(producer_key);
+        for awaiting_key in &awaiting {
+            // Pick the first discovered drv for each awaiting goal.
+            // (Multiple dynamic outputs from one producer is rare;
+            // first match is the simplest correct behavior.)
+            if let Some(dyn_drv) = discovered.first() {
+                let goal = self.registry.get_mut(awaiting_key)
+                    .expect("awaiting goal must exist");
+                goal.set_derivation(dyn_drv.derivation.clone())?;
+
+                // Now inspect deps and wire waiters (same as want()).
+                let dep_drv_paths: Vec<StorePath<String>> = dyn_drv.derivation
+                    .input_derivations
+                    .keys()
+                    .cloned()
+                    .collect();
+                // Create sub-goals for deps we haven't seen.
+                for dep_sp in &dep_drv_paths {
+                    let dep_key = dep_sp.to_absolute_path();
+                    if !self.registry.contains(&dep_key) {
+                        // Dep must be in KnownPaths (registered above).
+                        let dep_abs = dep_sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                        if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
+                            let dep_goal = crate::goal::Goal::new(
+                                dep_sp.clone(),
+                                entry.derivation.clone(),
+                            );
+                            self.registry.insert(dep_key.clone(), dep_goal)?;
+                        }
+                    }
+                }
+                // Wire deps and inspect.
+                self.wire_deps_and_inspect(awaiting_key, &dep_drv_paths)?;
+            }
+        }
+
+        // 3. Create new root goals for discovered dynamic derivations
+        //    that don't have awaiting goals.
+        for dyn_drv in &discovered {
+            let key = dyn_drv.drv_store_path.to_absolute_path();
+            if self.registry.contains(&key) {
+                continue; // already handled by an awaiting goal or dedup
+            }
+            // Create as a root goal so its outcome is reported.
+            self.want(&dyn_drv.drv_store_path, known_paths, true)?;
+        }
+
+        Ok(())
     }
 
     /// Dispatch all Ready goals. Returns the number dispatched.
@@ -469,10 +637,10 @@ impl Worker {
         builder: &mut Builder<BS, DS, BServ, PIS>,
         known_paths: &mut KnownPaths,
         sem: &Arc<Semaphore>,
-        join_set: &mut JoinSet<Result<(String, snix_build::buildservice::BuildResult), Error>>,
+        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<String>,
+        failed: &mut Vec<FailedGoal>,
     ) -> Result<u32, Error>
     where
         BS: BlobService + Clone + 'static,
@@ -497,16 +665,24 @@ impl Worker {
             let drv_path = goal.drv_path.clone();
             let derivation = goal.derivation.as_ref()
                 .ok_or_else(|| Error::Store(format!(
-                    "goal {drv_key} has no derivation (dynamic derivations not yet supported)"
+                    "goal {drv_key} in Ready state but has no derivation"
                 )))?
                 .clone();
 
-            match builder.prepare_build(&drv_path, &derivation, known_paths).await? {
-                PrepareResult::Done(outcome) => {
+            match builder.prepare_build(&drv_path, &derivation, known_paths).await {
+                Ok(PrepareResult::Done(outcome)) => {
                     // Cache hit or fetcher — complete synchronously.
                     self.complete_goal(&drv_key, outcome, outcomes, failed)?;
                 }
-                PrepareResult::NeedsBuild(prepared) => {
+                Err(e) => {
+                    // prepare_build failed (source not found, etc.)
+                    let err_msg = format!("{e}");
+                    tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
+                    self.fail_goal(&drv_key, &err_msg, failed)?;
+                    dispatched = dispatched.saturating_add(1);
+                    continue;
+                }
+                Ok(PrepareResult::NeedsBuild(prepared)) => {
                     // Mark Building before spawning.
                     let goal = self.registry.get_mut(&drv_key).expect("just checked");
                     goal.mark_building()?;
@@ -520,10 +696,13 @@ impl Worker {
 
                     join_set.spawn(async move {
                         let _permit = sem.acquire_owned().await
-                            .map_err(|e| Error::Store(format!("semaphore: {e}")))?;
-                        let result = bs.do_build(build_request).await
-                            .map_err(|e| Error::Store(format!("build: {e}")))?;
-                        Ok((key, result))
+                            .map_err(|e| Error::Store(format!("semaphore: {e}")));
+                        let build_result = match _permit {
+                            Ok(_p) => bs.do_build(build_request).await
+                                .map_err(|e| Error::Store(format!("build: {e}"))),
+                            Err(e) => Err(e),
+                        };
+                        (key, build_result)
                     });
                 }
             }
@@ -541,7 +720,7 @@ impl Worker {
         drv_key: &str,
         outcome: BuildOutcome,
         outcomes: &mut Vec<BuildOutcome>,
-        _failed: &mut Vec<String>,
+        _failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
             Error::Store(format!("completing unknown goal: {drv_key}"))
@@ -594,14 +773,15 @@ impl Worker {
         Ok(())
     }
 
-    /// Mark a goal as failed and propagate failure to waiters.
-    /// Not yet called — build errors currently abort via `?`. This
-    /// will be used when partial-failure (continue other roots) lands.
-    #[allow(dead_code)]
+    /// Mark a goal as failed and propagate failure to all waiters.
+    ///
+    /// The error message is stored in the  for root goals
+    /// so callers can report per-package errors.
     fn fail_goal(
         &mut self,
         drv_key: &str,
-        failed: &mut Vec<String>,
+        error_msg: &str,
+        failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
             Error::Store(format!("failing unknown goal: {drv_key}"))
@@ -611,32 +791,43 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = goal.waiters.clone();
+        let drv_name = goal.drv_path.name().to_string();
 
         if is_root {
-            failed.push(drv_key.to_string());
+            failed.push(FailedGoal {
+                drv_key: drv_key.to_string(),
+                error: error_msg.to_string(),
+            });
         }
+
+        info!(
+            drv = drv_key,
+            name = %drv_name,
+            waiters = waiters.len(),
+            "goal failed"
+        );
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, failed)?;
+            self.propagate_failure(waiter_key, &drv_name, failed)?;
         }
 
         Ok(())
     }
 
     /// Recursively propagate dep failure to waiting goals.
-    #[allow(dead_code)]
     fn propagate_failure(
         &mut self,
         drv_key: &str,
-        failed: &mut Vec<String>,
+        failed_dep_name: &str,
+        failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
             Error::Store(format!("propagating failure to unknown goal: {drv_key}"))
         })?;
 
-        // Only propagate to goals still Waiting.
-        if !matches!(goal.state, GoalState::Waiting { .. }) {
+        // Only propagate to goals still Waiting or AwaitingDerivation.
+        if !matches!(goal.state, GoalState::Waiting { .. } | GoalState::AwaitingDerivation) {
             return Ok(());
         }
 
@@ -644,13 +835,17 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = goal.waiters.clone();
+        let drv_name = goal.drv_path.name().to_string();
 
         if is_root {
-            failed.push(drv_key.to_string());
+            failed.push(FailedGoal {
+                drv_key: drv_key.to_string(),
+                error: format!("dependency {failed_dep_name} failed"),
+            });
         }
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, failed)?;
+            self.propagate_failure(waiter_key, &drv_name, failed)?;
         }
 
         Ok(())
@@ -1003,7 +1198,7 @@ mod tests {
 
         // Fail the leaf.
         let mut failed = Vec::new();
-        w.fail_goal(&leaf_key, &mut failed).unwrap();
+        w.fail_goal(&leaf_key, "leaf build error", &mut failed).unwrap();
 
         // Leaf should be Failed.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Failed);
@@ -1014,7 +1209,7 @@ mod tests {
         let top_key = top_sp.to_absolute_path();
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Failed);
         // Top is a root, so it should be in the failed list.
-        assert!(failed.contains(&top_key));
+        assert!(failed.iter().any(|f| f.drv_key == top_key));
     }
 
     #[test]
@@ -1041,7 +1236,7 @@ mod tests {
 
         // Fail bad. It has no waiters, so good (waiting on shared) should be unaffected.
         let mut failed = Vec::new();
-        w.fail_goal(&bad_key, &mut failed).unwrap();
+        w.fail_goal(&bad_key, "bad build error", &mut failed).unwrap();
 
         assert_eq!(w.registry.get(&bad_key).unwrap().state, GoalState::Failed);
         // good is still Waiting on shared, not failed.
@@ -1051,7 +1246,7 @@ mod tests {
             GoalState::Waiting { .. }
         ));
         // bad is a root, so it should be in failed list.
-        assert!(failed.contains(&bad_key));
+        assert!(failed.iter().any(|f| f.drv_key == bad_key));
     }
 
     // ── run() integration tests ───────────────────────────────
@@ -1361,5 +1556,289 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2);
+    }
+
+    // ── Dynamic derivation integration tests ─────────────────
+
+    use crate::test_support::DrvProducingMockBuildService;
+    use std::collections::HashMap as StdHashMap;
+
+    /// Build a derivation that produces `.drv` ATerm output.
+    /// The Worker should detect it, parse the inner .drv, register
+    /// it, and build it automatically.
+    #[tokio::test]
+    async fn dynamic_drv_detected_and_built() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        // Create the "inner" derivation that will be discovered dynamically.
+        let mut inner_kp = crunch_glue::KnownPaths::default();
+        let (_, inner_drv) = build_and_register("inner-hello", &[], &mut inner_kp);
+        let inner_aterm = inner_drv.to_aterm_bytes();
+
+        // The producer build will output this ATerm content.
+        let mut drv_outputs = StdHashMap::new();
+        // Match on the producer name substring.
+        drv_outputs.insert("producer-gen.drv".to_string(), inner_aterm.clone());
+
+        let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        // Register the producer derivation. Its output path name must
+        // end in .drv for detection to work.
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (producer_sp, _) = build_and_register("producer-gen.drv", &[], &mut kp);
+
+        let mut w = Worker::new(1);
+        w.want(&producer_sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        // The producer itself is a root, so at least 1 outcome.
+        assert!(
+            !result.outcomes.is_empty(),
+            "should have at least the producer outcome"
+        );
+        assert!(result.failed.is_empty(), "no failures expected");
+
+        let recorded = calls.lock().unwrap();
+        // Should have built the producer + the dynamically discovered inner drv.
+        assert_eq!(
+            recorded.len(), 2,
+            "expected 2 builds (producer + dynamic inner), got {}: {:?}",
+            recorded.len(), *recorded
+        );
+    }
+
+    /// Dynamic derivation via streaming: producer arrives over the
+    /// eval channel, its output is a .drv, which is then built.
+    #[tokio::test]
+    async fn dynamic_drv_streaming() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let mut inner_kp = crunch_glue::KnownPaths::default();
+        let (_, inner_drv) = build_and_register("streamed-inner", &[], &mut inner_kp);
+        let inner_aterm = inner_drv.to_aterm_bytes();
+
+        let mut drv_outputs = StdHashMap::new();
+        drv_outputs.insert("stream-producer.drv".to_string(), inner_aterm);
+
+        let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (producer_sp, _) = build_and_register("stream-producer.drv", &[], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        tx.send(EvalMessage {
+            label: "stream-producer.drv".into(),
+            drv_path: producer_sp.clone(),
+        }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(1);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert!(!result.outcomes.is_empty());
+        assert!(result.failed.is_empty());
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(
+            recorded.len(), 2,
+            "expected producer + dynamic inner: {:?}", *recorded
+        );
+    }
+
+    /// Non-.drv output is NOT treated as a dynamic derivation.
+    #[tokio::test]
+    async fn non_drv_output_not_treated_as_dynamic() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        // Name does NOT end in .drv.
+        let (sp, _) = build_and_register("normal-pkg", &[], &mut kp);
+
+        let mut w = Worker::new(1);
+        w.want(&sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1);
+        let recorded = calls.lock().unwrap();
+        // Only 1 build — no dynamic discovery.
+        assert_eq!(recorded.len(), 1);
+    }
+
+    // ── Partial failure integration tests ─────────────────────
+
+    use crate::test_support::FailingMockBuildService;
+
+    /// One root fails, the other succeeds. The Worker should continue
+    /// building the successful root and report both outcomes.
+    #[tokio::test]
+    async fn partial_failure_one_fails_one_succeeds() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        // "bad-pkg" will fail, "good-pkg" will succeed.
+        let (mock, calls) = FailingMockBuildService::new(
+            bs.clone(),
+            vec!["bad-pkg".to_string()],
+        );
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (good_sp, _) = build_and_register("good-pkg", &[], &mut kp);
+        let (bad_sp, _) = build_and_register("bad-pkg", &[], &mut kp);
+
+        let mut w = Worker::new(2);
+        w.want(&good_sp, &kp, true).unwrap();
+        w.want(&bad_sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        // good-pkg should succeed.
+        assert_eq!(result.outcomes.len(), 1, "one root should succeed");
+        assert!(
+            result.outcomes[0].drv_path.name().contains("good-pkg"),
+            "successful outcome should be good-pkg"
+        );
+
+        // bad-pkg should be in the failed list.
+        assert_eq!(result.failed.len(), 1, "one root should fail");
+        assert!(
+            result.failed[0].drv_key.contains("bad-pkg"),
+            "failed goal should be bad-pkg"
+        );
+        assert!(
+            result.failed[0].error.contains("simulated build failure"),
+            "error message should describe the failure: {}",
+            result.failed[0].error
+        );
+
+        // Both builds were attempted.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "both builds should be attempted");
+    }
+
+    /// A dep fails, its dependent root should also fail (propagated).
+    /// An independent root should still succeed.
+    #[tokio::test]
+    async fn partial_failure_dep_fails_propagates() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        // "bad-dep" will fail.
+        let (mock, _calls) = FailingMockBuildService::new(
+            bs.clone(),
+            vec!["bad-dep".to_string()],
+        );
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (bad_dep, _) = build_and_register("bad-dep", &[], &mut kp);
+        let (top_bad, _) = build_and_register("top-bad", &[(bad_dep.clone(), "out")], &mut kp);
+        let (good_sp, _) = build_and_register("good-pkg", &[], &mut kp);
+
+        let mut w = Worker::new(2);
+        w.want(&top_bad, &kp, true).unwrap();
+        w.want(&good_sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        // good-pkg should succeed.
+        assert_eq!(result.outcomes.len(), 1, "one root should succeed");
+        assert!(
+            result.outcomes[0].drv_path.name().contains("good-pkg"),
+            "successful outcome should be good-pkg"
+        );
+
+        // top-bad should fail because its dep bad-dep failed.
+        assert_eq!(result.failed.len(), 1, "one root should fail");
+        assert!(
+            result.failed[0].drv_key.contains("top-bad"),
+            "failed goal should be top-bad, got: {}",
+            result.failed[0].drv_key
+        );
+        assert!(
+            result.failed[0].error.contains("dependency"),
+            "error should mention dependency failure: {}",
+            result.failed[0].error
+        );
+    }
+
+    /// All roots fail — Worker should complete without panic.
+    #[tokio::test]
+    async fn partial_failure_all_fail() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let (mock, _) = FailingMockBuildService::new(
+            bs.clone(),
+            vec!["fail-a".to_string(), "fail-b".to_string()],
+        );
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a, _) = build_and_register("fail-a", &[], &mut kp);
+        let (b, _) = build_and_register("fail-b", &[], &mut kp);
+
+        let mut w = Worker::new(2);
+        w.want(&a, &kp, true).unwrap();
+        w.want(&b, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert!(result.outcomes.is_empty(), "no outcomes on total failure");
+        assert_eq!(result.failed.len(), 2, "both roots should fail");
+    }
+
+    /// Streaming partial failure: one root fails, second arrives later
+    /// and succeeds.
+    #[tokio::test]
+    async fn partial_failure_streaming() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let (mock, _) = FailingMockBuildService::new(
+            bs.clone(),
+            vec!["stream-bad".to_string()],
+        );
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (bad_sp, _) = build_and_register("stream-bad", &[], &mut kp);
+        let (good_sp, _) = build_and_register("stream-good", &[], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        tx.send(EvalMessage { label: "bad".into(), drv_path: bad_sp }).await.unwrap();
+        tx.send(EvalMessage { label: "good".into(), drv_path: good_sp }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(2);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1, "one root should succeed");
+        assert_eq!(result.failed.len(), 1, "one root should fail");
     }
 }

@@ -479,7 +479,7 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
     );
     // Should suggest the update
     assert!(
-        stderr.contains("update") || stderr.contains("got:"),
+        stderr.contains("update") || stderr.contains("got:") || stderr.contains("got sha256-"),
         "stderr should suggest the correct hash: {stderr}"
     );
     assert!(

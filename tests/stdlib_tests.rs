@@ -30,12 +30,14 @@ fn contract_catches_wrong_type() {
 }
 
 #[test]
-fn contract_catches_extra_field() {
+fn contract_allows_extra_fields() {
+    // The Derivation contract uses `..` (open record) to allow
+    // extra fields like pname, version, meta, passthru, etc.
     let result = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in { name = "x", builder = "/bin/sh", bogus = true } | crunch.Derivation"#,
         &stdlib_import_path(),
     );
-    assert!(result.is_err(), "should fail: extra field bogus");
+    assert!(result.is_ok(), "extra fields should be allowed: {result:?}");
 }
 
 #[test]

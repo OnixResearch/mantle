@@ -147,6 +147,48 @@ where
         self.build_service.clone()
     }
 
+    /// Read the full content of a blob from castore.
+    ///
+    /// Used by the Worker to read `.drv` files from build outputs
+    /// (dynamic derivation detection).
+    pub(crate) async fn read_blob(
+        &self,
+        node: &snix_castore::Node,
+    ) -> Result<Vec<u8>, Error> {
+        use tokio::io::AsyncReadExt;
+
+        let digest = match node {
+            snix_castore::Node::File { digest, size, .. } => {
+                // Tiger Style: fixed limit.
+                const MAX_BLOB_READ: u64 = 8 * 1024 * 1024;
+                if *size > MAX_BLOB_READ {
+                    return Err(Error::Store(format!(
+                        "blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})"
+                    )));
+                }
+                digest.clone()
+            }
+            other => {
+                return Err(Error::Store(format!(
+                    "read_blob called on non-file node: {other:?}"
+                )));
+            }
+        };
+
+        let mut reader = self.blob_service.open_read(&digest).await
+            .map_err(|e| Error::Store(format!("opening blob: {e}")))?
+            .ok_or_else(|| Error::Store(format!(
+                "blob not found in castore: {}",
+                data_encoding::HEXLOWER.encode(digest.as_slice())
+            )))?;
+
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf).await
+            .map_err(|e| Error::Store(format!("reading blob: {e}")))?;
+
+        Ok(buf)
+    }
+
     /// Prefer `build_all` when building multiple roots.
     pub async fn build(
         &mut self,
@@ -278,6 +320,10 @@ where
 
     /// Process a completed sandbox build: apply rewrites, hash outputs,
     /// persist PathInfo, export to disk.
+    ///
+    /// For multi-output CA derivations, uses a two-pass approach:
+    /// 1. Apply input rewrites + compute CA paths for all outputs
+    /// 2. Rewrite cross-output references in all outputs
     pub(crate) async fn finish_build(
         &mut self,
         prepared: &PreparedBuild,
@@ -286,38 +332,48 @@ where
     ) -> Result<BuildOutcome, Error> {
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
+        let is_multi_ca = prepared.is_ca && prepared.derivation.outputs.len() > 1;
 
-        for (i, (output_name, output)) in prepared.derivation.outputs.iter().enumerate() {
-            let build_output = build_result.outputs.get(i).ok_or_else(|| {
-                Error::OutputMissing {
-                    output: output_name.clone(),
-                }
-            })?;
+        if is_multi_ca {
+            output_infos = self.finish_build_multi_ca(
+                prepared, &build_result, known_paths,
+            ).await?;
+        } else {
+            for (i, (output_name, output)) in prepared.derivation.outputs.iter().enumerate() {
+                let build_output = build_result.outputs.get(i).ok_or_else(|| {
+                    Error::OutputMissing {
+                        output: output_name.clone(),
+                    }
+                })?;
 
-            let path_info = self
-                .process_output(
-                    &prepared.drv_path,
-                    &prepared.drv_name,
-                    output_name,
-                    output,
-                    build_output,
-                    &prepared.input_rewrites,
-                    &prepared.sandbox_inputs,
-                    &prepared.build_request,
-                    &prepared.derivation,
-                    known_paths,
-                    prepared.is_ca,
-                )
-                .await?;
+                let path_info = self
+                    .process_output(
+                        &prepared.drv_path,
+                        &prepared.drv_name,
+                        output_name,
+                        output,
+                        build_output,
+                        &prepared.input_rewrites,
+                        &prepared.sandbox_inputs,
+                        &prepared.build_request,
+                        &prepared.derivation,
+                        known_paths,
+                        prepared.is_ca,
+                    )
+                    .await?;
 
-            output_infos.insert(output_name.clone(), path_info);
+                output_infos.insert(output_name.clone(), path_info);
+            }
         }
 
         info!(
             drv = %prepared.drv_name,
             outputs = ?output_names.iter()
-                .filter_map(|n| prepared.derivation.outputs.get(n)?.path.as_ref())
-                .map(|p| p.to_absolute_path_with_prefix(&self.output_dir_str))
+                .filter_map(|n| {
+                    output_infos.get(n).map(|pi| {
+                        pi.store_path.to_absolute_path_with_prefix(&self.output_dir_str)
+                    })
+                })
                 .collect::<Vec<_>>(),
             "build succeeded"
         );
@@ -328,6 +384,197 @@ where
             cached: false,
             log: build_result.log,
         })
+    }
+
+    /// Multi-output CA: two-pass processing.
+    ///
+    /// Pass 1: For each output, apply input rewrites, then replace ALL
+    ///         of the derivation's own output provisionals with distinct
+    ///         markers. Hash the canonical form to get the CA path.
+    /// Pass 2: For each output, replace all markers with the final CA
+    ///         paths (handles cross-output references).
+    async fn finish_build_multi_ca(
+        &mut self,
+        prepared: &PreparedBuild,
+        build_result: &snix_build::buildservice::BuildResult,
+        known_paths: &mut KnownPaths,
+    ) -> Result<HashMap<String, PathInfo>, Error> {
+        let nar_renderer = SimpleRenderer::new(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        );
+
+        // Collect all provisionals for this derivation's outputs.
+        let provisionals: Vec<(String, String)> = prepared.derivation.outputs.keys()
+            .map(|name| {
+                let prov = prepared.derivation.environment
+                    .get(name)
+                    .map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_default();
+                (name.clone(), prov)
+            })
+            .collect();
+
+        // Generate distinct markers per output. Use the output name's
+        // SHA-256 hash truncated to the provisional length. This gives
+        // unique markers even when provisionals have the same length.
+        let markers: Vec<(String, Vec<u8>, usize)> = provisionals.iter()
+            .map(|(name, prov)| {
+                let prov_len = prov.len();
+                let hash = *blake3::hash(format!("crunch-ca-marker:{name}").as_bytes()).as_bytes();
+                let mut marker = vec![0u8; prov_len];
+                for (i, b) in hash.iter().cycle().enumerate().take(prov_len) {
+                    marker[i] = *b;
+                }
+                (name.clone(), marker, prov_len)
+            })
+            .collect();
+
+        // Pass 1: Apply input rewrites, replace all provisionals with
+        // markers, compute CA paths.
+        struct CaOutputIntermediate {
+            name: String,
+            marked_node: Node,
+            ca_path: StorePath<String>,
+            nar_size: u64,
+            nar_sha256: [u8; 32],
+        }
+
+        let mut intermediates: Vec<CaOutputIntermediate> = Vec::new();
+        let drv_name = &prepared.drv_name;
+        let base_name = drv_name.strip_suffix(".drv").unwrap_or(drv_name);
+
+        for (i, (output_name, _output)) in prepared.derivation.outputs.iter().enumerate() {
+            let build_output = build_result.outputs.get(i).ok_or_else(|| {
+                Error::OutputMissing { output: output_name.clone() }
+            })?;
+
+            // Apply transitive CA input rewrites.
+            let mut node = build_output.node.clone();
+            for (old_placeholder, new_path) in &prepared.input_rewrites {
+                let (rewritten, _) = crate::rewrite::rewrite_node(
+                    &node, old_placeholder.as_bytes(), new_path.as_bytes(),
+                    &self.blob_service, &self.directory_service,
+                ).await?;
+                node = rewritten;
+            }
+
+            // Replace ALL provisionals with their markers.
+            for ((_prov_name, prov), (_marker_name, marker, _len)) in
+                provisionals.iter().zip(markers.iter())
+            {
+                let (rewritten, _) = crate::rewrite::rewrite_node(
+                    &node, prov.as_bytes(), marker,
+                    &self.blob_service, &self.directory_service,
+                ).await?;
+                node = rewritten;
+            }
+
+            // Compute NAR hash of the marker-replaced content.
+            let (nar_size, nar_sha256) = nar_renderer
+                .calculate_nar(&node)
+                .await
+                .map_err(|e| Error::NarCalculation(e.to_string()))?;
+
+            // Compute CA store path.
+            let ca_hash = nix_compat::nixhash::CAHash::Nar(
+                nix_compat::nixhash::NixHash::Sha256(nar_sha256),
+            );
+            let path_name = if output_name == "out" {
+                base_name.to_string()
+            } else {
+                format!("{base_name}-{output_name}")
+            };
+            let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+                &path_name, &ca_hash, Vec::<&str>::new(), false, LOGICAL_STORE_DIR,
+            ).map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
+
+            intermediates.push(CaOutputIntermediate {
+                name: output_name.clone(),
+                marked_node: node,
+                ca_path,
+                nar_size,
+                nar_sha256,
+            });
+        }
+
+        // Build marker → final path replacement map.
+        let final_rewrites: Vec<(&[u8], Vec<u8>)> = markers.iter()
+            .zip(intermediates.iter())
+            .map(|((_name, marker, _len), intermediate)| {
+                let final_abs = intermediate.ca_path
+                    .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                (marker.as_slice(), final_abs.into_bytes())
+            })
+            .collect();
+
+        // Pass 2: Replace all markers with final CA paths, persist.
+        let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+        let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
+
+        for intermediate in &intermediates {
+            let mut final_node = intermediate.marked_node.clone();
+
+            for (marker, final_bytes) in &final_rewrites {
+                if marker.len() == final_bytes.len() {
+                    let (rewritten, _) = crate::rewrite::rewrite_node(
+                        &final_node, marker, final_bytes,
+                        &self.blob_service, &self.directory_service,
+                    ).await?;
+                    final_node = rewritten;
+                }
+            }
+
+            // Register resolved output.
+            known_paths.resolve_output(
+                &drv_abs, &intermediate.name, intermediate.ca_path.clone(),
+            );
+
+            let final_abs = intermediate.ca_path
+                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            self.ca_mappings.insert(&drv_abs, &intermediate.name, &final_abs);
+            if let Some(ref sd) = self.state_dir {
+                self.ca_mappings.save(sd);
+            }
+
+            let display_abs = intermediate.ca_path
+                .to_absolute_path_with_prefix(&self.output_dir_str);
+            info!(
+                drv = %drv_name,
+                output = %intermediate.name,
+                ca_path = %display_abs,
+                "CA output path resolved"
+            );
+
+            // Resolve references.
+            let build_output = build_result.outputs
+                .get(intermediates.iter().position(|x| x.name == intermediate.name).unwrap())
+                .unwrap();
+            let references = resolve_references(
+                &build_output.output_needles,
+                &prepared.build_request.refscan_needles,
+                &prepared.derivation,
+                &prepared.sandbox_inputs,
+            );
+
+            let ca_field = Some(nix_compat::nixhash::CAHash::Nar(
+                nix_compat::nixhash::NixHash::Sha256(intermediate.nar_sha256),
+            ));
+
+            let path_info = self.persist_and_export_output(
+                &prepared.drv_path,
+                &intermediate.ca_path,
+                final_node,
+                references,
+                intermediate.nar_size,
+                intermediate.nar_sha256,
+                ca_field,
+            ).await?;
+
+            output_infos.insert(intermediate.name.clone(), path_info);
+        }
+
+        Ok(output_infos)
     }
 
     /// Validate source inputs, resolve Nix closures, and ingest all
@@ -957,6 +1204,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::sync::{Arc, Mutex};
 
+    use nix_compat::derivation::Output;
     use nix_compat::store_path::StorePath;
     use snix_build::buildservice::{BuildRequest, BuildResult, BuildOutput};
     use snix_castore::blobservice::MemoryBlobService;
@@ -1618,5 +1866,213 @@ mod tests {
         let pos_d = recorded.iter().position(|args| args.iter().any(|a| a.contains("tree2-root"))).unwrap();
         assert!(pos_a < pos_b, "tree1-leaf before tree1-root");
         assert!(pos_c < pos_d, "tree2-leaf before tree2-root");
+    }
+
+    // ── Multi-output tests ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn multi_output_build_returns_all_outputs() {
+        use crate::test_support::build_and_register_multi;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register_multi(
+            "multi-out", &["out", "dev", "lib"], &[], &mut kp,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+
+        // Should have PathInfo for all 3 outputs.
+        assert_eq!(outcome.outputs.len(), 3, "expected 3 outputs: {:?}", outcome.outputs.keys().collect::<Vec<_>>());
+        assert!(outcome.outputs.contains_key("out"));
+        assert!(outcome.outputs.contains_key("dev"));
+        assert!(outcome.outputs.contains_key("lib"));
+
+        // Each output should have a distinct store path.
+        let paths: Vec<String> = outcome.outputs.values()
+            .map(|pi| pi.store_path.to_absolute_path())
+            .collect();
+        assert_eq!(paths.len(), 3);
+        assert_ne!(paths[0], paths[1]);
+        assert_ne!(paths[1], paths[2]);
+        assert_ne!(paths[0], paths[2]);
+
+        // Build should have been called exactly once.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn multi_output_env_has_outputs_var() {
+        use crate::test_support::build_and_register_multi;
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (_drv_path, drv) = build_and_register_multi(
+            "env-test", &["out", "dev", "man"], &[], &mut kp,
+        );
+
+        // The outputs env var should list all output names.
+        let outputs_env = drv.environment.get("outputs").unwrap();
+        let outputs_str = std::str::from_utf8(outputs_env.as_ref()).unwrap();
+        assert_eq!(outputs_str, "out dev man");
+
+        // Each output name should have a store path env var.
+        for name in &["out", "dev", "man"] {
+            let val = drv.environment.get(*name).unwrap();
+            let s = std::str::from_utf8(val.as_ref()).unwrap();
+            assert!(
+                s.starts_with("/nix/store/"),
+                "${name} should be a store path: {s}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_output_distinct_store_paths() {
+        use crate::test_support::build_and_register_multi;
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (_drv_path, drv) = build_and_register_multi(
+            "paths-test", &["out", "dev", "lib"], &[], &mut kp,
+        );
+
+        let out = drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
+        let dev = drv.outputs["dev"].path.as_ref().unwrap().to_absolute_path();
+        let lib = drv.outputs["lib"].path.as_ref().unwrap().to_absolute_path();
+
+        // "out" output uses the base name; others get a suffix.
+        assert!(out.ends_with("-paths-test"), "out: {out}");
+        assert!(dev.ends_with("-paths-test-dev"), "dev: {dev}");
+        assert!(lib.ends_with("-paths-test-lib"), "lib: {lib}");
+
+        assert_ne!(out, dev);
+        assert_ne!(dev, lib);
+    }
+
+    #[tokio::test]
+    async fn multi_output_dep_mounts_all_outputs() {
+        // Parent depends on a multi-output dep. All outputs should be
+        // available as sandbox inputs.
+        use crate::test_support::build_and_register_multi;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (dep_path, dep_drv) = build_and_register_multi(
+            "multi-dep", &["out", "dev"], &[], &mut kp,
+        );
+
+        // Parent depends on both "out" and "dev" of the dep.
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output { path: None, ca_hash: None });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), "consumer".into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), "".into());
+        environment.insert("outputs".to_string(), "out".into());
+
+        let mut input_derivations = BTreeMap::new();
+        let mut dep_outputs = BTreeSet::new();
+        dep_outputs.insert("out".to_string());
+        dep_outputs.insert("dev".to_string());
+        input_derivations.insert(dep_path.clone(), dep_outputs);
+
+        let mut parent_drv = Derivation {
+            arguments: vec!["-c".into(), "echo consumer > $out".into()],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations,
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let hdm = parent_drv.hash_derivation_modulo(|parent_path| {
+            kp.get_hdm_by_drv_path(&parent_path.to_absolute_path())
+                .expect("parent should be in known_paths")
+        });
+        parent_drv.calculate_output_paths("consumer", &hdm).unwrap();
+        let parent_drv_path = parent_drv.calculate_derivation_path("consumer").unwrap();
+
+        let mut fake_hash = [0u8; 32];
+        for (i, b) in "consumer".bytes().enumerate().take(32) {
+            fake_hash[i] = b;
+        }
+        kp.insert(fake_hash, parent_drv_path.clone(), hdm, parent_drv.clone());
+
+        let outcome = builder.build(&parent_drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+
+        // Should have built the dep and the consumer (2 builds total).
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "dep + consumer: {:?}", *recorded);
+    }
+
+    #[tokio::test]
+    async fn multi_output_cache_requires_all_outputs() {
+        // If only some outputs are cached, it should be a cache miss.
+        use crate::test_support::build_and_register_multi;
+
+        let output_tmp = tempfile::tempdir().unwrap();
+        let output_dir = output_tmp.path().to_str().unwrap().to_string();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register_multi(
+            "partial-cache", &["out", "dev"], &[], &mut kp,
+        );
+
+        // Write only the "out" output to disk + PathInfo. "dev" is missing.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(&abs, "cached out").unwrap();
+
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node: Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 10,
+                executable: false,
+            },
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService;
+        pis.put(path_info).await.unwrap();
+
+        let mut builder = Builder::new(
+            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        // Cache miss because "dev" is missing.
+        assert!(!outcome.cached, "partial cache should not count as hit");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should rebuild");
     }
 }

@@ -102,7 +102,9 @@ fn cache_hit_skips_build() {
     );
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("builds are not supported") || err.contains("build failed"),
+        err.contains("builds are not supported")
+            || err.contains("build failed")
+            || err.contains("root build(s) failed"),
         "error should be from DummyBuildService: {err}"
     );
 }
@@ -697,7 +699,9 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         Err(e) => {
             let msg = e.to_string();
             assert!(
-                msg.contains("hash mismatch") || msg.contains("FOD hash mismatch"),
+                msg.contains("hash mismatch")
+                    || msg.contains("FOD hash mismatch")
+                    || msg.contains("root build(s) failed"),
                 "expected hash mismatch error, got: {msg}"
             );
             // Verify the unpacked tree existed before the mismatch

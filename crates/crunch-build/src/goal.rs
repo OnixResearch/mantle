@@ -21,6 +21,7 @@ pub const MAX_GOALS: u32 = 10_000;
 ///
 /// Transitions:
 /// ```text
+/// AwaitingDerivation → Pending  (producer built, .drv parsed and set)
 /// Pending → Waiting  (has unbuilt deps)
 /// Pending → Ready    (all deps done or no deps)
 /// Waiting → Ready    (last dep completed)
@@ -31,6 +32,9 @@ pub const MAX_GOALS: u32 = 10_000;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GoalState {
+    /// Waiting for a producer build to complete and provide the
+    /// `.drv` content. Used for dynamic derivations.
+    AwaitingDerivation,
     /// Created but dependencies not yet inspected.
     Pending,
     /// Waiting for `remaining_deps` dependencies to complete.
@@ -50,8 +54,8 @@ pub enum GoalState {
 pub struct Goal {
     /// The derivation's store path (the .drv path).
     pub drv_path: StorePath<String>,
-    /// The derivation to build. `None` if the derivation hasn't been
-    /// obtained yet (future: dynamic derivations).
+    /// The derivation to build. `None` while in `AwaitingDerivation`
+    /// state (dynamic derivations — producer hasn't finished yet).
     pub derivation: Option<Derivation>,
     /// Current lifecycle state.
     pub state: GoalState,
@@ -63,6 +67,9 @@ pub struct Goal {
     pub waiters: Vec<String>,
     /// Whether this goal was explicitly requested by the user.
     pub is_root: bool,
+    /// The goal key of the producer that will provide our `.drv`.
+    /// Set only for dynamic derivation goals in `AwaitingDerivation` state.
+    pub producer_key: Option<String>,
 }
 
 impl Goal {
@@ -75,6 +82,7 @@ impl Goal {
             waitees: Vec::new(),
             waiters: Vec::new(),
             is_root: false,
+            producer_key: None,
         }
     }
 
@@ -83,6 +91,47 @@ impl Goal {
         let mut goal = Self::new(drv_path, derivation);
         goal.is_root = true;
         goal
+    }
+
+    /// Create a dynamic goal in `AwaitingDerivation` state.
+    ///
+    /// The goal has no derivation yet — a producer build must complete
+    /// and provide the `.drv` content via `set_derivation()`.
+    pub fn new_awaiting(
+        drv_path: StorePath<String>,
+        producer_key: String,
+    ) -> Self {
+        Self {
+            drv_path,
+            derivation: None,
+            state: GoalState::AwaitingDerivation,
+            waitees: Vec::new(),
+            waiters: Vec::new(),
+            is_root: false,
+            producer_key: Some(producer_key),
+        }
+    }
+
+    /// Provide the derivation for a dynamic goal. Transitions from
+    /// `AwaitingDerivation` to `Pending`.
+    ///
+    /// Called by the Worker after the producer build completes and
+    /// the `.drv` output has been parsed.
+    pub fn set_derivation(&mut self, derivation: Derivation) -> Result<(), Error> {
+        if self.state != GoalState::AwaitingDerivation {
+            return Err(Error::Store(format!(
+                "goal {}: set_derivation() called in {:?} state, expected AwaitingDerivation",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        debug_assert!(
+            self.derivation.is_none(),
+            "AwaitingDerivation goal should not already have a derivation"
+        );
+        self.derivation = Some(derivation);
+        self.state = GoalState::Pending;
+        Ok(())
     }
 
     /// Inspect dependencies and transition from Pending to Waiting or Ready.
@@ -145,11 +194,11 @@ impl Goal {
 
     /// Notify that a dependency has failed. Transitions to Failed.
     ///
-    /// Errors if not in Waiting state.
+    /// Errors if not in Waiting or AwaitingDerivation state.
     pub fn notify_dep_failed(&mut self) -> Result<(), Error> {
-        if !matches!(self.state, GoalState::Waiting { .. }) {
+        if !matches!(self.state, GoalState::Waiting { .. } | GoalState::AwaitingDerivation) {
             return Err(Error::Store(format!(
-                "goal {}: notify_dep_failed() in {:?}, expected Waiting",
+                "goal {}: notify_dep_failed() in {:?}, expected Waiting or AwaitingDerivation",
                 self.drv_path.name(),
                 self.state,
             )));
@@ -184,11 +233,14 @@ impl Goal {
         Ok(())
     }
 
-    /// Transition from Building to Failed.
+    /// Transition from Building (or Ready, for inline failures) to Failed.
+    ///
+    /// Accepts `Ready` because `prepare_build` can fail inline (e.g.,
+    /// fetcher hash mismatch) before the goal transitions to `Building`.
     pub fn mark_build_failed(&mut self) -> Result<(), Error> {
-        if self.state != GoalState::Building {
+        if self.state != GoalState::Building && self.state != GoalState::Ready {
             return Err(Error::Store(format!(
-                "goal {}: mark_build_failed() in {:?}, expected Building",
+                "goal {}: mark_build_failed() in {:?}, expected Building or Ready",
                 self.drv_path.name(),
                 self.state,
             )));
@@ -326,6 +378,20 @@ impl GoalRegistry {
         self.goals
             .iter()
             .filter(|(_, g)| g.is_root && g.state == GoalState::Failed)
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+
+    /// Find goals in `AwaitingDerivation` whose producer matches the
+    /// given key. Used after a build completes to discover dynamic
+    /// derivation goals waiting on that producer.
+    pub fn awaiting_producer(&self, producer_key: &str) -> Vec<String> {
+        self.goals
+            .iter()
+            .filter(|(_, g)| {
+                g.state == GoalState::AwaitingDerivation
+                    && g.producer_key.as_deref() == Some(producer_key)
+            })
             .map(|(k, _)| k.clone())
             .collect()
     }
@@ -481,9 +547,20 @@ mod tests {
     }
 
     #[test]
-    fn mark_build_failed_not_building_errors() {
+    fn mark_build_failed_from_ready() {
+        // Ready → Failed is valid (inline failures in prepare_build).
         let mut g = Goal::new(fake_sp("a.drv"), make_drv());
         g.inspect(vec![]).unwrap();
+        assert_eq!(g.state, GoalState::Ready);
+        g.mark_build_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn mark_build_failed_not_building_or_ready_errors() {
+        // Pending → mark_build_failed should still fail.
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert_eq!(g.state, GoalState::Pending);
         assert!(g.mark_build_failed().is_err());
     }
 
@@ -752,5 +829,116 @@ mod tests {
         assert!(failed.contains(&key_fail));
 
         assert!(reg.all_roots_terminal());
+    }
+
+    // ── Dynamic derivation (AwaitingDerivation) ────────────────
+
+    #[test]
+    fn new_awaiting_goal_state() {
+        let g = Goal::new_awaiting(fake_sp("dyn.drv"), "/nix/store/xxx-producer.drv".into());
+        assert_eq!(g.state, GoalState::AwaitingDerivation);
+        assert!(g.derivation.is_none());
+        assert!(!g.is_root);
+        assert_eq!(g.producer_key.as_deref(), Some("/nix/store/xxx-producer.drv"));
+    }
+
+    #[test]
+    fn set_derivation_transitions_to_pending() {
+        let mut g = Goal::new_awaiting(fake_sp("dyn.drv"), "producer-key".into());
+        g.set_derivation(make_drv()).unwrap();
+        assert_eq!(g.state, GoalState::Pending);
+        assert!(g.derivation.is_some());
+    }
+
+    #[test]
+    fn set_derivation_not_awaiting_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert!(g.set_derivation(make_drv()).is_err());
+    }
+
+    #[test]
+    fn awaiting_full_lifecycle() {
+        let mut g = Goal::new_awaiting(fake_sp("dyn.drv"), "prod".into());
+        assert_eq!(g.state, GoalState::AwaitingDerivation);
+
+        g.set_derivation(make_drv()).unwrap();
+        assert_eq!(g.state, GoalState::Pending);
+
+        g.inspect(vec![]).unwrap();
+        assert_eq!(g.state, GoalState::Ready);
+
+        g.mark_building().unwrap();
+        g.mark_done().unwrap();
+        assert_eq!(g.state, GoalState::Done);
+    }
+
+    #[test]
+    fn awaiting_with_deps_lifecycle() {
+        let mut g = Goal::new_awaiting(fake_sp("dyn.drv"), "prod".into());
+        g.set_derivation(make_drv()).unwrap();
+        g.inspect(vec!["dep.drv".into()]).unwrap();
+        assert_eq!(g.state, GoalState::Waiting { remaining_deps: 1 });
+
+        g.notify_dep_done().unwrap();
+        assert_eq!(g.state, GoalState::Ready);
+    }
+
+    #[test]
+    fn awaiting_dep_failure_goes_failed() {
+        let mut g = Goal::new_awaiting(fake_sp("dyn.drv"), "prod".into());
+        // Producer failure while still awaiting.
+        g.notify_dep_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn awaiting_rejects_inspect_before_set_derivation() {
+        let mut g = Goal::new_awaiting(fake_sp("dyn.drv"), "prod".into());
+        assert!(g.inspect(vec![]).is_err());
+    }
+
+    #[test]
+    fn awaiting_rejects_mark_building() {
+        let g = Goal::new_awaiting(fake_sp("dyn.drv"), "prod".into());
+        let mut g = g;
+        assert!(g.mark_building().is_err());
+    }
+
+    // ── Registry: awaiting_producer ───────────────────────────
+
+    #[test]
+    fn registry_awaiting_producer_finds_matching() {
+        let mut reg = GoalRegistry::new();
+
+        let sp1 = fake_sp("dyn1.drv");
+        let g1 = Goal::new_awaiting(sp1.clone(), "producer-A".into());
+        reg.insert(sp1.to_absolute_path(), g1).unwrap();
+
+        let sp2 = fake_sp("dyn2.drv");
+        let g2 = Goal::new_awaiting(sp2.clone(), "producer-A".into());
+        reg.insert(sp2.to_absolute_path(), g2).unwrap();
+
+        let sp3 = fake_sp("dyn3.drv");
+        let g3 = Goal::new_awaiting(sp3.clone(), "producer-B".into());
+        reg.insert(sp3.to_absolute_path(), g3).unwrap();
+
+        let awaiting_a = reg.awaiting_producer("producer-A");
+        assert_eq!(awaiting_a.len(), 2);
+
+        let awaiting_b = reg.awaiting_producer("producer-B");
+        assert_eq!(awaiting_b.len(), 1);
+
+        let awaiting_c = reg.awaiting_producer("producer-C");
+        assert!(awaiting_c.is_empty());
+    }
+
+    #[test]
+    fn registry_awaiting_not_terminal() {
+        let mut reg = GoalRegistry::new();
+        let sp = fake_sp("dyn.drv");
+        let mut g = Goal::new_awaiting(sp.clone(), "prod".into());
+        g.is_root = true;
+        reg.insert(sp.to_absolute_path(), g).unwrap();
+        assert!(!reg.all_roots_terminal());
     }
 }
