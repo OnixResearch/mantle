@@ -46,6 +46,7 @@ const SANDBOX_ENV_VARS: [(&str, &str); 12] = [
 pub fn derivation_to_build_request(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
+    store_dir: &str,
 ) -> Result<BuildRequest, crate::Error> {
     // command_args = [builder] ++ arguments, with placeholders replaced
     let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len() + 1);
@@ -54,10 +55,15 @@ pub fn derivation_to_build_request(
         command_args.push(replace_placeholders(arg, &derivation.outputs));
     }
 
-    // Environment: start with sandbox defaults, then add derivation env
+    // Environment: start with sandbox defaults, then add derivation env.
+    // NIX_STORE uses the configured store dir.
     let mut env: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     for (k, v) in &SANDBOX_ENV_VARS {
-        env.insert(k.to_string(), v.as_bytes().to_vec());
+        if *k == "NIX_STORE" {
+            env.insert(k.to_string(), store_dir.as_bytes().to_vec());
+        } else {
+            env.insert(k.to_string(), v.as_bytes().to_vec());
+        }
     }
     for (k, v) in &derivation.environment {
         let replaced = replace_placeholders_bstr(v, &derivation.outputs);
@@ -122,7 +128,7 @@ pub fn derivation_to_build_request(
                 )
             })
             .collect(),
-        inputs_dir: nix_compat::store_path::STORE_DIR[1..].into(),
+        inputs_dir: store_dir[1..].into(),
         constraints,
         working_dir: "build".into(),
         scratch_paths: vec!["build".into(), "nix/store".into()],
@@ -149,8 +155,9 @@ pub fn collect_input_paths(
 
     // Derivation input outputs
     for (drv_path, output_names) in &derivation.input_derivations {
+        let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
         let entry = known_paths
-            .get_by_drv_path(&drv_path.to_absolute_path())
+            .get_by_drv_path(&drv_abs)
             .ok_or_else(|| crate::Error::DerivationNotFound {
                 path: drv_path.clone(),
             })?;
@@ -293,7 +300,7 @@ mod tests {
     #[test]
     fn build_request_has_correct_builder() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new()).unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         assert_eq!(req.command_args[0], "/bin/sh");
         assert_eq!(req.command_args[1], "-c");
@@ -302,7 +309,7 @@ mod tests {
     #[test]
     fn build_request_has_sandbox_env() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new()).unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         let env_map: BTreeMap<&str, &[u8]> = req
             .environment_vars
@@ -317,7 +324,7 @@ mod tests {
     #[test]
     fn build_request_has_system_constraint() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new()).unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         assert!(req
             .constraints
@@ -328,7 +335,7 @@ mod tests {
     #[test]
     fn build_request_outputs_are_relative() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new()).unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         for output in &req.outputs {
             assert!(
@@ -345,7 +352,7 @@ mod tests {
     #[test]
     fn build_request_has_refscan_needles() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new()).unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         // At least one needle for the output
         assert!(!req.refscan_needles.is_empty());
@@ -438,7 +445,7 @@ mod tests {
         ).unwrap();
         drv.input_sources.insert(source.clone());
 
-        let kp = KnownPaths::new();
+        let kp = KnownPaths::default();
         let paths = collect_input_paths(&drv, &kp).unwrap();
         assert!(paths.contains(&source));
         assert_eq!(paths.len(), 1);
@@ -446,7 +453,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_derivation_only() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (dep_drv_path, dep_drv) = register_drv("dep", &mut kp);
 
         let mut parent = test_derivation();
@@ -461,7 +468,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_mixed() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (dep_drv_path, dep_drv) = register_drv("mixdep", &mut kp);
 
         let source: StorePath<String> = StorePath::from_absolute_path(
@@ -483,7 +490,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_missing_drv_returns_error() {
-        let kp = KnownPaths::new();
+        let kp = KnownPaths::default();
         let mut parent = test_derivation();
         let fake_drv: StorePath<String> = StorePath::from_absolute_path(
             "/nix/store/cccccccccccccccccccccccccccccccc-missing.drv".as_bytes()

@@ -171,7 +171,7 @@ fn full_serde_round_trip() {
     assert_eq!(drv.inputs.len(), 1);
 
     // Convert through glue
-    let mut kp = crunch_glue::KnownPaths::new();
+    let mut kp = crunch_glue::KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
     assert!(drv_path.to_string().ends_with("hello.drv"));
     assert!(nix_drv.outputs.get("out").unwrap().path.is_some());

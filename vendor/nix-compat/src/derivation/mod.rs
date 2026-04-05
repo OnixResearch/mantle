@@ -1,5 +1,7 @@
 use crate::store_path::{
-    self, StorePath, StorePathRef, build_ca_path, build_output_path, build_text_path,
+    self, StorePath, StorePathRef, build_ca_path, build_ca_path_with_store_dir,
+    build_output_path, build_output_path_with_store_dir, build_text_path,
+    build_text_path_with_store_dir,
 };
 use bstr::BString;
 #[cfg(feature = "serde")]
@@ -135,6 +137,15 @@ impl Derivation {
         &self,
         name: &str,
     ) -> Result<StorePath<String>, DerivationError> {
+        self.calculate_derivation_path_with_store_dir(name, crate::store_path::STORE_DIR)
+    }
+
+    /// Like [Derivation::calculate_derivation_path] but with a custom store dir.
+    pub fn calculate_derivation_path_with_store_dir(
+        &self,
+        name: &str,
+        store_dir: &str,
+    ) -> Result<StorePath<String>, DerivationError> {
         // append .drv to the name
         let name = format!("{name}.drv");
 
@@ -144,10 +155,10 @@ impl Derivation {
             .input_sources
             .iter()
             .chain(self.input_derivations.keys())
-            .map(StorePath::to_absolute_path)
+            .map(|p| p.to_absolute_path_with_prefix(store_dir))
             .collect();
 
-        build_text_path(&name, self.to_aterm_bytes(), references)
+        build_text_path_with_store_dir(&name, self.to_aterm_bytes(), references, store_dir)
             .map_err(|_e| DerivationError::InvalidOutputName(name))
     }
 
@@ -245,6 +256,20 @@ impl Derivation {
         name: &str,
         hash_derivation_modulo: &[u8; 32],
     ) -> Result<(), DerivationError> {
+        self.calculate_output_paths_with_store_dir(
+            name,
+            hash_derivation_modulo,
+            crate::store_path::STORE_DIR,
+        )
+    }
+
+    /// Like [Derivation::calculate_output_paths] but with a custom store dir.
+    pub fn calculate_output_paths_with_store_dir(
+        &mut self,
+        name: &str,
+        hash_derivation_modulo: &[u8; 32],
+        store_dir: &str,
+    ) -> Result<(), DerivationError> {
         // The fingerprint and hash differs per output
         for (output_name, output) in self.outputs.iter_mut() {
             // Assert that outputs are not yet populated, to avoid using this function wrongly.
@@ -257,11 +282,15 @@ impl Derivation {
             // For fixed output derivation we use [build_ca_path], otherwise we
             // use [build_output_path] with [hash_derivation_modulo].
             let store_path = if let Some(ref hwm) = output.ca_hash {
-                build_ca_path(&path_name, hwm, Vec::<&str>::new(), false).map_err(|e| {
+                build_ca_path_with_store_dir(
+                    &path_name, hwm, Vec::<&str>::new(), false, store_dir,
+                ).map_err(|e| {
                     DerivationError::InvalidOutputDerivationPath(output_name.to_string(), e)
                 })?
             } else {
-                build_output_path(hash_derivation_modulo, output_name, &path_name).map_err(|e| {
+                build_output_path_with_store_dir(
+                    hash_derivation_modulo, output_name, &path_name, store_dir,
+                ).map_err(|e| {
                     DerivationError::InvalidOutputDerivationPath(
                         output_name.to_string(),
                         store_path::BuildStorePathError::InvalidStorePath(e),
@@ -271,7 +300,7 @@ impl Derivation {
 
             self.environment.insert(
                 output_name.to_string(),
-                store_path.to_absolute_path().into(),
+                store_path.to_absolute_path_with_prefix(store_dir).into(),
             );
             output.path = Some(store_path);
         }

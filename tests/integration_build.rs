@@ -56,7 +56,7 @@ fn cache_hit_skips_build() {
         fixed_output: None,
     };
 
-    let mut kp = KnownPaths::new();
+    let mut kp = KnownPaths::default();
     let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -130,7 +130,7 @@ fn fod_hash_mismatch_error() {
         }),
     };
 
-    let mut kp = KnownPaths::new();
+    let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
     // The FOD has ca_hash set — verify it was constructed
@@ -177,7 +177,7 @@ fn end_to_end_trivial_build() {
         fixed_output: None,
     };
 
-    let mut kp = KnownPaths::new();
+    let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
     let out_path = nix_drv
@@ -306,7 +306,7 @@ fn eval_hello_world_with_seed() {
     }
 
     // Convert through glue
-    let mut kp = KnownPaths::new();
+    let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
     assert!(drv_path.to_string().ends_with("hello-world.drv"));
     assert!(nix_drv.outputs.get("out").unwrap().path.is_some());

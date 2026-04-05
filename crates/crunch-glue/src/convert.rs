@@ -39,6 +39,7 @@ fn convert_inner(
     drv: &CrunchDerivation,
     known_paths: &mut KnownPaths,
 ) -> Result<(StorePath<String>, Derivation), Error> {
+    let store_dir = known_paths.store_dir().to_string();
     // 1. Process inputs: resolve sources and recursively convert derivation inputs
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
     let mut input_sources: BTreeSet<StorePath<String>> = BTreeSet::new();
@@ -105,7 +106,7 @@ fn convert_inner(
     // 4. Compute hash_derivation_modulo
     let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
         known_paths
-            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path())
+            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(&store_dir))
             .unwrap_or_else(|| {
                 panic!(
                     "BUG: parent derivation {} not in KnownPaths during HDM computation",
@@ -115,10 +116,10 @@ fn convert_inner(
     });
 
     // 5. Compute output paths and fill them into the derivation
-    nix_drv.calculate_output_paths(&drv.name, &hdm)?;
+    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
 
     // 6. Compute the .drv store path
-    let drv_path = nix_drv.calculate_derivation_path(&drv.name)?;
+    let drv_path = nix_drv.calculate_derivation_path_with_store_dir(&drv.name, &store_dir)?;
 
     // 7. Compute ATerm hash for dedup key
     let aterm_bytes = nix_drv.to_aterm_bytes();
@@ -195,7 +196,7 @@ mod tests {
     #[test]
     fn simple_drv_exact_store_path() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
         let out_path = nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap();
 
@@ -212,7 +213,7 @@ mod tests {
     #[test]
     fn builder_and_system_propagate() {
         let drv = minimal_drv("hello", "/usr/bin/env");
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.builder, "/usr/bin/env");
@@ -222,7 +223,7 @@ mod tests {
     #[test]
     fn environment_auto_populated() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.environment.get("system").unwrap(), "x86_64-linux");
@@ -248,7 +249,7 @@ mod tests {
             outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(
@@ -267,7 +268,7 @@ mod tests {
             outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         let out = nix_drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
@@ -293,7 +294,7 @@ mod tests {
             )],
             ..minimal_drv("with-src", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_sources.len(), 1);
@@ -309,7 +310,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(dep))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_derivations.len(), 1);
@@ -328,7 +329,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(dep))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (parent_path, _) = convert(&drv, &mut kp).unwrap();
 
         // Both parent and dep are in KnownPaths
@@ -356,7 +357,7 @@ mod tests {
             ],
             ..minimal_drv("top", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&top, &mut kp).unwrap();
 
         // top depends on left and right
@@ -364,7 +365,7 @@ mod tests {
 
         // shared's drv path appears once in KnownPaths (dedup via identity)
         let shared_path = {
-            let mut kp_check = KnownPaths::new();
+            let mut kp_check = KnownPaths::default();
             let (p, _) = convert(&minimal_drv("shared", "/bin/sh"), &mut kp_check).unwrap();
             p.to_absolute_path()
         };
@@ -379,7 +380,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(inner))],
             ..minimal_drv("loop", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let err = convert(&outer, &mut kp).unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -401,7 +402,7 @@ mod tests {
             }),
             ..minimal_drv("src-flat", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(
@@ -427,7 +428,7 @@ mod tests {
             }),
             ..minimal_drv("src-rec", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(
@@ -452,7 +453,7 @@ mod tests {
             }),
             ..minimal_drv("src-sri", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(
@@ -505,7 +506,7 @@ mod tests {
             }),
             ..minimal_drv("bad-algo", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         assert!(
             err.to_string().contains("hash algorithm"),
@@ -524,7 +525,7 @@ mod tests {
             }),
             ..minimal_drv("bad-mode", "/bin/sh")
         };
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         assert!(
             err.to_string().contains("hash mode"),
@@ -549,5 +550,63 @@ mod tests {
     fn derivation_identity_format() {
         let drv = minimal_drv("foo", "/bin/sh");
         assert_eq!(derivation_identity(&drv), "foo:/bin/sh:x86_64-linux");
+    }
+
+    // ── store_dir threading tests ─────────────────────────────────────
+
+    #[test]
+    fn convert_custom_store_dir_produces_different_paths() {
+        let drv = minimal_drv("hello", "/bin/sh");
+
+        let mut kp_default = KnownPaths::default();
+        let (drv_path_default, nix_drv_default) = convert(&drv, &mut kp_default).unwrap();
+
+        let mut kp_custom = KnownPaths::new("/opt/crunch");
+        let (drv_path_custom, nix_drv_custom) = convert(&drv, &mut kp_custom).unwrap();
+
+        // Drv paths differ
+        assert_ne!(drv_path_default, drv_path_custom);
+
+        // Output paths differ
+        let out_default = nix_drv_default.outputs["out"].path.as_ref().unwrap();
+        let out_custom = nix_drv_custom.outputs["out"].path.as_ref().unwrap();
+        assert_ne!(out_default, out_custom);
+
+        // Custom env uses /opt/crunch prefix
+        let env_out: &[u8] = nix_drv_custom.environment.get("out").unwrap().as_ref();
+        assert!(
+            env_out.starts_with(b"/opt/crunch/"),
+            "expected /opt/crunch/ prefix, got: {}",
+            String::from_utf8_lossy(env_out)
+        );
+    }
+
+    #[test]
+    fn convert_default_store_dir_matches_existing() {
+        let drv = minimal_drv("hello", "/bin/sh");
+
+        let mut kp1 = KnownPaths::default();
+        let (path1, drv1) = convert(&drv, &mut kp1).unwrap();
+
+        let mut kp2 = KnownPaths::new("/nix/store");
+        let (path2, drv2) = convert(&drv, &mut kp2).unwrap();
+
+        assert_eq!(path1, path2);
+        assert_eq!(drv1.outputs, drv2.outputs);
+    }
+
+    #[test]
+    fn known_paths_custom_store_dir_lookup() {
+        let drv = minimal_drv("hello", "/bin/sh");
+        let mut kp = KnownPaths::new("/opt/crunch");
+        let (drv_path, _) = convert(&drv, &mut kp).unwrap();
+
+        // Lookup with the custom prefix must succeed
+        let abs = drv_path.to_absolute_path_with_prefix("/opt/crunch");
+        assert!(kp.get_by_drv_path(&abs).is_some());
+
+        // Lookup with the wrong prefix must fail
+        let wrong = drv_path.to_absolute_path();
+        assert!(kp.get_by_drv_path(&wrong).is_none());
     }
 }

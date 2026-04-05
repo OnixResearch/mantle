@@ -18,6 +18,8 @@ pub struct KnownPaths {
     /// Track in-progress conversions for cycle detection.
     /// Key is an opaque identity derived from the CrunchDerivation name + builder + system.
     in_progress: std::collections::HashSet<String>,
+    /// Store directory prefix (e.g. "/nix/store" or "/opt/crunch").
+    store_dir: String,
 }
 
 pub struct KnownEntry {
@@ -27,13 +29,19 @@ pub struct KnownEntry {
 }
 
 impl KnownPaths {
-    pub fn new() -> Self {
+    pub fn new(store_dir: &str) -> Self {
         Self {
             by_aterm_hash: HashMap::new(),
             hdm_by_drv_path: HashMap::new(),
             drv_path_to_aterm: HashMap::new(),
             in_progress: std::collections::HashSet::new(),
+            store_dir: store_dir.to_string(),
         }
+    }
+
+    /// The store directory prefix used for path serialization.
+    pub fn store_dir(&self) -> &str {
+        &self.store_dir
     }
 
     /// Register a fully-converted derivation.
@@ -44,7 +52,7 @@ impl KnownPaths {
         hdm: [u8; 32],
         derivation: Derivation,
     ) {
-        let drv_path_str = drv_path.to_absolute_path();
+        let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
         self.drv_path_to_aterm.insert(drv_path_str, aterm_hash);
         self.by_aterm_hash.insert(aterm_hash, KnownEntry {
@@ -87,7 +95,7 @@ impl KnownPaths {
 
 impl Default for KnownPaths {
     fn default() -> Self {
-        Self::new()
+        Self::new(nix_compat::store_path::STORE_DIR)
     }
 }
 
@@ -124,7 +132,7 @@ mod tests {
 
     #[test]
     fn insert_and_get_by_aterm_hash() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let aterm = [1u8; 32];
         let hdm = [2u8; 32];
         let path = fake_store_path("foo.drv");
@@ -139,7 +147,7 @@ mod tests {
 
     #[test]
     fn get_hdm_by_drv_path() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let aterm = [1u8; 32];
         let hdm = [2u8; 32];
         let path = fake_store_path("bar.drv");
@@ -152,7 +160,7 @@ mod tests {
 
     #[test]
     fn get_by_drv_path_indexed() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let aterm = [3u8; 32];
         let hdm = [4u8; 32];
         let path = fake_store_path("baz.drv");
@@ -167,13 +175,13 @@ mod tests {
 
     #[test]
     fn get_by_drv_path_unknown_returns_none() {
-        let kp = KnownPaths::new();
+        let kp = KnownPaths::default();
         assert!(kp.get_by_drv_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nope.drv").is_none());
     }
 
     #[test]
     fn multiple_inserts_resolve_independently() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
 
         let aterm_a = [10u8; 32];
         let hdm_a = [11u8; 32];
@@ -195,7 +203,7 @@ mod tests {
 
     #[test]
     fn overwrite_same_drv_path_updates_index() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         let path = fake_store_path("reuse.drv");
 
         let aterm_1 = [30u8; 32];
@@ -214,14 +222,14 @@ mod tests {
 
     #[test]
     fn cycle_detection_begin_returns_false_on_reentry() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         assert!(kp.begin_conversion("foo:bar:baz"));
         assert!(!kp.begin_conversion("foo:bar:baz"));
     }
 
     #[test]
     fn cycle_detection_end_allows_reentry() {
-        let mut kp = KnownPaths::new();
+        let mut kp = KnownPaths::default();
         assert!(kp.begin_conversion("foo:bar:baz"));
         kp.end_conversion("foo:bar:baz");
         assert!(kp.begin_conversion("foo:bar:baz"));

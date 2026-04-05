@@ -44,6 +44,8 @@ pub struct Builder<BS, DS, BServ> {
     directory_service: DS,
     build_service: BServ,
     store_dir: PathBuf,
+    /// The store dir as a string, for path serialization.
+    store_dir_str: String,
     /// Output store path → PathInfo for outputs built in this session.
     built_outputs: HashMap<String, PathInfo>,
     /// Output store path → Node (castore root node) for outputs built or
@@ -66,11 +68,13 @@ where
         store_dir: PathBuf,
         verbose: bool,
     ) -> Self {
+        let store_dir_str = store_dir.to_str().unwrap_or("/nix/store").to_string();
         Self {
             blob_service,
             directory_service,
             build_service,
             store_dir,
+            store_dir_str,
             built_outputs: HashMap::new(),
             output_nodes: HashMap::new(),
             verbose,
@@ -87,7 +91,7 @@ where
         known_paths: &KnownPaths,
     ) -> Result<BuildOutcome, Error> {
         let entry = known_paths
-            .get_by_drv_path(&drv_path.to_absolute_path())
+            .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(&self.store_dir_str))
             .ok_or_else(|| Error::DerivationNotFound {
                 path: drv_path.clone(),
             })?;
@@ -133,7 +137,7 @@ where
         // 2. Recursively build all input derivations
         for (input_drv_path, _output_names) in &derivation.input_derivations {
             let input_entry = known_paths
-                .get_by_drv_path(&input_drv_path.to_absolute_path())
+                .get_by_drv_path(&input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str))
                 .ok_or_else(|| Error::DerivationNotFound {
                     path: input_drv_path.clone(),
                 })?;
@@ -158,7 +162,7 @@ where
 
         // 3. Validate source inputs exist on disk
         for source_path in &derivation.input_sources {
-            let abs = PathBuf::from(source_path.to_absolute_path());
+            let abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store_dir_str));
             if !abs.exists() {
                 return Err(Error::SourceNotFound {
                     path: source_path.clone(),
@@ -190,7 +194,7 @@ where
                 sandbox_inputs.insert(input_path.clone(), node.clone());
             } else {
                 // Try ingesting from disk
-                let abs = PathBuf::from(input_path.to_absolute_path());
+                let abs = PathBuf::from(input_path.to_absolute_path_with_prefix(&self.store_dir_str));
                 if abs.exists() {
                     let node = ingest_path::<_, _, _, &[u8]>(
                         self.blob_service.clone(),
@@ -214,7 +218,7 @@ where
         }
 
         // 5. Build the BuildRequest
-        let build_request = derivation_to_build_request(derivation, &sandbox_inputs)?;
+        let build_request = derivation_to_build_request(derivation, &sandbox_inputs, &self.store_dir_str)?;
 
         info!(drv = %drv_name, "building");
         if self.verbose {
@@ -303,7 +307,7 @@ where
             };
 
             // Register in our session state
-            let abs_path = output_path.to_absolute_path();
+            let abs_path = output_path.to_absolute_path_with_prefix(&self.store_dir_str);
             self.built_outputs.insert(abs_path, path_info.clone());
             self.output_nodes
                 .insert(output_path.clone(), build_output.node.clone());
@@ -315,7 +319,7 @@ where
             drv = %drv_name,
             outputs = ?output_names.iter()
                 .filter_map(|n| derivation.outputs.get(n)?.path.as_ref())
-                .map(|p| p.to_absolute_path())
+                .map(|p| p.to_absolute_path_with_prefix(&self.store_dir_str))
                 .collect::<Vec<_>>(),
             "build succeeded"
         );
@@ -340,7 +344,7 @@ where
 
     /// Check if a store path exists on the filesystem.
     fn path_exists_on_disk(&self, path: &StorePath<String>) -> bool {
-        let abs = PathBuf::from(path.to_absolute_path());
+        let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store_dir_str));
         abs.exists()
     }
 
@@ -359,7 +363,7 @@ where
             })?;
 
             // Ingest from disk to compute node, NAR hash, etc.
-            let abs = PathBuf::from(output_path.to_absolute_path());
+            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.store_dir_str));
             let node = ingest_path::<_, _, _, &[u8]>(
                 self.blob_service.clone(),
                 self.directory_service.clone(),
@@ -394,7 +398,7 @@ where
 
             self.output_nodes.insert(output_path.clone(), node);
             self.built_outputs
-                .insert(output_path.to_absolute_path(), path_info.clone());
+                .insert(output_path.to_absolute_path_with_prefix(&self.store_dir_str), path_info.clone());
 
             infos.insert(output_name.clone(), path_info);
         }
@@ -408,7 +412,7 @@ where
         for output in derivation.outputs.values() {
             if let Some(path) = &output.path {
                 if !self.output_nodes.contains_key(path) {
-                    let abs = PathBuf::from(path.to_absolute_path());
+                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store_dir_str));
                     if abs.exists() {
                         let node = ingest_path::<_, _, _, &[u8]>(
                             self.blob_service.clone(),
@@ -1255,10 +1259,10 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+            bs, ds, mock, PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::new();
+        let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, _) = build_and_register("solo", &[], &mut kp);
 
         let outcome = builder.build(&drv_path, &kp).await.unwrap();
@@ -1276,10 +1280,10 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+            bs, ds, mock, PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::new();
+        let mut kp = crunch_glue::KnownPaths::default();
         let (dep_path, _) = build_and_register("dep", &[], &mut kp);
         let (top_path, _) = build_and_register("top", &[(dep_path.clone(), "out")], &mut kp);
 
@@ -1306,10 +1310,10 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nonexistent-store"), false,
+            bs, ds, mock, PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::new();
+        let mut kp = crunch_glue::KnownPaths::default();
         // A is shared dep
         let (a_path, _) = build_and_register("aaa", &[], &mut kp);
         // B and C both depend on A
@@ -1339,42 +1343,34 @@ mod tests {
     /// Test that the cache check works: if the output path exists on disk,
     /// the builder skips the build and returns cached: true.
     ///
-    /// This test creates a file under /nix/store which requires write access.
-    /// Skipped when /nix/store is read-only (normal NixOS).
+    /// Uses a tempdir as store_dir so no /nix/store write access is needed.
     #[tokio::test]
     async fn builder_skips_build_when_output_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store_dir = tmp.path().to_str().unwrap().to_string();
+
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, tmp.path().to_path_buf(), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::new();
+        let mut kp = crunch_glue::KnownPaths::new(&store_dir);
         let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
 
-        // Pre-create the output path on disk so the cache check passes.
-        // Store paths are always /nix/store/... — skip if we can't write there.
+        // Pre-create the output path on disk in the tempdir store.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path());
-        if std::fs::create_dir_all(abs.parent().unwrap()).is_err() {
-            eprintln!("skipping cache test: cannot write to /nix/store");
-            return;
-        }
-        if std::fs::write(&abs, "cached content").is_err() {
-            eprintln!("skipping cache test: cannot write file in /nix/store");
-            return;
-        }
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&store_dir));
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(&abs, "cached content").unwrap();
 
         let outcome = builder.build(&drv_path, &kp).await.unwrap();
         assert!(outcome.cached, "should report as cached");
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "should NOT call do_build for cached output");
-
-        // Cleanup
-        let _ = std::fs::remove_file(&abs);
     }
 }
 

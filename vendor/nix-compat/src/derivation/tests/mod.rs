@@ -462,3 +462,100 @@ fn output_path_construction() {
     bar_drv2.calculate_output_paths("bar", &bar_hdm2).unwrap();
     assert_eq!(bar_drv.outputs, bar_drv2.outputs, "FOD output paths must be deterministic");
 }
+
+/// calculate_derivation_path_with_store_dir: default matches original.
+#[cfg(feature = "serde")]
+#[test]
+fn derivation_path_with_store_dir_default() {
+    let json_bytes = fs::read(format!(
+        "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"
+    ))
+    .expect("unable to read JSON");
+    let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
+
+    let default_path = drv.calculate_derivation_path("bar").unwrap();
+    let explicit_path = drv
+        .calculate_derivation_path_with_store_dir("bar", "/nix/store")
+        .unwrap();
+
+    assert_eq!(default_path, explicit_path);
+}
+
+/// calculate_derivation_path_with_store_dir: custom dir differs.
+#[cfg(feature = "serde")]
+#[test]
+fn derivation_path_with_store_dir_custom() {
+    let json_bytes = fs::read(format!(
+        "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"
+    ))
+    .expect("unable to read JSON");
+    let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
+
+    let default_path = drv.calculate_derivation_path("bar").unwrap();
+    let custom_path = drv
+        .calculate_derivation_path_with_store_dir("bar", "/opt/crunch")
+        .unwrap();
+
+    assert_ne!(default_path, custom_path, "custom store dir must produce different drv path");
+}
+
+/// calculate_output_paths_with_store_dir: default matches original.
+#[cfg(feature = "serde")]
+#[test]
+fn output_paths_with_store_dir_default() {
+    let nix_drv = Derivation::from_aterm_bytes(
+        &fs::read(format!(
+            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
+        ))
+        .expect("unable to read .drv"),
+    )
+    .expect("must succeed");
+
+    let mut drv1 = derivation_without_output_paths(&nix_drv);
+    let mut drv2 = derivation_without_output_paths(&nix_drv);
+
+    let hdm = drv1.hash_derivation_modulo(|_| panic!("FOD"));
+
+    drv1.calculate_output_paths("bar", &hdm).unwrap();
+    drv2.calculate_output_paths_with_store_dir("bar", &hdm, "/nix/store")
+        .unwrap();
+
+    assert_eq!(drv1.outputs, drv2.outputs);
+    assert_eq!(drv1.environment, drv2.environment);
+}
+
+/// calculate_output_paths_with_store_dir: custom dir differs from default.
+#[cfg(feature = "serde")]
+#[test]
+fn output_paths_with_store_dir_custom() {
+    let nix_drv = Derivation::from_aterm_bytes(
+        &fs::read(format!(
+            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
+        ))
+        .expect("unable to read .drv"),
+    )
+    .expect("must succeed");
+
+    let mut drv_default = derivation_without_output_paths(&nix_drv);
+    let mut drv_custom = derivation_without_output_paths(&nix_drv);
+
+    let hdm = drv_default.hash_derivation_modulo(|_| panic!("FOD"));
+
+    drv_default.calculate_output_paths("bar", &hdm).unwrap();
+    drv_custom
+        .calculate_output_paths_with_store_dir("bar", &hdm, "/opt/crunch")
+        .unwrap();
+
+    // Paths differ
+    let default_out = drv_default.outputs["out"].path.as_ref().unwrap();
+    let custom_out = drv_custom.outputs["out"].path.as_ref().unwrap();
+    assert_ne!(default_out, custom_out, "custom store dir must produce different output path");
+
+    // Environment uses the custom prefix
+    let env_out: &[u8] = drv_custom.environment.get("out").unwrap().as_ref();
+    assert!(
+        env_out.starts_with(b"/opt/crunch/"),
+        "environment should use custom store dir prefix, got: {}",
+        String::from_utf8_lossy(env_out)
+    );
+}

@@ -189,7 +189,8 @@ fn cmd_build(
     };
 
     // 3. Convert all derivations
-    let mut known_paths = crunch_glue::KnownPaths::new();
+    let store_dir_str = store_dir.to_str().unwrap_or("/nix/store");
+    let mut known_paths = crunch_glue::KnownPaths::new(store_dir_str);
     let mut drv_paths = Vec::new();
     for (label, drv) in &derivations {
         let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
@@ -266,7 +267,7 @@ fn cmd_build(
                 }
 
                 for (_output_name, path_info) in &outcome.outputs {
-                    let path = path_info.store_path.to_absolute_path();
+                    let path = path_info.store_path.to_absolute_path_with_prefix(store_dir_str);
                     if outcome.cached {
                         println!("{path} (cached)");
                     } else {

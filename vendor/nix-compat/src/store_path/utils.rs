@@ -54,10 +54,26 @@ where
     I: IntoIterator<Item = S>,
     C: AsRef<[u8]>,
 {
+    build_text_path_with_store_dir(name, content, references, STORE_DIR)
+}
+
+/// Like [build_text_path] but with a custom store dir.
+pub fn build_text_path_with_store_dir<'a, S, SP, I, C>(
+    name: &'a str,
+    content: C,
+    references: I,
+    store_dir: &str,
+) -> Result<StorePath<SP>, BuildStorePathError>
+where
+    S: AsRef<str>,
+    SP: AsRef<str> + std::convert::From<&'a str>,
+    I: IntoIterator<Item = S>,
+    C: AsRef<[u8]>,
+{
     // produce the BLAKE3 digest of the contents (crunch: was SHA-256)
     let content_digest = *blake3::hash(content.as_ref()).as_bytes();
 
-    build_ca_path(name, &CAHash::Text(content_digest), references, false)
+    build_ca_path_with_store_dir(name, &CAHash::Text(content_digest), references, false, store_dir)
 }
 
 /// This builds a store path from a [CAHash] and a list of references.
@@ -66,6 +82,22 @@ pub fn build_ca_path<'a, S, SP, I>(
     ca_hash: &CAHash,
     references: I,
     self_reference: bool,
+) -> Result<StorePath<SP>, BuildStorePathError>
+where
+    S: AsRef<str>,
+    SP: AsRef<str> + std::convert::From<&'a str>,
+    I: IntoIterator<Item = S>,
+{
+    build_ca_path_with_store_dir(name, ca_hash, references, self_reference, STORE_DIR)
+}
+
+/// Like [build_ca_path] but with a custom store dir.
+pub fn build_ca_path_with_store_dir<'a, S, SP, I>(
+    name: &'a str,
+    ca_hash: &CAHash,
+    references: I,
+    self_reference: bool,
+    store_dir: &str,
 ) -> Result<StorePath<SP>, BuildStorePathError>
 where
     S: AsRef<str>,
@@ -113,7 +145,7 @@ where
         }
     };
 
-    build_store_path_from_fingerprint_parts(&ty, &inner_digest, name)
+    build_store_path_from_fingerprint_parts_with_store_dir(&ty, &inner_digest, name, store_dir)
         .map_err(BuildStorePathError::InvalidStorePath)
 }
 
@@ -129,10 +161,24 @@ pub fn build_output_path<'a, SP>(
 where
     SP: AsRef<str> + std::convert::From<&'a str>,
 {
-    build_store_path_from_fingerprint_parts(
+    build_output_path_with_store_dir(drv_sha256, output_name, output_path_name, STORE_DIR)
+}
+
+/// Like [build_output_path] but with a custom store dir.
+pub fn build_output_path_with_store_dir<'a, SP>(
+    drv_sha256: &[u8; 32],
+    output_name: &str,
+    output_path_name: &'a str,
+    store_dir: &str,
+) -> Result<StorePath<SP>, Error>
+where
+    SP: AsRef<str> + std::convert::From<&'a str>,
+{
+    build_store_path_from_fingerprint_parts_with_store_dir(
         &(String::from("output:") + output_name),
         drv_sha256,
         output_path_name,
+        store_dir,
     )
 }
 
@@ -293,6 +339,55 @@ mod test {
             outer.to_absolute_path().as_str(),
             "/nix/store/57rxb32ssn02s9zp6m3n8sph18s2b95m-baz"
         );
+    }
+
+    /// Non-default store dir produces different paths.
+    #[test]
+    fn build_text_path_custom_store_dir() {
+        let default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
+            .expect("should succeed");
+        let custom: StorePathRef =
+            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/opt/crunch")
+                .expect("should succeed");
+
+        assert_ne!(default, custom, "different store dir must produce different path");
+    }
+
+    /// Default store dir matches existing build_text_path.
+    #[test]
+    fn build_text_path_default_store_dir_matches() {
+        let via_default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
+            .expect("should succeed");
+        let via_explicit: StorePathRef =
+            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/nix/store")
+                .expect("should succeed");
+
+        assert_eq!(via_default, via_explicit);
+    }
+
+    /// Non-default store dir on build_output_path.
+    #[test]
+    fn build_output_path_custom_store_dir() {
+        let hash = [0x42u8; 32];
+        let default: StorePathRef = build_output_path(&hash, "out", "test").expect("should succeed");
+        let custom: StorePathRef =
+            build_output_path_with_store_dir(&hash, "out", "test", "/opt/crunch")
+                .expect("should succeed");
+
+        assert_ne!(default, custom, "different store dir must produce different path");
+    }
+
+    /// Non-default store dir on build_ca_path.
+    #[test]
+    fn build_ca_path_custom_store_dir() {
+        let ca = CAHash::Nar(NixHash::Sha256([0x42u8; 32]));
+        let default: StorePathRef =
+            build_ca_path("test", &ca, Vec::<String>::new(), false).expect("should succeed");
+        let custom: StorePathRef =
+            build_ca_path_with_store_dir("test", &ca, Vec::<String>::new(), false, "/opt/crunch")
+                .expect("should succeed");
+
+        assert_ne!(default, custom, "different store dir must produce different path");
     }
 
     /// Verify BLAKE3 path computation is deterministic: same inputs → same path.
