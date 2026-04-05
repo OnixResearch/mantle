@@ -667,4 +667,341 @@ mod tests {
         assert_eq!(w.ready_queue.len(), 2);
         assert_eq!(w.registry.root_count(), 2);
     }
+
+    // ── complete_goal / waiter notification ────────────────────
+
+    #[test]
+    fn complete_goal_notifies_waiters() {
+        let mut kp = KnownPaths::default();
+
+        let leaf_drv = make_drv();
+        let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
+
+        let top_drv = make_drv_with_deps(&[leaf_sp.clone()]);
+        let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
+
+        let mut w = Worker::new(1);
+        w.want(&top_sp, &kp, true).unwrap();
+
+        // Leaf is Ready, top is Waiting.
+        let leaf_key = leaf_sp.to_absolute_path();
+        let top_key = top_sp.to_absolute_path();
+        assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Ready);
+        assert!(matches!(
+            w.registry.get(&top_key).unwrap().state,
+            GoalState::Waiting { remaining_deps: 1 }
+        ));
+
+        // Simulate completing the leaf.
+        let outcome = crate::orchestrate::BuildOutcome {
+            drv_path: leaf_sp.clone(),
+            outputs: std::collections::HashMap::new(),
+            cached: false,
+            log: None,
+        };
+        let mut outcomes = Vec::new();
+        let mut failed = Vec::new();
+        w.complete_goal(&leaf_key, outcome, &mut outcomes, &mut failed).unwrap();
+
+        // Leaf should be Done.
+        assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Done);
+        // Top should now be Ready (its sole dep completed).
+        assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Ready);
+        // Top should be in the ready queue.
+        assert!(w.ready_queue.contains(&top_key));
+        // Leaf is not a root, so outcomes should be empty.
+        assert!(outcomes.is_empty());
+    }
+
+    #[test]
+    fn complete_goal_collects_root_outcome() {
+        let mut kp = KnownPaths::default();
+        let drv = make_drv();
+        let sp = register_drv(&mut kp, "root.drv", &drv);
+
+        let mut w = Worker::new(1);
+        w.want(&sp, &kp, true).unwrap();
+
+        let key = sp.to_absolute_path();
+        let outcome = crate::orchestrate::BuildOutcome {
+            drv_path: sp.clone(),
+            outputs: std::collections::HashMap::new(),
+            cached: true,
+            log: None,
+        };
+        let mut outcomes = Vec::new();
+        let mut failed = Vec::new();
+        w.complete_goal(&key, outcome, &mut outcomes, &mut failed).unwrap();
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(outcomes[0].cached);
+    }
+
+    #[test]
+    fn complete_diamond_shared_dep_unblocks_both() {
+        let mut kp = KnownPaths::default();
+
+        let shared_drv = make_drv();
+        let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
+
+        let left_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let left_sp = register_drv(&mut kp, "left.drv", &left_drv);
+
+        let right_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let right_sp = register_drv(&mut kp, "right.drv", &right_drv);
+
+        let top_drv = make_drv_with_deps(&[left_sp.clone(), right_sp.clone()]);
+        let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
+
+        let mut w = Worker::new(2);
+        w.want(&top_sp, &kp, true).unwrap();
+
+        // Complete shared dep.
+        let shared_key = shared_sp.to_absolute_path();
+        let outcome = crate::orchestrate::BuildOutcome {
+            drv_path: shared_sp.clone(),
+            outputs: std::collections::HashMap::new(),
+            cached: false,
+            log: None,
+        };
+        let mut outcomes = Vec::new();
+        let mut failed = Vec::new();
+        w.complete_goal(&shared_key, outcome, &mut outcomes, &mut failed).unwrap();
+
+        // Both left and right should now be Ready.
+        let left_key = left_sp.to_absolute_path();
+        let right_key = right_sp.to_absolute_path();
+        assert_eq!(w.registry.get(&left_key).unwrap().state, GoalState::Ready);
+        assert_eq!(w.registry.get(&right_key).unwrap().state, GoalState::Ready);
+        // Top still Waiting (needs left + right).
+        let top_key = top_sp.to_absolute_path();
+        assert!(matches!(
+            w.registry.get(&top_key).unwrap().state,
+            GoalState::Waiting { remaining_deps: 2 }
+        ));
+    }
+
+    // ── fail_goal / propagate_failure ─────────────────────────
+
+    #[test]
+    fn fail_goal_propagates_to_waiters() {
+        let mut kp = KnownPaths::default();
+
+        let leaf_drv = make_drv();
+        let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
+
+        let mid_drv = make_drv_with_deps(&[leaf_sp.clone()]);
+        let mid_sp = register_drv(&mut kp, "mid.drv", &mid_drv);
+
+        let top_drv = make_drv_with_deps(&[mid_sp.clone()]);
+        let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
+
+        let mut w = Worker::new(1);
+        w.want(&top_sp, &kp, true).unwrap();
+
+        // Leaf is Ready — simulate it being dispatched and starting.
+        let leaf_key = leaf_sp.to_absolute_path();
+        w.ready_queue.pop_front(); // remove leaf from ready queue
+        w.registry.get_mut(&leaf_key).unwrap().mark_building().unwrap();
+
+        // Fail the leaf.
+        let mut failed = Vec::new();
+        w.fail_goal(&leaf_key, &mut failed).unwrap();
+
+        // Leaf should be Failed.
+        assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Failed);
+        // Mid should be Failed (dep failed).
+        let mid_key = mid_sp.to_absolute_path();
+        assert_eq!(w.registry.get(&mid_key).unwrap().state, GoalState::Failed);
+        // Top should be Failed (transitive dep failed).
+        let top_key = top_sp.to_absolute_path();
+        assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Failed);
+        // Top is a root, so it should be in the failed list.
+        assert!(failed.contains(&top_key));
+    }
+
+    #[test]
+    fn fail_goal_only_propagates_to_waiting() {
+        let mut kp = KnownPaths::default();
+
+        let shared_drv = make_drv();
+        let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
+
+        let good_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let good_sp = register_drv(&mut kp, "good.drv", &good_drv);
+
+        let bad_drv = make_drv();
+        let bad_sp = register_drv(&mut kp, "bad.drv", &bad_drv);
+
+        let mut w = Worker::new(2);
+        w.want(&good_sp, &kp, true).unwrap();
+        w.want(&bad_sp, &kp, true).unwrap();
+
+        // bad is Ready, shared is Ready, good is Waiting.
+        let bad_key = bad_sp.to_absolute_path();
+        w.ready_queue.retain(|k| k != &bad_key); // remove bad from ready queue
+        w.registry.get_mut(&bad_key).unwrap().mark_building().unwrap();
+
+        // Fail bad. It has no waiters, so good (waiting on shared) should be unaffected.
+        let mut failed = Vec::new();
+        w.fail_goal(&bad_key, &mut failed).unwrap();
+
+        assert_eq!(w.registry.get(&bad_key).unwrap().state, GoalState::Failed);
+        // good is still Waiting on shared, not failed.
+        let good_key = good_sp.to_absolute_path();
+        assert!(matches!(
+            w.registry.get(&good_key).unwrap().state,
+            GoalState::Waiting { .. }
+        ));
+        // bad is a root, so it should be in failed list.
+        assert!(failed.contains(&bad_key));
+    }
+
+    // ── run() integration tests ───────────────────────────────
+
+    use crate::orchestrate::Builder;
+    use crate::test_support::{self, MockBuildService, build_and_register, tmp_ds, test_pis};
+    use snix_castore::blobservice::MemoryBlobService;
+    use std::path::PathBuf;
+
+    #[tokio::test]
+    async fn run_single_leaf_builds_once() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (sp, _) = build_and_register("solo", &[], &mut kp);
+
+        let mut w = Worker::new(1);
+        w.want(&sp, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(result.failed.is_empty());
+        assert!(!result.outcomes[0].cached);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn run_chain_builds_in_order() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (dep_path, _) = build_and_register("dep", &[], &mut kp);
+        let (mid_path, _) = build_and_register("mid", &[(dep_path.clone(), "out")], &mut kp);
+        let (top_path, _) = build_and_register("top", &[(mid_path.clone(), "out")], &mut kp);
+
+        let mut w = Worker::new(1);
+        w.want(&top_path, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(result.outcomes[0].drv_path.name().contains("top"));
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+
+        // Verify ordering: dep before mid before top.
+        let pos_dep = recorded.iter().position(|a| a.iter().any(|s| s.contains("dep"))).unwrap();
+        let pos_mid = recorded.iter().position(|a| a.iter().any(|s| s.contains("mid"))).unwrap();
+        let pos_top = recorded.iter().position(|a| a.iter().any(|s| s.contains("top"))).unwrap();
+        assert!(pos_dep < pos_mid, "dep before mid");
+        assert!(pos_mid < pos_top, "mid before top");
+    }
+
+    #[tokio::test]
+    async fn run_diamond_builds_shared_once() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (shared, _) = build_and_register("shared", &[], &mut kp);
+        let (left, _) = build_and_register("left", &[(shared.clone(), "out")], &mut kp);
+        let (right, _) = build_and_register("right", &[(shared.clone(), "out")], &mut kp);
+
+        let mut w = Worker::new(2);
+        w.want(&left, &kp, true).unwrap();
+        w.want(&right, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3, "shared + left + right");
+        let shared_builds = recorded.iter()
+            .filter(|a| a.iter().any(|s| s.contains("shared")))
+            .count();
+        assert_eq!(shared_builds, 1, "shared built exactly once");
+    }
+
+    #[tokio::test]
+    async fn run_disjoint_trees() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a, _) = build_and_register("tree1-leaf", &[], &mut kp);
+        let (b, _) = build_and_register("tree1-root", &[(a.clone(), "out")], &mut kp);
+        let (c, _) = build_and_register("tree2-leaf", &[], &mut kp);
+        let (d, _) = build_and_register("tree2-root", &[(c.clone(), "out")], &mut kp);
+
+        let mut w = Worker::new(2);
+        w.want(&b, &kp, true).unwrap();
+        w.want(&d, &kp, true).unwrap();
+        let result = w.run(&mut builder, &mut kp).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 4);
+
+        // Each leaf before its root.
+        let pos_a = recorded.iter().position(|a| a.iter().any(|s| s.contains("tree1-leaf"))).unwrap();
+        let pos_b = recorded.iter().position(|a| a.iter().any(|s| s.contains("tree1-root"))).unwrap();
+        let pos_c = recorded.iter().position(|a| a.iter().any(|s| s.contains("tree2-leaf"))).unwrap();
+        let pos_d = recorded.iter().position(|a| a.iter().any(|s| s.contains("tree2-root"))).unwrap();
+        assert!(pos_a < pos_b, "tree1-leaf before tree1-root");
+        assert!(pos_c < pos_d, "tree2-leaf before tree2-root");
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "no root goals to build")]
+    async fn run_empty_worker_panics() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let mut w = Worker::new(1);
+
+        // No roots — debug_assert catches this.
+        let _ = w.run(&mut builder, &mut kp).await;
+    }
 }

@@ -607,4 +607,150 @@ mod tests {
         let reg = GoalRegistry::new();
         assert!(reg.all_roots_terminal());
     }
+
+    // ── MAX_GOALS limit ─────────────────────────────────────────
+
+    #[test]
+    fn registry_max_goals_enforced() {
+        let mut reg = GoalRegistry::new();
+
+        // Fill to MAX_GOALS.
+        for i in 0..MAX_GOALS {
+            let name = format!("g{i}.drv");
+            let sp = fake_sp(&name);
+            let key = sp.to_absolute_path();
+            reg.insert(key, Goal::new(sp, make_drv())).unwrap();
+        }
+
+        assert_eq!(reg.len(), MAX_GOALS);
+
+        // One more should fail.
+        let sp = fake_sp("overflow.drv");
+        let key = sp.to_absolute_path();
+        let err = reg.insert(key, Goal::new(sp, make_drv()));
+        assert!(err.is_err());
+        assert_eq!(reg.len(), MAX_GOALS);
+    }
+
+    #[test]
+    fn registry_get_or_insert_respects_limit() {
+        let mut reg = GoalRegistry::new();
+
+        for i in 0..MAX_GOALS {
+            let name = format!("g{i}.drv");
+            let sp = fake_sp(&name);
+            let key = sp.to_absolute_path();
+            reg.get_or_insert(key, || Goal::new(sp, make_drv())).unwrap();
+        }
+
+        // New key should fail.
+        let sp = fake_sp("overflow.drv");
+        let key = sp.to_absolute_path();
+        let err = reg.get_or_insert(key, || Goal::new(sp, make_drv()));
+        assert!(err.is_err());
+
+        // Existing key should still work (no insertion).
+        let sp0 = fake_sp("g0.drv");
+        let key0 = sp0.to_absolute_path();
+        let (_, created) = reg.get_or_insert(key0, || Goal::new(sp0, make_drv())).unwrap();
+        assert!(!created);
+    }
+
+    // ── Failure lifecycle ────────────────────────────────────────
+
+    #[test]
+    fn full_lifecycle_dep_failure() {
+        let mut g = Goal::new(fake_sp("top.drv"), make_drv());
+
+        g.inspect(vec!["dep.drv".into()]).unwrap();
+        assert_eq!(g.state, GoalState::Waiting { remaining_deps: 1 });
+
+        g.notify_dep_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn full_lifecycle_build_failure() {
+        let mut g = Goal::new(fake_sp("top.drv"), make_drv());
+
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        g.mark_build_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn failed_goal_rejects_further_transitions() {
+        let mut g = Goal::new(fake_sp("top.drv"), make_drv());
+        g.inspect(vec!["d.drv".into()]).unwrap();
+        g.notify_dep_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+
+        // Nothing should work on a Failed goal.
+        assert!(g.inspect(vec![]).is_err());
+        assert!(g.notify_dep_done().is_err());
+        assert!(g.notify_dep_failed().is_err());
+        assert!(g.mark_building().is_err());
+        assert!(g.mark_done().is_err());
+        assert!(g.mark_build_failed().is_err());
+    }
+
+    #[test]
+    fn done_goal_rejects_further_transitions() {
+        let mut g = Goal::new(fake_sp("d.drv"), make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        g.mark_done().unwrap();
+        assert_eq!(g.state, GoalState::Done);
+
+        assert!(g.inspect(vec![]).is_err());
+        assert!(g.notify_dep_done().is_err());
+        assert!(g.mark_building().is_err());
+        assert!(g.mark_done().is_err());
+        assert!(g.mark_build_failed().is_err());
+    }
+
+    // ── Registry: root tracking ─────────────────────────────────
+
+    #[test]
+    fn registry_root_done_and_failed_keys() {
+        let mut reg = GoalRegistry::new();
+
+        // Root that succeeds.
+        let sp_ok = fake_sp("ok.drv");
+        let key_ok = sp_ok.to_absolute_path();
+        let mut g_ok = Goal::new_root(sp_ok, make_drv());
+        g_ok.inspect(vec![]).unwrap();
+        g_ok.mark_building().unwrap();
+        g_ok.mark_done().unwrap();
+        reg.insert(key_ok.clone(), g_ok).unwrap();
+
+        // Root that fails.
+        let sp_fail = fake_sp("fail.drv");
+        let key_fail = sp_fail.to_absolute_path();
+        let mut g_fail = Goal::new_root(sp_fail, make_drv());
+        g_fail.inspect(vec![]).unwrap();
+        g_fail.mark_building().unwrap();
+        g_fail.mark_build_failed().unwrap();
+        reg.insert(key_fail.clone(), g_fail).unwrap();
+
+        // Non-root that succeeds (should not appear in root lists).
+        let sp_nr = fake_sp("nonroot.drv");
+        let key_nr = sp_nr.to_absolute_path();
+        let mut g_nr = Goal::new(sp_nr, make_drv());
+        g_nr.inspect(vec![]).unwrap();
+        g_nr.mark_building().unwrap();
+        g_nr.mark_done().unwrap();
+        reg.insert(key_nr, g_nr).unwrap();
+
+        let done = reg.root_done_keys();
+        assert_eq!(done.len(), 1);
+        assert!(done.contains(&key_ok));
+
+        let failed = reg.root_failed_keys();
+        assert_eq!(failed.len(), 1);
+        assert!(failed.contains(&key_fail));
+
+        assert!(reg.all_roots_terminal());
+    }
 }

@@ -16,6 +16,8 @@ mod hash;
 mod orchestrate;
 mod references;
 pub mod rewrite;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod worker;
 
 pub use build_request::derivation_to_build_request;
