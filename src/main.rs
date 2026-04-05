@@ -299,7 +299,7 @@ fn cmd_build(
 
             for (label, drv_path) in &drv_paths {
                 let outcome = builder
-                    .build(drv_path, &known_paths)
+                    .build(drv_path, &mut known_paths)
                     .await
                     .map_err(|e| {
                         let log_msg = format!("{e}");

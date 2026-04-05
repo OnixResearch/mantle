@@ -93,7 +93,7 @@ where
     pub async fn build(
         &mut self,
         drv_path: &StorePath<String>,
-        known_paths: &KnownPaths,
+        known_paths: &mut KnownPaths,
     ) -> Result<BuildOutcome, Error> {
         let entry = known_paths
             .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(&self.store_dir_str))
@@ -114,7 +114,7 @@ where
         &'a mut self,
         drv_path: &'a StorePath<String>,
         derivation: &'a Derivation,
-        known_paths: &'a KnownPaths,
+        known_paths: &'a mut KnownPaths,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<BuildOutcome, Error>> + 'a>> {
         Box::pin(self.build_derivation_inner(drv_path, derivation, known_paths))
     }
@@ -123,7 +123,7 @@ where
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
-        known_paths: &KnownPaths,
+        known_paths: &mut KnownPaths,
     ) -> Result<BuildOutcome, Error> {
         let drv_name = drv_path.name().to_string();
 
@@ -258,12 +258,11 @@ where
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
         let output_names: Vec<String> = derivation.outputs.keys().cloned().collect();
 
-        for (i, (output_name, output)) in derivation.outputs.iter().enumerate() {
-            let output_path = output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
-                output: output_name.clone(),
-                drv_name: drv_name.clone(),
-            })?;
+        // Determine if this is a CA derivation (output paths are None).
+        let is_ca = derivation.outputs.values()
+            .all(|o| o.path.is_none() && o.ca_hash.is_none());
 
+        for (i, (output_name, output)) in derivation.outputs.iter().enumerate() {
             let build_output = build_result.outputs.get(i).ok_or_else(|| {
                 Error::OutputMissing {
                     output: output_name.clone(),
@@ -276,7 +275,47 @@ where
                 .await
                 .map_err(|e| Error::NarCalculation(e.to_string()))?;
 
-            // FOD hash verification
+            // Determine the output store path.
+            let output_path = if is_ca {
+                // CA derivation: compute path from content hash.
+                let ca_hash = nix_compat::nixhash::CAHash::Nar(
+                    nix_compat::nixhash::NixHash::Sha256(nar_sha256),
+                );
+                let path_name = if output_name == "out" {
+                    drv_name.clone()
+                } else {
+                    format!("{drv_name}-{output_name}")
+                };
+                let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+                    &path_name,
+                    &ca_hash,
+                    Vec::<&str>::new(),
+                    false,
+                    &self.store_dir_str,
+                )
+                .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
+
+                // Register the resolved path in KnownPaths
+                let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+                known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
+
+                info!(
+                    drv = %drv_name,
+                    output = %output_name,
+                    ca_path = %ca_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                    "CA output path resolved"
+                );
+
+                ca_path
+            } else {
+                // Input-addressed or FOD: path was computed at convert() time.
+                output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
+                    output: output_name.clone(),
+                    drv_name: drv_name.clone(),
+                })?.clone()
+            };
+
+            // FOD hash verification (only for FODs, not CA)
             if let Some(ca_hash) = &output.ca_hash {
                 verify_fod_hash(
                     &drv_name,
@@ -299,6 +338,14 @@ where
                 &sandbox_inputs,
             );
 
+            let ca_field = if is_ca {
+                Some(nix_compat::nixhash::CAHash::Nar(
+                    nix_compat::nixhash::NixHash::Sha256(nar_sha256),
+                ))
+            } else {
+                output.ca_hash.clone()
+            };
+
             let path_info = PathInfo {
                 store_path: output_path.clone(),
                 node: build_output.node.clone(),
@@ -307,7 +354,7 @@ where
                 nar_sha256,
                 signatures: vec![],
                 deriver: Some(drv_path.clone()),
-                ca: output.ca_hash.clone(),
+                ca: ca_field,
             };
 
             // Persist to PathInfoService
@@ -1274,7 +1321,7 @@ mod tests {
         let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, _) = build_and_register("solo", &[], &mut kp);
 
-        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
         assert_eq!(outcome.outputs.len(), 1);
 
@@ -1296,7 +1343,7 @@ mod tests {
         let (dep_path, _) = build_and_register("dep", &[], &mut kp);
         let (top_path, _) = build_and_register("top", &[(dep_path.clone(), "out")], &mut kp);
 
-        let outcome = builder.build(&top_path, &kp).await.unwrap();
+        let outcome = builder.build(&top_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
 
         let recorded = calls.lock().unwrap();
@@ -1335,7 +1382,7 @@ mod tests {
             &mut kp,
         );
 
-        let outcome = builder.build(&d_path, &kp).await.unwrap();
+        let outcome = builder.build(&d_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
 
         let recorded = calls.lock().unwrap();
@@ -1395,7 +1442,7 @@ mod tests {
             bs, ds, mock, pis, tmp.path().to_path_buf(), false,
         );
 
-        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
         assert!(outcome.cached, "should report as cached");
 
         let recorded = calls.lock().unwrap();
@@ -1436,7 +1483,7 @@ mod tests {
             bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
         );
 
-        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached, "should NOT be cached (file missing)");
 
         let recorded = calls.lock().unwrap();
@@ -1467,7 +1514,7 @@ mod tests {
             bs, ds, mock, pis, tmp.path().to_path_buf(), false,
         );
 
-        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached, "should NOT be cached (no PathInfo)");
 
         let recorded = calls.lock().unwrap();

@@ -92,7 +92,7 @@ fn cache_hit_skips_build() {
             false,
         );
 
-        builder.build(&drv_path, &kp).await
+        builder.build(&drv_path, &mut kp).await
     });
 
     // DummyBuildService errors when build is attempted (no cache hit)
@@ -242,7 +242,7 @@ fn end_to_end_trivial_build() {
                 true,
             );
 
-            let outcome = builder.build(&drv_path, &kp).await;
+            let outcome = builder.build(&drv_path, &mut kp).await;
 
             // Clean up workdir
             let _ = std::fs::remove_dir_all(&workdir);

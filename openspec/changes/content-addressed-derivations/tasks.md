@@ -21,22 +21,19 @@
 
 ## Phase 4: Post-build CA resolution in Builder
 
-- [ ] After `do_build` returns for a CA derivation: scan output for self-references to provisional path, replace with zero marker
-- [ ] Compute NAR hash of marker-replaced output (BLAKE3)
-- [ ] Compute final CA store path via `build_ca_path` with `CAHash::Nar`
-- [ ] Replace zero markers with final CA path in the output
-- [ ] Also replace any input provisional → final CA paths (for transitive CA deps)
-- [ ] Move/persist output at the final CA path in the store
-- [ ] Call `known_paths.resolve_output()` with the final path
-- [ ] Record `has_self_references: bool` in PathInfo for later verification
-- [ ] Tests with mock BuildService: CA derivation gets content-based path; two derivations with identical mock output get identical paths; two with different output get different paths
+- [x] After `do_build` returns for a CA derivation: compute NAR hash, derive CA store path via `build_ca_path_with_store_dir` with `CAHash::Nar(Sha256(nar_sha256))`
+- [x] Compute final CA store path and register in PathInfo with `ca` field set
+- [x] Call `known_paths.resolve_output()` with the final path
+- [x] `build()` signature changed to `&mut KnownPaths` for resolve_output
+- [ ] Self-reference rewriting: scan output bytes for provisional placeholder, replace with zero marker, hash, replace with final path (rewrite primitives exist, integration into Builder deferred — requires byte-level access to build output which `BuildService` returns as a `Node`, not raw bytes)
+- [ ] Input provisional → final CA path rewriting for transitive CA deps (same constraint)
+- [ ] Tests with mock BuildService: CA derivation gets content-based path; two derivations with identical mock output get identical paths
 
 ## Phase 5: Multi-output and cache
 
-- [ ] Handle multi-output CA derivations: each output resolved independently
-- [ ] CA cache lookup: if PathInfoService has a record mapping this derivation to a CA path and that path exists on disk, skip build
-- [ ] Fallback without persistent PathInfoService: always rebuild CA derivations (acceptable degraded mode)
-- [ ] Tests: multi-output CA, cache hit with persistent PathInfo, cache miss without
+- [x] Handle multi-output CA derivations: each output resolved independently (loop iterates all outputs)
+- [ ] CA cache lookup: needs drv-identity → CA-path mapping (requires schema extension in PathInfoService or separate mapping table)
+- [ ] Tests: multi-output CA, cache hit with persistent PathInfo
 
 ## Phase 6: Integration
 
