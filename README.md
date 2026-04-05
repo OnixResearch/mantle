@@ -86,7 +86,33 @@ the derivation inputs. Identical outputs get identical paths.
 
 CA self-reference rewriting works: if a build output embeds its own
 store path (RPATHs, shebangs), the provisional path is rewritten to
-the final content-addressed path.
+the final content-addressed path. Multi-output CA derivations use
+two-pass rewriting to handle cross-output references.
+
+## Multi-Output Derivations
+
+Split a package into separate outputs (binary, headers, man pages):
+
+```nickel
+{
+  name = "hello",
+  outputs = ["out", "dev", "man"],
+  builder = "/bin/bash",
+  args = ["-c", m%"
+    for output in $outputs; do
+      mkdir -p "${!output}"
+    done
+    mkdir -p $out/bin && echo 'hello' > $out/bin/hello
+    mkdir -p $dev/include && echo '#define V 1' > $dev/include/hello.h
+    mkdir -p $man/share/man/man1 && echo '.TH HELLO 1' > $man/share/man/man1/hello.1
+  "%],
+  ...
+} | crunch.Derivation
+```
+
+Each output gets a distinct store path. The builder receives `$outputs`
+(space-separated list) and individual path variables (`$out`, `$dev`,
+`$man`). Works with both input-addressed and content-addressed modes.
 
 ## Architecture
 
@@ -259,3 +285,7 @@ crunch --store /tmp/mystore build hello.ncl
   is concurrent via `tokio::JoinSet`. Preparation and output processing
   are sequential.
 - **No garbage collection**: `crunch store gc` is not implemented.
+- **Multi-output**: outputs work end-to-end. No output *selection*
+  from consuming derivations yet (all outputs of a dependency are
+  mounted in the sandbox, but there's no way to reference a specific
+  output path like Nix's `pkg.dev`).
