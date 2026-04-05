@@ -927,6 +927,8 @@ dependencies = [
  "crunch-build",
  "crunch-eval",
  "crunch-glue",
+ "data-encoding",
+ "futures",
  "nix-compat",
  "predicates",
  "pretty_assertions",

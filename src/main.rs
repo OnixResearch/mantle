@@ -81,6 +81,28 @@ enum Command {
         #[arg(long)]
         list: bool,
     },
+
+    /// Inspect the store's PathInfo database
+    Store {
+        #[command(subcommand)]
+        action: StoreAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum StoreAction {
+    /// List all known store paths
+    List,
+    /// Show detailed PathInfo for a store path
+    Info {
+        /// Store path (full or fragment to match)
+        path: String,
+    },
+    /// Verify NAR hash of stored paths against disk
+    Verify {
+        /// Optional: verify a specific path (default: all)
+        path: Option<String>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -134,6 +156,7 @@ fn run(args: Args) -> Result<(), RunError> {
         }
         Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
+        Command::Store { action } => cmd_store(action),
     }
 }
 
@@ -396,6 +419,169 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
     eprintln!("Wrote {}", output.display());
     Ok(())
+}
+
+fn cmd_store(action: StoreAction) -> Result<(), RunError> {
+    use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
+    use futures::StreamExt;
+
+    let state = state_dir();
+    let db_path = state.join("pathinfo.redb");
+    if !db_path.exists() {
+        return Err(RunError::Internal(format!(
+            "PathInfo database {} does not exist (no builds yet?)",
+            db_path.display()
+        )));
+    }
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+
+    rt.block_on(async {
+        let read_only = matches!(action, StoreAction::List | StoreAction::Info { .. });
+        let svc = RedbPathInfoService::new(
+            "crunch".to_string(),
+            RedbPathInfoServiceConfig {
+                path: Some(db_path.clone()),
+                read_only,
+                cache_size: None,
+            },
+        )
+        .await
+        .map_err(|e| RunError::Internal(format!("opening PathInfo database: {e}")))?;
+
+        match action {
+            StoreAction::List => {
+                let mut stream = svc.list();
+                let mut count: u32 = 0;
+                while let Some(result) = stream.next().await {
+                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+                    let deriver_name = pi
+                        .deriver
+                        .as_ref()
+                        .map(|d| d.name().to_string())
+                        .unwrap_or_else(|| "-".to_string());
+                    println!(
+                        "{}  deriver={}  nar_size={}",
+                        pi.store_path, deriver_name, pi.nar_size
+                    );
+                    count = count.saturating_add(1);
+                }
+                if count == 0 {
+                    eprintln!("No paths in PathInfo database.");
+                } else {
+                    eprintln!("{count} path(s)");
+                }
+            }
+
+            StoreAction::Info { path } => {
+                // Find the matching PathInfo by scanning
+                let mut stream = svc.list();
+                let mut found = false;
+                while let Some(result) = stream.next().await {
+                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+                    let sp_str = pi.store_path.to_string();
+                    if sp_str.contains(&path) {
+                        println!("store_path: {}", pi.store_path);
+                        println!("nar_size:   {}", pi.nar_size);
+                        println!(
+                            "nar_sha256: {}",
+                            data_encoding::HEXLOWER.encode(&pi.nar_sha256)
+                        );
+                        if let Some(ref d) = pi.deriver {
+                            println!("deriver:    {d}");
+                        }
+                        if !pi.references.is_empty() {
+                            println!("references:");
+                            for r in &pi.references {
+                                println!("  {r}");
+                            }
+                        }
+                        if let Some(ref ca) = pi.ca {
+                            println!("ca:         {ca:?}");
+                        }
+                        println!("node:       {:?}", pi.node);
+                        found = true;
+                    }
+                }
+                if !found {
+                    return Err(RunError::Internal(format!(
+                        "no PathInfo matching '{path}'"
+                    )));
+                }
+            }
+
+            StoreAction::Verify { path } => {
+                use snix_castore::blobservice::MemoryBlobService;
+                use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+                use snix_castore::import::fs::ingest_path;
+                use snix_store::nar::{NarCalculationService, SimpleRenderer};
+
+                let bs = MemoryBlobService::default();
+                let ds = RedbDirectoryService::new_temporary(
+                    "verify".to_string(),
+                    RedbDirectoryServiceConfig::default(),
+                ).map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+                let mut stream = svc.list();
+                let mut checked: u32 = 0;
+                let mut mismatches: u32 = 0;
+
+                while let Some(result) = stream.next().await {
+                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+                    let sp_str = pi.store_path.to_string();
+
+                    if let Some(ref filter) = path {
+                        if !sp_str.contains(filter) {
+                            continue;
+                        }
+                    }
+
+                    let abs = std::path::Path::new("/nix/store").join(sp_str);
+                    if !abs.exists() {
+                        println!("MISSING {}", pi.store_path);
+                        mismatches = mismatches.saturating_add(1);
+                        checked = checked.saturating_add(1);
+                        continue;
+                    }
+
+                    let node = ingest_path::<_, _, _, &[u8]>(
+                        bs.clone(), ds.clone(), &abs, None,
+                    )
+                    .await
+                    .map_err(|e| RunError::Internal(format!("ingest {}: {e}", pi.store_path)))?;
+
+                    let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
+                    let (_nar_size, nar_sha256) = renderer
+                        .calculate_nar(&node)
+                        .await
+                        .map_err(|e| RunError::Internal(format!("NAR calc: {e}")))?;
+
+                    if nar_sha256 == pi.nar_sha256 {
+                        println!("OK {}", pi.store_path);
+                    } else {
+                        println!(
+                            "MISMATCH {}  stored={}  actual={}",
+                            pi.store_path,
+                            data_encoding::HEXLOWER.encode(&pi.nar_sha256),
+                            data_encoding::HEXLOWER.encode(&nar_sha256),
+                        );
+                        mismatches = mismatches.saturating_add(1);
+                    }
+                    checked = checked.saturating_add(1);
+                }
+
+                eprintln!("{checked} checked, {mismatches} mismatches");
+                if mismatches > 0 {
+                    return Err(RunError::Build(format!(
+                        "{mismatches} path(s) failed verification"
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    })
 }
 
 /// Write a build log file with metadata header.
