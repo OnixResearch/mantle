@@ -8,8 +8,12 @@
 mod build_request;
 pub mod ca_mapping;
 mod error;
+mod export;
 pub mod fetcher;
+mod fod;
+mod hash;
 mod orchestrate;
+mod references;
 pub mod rewrite;
 
 pub use build_request::derivation_to_build_request;

@@ -43,11 +43,20 @@ const SANDBOX_ENV_VARS: [(&str, &str); 12] = [
 ///
 /// `known_paths` is used to look up nested derivation outputs when
 /// resolving `input_derivations`.
+/// Compile-time: sandbox env vars must not be empty.
+const _: () = assert!(SANDBOX_ENV_VARS.len() > 0);
+
 pub fn derivation_to_build_request(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
     store_dir: &str,
 ) -> Result<BuildRequest, crate::Error> {
+    // Tiger Style: assert preconditions.
+    debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
+    debug_assert!(!derivation.outputs.is_empty(), "must have at least one output");
+    debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
+
     // command_args = [builder] ++ arguments, with placeholders replaced
     let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len() + 1);
     command_args.push(derivation.builder.clone());
@@ -97,6 +106,10 @@ pub fn derivation_to_build_request(
         .map(|p| nixbase32::encode(p.digest()))
         .chain(inputs.keys().map(|p| nixbase32::encode(p.digest())))
         .collect();
+
+    // Tiger Style: assert command_args has at least the builder.
+    debug_assert!(!command_args.is_empty());
+    debug_assert!(!env.is_empty(), "environment must include sandbox vars");
 
     Ok(BuildRequest {
         command_args,

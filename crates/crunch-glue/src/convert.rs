@@ -11,6 +11,10 @@ use crate::error::Error;
 use crate::known_paths::KnownPaths;
 use crate::types::{CrunchDerivation, FixedOutput, Input};
 
+/// Maximum derivation dependency depth before we bail out.
+/// Prevents stack overflow from pathological or accidental deep graphs.
+const MAX_RECURSION_DEPTH: u32 = 512;
+
 /// Convert a `CrunchDerivation` into a `nix_compat::Derivation` with
 /// computed BLAKE3 store paths.
 ///
@@ -22,6 +26,26 @@ pub fn convert(
     drv: &CrunchDerivation,
     known_paths: &mut KnownPaths,
 ) -> Result<(StorePath<String>, Derivation), Error> {
+    convert_with_depth(drv, known_paths, 0)
+}
+
+fn convert_with_depth(
+    drv: &CrunchDerivation,
+    known_paths: &mut KnownPaths,
+    depth: u32,
+) -> Result<(StorePath<String>, Derivation), Error> {
+    // Tiger Style: fixed limit on recursion depth.
+    if depth >= MAX_RECURSION_DEPTH {
+        return Err(Error::CircularDependency(format!(
+            "{} (depth limit {} exceeded)",
+            drv.name, MAX_RECURSION_DEPTH
+        )));
+    }
+
+    debug_assert!(!drv.name.is_empty(), "derivation name must not be empty");
+    debug_assert!(!drv.builder.is_empty(), "derivation builder must not be empty");
+    debug_assert!(!drv.outputs.is_empty(), "derivation must have at least one output");
+
     let identity = derivation_identity(drv);
 
     // Cycle detection
@@ -29,7 +53,7 @@ pub fn convert(
         return Err(Error::CircularDependency(drv.name.clone()));
     }
 
-    let result = convert_inner(drv, known_paths);
+    let result = convert_inner(drv, known_paths, depth);
 
     known_paths.end_conversion(&identity);
     result
@@ -38,21 +62,44 @@ pub fn convert(
 fn convert_inner(
     drv: &CrunchDerivation,
     known_paths: &mut KnownPaths,
+    depth: u32,
 ) -> Result<(StorePath<String>, Derivation), Error> {
     let store_dir = known_paths.store_dir().to_string();
-    // 1. Process inputs: resolve sources and recursively convert derivation inputs
+
+    // 1. Resolve inputs (recursive for derivation deps).
+    let (input_derivations, input_sources) =
+        resolve_inputs(&drv.inputs, known_paths, depth)?;
+
+    // 2. Build the nix_compat::Derivation struct.
+    let ca_hash = drv.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
+    let mut nix_drv = build_nix_derivation(drv, input_derivations, input_sources, ca_hash);
+
+    // 3. Finalize: compute HDM, output paths, drv path, register.
+    finalize_and_register(drv, &mut nix_drv, known_paths, &store_dir)
+}
+
+/// Resolve all inputs: source paths are parsed, derivation inputs are
+/// recursively converted and registered in `known_paths`.
+fn resolve_inputs(
+    inputs: &[Input],
+    known_paths: &mut KnownPaths,
+    depth: u32,
+) -> Result<(
+    BTreeMap<StorePath<String>, BTreeSet<String>>,
+    BTreeSet<StorePath<String>>,
+), Error> {
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
     let mut input_sources: BTreeSet<StorePath<String>> = BTreeSet::new();
 
-    for input in &drv.inputs {
+    for input in inputs {
         match input {
             Input::Source(path_str) => {
                 let store_path = parse_store_path(path_str)?;
                 input_sources.insert(store_path);
             }
             Input::Derivation(nested_drv) => {
-                let (nested_drv_path, _nested_nix_drv) = convert(nested_drv, known_paths)?;
-                // Reference all outputs of the nested derivation
+                let (nested_drv_path, _nested_nix_drv) =
+                    convert_with_depth(nested_drv, known_paths, depth.saturating_add(1))?;
                 let output_names: BTreeSet<String> =
                     nested_drv.outputs.iter().cloned().collect();
                 input_derivations.insert(nested_drv_path, output_names);
@@ -60,10 +107,17 @@ fn convert_inner(
         }
     }
 
-    // 2. Parse fixed-output if present
-    let ca_hash = drv.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
+    Ok((input_derivations, input_sources))
+}
 
-    // 3. Build the nix_compat::Derivation struct (without output paths yet)
+/// Construct a `nix_compat::Derivation` from the CrunchDerivation fields.
+/// Output paths are not yet computed — that happens in `finalize_and_register`.
+fn build_nix_derivation(
+    drv: &CrunchDerivation,
+    input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>>,
+    input_sources: BTreeSet<StorePath<String>>,
+    ca_hash: Option<CAHash>,
+) -> Derivation {
     let mut outputs = BTreeMap::new();
     for output_name in &drv.outputs {
         outputs.insert(
@@ -75,25 +129,18 @@ fn convert_inner(
         );
     }
 
-    // Environment: start with user-provided env, leave output path slots empty
     let mut environment: BTreeMap<String, BString> = BTreeMap::new();
     for (k, v) in &drv.env {
         environment.insert(k.clone(), v.as_bytes().into());
     }
-
-    // Auto-populate standard env entries
     environment.insert("system".to_string(), drv.system.as_bytes().into());
     environment.insert("builder".to_string(), drv.builder.as_bytes().into());
     environment.insert("name".to_string(), drv.name.as_bytes().into());
-
-    // Reserve empty slots for output paths (filled after path computation)
     for output_name in &drv.outputs {
-        environment
-            .entry(output_name.clone())
-            .or_insert_with(|| "".into());
+        environment.entry(output_name.clone()).or_insert_with(|| "".into());
     }
 
-    let mut nix_drv = Derivation {
+    Derivation {
         arguments: drv.args.clone(),
         builder: drv.builder.clone(),
         environment,
@@ -101,12 +148,19 @@ fn convert_inner(
         input_sources,
         outputs,
         system: drv.system.clone(),
-    };
+    }
+}
 
-    // 4. Compute hash_derivation_modulo
+/// Compute HDM, output paths, and .drv path. Register in KnownPaths.
+fn finalize_and_register(
+    drv: &CrunchDerivation,
+    nix_drv: &mut Derivation,
+    known_paths: &mut KnownPaths,
+    store_dir: &str,
+) -> Result<(StorePath<String>, Derivation), Error> {
     let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
         known_paths
-            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(&store_dir))
+            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir))
             .unwrap_or_else(|| {
                 panic!(
                     "BUG: parent derivation {} not in KnownPaths during HDM computation",
@@ -117,39 +171,36 @@ fn convert_inner(
 
     let is_ca = drv.addressing_mode == "content-addressed" && drv.fixed_output.is_none();
 
-    // 5. Compute output paths.
-    //    Input-addressed (and FODs): compute now, fill into derivation.
-    //    Content-addressed: output paths are unknown until after the build.
-    //    Set environment to placeholders so the builder has a $out to write to.
-    // Always compute the input-addressed output paths first.
-    // For CA derivations, these serve as provisional paths that the builder
-    // writes to. Both the provisional and final CA path are store paths
-    // with the same name, so they have the same length — enabling byte-level
-    // self-reference rewriting after the build.
-    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
+    // Compute provisional output paths (used as $out in the sandbox).
+    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, store_dir)?;
 
     if is_ca {
-        // Clear the output paths (they'll be resolved to CA paths after the
-        // build), but keep the provisional paths in the environment so the
-        // builder has a valid $out to write to.
-        for (_output_name, output) in nix_drv.outputs.iter_mut() {
-            // The environment already has the provisional path from
-            // calculate_output_paths_with_store_dir.
+        // CA: clear stored paths but keep provisional paths in env for $out.
+        for (_name, output) in nix_drv.outputs.iter_mut() {
             output.path = None;
         }
     }
 
-    // 6. Compute the .drv store path
-    let drv_path = nix_drv.calculate_derivation_path_with_store_dir(&drv.name, &store_dir)?;
+    let drv_path = nix_drv.calculate_derivation_path_with_store_dir(&drv.name, store_dir)?;
 
-    // 7. Compute ATerm hash for dedup key
     let aterm_bytes = nix_drv.to_aterm_bytes();
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
-    // 8. Register in KnownPaths
     known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, nix_drv.clone(), is_ca);
 
-    Ok((drv_path, nix_drv))
+    // Tiger Style: assert postconditions.
+    debug_assert!(
+        known_paths.get_by_drv_path(
+            &drv_path.to_absolute_path_with_prefix(store_dir)
+        ).is_some(),
+        "derivation must be registered in KnownPaths after insert"
+    );
+    debug_assert!(
+        !is_ca || nix_drv.outputs.values().all(|o| o.path.is_none()),
+        "CA derivation outputs must have None paths (resolved after build)"
+    );
+
+    Ok((drv_path, nix_drv.clone()))
 }
 
 /// Parse a store path string into a `StorePath`.

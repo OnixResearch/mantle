@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use nix_compat::store_path::StorePath;
 use tracing::info;
 
 use errors::RunError;
@@ -164,6 +165,8 @@ fn run(args: Args) -> Result<(), RunError> {
     }
 }
 
+// ── cmd_build: eval → convert → build ──────────────────────────────────
+
 fn cmd_build(
     file: &std::path::Path,
     import_paths: &[OsString],
@@ -171,7 +174,6 @@ fn cmd_build(
     verbose: bool,
     fix: bool,
 ) -> Result<(), RunError> {
-    // 0. Verify store directory exists (or explain how to create it)
     if !store_dir.exists() {
         return Err(RunError::Internal(format!(
             "store directory {} does not exist.\n\
@@ -180,46 +182,55 @@ fn cmd_build(
         )));
     }
 
-    // 1. Evaluate Nickel file
+    // Phase 1: Evaluate and convert (functional core — deterministic
+    // given the same .ncl input, no network/disk mutation).
+    let store_dir_str = store_dir.to_str().unwrap_or("/nix/store");
+    let (drv_paths, mut known_paths) =
+        evaluate_and_convert(file, import_paths, store_dir_str)?;
+
+    // Phase 2+3: Set up services and execute builds (imperative shell).
+    let log_dir = log_dir();
+    let _ = std::fs::create_dir_all(&log_dir);
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+
+    rt.block_on(async {
+        execute_builds(
+            &drv_paths,
+            &mut known_paths,
+            store_dir,
+            store_dir_str,
+            &log_dir,
+            file,
+            verbose,
+            fix,
+        )
+        .await
+    })
+}
+
+/// Functional core: evaluate a .ncl file and convert all derivations.
+///
+/// No disk mutation, no service construction — just Nickel eval and
+/// the pure derivation→store-path conversion. Returns the list of
+/// (label, drv_path) pairs and the populated KnownPaths.
+fn evaluate_and_convert(
+    file: &std::path::Path,
+    import_paths: &[OsString],
+    store_dir_str: &str,
+) -> Result<(Vec<(String, StorePath<String>)>, crunch_glue::KnownPaths), RunError> {
     info!(file = %file.display(), "evaluating");
     let expr = crunch_eval::evaluate(file, import_paths)
         .map_err(|e| RunError::Eval(format!("{e}")))?;
 
-    // 2. Detect single vs multi-derivation output.
-    //    If the top-level record has a "name" field, treat as single derivation.
-    //    Otherwise, treat each field as a named derivation.
-    let derivations: Vec<(String, crunch_glue::CrunchDerivation)> = if let Some(record) = expr.as_record() {
-        if record.value_by_name("name").is_some_and(|v| v.as_str().is_some()) {
-            // Single derivation -- deserialize the whole expression directly
-            let drv: crunch_glue::CrunchDerivation = expr.to_serde()
-                .map_err(|e| RunError::Eval(format!("deserializing derivation: {e}")))?;
-            let name = drv.name.clone();
-            vec![(name, drv)]
-        } else {
-            // Package set -- each field is a derivation
-            let mut derivations = Vec::new();
-            for (key, maybe_value) in record.iter() {
-                let value = maybe_value.ok_or_else(|| RunError::Eval(
-                    format!("field '{key}' has no value")
-                ))?;
-                let drv: crunch_glue::CrunchDerivation = value.to_serde()
-                    .map_err(|e| RunError::Eval(format!(
-                        "deserializing derivation '{key}': {e}"
-                    )))?;
-                derivations.push((key.to_string(), drv));
-            }
-            derivations
-        }
-    } else {
-        return Err(RunError::Eval(
-            "expected a Derivation record or a record of Derivations".to_string(),
-        ));
-    };
+    let derivations = deserialize_derivations(&expr)?;
 
-    // 3. Convert all derivations
-    let store_dir_str = store_dir.to_str().unwrap_or("/nix/store");
+    debug_assert!(!derivations.is_empty(), "must have at least one derivation");
+
     let mut known_paths = crunch_glue::KnownPaths::new(store_dir_str);
     let mut drv_paths = Vec::new();
+
     for (label, drv) in &derivations {
         let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
             .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
@@ -227,164 +238,275 @@ fn cmd_build(
         drv_paths.push((label.clone(), drv_path));
     }
 
-    // 4. Set up build log directory
-    let log_dir = log_dir();
-    let _ = std::fs::create_dir_all(&log_dir);
+    debug_assert!(
+        drv_paths.len() == derivations.len(),
+        "every derivation must produce a drv_path"
+    );
 
-    // 5. Set up build services and build each derivation
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-
-    rt.block_on(async {
-        use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-        use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
-
-        let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "crunch".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
-        .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-        // PathInfoService: persistent redb, fallback to in-memory
-        let state_dir = state_dir();
-        let _ = std::fs::create_dir_all(&state_dir);
-        let pathinfo_db_path = state_dir.join("pathinfo.redb");
-        let pathinfo_service = match RedbPathInfoService::new(
-            "crunch".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(pathinfo_db_path.clone()),
-                read_only: false,
-                cache_size: None,
-            },
-        ).await {
-            Ok(svc) => {
-                info!(path = %pathinfo_db_path.display(), "PathInfo database opened");
-                svc
-            }
-            Err(e) => {
-                tracing::warn!(
-                    path = %pathinfo_db_path.display(),
-                    err = %e,
-                    "failed to open PathInfo database, using in-memory fallback"
-                );
-                RedbPathInfoService::new_temporary(
-                    "crunch".to_string(),
-                    RedbPathInfoServiceConfig::default(),
-                ).map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))?            }
-        };
-
-        #[cfg(target_os = "linux")]
-        {
-            use snix_build::buildservice::BubblewrapBuildService;
-
-            let workdir = std::env::temp_dir().join("crunch-builds");
-            std::fs::create_dir_all(&workdir)
-                .map_err(|e| RunError::Internal(format!("create workdir: {e}")))?;
-
-            let build_service = BubblewrapBuildService::new(
-                workdir,
-                blob_service.clone(),
-                directory_service.clone(),
-            );
-
-            let mut builder = crunch_build::Builder::with_state_dir(
-                blob_service,
-                directory_service,
-                build_service,
-                pathinfo_service,
-                store_dir.to_path_buf(),
-                Some(state_dir.clone()),
-                verbose,
-            );
-
-            for (label, drv_path) in &drv_paths {
-                let outcome = match builder
-                    .build(drv_path, &mut known_paths)
-                    .await
-                {
-                    Ok(o) => o,
-                    Err(crunch_build::Error::FodHashMismatch {
-                        ref name,
-                        ref expected_sri,
-                        ref actual_sri,
-                    }) => {
-                        let msg = format!(
-                            "hash mismatch for '{name}':\n\
-                             \x20 expected: {expected_sri}\n\
-                             \x20 got:      {actual_sri}"
-                        );
-                        if fix {
-                            match auto_fix_hash(file, expected_sri, actual_sri) {
-                                Ok(()) => {
-                                    eprintln!("{msg}");
-                                    eprintln!("  fixed: updated {} with correct hash", file.display());
-                                    // Rebuild: return the mismatch as an error so the
-                                    // user re-runs. A full retry loop is future work.
-                                    return Err(RunError::Build(format!(
-                                        "{msg}\n  fixed: re-run to build with the corrected hash"
-                                    )));
-                                }
-                                Err(fix_err) => {
-                                    eprintln!("{msg}");
-                                    eprintln!("  --fix failed: {fix_err}");
-                                }
-                            }
-                        } else {
-                            eprintln!("{msg}");
-                            eprintln!(
-                                "  update {}: hash = \"{actual_sri}\"",
-                                file.display()
-                            );
-                        }
-                        write_log(&log_dir, drv_path, label, false, &msg);
-                        return Err(RunError::Build(msg));
-                    }
-                    Err(e) => {
-                        let log_msg = format!("{e}");
-                        write_log(&log_dir, drv_path, label, false, &log_msg);
-                        return Err(RunError::Build(log_msg));
-                    }
-                };
-
-                // Persist the build log (success)
-                if let Some(ref log) = outcome.log {
-                    write_log(&log_dir, drv_path, label, true, log);
-                    if verbose {
-                        eprintln!("--- build log: {label} ---");
-                        eprintln!("{log}");
-                        eprintln!("--- end log ---");
-                    }
-                } else if !outcome.cached {
-                    write_log(&log_dir, drv_path, label, true, "(no output captured)");
-                }
-
-                for (_output_name, path_info) in &outcome.outputs {
-                    let path = path_info.store_path.to_absolute_path_with_prefix(store_dir_str);
-                    if outcome.cached {
-                        println!("{path} (cached)");
-                    } else {
-                        println!("{path}");
-                    }
-                }
-            }
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            return Err(RunError::Internal(
-                "building is only supported on Linux (requires bwrap)".to_string(),
-            ));
-        }
-
-        Ok(())
-    })
+    Ok((drv_paths, known_paths))
 }
+
+/// Deserialize a Nickel expression into a list of named derivations.
+///
+/// Handles both single-derivation records (has a "name" field) and
+/// package sets (each field is a derivation).
+fn deserialize_derivations(
+    expr: &crunch_eval::Expr,
+) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
+    let Some(record) = expr.as_record() else {
+        return Err(RunError::Eval(
+            "expected a Derivation record or a record of Derivations".to_string(),
+        ));
+    };
+
+    if record.value_by_name("name").is_some_and(|v| v.as_str().is_some()) {
+        let drv: crunch_glue::CrunchDerivation = expr.to_serde()
+            .map_err(|e| RunError::Eval(format!("deserializing derivation: {e}")))?;
+        let name = drv.name.clone();
+        return Ok(vec![(name, drv)]);
+    }
+
+    let mut derivations = Vec::new();
+    for (key, maybe_value) in record.iter() {
+        let value = maybe_value.ok_or_else(|| {
+            RunError::Eval(format!("field '{key}' has no value"))
+        })?;
+        let drv: crunch_glue::CrunchDerivation = value.to_serde()
+            .map_err(|e| RunError::Eval(format!("deserializing derivation '{key}': {e}")))?;
+        derivations.push((key.to_string(), drv));
+    }
+    Ok(derivations)
+}
+
+/// Imperative shell: set up build services and execute all builds.
+#[allow(clippy::too_many_arguments)]
+async fn execute_builds(
+    drv_paths: &[(String, StorePath<String>)],
+    known_paths: &mut crunch_glue::KnownPaths,
+    store_dir: &std::path::Path,
+    store_dir_str: &str,
+    log_dir: &std::path::Path,
+    source_file: &std::path::Path,
+    verbose: bool,
+    fix: bool,
+) -> Result<(), RunError> {
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
+
+    let blob_service = MemoryBlobService::default();
+    let directory_service = RedbDirectoryService::new_temporary(
+        "crunch".to_string(),
+        RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        },
+    )
+    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+    let state_dir = state_dir();
+    let _ = std::fs::create_dir_all(&state_dir);
+    let pathinfo_service = open_pathinfo_service(&state_dir).await?;
+
+    #[cfg(target_os = "linux")]
+    {
+        use snix_build::buildservice::BubblewrapBuildService;
+
+        let workdir = std::env::temp_dir().join("crunch-builds");
+        std::fs::create_dir_all(&workdir)
+            .map_err(|e| RunError::Internal(format!("create workdir: {e}")))?;
+
+        let build_service = BubblewrapBuildService::new(
+            workdir,
+            blob_service.clone(),
+            directory_service.clone(),
+        );
+
+        let mut builder = crunch_build::Builder::with_state_dir(
+            blob_service,
+            directory_service,
+            build_service,
+            pathinfo_service,
+            store_dir.to_path_buf(),
+            Some(state_dir.clone()),
+            verbose,
+        );
+
+        for (label, drv_path) in drv_paths {
+            build_one_derivation(
+                &mut builder,
+                drv_path,
+                label,
+                known_paths,
+                store_dir_str,
+                log_dir,
+                source_file,
+                verbose,
+                fix,
+            )
+            .await?;
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(RunError::Internal(
+            "building is only supported on Linux (requires bwrap)".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Open the persistent PathInfo database, falling back to in-memory.
+async fn open_pathinfo_service(
+    state_dir: &std::path::Path,
+) -> Result<
+    snix_store::pathinfoservice::RedbPathInfoService,
+    RunError,
+> {
+    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
+
+    let db_path = state_dir.join("pathinfo.redb");
+    match RedbPathInfoService::new(
+        "crunch".to_string(),
+        RedbPathInfoServiceConfig {
+            path: Some(db_path.clone()),
+            read_only: false,
+            cache_size: None,
+        },
+    )
+    .await
+    {
+        Ok(svc) => {
+            info!(path = %db_path.display(), "PathInfo database opened");
+            Ok(svc)
+        }
+        Err(e) => {
+            tracing::warn!(
+                path = %db_path.display(),
+                err = %e,
+                "failed to open PathInfo database, using in-memory fallback"
+            );
+            RedbPathInfoService::new_temporary(
+                "crunch".to_string(),
+                RedbPathInfoServiceConfig::default(),
+            )
+            .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
+        }
+    }
+}
+
+/// Build a single derivation, handling errors, logs, and output.
+async fn build_one_derivation(
+    builder: &mut crunch_build::Builder<
+        snix_castore::blobservice::MemoryBlobService,
+        snix_castore::directoryservice::RedbDirectoryService,
+        snix_build::buildservice::BubblewrapBuildService<
+            snix_castore::blobservice::MemoryBlobService,
+            snix_castore::directoryservice::RedbDirectoryService,
+        >,
+        snix_store::pathinfoservice::RedbPathInfoService,
+    >,
+    drv_path: &StorePath<String>,
+    label: &str,
+    known_paths: &mut crunch_glue::KnownPaths,
+    store_dir_str: &str,
+    log_dir: &std::path::Path,
+    source_file: &std::path::Path,
+    verbose: bool,
+    fix: bool,
+) -> Result<(), RunError> {
+    let outcome = match builder.build(drv_path, known_paths).await {
+        Ok(o) => o,
+        Err(crunch_build::Error::FodHashMismatch {
+            ref name,
+            ref expected_sri,
+            ref actual_sri,
+        }) => {
+            return handle_fod_mismatch(
+                name, expected_sri, actual_sri, drv_path, label,
+                log_dir, source_file, fix,
+            );
+        }
+        Err(e) => {
+            let log_msg = format!("{e}");
+            write_log(log_dir, drv_path, label, false, &log_msg);
+            return Err(RunError::Build(log_msg));
+        }
+    };
+
+    // Log success.
+    if let Some(log) = &outcome.log {
+        write_log(log_dir, drv_path, label, true, log);
+        if verbose {
+            eprintln!("--- build log: {label} ---");
+            eprintln!("{log}");
+            eprintln!("--- end log ---");
+        }
+    } else if !outcome.cached {
+        write_log(log_dir, drv_path, label, true, "(no output captured)");
+    }
+
+    // Print output paths.
+    for (_output_name, path_info) in &outcome.outputs {
+        let path = path_info.store_path.to_absolute_path_with_prefix(store_dir_str);
+        if outcome.cached {
+            println!("{path} (cached)");
+        } else {
+            println!("{path}");
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle a FOD hash mismatch: optionally auto-fix, always log.
+fn handle_fod_mismatch(
+    name: &str,
+    expected_sri: &str,
+    actual_sri: &str,
+    drv_path: &StorePath<String>,
+    label: &str,
+    log_dir: &std::path::Path,
+    source_file: &std::path::Path,
+    fix: bool,
+) -> Result<(), RunError> {
+    let msg = format!(
+        "hash mismatch for '{name}':\n\
+         \x20 expected: {expected_sri}\n\
+         \x20 got:      {actual_sri}"
+    );
+
+    if fix {
+        match auto_fix_hash(source_file, expected_sri, actual_sri) {
+            Ok(()) => {
+                eprintln!("{msg}");
+                eprintln!("  fixed: updated {} with correct hash", source_file.display());
+                write_log(log_dir, drv_path, label, false, &msg);
+                return Err(RunError::Build(format!(
+                    "{msg}\n  fixed: re-run to build with the corrected hash"
+                )));
+            }
+            Err(fix_err) => {
+                eprintln!("{msg}");
+                eprintln!("  --fix failed: {fix_err}");
+            }
+        }
+    } else {
+        eprintln!("{msg}");
+        eprintln!(
+            "  update {}: hash = \"{actual_sri}\"",
+            source_file.display()
+        );
+    }
+
+    write_log(log_dir, drv_path, label, false, &msg);
+    Err(RunError::Build(msg))
+}
+
+// ── cmd_log ────────────────────────────────────────────────────────────
 
 fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     let dir = log_dir();
@@ -396,8 +518,8 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     }
 
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
-        .map_err(|e| RunError::Internal(format!("reading log dir: {e}")))?.
-        filter_map(|e| e.ok())
+        .map_err(|e| RunError::Internal(format!("reading log dir: {e}")))?
+        .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "log"))
         .collect();
     entries.sort_by_key(|e| e.file_name());
@@ -410,7 +532,6 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
         for entry in &entries {
             let path = entry.path();
             let name = path.file_stem().unwrap_or_default().to_string_lossy();
-            // Read first few lines to get metadata
             if let Ok(content) = std::fs::read_to_string(&path) {
                 let status = content.lines()
                     .find(|l| l.starts_with("# status:"))
@@ -448,6 +569,8 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     }
 }
 
+// ── cmd_bootstrap ──────────────────────────────────────────────────────
+
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
     eprintln!("Resolving store paths for {} packages...", packages.len());
 
@@ -466,9 +589,10 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
     Ok(())
 }
 
+// ── cmd_store: list / info / verify ────────────────────────────────────
+
 fn cmd_store(action: StoreAction) -> Result<(), RunError> {
-    use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
-    use futures::StreamExt;
+    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
 
     let state = state_dir();
     let db_path = state.join("pathinfo.redb");
@@ -496,145 +620,159 @@ fn cmd_store(action: StoreAction) -> Result<(), RunError> {
         .map_err(|e| RunError::Internal(format!("opening PathInfo database: {e}")))?;
 
         match action {
-            StoreAction::List => {
-                let mut stream = svc.list();
-                let mut count: u32 = 0;
-                while let Some(result) = stream.next().await {
-                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-                    let deriver_name = pi
-                        .deriver
-                        .as_ref()
-                        .map(|d| d.name().to_string())
-                        .unwrap_or_else(|| "-".to_string());
-                    println!(
-                        "{}  deriver={}  nar_size={}",
-                        pi.store_path, deriver_name, pi.nar_size
-                    );
-                    count = count.saturating_add(1);
-                }
-                if count == 0 {
-                    eprintln!("No paths in PathInfo database.");
-                } else {
-                    eprintln!("{count} path(s)");
-                }
-            }
-
-            StoreAction::Info { path } => {
-                // Find the matching PathInfo by scanning
-                let mut stream = svc.list();
-                let mut found = false;
-                while let Some(result) = stream.next().await {
-                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-                    let sp_str = pi.store_path.to_string();
-                    if sp_str.contains(&path) {
-                        println!("store_path: {}", pi.store_path);
-                        println!("nar_size:   {}", pi.nar_size);
-                        println!(
-                            "nar_sha256: {}",
-                            data_encoding::HEXLOWER.encode(&pi.nar_sha256)
-                        );
-                        if let Some(ref d) = pi.deriver {
-                            println!("deriver:    {d}");
-                        }
-                        if !pi.references.is_empty() {
-                            println!("references:");
-                            for r in &pi.references {
-                                println!("  {r}");
-                            }
-                        }
-                        if let Some(ref ca) = pi.ca {
-                            println!("ca:         {ca:?}");
-                        }
-                        println!("node:       {:?}", pi.node);
-                        found = true;
-                    }
-                }
-                if !found {
-                    return Err(RunError::Internal(format!(
-                        "no PathInfo matching '{path}'"
-                    )));
-                }
-            }
-
-            StoreAction::Verify { path } => {
-                use snix_castore::blobservice::MemoryBlobService;
-                use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-                use snix_castore::import::fs::ingest_path;
-                use snix_store::nar::{NarCalculationService, SimpleRenderer};
-
-                let bs = MemoryBlobService::default();
-                let ds = RedbDirectoryService::new_temporary(
-                    "verify".to_string(),
-                    RedbDirectoryServiceConfig::default(),
-                ).map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-                let mut stream = svc.list();
-                let mut checked: u32 = 0;
-                let mut mismatches: u32 = 0;
-
-                while let Some(result) = stream.next().await {
-                    let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-                    let sp_str = pi.store_path.to_string();
-
-                    if let Some(ref filter) = path {
-                        if !sp_str.contains(filter) {
-                            continue;
-                        }
-                    }
-
-                    let abs = std::path::Path::new("/nix/store").join(sp_str);
-                    if !abs.exists() {
-                        println!("MISSING {}", pi.store_path);
-                        mismatches = mismatches.saturating_add(1);
-                        checked = checked.saturating_add(1);
-                        continue;
-                    }
-
-                    let node = ingest_path::<_, _, _, &[u8]>(
-                        bs.clone(), ds.clone(), &abs, None,
-                    )
-                    .await
-                    .map_err(|e| RunError::Internal(format!("ingest {}: {e}", pi.store_path)))?;
-
-                    let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
-                    let (_nar_size, nar_sha256) = renderer
-                        .calculate_nar(&node)
-                        .await
-                        .map_err(|e| RunError::Internal(format!("NAR calc: {e}")))?;
-
-                    if nar_sha256 == pi.nar_sha256 {
-                        println!("OK {}", pi.store_path);
-                    } else {
-                        println!(
-                            "MISMATCH {}  stored={}  actual={}",
-                            pi.store_path,
-                            data_encoding::HEXLOWER.encode(&pi.nar_sha256),
-                            data_encoding::HEXLOWER.encode(&nar_sha256),
-                        );
-                        mismatches = mismatches.saturating_add(1);
-                    }
-                    checked = checked.saturating_add(1);
-                }
-
-                eprintln!("{checked} checked, {mismatches} mismatches");
-                if mismatches > 0 {
-                    return Err(RunError::Build(format!(
-                        "{mismatches} path(s) failed verification"
-                    )));
-                }
-            }
+            StoreAction::List => cmd_store_list(&svc).await,
+            StoreAction::Info { path } => cmd_store_info(&svc, &path).await,
+            StoreAction::Verify { path } => cmd_store_verify(&svc, path.as_deref()).await,
         }
-
-        Ok(())
     })
 }
 
-/// Write a build log file with metadata header.
+async fn cmd_store_list(
+    svc: &impl snix_store::pathinfoservice::PathInfoService,
+) -> Result<(), RunError> {
+    use futures::StreamExt;
+
+    let mut stream = svc.list();
+    let mut count: u32 = 0;
+    while let Some(result) = stream.next().await {
+        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+        let deriver_name = pi
+            .deriver
+            .as_ref()
+            .map(|d| d.name().to_string())
+            .unwrap_or_else(|| "-".to_string());
+        println!(
+            "{}  deriver={}  nar_size={}",
+            pi.store_path, deriver_name, pi.nar_size
+        );
+        count = count.saturating_add(1);
+    }
+    if count == 0 {
+        eprintln!("No paths in PathInfo database.");
+    } else {
+        eprintln!("{count} path(s)");
+    }
+    Ok(())
+}
+
+async fn cmd_store_info(
+    svc: &impl snix_store::pathinfoservice::PathInfoService,
+    path: &str,
+) -> Result<(), RunError> {
+    use futures::StreamExt;
+
+    let mut stream = svc.list();
+    let mut found = false;
+    while let Some(result) = stream.next().await {
+        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+        let sp_str = pi.store_path.to_string();
+        if !sp_str.contains(path) {
+            continue;
+        }
+        println!("store_path: {}", pi.store_path);
+        println!("nar_size:   {}", pi.nar_size);
+        println!(
+            "nar_sha256: {}",
+            data_encoding::HEXLOWER.encode(&pi.nar_sha256)
+        );
+        if let Some(ref d) = pi.deriver {
+            println!("deriver:    {d}");
+        }
+        if !pi.references.is_empty() {
+            println!("references:");
+            for r in &pi.references {
+                println!("  {r}");
+            }
+        }
+        if let Some(ref ca) = pi.ca {
+            println!("ca:         {ca:?}");
+        }
+        println!("node:       {:?}", pi.node);
+        found = true;
+    }
+    if !found {
+        return Err(RunError::Internal(format!(
+            "no PathInfo matching '{path}'"
+        )));
+    }
+    Ok(())
+}
+
+async fn cmd_store_verify(
+    svc: &impl snix_store::pathinfoservice::PathInfoService,
+    path_filter: Option<&str>,
+) -> Result<(), RunError> {
+    use futures::StreamExt;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+    use snix_castore::import::fs::ingest_path;
+    use snix_store::nar::{NarCalculationService, SimpleRenderer};
+
+    let bs = MemoryBlobService::default();
+    let ds = RedbDirectoryService::new_temporary(
+        "verify".to_string(),
+        RedbDirectoryServiceConfig::default(),
+    )
+    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+    let mut stream = svc.list();
+    let mut checked: u32 = 0;
+    let mut mismatches: u32 = 0;
+
+    while let Some(result) = stream.next().await {
+        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
+        let sp_str = pi.store_path.to_string();
+
+        if let Some(filter) = path_filter {
+            if !sp_str.contains(filter) {
+                continue;
+            }
+        }
+
+        let abs = std::path::Path::new("/nix/store").join(sp_str);
+        if !abs.exists() {
+            println!("MISSING {}", pi.store_path);
+            mismatches = mismatches.saturating_add(1);
+            checked = checked.saturating_add(1);
+            continue;
+        }
+
+        let node = ingest_path::<_, _, _, &[u8]>(bs.clone(), ds.clone(), &abs, None)
+            .await
+            .map_err(|e| RunError::Internal(format!("ingest {}: {e}", pi.store_path)))?;
+
+        let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
+        let (_nar_size, nar_sha256) = renderer
+            .calculate_nar(&node)
+            .await
+            .map_err(|e| RunError::Internal(format!("NAR calc: {e}")))?;
+
+        if nar_sha256 == pi.nar_sha256 {
+            println!("OK {}", pi.store_path);
+        } else {
+            println!(
+                "MISMATCH {}  stored={}  actual={}",
+                pi.store_path,
+                data_encoding::HEXLOWER.encode(&pi.nar_sha256),
+                data_encoding::HEXLOWER.encode(&nar_sha256),
+            );
+            mismatches = mismatches.saturating_add(1);
+        }
+        checked = checked.saturating_add(1);
+    }
+
+    eprintln!("{checked} checked, {mismatches} mismatches");
+    if mismatches > 0 {
+        return Err(RunError::Build(format!(
+            "{mismatches} path(s) failed verification"
+        )));
+    }
+    Ok(())
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────
+
 /// Replace an old hash string with a new one in a .ncl file.
-///
-/// Reads the file, finds the old hash (must appear exactly once),
-/// replaces it, and writes back. Returns an error if the old hash
-/// appears zero or more than one time.
 fn auto_fix_hash(
     file: &std::path::Path,
     old_hash: &str,
@@ -647,29 +785,25 @@ fn auto_fix_hash(
     if count == 0 {
         return Err(format!(
             "hash '{}' not found in {}",
-            old_hash,
-            file.display()
+            old_hash, file.display()
         ));
     }
     if count > 1 {
         return Err(format!(
             "hash '{}' appears {} times in {} — ambiguous, not fixing",
-            old_hash,
-            count,
-            file.display()
+            old_hash, count, file.display()
         ));
     }
 
     let fixed = content.replacen(old_hash, new_hash, 1);
     std::fs::write(file, &fixed)
         .map_err(|e| format!("writing {}: {e}", file.display()))?;
-
     Ok(())
 }
 
 fn write_log(
     log_dir: &std::path::Path,
-    drv_path: &nix_compat::store_path::StorePath<String>,
+    drv_path: &StorePath<String>,
     label: &str,
     success: bool,
     body: &str,
@@ -687,8 +821,6 @@ fn write_log(
 }
 
 /// Resolve the crunch state directory.
-///
-/// Precedence: $CRUNCH_STATE_DIR > $XDG_STATE_HOME/crunch > ~/.local/state/crunch
 fn state_dir() -> PathBuf {
     std::env::var("CRUNCH_STATE_DIR")
         .map(PathBuf::from)
@@ -703,18 +835,15 @@ fn state_dir() -> PathBuf {
         })
 }
 
-/// Resolve log directory path.
 fn log_dir() -> PathBuf {
     std::env::var("CRUNCH_LOG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| state_dir().join("logs"))
 }
 
-/// Build the import path list: stdlib dir + user-specified paths.
 fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
     let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
         .map_err(|e| RunError::Internal(format!("stdlib: {e}")))?;
-
     let mut paths: Vec<OsString> = vec![stdlib_dir.into()];
     for p in extra {
         paths.push(p.into());

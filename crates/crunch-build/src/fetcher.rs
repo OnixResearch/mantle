@@ -12,6 +12,15 @@ use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
 use tracing::info;
 use url::Url;
 
+/// Maximum download size: 4 GiB. Prevents unbounded memory/disk use
+/// from a misbehaving or malicious server.
+const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Maximum number of entries to extract from a tar archive.
+/// Prevents zip-bomb style attacks and accidental extraction of
+/// enormous archives.
+const MAX_TAR_ENTRIES: u32 = 500_000;
+
 // ── Fetch description ──────────────────────────────────────────────────
 
 /// What kind of fetch to perform, parsed from the derivation environment.
@@ -321,6 +330,7 @@ fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
 // ── Download helpers (sync, ureq) ──────────────────────────────────────
 
 /// Download a URL and write the raw content to a file.
+/// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     let resp = ureq::get(url)
         .call()
@@ -328,9 +338,11 @@ fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
             url: url.to_string(),
             reason: e.to_string(),
         })?;
-    let mut reader = resp.into_body().into_reader();
+    let reader = resp.into_body().into_reader();
+    let mut limited = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(out)?;
-    io::copy(&mut reader, &mut file)?;
+    let bytes_written = io::copy(&mut limited, &mut file)?;
+    debug_assert!(bytes_written <= MAX_DOWNLOAD_BYTES);
     Ok(())
 }
 
@@ -401,8 +413,16 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
     archive.set_preserve_mtime(false);
 
     let mut prefix_to_strip: Option<std::path::PathBuf> = None;
+    let mut entry_count: u32 = 0;
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
+        // Tiger Style: fixed limit on tar entries.
+        entry_count = entry_count.saturating_add(1);
+        if entry_count > MAX_TAR_ENTRIES {
+            return Err(FetchError::TarError(format!(
+                "tar archive exceeds {MAX_TAR_ENTRIES} entries"
+            )));
+        }
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry
             .path()

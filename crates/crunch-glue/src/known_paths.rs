@@ -71,9 +71,19 @@ impl KnownPaths {
         derivation: Derivation,
         content_addressed: bool,
     ) {
+        // Tiger Style: assert preconditions.
+        debug_assert!(
+            !derivation.outputs.is_empty(),
+            "derivation must have at least one output"
+        );
+        debug_assert!(
+            aterm_hash != [0u8; 32],
+            "aterm_hash must not be all zeros"
+        );
+
         let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
-        self.drv_path_to_aterm.insert(drv_path_str, aterm_hash);
+        self.drv_path_to_aterm.insert(drv_path_str.clone(), aterm_hash);
         self.by_aterm_hash.insert(aterm_hash, KnownEntry {
             drv_path,
             hash_derivation_modulo: hdm,
@@ -81,6 +91,11 @@ impl KnownPaths {
             content_addressed,
             resolved_outputs: HashMap::new(),
         });
+
+        // Tiger Style: assert all indices are consistent after insert.
+        debug_assert!(self.hdm_by_drv_path.contains_key(&drv_path_str));
+        debug_assert!(self.drv_path_to_aterm.contains_key(&drv_path_str));
+        debug_assert!(self.by_aterm_hash.contains_key(&aterm_hash));
     }
 
     /// Resolve a CA derivation's output path after build.
