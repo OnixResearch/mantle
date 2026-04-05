@@ -380,3 +380,40 @@ fn convert_from_json_serde() {
     assert!(drv_path.to_string().ends_with("from-json.drv"));
     assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
 }
+
+/// Verify that extra fields from mkDerivation (pname, version, meta,
+/// passthru) are silently ignored during deserialization.
+#[test]
+fn json_with_extra_mkderivation_fields_deserializes() {
+    let json = r#"{
+        "name": "hello-1.0",
+        "builder": "/bin/sh",
+        "system": "x86_64-linux",
+        "args": ["-c", "echo hi > $out"],
+        "outputs": ["out"],
+        "env": {},
+        "inputs": [],
+        "addressing_mode": "content-addressed",
+        "pname": "hello",
+        "version": "1.0",
+        "meta": {"description": "a test", "license": "MIT"},
+        "passthru": {"tests": "some-path"}
+    }"#;
+
+    let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
+    assert_eq!(drv.name, "hello-1.0");
+    assert_eq!(drv.builder, "/bin/sh");
+    assert_eq!(drv.addressing_mode, "content-addressed");
+
+    // Extra fields don't appear on the struct — they're dropped.
+    let mut kp = KnownPaths::default();
+    let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+    assert!(drv_path.to_string().ends_with("hello-1.0.drv"));
+
+    // Environment should NOT contain pname/version/meta/passthru —
+    // only the fields convert() explicitly sets.
+    assert!(!nix_drv.environment.contains_key("pname"));
+    assert!(!nix_drv.environment.contains_key("version"));
+    assert!(!nix_drv.environment.contains_key("meta"));
+    assert!(!nix_drv.environment.contains_key("passthru"));
+}

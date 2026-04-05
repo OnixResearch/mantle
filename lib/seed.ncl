@@ -5,7 +5,7 @@
 #
 # The StorePath contract catches typos and malformed paths at eval time.
 
-let { StorePath } = import "contracts.ncl" in
+let { StorePath, .. } = import "contracts.ncl" in
 
 {
   bash | StorePath
