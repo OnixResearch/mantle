@@ -163,6 +163,13 @@ where
             });
         }
 
+        // 1b. Builtin fetcher bypass: download instead of sandbox.
+        if crate::fetcher::is_builtin_fetcher(derivation) {
+            return self
+                .build_fetcher(drv_path, derivation, known_paths)
+                .await;
+        }
+
         // 2. Recursively build all input derivations
         for (input_drv_path, _output_names) in &derivation.input_derivations {
             let input_entry = known_paths
@@ -503,6 +510,159 @@ where
             outputs: output_infos,
             cached: false,
             log: build_result.log,
+        })
+    }
+
+    /// Execute a builtin fetcher derivation (e.g., `builtin:fetchurl`).
+    ///
+    /// Bypasses the sandbox entirely: parses the derivation environment
+    /// into a `Fetch`, downloads the resource, verifies the hash, then
+    /// runs the standard post-build pipeline (ingest, NAR hash, PathInfo).
+    async fn build_fetcher(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        known_paths: &mut KnownPaths,
+    ) -> Result<BuildOutcome, Error> {
+        let drv_name = drv_path.name().to_string();
+
+        // 1. Parse the derivation into a typed Fetch.
+        let fetch = crate::fetcher::parse_fetch(derivation).map_err(|e| {
+            Error::BuildFailed {
+                name: drv_name.clone(),
+                exit_code: "parse".to_string(),
+                log: e.to_string(),
+            }
+        })?;
+
+        // 2. Validate: fetchers must be fixed-output derivations.
+        let out_output = derivation.outputs.get("out").ok_or_else(|| {
+            Error::OutputMissing {
+                output: "out".to_string(),
+            }
+        })?;
+        let out_path = out_output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
+            output: "out".to_string(),
+            drv_name: drv_name.clone(),
+        })?;
+        let out_abs = out_path.to_absolute_path_with_prefix(&self.store_dir_str);
+
+        // 3. Execute the fetch in a blocking task (ureq is sync).
+        info!(drv = %drv_name, "fetching");
+        let fetch_clone = fetch.clone();
+        let out_abs_clone = out_abs.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::fetcher::fetch_to_store(&fetch_clone, &out_abs_clone)
+        })
+        .await
+        .map_err(|e| Error::Sandbox(std::io::Error::other(format!("spawn_blocking: {e}"))))?
+        .map_err(|e| Error::BuildFailed {
+            name: drv_name.clone(),
+            exit_code: "fetch".to_string(),
+            log: e.to_string(),
+        })?;
+
+        // 4. Verify output was created.
+        if !PathBuf::from(&out_abs).exists() {
+            return Err(Error::BuildFailed {
+                name: drv_name.clone(),
+                exit_code: "fetch".to_string(),
+                log: format!("fetcher did not produce output at {out_abs}"),
+            });
+        }
+
+        // 5. Verify flat hash for URL fetches (before ingest).
+        if let crate::fetcher::Fetch::Url { exp_hash: Some(ref expected), .. } = fetch {
+            crate::fetcher::verify_flat_hash(&out_abs, expected, &drv_name).map_err(
+                |e| match e {
+                    crate::fetcher::FetchError::HashMismatch {
+                        name,
+                        expected,
+                        actual,
+                    } => Error::FodHashMismatch {
+                        name,
+                        expected,
+                        actual,
+                    },
+                    other => Error::BuildFailed {
+                        name: drv_name.clone(),
+                        exit_code: "verify".to_string(),
+                        log: other.to_string(),
+                    },
+                },
+            )?;
+        }
+
+        // 6. Ingest output into castore.
+        let node = ingest_path::<_, _, _, &[u8]>(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            PathBuf::from(&out_abs).as_path(),
+            None,
+        )
+        .await
+        .map_err(|e| {
+            Error::Sandbox(std::io::Error::other(format!(
+                "failed to ingest fetcher output {out_abs}: {e}"
+            )))
+        })?;
+
+        // 7. Compute NAR hash.
+        let nar_renderer = SimpleRenderer::new(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        );
+        let (nar_size, nar_sha256) = nar_renderer
+            .calculate_nar(&node)
+            .await
+            .map_err(|e| Error::NarCalculation(e.to_string()))?;
+
+        // 8. Verify FOD hash (NAR-based, for tarballs/git/NAR fetches).
+        if let Some(ca_hash) = &out_output.ca_hash {
+            verify_fod_hash(
+                &drv_name,
+                "out",
+                ca_hash,
+                nar_size,
+                &nar_sha256,
+                &node,
+                &self.blob_service,
+                &self.directory_service,
+            )
+            .await?;
+        }
+
+        // 9. Build PathInfo and persist.
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node: node.clone(),
+            references: vec![], // fetcher outputs have no references
+            nar_size,
+            nar_sha256,
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: out_output.ca_hash.clone(),
+        };
+
+        self.pathinfo_service
+            .put(path_info.clone())
+            .await
+            .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
+
+        self.built_outputs
+            .insert(out_abs.clone(), path_info.clone());
+        self.output_nodes.insert(out_path.clone(), node);
+
+        let mut output_infos = HashMap::new();
+        output_infos.insert("out".to_string(), path_info);
+
+        info!(drv = %drv_name, path = %out_abs, "fetch succeeded");
+
+        Ok(BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: output_infos,
+            cached: false,
+            log: None,
         })
     }
 

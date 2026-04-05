@@ -177,3 +177,110 @@ fn full_serde_round_trip() {
     assert!(drv_path.to_string().ends_with("hello.drv"));
     assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
 }
+
+// ── Fetcher stdlib tests ───────────────────────────────────────────────
+
+#[test]
+fn fetchurl_produces_fod_record() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchurl {
+             url = "https://example.com/foo.txt",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "fetchurl failed: {:?}", result.err());
+    let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
+    assert_eq!(drv.builder, "builtin:fetchurl");
+    assert_eq!(drv.name, "foo.txt");
+    assert!(drv.fixed_output.is_some());
+    let fo = drv.fixed_output.unwrap();
+    assert_eq!(fo.mode, "flat");
+    assert_eq!(drv.env.get("url").unwrap(), "https://example.com/foo.txt");
+}
+
+#[test]
+fn fetchurl_custom_name() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchurl {
+             url = "https://example.com/foo.txt",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+             name = "my-source",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "fetchurl failed: {:?}", result.err());
+    let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
+    assert_eq!(drv.name, "my-source");
+}
+
+#[test]
+fn fetch_tarball_produces_recursive_hash() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchTarball {
+             url = "https://example.com/src.tar.gz",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "fetchTarball failed: {:?}", result.err());
+    let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
+    assert_eq!(drv.builder, "builtin:fetchurl");
+    assert!(drv.fixed_output.is_some());
+    let fo = drv.fixed_output.unwrap();
+    assert_eq!(fo.mode, "recursive");
+    assert_eq!(drv.env.get("unpack").unwrap(), "1");
+    // Name derived from URL without .tar.gz suffix.
+    assert_eq!(drv.name, "src");
+}
+
+#[test]
+fn fetch_git_produces_git_env() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchGit {
+             url = "https://github.com/user/repo.git",
+             rev = "abc123def456",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "fetchGit failed: {:?}", result.err());
+    let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
+    assert_eq!(drv.builder, "builtin:fetchurl");
+    assert_eq!(drv.env.get("type").unwrap(), "git");
+    assert_eq!(drv.env.get("rev").unwrap(), "abc123def456");
+    assert_eq!(drv.name, "repo");
+}
+
+#[test]
+fn fetchurl_rejects_empty_url() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchurl {
+             url = "",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_err(), "should reject empty URL");
+}
+
+#[test]
+fn fetchurl_invalid_hash_passes_eval() {
+    // Invalid hashes are not caught at Nickel eval time — the Rust glue
+    // layer validates them. This test confirms the Nickel layer does not
+    // reject bad hashes (defense in depth is on the Rust side).
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchurl {
+             url = "https://example.com/foo.txt",
+             hash = "not-a-hash",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "eval should succeed; Rust layer validates hash format");
+}

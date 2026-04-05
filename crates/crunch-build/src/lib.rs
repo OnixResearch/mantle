@@ -8,9 +8,11 @@
 mod build_request;
 pub mod ca_mapping;
 mod error;
+pub mod fetcher;
 mod orchestrate;
 pub mod rewrite;
 
 pub use build_request::derivation_to_build_request;
 pub use error::Error;
+pub use fetcher::{Fetch, FetchError};
 pub use orchestrate::{BuildOutcome, Builder};

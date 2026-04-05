@@ -44,4 +44,7 @@ pub enum Error {
 
     #[error("glue error: {0}")]
     Glue(#[from] crunch_glue::Error),
+
+    #[error("fetcher error: {0}")]
+    Fetcher(#[from] crate::fetcher::FetchError),
 }
