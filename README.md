@@ -114,6 +114,26 @@ Each output gets a distinct store path. The builder receives `$outputs`
 (space-separated list) and individual path variables (`$out`, `$dev`,
 `$man`). Works with both input-addressed and content-addressed modes.
 
+To depend on a single output of a multi-output package, use
+`crunch.select`:
+
+```nickel
+let crunch = import "lib.ncl" in
+# Only mount the `dev` output of libfoo (not `out` or `lib`)
+{
+  name = "consumer",
+  inputs = [
+    crunch.select libfoo "dev",
+    crunch.select libfoo "lib",
+  ],
+  ...
+} | crunch.Derivation
+```
+
+Multiple selections from the same dependency are coalesced into a single
+`input_derivations` entry. A bare derivation in `inputs` mounts all its
+outputs.
+
 ## Architecture
 
 ```
@@ -240,10 +260,12 @@ crunch log [query]           Show stored build logs
 crunch log --list            List all stored logs
 
 Flags:
-  --store <path>     Store directory (default: /nix/store)
-  -v, --verbose      Debug logging
-  --log-level <lvl>  trace|debug|info|warn|error
-  -I <path>          Additional Nickel import paths
+  --store <path>        Store directory (default: /nix/store)
+  --substituters <url>  Binary cache URL (default: cache.nixos.org)
+  --no-substitute       Disable binary cache substitution
+  -v, --verbose         Debug logging
+  --log-level <lvl>     trace|debug|info|warn|error
+  -I <path>             Additional Nickel import paths
 
 Exit codes:
   0  success
@@ -287,7 +309,6 @@ crunch --store /tmp/mystore build hello.ncl
   is concurrent via `tokio::JoinSet`. Preparation and output processing
   are sequential.
 - **No garbage collection**: `crunch store gc` is not implemented.
-- **Multi-output**: outputs work end-to-end. No output *selection*
-  from consuming derivations yet (all outputs of a dependency are
-  mounted in the sandbox, but there's no way to reference a specific
-  output path like Nix's `pkg.dev`).
+- **Multi-output**: outputs work end-to-end. Output *selection* is
+  supported via `crunch.select dep "dev"` to mount a single output of
+  a multi-output dependency in the sandbox (like Nix's `pkg.dev`).
