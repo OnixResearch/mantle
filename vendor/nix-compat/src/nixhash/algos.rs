@@ -6,7 +6,9 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use crate::nixhash::Error;
 
-/// This are the hash algorithms supported by cppnix.
+/// Hash algorithms supported by crunch.
+///
+/// Extends the original Nix set (md5, sha1, sha256, sha512) with blake3.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(DeserializeFromStr, SerializeDisplay))]
 pub enum HashAlgo {
@@ -14,16 +16,18 @@ pub enum HashAlgo {
     Sha1,
     Sha256,
     Sha512,
+    Blake3,
 }
 
 impl HashAlgo {
     // return the number of bytes in the digest of the given hash algo.
     pub const fn digest_length(&self) -> usize {
         match self {
+            HashAlgo::Md5 => 16,
             HashAlgo::Sha1 => 20,
             HashAlgo::Sha256 => 32,
             HashAlgo::Sha512 => 64,
-            HashAlgo::Md5 => 16,
+            HashAlgo::Blake3 => 32,
         }
     }
 }
@@ -35,12 +39,13 @@ impl Display for HashAlgo {
             HashAlgo::Sha1 => write!(f, "sha1"),
             HashAlgo::Sha256 => write!(f, "sha256"),
             HashAlgo::Sha512 => write!(f, "sha512"),
+            HashAlgo::Blake3 => write!(f, "blake3"),
         }
     }
 }
 
 #[cfg(feature = "serde")]
-pub const SUPPORTED_ALGOS: [&str; 4] = ["md5", "sha1", "sha256", "sha512"];
+pub const SUPPORTED_ALGOS: [&str; 5] = ["md5", "sha1", "sha256", "sha512", "blake3"];
 
 impl FromStr for HashAlgo {
     type Err = Error;
@@ -51,6 +56,7 @@ impl FromStr for HashAlgo {
             "sha1" => Ok(Self::Sha1),
             "sha256" => Ok(Self::Sha256),
             "sha512" => Ok(Self::Sha512),
+            "blake3" => Ok(Self::Blake3),
             _ => Err(Error::InvalidAlgo),
         }
     }

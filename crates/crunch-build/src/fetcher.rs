@@ -275,6 +275,10 @@ pub fn verify_flat_hash(
             let h = md5::Md5::digest(&content);
             h.to_vec()
         }
+        HashAlgo::Blake3 => {
+            let h = blake3::hash(&content);
+            h.as_bytes().to_vec()
+        }
     };
 
     if actual_bytes.as_slice() != expected.digest_as_bytes() {
@@ -310,6 +314,7 @@ fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
         HashAlgo::Sha1 => "sha1",
         HashAlgo::Sha256 => "sha256",
         HashAlgo::Sha512 => "sha512",
+        HashAlgo::Blake3 => "blake3",
     }
 }
 

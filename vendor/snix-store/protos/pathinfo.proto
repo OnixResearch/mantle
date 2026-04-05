@@ -118,7 +118,9 @@ message NARInfo {
       FLAT_SHA256 = 7;
       FLAT_SHA512 = 8;
 
-      // TODO: what happens in Rust if we introduce a new enum kind here?
+      // BLAKE3 variants (crunch extension).
+      NAR_BLAKE3 = 9;
+      FLAT_BLAKE3 = 10;
     }
 
     // The hashing type used.

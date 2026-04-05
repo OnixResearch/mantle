@@ -20,6 +20,7 @@
       'sha1 => "sha1",
       'sha256 => "sha256",
       'sha512 => "sha512",
+      'blake3 => "blake3",
     },
 
   hash_mode_to_string

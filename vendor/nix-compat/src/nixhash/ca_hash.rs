@@ -80,12 +80,14 @@ impl CAHash {
                 NixHash::Sha1(h) => ("fixed:sha1", &h[..]),
                 NixHash::Sha256(h) => ("fixed:sha256", &h[..]),
                 NixHash::Sha512(h) => ("fixed:sha512", &h[..]),
+                NixHash::Blake3(h) => ("fixed:blake3", &h[..]),
             },
             CAHash::Nar(h) => match h {
                 NixHash::Md5(h) => ("fixed:r:md5", &h[..]),
                 NixHash::Sha1(h) => ("fixed:r:sha1", &h[..]),
                 NixHash::Sha256(h) => ("fixed:r:sha256", &h[..]),
                 NixHash::Sha512(h) => ("fixed:r:sha512", &h[..]),
+                NixHash::Blake3(h) => ("fixed:r:blake3", &h[..]),
             },
             CAHash::Text(h) => ("text:sha256", &h[..]),
         };

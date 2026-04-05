@@ -888,6 +888,14 @@ async fn nar_hash(
             let hash: [u8; 64] = hasher.finalize().into();
             Ok(NixHash::Sha512(Box::new(hash)))
         }
+        HashAlgo::Blake3 => {
+            let mut hasher = blake3::Hasher::new();
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
+                .await
+                .map_err(|e| Error::NarCalculation(e.to_string()))?;
+            let hash = blake3::Hasher::finalize(&hasher);
+            Ok(NixHash::Blake3(*hash.as_bytes()))
+        }
     }
 }
 
@@ -951,6 +959,17 @@ async fn hash_blob(
             }
             let hash: [u8; 64] = hasher.finalize().into();
             Ok(NixHash::Sha512(Box::new(hash)))
+        }
+        HashAlgo::Blake3 => {
+            let mut hasher = blake3::Hasher::new();
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            let hash = blake3::Hasher::finalize(&hasher);
+            Ok(NixHash::Blake3(*hash.as_bytes()))
         }
     }
 }
@@ -1023,6 +1042,10 @@ mod tests {
             HashAlgo::Sha512 => {
                 let h: [u8; 64] = sha2::Sha512::digest(data).into();
                 NixHash::Sha512(Box::new(h))
+            }
+            HashAlgo::Blake3 => {
+                let h = blake3::hash(data);
+                NixHash::Blake3(*h.as_bytes())
             }
         }
     }

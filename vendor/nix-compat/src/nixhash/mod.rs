@@ -58,6 +58,7 @@ pub enum NixHash {
     Sha1([u8; 20]),
     Sha256([u8; 32]),
     Sha512(Box<[u8; 64]>),
+    Blake3([u8; 32]),
 }
 
 /// Same order as sorting the corresponding nixbase32 strings.
@@ -94,6 +95,7 @@ impl NixHash {
             NixHash::Sha1(_) => HashAlgo::Sha1,
             NixHash::Sha256(_) => HashAlgo::Sha256,
             NixHash::Sha512(_) => HashAlgo::Sha512,
+            NixHash::Blake3(_) => HashAlgo::Blake3,
         }
     }
 
@@ -104,6 +106,7 @@ impl NixHash {
             NixHash::Sha1(digest) => digest,
             NixHash::Sha256(digest) => digest,
             NixHash::Sha512(digest) => digest.as_ref(),
+            NixHash::Blake3(digest) => digest,
         }
     }
 
@@ -120,6 +123,7 @@ impl NixHash {
             HashAlgo::Sha1 => NixHash::Sha1(digest.try_into().unwrap()),
             HashAlgo::Sha256 => NixHash::Sha256(digest.try_into().unwrap()),
             HashAlgo::Sha512 => NixHash::Sha512(Box::new(digest.try_into().unwrap())),
+            HashAlgo::Blake3 => NixHash::Blake3(digest.try_into().unwrap()),
         })
     }
 
@@ -135,6 +139,7 @@ impl NixHash {
             "sha512" => nixbase32::decode_fixed(digest)
                 .map(Box::new)
                 .map(NixHash::Sha512),
+            "blake3" => nixbase32::decode_fixed(digest).map(NixHash::Blake3),
             _ => return None,
         })
         .ok()

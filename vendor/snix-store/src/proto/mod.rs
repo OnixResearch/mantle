@@ -148,6 +148,16 @@ impl TryFrom<&nar_info::Ca> for nix_compat::nixhash::CAHash {
                     ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha512")
                 })?),
             )),
+            typ if typ == nar_info::ca::Hash::NarBlake3 as i32 => {
+                Self::Nar(NixHash::Blake3(value.digest[..].try_into().map_err(
+                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarBlake3"),
+                )?))
+            }
+            typ if typ == nar_info::ca::Hash::FlatBlake3 as i32 => {
+                Self::Flat(NixHash::Blake3(value.digest[..].try_into().map_err(
+                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatBlake3"),
+                )?))
+            }
             typ => return Err(ConvertCAError::UnknownHashType(typ)),
         })
     }
@@ -160,10 +170,12 @@ impl From<&nix_compat::nixhash::CAHash> for nar_info::ca::Hash {
             CAHash::Flat(NixHash::Sha1(_)) => nar_info::ca::Hash::FlatSha1,
             CAHash::Flat(NixHash::Sha256(_)) => nar_info::ca::Hash::FlatSha256,
             CAHash::Flat(NixHash::Sha512(_)) => nar_info::ca::Hash::FlatSha512,
+            CAHash::Flat(NixHash::Blake3(_)) => nar_info::ca::Hash::FlatBlake3,
             CAHash::Nar(NixHash::Md5(_)) => nar_info::ca::Hash::NarMd5,
             CAHash::Nar(NixHash::Sha1(_)) => nar_info::ca::Hash::NarSha1,
             CAHash::Nar(NixHash::Sha256(_)) => nar_info::ca::Hash::NarSha256,
             CAHash::Nar(NixHash::Sha512(_)) => nar_info::ca::Hash::NarSha512,
+            CAHash::Nar(NixHash::Blake3(_)) => nar_info::ca::Hash::NarBlake3,
             CAHash::Text(_) => nar_info::ca::Hash::TextSha256,
         }
     }

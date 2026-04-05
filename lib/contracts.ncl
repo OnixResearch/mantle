@@ -34,7 +34,7 @@
 
   HashAlgo
     | doc "Hash algorithm for fixed-output derivations."
-    = [| 'md5, 'sha1, 'sha256, 'sha512 |],
+    = [| 'md5, 'sha1, 'sha256, 'sha512, 'blake3 |],
 
   HashMode
     | doc "Hashing mode: flat (single file) or recursive (NAR serialization)."
