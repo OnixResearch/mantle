@@ -71,6 +71,16 @@ enum Command {
         ])]
         packages: Vec<String>,
     },
+
+    /// Show a stored build log
+    Log {
+        /// Derivation hash, store path, or path fragment to match
+        query: Option<String>,
+
+        /// List all stored logs
+        #[arg(long)]
+        list: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -123,6 +133,7 @@ fn run(args: Args) -> Result<(), RunError> {
             cmd_build(&file, &import_paths, &args.store, args.verbose)
         }
         Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
+        Command::Log { query, list } => cmd_log(query.as_deref(), list),
     }
 }
 
@@ -188,17 +199,7 @@ fn cmd_build(
     }
 
     // 4. Set up build log directory
-    let log_dir = std::env::var("CRUNCH_LOG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let state = std::env::var("XDG_STATE_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".local/state")
-                });
-            state.join("crunch/logs")
-        });
+    let log_dir = log_dir();
     let _ = std::fs::create_dir_all(&log_dir);
 
     // 5. Set up build services and build each derivation
@@ -247,12 +248,22 @@ fn cmd_build(
                     .build(drv_path, &known_paths)
                     .await
                     .map_err(|e| {
-                        // Write build log on failure
                         let log_msg = format!("{e}");
-                        let log_file = log_dir.join(format!("{}.log", drv_path));
-                        let _ = std::fs::write(&log_file, &log_msg);
+                        write_log(&log_dir, drv_path, label, false, &log_msg);
                         RunError::Build(log_msg)
                     })?;
+
+                // Persist the build log (success)
+                if let Some(ref log) = outcome.log {
+                    write_log(&log_dir, drv_path, label, true, log);
+                    if verbose {
+                        eprintln!("--- build log: {label} ---");
+                        eprintln!("{log}");
+                        eprintln!("--- end log ---");
+                    }
+                } else if !outcome.cached {
+                    write_log(&log_dir, drv_path, label, true, "(no output captured)");
+                }
 
                 for (_output_name, path_info) in &outcome.outputs {
                     let path = path_info.store_path.to_absolute_path();
@@ -261,13 +272,6 @@ fn cmd_build(
                     } else {
                         println!("{path}");
                     }
-                }
-
-                // Write success log
-                if verbose {
-                    let log_file = log_dir.join(format!("{}.log", drv_path));
-                    let msg = format!("build succeeded: {label}\n");
-                    let _ = std::fs::write(&log_file, &msg);
                 }
             }
         }
@@ -281,6 +285,68 @@ fn cmd_build(
 
         Ok(())
     })
+}
+
+fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
+    let dir = log_dir();
+    if !dir.exists() {
+        return Err(RunError::Internal(format!(
+            "log directory {} does not exist (no builds yet?)",
+            dir.display()
+        )));
+    }
+
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)
+        .map_err(|e| RunError::Internal(format!("reading log dir: {e}")))?.
+        filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "log"))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    if list || query.is_none() {
+        if entries.is_empty() {
+            eprintln!("No build logs found in {}", dir.display());
+            return Ok(());
+        }
+        for entry in &entries {
+            let path = entry.path();
+            let name = path.file_stem().unwrap_or_default().to_string_lossy();
+            // Read first few lines to get metadata
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                let status = content.lines()
+                    .find(|l| l.starts_with("# status:"))
+                    .map(|l| l.trim_start_matches("# status: "))
+                    .unwrap_or("unknown");
+                let drv_label = content.lines()
+                    .find(|l| l.starts_with("# derivation:"))
+                    .map(|l| l.trim_start_matches("# derivation: "))
+                    .unwrap_or("");
+                println!("{name}  [{status}]  {drv_label}");
+            } else {
+                println!("{name}");
+            }
+        }
+        return Ok(());
+    }
+
+    let query = query.unwrap();
+    let matched = entries.iter().find(|e| {
+        let name = e.file_name();
+        let name_str = name.to_string_lossy();
+        name_str.contains(query)
+    });
+
+    match matched {
+        Some(entry) => {
+            let content = std::fs::read_to_string(entry.path())
+                .map_err(|e| RunError::Internal(format!("reading log: {e}")))?;
+            print!("{content}");
+            Ok(())
+        }
+        None => Err(RunError::Internal(format!(
+            "no log matching '{query}' in {}", dir.display()
+        ))),
+    }
 }
 
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
@@ -299,6 +365,41 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
     eprintln!("Wrote {}", output.display());
     Ok(())
+}
+
+/// Write a build log file with metadata header.
+fn write_log(
+    log_dir: &std::path::Path,
+    drv_path: &nix_compat::store_path::StorePath<String>,
+    label: &str,
+    success: bool,
+    body: &str,
+) {
+    let log_file = log_dir.join(format!("{}.log", drv_path));
+    let status = if success { "success" } else { "failure" };
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let content = format!(
+        "# crunch build log\n# derivation: {label}\n# drv_path: {drv_path}\n# status: {status}\n# timestamp: {timestamp}\n\n{body}\n"
+    );
+    let _ = std::fs::write(&log_file, &content);
+}
+
+/// Resolve log directory path.
+fn log_dir() -> PathBuf {
+    std::env::var("CRUNCH_LOG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let state = std::env::var("XDG_STATE_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| {
+                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                    PathBuf::from(home).join(".local/state")
+                });
+            state.join("crunch/logs")
+        })
 }
 
 /// Build the import path list: stdlib dir + user-specified paths.

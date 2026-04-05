@@ -112,7 +112,24 @@ where
 
             warn!(stdout=%stdout, stderr=%stderr, exit_code=%outcome.output().status, "build failed");
 
-            return Err(std::io::Error::other("nonzero exit code".to_string()));
+            // Include stdout+stderr in the error so callers can display the
+            // build log. Previously this was just "nonzero exit code".
+            let mut log = String::new();
+            if !outcome.output().stdout.is_empty() {
+                log.push_str(&String::from_utf8_lossy(&outcome.output().stdout));
+            }
+            if !outcome.output().stderr.is_empty() {
+                if !log.is_empty() {
+                    log.push('\n');
+                }
+                log.push_str(&String::from_utf8_lossy(&outcome.output().stderr));
+            }
+            let msg = if log.is_empty() {
+                format!("nonzero exit code: {}", outcome.output().status)
+            } else {
+                format!("nonzero exit code: {}\n{}", outcome.output().status, log)
+            };
+            return Err(std::io::Error::other(msg));
         }
 
         let outputs: Vec<_> = request
@@ -161,6 +178,21 @@ where
             },
         ))
         .await?;
-        Ok(BuildResult { outputs })
+        // Capture stdout+stderr for the log (even on success)
+        let mut log = String::new();
+        if !outcome.output().stdout.is_empty() {
+            log.push_str(&String::from_utf8_lossy(&outcome.output().stdout));
+        }
+        if !outcome.output().stderr.is_empty() {
+            if !log.is_empty() {
+                log.push('\n');
+            }
+            log.push_str(&String::from_utf8_lossy(&outcome.output().stderr));
+        }
+
+        Ok(BuildResult {
+            outputs,
+            log: if log.is_empty() { None } else { Some(log) },
+        })
     }
 }

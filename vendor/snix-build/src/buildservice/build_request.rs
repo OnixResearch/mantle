@@ -136,6 +136,8 @@ pub struct BuildResult {
     /// The outputs that were produced after successfully building.
     // They are sorted by the order specified in the build request.
     pub outputs: Vec<BuildOutput>,
+    /// Captured stdout+stderr from the build, if available.
+    pub log: Option<String>,
 }
 
 /// Specific information about an individual output in [BuildResult].

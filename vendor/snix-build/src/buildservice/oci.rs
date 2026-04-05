@@ -179,7 +179,7 @@ where
         ))
         .await?;
 
-        Ok(BuildResult { outputs })
+        Ok(BuildResult { outputs, log: None })
     }
 }
 

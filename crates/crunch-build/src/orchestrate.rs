@@ -33,6 +33,8 @@ pub struct BuildOutcome {
     pub outputs: HashMap<String, PathInfo>,
     /// Whether the build was served from cache (output already existed).
     pub cached: bool,
+    /// Captured build stdout+stderr, if available.
+    pub log: Option<String>,
 }
 
 /// Orchestrates the build pipeline: evaluating dependencies, checking
@@ -124,6 +126,7 @@ where
                 drv_path: drv_path.clone(),
                 outputs,
                 cached: true,
+                log: None,
             });
         }
 
@@ -321,6 +324,7 @@ where
             drv_path: drv_path.clone(),
             outputs: output_infos,
             cached: false,
+            log: build_result.log,
         })
     }
 
@@ -1189,7 +1193,7 @@ mod tests {
                 })
                 .collect();
 
-            Ok(BuildResult { outputs })
+            Ok(BuildResult { outputs, log: None })
         }
     }
 

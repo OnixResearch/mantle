@@ -269,6 +269,66 @@ let seed = import "seed.ncl" in
     }
 
     #[test]
+    fn build_writes_log_file() {
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let log_dir = tempfile::tempdir().unwrap();
+        let seed = dir.path().join("seed.ncl");
+        let result = crunch_cmd()
+            .arg("bootstrap")
+            .arg("-o")
+            .arg(&seed)
+            .arg("bash")
+            .arg("coreutils")
+            .output()
+            .expect("should run");
+
+        if !result.status.success() {
+            eprintln!("skipping: bootstrap failed");
+            return;
+        }
+
+        std::fs::write(
+            dir.path().join("logged.ncl"),
+            r#"let crunch = import "lib.ncl" in
+let seed = import "seed.ncl" in
+{
+  name = "logged-build",
+  builder = "%{seed.bash}/bin/bash",
+  args = ["-c", "%{seed.coreutils}/bin/echo 'log test output' > $out"],
+  inputs = [seed.bash, seed.coreutils],
+} | crunch.Derivation"#,
+        )
+        .unwrap();
+
+        crunch_cmd()
+            .env("CRUNCH_LOG_DIR", log_dir.path())
+            .arg("build")
+            .arg("-I")
+            .arg(dir.path())
+            .arg(dir.path().join("logged.ncl"))
+            .assert()
+            .success();
+
+        // Check that a log file was written
+        let logs: Vec<_> = std::fs::read_dir(log_dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "log"))
+            .collect();
+        assert!(!logs.is_empty(), "should have written at least one log file");
+
+        let content = std::fs::read_to_string(logs[0].path()).unwrap();
+        assert!(content.contains("# crunch build log"), "log should have header");
+        assert!(content.contains("# status: success"), "log should show success");
+        assert!(content.contains("logged-build"), "log should name the derivation");
+    }
+
+    #[test]
     fn build_failing_builder_exits_1() {
         if !can_build() {
             eprintln!("skipping build test: bwrap or /nix/store not available");
@@ -337,9 +397,67 @@ fn verbose_flag_produces_debug_output() {
         .expect("should run");
 
     assert!(output.status.success());
-    // Verbose mode sends tracing output to stderr
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    // May or may not have output depending on tracing subscriber, but
-    // the main thing is it doesn't crash
-    assert!(output.status.success());
+}
+
+// ── Build log tests ────────────────────────────────────────
+
+#[test]
+fn log_subcommand_no_logs() {
+    // Point to an empty log dir
+    let dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("--list")
+        .assert()
+        .success();
+}
+
+#[test]
+fn log_subcommand_lists_logs() {
+    let dir = tempfile::tempdir().unwrap();
+    let log_file = dir.path().join("abc123-test.drv.log");
+    std::fs::write(
+        &log_file,
+        "# crunch build log\n# derivation: mytest\n# drv_path: abc123-test.drv\n# status: success\n# timestamp: 0\n\nhello world\n",
+    ).unwrap();
+
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("--list")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("mytest"))
+        .stdout(predicate::str::contains("success"));
+}
+
+#[test]
+fn log_subcommand_shows_log_by_query() {
+    let dir = tempfile::tempdir().unwrap();
+    let log_file = dir.path().join("abc123-test.drv.log");
+    std::fs::write(
+        &log_file,
+        "# crunch build log\n# derivation: mytest\n# status: success\n# timestamp: 0\n\nbuild output here\n",
+    ).unwrap();
+
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("abc123")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("build output here"));
+}
+
+#[test]
+fn log_subcommand_query_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .env("CRUNCH_LOG_DIR", dir.path())
+        .arg("log")
+        .arg("nonexistent")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("no log matching"));
 }

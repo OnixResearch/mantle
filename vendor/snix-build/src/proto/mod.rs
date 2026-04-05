@@ -322,6 +322,7 @@ impl TryFrom<BuildResponse> for BuildResult {
                     })
                 })
                 .try_collect()?,
+            log: None,
         })
     }
 }
