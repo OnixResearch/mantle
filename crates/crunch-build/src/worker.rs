@@ -83,59 +83,106 @@ impl Worker {
 
     /// Lazily create a goal for a derivation. If the goal already
     /// exists, this is a no-op. Inspects the derivation's
-    /// `input_derivations` to discover deps, recursively creating
-    /// sub-goals and wiring waiters.
+    /// `input_derivations` to discover deps, creating sub-goals
+    /// and wiring waiters.
     ///
     /// `is_root`: whether this was explicitly requested by the user.
     ///
-    /// This is pure graph construction — no I/O. Dependencies are
-    /// looked up from `known_paths`, not from the filesystem.
+    /// Two-pass BFS: first creates all goals (so deps exist before
+    /// wiring), then wires waiter edges and inspects states.
+    /// Uses an explicit queue instead of recursion.
     pub fn want(
         &mut self,
         drv_path: &StorePath<String>,
         known_paths: &KnownPaths,
         is_root: bool,
     ) -> Result<(), Error> {
-        let key = drv_path.to_absolute_path();
+        // Pass 1: BFS to create all goals. Collect (key, dep_paths)
+        // for each newly created goal, in creation order.
+        let created = self.create_goals_bfs(drv_path, known_paths, is_root)?;
 
-        // Already tracked — just upgrade to root if needed.
-        if let Some(goal) = self.registry.get_mut(&key) {
-            if is_root {
-                goal.is_root = true;
+        // Pass 2: Wire deps and inspect, in creation order (leaves
+        // first since BFS processes deps before dependents).
+        for (key, dep_drv_paths) in &created {
+            self.wire_deps_and_inspect(key, dep_drv_paths)?;
+        }
+
+        Ok(())
+    }
+
+    /// BFS pass: create Goal structs for a root and all its transitive
+    /// deps. Returns `(key, dep_paths)` for each newly created goal.
+    fn create_goals_bfs(
+        &mut self,
+        drv_path: &StorePath<String>,
+        known_paths: &KnownPaths,
+        is_root: bool,
+    ) -> Result<Vec<(String, Vec<StorePath<String>>)>, Error> {
+        let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
+        queue.push_back((drv_path.clone(), is_root));
+
+        let mut created: Vec<(String, Vec<StorePath<String>>)> = Vec::new();
+        // Tiger Style: fixed iteration limit.
+        let limit: u32 = MAX_GOALS;
+        let mut iterations: u32 = 0;
+
+        while let Some((sp, root)) = queue.pop_front() {
+            iterations = iterations.saturating_add(1);
+            if iterations > limit {
+                return Err(Error::Store(format!(
+                    "want() BFS exceeded iteration limit ({limit})"
+                )));
             }
-            return Ok(());
+
+            let key = sp.to_absolute_path();
+
+            // Already tracked — just upgrade to root if needed.
+            if let Some(goal) = self.registry.get_mut(&key) {
+                if root { goal.is_root = true; }
+                continue;
+            }
+
+            // Look up derivation.
+            let drv_abs = sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let entry = known_paths.get_by_drv_path(&drv_abs).ok_or_else(|| {
+                Error::DerivationNotFound { path: sp.clone() }
+            })?;
+            let derivation = entry.derivation.clone();
+
+            let goal = if root {
+                Goal::new_root(sp.clone(), derivation.clone())
+            } else {
+                Goal::new(sp, derivation.clone())
+            };
+            self.registry.insert(key.clone(), goal)?;
+
+            let dep_drv_paths: Vec<StorePath<String>> = derivation
+                .input_derivations
+                .keys()
+                .cloned()
+                .collect();
+
+            // Enqueue deps for creation.
+            for dep_sp in &dep_drv_paths {
+                if !self.registry.contains(&dep_sp.to_absolute_path()) {
+                    queue.push_back((dep_sp.clone(), false));
+                }
+            }
+
+            created.push((key, dep_drv_paths));
         }
 
-        // Look up derivation from KnownPaths.
-        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
-        let entry = known_paths.get_by_drv_path(&drv_abs).ok_or_else(|| {
-            Error::DerivationNotFound { path: drv_path.clone() }
-        })?;
-        let derivation = entry.derivation.clone();
+        debug_assert!(iterations <= limit);
+        Ok(created)
+    }
 
-        // Create the goal.
-        let goal = if is_root {
-            Goal::new_root(drv_path.clone(), derivation.clone())
-        } else {
-            Goal::new(drv_path.clone(), derivation.clone())
-        };
-        self.registry.insert(key.clone(), goal)?;
-
-        // Recursively create goals for input derivations.
-        // Collect dep keys BEFORE inspecting (need to know which
-        // are unbuilt).
-        let dep_drv_paths: Vec<StorePath<String>> = derivation
-            .input_derivations
-            .keys()
-            .cloned()
-            .collect();
-
-        for dep_sp in &dep_drv_paths {
-            // Recursive want — creates sub-goals and their sub-goals.
-            self.want(dep_sp, known_paths, false)?;
-        }
-
-        // Determine which deps are not yet Done.
+    /// Wire waiter edges for a goal's deps and inspect (Pending →
+    /// Waiting/Ready). All deps must already exist in the registry.
+    fn wire_deps_and_inspect(
+        &mut self,
+        key: &str,
+        dep_drv_paths: &[StorePath<String>],
+    ) -> Result<(), Error> {
         let unbuilt_dep_keys: Vec<String> = dep_drv_paths
             .iter()
             .map(|sp| sp.to_absolute_path())
@@ -146,20 +193,17 @@ impl Worker {
             })
             .collect();
 
-        // Wire waiter relationships: each unbuilt dep gains this
-        // goal as a waiter.
         for dep_key in &unbuilt_dep_keys {
             if let Some(dep_goal) = self.registry.get_mut(dep_key) {
-                dep_goal.waiters.push(key.clone());
+                dep_goal.waiters.push(key.to_string());
             }
         }
 
-        // Inspect: Pending → Waiting or Ready.
-        let goal = self.registry.get_mut(&key).expect("just inserted");
+        let goal = self.registry.get_mut(key).expect("goal must exist");
         let state = goal.inspect(unbuilt_dep_keys)?;
 
         if *state == GoalState::Ready {
-            self.ready_queue.push_back(key);
+            self.ready_queue.push_back(key.to_string());
         }
 
         Ok(())
@@ -183,29 +227,17 @@ impl Worker {
     {
         let total_goals = self.registry.len();
         let root_count = self.registry.root_count();
-        info!(
-            goals = total_goals,
-            roots = root_count,
-            jobs = self.max_jobs,
-            "worker starting"
-        );
+        info!(goals = total_goals, roots = root_count, jobs = self.max_jobs, "worker starting");
 
-        // Tiger Style: assert positive space.
         debug_assert!(root_count > 0, "no root goals to build");
         debug_assert!(total_goals <= MAX_GOALS, "goal count exceeds limit");
 
         let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
-        let mut join_set: JoinSet<
-            Result<(String, snix_build::buildservice::BuildResult), Error>,
-        > = JoinSet::new();
-
-        // drv_key → PreparedBuild metadata for in-flight sandbox builds.
+        let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<String> = Vec::new();
-
-        // Iteration limit to prevent infinite loops from bugs.
         let iteration_limit: u32 = total_goals.saturating_mul(4).max(16);
         let mut iterations: u32 = 0;
 
@@ -217,23 +249,14 @@ impl Worker {
                 )));
             }
 
-            // Phase 1: Dispatch all Ready goals.
-            let dispatched = self
-                .dispatch_ready(
-                    builder, known_paths, &sem, &mut join_set,
-                    &mut pending_meta, &mut outcomes, &mut failed,
-                )
-                .await?;
+            let dispatched = self.dispatch_ready(
+                builder, known_paths, &sem, &mut join_set,
+                &mut pending_meta, &mut outcomes, &mut failed,
+            ).await?;
 
-            // Phase 2: Check termination.
-            if self.registry.all_roots_terminal() {
-                break;
-            }
+            if self.registry.all_roots_terminal() { break; }
 
-            // Phase 3: Wait for one in-flight build to complete.
             if join_set.is_empty() {
-                // No in-flight builds and no ready goals — should not
-                // happen if the graph is valid.
                 if dispatched == 0 {
                     return Err(Error::Store(
                         "worker deadlock: no ready goals and no in-flight builds".into(),
@@ -242,34 +265,18 @@ impl Worker {
                 continue;
             }
 
-            let join_result = join_set.join_next().await;
-            let Some(result) = join_result else {
-                continue;
-            };
-
+            let Some(result) = join_set.join_next().await else { continue };
             let (drv_key, build_result) = result
-                .map_err(|e| Error::Store(format!("task join: {e}")))?
-                .map_err(|e: Error| e)?;
+                .map_err(|e| Error::Store(format!("task join: {e}")))??;
 
-            let prepared = pending_meta.remove(&drv_key).ok_or_else(|| {
-                Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}"))
-            })?;
-
-            let outcome = builder
-                .finish_build(&prepared, build_result, known_paths)
-                .await?;
-
-            self.complete_goal(&drv_key, outcome, &mut outcomes, &mut failed)?;
+            self.handle_build_completion(
+                &drv_key, build_result, builder, known_paths,
+                &mut pending_meta, &mut outcomes, &mut failed,
+            ).await?;
             completed_count = completed_count.saturating_add(1);
         }
 
-        info!(
-            completed = completed_count,
-            succeeded = outcomes.len(),
-            failed = failed.len(),
-            "worker finished"
-        );
-
+        info!(completed = completed_count, succeeded = outcomes.len(), failed = failed.len(), "worker finished");
         Ok(WorkerResult { outcomes, failed })
     }
 
@@ -296,17 +303,12 @@ impl Worker {
         PIS: PathInfoService,
     {
         let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
-        let mut join_set: JoinSet<
-            Result<(String, snix_build::buildservice::BuildResult), Error>,
-        > = JoinSet::new();
-
+        let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<String> = Vec::new();
         let mut eval_done = false;
-
-        // Iteration limit: generous since we don't know total goals upfront.
         let iteration_limit: u32 = MAX_GOALS.saturating_mul(4);
         let mut iterations: u32 = 0;
 
@@ -320,96 +322,90 @@ impl Worker {
                 )));
             }
 
-            // Phase 1: Drain any buffered eval messages.
             if !eval_done {
                 self.drain_eval_messages(rx, known_paths, &mut eval_done)?;
             }
 
-            // Phase 2: Dispatch all Ready goals.
             self.dispatch_ready(
                 builder, known_paths, &sem, &mut join_set,
                 &mut pending_meta, &mut outcomes, &mut failed,
             ).await?;
 
-            // Phase 3: Check termination.
-            if eval_done && self.registry.all_roots_terminal() {
-                break;
-            }
+            if eval_done && self.registry.all_roots_terminal() { break; }
 
-            // Phase 4: Wait for a build completion OR a new eval message.
-            if eval_done {
-                // No more roots coming — just wait for builds.
-                let Some(result) = join_set.join_next().await else {
-                    // No in-flight builds and eval done — we're finished
-                    // (or all roots were cache hits already handled).
-                    break;
-                };
-                let (drv_key, build_result) = result
-                    .map_err(|e| Error::Store(format!("task join: {e}")))??
-                    ;
-                self.handle_build_completion(
-                    &drv_key, build_result, builder, known_paths,
-                    &mut pending_meta, &mut outcomes, &mut failed,
-                ).await?;
-                completed_count = completed_count.saturating_add(1);
-            } else if join_set.is_empty() {
-                // No in-flight builds but eval still running.
-                // Wait for next eval message.
-                match rx.recv().await {
-                    Some(msg) => {
-                        self.accept_eval_message(msg, known_paths)?;
-                    }
-                    None => {
-                        eval_done = true;
-                    }
+            self.wait_for_event(
+                &mut eval_done, rx, &mut join_set, builder, known_paths,
+                &mut pending_meta, &mut outcomes, &mut failed,
+                &mut completed_count,
+            ).await?;
+        }
+
+        info!(completed = completed_count, succeeded = outcomes.len(),
+              failed = failed.len(), roots = self.registry.root_count(),
+              "worker streaming finished");
+        Ok(WorkerResult { outcomes, failed })
+    }
+
+    /// Wait for either a build completion or an eval message.
+    /// Centralized select! to avoid duplicating handle_build_completion.
+    #[allow(clippy::too_many_arguments)]
+    async fn wait_for_event<BS, DS, BServ, PIS>(
+        &mut self,
+        eval_done: &mut bool,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+        join_set: &mut JoinSet<Result<(String, snix_build::buildservice::BuildResult), Error>>,
+        builder: &mut Builder<BS, DS, BServ, PIS>,
+        known_paths: &mut KnownPaths,
+        pending_meta: &mut HashMap<String, PreparedBuild>,
+        outcomes: &mut Vec<BuildOutcome>,
+        failed: &mut Vec<String>,
+        completed_count: &mut u32,
+    ) -> Result<(), Error>
+    where
+        BS: BlobService + Clone + 'static,
+        DS: DirectoryService + Clone + 'static,
+        BServ: BuildService + 'static,
+        PIS: PathInfoService,
+    {
+        if *eval_done {
+            let Some(result) = join_set.join_next().await else { return Ok(()); };
+            let (key, br) = result.map_err(|e| Error::Store(format!("task join: {e}")))??;
+            self.handle_build_completion(&key, br, builder, known_paths, pending_meta, outcomes, failed).await?;
+            *completed_count = completed_count.saturating_add(1);
+        } else if join_set.is_empty() {
+            match rx.recv().await {
+                Some(msg) => self.accept_eval_message(msg, known_paths)?,
+                None => *eval_done = true,
+            }
+        } else {
+            tokio::select! {
+                result = join_set.join_next() => {
+                    let Some(result) = result else { return Ok(()); };
+                    let (key, br) = result.map_err(|e| Error::Store(format!("task join: {e}")))??;
+                    self.handle_build_completion(&key, br, builder, known_paths, pending_meta, outcomes, failed).await?;
+                    *completed_count = completed_count.saturating_add(1);
                 }
-            } else {
-                // Both eval and builds active — select.
-                tokio::select! {
-                    result = join_set.join_next() => {
-                        let Some(result) = result else { continue };
-                        let (drv_key, build_result) = result
-                            .map_err(|e| Error::Store(format!("task join: {e}")))??
-                            ;
-                        self.handle_build_completion(
-                            &drv_key, build_result, builder, known_paths,
-                            &mut pending_meta, &mut outcomes, &mut failed,
-                        ).await?;
-                        completed_count = completed_count.saturating_add(1);
-                    }
-                    msg = rx.recv() => {
-                        match msg {
-                            Some(msg) => {
-                                self.accept_eval_message(msg, known_paths)?;
-                            }
-                            None => {
-                                eval_done = true;
-                            }
-                        }
+                msg = rx.recv() => {
+                    match msg {
+                        Some(msg) => self.accept_eval_message(msg, known_paths)?,
+                        None => *eval_done = true,
                     }
                 }
             }
         }
-
-        info!(
-            completed = completed_count,
-            succeeded = outcomes.len(),
-            failed = failed.len(),
-            roots = self.registry.root_count(),
-            "worker streaming finished"
-        );
-
-        Ok(WorkerResult { outcomes, failed })
+        Ok(())
     }
 
-    /// Drain all currently buffered eval messages without blocking.
+    /// Drain buffered eval messages without blocking.
+    /// Tiger Style: fixed limit prevents unbounded iteration.
     fn drain_eval_messages(
         &mut self,
         rx: &mut mpsc::Receiver<EvalMessage>,
         known_paths: &KnownPaths,
         eval_done: &mut bool,
     ) -> Result<(), Error> {
-        loop {
+        let drain_limit: u32 = 256;
+        for _ in 0..drain_limit {
             match rx.try_recv() {
                 Ok(msg) => {
                     self.accept_eval_message(msg, known_paths)?;

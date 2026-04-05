@@ -99,12 +99,25 @@ crunch-eval (nickel-lang)     Evaluate Nickel → record
     ▼
 crunch-glue (nix-compat)      Record → nix_compat::Derivation + BLAKE3 store paths
     │
-    ▼
-crunch-build (snix-build)     Derivation → BuildRequest → bwrap sandbox → PathInfo
+    ▼  mpsc channel (EvalMessage per root)
+    │
+crunch-build (goal + worker)  Lazy goal scheduler → bwrap sandbox → PathInfo
     │                         (or builtin fetcher for fetchurl/fetchTarball/fetchGit)
     ▼
 /nix/store/<hash>-<name>      Output in the store
 ```
+
+The scheduler is a lazy goal-based system (not an eager DAG). Each
+derivation becomes a `Goal` with a state machine
+(Pending→Waiting→Ready→Building→Done). The `Worker` creates goals on
+demand, deduplicates by store path, and dispatches concurrent builds
+via `JoinSet` + `Semaphore`. Roots arrive over an mpsc channel, so the
+Worker can start building leaf deps while later roots are still being
+processed.
+
+The goal system is extensible: substitution goals, dynamic derivations
+(build outputs that are .drv files), and remote build dispatch can be
+added without restructuring the scheduler.
 
 ## Crate Layout
 
@@ -113,7 +126,7 @@ crunch-build (snix-build)     Derivation → BuildRequest → bwrap sandbox → 
 | `crunch` | CLI binary — `build`, `eval`, `bootstrap`, `store`, `log` |
 | `crunch-eval` | Nickel evaluation, stdlib embedding |
 | `crunch-glue` | `CrunchDerivation` → `nix_compat::Derivation`, KnownPaths |
-| `crunch-build` | `Derivation` → `BuildRequest`, build orchestration, fetchers |
+| `crunch-build` | `Derivation` → `BuildRequest`, goal scheduler, build orchestration, fetchers |
 | `vendor/nix-compat` | Store paths, ATerm, NAR (BLAKE3-modified) |
 | `vendor/snix-build` | `BuildService` trait, bwrap sandbox |
 | `vendor/snix-castore` | Blob and directory content-addressed storage |
@@ -190,7 +203,7 @@ ncurses, etc.) in the sandbox.
 
 ```
 crunch build <file.ncl>     Evaluate and build
-crunch build -j 4 <file>    Build with max 4 concurrent jobs (plumbing; sequential for now)
+crunch build -j 4 <file>    Build with max 4 concurrent jobs
 crunch build --fix <file>   Build, auto-fix FOD hash mismatches in .ncl source
 crunch eval <file.ncl>      Evaluate and print JSON
 crunch bootstrap [-o seed.ncl] [packages...]   Generate seed from Nix store
@@ -241,7 +254,8 @@ crunch --store /tmp/mystore build hello.ncl
   database and castore) but output files are not written to disk. Use an
   overlay mount or a writable store.
 - **Concurrent builds**: independent derivations run in parallel (up to
-  `--jobs N`, default: CPU count, max 16). The DAG scheduler dispatches
-  builds in topological order; sandbox execution is concurrent via
-  `tokio::JoinSet`. Preparation and output processing are sequential.
+  `--jobs N`, default: CPU count, max 16). The lazy goal scheduler
+  dispatches builds as their dependencies complete; sandbox execution
+  is concurrent via `tokio::JoinSet`. Preparation and output processing
+  are sequential.
 - **No garbage collection**: `crunch store gc` is not implemented.
