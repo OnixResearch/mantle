@@ -47,6 +47,6 @@
 
 ## Phase 5: End-to-end examples
 
-- [ ] `examples/fetch-file.ncl`: fetchurl a single file (e.g., a small known-hash text file)
-- [ ] `examples/fetch-tarball.ncl`: fetchTarball a GitHub release → use contents in a build
-- [ ] `examples/fetch-git.ncl`: fetchGit a repo → build something from the checkout
+- [x] `examples/fetch-file.ncl`: fetchurl a single file (e.g., a small known-hash text file)
+- [x] `examples/fetch-tarball.ncl`: fetchTarball a GitHub release → use contents in a build
+- [x] `examples/fetch-git.ncl`: fetchGit a repo → build something from the checkout
