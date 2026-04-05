@@ -54,6 +54,14 @@ enum Command {
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
         jobs: Option<u32>,
+
+        /// Binary cache URLs for substitution (comma-separated)
+        #[arg(long, default_value = "https://cache.nixos.org")]
+        substituters: String,
+
+        /// Disable remote binary cache substitution
+        #[arg(long)]
+        no_substitute: bool,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -161,10 +169,11 @@ fn run(args: Args) -> Result<(), RunError> {
             println!("{json}");
             Ok(())
         }
-        Command::Build { file, import_paths, fix, jobs } => {
+        Command::Build { file, import_paths, fix, jobs, substituters, no_substitute } => {
             let import_paths = build_import_paths(&import_paths)?;
             let max_jobs = resolve_max_jobs(jobs);
-            cmd_build(&file, &import_paths, &args.store, args.verbose, fix, max_jobs)
+            let sub_url = if no_substitute { None } else { Some(substituters) };
+            cmd_build(&file, &import_paths, &args.store, args.verbose, fix, max_jobs, sub_url.as_deref())
         }
         Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
@@ -196,6 +205,7 @@ fn cmd_build(
     verbose: bool,
     fix: bool,
     max_jobs: u32,
+    substituter_url: Option<&str>,
 ) -> Result<(), RunError> {
     if !output_dir.exists() {
         return Err(RunError::Internal(format!(
@@ -233,6 +243,7 @@ fn cmd_build(
             verbose,
             fix,
             max_jobs,
+            substituter_url,
         )
         .await
     })
@@ -324,6 +335,7 @@ async fn execute_builds(
             pathinfo_service,
             output_dir.to_path_buf(),
             Some(state_dir.clone()),
+            None, // no remote substitution in legacy path
             verbose,
         );
 
@@ -425,6 +437,7 @@ async fn execute_builds_streaming(
     verbose: bool,
     fix: bool,
     max_jobs: u32,
+    substituter_url: Option<&str>,
 ) -> Result<(), RunError> {
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
@@ -444,6 +457,33 @@ async fn execute_builds_streaming(
     let state_dir = state_dir();
     let _ = std::fs::create_dir_all(&state_dir);
     let pathinfo_service = open_pathinfo_service(&state_dir).await?;
+
+    // Build the remote PathInfoService for binary cache substitution.
+    let remote_pathinfo: Option<
+        std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+    > = match substituter_url {
+        Some(url_str) => {
+            match build_remote_pathinfo(
+                url_str,
+                blob_service.clone(),
+                directory_service.clone(),
+            ) {
+                Ok(svc) => {
+                    info!(url = %url_str, "binary cache substitution enabled");
+                    Some(svc)
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        url = %url_str,
+                        err = %e,
+                        "failed to configure remote cache, substitution disabled"
+                    );
+                    None
+                }
+            }
+        }
+        None => None,
+    };
 
     #[cfg(target_os = "linux")]
     {
@@ -466,6 +506,7 @@ async fn execute_builds_streaming(
             pathinfo_service,
             output_dir.to_path_buf(),
             Some(state_dir.clone()),
+            remote_pathinfo,
             verbose,
         );
 
@@ -1038,4 +1079,37 @@ fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
         paths.push(p.into());
     }
     Ok(paths)
+}
+
+/// Construct a `NixHTTPPathInfoService` from a cache URL string.
+///
+/// Shares the caller's blob/directory services so downloaded NARs are
+/// immediately available to the Builder.
+fn build_remote_pathinfo<BS, DS>(
+    url_str: &str,
+    blob_service: BS,
+    directory_service: DS,
+) -> Result<std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>, RunError>
+where
+    BS: snix_castore::blobservice::BlobService + Send + Sync + Clone + 'static,
+    DS: snix_castore::directoryservice::DirectoryService + Send + Sync + Clone + 'static,
+{
+    use snix_store::pathinfoservice::{NixHTTPPathInfoService, NixHTTPPathInfoServiceConfig};
+
+    // NixHTTPPathInfoServiceConfig::try_from expects "nix+https://..." scheme.
+    let nix_url_str = format!("nix+{url_str}");
+    let nix_url: url::Url = nix_url_str.parse()
+        .map_err(|e| RunError::Internal(format!("invalid substituter URL '{url_str}': {e}")))?;
+
+    let config: NixHTTPPathInfoServiceConfig = nix_url.try_into()
+        .map_err(|e| RunError::Internal(format!("remote cache config for '{url_str}': {e}")))?;
+
+    let svc = NixHTTPPathInfoService::try_build(
+        "crunch-remote".to_string(),
+        config,
+        blob_service,
+        directory_service,
+    ).map_err(|e| RunError::Internal(format!("building remote cache client: {e}")))?;
+
+    Ok(std::sync::Arc::new(svc))
 }

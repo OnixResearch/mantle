@@ -72,6 +72,12 @@ pub struct Builder<BS, DS, BServ, PIS> {
     directory_service: DS,
     build_service: Arc<BServ>,
     pathinfo_service: PIS,
+    /// Optional remote PathInfoService for binary cache substitution.
+    /// Queried on local cache miss. Remote hits are persisted locally
+    /// (write-through). `NixHTTPPathInfoService` shares the same
+    /// blob/directory services, so ingested NARs are immediately
+    /// available to the Builder.
+    remote_pathinfo: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
     /// Physical output directory on the host filesystem. This is where
     /// crunch writes build outputs (from `--store`). May differ from
     /// `LOGICAL_STORE_DIR` — e.g., `/tmp/mystore` while derivation
@@ -108,10 +114,11 @@ where
         verbose: bool,
     ) -> Self {
         Self::with_state_dir(blob_service, directory_service, build_service,
-            pathinfo_service, output_dir, None, verbose)
+            pathinfo_service, output_dir, None, None, verbose)
     }
 
-    /// Create a Builder with a state directory for persistent CA mappings.
+    /// Create a Builder with a state directory for persistent CA mappings
+    /// and an optional remote PathInfoService for binary cache substitution.
     pub fn with_state_dir(
         blob_service: BS,
         directory_service: DS,
@@ -119,6 +126,7 @@ where
         pathinfo_service: PIS,
         output_dir: PathBuf,
         state_dir: Option<PathBuf>,
+        remote_pathinfo: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
         verbose: bool,
     ) -> Self {
         let output_dir_str = output_dir.to_str()
@@ -132,6 +140,7 @@ where
             directory_service,
             build_service: Arc::new(build_service),
             pathinfo_service,
+            remote_pathinfo,
             output_dir,
             output_dir_str,
             built_outputs: HashMap::new(),
@@ -1135,6 +1144,12 @@ where
         let mut infos = HashMap::new();
         let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
 
+        // FODs (any output has ca_hash) and CA derivations (output.path
+        // is None with no CA mapping) should not query the remote cache.
+        // FODs: the fetcher pipeline handles them. CA: output paths
+        // aren't known until after build.
+        let is_fod = derivation.outputs.values().any(|o| o.ca_hash.is_some());
+
         for (output_name, output) in &derivation.outputs {
             let output_path: StorePath<String> = match output.path.as_ref() {
                 Some(p) => p.clone(),
@@ -1176,12 +1191,75 @@ where
                     }
                 }
                 None => {
+                    // Local miss — try remote binary cache substitution.
+                    if !is_fod {
+                        if let Some(remote_pi) = self
+                            .try_substitute_remote(digest, &output_path, output_name)
+                            .await?
+                        {
+                            infos.insert(output_name.clone(), remote_pi);
+                            continue;
+                        }
+                    }
                     return Ok(None);
                 }
             }
         }
 
         Ok(Some(infos))
+    }
+
+    /// Try to fetch a single output from the remote binary cache.
+    ///
+    /// On hit: persists PathInfo locally (write-through), caches the
+    /// output node, and returns the PathInfo. On miss or error: returns
+    /// None. Remote errors are logged as warnings and treated as misses.
+    async fn try_substitute_remote(
+        &mut self,
+        digest: [u8; 20],
+        output_path: &StorePath<String>,
+        output_name: &str,
+    ) -> Result<Option<PathInfo>, Error> {
+        let remote = match &self.remote_pathinfo {
+            Some(r) => r.clone(),
+            None => return Ok(None),
+        };
+
+        match remote.get(digest).await {
+            Ok(Some(remote_pi)) => {
+                info!(
+                    path = %output_path,
+                    output = %output_name,
+                    "substituting from remote cache"
+                );
+
+                // Write-through: persist to local pathinfo for next time.
+                self.pathinfo_service
+                    .put(remote_pi.clone())
+                    .await
+                    .map_err(|e| Error::Store(format!(
+                        "persisting substituted PathInfo: {e}"
+                    )))?;
+
+                self.output_nodes
+                    .insert(output_path.clone(), remote_pi.node.clone());
+                self.built_outputs.insert(
+                    output_path.to_absolute_path_with_prefix(&self.output_dir_str),
+                    remote_pi.clone(),
+                );
+
+                Ok(Some(remote_pi))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => {
+                tracing::warn!(
+                    path = %output_path,
+                    err = %e,
+                    "remote cache query failed, building locally"
+                );
+                Ok(None)
+            }
+        }
     }
 
     /// Resolve a store path to its host filesystem location.
@@ -2154,5 +2232,266 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1, "should rebuild");
+    }
+
+    // ── Remote substitution tests ─────────────────────────────────
+
+    #[tokio::test]
+    async fn remote_cache_hit_skips_build() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+        let remote_pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register("remote-hit", &[], &mut kp);
+
+        // Put content in castore + remote PathInfo.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"remote content").await;
+
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 14,
+            nar_sha256: [1u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService as _;
+        remote_pis.put(path_info).await.unwrap();
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+            Arc::new(remote_pis);
+        let mut builder = Builder::with_state_dir(
+            bs, ds, mock, local_pis,
+            PathBuf::from("/nix/store"),
+            None, Some(remote), false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(outcome.cached, "should be cached via remote substitution");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "should NOT call do_build");
+    }
+
+    #[tokio::test]
+    async fn remote_miss_falls_through_to_build() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+        // Remote is empty — no PathInfo.
+        let remote_pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, _drv) = build_and_register("remote-miss", &[], &mut kp);
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+            Arc::new(remote_pis);
+        let mut builder = Builder::with_state_dir(
+            bs, ds, mock, local_pis,
+            PathBuf::from("/nix/store"),
+            None, Some(remote), false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached, "should build locally on remote miss");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should call do_build");
+    }
+
+    #[tokio::test]
+    async fn remote_hit_persisted_to_local() {
+        // After a remote cache hit, the PathInfo is written to the
+        // local pathinfo service. A second build should hit local.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let remote_pis = test_pis();
+
+        // Wrap local PIS in Arc so both builders share it.
+        let local_pis = Arc::new(test_pis());
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register("persist-local", &[], &mut kp);
+
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"persist me").await;
+
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 10,
+            nar_sha256: [2u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService as _;
+        remote_pis.put(path_info).await.unwrap();
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+            Arc::new(remote_pis);
+        let (mock1, _) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::with_state_dir(
+            bs.clone(), ds.clone(), mock1, local_pis.clone(),
+            PathBuf::from("/nix/store"),
+            None, Some(remote), false,
+        );
+
+        // First build: remote hit.
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(outcome.cached);
+
+        // Second build: fresh builder with NO remote. Local should have it.
+        let (mock2, calls2) = MockBuildService::new(bs.clone());
+        let mut builder2 = Builder::new(
+            bs, ds, mock2, local_pis,
+            PathBuf::from("/nix/store"), false,
+        );
+
+        let outcome2 = builder2.build(&drv_path, &mut kp).await.unwrap();
+        assert!(outcome2.cached, "should hit local cache after write-through");
+
+        let recorded2 = calls2.lock().unwrap();
+        assert_eq!(recorded2.len(), 0, "no build on second pass");
+    }
+
+    #[tokio::test]
+    async fn fod_skips_remote_cache() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+        let remote_pis = test_pis();
+
+        // Build a FOD derivation (has ca_hash on the output).
+        let mut kp = crunch_glue::KnownPaths::default();
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None,
+            ca_hash: Some(nix_compat::nixhash::CAHash::Flat(
+                nix_compat::nixhash::NixHash::Sha256([42u8; 32]),
+            )),
+        });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), "fod-test".into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), "".into());
+        environment.insert("outputs".to_string(), "out".into());
+
+        let mut drv = nix_compat::derivation::Derivation {
+            arguments: vec!["-c".into(), "echo fod > $out".into()],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let hdm = drv.hash_derivation_modulo(|_| panic!("no input drvs"));
+        drv.calculate_output_paths("fod-test", &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path("fod-test").unwrap();
+
+        let mut fake_hash = [0u8; 32];
+        for (i, b) in "fod-test".bytes().enumerate().take(32) {
+            fake_hash[i] = b;
+        }
+        kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+
+        // Put PathInfo in remote for the FOD output path.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"fod content").await;
+        let pi = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 11,
+            nar_sha256: [3u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService as _;
+        remote_pis.put(pi).await.unwrap();
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+            Arc::new(remote_pis);
+        let mut builder = Builder::with_state_dir(
+            bs, ds, mock, local_pis,
+            PathBuf::from("/nix/store"),
+            None, Some(remote), false,
+        );
+
+        // FOD should bypass remote and attempt a local build.
+        // The build itself may fail (mock output won't match ca_hash)
+        // but the critical assertion is that do_build was called,
+        // proving substitution was skipped.
+        let _result = builder.build(&drv_path, &mut kp).await;
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "FOD should trigger sandbox build, not substitution");
+    }
+
+    /// A PathInfoService that always fails on get().
+    struct FailingRemoteService;
+
+    #[tonic::async_trait]
+    impl snix_store::pathinfoservice::PathInfoService for FailingRemoteService {
+        async fn get(
+            &self, _digest: [u8; 20],
+        ) -> Result<Option<PathInfo>, snix_store::pathinfoservice::Error> {
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "simulated network error",
+            )))
+        }
+        async fn put(
+            &self, _pi: PathInfo,
+        ) -> Result<PathInfo, snix_store::pathinfoservice::Error> {
+            unimplemented!()
+        }
+        fn list(
+            &self,
+        ) -> futures::stream::BoxStream<
+            'static,
+            Result<PathInfo, snix_store::pathinfoservice::Error>,
+        > {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_error_treated_as_miss() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, _drv) = build_and_register("remote-err", &[], &mut kp);
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
+            Arc::new(FailingRemoteService);
+        let mut builder = Builder::with_state_dir(
+            bs, ds, mock, local_pis,
+            PathBuf::from("/nix/store"),
+            None, Some(remote), false,
+        );
+
+        // Remote error should be swallowed — build proceeds.
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached, "should build locally on remote error");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should call do_build");
     }
 }
