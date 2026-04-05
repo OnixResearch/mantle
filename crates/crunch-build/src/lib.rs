@@ -25,4 +25,4 @@ pub use error::Error;
 pub use fetcher::{Fetch, FetchError};
 pub use goal::{Goal, GoalRegistry, GoalState};
 pub use orchestrate::{BuildOutcome, Builder};
-pub use worker::{Worker, WorkerResult};
+pub use worker::{EvalMessage, Worker, WorkerResult};

@@ -204,13 +204,16 @@ fn cmd_build(
         )));
     }
 
-    // Phase 1: Evaluate and convert (functional core — deterministic
-    // given the same .ncl input, no network/disk mutation).
-    // Always use the logical store dir for derivation computation.
-    let (drv_paths, mut known_paths) =
-        evaluate_and_convert(file, import_paths, LOGICAL_STORE_DIR)?;
+    // Phase 1: Evaluate Nickel expression (sync, fast).
+    info!(file = %file.display(), "evaluating");
+    let expr = crunch_eval::evaluate(file, import_paths)
+        .map_err(|e| RunError::Eval(format!("{e}")))?;
+    let derivations = deserialize_derivations(&expr)?;
+    debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 
-    // Phase 2+3: Set up services and execute builds (imperative shell).
+    // Phase 2: Convert each root derivation and stream to build Worker.
+    // Eval (convert) and building overlap: as soon as the first
+    // derivation is converted, the Worker can start building its deps.
     let log_dir = log_dir();
     let _ = std::fs::create_dir_all(&log_dir);
 
@@ -220,9 +223,8 @@ fn cmd_build(
         .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
 
     rt.block_on(async {
-        execute_builds(
-            &drv_paths,
-            &mut known_paths,
+        execute_builds_streaming(
+            derivations,
             output_dir,
             output_dir_str,
             &log_dir,
@@ -235,41 +237,7 @@ fn cmd_build(
     })
 }
 
-/// Functional core: evaluate a .ncl file and convert all derivations.
-///
-/// No disk mutation, no service construction — just Nickel eval and
-/// the pure derivation→store-path conversion. Returns the list of
-/// (label, drv_path) pairs and the populated KnownPaths.
-fn evaluate_and_convert(
-    file: &std::path::Path,
-    import_paths: &[OsString],
-    store_dir_str: &str,
-) -> Result<(Vec<(String, StorePath<String>)>, crunch_glue::KnownPaths), RunError> {
-    info!(file = %file.display(), "evaluating");
-    let expr = crunch_eval::evaluate(file, import_paths)
-        .map_err(|e| RunError::Eval(format!("{e}")))?;
 
-    let derivations = deserialize_derivations(&expr)?;
-
-    debug_assert!(!derivations.is_empty(), "must have at least one derivation");
-
-    let mut known_paths = crunch_glue::KnownPaths::new(store_dir_str);
-    let mut drv_paths = Vec::new();
-
-    for (label, drv) in &derivations {
-        let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
-            .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
-        info!(drv = %drv_path, label = %label, "derivation constructed");
-        drv_paths.push((label.clone(), drv_path));
-    }
-
-    debug_assert!(
-        drv_paths.len() == derivations.len(),
-        "every derivation must produce a drv_path"
-    );
-
-    Ok((drv_paths, known_paths))
-}
 
 /// Deserialize a Nickel expression into a list of named derivations.
 ///
@@ -303,8 +271,7 @@ fn deserialize_derivations(
     Ok(derivations)
 }
 
-/// Imperative shell: set up build services and execute all builds.
-#[allow(clippy::too_many_arguments)]
+#[allow(dead_code)] // Kept as non-streaming fallback.
 #[allow(clippy::too_many_arguments)]
 async fn execute_builds(
     drv_paths: &[(String, StorePath<String>)],
@@ -425,6 +392,179 @@ async fn execute_builds(
                     println!("{path}");
                 }
             }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(RunError::Internal(
+            "building is only supported on Linux (requires bwrap)".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Streaming build pipeline: converts derivations on a background thread
+/// while the Worker builds them concurrently.
+///
+/// Each root derivation is converted and sent over a channel. The Worker
+/// starts building as soon as the first leaf dependency is ready, even
+/// while later roots are still being converted.
+#[allow(clippy::too_many_arguments)]
+async fn execute_builds_streaming(
+    derivations: Vec<(String, crunch_glue::CrunchDerivation)>,
+    output_dir: &std::path::Path,
+    output_dir_str: &str,
+    log_dir: &std::path::Path,
+    source_file: &std::path::Path,
+    verbose: bool,
+    fix: bool,
+    max_jobs: u32,
+) -> Result<(), RunError> {
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+    use tokio::sync::mpsc;
+
+    let blob_service = MemoryBlobService::default();
+    let directory_service = RedbDirectoryService::new_temporary(
+        "crunch".to_string(),
+        RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        },
+    )
+    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+    let state_dir = state_dir();
+    let _ = std::fs::create_dir_all(&state_dir);
+    let pathinfo_service = open_pathinfo_service(&state_dir).await?;
+
+    #[cfg(target_os = "linux")]
+    {
+        use snix_build::buildservice::BubblewrapBuildService;
+
+        let workdir = std::env::temp_dir().join("crunch-builds");
+        std::fs::create_dir_all(&workdir)
+            .map_err(|e| RunError::Internal(format!("create workdir: {e}")))?;
+
+        let build_service = BubblewrapBuildService::new(
+            workdir,
+            blob_service.clone(),
+            directory_service.clone(),
+        );
+
+        let mut builder = crunch_build::Builder::with_state_dir(
+            blob_service,
+            directory_service,
+            build_service,
+            pathinfo_service,
+            output_dir.to_path_buf(),
+            Some(state_dir.clone()),
+            verbose,
+        );
+
+        // Convert all derivations (sync, fast — CPU-only, no I/O).
+        // KnownPaths is fully populated before builds start.
+        let mut known_paths = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
+        let mut drv_paths: Vec<(String, StorePath<String>)> = Vec::new();
+
+        for (label, drv) in &derivations {
+            let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
+                .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
+            info!(drv = %drv_path, label = %label, "derivation constructed");
+            drv_paths.push((label.clone(), drv_path));
+        }
+
+        // Stream roots to the Worker over a channel. The Worker starts
+        // building each root's deps as soon as it arrives, concurrently
+        // with processing later roots.
+        let (tx, mut rx) = mpsc::channel::<crunch_build::EvalMessage>(16);
+
+        // Send all roots, then close the channel.
+        for (label, drv_path) in &drv_paths {
+            tx.send(crunch_build::EvalMessage {
+                label: label.clone(),
+                drv_path: drv_path.clone(),
+            }).await.map_err(|e| RunError::Internal(format!("channel send: {e}")))?;
+        }
+        drop(tx);
+
+        // Run the Worker.
+        let mut worker = crunch_build::Worker::new(max_jobs);
+        let worker_result = worker
+            .run_streaming(&mut builder, &mut known_paths, &mut rx)
+            .await;
+
+        let result = match worker_result {
+            Ok(r) => r,
+            Err(crunch_build::Error::FodHashMismatch {
+                ref name,
+                ref expected_sri,
+                ref actual_sri,
+            }) => {
+                let (label, drv_path) = drv_paths
+                    .iter()
+                    .find(|(_, sp)| sp.name().contains(name.as_str()))
+                    .unwrap_or(&drv_paths[0]);
+                return handle_fod_mismatch(
+                    name, expected_sri, actual_sri, drv_path, label,
+                    log_dir, source_file, fix,
+                );
+            }
+            Err(e) => {
+                let log_msg = format!("{e}");
+                if let Some((label, drv_path)) = drv_paths.first() {
+                    write_log(log_dir, drv_path, label, false, &log_msg);
+                }
+                return Err(RunError::Build(log_msg));
+            }
+        };
+
+        // Report results.
+        let label_by_drv: std::collections::HashMap<String, &str> = drv_paths
+            .iter()
+            .map(|(label, sp)| {
+                (sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR), label.as_str())
+            })
+            .collect();
+
+        for outcome in &result.outcomes {
+            let drv_abs = outcome.drv_path
+                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let label = label_by_drv.get(drv_abs.as_str()).copied().unwrap_or("?");
+
+            if let Some(log) = &outcome.log {
+                write_log(log_dir, &outcome.drv_path, label, true, log);
+                if verbose {
+                    eprintln!("--- build log: {label} ---");
+                    eprintln!("{log}");
+                    eprintln!("--- end log ---");
+                }
+            } else if !outcome.cached {
+                write_log(
+                    log_dir, &outcome.drv_path, label, true,
+                    "(no output captured)",
+                );
+            }
+
+            for (_output_name, path_info) in &outcome.outputs {
+                let path = path_info.store_path
+                    .to_absolute_path_with_prefix(output_dir_str);
+                if outcome.cached {
+                    println!("{path} (cached)");
+                } else {
+                    println!("{path}");
+                }
+            }
+        }
+
+        if !result.failed.is_empty() {
+            return Err(RunError::Build(format!(
+                "{} root build(s) failed",
+                result.failed.len(),
+            )));
         }
     }
 

@@ -25,9 +25,21 @@ use tracing::{debug, info};
 
 use crunch_glue::KnownPaths;
 
+use tokio::sync::mpsc;
+
 use crate::goal::{GoalRegistry, GoalState, Goal, MAX_GOALS};
 use crate::orchestrate::{BuildOutcome, Builder};
 use crate::Error;
+
+/// A derivation arriving from the eval thread.
+/// Contains everything the Worker needs to create a root goal.
+#[derive(Debug, Clone)]
+pub struct EvalMessage {
+    /// Human-readable label (e.g., package name).
+    pub label: String,
+    /// The root derivation's store path.
+    pub drv_path: StorePath<String>,
+}
 
 /// Logical store prefix — must match orchestrate.rs.
 const LOGICAL_STORE_DIR: &str = "/nix/store";
@@ -259,6 +271,195 @@ impl Worker {
         );
 
         Ok(WorkerResult { outcomes, failed })
+    }
+
+    /// Run the build loop, receiving new roots from an eval channel.
+    ///
+    /// The eval thread converts derivations and sends `EvalMessage`s.
+    /// The Worker calls `want()` for each arrival, interleaving new
+    /// root discovery with build dispatch and completion. Builds
+    /// start as soon as leaf derivations are ready — no waiting for
+    /// all eval to finish.
+    ///
+    /// Terminates when: the channel is closed (eval done) AND all
+    /// root goals are terminal.
+    pub async fn run_streaming<BS, DS, BServ, PIS>(
+        &mut self,
+        builder: &mut Builder<BS, DS, BServ, PIS>,
+        known_paths: &mut KnownPaths,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+    ) -> Result<WorkerResult, Error>
+    where
+        BS: BlobService + Clone + 'static,
+        DS: DirectoryService + Clone + 'static,
+        BServ: BuildService + 'static,
+        PIS: PathInfoService,
+    {
+        let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
+        let mut join_set: JoinSet<
+            Result<(String, snix_build::buildservice::BuildResult), Error>,
+        > = JoinSet::new();
+
+        let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
+        let mut completed_count: u32 = 0;
+        let mut outcomes: Vec<BuildOutcome> = Vec::new();
+        let mut failed: Vec<String> = Vec::new();
+        let mut eval_done = false;
+
+        // Iteration limit: generous since we don't know total goals upfront.
+        let iteration_limit: u32 = MAX_GOALS.saturating_mul(4);
+        let mut iterations: u32 = 0;
+
+        info!(jobs = self.max_jobs, "worker streaming started");
+
+        loop {
+            iterations = iterations.saturating_add(1);
+            if iterations > iteration_limit {
+                return Err(Error::Store(format!(
+                    "worker loop exceeded iteration limit ({iteration_limit})"
+                )));
+            }
+
+            // Phase 1: Drain any buffered eval messages.
+            if !eval_done {
+                self.drain_eval_messages(rx, known_paths, &mut eval_done)?;
+            }
+
+            // Phase 2: Dispatch all Ready goals.
+            self.dispatch_ready(
+                builder, known_paths, &sem, &mut join_set,
+                &mut pending_meta, &mut outcomes, &mut failed,
+            ).await?;
+
+            // Phase 3: Check termination.
+            if eval_done && self.registry.all_roots_terminal() {
+                break;
+            }
+
+            // Phase 4: Wait for a build completion OR a new eval message.
+            if eval_done {
+                // No more roots coming — just wait for builds.
+                let Some(result) = join_set.join_next().await else {
+                    // No in-flight builds and eval done — we're finished
+                    // (or all roots were cache hits already handled).
+                    break;
+                };
+                let (drv_key, build_result) = result
+                    .map_err(|e| Error::Store(format!("task join: {e}")))??
+                    ;
+                self.handle_build_completion(
+                    &drv_key, build_result, builder, known_paths,
+                    &mut pending_meta, &mut outcomes, &mut failed,
+                ).await?;
+                completed_count = completed_count.saturating_add(1);
+            } else if join_set.is_empty() {
+                // No in-flight builds but eval still running.
+                // Wait for next eval message.
+                match rx.recv().await {
+                    Some(msg) => {
+                        self.accept_eval_message(msg, known_paths)?;
+                    }
+                    None => {
+                        eval_done = true;
+                    }
+                }
+            } else {
+                // Both eval and builds active — select.
+                tokio::select! {
+                    result = join_set.join_next() => {
+                        let Some(result) = result else { continue };
+                        let (drv_key, build_result) = result
+                            .map_err(|e| Error::Store(format!("task join: {e}")))??
+                            ;
+                        self.handle_build_completion(
+                            &drv_key, build_result, builder, known_paths,
+                            &mut pending_meta, &mut outcomes, &mut failed,
+                        ).await?;
+                        completed_count = completed_count.saturating_add(1);
+                    }
+                    msg = rx.recv() => {
+                        match msg {
+                            Some(msg) => {
+                                self.accept_eval_message(msg, known_paths)?;
+                            }
+                            None => {
+                                eval_done = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        info!(
+            completed = completed_count,
+            succeeded = outcomes.len(),
+            failed = failed.len(),
+            roots = self.registry.root_count(),
+            "worker streaming finished"
+        );
+
+        Ok(WorkerResult { outcomes, failed })
+    }
+
+    /// Drain all currently buffered eval messages without blocking.
+    fn drain_eval_messages(
+        &mut self,
+        rx: &mut mpsc::Receiver<EvalMessage>,
+        known_paths: &KnownPaths,
+        eval_done: &mut bool,
+    ) -> Result<(), Error> {
+        loop {
+            match rx.try_recv() {
+                Ok(msg) => {
+                    self.accept_eval_message(msg, known_paths)?;
+                }
+                Err(mpsc::error::TryRecvError::Empty) => break,
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    *eval_done = true;
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Process a single eval message: create a root goal.
+    fn accept_eval_message(
+        &mut self,
+        msg: EvalMessage,
+        known_paths: &KnownPaths,
+    ) -> Result<(), Error> {
+        debug!(label = %msg.label, drv = %msg.drv_path, "received derivation from eval");
+        self.want(&msg.drv_path, known_paths, true)
+    }
+
+    /// Handle a completed sandbox build: finish_build + notify waiters.
+    async fn handle_build_completion<BS, DS, BServ, PIS>(
+        &mut self,
+        drv_key: &str,
+        build_result: snix_build::buildservice::BuildResult,
+        builder: &mut Builder<BS, DS, BServ, PIS>,
+        known_paths: &mut KnownPaths,
+        pending_meta: &mut HashMap<String, PreparedBuild>,
+        outcomes: &mut Vec<BuildOutcome>,
+        failed: &mut Vec<String>,
+    ) -> Result<(), Error>
+    where
+        BS: BlobService + Clone + 'static,
+        DS: DirectoryService + Clone + 'static,
+        BServ: BuildService + 'static,
+        PIS: PathInfoService,
+    {
+        let prepared = pending_meta.remove(drv_key).ok_or_else(|| {
+            Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}"))
+        })?;
+
+        let outcome = builder
+            .finish_build(&prepared, build_result, known_paths)
+            .await?;
+
+        self.complete_goal(drv_key, outcome, outcomes, failed)
     }
 
     /// Dispatch all Ready goals. Returns the number dispatched.
@@ -860,7 +1061,7 @@ mod tests {
     // ── run() integration tests ───────────────────────────────
 
     use crate::orchestrate::Builder;
-    use crate::test_support::{self, MockBuildService, build_and_register, tmp_ds, test_pis};
+    use crate::test_support::{MockBuildService, build_and_register, tmp_ds, test_pis};
     use snix_castore::blobservice::MemoryBlobService;
     use std::path::PathBuf;
 
@@ -1003,5 +1204,166 @@ mod tests {
 
         // No roots — debug_assert catches this.
         let _ = w.run(&mut builder, &mut kp).await;
+    }
+
+    // ── run_streaming() tests ───────────────────────────────
+
+    #[tokio::test]
+    async fn streaming_single_root() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (sp, _) = build_and_register("solo", &[], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        tx.send(EvalMessage { label: "solo".into(), drv_path: sp.clone() }).await.unwrap();
+        drop(tx); // Close channel — eval done.
+
+        let mut w = Worker::new(1);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(result.failed.is_empty());
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn streaming_multiple_roots_arrive_incrementally() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a, _) = build_and_register("pkg-a", &[], &mut kp);
+        let (b, _) = build_and_register("pkg-b", &[], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+
+        // Send first root.
+        tx.send(EvalMessage { label: "pkg-a".into(), drv_path: a.clone() }).await.unwrap();
+        // Send second root.
+        tx.send(EvalMessage { label: "pkg-b".into(), drv_path: b.clone() }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(2);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn streaming_chain_with_shared_deps() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (shared, _) = build_and_register("shared", &[], &mut kp);
+        let (top_a, _) = build_and_register("top-a", &[(shared.clone(), "out")], &mut kp);
+        let (top_b, _) = build_and_register("top-b", &[(shared.clone(), "out")], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        tx.send(EvalMessage { label: "top-a".into(), drv_path: top_a.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "top-b".into(), drv_path: top_b.clone() }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(2);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        // shared + top-a + top-b = 3 builds (shared built once).
+        assert_eq!(recorded.len(), 3);
+        let shared_builds = recorded.iter()
+            .filter(|a| a.iter().any(|s| s.contains("shared")))
+            .count();
+        assert_eq!(shared_builds, 1);
+    }
+
+    #[tokio::test]
+    async fn streaming_empty_channel_returns_empty() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (_tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        drop(_tx); // Immediately close.
+
+        let mut w = Worker::new(1);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert!(result.outcomes.is_empty());
+        assert!(result.failed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn streaming_builds_start_before_channel_closes() {
+        // Verify that builds begin while eval is still sending.
+        // We send one root, let it build, then send another.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a, _) = build_and_register("first", &[], &mut kp);
+        let (b, _) = build_and_register("second", &[], &mut kp);
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+
+        // Send first root only.
+        tx.send(EvalMessage { label: "first".into(), drv_path: a.clone() }).await.unwrap();
+
+        // Spawn a task that sends second root after a short delay
+        // (simulating slow eval).
+        let tx2 = tx.clone();
+        let b2 = b.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            tx2.send(EvalMessage { label: "second".into(), drv_path: b2 }).await.unwrap();
+            // Drop tx2 but tx is still alive — don't close channel yet.
+        });
+
+        // Drop the original sender after a bit more delay.
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            drop(tx);
+        });
+
+        let mut w = Worker::new(2);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
     }
 }
