@@ -220,11 +220,22 @@ Exit codes:
 - Writable `/nix/store` for build outputs to land on disk
 - Nix installation (for `bootstrap` and runtime closure resolution)
 
+## Custom Output Directory
+
+`--store` controls where crunch writes build outputs on disk. Source
+inputs (seed packages) are always read from `/nix/store`. Derivation
+path computation always uses `/nix/store` as the logical store prefix,
+matching Nix convention.
+
+```bash
+mkdir -p /tmp/mystore
+crunch --store /tmp/mystore build hello.ncl
+# Output lands at /tmp/mystore/<hash>-hello
+# Source inputs (bash, coreutils, ...) read from /nix/store
+```
+
 ## Known Limitations
 
-- **`--store <custom-dir>`** does not work with seed paths from `/nix/store`.
-  Seed paths have their prefix baked in; the custom store dir is applied on
-  top, producing wrong paths. Use the default `/nix/store` for now.
 - **Read-only `/nix/store`**: builds succeed (output is in the PathInfo
   database and castore) but output files are not written to disk. Use an
   overlay mount or a writable store.

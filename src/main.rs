@@ -26,7 +26,8 @@ struct Args {
     #[arg(long, global = true)]
     json: bool,
 
-    /// Store directory
+    /// Physical directory for build outputs (source inputs always
+    /// come from /nix/store)
     #[arg(long, global = true, default_value = "/nix/store")]
     store: PathBuf,
 
@@ -167,30 +168,36 @@ fn run(args: Args) -> Result<(), RunError> {
 
 // ── cmd_build: eval → convert → build ──────────────────────────────────
 
+/// The logical store prefix. Derivation paths, output hashing, sandbox
+/// layout, and KnownPaths lookups always use this.
+const LOGICAL_STORE_DIR: &str = "/nix/store";
+
 fn cmd_build(
     file: &std::path::Path,
     import_paths: &[OsString],
-    store_dir: &std::path::Path,
+    output_dir: &std::path::Path,
     verbose: bool,
     fix: bool,
 ) -> Result<(), RunError> {
-    if !store_dir.exists() {
+    if !output_dir.exists() {
         return Err(RunError::Internal(format!(
-            "store directory {} does not exist.\n\
+            "output store directory {} does not exist.\n\
              Create it with: sudo mkdir -p {0} && sudo chown $USER {0}",
-            store_dir.display()
+            output_dir.display()
         )));
     }
 
     // Phase 1: Evaluate and convert (functional core — deterministic
     // given the same .ncl input, no network/disk mutation).
-    let store_dir_str = store_dir.to_str().unwrap_or("/nix/store");
+    // Always use the logical store dir for derivation computation.
     let (drv_paths, mut known_paths) =
-        evaluate_and_convert(file, import_paths, store_dir_str)?;
+        evaluate_and_convert(file, import_paths, LOGICAL_STORE_DIR)?;
 
     // Phase 2+3: Set up services and execute builds (imperative shell).
     let log_dir = log_dir();
     let _ = std::fs::create_dir_all(&log_dir);
+
+    let output_dir_str = output_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
 
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
@@ -199,8 +206,8 @@ fn cmd_build(
         execute_builds(
             &drv_paths,
             &mut known_paths,
-            store_dir,
-            store_dir_str,
+            output_dir,
+            output_dir_str,
             &log_dir,
             file,
             verbose,
@@ -283,8 +290,8 @@ fn deserialize_derivations(
 async fn execute_builds(
     drv_paths: &[(String, StorePath<String>)],
     known_paths: &mut crunch_glue::KnownPaths,
-    store_dir: &std::path::Path,
-    store_dir_str: &str,
+    output_dir: &std::path::Path,
+    output_dir_str: &str,
     log_dir: &std::path::Path,
     source_file: &std::path::Path,
     verbose: bool,
@@ -327,7 +334,7 @@ async fn execute_builds(
             directory_service,
             build_service,
             pathinfo_service,
-            store_dir.to_path_buf(),
+            output_dir.to_path_buf(),
             Some(state_dir.clone()),
             verbose,
         );
@@ -338,7 +345,7 @@ async fn execute_builds(
                 drv_path,
                 label,
                 known_paths,
-                store_dir_str,
+                output_dir_str,
                 log_dir,
                 source_file,
                 verbose,
@@ -411,7 +418,7 @@ async fn build_one_derivation(
     drv_path: &StorePath<String>,
     label: &str,
     known_paths: &mut crunch_glue::KnownPaths,
-    store_dir_str: &str,
+    output_dir_str: &str,
     log_dir: &std::path::Path,
     source_file: &std::path::Path,
     verbose: bool,
@@ -450,7 +457,7 @@ async fn build_one_derivation(
 
     // Print output paths.
     for (_output_name, path_info) in &outcome.outputs {
-        let path = path_info.store_path.to_absolute_path_with_prefix(store_dir_str);
+        let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
         if outcome.cached {
             println!("{path} (cached)");
         } else {

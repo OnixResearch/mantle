@@ -42,6 +42,10 @@ pub struct BuildOutcome {
     pub log: Option<String>,
 }
 
+/// The logical store prefix. Derivation paths, output hashing, sandbox
+/// layout, and KnownPaths lookups always use this. Matches Nix convention.
+const LOGICAL_STORE_DIR: &str = "/nix/store";
+
 /// Orchestrates the build pipeline: evaluating dependencies, checking
 /// cache, running builds, persisting results.
 pub struct Builder<BS, DS, BServ, PIS> {
@@ -49,10 +53,13 @@ pub struct Builder<BS, DS, BServ, PIS> {
     directory_service: DS,
     build_service: BServ,
     pathinfo_service: PIS,
-    #[allow(dead_code)] // reserved for --store <custom> path fix
-    store_dir: PathBuf,
-    /// The store dir as a string, for path serialization.
-    store_dir_str: String,
+    /// Physical output directory on the host filesystem. This is where
+    /// crunch writes build outputs (from `--store`). May differ from
+    /// `LOGICAL_STORE_DIR` — e.g., `/tmp/mystore` while derivation
+    /// paths still use `/nix/store`.
+    #[allow(dead_code)] // used indirectly via output_dir_str
+    output_dir: PathBuf,
+    output_dir_str: String,
     /// Output store path → PathInfo for outputs built in this session.
     built_outputs: HashMap<String, PathInfo>,
     /// Output store path → Node (castore root node) for outputs built or
@@ -78,11 +85,11 @@ where
         directory_service: DS,
         build_service: BServ,
         pathinfo_service: PIS,
-        store_dir: PathBuf,
+        output_dir: PathBuf,
         verbose: bool,
     ) -> Self {
         Self::with_state_dir(blob_service, directory_service, build_service,
-            pathinfo_service, store_dir, None, verbose)
+            pathinfo_service, output_dir, None, verbose)
     }
 
     /// Create a Builder with a state directory for persistent CA mappings.
@@ -91,11 +98,12 @@ where
         directory_service: DS,
         build_service: BServ,
         pathinfo_service: PIS,
-        store_dir: PathBuf,
+        output_dir: PathBuf,
         state_dir: Option<PathBuf>,
         verbose: bool,
     ) -> Self {
-        let store_dir_str = store_dir.to_str().unwrap_or("/nix/store").to_string();
+        let output_dir_str = output_dir.to_str()
+            .unwrap_or(LOGICAL_STORE_DIR).to_string();
         let ca_mappings = state_dir
             .as_ref()
             .map(|d| CaMappings::load(d))
@@ -105,8 +113,8 @@ where
             directory_service,
             build_service,
             pathinfo_service,
-            store_dir,
-            store_dir_str,
+            output_dir,
+            output_dir_str,
             built_outputs: HashMap::new(),
             output_nodes: HashMap::new(),
             ca_mappings,
@@ -125,7 +133,7 @@ where
         known_paths: &mut KnownPaths,
     ) -> Result<BuildOutcome, Error> {
         let entry = known_paths
-            .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(&self.store_dir_str))
+            .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR))
             .ok_or_else(|| Error::DerivationNotFound {
                 path: drv_path.clone(),
             })?;
@@ -204,7 +212,7 @@ where
             .await?;
 
         // 6. Build
-        let build_request = derivation_to_build_request(derivation, &sandbox_inputs, &self.store_dir_str)?;
+        let build_request = derivation_to_build_request(derivation, &sandbox_inputs, LOGICAL_STORE_DIR)?;
 
         info!(drv = %drv_name, "building");
         if self.verbose {
@@ -265,7 +273,7 @@ where
             drv = %drv_name,
             outputs = ?output_names.iter()
                 .filter_map(|n| derivation.outputs.get(n)?.path.as_ref())
-                .map(|p| p.to_absolute_path_with_prefix(&self.store_dir_str))
+                .map(|p| p.to_absolute_path_with_prefix(&self.output_dir_str))
                 .collect::<Vec<_>>(),
             "build succeeded"
         );
@@ -288,16 +296,16 @@ where
     ) -> Result<(), Error> {
         for (input_drv_path, _output_names) in &derivation.input_derivations {
             let input_entry = known_paths
-                .get_by_drv_path(&input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str))
+                .get_by_drv_path(&input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR))
                 .ok_or_else(|| Error::DerivationNotFound {
                     path: input_drv_path.clone(),
                 })?;
             let input_drv = input_entry.derivation.clone();
 
-            let input_abs = input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
             let already_built = input_drv.outputs.keys().all(|output_name| {
                 if let Some(resolved) = known_paths.get_output_path(&input_abs, output_name) {
-                    self.output_nodes.contains_key(&resolved) || self.path_exists_on_disk(&resolved)
+                    self.output_nodes.contains_key(&resolved) || self.output_exists_on_disk(&resolved)
                 } else {
                     false
                 }
@@ -324,16 +332,17 @@ where
         let mut all_source_paths: Vec<StorePath<String>> =
             derivation.input_sources.iter().cloned().collect();
 
-        // Resolve closures for each declared source input.
+        // Source inputs are seed packages — always physically at
+        // /nix/store/ regardless of --store output dir.
         for source_path in &derivation.input_sources {
-            let abs = source_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            let abs = source_path.to_absolute_path();
             if !PathBuf::from(&abs).exists() {
                 return Err(Error::SourceNotFound {
                     path: source_path.clone(),
                 });
             }
             for closure_abs in resolve_nix_closure(&abs) {
-                if let Some(sp) = parse_store_path(&closure_abs, &self.store_dir_str) {
+                if let Some(sp) = parse_store_path(&closure_abs, LOGICAL_STORE_DIR) {
                     if !all_source_paths.contains(&sp) {
                         all_source_paths.push(sp);
                     }
@@ -342,8 +351,9 @@ where
         }
 
         // Ingest all source paths (declared + closure) into castore.
+        // Source/closure paths live at /nix/store/ on the host.
         for source_path in &all_source_paths {
-            let abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store_dir_str));
+            let abs = PathBuf::from(source_path.to_absolute_path());
             if !abs.exists() {
                 debug!(path = %source_path, "closure path not found on disk, skipping");
                 continue;
@@ -386,7 +396,8 @@ where
                 sandbox_inputs.insert(input_path.clone(), node.clone());
             } else {
                 // Try ingesting from disk as fallback.
-                let abs = PathBuf::from(input_path.to_absolute_path_with_prefix(&self.store_dir_str));
+                // Source inputs live at /nix/store/, built outputs at output_dir.
+                let abs = self.resolve_host_path(input_path, derivation);
                 if abs.exists() {
                     let node = ingest_path::<_, _, _, &[u8]>(
                         self.blob_service.clone(),
@@ -421,7 +432,7 @@ where
     ) -> Vec<(String, String)> {
         let mut rewrites: Vec<(String, String)> = Vec::new();
         for (input_drv_path, output_names) in &derivation.input_derivations {
-            let input_abs = input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 if entry.content_addressed {
                     for on in output_names {
@@ -430,7 +441,8 @@ where
                             .map(|v| String::from_utf8_lossy(v).to_string())
                             .unwrap_or_default();
                         if let Some(resolved) = entry.resolved_outputs.get(on) {
-                            let resolved_abs = resolved.to_absolute_path_with_prefix(&self.store_dir_str);
+                            // CA rewrites operate in sandbox space (logical prefix).
+                            let resolved_abs = resolved.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
                             if placeholder.len() == resolved_abs.len() {
                                 rewrites.push((placeholder, resolved_abs));
                             }
@@ -583,12 +595,12 @@ where
             &ca_hash,
             Vec::<&str>::new(),
             false,
-            &self.store_dir_str,
+            LOGICAL_STORE_DIR,
         )
         .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
 
-        // 5. Replace zero markers with the final CA path.
-        let final_abs = ca_path.to_absolute_path_with_prefix(&self.store_dir_str);
+        // 5. Replace zero markers with the final CA path (in sandbox/logical space).
+        let final_abs = ca_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
         let final_bytes = final_abs.as_bytes();
         let final_node = if marker.len() == final_bytes.len() {
             let (node, _) = crate::rewrite::rewrite_node(
@@ -604,7 +616,7 @@ where
         };
 
         // Register the resolved path.
-        let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
         known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
 
         // Persist CA mapping for cache across restarts.
@@ -613,10 +625,11 @@ where
             self.ca_mappings.save(sd);
         }
 
+        let display_abs = ca_path.to_absolute_path_with_prefix(&self.output_dir_str);
         info!(
             drv = %drv_name,
             output = %output_name,
-            ca_path = %final_abs,
+            ca_path = %display_abs,
             "CA output path resolved"
         );
 
@@ -658,7 +671,8 @@ where
             .await
             .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
 
-        let abs_path = output_path.to_absolute_path_with_prefix(&self.store_dir_str);
+        // Host filesystem: write outputs to the physical output dir.
+        let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
         self.built_outputs.insert(abs_path.clone(), path_info.clone());
         self.output_nodes
             .insert(output_path.clone(), final_node.clone());
@@ -717,7 +731,8 @@ where
             output: "out".to_string(),
             drv_name: drv_name.clone(),
         })?;
-        let out_abs = out_path.to_absolute_path_with_prefix(&self.store_dir_str);
+        // Fetcher outputs land on disk at the physical output dir.
+        let out_abs = out_path.to_absolute_path_with_prefix(&self.output_dir_str);
 
         info!(drv = %drv_name, "fetching");
         let fetch_clone = fetch.clone();
@@ -830,7 +845,7 @@ where
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         let mut infos = HashMap::new();
-        let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
 
         for (output_name, output) in &derivation.outputs {
             let output_path: StorePath<String> = match output.path.as_ref() {
@@ -848,7 +863,8 @@ where
                 }
             };
 
-            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.store_dir_str));
+            // Cache check: output must exist on host at the physical output dir.
+            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.output_dir_str));
             let digest = *output_path.digest();
 
             let stored = self.pathinfo_service.get(digest).await
@@ -858,21 +874,21 @@ where
                 (Some(path_info), true) => {
                     self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                     self.built_outputs.insert(
-                        output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        output_path.to_absolute_path_with_prefix(&self.output_dir_str),
                         path_info.clone(),
                     );
                     infos.insert(output_name.clone(), path_info);
                 }
                 (Some(_), false) => {
                     tracing::warn!(
-                        path = %output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        path = %output_path.to_absolute_path_with_prefix(&self.output_dir_str),
                         "PathInfo exists but output missing from disk, rebuilding"
                     );
                     return Ok(None);
                 }
                 (None, true) => {
                     debug!(
-                        path = %output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        path = %output_path.to_absolute_path_with_prefix(&self.output_dir_str),
                         "output exists on disk but no PathInfo, rebuilding"
                     );
                     return Ok(None);
@@ -886,10 +902,23 @@ where
         Ok(Some(infos))
     }
 
-    /// Check if a store path exists on the filesystem.
-    fn path_exists_on_disk(&self, path: &StorePath<String>) -> bool {
-        let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store_dir_str));
+    /// Check if a crunch-built output exists on the host filesystem.
+    /// Uses the physical output dir, not the logical store prefix.
+    fn output_exists_on_disk(&self, path: &StorePath<String>) -> bool {
+        let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str));
         abs.exists()
+    }
+
+    /// Resolve a store path to its host filesystem location.
+    /// Source inputs (from input_sources) live at /nix/store/.
+    /// Built outputs live at the physical output dir.
+    fn resolve_host_path(&self, path: &StorePath<String>, derivation: &Derivation) -> PathBuf {
+        let is_source = derivation.input_sources.contains(path);
+        if is_source {
+            PathBuf::from(path.to_absolute_path())
+        } else {
+            PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str))
+        }
     }
 
     /// Make sure we have castore nodes for inputs that exist on disk
@@ -898,7 +927,8 @@ where
         for output in derivation.outputs.values() {
             if let Some(path) = &output.path {
                 if !self.output_nodes.contains_key(path) {
-                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store_dir_str));
+                    // Built outputs are at the physical output dir.
+                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str));
                     if abs.exists() {
                         let node = ingest_path::<_, _, _, &[u8]>(
                             self.blob_service.clone(),
@@ -1123,19 +1153,21 @@ mod tests {
 
     #[tokio::test]
     async fn builder_skips_build_when_output_exists() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store_dir = tmp.path().to_str().unwrap().to_string();
+        let output_tmp = tempfile::tempdir().unwrap();
+        let output_dir = output_tmp.path().to_str().unwrap().to_string();
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::new(&store_dir);
+        // KnownPaths uses /nix/store (logical); output_dir is the
+        // physical location where the Builder checks for cached files.
+        let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
 
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&store_dir));
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
         std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
         std::fs::write(&abs, "cached content").unwrap();
 
@@ -1157,7 +1189,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1208,24 +1240,24 @@ mod tests {
 
     #[tokio::test]
     async fn cache_miss_when_file_but_no_pathinfo() {
-        let tmp = tempfile::tempdir().unwrap();
-        let store_dir = tmp.path().to_str().unwrap().to_string();
+        let output_tmp = tempfile::tempdir().unwrap();
+        let output_dir = output_tmp.path().to_str().unwrap().to_string();
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::new(&store_dir);
+        let mut kp = crunch_glue::KnownPaths::default();
         let (drv_path, drv) = build_and_register("untracked", &[], &mut kp);
 
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&store_dir));
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
         std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
         std::fs::write(&abs, "untracked content").unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1354,5 +1386,102 @@ mod tests {
         let path1 = outcome1.outputs["out"].store_path.to_absolute_path();
         let path2 = outcome2.outputs["out"].store_path.to_absolute_path();
         assert_eq!(path1, path2, "same name + same content = same CA path");
+    }
+
+    // ── Custom output_dir tests ───────────────────────────────────
+
+    #[tokio::test]
+    async fn custom_output_dir_writes_output_there() {
+        // Builder with output_dir = temp dir (not /nix/store).
+        // KnownPaths uses /nix/store (default/logical).
+        // Verifies output lands in the custom dir, not /nix/store.
+        let output_tmp = tempfile::tempdir().unwrap();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(),
+            output_tmp.path().to_path_buf(), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, _) = build_and_register("custom-dir-test", &[], &mut kp);
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+
+        // Output should exist under the custom output dir.
+        let out_info = &outcome.outputs["out"];
+        let custom_abs = out_info.store_path
+            .to_absolute_path_with_prefix(output_tmp.path().to_str().unwrap());
+        assert!(
+            PathBuf::from(&custom_abs).exists(),
+            "output should exist at custom dir: {custom_abs}"
+        );
+
+        // And should NOT exist at the logical /nix/store path.
+        let logical_abs = out_info.store_path.to_absolute_path();
+        // (Only check if /nix/store is not the output_dir, which it
+        // isn't since we used a temp dir.)
+        assert_ne!(
+            output_tmp.path().to_str().unwrap(), "/nix/store",
+            "test requires output_dir != /nix/store"
+        );
+        assert!(
+            !PathBuf::from(&logical_abs).exists()
+                || logical_abs == custom_abs,
+            "output should NOT exist at /nix/store: {logical_abs}"
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_output_dir_cache_hit() {
+        // Pre-populate output in a custom dir, verify cache hit.
+        let output_tmp = tempfile::tempdir().unwrap();
+        let output_dir = output_tmp.path().to_str().unwrap().to_string();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register("cached-custom", &[], &mut kp);
+
+        // Write the output file at output_dir, NOT /nix/store.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&output_dir));
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(&abs, "cached").unwrap();
+
+        // Also insert PathInfo.
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node: Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 6,
+                executable: false,
+            },
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService;
+        pis.put(path_info).await.unwrap();
+
+        let mut builder = Builder::new(
+            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(outcome.cached, "should be cached from custom output dir");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "no build needed for cached output");
     }
 }

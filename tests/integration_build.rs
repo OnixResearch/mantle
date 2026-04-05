@@ -495,8 +495,8 @@ fn spawn_http_server(body: Vec<u8>) -> (std::net::SocketAddr, std::thread::JoinH
 fn fetchurl_downloads_and_verifies_hash() {
     use sha2::Digest;
 
-    let store_dir = tempfile::tempdir().unwrap();
-    let store_str = store_dir.path().to_str().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let output_dir_str = output_dir.path().to_str().unwrap();
 
     let content = b"hello from crunch fetcher test";
     let sha256_digest: [u8; 32] = sha2::Sha256::digest(content).into();
@@ -524,7 +524,9 @@ fn fetchurl_downloads_and_verifies_hash() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::new(store_str);
+    // KnownPaths uses /nix/store (logical prefix), output_dir is
+    // the physical location where the Builder writes outputs.
+    let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
     let out_path = nix_drv
@@ -534,7 +536,7 @@ fn fetchurl_downloads_and_verifies_hash() {
         .path
         .as_ref()
         .unwrap()
-        .to_absolute_path_with_prefix(store_str);
+        .to_absolute_path_with_prefix(output_dir_str);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
@@ -564,7 +566,7 @@ fn fetchurl_downloads_and_verifies_hash() {
             directory_service,
             build_service,
             pis,
-            store_dir.path().to_path_buf(),
+            output_dir.path().to_path_buf(),
             true,
         );
 
@@ -593,8 +595,8 @@ fn fetchurl_downloads_and_verifies_hash() {
 
 #[test]
 fn fetch_tarball_unpacks_and_strips_prefix() {
-    let store_dir = tempfile::tempdir().unwrap();
-    let store_str = store_dir.path().to_str().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let output_dir_str = output_dir.path().to_str().unwrap();
 
     // Build a tar.gz in memory with a top-level dir
     let tmp_src = tempfile::tempdir().unwrap();
@@ -641,7 +643,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::new(store_str);
+    let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
     let out_path = nix_drv
@@ -651,7 +653,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         .path
         .as_ref()
         .unwrap()
-        .to_absolute_path_with_prefix(store_str);
+        .to_absolute_path_with_prefix(output_dir_str);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
@@ -681,7 +683,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
             directory_service,
             build_service,
             pis,
-            store_dir.path().to_path_buf(),
+            output_dir.path().to_path_buf(),
             true,
         );
 
