@@ -1,23 +1,23 @@
 ## Phase 1: Nickel contract and CrunchDerivation type
 
-- [ ] Add `addressing_mode` field to `lib/derivation.ncl` with enum `[| 'input-addressed, 'content-addressed |]`, default `'content-addressed`
-- [ ] Add `addressing_mode` to `CrunchDerivation` struct in `crates/crunch-glue/src/types.rs`, with serde default
-- [ ] Add `addressing_mode_to_string` helper in `lib/helpers.ncl`
-- [ ] Nickel tests: default is content-addressed, explicit input-addressed works, invalid variant rejected
+- [x] Add `addressing_mode` field to `lib/derivation.ncl` with enum `[| 'input-addressed, 'content-addressed |]`, default `'content-addressed`
+- [x] Add `addressing_mode` to `CrunchDerivation` struct in `crates/crunch-glue/src/types.rs`, with serde default
+- [x] Add `addressing_mode_to_string` helper in `lib/helpers.ncl`
+- [x] Nickel tests: default is content-addressed (`ca_json_default_is_content_addressed`), explicit input-addressed works, invalid variant rejected by Nickel contract
 
 ## Phase 2: Provisional paths and convert() branching
 
-- [ ] In `convert()`, branch on `addressing_mode`: input-addressed uses existing code path, content-addressed sets output paths to `None` and environment to `hash_placeholder(output_name)`
-- [ ] Extend `KnownPaths` to track output resolution state: `Option<StorePath>` per output, with `resolve_output()` method
-- [ ] Add `get_output_path(drv_path, output_name) -> Option<StorePath>` to KnownPaths
-- [ ] Tests: CA derivation from `convert()` has `None` output paths, input-addressed has `Some` (existing behavior)
+- [x] In `convert()`, branch on `addressing_mode`: input-addressed uses existing code path, content-addressed sets output paths to `None` and environment to `hash_placeholder(output_name)`
+- [x] Extend `KnownPaths` to track output resolution state: `Option<StorePath>` per output, with `resolve_output()` method
+- [x] Add `get_output_path(drv_path, output_name) -> Option<StorePath>` to KnownPaths
+- [x] Tests: CA derivation from `convert()` has `None` output paths, input-addressed has `Some` (existing behavior)
 
 ## Phase 3: Self-reference rewriting primitives
 
-- [ ] Implement `replace_provisional_with_marker(output_bytes: &[u8], provisional: &str) -> (Vec<u8>, bool)` — returns rewritten bytes and whether any self-refs were found. Marker is `\0` repeated to store path length.
-- [ ] Implement `replace_marker_with_final(output_bytes: &[u8], final_path: &str) -> Vec<u8>` — replaces zero markers with the final CA path
-- [ ] Implement `replace_input_provisional(output_bytes: &[u8], old_path: &str, new_path: &str) -> Vec<u8>` — rewrites input provisional paths to their resolved CA paths
-- [ ] Tests: round-trip provisional → marker → final produces correct bytes; no-op when no references present; multiple occurrences all replaced; binary data (non-UTF8) handled
+- [x] Implement `replace_provisional_with_marker(output_bytes: &[u8], provisional: &str) -> (Vec<u8>, bool)` — returns rewritten bytes and whether any self-refs were found. Marker is `\0` repeated to store path length.
+- [x] Implement `replace_marker_with_final(output_bytes: &[u8], final_path: &str) -> Vec<u8>` — replaces zero markers with the final CA path
+- [x] Implement `replace_input_provisional(output_bytes: &[u8], old_path: &str, new_path: &str) -> Vec<u8>` — rewrites input provisional paths to their resolved CA paths
+- [x] Tests: round-trip provisional → marker → final produces correct bytes; no-op when no references present; multiple occurrences all replaced; binary data (non-UTF8) handled
 
 ## Phase 4: Post-build CA resolution in Builder
 

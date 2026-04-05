@@ -55,6 +55,7 @@ fn cache_hit_skips_build() {
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: None,
+        addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -135,6 +136,7 @@ fn fod_hash_mismatch_error() {
             algo: "sha256".to_string(),
             mode: "recursive".to_string(),
         }),
+        addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -182,6 +184,7 @@ fn end_to_end_trivial_build() {
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: None,
+        addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -322,7 +325,14 @@ fn eval_hello_world_with_seed() {
     let mut kp = KnownPaths::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
     assert!(drv_path.to_string().ends_with("hello-world.drv"));
-    assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
+    // CA derivations have None output paths until after build.
+    // Input-addressed derivations have Some.
+    if drv.addressing_mode == "content-addressed" {
+        assert!(nix_drv.outputs.get("out").unwrap().path.is_none(),
+            "CA derivation should have None output path before build");
+    } else {
+        assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
+    }
     // Should have source inputs
     assert!(
         !nix_drv.input_sources.is_empty(),

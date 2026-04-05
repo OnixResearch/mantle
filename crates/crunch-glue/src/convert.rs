@@ -115,8 +115,21 @@ fn convert_inner(
             })
     });
 
-    // 5. Compute output paths and fill them into the derivation
-    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
+    let is_ca = drv.addressing_mode == "content-addressed" && drv.fixed_output.is_none();
+
+    // 5. Compute output paths.
+    //    Input-addressed (and FODs): compute now, fill into derivation.
+    //    Content-addressed: output paths are unknown until after the build.
+    //    Set environment to placeholders so the builder has a $out to write to.
+    if is_ca {
+        for (output_name, output) in nix_drv.outputs.iter_mut() {
+            assert!(output.path.is_none());
+            let placeholder = nix_compat::store_path::hash_placeholder(output_name);
+            nix_drv.environment.insert(output_name.clone(), placeholder.into());
+        }
+    } else {
+        nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
+    }
 
     // 6. Compute the .drv store path
     let drv_path = nix_drv.calculate_derivation_path_with_store_dir(&drv.name, &store_dir)?;
@@ -126,7 +139,7 @@ fn convert_inner(
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
     // 8. Register in KnownPaths
-    known_paths.insert(aterm_hash, drv_path.clone(), hdm, nix_drv.clone());
+    known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, nix_drv.clone(), is_ca);
 
     Ok((drv_path, nix_drv))
 }
@@ -188,6 +201,7 @@ mod tests {
             env: Default::default(),
             inputs: vec![],
             fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
         }
     }
 
@@ -608,5 +622,135 @@ mod tests {
         // Lookup with the wrong prefix must fail
         let wrong = drv_path.to_absolute_path();
         assert!(kp.get_by_drv_path(&wrong).is_none());
+    }
+
+    // ── content-addressed derivation tests ─────────────────────────
+
+    fn ca_drv(name: &str, builder: &str) -> CrunchDerivation {
+        CrunchDerivation {
+            addressing_mode: "content-addressed".to_string(),
+            ..minimal_drv(name, builder)
+        }
+    }
+
+    #[test]
+    fn ca_derivation_has_none_output_paths() {
+        let drv = ca_drv("ca-hello", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        // drv path still computed (needed for build graph)
+        assert!(drv_path.to_string().ends_with("ca-hello.drv"));
+
+        // output paths are None (not known until after build)
+        for (name, output) in &nix_drv.outputs {
+            assert!(
+                output.path.is_none(),
+                "CA output '{name}' should have None path"
+            );
+        }
+    }
+
+    #[test]
+    fn ca_derivation_env_has_placeholders() {
+        let drv = ca_drv("ca-hello", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        let env_out: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
+        let env_str = std::str::from_utf8(env_out).unwrap();
+
+        // Placeholder starts with / and is a nixbase32-encoded hash
+        assert!(env_str.starts_with('/'), "placeholder should start with /");
+        assert!(env_str.len() > 1, "placeholder should not be empty");
+        // It should NOT start with /nix/store (that's the input-addressed path)
+        assert!(!env_str.starts_with("/nix/store"), "CA env should be placeholder, not store path");
+    }
+
+    #[test]
+    fn ca_known_paths_marked_content_addressed() {
+        let drv = ca_drv("ca-hello", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (drv_path, _) = convert(&drv, &mut kp).unwrap();
+
+        let entry = kp.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
+        assert!(entry.content_addressed);
+    }
+
+    #[test]
+    fn input_addressed_known_paths_not_ca() {
+        let drv = minimal_drv("ia-hello", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (drv_path, _) = convert(&drv, &mut kp).unwrap();
+
+        let entry = kp.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
+        assert!(!entry.content_addressed);
+    }
+
+    #[test]
+    fn ia_derivation_has_some_output_paths() {
+        let drv = minimal_drv("ia-hello", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        for (name, output) in &nix_drv.outputs {
+            assert!(
+                output.path.is_some(),
+                "IA output '{name}' should have Some path"
+            );
+        }
+    }
+
+    #[test]
+    fn fod_stays_input_addressed_even_with_ca_mode() {
+        // FODs are always content-addressed by definition (hash declared).
+        // Setting addressing_mode = CA shouldn't break them.
+        let drv = CrunchDerivation {
+            addressing_mode: "content-addressed".to_string(),
+            fixed_output: Some(FixedOutput {
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
+                    .to_string(),
+                algo: "sha256".to_string(),
+                mode: "flat".to_string(),
+            }),
+            ..minimal_drv("fod-ca", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        // FOD output path is always computed (from declared hash)
+        let out = nix_drv.outputs.get("out").unwrap();
+        assert!(out.path.is_some(), "FOD should always have output path");
+        assert!(out.ca_hash.is_some(), "FOD should have ca_hash");
+    }
+
+    #[test]
+    fn ca_resolve_output_updates_known_paths() {
+        let drv = ca_drv("ca-resolve", "/bin/sh");
+        let mut kp = KnownPaths::default();
+        let (drv_path, _) = convert(&drv, &mut kp).unwrap();
+        let drv_abs = drv_path.to_absolute_path();
+
+        // Before resolve: no output path
+        assert!(kp.get_output_path(&drv_abs, "out").is_none());
+
+        // Simulate post-build resolution
+        let final_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed(
+            "ca-resolve", [0xbb; 20]
+        ).unwrap();
+        kp.resolve_output(&drv_abs, "out", final_path.clone());
+
+        // After resolve: output path available
+        assert_eq!(kp.get_output_path(&drv_abs, "out").unwrap(), final_path);
+    }
+
+    #[test]
+    fn ca_json_default_is_content_addressed() {
+        let json = r#"{
+            "name": "from-json-ca",
+            "builder": "/bin/sh"
+        }"#;
+        let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
+        assert_eq!(drv.addressing_mode, "content-addressed");
     }
 }

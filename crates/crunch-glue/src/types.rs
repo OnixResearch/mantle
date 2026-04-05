@@ -32,6 +32,12 @@ pub struct CrunchDerivation {
     pub inputs: Vec<Input>,
     #[serde(default)]
     pub fixed_output: Option<FixedOutput>,
+    #[serde(default = "default_addressing_mode", deserialize_with = "deserialize_nickel_string")]
+    pub addressing_mode: String,
+}
+
+fn default_addressing_mode() -> String {
+    "content-addressed".to_string()
 }
 
 fn default_system() -> String {

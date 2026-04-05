@@ -28,4 +28,11 @@
       'flat => "flat",
       'recursive => "recursive",
     },
+
+  addressing_mode_to_string
+    | doc "Convert an addressing mode enum tag to its string representation."
+    = fun mode => mode |> match {
+      'input-addressed => "input-addressed",
+      'content-addressed => "content-addressed",
+    },
 }

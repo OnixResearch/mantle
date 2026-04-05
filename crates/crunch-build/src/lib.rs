@@ -8,6 +8,7 @@
 mod build_request;
 mod error;
 mod orchestrate;
+pub mod rewrite;
 
 pub use build_request::derivation_to_build_request;
 pub use error::Error;

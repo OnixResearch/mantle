@@ -160,6 +160,7 @@ fn full_serde_round_trip() {
             builder = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash/bin/bash",
             args = ["-c", "echo hi > $out"],
             inputs = ["/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash"],
+            addressing_mode = 'input-addressed,
         } | crunch.Derivation
         "#,
         &stdlib_import_path(),

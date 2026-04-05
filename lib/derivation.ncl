@@ -37,6 +37,10 @@ let { FixedOutput } = import "fixed_output.ncl" in
     | doc "Fixed-output derivation parameters. Only set for FODs (fetchers, fixed downloads)."
     | optional,
 
+  addressing_mode | [| 'input-addressed, 'content-addressed |]
+    | doc "How output paths are computed. 'input-addressed: from derivation inputs (deterministic before build). 'content-addressed: from build output content (deterministic after build)."
+    | default = 'content-addressed,
+
   sandbox | Sandbox
     | doc "Sandbox backend. 'native = bwrap (Linux), 'oci = OCI container, 'wasm = WASI (single-process)."
     | default = 'native,

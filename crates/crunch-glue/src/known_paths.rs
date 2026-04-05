@@ -26,6 +26,13 @@ pub struct KnownEntry {
     pub drv_path: StorePath<String>,
     pub hash_derivation_modulo: [u8; 32],
     pub derivation: Derivation,
+    /// Whether this is a content-addressed derivation (output paths
+    /// resolved after build).
+    pub content_addressed: bool,
+    /// Resolved output paths for CA derivations. Populated by
+    /// `resolve_output()` after the build completes.
+    /// Key: output name, Value: final store path.
+    pub resolved_outputs: HashMap<String, StorePath<String>>,
 }
 
 impl KnownPaths {
@@ -52,6 +59,18 @@ impl KnownPaths {
         hdm: [u8; 32],
         derivation: Derivation,
     ) {
+        self.insert_ca(aterm_hash, drv_path, hdm, derivation, false);
+    }
+
+    /// Register a derivation, optionally marking it as content-addressed.
+    pub fn insert_ca(
+        &mut self,
+        aterm_hash: [u8; 32],
+        drv_path: StorePath<String>,
+        hdm: [u8; 32],
+        derivation: Derivation,
+        content_addressed: bool,
+    ) {
         let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
         self.drv_path_to_aterm.insert(drv_path_str, aterm_hash);
@@ -59,7 +78,41 @@ impl KnownPaths {
             drv_path,
             hash_derivation_modulo: hdm,
             derivation,
+            content_addressed,
+            resolved_outputs: HashMap::new(),
         });
+    }
+
+    /// Resolve a CA derivation's output path after build.
+    pub fn resolve_output(
+        &mut self,
+        drv_path_abs: &str,
+        output_name: &str,
+        final_path: StorePath<String>,
+    ) {
+        let aterm_hash = self.drv_path_to_aterm.get(drv_path_abs)
+            .copied()
+            .expect("BUG: resolve_output called for unknown drv path");
+        let entry = self.by_aterm_hash.get_mut(&aterm_hash)
+            .expect("BUG: aterm hash not found");
+        entry.resolved_outputs.insert(output_name.to_string(), final_path);
+    }
+
+    /// Get the resolved output path for a CA derivation, or the
+    /// pre-computed path for an input-addressed derivation.
+    pub fn get_output_path(
+        &self,
+        drv_path_abs: &str,
+        output_name: &str,
+    ) -> Option<StorePath<String>> {
+        let aterm_hash = self.drv_path_to_aterm.get(drv_path_abs)?;
+        let entry = self.by_aterm_hash.get(aterm_hash)?;
+        if entry.content_addressed {
+            entry.resolved_outputs.get(output_name).cloned()
+        } else {
+            entry.derivation.outputs.get(output_name)
+                .and_then(|o| o.path.clone())
+        }
     }
 
     /// Look up a derivation by its ATerm hash. Used for deduplication.

@@ -13,6 +13,7 @@ fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
+        addressing_mode: "input-addressed".to_string(),
     }
 }
 
@@ -79,6 +80,7 @@ fn convert_with_source_input() {
             Input::Source("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash".to_string()),
         ],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -100,6 +102,7 @@ fn convert_with_derivation_input() {
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let drv = CrunchDerivation {
@@ -111,6 +114,7 @@ fn convert_with_derivation_input() {
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(dep))],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -138,6 +142,7 @@ fn convert_fixed_output_sha256() {
             algo: "sha256".to_string(),
             mode: "recursive".to_string(),
         }),
+        addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -159,6 +164,7 @@ fn convert_multiple_outputs() {
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -193,6 +199,7 @@ fn convert_diamond_dependency() {
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let b = CrunchDerivation {
@@ -204,6 +211,7 @@ fn convert_diamond_dependency() {
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(d.clone()))],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let c = CrunchDerivation {
@@ -215,6 +223,7 @@ fn convert_diamond_dependency() {
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(d))],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let a = CrunchDerivation {
@@ -229,6 +238,7 @@ fn convert_diamond_dependency() {
             Input::Derivation(Box::new(c)),
         ],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -255,6 +265,7 @@ fn convert_circular_dependency_detected() {
         env: Default::default(),
         inputs: vec![], // can't nest itself due to ownership, but identity match triggers
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     // Outer has same identity as inner
@@ -267,6 +278,7 @@ fn convert_circular_dependency_detected() {
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(inner))],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -291,6 +303,7 @@ fn convert_user_env_preserved() {
         env,
         inputs: vec![],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -314,6 +327,7 @@ fn convert_invalid_source_path() {
         env: Default::default(),
         inputs: vec![Input::Source("/tmp/not-a-store-path".to_string())],
         fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -336,6 +350,7 @@ fn convert_invalid_hash_algo() {
             algo: "crc32".to_string(),
             mode: "flat".to_string(),
         }),
+        addressing_mode: "input-addressed".to_string(),
     };
 
     let mut kp = KnownPaths::default();
@@ -354,7 +369,8 @@ fn convert_from_json_serde() {
         "args": ["-c", "echo hi"],
         "outputs": ["out"],
         "env": {},
-        "inputs": []
+        "inputs": [],
+        "addressing_mode": "input-addressed"
     }"#;
 
     let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
