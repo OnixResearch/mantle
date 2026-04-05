@@ -527,9 +527,37 @@ where
 
             // Register in our session state
             let abs_path = output_path.to_absolute_path_with_prefix(&self.store_dir_str);
-            self.built_outputs.insert(abs_path, path_info.clone());
+            self.built_outputs.insert(abs_path.clone(), path_info.clone());
             self.output_nodes
-                .insert(output_path.clone(), final_node);
+                .insert(output_path.clone(), final_node.clone());
+
+            // Export the output from castore to the store directory on disk.
+            // Skip if the path already exists (cache hit) or the store is
+            // read-only (output stays in castore + PathInfo db only).
+            if !PathBuf::from(&abs_path).exists() {
+                match export_castore_to_disk(
+                    &final_node,
+                    &abs_path,
+                    &self.blob_service,
+                    &self.directory_service,
+                )
+                .await
+                {
+                    Ok(()) => {}
+                    Err(e) if e.contains("Read-only file system")
+                           || e.contains("Permission denied") => {
+                        debug!(
+                            path = %abs_path,
+                            "store dir not writable, output stays in castore only"
+                        );
+                    }
+                    Err(e) => {
+                        return Err(Error::Store(format!(
+                            "exporting output {abs_path} to disk: {e}"
+                        )));
+                    }
+                }
+            }
 
             output_infos.insert(output_name.clone(), path_info);
         }
@@ -1017,6 +1045,86 @@ async fn hash_blob(
 }
 
 /// Map refscan needle indices back to store path references.
+/// Export a castore Node to a filesystem path.
+///
+/// Reconstructs files, directories, and symlinks on disk from the
+/// content-addressed store. This is the inverse of `ingest_path`.
+async fn export_castore_to_disk(
+    node: &Node,
+    dest: &str,
+    blob_service: &(impl BlobService + Clone),
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<(), String> {
+    match node {
+        Node::File { digest, executable, .. } => {
+            // Read blob content and write to disk.
+            let mut reader = blob_service
+                .open_read(digest)
+                .await
+                .map_err(|e| format!("opening blob {digest}: {e}"))?
+                .ok_or_else(|| format!("blob {digest} not found in castore"))?;
+
+            if let Some(parent) = std::path::Path::new(dest).parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("creating parent dir: {e}"))?;
+            }
+            let mut file = std::fs::File::create(dest)
+                .map_err(|e| format!("creating {dest}: {e}"))?;
+            let mut buf = vec![0u8; 64 * 1024];
+            loop {
+                let n = reader.read(&mut buf).await
+                    .map_err(|e| format!("reading blob: {e}"))?;
+                if n == 0 { break; }
+                std::io::Write::write_all(&mut file, &buf[..n])
+                    .map_err(|e| format!("writing {dest}: {e}"))?;
+            }
+            #[cfg(unix)]
+            if *executable {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o555))
+                    .map_err(|e| format!("setting executable: {e}"))?;
+            }
+        }
+        Node::Symlink { target, .. } => {
+            if let Some(parent) = std::path::Path::new(dest).parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("creating parent dir: {e}"))?;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+                let target_os = std::ffi::OsStr::from_bytes(target.as_ref());
+                std::os::unix::fs::symlink(target_os, dest)
+                    .map_err(|e| format!("creating symlink {dest}: {e}"))?;
+            }
+        }
+        Node::Directory { digest, .. } => {
+            std::fs::create_dir_all(dest)
+                .map_err(|e| format!("creating dir {dest}: {e}"))?;
+
+            let dir = directory_service
+                .get(digest)
+                .await
+                .map_err(|e| format!("fetching directory {digest}: {e}"))?
+                .ok_or_else(|| format!("directory {digest} not found in castore"))?;
+
+            for (name, child_node) in dir.nodes() {
+                let name_str = std::str::from_utf8(name.as_ref())
+                    .map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
+                let child_dest = format!("{dest}/{name_str}");
+                Box::pin(export_castore_to_disk(
+                    child_node,
+                    &child_dest,
+                    blob_service,
+                    directory_service,
+                ))
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Query the Nix store for the runtime closure of a store path.
 ///
 /// Runs `nix-store -qR <path>` and returns the list of absolute paths.

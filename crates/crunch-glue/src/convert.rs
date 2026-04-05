@@ -669,11 +669,13 @@ mod tests {
         let env_out: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
         let env_str = std::str::from_utf8(env_out).unwrap();
 
-        // Placeholder starts with / and is a nixbase32-encoded hash
-        assert!(env_str.starts_with('/'), "placeholder should start with /");
-        assert!(env_str.len() > 1, "placeholder should not be empty");
-        // It should NOT start with /nix/store (that's the input-addressed path)
-        assert!(!env_str.starts_with("/nix/store"), "CA env should be placeholder, not store path");
+        // Placeholder is under the store dir (so the bwrap scratch overlay
+        // covers it). It starts with /nix/store/ followed by a nixbase32
+        // hash — NOT a valid store path name (no dash-name suffix).
+        assert!(env_str.starts_with("/nix/store/"), "placeholder should be under store dir");
+        let after_prefix = &env_str["/nix/store/".len()..];
+        assert!(!after_prefix.contains('-'), "placeholder should be a bare hash, not a store path with a name");
+        assert!(after_prefix.len() >= 32, "placeholder hash should be at least 32 chars");
     }
 
     #[test]
