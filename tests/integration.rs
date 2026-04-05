@@ -254,6 +254,7 @@ let seed = import "seed.ncl" in
   builder = "%{seed.bash}/bin/bash",
   args = ["-c", "%{seed.coreutils}/bin/echo hello > $out"],
   inputs = [seed.bash, seed.coreutils],
+  addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
         .unwrap();
@@ -301,6 +302,7 @@ let seed = import "seed.ncl" in
   builder = "%{seed.bash}/bin/bash",
   args = ["-c", "%{seed.coreutils}/bin/echo 'log test output' > $out"],
   inputs = [seed.bash, seed.coreutils],
+  addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
         .unwrap();
@@ -359,6 +361,7 @@ let seed = import "seed.ncl" in
   builder = "%{seed.bash}/bin/bash",
   args = ["-c", "exit 1"],
   inputs = [seed.bash],
+  addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
         .unwrap();
