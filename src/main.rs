@@ -769,7 +769,9 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
         return Ok(());
     }
 
-    let query = query.unwrap();
+    let Some(query) = query else {
+        return Err(RunError::Internal("log query is None after guard".to_string()));
+    };
     let matched = entries.iter().find(|e| {
         let name = e.file_name();
         let name_str = name.to_string_lossy();

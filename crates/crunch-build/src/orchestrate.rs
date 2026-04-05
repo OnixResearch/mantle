@@ -562,9 +562,17 @@ where
             );
 
             // Resolve references.
+            let output_idx = intermediates.iter()
+                .position(|x| x.name == intermediate.name)
+                .ok_or_else(|| Error::Store(format!(
+                    "multi-output CA: intermediate '{}' not found in intermediates list",
+                    intermediate.name
+                )))?;
             let build_output = build_result.outputs
-                .get(intermediates.iter().position(|x| x.name == intermediate.name).unwrap())
-                .unwrap();
+                .get(output_idx)
+                .ok_or_else(|| Error::OutputMissing {
+                    output: intermediate.name.clone(),
+                })?;
             let references = resolve_references(
                 &build_output.output_needles,
                 &prepared.build_request.refscan_needles,

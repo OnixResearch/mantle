@@ -329,10 +329,23 @@ fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
 
 // ── Download helpers (sync, ureq) ──────────────────────────────────────
 
+/// Connect timeout for HTTP fetches (seconds).
+const FETCH_CONNECT_TIMEOUT_SECS: u64 = 60;
+/// Total read timeout for HTTP fetches (seconds).
+const FETCH_READ_TIMEOUT_SECS: u64 = 600;
+
+fn fetch_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(FETCH_READ_TIMEOUT_SECS)))
+        .timeout_connect(Some(std::time::Duration::from_secs(FETCH_CONNECT_TIMEOUT_SECS)))
+        .build()
+        .new_agent()
+}
+
 /// Download a URL and write the raw content to a file.
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
-    let resp = ureq::get(url)
+    let resp = fetch_agent().get(url)
         .call()
         .map_err(|e| FetchError::HttpError {
             url: url.to_string(),
@@ -348,7 +361,7 @@ fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
 
 /// Download a tarball, decompress, and extract to a directory.
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
-    let resp = ureq::get(url)
+    let resp = fetch_agent().get(url)
         .call()
         .map_err(|e| FetchError::HttpError {
             url: url.to_string(),
@@ -450,7 +463,25 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
             continue;
         }
 
+        // Reject path traversal: no `..` components allowed.
+        for component in relative.components() {
+            if matches!(component, std::path::Component::ParentDir) {
+                return Err(FetchError::TarError(format!(
+                    "tar entry contains '..' path traversal: {}",
+                    relative.display()
+                )));
+            }
+        }
+
         let dest = out_path.join(&relative);
+
+        // Belt-and-suspenders: verify dest is inside out_path.
+        // canonicalize isn't usable (dest doesn't exist yet), so check
+        // the prefix after join. Components() already rejected '..'.
+        debug_assert!(
+            dest.starts_with(out_path),
+            "dest {dest:?} escapes out_path {out_path:?}"
+        );
 
         match entry.header().entry_type() {
             tar::EntryType::Regular | tar::EntryType::GNUSparse => {
@@ -480,7 +511,35 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                     .link_name()
                     .map_err(|e| FetchError::TarError(e.to_string()))?
                 {
-                    std::os::unix::fs::symlink(target.as_ref(), &dest)?;
+                    // Validate symlink target: must be relative and
+                    // must not escape the output directory.
+                    let target_path = target.as_ref();
+                    if target_path.is_absolute() {
+                        return Err(FetchError::TarError(format!(
+                            "tar symlink has absolute target: {} -> {}",
+                            relative.display(),
+                            target_path.display()
+                        )));
+                    }
+                    // Resolve the symlink relative to its parent dir
+                    // and check for escape via '..' traversal.
+                    let resolved = dest.parent().unwrap_or(out_path).join(target_path);
+                    let mut depth: i32 = 0;
+                    for comp in resolved.components() {
+                        match comp {
+                            std::path::Component::ParentDir => depth -= 1,
+                            std::path::Component::Normal(_) => depth += 1,
+                            _ => {}
+                        }
+                        if depth < 0 {
+                            return Err(FetchError::TarError(format!(
+                                "tar symlink escapes output dir: {} -> {}",
+                                relative.display(),
+                                target_path.display()
+                            )));
+                        }
+                    }
+                    std::os::unix::fs::symlink(target_path, &dest)?;
                 }
             }
             tar::EntryType::Link => {

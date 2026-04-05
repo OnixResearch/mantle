@@ -208,7 +208,9 @@ impl Worker {
             }
         }
 
-        let goal = self.registry.get_mut(key).expect("goal must exist");
+        let goal = self.registry.get_mut(key).ok_or_else(|| {
+            Error::Store(format!("worker: goal not found in registry: {key}"))
+        })?;
         let state = goal.inspect(unbuilt_dep_keys)?;
 
         if *state == GoalState::Ready {
@@ -583,7 +585,9 @@ impl Worker {
             // first match is the simplest correct behavior.)
             if let Some(dyn_drv) = discovered.first() {
                 let goal = self.registry.get_mut(awaiting_key)
-                    .expect("awaiting goal must exist");
+                    .ok_or_else(|| Error::Store(format!(
+                        "worker: awaiting goal not found: {awaiting_key}"
+                    )))?;
                 goal.set_derivation(dyn_drv.derivation.clone())?;
 
                 // Now inspect deps and wire waiters (same as want()).
@@ -685,7 +689,9 @@ impl Worker {
                 }
                 Ok(PrepareResult::NeedsBuild(prepared)) => {
                     // Mark Building before spawning.
-                    let goal = self.registry.get_mut(&drv_key).expect("just checked");
+                    let goal = self.registry.get_mut(&drv_key).ok_or_else(|| {
+                        Error::Store(format!("worker: goal vanished during dispatch: {drv_key}"))
+                    })?;
                     goal.mark_building()?;
 
                     let build_request = prepared.build_request.clone();
