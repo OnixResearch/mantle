@@ -49,3 +49,6 @@ pretty_assertions = "1.0"
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
+sha2 = "0.10.8"
+tar = "0.4"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

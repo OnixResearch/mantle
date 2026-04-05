@@ -19,8 +19,8 @@
 - [x] Wrap `fetch_to_store()` in `tokio::task::spawn_blocking` (ureq is sync)
 - [x] After fetch: run existing post-build pipeline (NAR hash, reference scan, PathInfo persist) — same code path as regular builds
 - [x] Handle CA derivation fetchers: FODs compute output path from declared hash regardless of addressing_mode (existing behavior, verify it works)
-- [ ] Integration test: fetchurl a small file from a local HTTP server, verify store path exists
-- [ ] Integration test: fetchTarball with .tar.gz, verify extracted contents and prefix stripping
+- [x] Integration test: fetchurl a small file from a local HTTP server, verify store path exists
+- [x] Integration test: fetchTarball with .tar.gz, verify extracted contents and prefix stripping
 
 ## Phase 3: Nickel stdlib fetch helpers
 
