@@ -1,0 +1,184 @@
+# Persistent PathInfoService Specification
+
+## Purpose
+
+Defines how build output metadata (PathInfo) is persisted across
+process restarts, enabling accurate cache checks, store queries,
+and CA derivation lookup.
+
+## Requirements
+
+### Requirement: PathInfo persisted after build
+
+After a successful build, the system MUST persist a `PathInfo`
+record for each output via `PathInfoService::put()`. The record
+MUST contain:
+
+- `store_path`: the output store path
+- `node`: the castore root node (file/directory/symlink)
+- `references`: runtime references found via refscan
+- `nar_size`: NAR serialization size in bytes
+- `nar_sha256`: SHA-256 hash of the NAR serialization
+- `deriver`: the derivation store path that produced this output
+- `ca`: the `CAHash` if this is a fixed-output or CA derivation
+- `signatures`: empty for v1 (signing is future work)
+
+#### Scenario: Build persists PathInfo
+
+- GIVEN a successful build of derivation "hello"
+- WHEN the build completes
+- THEN `PathInfoService::get(digest)` returns the PathInfo
+- AND the PathInfo survives process restart
+
+#### Scenario: Cached outputs retain PathInfo
+
+- GIVEN a previously built output with PathInfo in the database
+- WHEN `crunch build` is run again and the output is cached
+- THEN the existing PathInfo is returned without re-ingesting
+
+### Requirement: Cache check uses PathInfoService
+
+The cache check MUST query `PathInfoService::get()` using the
+output path's 20-byte digest. A cache hit requires BOTH:
+
+1. `PathInfoService::get(digest)` returns `Some(path_info)`
+2. The output path exists on the filesystem
+
+If the PathInfo exists but the file doesn't (garbage collected or
+manually deleted), the system MUST treat it as a cache miss and
+rebuild. It SHOULD log a warning that the store is inconsistent.
+
+If the file exists but no PathInfo is found, the system MUST
+treat it as a cache miss and rebuild (re-ingesting the output
+would produce PathInfo, but we can't trust untracked paths).
+
+#### Scenario: PathInfo + file = cache hit
+
+- GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
+- AND the path exists on disk
+- WHEN `crunch build` processes this derivation
+- THEN the build is skipped (cache hit)
+
+#### Scenario: PathInfo but no file = cache miss
+
+- GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
+- BUT the path was deleted from disk
+- WHEN `crunch build` processes this derivation
+- THEN the derivation is rebuilt
+- AND a warning is logged about the inconsistency
+
+#### Scenario: File but no PathInfo = cache miss
+
+- GIVEN `/nix/store/<hash>-hello` exists on disk (from Nix or
+  manual copy)
+- BUT no PathInfo is in the database
+- WHEN `crunch build` processes this derivation
+- THEN the derivation is rebuilt
+
+### Requirement: Database location
+
+The PathInfo database MUST be stored at a well-known location:
+
+1. `$CRUNCH_STATE_DIR/pathinfo.redb` if `CRUNCH_STATE_DIR` is set
+2. `$XDG_STATE_HOME/crunch/pathinfo.redb` if `XDG_STATE_HOME` is set
+3. `$HOME/.local/state/crunch/pathinfo.redb` otherwise
+
+The directory MUST be created automatically if it doesn't exist.
+
+#### Scenario: First run creates database
+
+- GIVEN no prior crunch state directory
+- WHEN `crunch build` runs for the first time
+- THEN the state directory and redb file are created
+
+#### Scenario: Custom state dir
+
+- GIVEN `CRUNCH_STATE_DIR=/tmp/crunch-test`
+- WHEN `crunch build` runs
+- THEN PathInfo is stored in `/tmp/crunch-test/pathinfo.redb`
+
+### Requirement: RedbPathInfoService backend
+
+The system MUST use `RedbPathInfoService` from vendored snix-store
+as the storage backend. The database MUST be opened in read-write
+mode.
+
+The `RedbPathInfoService` stores PathInfo as protobuf-encoded bytes
+keyed by the 20-byte output path digest. This is already implemented
+in the vendored code.
+
+#### Scenario: Database survives restart
+
+- GIVEN a build that persists PathInfo to redb
+- WHEN the crunch process exits and restarts
+- THEN `PathInfoService::get()` returns the previously stored PathInfo
+
+### Requirement: Builder accepts PathInfoService
+
+`Builder::new()` MUST accept a `PathInfoService` implementation
+(as a trait object or generic parameter). The Builder uses it for:
+
+- Cache checks (before building)
+- Persisting PathInfo (after building)
+- Providing PathInfo for cached outputs (instead of re-ingesting
+  from disk)
+
+#### Scenario: Cache hit avoids re-ingest
+
+- GIVEN a cached output with PathInfo in the database
+- WHEN the Builder processes it
+- THEN it returns the stored PathInfo directly, without calling
+  `ingest_path` or `calculate_nar`
+
+### Requirement: Store query subcommand
+
+The CLI MUST provide a `crunch store` subcommand with:
+
+- `crunch store list` — list all known store paths with name,
+  deriver, NAR size
+- `crunch store info <path>` — show full PathInfo for a store
+  path (references, NAR hash, deriver, CA info)
+- `crunch store verify [<path>]` — re-compute NAR hash and
+  compare with stored value. Report mismatches.
+
+#### Scenario: List known paths
+
+- GIVEN three paths in the PathInfo database
+- WHEN `crunch store list` is run
+- THEN all three are printed with name, deriver, and NAR size
+
+#### Scenario: Verify detects corruption
+
+- GIVEN a stored PathInfo with NAR hash H
+- AND the output on disk has been modified
+- WHEN `crunch store verify` is run
+- THEN the mismatch is reported
+
+### Requirement: Concurrency safety
+
+The redb database MUST support concurrent reads from multiple
+processes. Write access MUST be serialized (redb provides this
+via its write transaction model).
+
+A second `crunch build` invocation while the first is running
+MUST NOT corrupt the database. It MAY block on write transactions
+(acceptable for v1).
+
+#### Scenario: Concurrent reads
+
+- GIVEN `crunch build` is running
+- WHEN `crunch store list` is run simultaneously
+- THEN the list command succeeds without blocking the build
+
+### Requirement: Graceful degradation
+
+If the database cannot be opened (permissions, corruption), the
+system MUST fall back to the v0 behavior (filesystem-only cache
+checks, in-memory PathInfo). It MUST log a warning.
+
+#### Scenario: Corrupt database
+
+- GIVEN a corrupted `pathinfo.redb` file
+- WHEN `crunch build` attempts to open it
+- THEN a warning is logged
+- AND builds proceed with in-memory PathInfo (no persistence)
