@@ -288,12 +288,13 @@ fn cmd_build(
                 directory_service.clone(),
             );
 
-            let mut builder = crunch_build::Builder::new(
+            let mut builder = crunch_build::Builder::with_state_dir(
                 blob_service,
                 directory_service,
                 build_service,
                 pathinfo_service,
                 store_dir.to_path_buf(),
+                Some(state_dir.clone()),
                 verbose,
             );
 

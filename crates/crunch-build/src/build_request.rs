@@ -170,26 +170,23 @@ pub fn collect_input_paths(
     // Derivation input outputs
     for (drv_path, output_names) in &derivation.input_derivations {
         let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
-        let entry = known_paths
-            .get_by_drv_path(&drv_abs)
-            .ok_or_else(|| crate::Error::DerivationNotFound {
+        // Verify the derivation is in KnownPaths
+        if known_paths.get_by_drv_path(&drv_abs).is_none() {
+            return Err(crate::Error::DerivationNotFound {
                 path: drv_path.clone(),
-            })?;
+            });
+        }
         for output_name in output_names {
-            let output = entry
-                .derivation
-                .outputs
-                .get(output_name)
-                .ok_or_else(|| crate::Error::OutputMissing {
-                    output: output_name.clone(),
-                })?;
-            let output_path = output.path.as_ref().ok_or_else(|| {
-                crate::Error::OutputNoPath {
+            // Use get_output_path which handles both input-addressed
+            // (reads from derivation.outputs[].path) and content-addressed
+            // (reads from resolved_outputs).
+            let output_path = known_paths
+                .get_output_path(&drv_abs, output_name)
+                .ok_or_else(|| crate::Error::OutputNoPath {
                     output: output_name.clone(),
                     drv_name: drv_path.to_string(),
-                }
-            })?;
-            paths.insert(output_path.clone());
+                })?;
+            paths.insert(output_path);
         }
     }
 

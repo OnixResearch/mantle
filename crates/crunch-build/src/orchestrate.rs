@@ -23,6 +23,7 @@ use crunch_glue::KnownPaths;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::build_request::{collect_input_paths, derivation_to_build_request};
+use crate::ca_mapping::CaMappings;
 use crate::Error;
 
 /// The result of building a single derivation.
@@ -54,6 +55,10 @@ pub struct Builder<BS, DS, BServ, PIS> {
     /// ingested in this session. Needed by downstream builds that reference
     /// these as inputs.
     output_nodes: HashMap<StorePath<String>, Node>,
+    /// Persistent CA derivation → output path mapping.
+    ca_mappings: CaMappings,
+    /// State directory for persisting ca_mappings.
+    state_dir: Option<PathBuf>,
     verbose: bool,
 }
 
@@ -72,7 +77,25 @@ where
         store_dir: PathBuf,
         verbose: bool,
     ) -> Self {
+        Self::with_state_dir(blob_service, directory_service, build_service,
+            pathinfo_service, store_dir, None, verbose)
+    }
+
+    /// Create a Builder with a state directory for persistent CA mappings.
+    pub fn with_state_dir(
+        blob_service: BS,
+        directory_service: DS,
+        build_service: BServ,
+        pathinfo_service: PIS,
+        store_dir: PathBuf,
+        state_dir: Option<PathBuf>,
+        verbose: bool,
+    ) -> Self {
         let store_dir_str = store_dir.to_str().unwrap_or("/nix/store").to_string();
+        let ca_mappings = state_dir
+            .as_ref()
+            .map(|d| CaMappings::load(d))
+            .unwrap_or_default();
         Self {
             blob_service,
             directory_service,
@@ -82,6 +105,8 @@ where
             store_dir_str,
             built_outputs: HashMap::new(),
             output_nodes: HashMap::new(),
+            ca_mappings,
+            state_dir,
             verbose,
         }
     }
@@ -147,12 +172,17 @@ where
                 })?;
             let input_drv = input_entry.derivation.clone();
 
-            // Skip if we've already built this in the current session
-            let already_built = input_drv
-                .outputs
-                .values()
-                .filter_map(|o| o.path.as_ref())
-                .all(|p| self.output_nodes.contains_key(p) || self.path_exists_on_disk(p));
+            // Skip if we've already built this in the current session.
+            // For CA inputs, check resolved_outputs in known_paths.
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            let already_built = input_drv.outputs.keys().all(|output_name| {
+                if let Some(resolved) = known_paths.get_output_path(&input_abs, output_name) {
+                    self.output_nodes.contains_key(&resolved) || self.path_exists_on_disk(&resolved)
+                } else {
+                    // No resolved path yet — not built
+                    false
+                }
+            });
 
             if !already_built {
                 self.build_derivation(input_drv_path, &input_drv, known_paths)
@@ -234,6 +264,27 @@ where
             );
         }
 
+        // 5b. Collect CA input rewrite pairs for transitive rewriting.
+        // If any input derivation is CA, its placeholder in $env may
+        // appear in our output and needs rewriting to the final path.
+        let mut input_rewrites: Vec<(String, String)> = Vec::new();
+        for (input_drv_path, output_names) in &derivation.input_derivations {
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
+            if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
+                if entry.content_addressed {
+                    for on in output_names {
+                        let placeholder = nix_compat::store_path::hash_placeholder(on);
+                        if let Some(resolved) = entry.resolved_outputs.get(on) {
+                            let resolved_abs = resolved.to_absolute_path_with_prefix(&self.store_dir_str);
+                            if placeholder.len() == resolved_abs.len() {
+                                input_rewrites.push((placeholder, resolved_abs));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 6. Execute the build
         let build_result = self
             .build_service
@@ -269,6 +320,19 @@ where
                 }
             })?;
 
+            // Apply transitive CA input rewrites if any.
+            let mut working_node = build_output.node.clone();
+            for (old_placeholder, new_path) in &input_rewrites {
+                let (rewritten, _) = crate::rewrite::rewrite_node(
+                    &working_node,
+                    old_placeholder.as_bytes(),
+                    new_path.as_bytes(),
+                    &self.blob_service,
+                    &self.directory_service,
+                ).await?;
+                working_node = rewritten;
+            }
+
             // Determine the output store path and final node.
             let (output_path, final_node, nar_size, nar_sha256) = if is_ca {
                 // CA derivation: self-reference rewriting + content-based path.
@@ -280,7 +344,7 @@ where
 
                 // 2. Replace provisional with zero marker in the output tree
                 let (marked_node, _has_self_refs) = crate::rewrite::rewrite_node(
-                    &build_output.node,
+                    &working_node,
                     provisional_bytes,
                     &marker,
                     &self.blob_service,
@@ -338,6 +402,12 @@ where
                 let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
                 known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
 
+                // Persist CA mapping for cache across restarts
+                self.ca_mappings.insert(&drv_abs, output_name, &final_abs);
+                if let Some(ref sd) = self.state_dir {
+                    self.ca_mappings.save(sd);
+                }
+
                 info!(
                     drv = %drv_name,
                     output = %output_name,
@@ -359,7 +429,7 @@ where
                     .await
                     .map_err(|e| Error::NarCalculation(e.to_string()))?;
 
-                (path, build_output.node.clone(), nar_size, nar_sha256)
+                (path, working_node, nar_size, nar_sha256)
             };
 
             // FOD hash verification (only for FODs, not CA)
@@ -437,18 +507,33 @@ where
     }
 
     /// Check cache: every output must have PathInfo AND exist on disk.
+    /// For CA derivations, uses ca_mappings to find the resolved path.
     /// Returns Some(outputs) on full cache hit, None on any miss.
     async fn check_cache(
         &mut self,
-        _drv_path: &StorePath<String>,
+        drv_path: &StorePath<String>,
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         let mut infos = HashMap::new();
+        let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
 
         for (output_name, output) in &derivation.outputs {
-            let output_path = match output.path.as_ref() {
-                Some(p) => p,
-                None => return Ok(None), // no path = can't cache check
+            // For input-addressed: path is in the derivation.
+            // For CA: look up in ca_mappings from a previous session.
+            let output_path: StorePath<String> = match output.path.as_ref() {
+                Some(p) => p.clone(),
+                None => {
+                    // CA derivation — check persistent mapping
+                    match self.ca_mappings.get(&drv_abs, output_name) {
+                        Some(ca_abs) => {
+                            StorePath::from_absolute_path(ca_abs.as_bytes())
+                                .map_err(|_| Error::Store(format!(
+                                    "invalid CA mapping path: {ca_abs}"
+                                )))?
+                        }
+                        None => return Ok(None), // no mapping = must build
+                    }
+                }
             };
 
             let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.store_dir_str));

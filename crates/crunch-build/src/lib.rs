@@ -6,6 +6,7 @@
 //! Pipeline: `Derivation` → `BuildRequest` → sandbox → `BuildResult` → `PathInfo`
 
 mod build_request;
+pub mod ca_mapping;
 mod error;
 mod orchestrate;
 pub mod rewrite;

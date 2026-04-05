@@ -957,6 +957,8 @@ dependencies = [
  "md-5",
  "nix-compat",
  "pretty_assertions",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
  "snix-build",
