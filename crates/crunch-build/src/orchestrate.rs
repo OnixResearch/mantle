@@ -308,12 +308,12 @@ where
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 if entry.content_addressed {
                     for on in output_names {
-                        let raw = nix_compat::store_path::hash_placeholder(on);
-                        let placeholder = format!(
-                            "{}/{}",
-                            self.store_dir_str,
-                            raw.strip_prefix('/').unwrap_or(&raw)
-                        );
+                        // Read the provisional path from the derivation's
+                        // environment (set by calculate_output_paths).
+                        let placeholder = entry.derivation.environment
+                            .get(on)
+                            .map(|v| String::from_utf8_lossy(v).to_string())
+                            .unwrap_or_default();
                         if let Some(resolved) = entry.resolved_outputs.get(on) {
                             let resolved_abs = resolved.to_absolute_path_with_prefix(&self.store_dir_str);
                             if placeholder.len() == resolved_abs.len() {
@@ -377,13 +377,14 @@ where
             let (output_path, final_node, nar_size, nar_sha256) = if is_ca {
                 // CA derivation: self-reference rewriting + content-based path.
                 //
-                // 1. Get the provisional placeholder this output was built with
-                let raw_provisional = nix_compat::store_path::hash_placeholder(output_name);
-                let provisional = format!(
-                    "{}/{}",
-                    self.store_dir_str,
-                    raw_provisional.strip_prefix('/').unwrap_or(&raw_provisional)
-                );
+                // 1. Get the provisional path this output was built with.
+                //    This is the input-addressed store path set in the env
+                //    by calculate_output_paths. It has the same length as
+                //    the final CA path (same name, same store dir prefix).
+                let provisional = derivation.environment
+                    .get(output_name)
+                    .map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_default();
                 let provisional_bytes = provisional.as_bytes();
                 let marker = vec![0u8; provisional_bytes.len()];
 
@@ -2026,12 +2027,6 @@ mod tests {
         name: &str,
         kp: &mut crunch_glue::KnownPaths,
     ) -> (StorePath<String>, Derivation) {
-        let raw = nix_compat::store_path::hash_placeholder("out");
-        let placeholder = format!(
-            "{}/{}",
-            kp.store_dir(),
-            raw.strip_prefix('/').unwrap_or(&raw)
-        );
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
             path: None, ca_hash: None,
@@ -2040,9 +2035,10 @@ mod tests {
         environment.insert("name".to_string(), name.into());
         environment.insert("system".to_string(), "x86_64-linux".into());
         environment.insert("builder".to_string(), "/bin/sh".into());
-        environment.insert("out".to_string(), placeholder.into());
+        // Placeholder filled below by calculate_output_paths.
+        environment.insert("out".to_string(), "".into());
 
-        let drv = Derivation {
+        let mut drv = Derivation {
             arguments: vec!["-c".into(), format!("echo {name} > $out")],
             builder: "/bin/sh".to_string(),
             environment,
@@ -2053,6 +2049,15 @@ mod tests {
         };
 
         let hdm = drv.hash_derivation_modulo(|_| panic!("CA drv has no input derivations"));
+
+        // Compute input-addressed provisional path (same as what the
+        // real glue layer does for CA derivations).
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        // Clear path to mark as CA, but keep the env entry.
+        for (_, output) in drv.outputs.iter_mut() {
+            output.path = None;
+        }
+
         let drv_path = drv.calculate_derivation_path(name).unwrap();
 
         let mut fake_hash = [0u8; 32];

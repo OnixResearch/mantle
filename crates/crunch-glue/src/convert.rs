@@ -121,23 +121,22 @@ fn convert_inner(
     //    Input-addressed (and FODs): compute now, fill into derivation.
     //    Content-addressed: output paths are unknown until after the build.
     //    Set environment to placeholders so the builder has a $out to write to.
+    // Always compute the input-addressed output paths first.
+    // For CA derivations, these serve as provisional paths that the builder
+    // writes to. Both the provisional and final CA path are store paths
+    // with the same name, so they have the same length — enabling byte-level
+    // self-reference rewriting after the build.
+    nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
+
     if is_ca {
-        for (output_name, output) in nix_drv.outputs.iter_mut() {
-            assert!(output.path.is_none());
-            // Put the placeholder under the store dir so it falls within
-            // the sandbox's writable scratch overlay on nix/store.
-            // hash_placeholder returns "/HASH"; we replace the leading "/"
-            // with the store dir prefix.
-            let raw_placeholder = nix_compat::store_path::hash_placeholder(output_name);
-            let placeholder = format!(
-                "{}/{}",
-                store_dir,
-                raw_placeholder.strip_prefix('/').unwrap_or(&raw_placeholder)
-            );
-            nix_drv.environment.insert(output_name.clone(), placeholder.into());
+        // Clear the output paths (they'll be resolved to CA paths after the
+        // build), but keep the provisional paths in the environment so the
+        // builder has a valid $out to write to.
+        for (_output_name, output) in nix_drv.outputs.iter_mut() {
+            // The environment already has the provisional path from
+            // calculate_output_paths_with_store_dir.
+            output.path = None;
         }
-    } else {
-        nix_drv.calculate_output_paths_with_store_dir(&drv.name, &hdm, &store_dir)?;
     }
 
     // 6. Compute the .drv store path
@@ -661,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn ca_derivation_env_has_placeholders() {
+    fn ca_derivation_env_has_provisional_path() {
         let drv = ca_drv("ca-hello", "/bin/sh");
         let mut kp = KnownPaths::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
@@ -669,13 +668,15 @@ mod tests {
         let env_out: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
         let env_str = std::str::from_utf8(env_out).unwrap();
 
-        // Placeholder is under the store dir (so the bwrap scratch overlay
-        // covers it). It starts with /nix/store/ followed by a nixbase32
-        // hash — NOT a valid store path name (no dash-name suffix).
-        assert!(env_str.starts_with("/nix/store/"), "placeholder should be under store dir");
+        // CA derivations use the input-addressed path as a provisional $out.
+        // It's a proper store path: /nix/store/<32-char hash>-<name>
+        assert!(env_str.starts_with("/nix/store/"), "provisional should be under store dir");
         let after_prefix = &env_str["/nix/store/".len()..];
-        assert!(!after_prefix.contains('-'), "placeholder should be a bare hash, not a store path with a name");
-        assert!(after_prefix.len() >= 32, "placeholder hash should be at least 32 chars");
+        assert!(after_prefix.contains('-'), "provisional should be a store path with hash-name format");
+        assert!(env_str.ends_with("-ca-hello"), "provisional should end with derivation name");
+
+        // output.path should be None (marking it as CA)
+        assert!(nix_drv.outputs["out"].path.is_none(), "CA output path should be None");
     }
 
     #[test]
