@@ -292,7 +292,6 @@ async fn execute_builds(
 ) -> Result<(), RunError> {
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
 
     let blob_service = MemoryBlobService::default();
     let directory_service = RedbDirectoryService::new_temporary(

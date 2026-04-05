@@ -1,7 +1,6 @@
 use crate::store_path::{
-    self, StorePath, StorePathRef, build_ca_path, build_ca_path_with_store_dir,
-    build_output_path, build_output_path_with_store_dir, build_text_path,
-    build_text_path_with_store_dir,
+    self, StorePath, StorePathRef, build_ca_path_with_store_dir,
+    build_output_path_with_store_dir, build_text_path_with_store_dir,
 };
 use bstr::BString;
 #[cfg(feature = "serde")]

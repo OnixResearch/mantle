@@ -49,6 +49,7 @@ pub struct Builder<BS, DS, BServ, PIS> {
     directory_service: DS,
     build_service: BServ,
     pathinfo_service: PIS,
+    #[allow(dead_code)] // reserved for --store <custom> path fix
     store_dir: PathBuf,
     /// The store dir as a string, for path serialization.
     store_dir_str: String,

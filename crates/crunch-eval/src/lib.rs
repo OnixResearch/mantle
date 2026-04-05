@@ -8,7 +8,7 @@
 //! `Context::expr_to_json()`.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub use nickel_lang::{Context, Error as NickelError, Expr};
 

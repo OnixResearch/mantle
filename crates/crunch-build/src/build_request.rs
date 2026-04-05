@@ -270,9 +270,6 @@ mod tests {
 
     fn register_drv(name: &str, kp: &mut KnownPaths) -> (StorePath<String>, Derivation) {
         let drv = make_drv_with_name(name);
-        let aterm_hash = nix_compat::derivation::CAHash::Nar(
-            nix_compat::nixhash::NixHash::Sha256([0; 32]),
-        );
         // Use drv name bytes as a unique fake aterm hash
         let mut fake_hash = [0u8; 32];
         for (i, b) in name.bytes().enumerate().take(32) {

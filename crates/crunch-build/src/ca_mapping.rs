@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use nix_compat::store_path::StorePath;
 use serde::{Deserialize, Serialize};
 
 /// Per-output resolved CA path. The key is the output name ("out", "lib", etc).

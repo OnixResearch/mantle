@@ -9,9 +9,6 @@
 //! 3. Replace zero markers with the final CA path
 //! 4. Do NOT re-hash (the CA path is defined by the marker-replaced content)
 
-/// Length of a Nix store path hash component in nixbase32: 32 chars.
-const STORE_PATH_HASH_LEN: usize = 32;
-
 /// Replace all occurrences of `provisional` in `data` with a zero marker
 /// of the same byte length. Returns the rewritten data and whether any
 /// replacements were made.
@@ -75,7 +72,7 @@ fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> (Vec<u8>
 
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::{B3Digest, Node};
+use snix_castore::Node;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Rewrite all file blobs in a castore `Node` tree, replacing `old_bytes`
@@ -125,7 +122,7 @@ pub async fn rewrite_node(
                 executable: *executable,
             }, true))
         }
-        Node::Directory { digest, size } => {
+        Node::Directory { digest, size: _ } => {
             let dir = directory_service
                 .get(digest)
                 .await

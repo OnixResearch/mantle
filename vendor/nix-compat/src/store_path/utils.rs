@@ -192,6 +192,7 @@ where
 /// bytes.
 /// Inside a StorePath, that digest is printed nixbase32-encoded
 /// (32 characters).
+#[allow(dead_code)] // wrapper over _with_store_dir; kept for API parity with upstream snix
 fn build_store_path_from_fingerprint_parts<'a, SP>(
     ty: &str,
     inner_digest: &[u8; 32],
