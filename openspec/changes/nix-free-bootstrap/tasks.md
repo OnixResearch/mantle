@@ -23,9 +23,9 @@
 - [x] Test: `crunch build bootstrap/make.ncl` produces a working `make` binary ✅ (GNU Make 4.4.1, static-pie, musl-linked)
 - [x] Write `bootstrap/dash.ncl`: build dash 0.5.12 with musl-gcc (pivoted from bash — dash is 28 source files vs bash's 150+, sufficient for build scripts) ✅
 - [x] Test: the built dash works (`dash -c` for loops, variable expansion, subshells) ✅ (static-pie ELF, 208KB)
-- [ ] Write `bootstrap/coreutils.ncl` (or validate busybox is sufficient): fetch + build with musl-gcc
-- [ ] Write `bootstrap/sed.ncl`, `bootstrap/grep.ncl`, `bootstrap/awk.ncl`: minimal text processing tools
-- [ ] Integration test: build a multi-file C project using ONLY Phase 3 tools (no nix paths in the dependency tree)
+- [~] Write `bootstrap/coreutils.ncl` (or validate busybox is sufficient) — busybox covers all needs, skipped
+- [~] Write `bootstrap/sed.ncl`, `bootstrap/grep.ncl`, `bootstrap/awk.ncl` — busybox covers all needs, skipped
+- [x] Integration test: multi-file C project (3 .c, 2 .h, Makefile) built with ONLY bootstrap tools ✅ (16 assertions, direct compile + make rebuild both pass)
 
 ## Phase 4: Rebuild gcc from source (optional, high-effort)
 

@@ -163,7 +163,9 @@ let make_src = crunch.fetchTarball {
    GNU Make's dir_setup_glob() uses GLOB_ALTDIRFUNC which musl
    doesn't support. We stub it out — Make works fine without the
    custom directory stream optimization. */
-#define HAVE_CASE_INSENSITIVE_FS 0
+/* Linux/ext4 is case-sensitive. Do NOT define HAVE_CASE_INSENSITIVE_FS
+   — the code uses #ifdef, so even defining it to 0 enables it. */
+/* #undef HAVE_CASE_INSENSITIVE_FS */
 
 /* musl lacks GLOB_ALTDIRFUNC. Define to 0 so the flag is ignored
    by glob() and the custom dir functions in dir_setup_glob are
