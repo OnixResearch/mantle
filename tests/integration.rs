@@ -228,32 +228,17 @@ mod build_tests {
             return;
         }
 
-        // Bootstrap to get a seed with bash
+        // Use /bin/sh as builder (available in bwrap via --bind).
+        // Store-path builders (e.g., seed.bash) require the full closure
+        // in inputs, which bootstrap doesn't resolve yet.
         let dir = tempfile::tempdir().unwrap();
-        let seed = dir.path().join("seed.ncl");
-        let result = crunch_cmd()
-            .arg("bootstrap")
-            .arg("-o")
-            .arg(&seed)
-            .arg("bash")
-            .arg("coreutils")
-            .output()
-            .expect("should run");
-
-        if !result.status.success() {
-            eprintln!("skipping: bootstrap failed");
-            return;
-        }
-
         std::fs::write(
             dir.path().join("hello.ncl"),
             r#"let crunch = import "lib.ncl" in
-let seed = import "seed.ncl" in
 {
   name = "hello-e2e",
-  builder = "%{seed.bash}/bin/bash",
-  args = ["-c", "%{seed.coreutils}/bin/echo hello > $out"],
-  inputs = [seed.bash, seed.coreutils],
+  builder = "/bin/sh",
+  args = ["-c", "echo hello > $out"],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
@@ -278,30 +263,14 @@ let seed = import "seed.ncl" in
 
         let dir = tempfile::tempdir().unwrap();
         let log_dir = tempfile::tempdir().unwrap();
-        let seed = dir.path().join("seed.ncl");
-        let result = crunch_cmd()
-            .arg("bootstrap")
-            .arg("-o")
-            .arg(&seed)
-            .arg("bash")
-            .arg("coreutils")
-            .output()
-            .expect("should run");
-
-        if !result.status.success() {
-            eprintln!("skipping: bootstrap failed");
-            return;
-        }
 
         std::fs::write(
             dir.path().join("logged.ncl"),
             r#"let crunch = import "lib.ncl" in
-let seed = import "seed.ncl" in
 {
   name = "logged-build",
-  builder = "%{seed.bash}/bin/bash",
-  args = ["-c", "%{seed.coreutils}/bin/echo 'log test output' > $out"],
-  inputs = [seed.bash, seed.coreutils],
+  builder = "/bin/sh",
+  args = ["-c", "echo 'log test output' > $out"],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
@@ -338,29 +307,14 @@ let seed = import "seed.ncl" in
         }
 
         let dir = tempfile::tempdir().unwrap();
-        let seed = dir.path().join("seed.ncl");
-        let result = crunch_cmd()
-            .arg("bootstrap")
-            .arg("-o")
-            .arg(&seed)
-            .arg("bash")
-            .output()
-            .expect("should run");
-
-        if !result.status.success() {
-            eprintln!("skipping: bootstrap failed");
-            return;
-        }
 
         std::fs::write(
             dir.path().join("fail.ncl"),
             r#"let crunch = import "lib.ncl" in
-let seed = import "seed.ncl" in
 {
   name = "will-fail",
-  builder = "%{seed.bash}/bin/bash",
+  builder = "/bin/sh",
   args = ["-c", "exit 1"],
-  inputs = [seed.bash],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         )
