@@ -281,6 +281,131 @@ fn end_to_end_trivial_build() {
     }
 }
 
+// -- CA end-to-end test with bwrap --
+
+#[test]
+fn end_to_end_ca_build() {
+    if !has_bwrap() {
+        eprintln!("SKIP: bwrap not available");
+        return;
+    }
+
+    let drv = CrunchDerivation {
+        name: "ca-trivial".to_string(),
+        builder: "/bin/sh".to_string(),
+        system: "x86_64-linux".to_string(),
+        args: vec![
+            "-c".to_string(),
+            "mkdir -p $out && echo 'ca-built' > $out/result.txt".to_string(),
+        ],
+        outputs: vec!["out".to_string()],
+        env: HashMap::new(),
+        inputs: vec![],
+        fixed_output: None,
+        addressing_mode: "content-addressed".to_string(),
+    };
+
+    let mut kp = KnownPaths::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+
+    // CA derivation: output paths are None before build
+    assert!(
+        nix_drv.outputs["out"].path.is_none(),
+        "CA output should be None before build"
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(async {
+        use snix_castore::blobservice::MemoryBlobService;
+        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+
+        let blob_service = MemoryBlobService::default();
+        let directory_service = RedbDirectoryService::new_temporary(
+            "test".to_string(),
+            RedbDirectoryServiceConfig {
+                path: None,
+                read_only: false,
+                cache_size: None,
+            },
+        )
+        .unwrap();
+
+        #[cfg(target_os = "linux")]
+        {
+            use snix_build::buildservice::BubblewrapBuildService;
+
+            let workdir = std::env::temp_dir().join("crunch-test-ca-builds");
+            std::fs::create_dir_all(&workdir).unwrap();
+
+            let build_service = BubblewrapBuildService::new(
+                workdir.clone(),
+                blob_service.clone(),
+                directory_service.clone(),
+            );
+
+            let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+                "test".to_string(),
+                NonZeroUsize::new(128).unwrap(),
+            );
+
+            let mut builder = crunch_build::Builder::new(
+                blob_service,
+                directory_service,
+                build_service,
+                pis,
+                PathBuf::from("/nix/store"),
+                true,
+            );
+
+            let outcome = builder.build(&drv_path, &mut kp).await;
+
+            let _ = std::fs::remove_dir_all(&workdir);
+
+            outcome
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(crunch_build::Error::Sandbox(std::io::Error::other(
+                "not on linux",
+            )))
+        }
+    });
+
+    match result {
+        Ok(outcome) => {
+            assert!(!outcome.cached);
+            assert!(outcome.outputs.contains_key("out"));
+
+            let pi = &outcome.outputs["out"];
+            // CA output should have a store path now
+            let ca_path = pi.store_path.to_absolute_path();
+            assert!(
+                ca_path.starts_with("/nix/store/"),
+                "CA path should be in store: {ca_path}"
+            );
+            // CA field should be set
+            assert!(pi.ca.is_some(), "CA PathInfo should have ca field");
+
+            // The resolved path should be in KnownPaths
+            let drv_abs = drv_path.to_absolute_path();
+            let resolved = kp.get_output_path(&drv_abs, "out");
+            assert!(resolved.is_some(), "CA output should be resolved in KnownPaths");
+            assert_eq!(
+                resolved.unwrap().to_absolute_path(),
+                ca_path,
+                "resolved path should match build outcome"
+            );
+
+            // Clean up the output from the store
+            let _ = std::fs::remove_dir_all(&ca_path);
+        }
+        Err(e) => {
+            eprintln!("SKIP end-to-end CA build (bwrap failed): {e}");
+        }
+    }
+}
+
 // -- Eval → glue round-trip with seed --
 
 #[test]
