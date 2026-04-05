@@ -73,6 +73,103 @@ fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> (Vec<u8>
     (result, found)
 }
 
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::{B3Digest, Node};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+/// Rewrite all file blobs in a castore `Node` tree, replacing `old_bytes`
+/// with `new_bytes` (must be same length). Returns the new root Node and
+/// whether any replacements were made.
+///
+/// For File nodes: reads the blob, does byte replacement, writes back.
+/// For Directory nodes: recurses into children.
+/// For Symlink nodes: no-op (symlink targets are not store-path-bearing).
+pub async fn rewrite_node(
+    node: &Node,
+    old_bytes: &[u8],
+    new_bytes: &[u8],
+    blob_service: &(impl BlobService + Clone),
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<(Node, bool), crate::Error> {
+    assert_eq!(old_bytes.len(), new_bytes.len(), "old and new must be same length");
+
+    match node {
+        Node::File { digest, size, executable } => {
+            let mut reader = blob_service
+                .open_read(digest)
+                .await
+                .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
+            let reader = reader.as_mut()
+                .ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
+
+            let mut data = Vec::with_capacity(*size as usize);
+            reader.read_to_end(&mut data).await
+                .map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
+
+            let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);
+
+            if !found {
+                return Ok((node.clone(), false));
+            }
+
+            let mut writer = blob_service.open_write().await;
+            writer.write_all(&rewritten).await
+                .map_err(|e| crate::Error::Store(format!("writing rewritten blob: {e}")))?;
+            let new_digest = writer.close().await
+                .map_err(|e| crate::Error::Store(format!("closing rewritten blob: {e}")))?;
+
+            Ok((Node::File {
+                digest: new_digest,
+                size: *size,
+                executable: *executable,
+            }, true))
+        }
+        Node::Directory { digest, size } => {
+            let dir = directory_service
+                .get(digest)
+                .await
+                .map_err(|e| crate::Error::Store(format!("directory read for rewrite: {e}")))?;
+            let dir = dir.ok_or_else(|| crate::Error::Store(
+                format!("directory {digest} not found for rewrite")
+            ))?;
+
+            let mut any_found = false;
+            let mut new_dir = snix_castore::Directory::new();
+
+            for (name, child_node) in dir.nodes() {
+                let (new_child, found) = Box::pin(
+                    rewrite_node(child_node, old_bytes, new_bytes, blob_service, directory_service)
+                ).await?;
+                if found {
+                    any_found = true;
+                }
+                new_dir.add(name.clone(), new_child)
+                    .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;
+            }
+
+            if !any_found {
+                return Ok((node.clone(), false));
+            }
+
+            let new_digest = new_dir.digest();
+            let new_size = new_dir.size();
+            directory_service.put(new_dir).await
+                .map_err(|e| crate::Error::Store(format!("storing rewritten directory: {e}")))?;
+
+            Ok((Node::Directory {
+                digest: new_digest,
+                size: new_size,
+            }, true))
+        }
+        Node::Symlink { .. } => {
+            // Symlinks don't contain store paths in their targets
+            // (and if they did, they'd need different handling)
+            Ok((node.clone(), false))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

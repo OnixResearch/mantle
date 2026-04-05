@@ -25,8 +25,8 @@
 - [x] Compute final CA store path and register in PathInfo with `ca` field set
 - [x] Call `known_paths.resolve_output()` with the final path
 - [x] `build()` signature changed to `&mut KnownPaths` for resolve_output
-- [ ] Self-reference rewriting: scan output bytes for provisional placeholder, replace with zero marker, hash, replace with final path (rewrite primitives exist, integration into Builder deferred — requires byte-level access to build output which `BuildService` returns as a `Node`, not raw bytes)
-- [ ] Input provisional → final CA path rewriting for transitive CA deps (same constraint)
+- [x] Self-reference rewriting: `rewrite_node()` reads blobs from BlobService, rewrites bytes, writes back. Builder does provisional→marker→hash→compute CA path→marker→final sequence via rewrite_node on castore Node trees (files + directories)
+- [ ] Input provisional → final CA path rewriting for transitive CA deps (needs resolved CA paths of inputs during output rewriting)
 - [ ] Tests with mock BuildService: CA derivation gets content-based path; two derivations with identical mock output get identical paths
 
 ## Phase 5: Multi-output and cache

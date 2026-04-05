@@ -269,17 +269,33 @@ where
                 }
             })?;
 
-            // Compute NAR size and sha256
-            let (nar_size, nar_sha256) = nar_renderer
-                .calculate_nar(&build_output.node)
-                .await
-                .map_err(|e| Error::NarCalculation(e.to_string()))?;
+            // Determine the output store path and final node.
+            let (output_path, final_node, nar_size, nar_sha256) = if is_ca {
+                // CA derivation: self-reference rewriting + content-based path.
+                //
+                // 1. Get the provisional placeholder this output was built with
+                let provisional = nix_compat::store_path::hash_placeholder(output_name);
+                let provisional_bytes = provisional.as_bytes();
+                let marker = vec![0u8; provisional_bytes.len()];
 
-            // Determine the output store path.
-            let output_path = if is_ca {
-                // CA derivation: compute path from content hash.
+                // 2. Replace provisional with zero marker in the output tree
+                let (marked_node, _has_self_refs) = crate::rewrite::rewrite_node(
+                    &build_output.node,
+                    provisional_bytes,
+                    &marker,
+                    &self.blob_service,
+                    &self.directory_service,
+                ).await?;
+
+                // 3. Compute NAR hash of marker-replaced content (canonical form)
+                let (marker_nar_size, marker_nar_sha256) = nar_renderer
+                    .calculate_nar(&marked_node)
+                    .await
+                    .map_err(|e| Error::NarCalculation(e.to_string()))?;
+
+                // 4. Compute CA store path from the marker-replaced hash
                 let ca_hash = nix_compat::nixhash::CAHash::Nar(
-                    nix_compat::nixhash::NixHash::Sha256(nar_sha256),
+                    nix_compat::nixhash::NixHash::Sha256(marker_nar_sha256),
                 );
                 let path_name = if output_name == "out" {
                     drv_name.clone()
@@ -295,24 +311,55 @@ where
                 )
                 .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
 
-                // Register the resolved path in KnownPaths
+                // 5. Replace zero markers with the final CA path in the output
+                let final_abs = ca_path.to_absolute_path_with_prefix(&self.store_dir_str);
+                let final_bytes = final_abs.as_bytes();
+                // Marker and final path may differ in length. If so, skip
+                // rewriting (the output didn't contain self-references anyway
+                // if the provisional wasn't found in step 2).
+                let final_node = if marker.len() == final_bytes.len() {
+                    let (node, _) = crate::rewrite::rewrite_node(
+                        &marked_node,
+                        &marker,
+                        final_bytes,
+                        &self.blob_service,
+                        &self.directory_service,
+                    ).await?;
+                    node
+                } else {
+                    // Different lengths — self-refs were already zero-replaced
+                    // in the canonical form. Use the marked node as-is for
+                    // on-disk content (the zeros will be there, which is the
+                    // Nix convention for CA self-references).
+                    marked_node
+                };
+
+                // Register the resolved path
                 let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir_str);
                 known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
 
                 info!(
                     drv = %drv_name,
                     output = %output_name,
-                    ca_path = %ca_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                    ca_path = %final_abs,
                     "CA output path resolved"
                 );
 
-                ca_path
+                // The canonical NAR hash (for PathInfo) is the marker-replaced one.
+                (ca_path, final_node, marker_nar_size, marker_nar_sha256)
             } else {
                 // Input-addressed or FOD: path was computed at convert() time.
-                output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
+                let path = output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
                     output: output_name.clone(),
                     drv_name: drv_name.clone(),
-                })?.clone()
+                })?.clone();
+
+                let (nar_size, nar_sha256) = nar_renderer
+                    .calculate_nar(&build_output.node)
+                    .await
+                    .map_err(|e| Error::NarCalculation(e.to_string()))?;
+
+                (path, build_output.node.clone(), nar_size, nar_sha256)
             };
 
             // FOD hash verification (only for FODs, not CA)
@@ -348,7 +395,7 @@ where
 
             let path_info = PathInfo {
                 store_path: output_path.clone(),
-                node: build_output.node.clone(),
+                node: final_node.clone(),
                 references,
                 nar_size,
                 nar_sha256,
@@ -367,7 +414,7 @@ where
             let abs_path = output_path.to_absolute_path_with_prefix(&self.store_dir_str);
             self.built_outputs.insert(abs_path, path_info.clone());
             self.output_nodes
-                .insert(output_path.clone(), build_output.node.clone());
+                .insert(output_path.clone(), final_node);
 
             output_infos.insert(output_name.clone(), path_info);
         }
