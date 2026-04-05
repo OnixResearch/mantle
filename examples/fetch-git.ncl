@@ -14,8 +14,8 @@
 let crunch = import "lib.ncl" in
 
 crunch.fetchGit {
-  url = "https://github.com/nickel-lang/nickel.git",
-  rev = "6f2c7ab1e3e4e37a0e11e5eb82deba56cb4e23fe",
-  hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-  name = "nickel-src",
+  url = "https://github.com/andir/npins.git",
+  rev = "refs/tags/0.3.0",
+  hash = "sha256-nTm6IqCHNFQLU7WR7dJRP7ktBctpE/O2LHbUV25roJA=",
+  name = "npins-src",
 }

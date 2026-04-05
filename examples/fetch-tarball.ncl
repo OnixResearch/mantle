@@ -16,6 +16,6 @@ let crunch = import "lib.ncl" in
 
 crunch.fetchTarball {
   url = "https://github.com/nickel-lang/nickel/archive/refs/tags/1.9.0.tar.gz",
-  hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  hash = "sha256-TG6BuV1PotdbSxZECow4OPC1+MxvAX300PMuty5ibsM=",
   name = "nickel-src",
 }

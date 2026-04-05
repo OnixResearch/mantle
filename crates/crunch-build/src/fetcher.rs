@@ -575,20 +575,30 @@ fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
 
 /// Find the `git` binary in common locations or PATH.
 fn find_git() -> Result<String, FetchError> {
-    for path in ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"] {
+    // Check well-known paths (FHS, Homebrew, NixOS).
+    for path in [
+        "/usr/bin/git",
+        "/bin/git",
+        "/usr/local/bin/git",
+        "/run/current-system/sw/bin/git",
+    ] {
         if Path::new(path).exists() {
             return Ok(path.to_string());
         }
     }
-    // Fall back to PATH lookup.
-    let which = std::process::Command::new("which")
-        .arg("git")
-        .output();
-    if let Ok(out) = which {
-        if out.status.success() {
-            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(path);
+    // Check NixOS per-user profile paths.
+    if let Ok(user) = std::env::var("USER") {
+        let profile_path = format!("/etc/profiles/per-user/{user}/bin/git");
+        if Path::new(&profile_path).exists() {
+            return Ok(profile_path);
+        }
+    }
+    // Fall back to scanning PATH directly.
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in path_var.split(':') {
+            let candidate = Path::new(dir).join("git");
+            if candidate.exists() {
+                return Ok(candidate.to_string_lossy().to_string());
             }
         }
     }

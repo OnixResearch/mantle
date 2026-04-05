@@ -10,6 +10,6 @@ let crunch = import "lib.ncl" in
 
 crunch.fetchurl {
   url = "https://raw.githubusercontent.com/nickel-lang/nickel/master/LICENSE",
-  hash = "sha256-jOtLnHt0MU0Bfrekml4dJqHFdMOBkJMkbTcMmPRsaJo=",
+  hash = "sha256-3jC9jts9aiU9fst7yGXpoRxcwMsB2CQ2EOnFjBhJ3CI=",
   name = "nickel-license",
 }

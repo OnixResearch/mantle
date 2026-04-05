@@ -7,7 +7,7 @@ pub enum Error {
     #[error("source input not found in store: {}", path.to_absolute_path())]
     SourceNotFound { path: StorePath<String> },
 
-    #[error("build failed for {name} (exit code {exit_code})")]
+    #[error("build failed for {name} (exit code {exit_code})\n{log}")]
     BuildFailed {
         name: String,
         exit_code: String,
