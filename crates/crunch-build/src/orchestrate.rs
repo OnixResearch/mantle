@@ -20,6 +20,7 @@ use tokio::io::AsyncReadExt;
 use tracing::{debug, info};
 
 use crunch_glue::KnownPaths;
+use snix_store::pathinfoservice::PathInfoService;
 
 use crate::build_request::{collect_input_paths, derivation_to_build_request};
 use crate::Error;
@@ -39,10 +40,11 @@ pub struct BuildOutcome {
 
 /// Orchestrates the build pipeline: evaluating dependencies, checking
 /// cache, running builds, persisting results.
-pub struct Builder<BS, DS, BServ> {
+pub struct Builder<BS, DS, BServ, PIS> {
     blob_service: BS,
     directory_service: DS,
     build_service: BServ,
+    pathinfo_service: PIS,
     store_dir: PathBuf,
     /// The store dir as a string, for path serialization.
     store_dir_str: String,
@@ -55,16 +57,18 @@ pub struct Builder<BS, DS, BServ> {
     verbose: bool,
 }
 
-impl<BS, DS, BServ> Builder<BS, DS, BServ>
+impl<BS, DS, BServ, PIS> Builder<BS, DS, BServ, PIS>
 where
     BS: BlobService + Clone + 'static,
     DS: DirectoryService + Clone + 'static,
     BServ: BuildService,
+    PIS: PathInfoService,
 {
     pub fn new(
         blob_service: BS,
         directory_service: DS,
         build_service: BServ,
+        pathinfo_service: PIS,
         store_dir: PathBuf,
         verbose: bool,
     ) -> Self {
@@ -73,6 +77,7 @@ where
             blob_service,
             directory_service,
             build_service,
+            pathinfo_service,
             store_dir,
             store_dir_str,
             built_outputs: HashMap::new(),
@@ -122,13 +127,12 @@ where
     ) -> Result<BuildOutcome, Error> {
         let drv_name = drv_path.name().to_string();
 
-        // 1. Check if all outputs already exist (cache hit)
-        if self.all_outputs_exist(derivation) {
+        // 1. Check cache: PathInfoService + filesystem
+        if let Some(cached_outputs) = self.check_cache(drv_path, derivation).await? {
             info!(drv = %drv_name, "all outputs cached, skipping build");
-            let outputs = self.load_cached_outputs(drv_path, derivation).await?;
             return Ok(BuildOutcome {
                 drv_path: drv_path.clone(),
-                outputs,
+                outputs: cached_outputs,
                 cached: true,
                 log: None,
             });
@@ -306,6 +310,12 @@ where
                 ca: output.ca_hash.clone(),
             };
 
+            // Persist to PathInfoService
+            self.pathinfo_service
+                .put(path_info.clone())
+                .await
+                .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
+
             // Register in our session state
             let abs_path = output_path.to_absolute_path_with_prefix(&self.store_dir_str);
             self.built_outputs.insert(abs_path, path_info.clone());
@@ -332,78 +342,68 @@ where
         })
     }
 
-    /// Check if all outputs of a derivation exist on disk.
-    fn all_outputs_exist(&self, derivation: &Derivation) -> bool {
-        derivation.outputs.values().all(|output| {
-            output
-                .path
-                .as_ref()
-                .is_some_and(|p| self.path_exists_on_disk(p))
-        })
+    /// Check cache: every output must have PathInfo AND exist on disk.
+    /// Returns Some(outputs) on full cache hit, None on any miss.
+    async fn check_cache(
+        &mut self,
+        _drv_path: &StorePath<String>,
+        derivation: &Derivation,
+    ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
+        let mut infos = HashMap::new();
+
+        for (output_name, output) in &derivation.outputs {
+            let output_path = match output.path.as_ref() {
+                Some(p) => p,
+                None => return Ok(None), // no path = can't cache check
+            };
+
+            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.store_dir_str));
+            let digest = *output_path.digest();
+
+            // Query PathInfoService
+            let stored = self.pathinfo_service.get(digest).await
+                .map_err(|e| Error::Store(format!("PathInfo lookup: {e}")))?;
+
+            match (stored, abs.exists()) {
+                (Some(path_info), true) => {
+                    // Full cache hit: PathInfo + file on disk
+                    self.output_nodes.insert(output_path.clone(), path_info.node.clone());
+                    self.built_outputs.insert(
+                        output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        path_info.clone(),
+                    );
+                    infos.insert(output_name.clone(), path_info);
+                }
+                (Some(_), false) => {
+                    // PathInfo exists but file gone — inconsistent store
+                    tracing::warn!(
+                        path = %output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        "PathInfo exists but output missing from disk, rebuilding"
+                    );
+                    return Ok(None);
+                }
+                (None, true) => {
+                    // File exists but no PathInfo — untracked, rebuild
+                    debug!(
+                        path = %output_path.to_absolute_path_with_prefix(&self.store_dir_str),
+                        "output exists on disk but no PathInfo, rebuilding"
+                    );
+                    return Ok(None);
+                }
+                (None, false) => {
+                    // Nothing — cache miss
+                    return Ok(None);
+                }
+            }
+        }
+
+        Ok(Some(infos))
     }
 
     /// Check if a store path exists on the filesystem.
     fn path_exists_on_disk(&self, path: &StorePath<String>) -> bool {
         let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store_dir_str));
         abs.exists()
-    }
-
-    /// For cached outputs, construct PathInfo from what's on disk.
-    async fn load_cached_outputs(
-        &mut self,
-        drv_path: &StorePath<String>,
-        derivation: &Derivation,
-    ) -> Result<HashMap<String, PathInfo>, Error> {
-        let mut infos = HashMap::new();
-
-        for (output_name, output) in &derivation.outputs {
-            let output_path = output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
-                output: output_name.clone(),
-                drv_name: drv_path.name().to_string(),
-            })?;
-
-            // Ingest from disk to compute node, NAR hash, etc.
-            let abs = PathBuf::from(output_path.to_absolute_path_with_prefix(&self.store_dir_str));
-            let node = ingest_path::<_, _, _, &[u8]>(
-                self.blob_service.clone(),
-                self.directory_service.clone(),
-                &abs,
-                None,
-            )
-            .await
-            .map_err(|e| Error::Sandbox(std::io::Error::other(format!(
-                "failed to ingest cached output {}: {e}",
-                output_path
-            ))))?;
-
-            let nar_renderer = SimpleRenderer::new(
-                self.blob_service.clone(),
-                self.directory_service.clone(),
-            );
-            let (nar_size, nar_sha256) = nar_renderer
-                .calculate_nar(&node)
-                .await
-                .map_err(|e| Error::NarCalculation(e.to_string()))?;
-
-            let path_info = PathInfo {
-                store_path: output_path.clone(),
-                node: node.clone(),
-                references: vec![], // no refscan for cached outputs
-                nar_size,
-                nar_sha256,
-                signatures: vec![],
-                deriver: Some(drv_path.clone()),
-                ca: output.ca_hash.clone(),
-            };
-
-            self.output_nodes.insert(output_path.clone(), node);
-            self.built_outputs
-                .insert(output_path.to_absolute_path_with_prefix(&self.store_dir_str), path_info.clone());
-
-            infos.insert(output_name.clone(), path_info);
-        }
-
-        Ok(infos)
     }
 
     /// Make sure we have castore nodes for inputs that exist on disk
@@ -1158,6 +1158,15 @@ mod tests {
 
     use std::sync::{Arc, Mutex};
     use snix_build::buildservice::{BuildRequest, BuildResult, BuildOutput};
+    use snix_store::pathinfoservice::LruPathInfoService;
+
+    /// Create an in-memory LruPathInfoService for tests.
+    fn test_pis() -> LruPathInfoService {
+        LruPathInfoService::with_capacity(
+            "test".to_string(),
+            std::num::NonZeroUsize::new(128).unwrap(),
+        )
+    }
 
     /// A mock BuildService that records requests and returns a synthetic
     /// output node for each requested output. Uses a shared blob service
@@ -1259,7 +1268,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
         let mut kp = crunch_glue::KnownPaths::default();
@@ -1280,7 +1289,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
         let mut kp = crunch_glue::KnownPaths::default();
@@ -1310,7 +1319,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
         let mut kp = crunch_glue::KnownPaths::default();
@@ -1344,6 +1353,7 @@ mod tests {
     /// the builder skips the build and returns cached: true.
     ///
     /// Uses a tempdir as store_dir so no /nix/store write access is needed.
+    /// Cache hit requires BOTH PathInfo in the service AND file on disk.
     #[tokio::test]
     async fn builder_skips_build_when_output_exists() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1352,25 +1362,116 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let (mock, calls) = MockBuildService::new(bs.clone());
-
-        let mut builder = Builder::new(
-            bs, ds, mock, tmp.path().to_path_buf(), false,
-        );
+        let pis = test_pis();
 
         let mut kp = crunch_glue::KnownPaths::new(&store_dir);
         let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
 
-        // Pre-create the output path on disk in the tempdir store.
+        // Pre-create the output path on disk.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
         let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&store_dir));
         std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
         std::fs::write(&abs, "cached content").unwrap();
+
+        // Pre-populate PathInfoService with a dummy PathInfo.
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node: Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 14,
+                executable: false,
+            },
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService;
+        pis.put(path_info).await.unwrap();
+
+        let mut builder = Builder::new(
+            bs, ds, mock, pis, tmp.path().to_path_buf(), false,
+        );
 
         let outcome = builder.build(&drv_path, &kp).await.unwrap();
         assert!(outcome.cached, "should report as cached");
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "should NOT call do_build for cached output");
+    }
+
+    /// PathInfo exists but file doesn't = cache miss, rebuild.
+    #[tokio::test]
+    async fn cache_miss_when_pathinfo_but_no_file() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register("orphan", &[], &mut kp);
+
+        // Put PathInfo but DON'T create the file on disk.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node: Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 0,
+                executable: false,
+            },
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        use snix_store::pathinfoservice::PathInfoService;
+        pis.put(path_info).await.unwrap();
+
+        let mut builder = Builder::new(
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+        );
+
+        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        assert!(!outcome.cached, "should NOT be cached (file missing)");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should call do_build");
+    }
+
+    /// File exists but no PathInfo = cache miss, rebuild.
+    #[tokio::test]
+    async fn cache_miss_when_file_but_no_pathinfo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store_dir = tmp.path().to_str().unwrap().to_string();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis(); // empty — no PathInfo stored
+
+        let mut kp = crunch_glue::KnownPaths::new(&store_dir);
+        let (drv_path, drv) = build_and_register("untracked", &[], &mut kp);
+
+        // Create file on disk but DON'T put PathInfo.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let abs = PathBuf::from(out_path.to_absolute_path_with_prefix(&store_dir));
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(&abs, "untracked content").unwrap();
+
+        let mut builder = Builder::new(
+            bs, ds, mock, pis, tmp.path().to_path_buf(), false,
+        );
+
+        let outcome = builder.build(&drv_path, &kp).await.unwrap();
+        assert!(!outcome.cached, "should NOT be cached (no PathInfo)");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "should call do_build");
     }
 }
 

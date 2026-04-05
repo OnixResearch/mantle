@@ -210,6 +210,7 @@ fn cmd_build(
     rt.block_on(async {
         use snix_castore::blobservice::MemoryBlobService;
         use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
 
         let blob_service = MemoryBlobService::default();
         let directory_service = RedbDirectoryService::new_temporary(
@@ -221,6 +222,34 @@ fn cmd_build(
             },
         )
         .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+        // PathInfoService: persistent redb, fallback to in-memory
+        let state_dir = state_dir();
+        let _ = std::fs::create_dir_all(&state_dir);
+        let pathinfo_db_path = state_dir.join("pathinfo.redb");
+        let pathinfo_service = match RedbPathInfoService::new(
+            "crunch".to_string(),
+            RedbPathInfoServiceConfig {
+                path: Some(pathinfo_db_path.clone()),
+                read_only: false,
+                cache_size: None,
+            },
+        ).await {
+            Ok(svc) => {
+                info!(path = %pathinfo_db_path.display(), "PathInfo database opened");
+                svc
+            }
+            Err(e) => {
+                tracing::warn!(
+                    path = %pathinfo_db_path.display(),
+                    err = %e,
+                    "failed to open PathInfo database, using in-memory fallback"
+                );
+                RedbPathInfoService::new_temporary(
+                    "crunch".to_string(),
+                    RedbPathInfoServiceConfig::default(),
+                ).map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))?            }
+        };
 
         #[cfg(target_os = "linux")]
         {
@@ -240,6 +269,7 @@ fn cmd_build(
                 blob_service,
                 directory_service,
                 build_service,
+                pathinfo_service,
                 store_dir.to_path_buf(),
                 verbose,
             );
@@ -388,9 +418,11 @@ fn write_log(
     let _ = std::fs::write(&log_file, &content);
 }
 
-/// Resolve log directory path.
-fn log_dir() -> PathBuf {
-    std::env::var("CRUNCH_LOG_DIR")
+/// Resolve the crunch state directory.
+///
+/// Precedence: $CRUNCH_STATE_DIR > $XDG_STATE_HOME/crunch > ~/.local/state/crunch
+fn state_dir() -> PathBuf {
+    std::env::var("CRUNCH_STATE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             let state = std::env::var("XDG_STATE_HOME")
@@ -399,8 +431,15 @@ fn log_dir() -> PathBuf {
                     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
                     PathBuf::from(home).join(".local/state")
                 });
-            state.join("crunch/logs")
+            state.join("crunch")
         })
+}
+
+/// Resolve log directory path.
+fn log_dir() -> PathBuf {
+    std::env::var("CRUNCH_LOG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| state_dir().join("logs"))
 }
 
 /// Build the import path list: stdlib dir + user-specified paths.

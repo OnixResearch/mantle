@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use crunch_glue::{CrunchDerivation, Input, KnownPaths};
@@ -76,10 +77,16 @@ fn cache_hit_skips_build() {
         )
         .unwrap();
 
+        let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+            "test".to_string(),
+            std::num::NonZeroUsize::new(128).unwrap(),
+        );
+
         let mut builder = crunch_build::Builder::new(
             blob_service,
             directory_service,
             DummyBuildService::default(),
+            pis,
             PathBuf::from("/nix/store"),
             false,
         );
@@ -218,10 +225,16 @@ fn end_to_end_trivial_build() {
                 directory_service.clone(),
             );
 
+            let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+                "test".to_string(),
+                std::num::NonZeroUsize::new(128).unwrap(),
+            );
+
             let mut builder = crunch_build::Builder::new(
                 blob_service,
                 directory_service,
                 build_service,
+                pis,
                 PathBuf::from("/nix/store"),
                 true,
             );

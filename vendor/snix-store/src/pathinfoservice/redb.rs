@@ -262,14 +262,14 @@ pub enum Error {
 #[derive(Clone, Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RedbPathInfoServiceConfig {
-    path: Option<PathBuf>,
+    pub path: Option<PathBuf>,
 
     /// The amount of memory (in bytes) used for caching data
-    cache_size: Option<usize>,
+    pub cache_size: Option<usize>,
 
     /// Whether to open read-only.
     #[serde(default)]
-    read_only: bool,
+    pub read_only: bool,
 }
 
 impl TryFrom<url::Url> for RedbPathInfoServiceConfig {
