@@ -308,7 +308,12 @@ where
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 if entry.content_addressed {
                     for on in output_names {
-                        let placeholder = nix_compat::store_path::hash_placeholder(on);
+                        let raw = nix_compat::store_path::hash_placeholder(on);
+                        let placeholder = format!(
+                            "{}/{}",
+                            self.store_dir_str,
+                            raw.strip_prefix('/').unwrap_or(&raw)
+                        );
                         if let Some(resolved) = entry.resolved_outputs.get(on) {
                             let resolved_abs = resolved.to_absolute_path_with_prefix(&self.store_dir_str);
                             if placeholder.len() == resolved_abs.len() {
@@ -373,7 +378,12 @@ where
                 // CA derivation: self-reference rewriting + content-based path.
                 //
                 // 1. Get the provisional placeholder this output was built with
-                let provisional = nix_compat::store_path::hash_placeholder(output_name);
+                let raw_provisional = nix_compat::store_path::hash_placeholder(output_name);
+                let provisional = format!(
+                    "{}/{}",
+                    self.store_dir_str,
+                    raw_provisional.strip_prefix('/').unwrap_or(&raw_provisional)
+                );
                 let provisional_bytes = provisional.as_bytes();
                 let marker = vec![0u8; provisional_bytes.len()];
 
@@ -1906,7 +1916,12 @@ mod tests {
         name: &str,
         kp: &mut crunch_glue::KnownPaths,
     ) -> (StorePath<String>, Derivation) {
-        let placeholder = nix_compat::store_path::hash_placeholder("out");
+        let raw = nix_compat::store_path::hash_placeholder("out");
+        let placeholder = format!(
+            "{}/{}",
+            kp.store_dir(),
+            raw.strip_prefix('/').unwrap_or(&raw)
+        );
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
             path: None, ca_hash: None,

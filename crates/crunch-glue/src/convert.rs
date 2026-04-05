@@ -124,7 +124,16 @@ fn convert_inner(
     if is_ca {
         for (output_name, output) in nix_drv.outputs.iter_mut() {
             assert!(output.path.is_none());
-            let placeholder = nix_compat::store_path::hash_placeholder(output_name);
+            // Put the placeholder under the store dir so it falls within
+            // the sandbox's writable scratch overlay on nix/store.
+            // hash_placeholder returns "/HASH"; we replace the leading "/"
+            // with the store dir prefix.
+            let raw_placeholder = nix_compat::store_path::hash_placeholder(output_name);
+            let placeholder = format!(
+                "{}/{}",
+                store_dir,
+                raw_placeholder.strip_prefix('/').unwrap_or(&raw_placeholder)
+            );
             nix_drv.environment.insert(output_name.clone(), placeholder.into());
         }
     } else {

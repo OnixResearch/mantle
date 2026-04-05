@@ -145,7 +145,7 @@ pub fn derivation_to_build_request(
         inputs_dir: store_dir[1..].into(),
         constraints,
         working_dir: "build".into(),
-        scratch_paths: vec!["build".into(), "nix/store".into()],
+        scratch_paths: vec!["build".into(), store_dir[1..].into()],
         additional_files: vec![],
         refscan_needles,
     })
