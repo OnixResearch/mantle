@@ -41,7 +41,7 @@ let binutils_src = crunch.fetchTarball {
                  install find xargs readlink sleep touch date od \
                  uname id hostname diff cmp true false tee nl \
                  cut tar gzip gunzip bzip2 patch mktemp rmdir \
-                 env seq printf dd; do
+                 env seq printf dd uniq; do
         $BB ln -sf $BB /tmp/tools/$cmd
       done
 
@@ -67,6 +67,22 @@ let binutils_src = crunch.fetchTarball {
 
       # Symlink dash as sh (configure needs /tmp/tools/sh).
       $BB ln -sf "$DASH" /tmp/tools/sh
+
+      # egrep/fgrep wrappers (sub-configures use them directly).
+      # Must use /tmp/tools/sh as interpreter — /bin/sh is busybox
+      # which doesn't see /tmp/tools in PATH.
+      echo '#!/tmp/tools/sh' > /tmp/tools/egrep
+      echo 'exec /tmp/tools/grep -E "$@"' >> /tmp/tools/egrep
+      $BB chmod +x /tmp/tools/egrep
+      echo '#!/tmp/tools/sh' > /tmp/tools/fgrep
+      echo 'exec /tmp/tools/grep -F "$@"' >> /tmp/tools/fgrep
+      $BB chmod +x /tmp/tools/fgrep
+
+      # Stub out perl/pod2man (man page generation).
+      echo '#!/tmp/tools/sh' > /tmp/tools/perl
+      echo 'exit 0' >> /tmp/tools/perl
+      $BB chmod +x /tmp/tools/perl
+      $BB ln -sf /tmp/tools/perl /tmp/tools/pod2man
 
       # Find binutils source.
       SRCDIR=""

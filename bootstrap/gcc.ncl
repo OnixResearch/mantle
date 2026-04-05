@@ -100,17 +100,13 @@ let mpc_src = crunch.fetchTarball {
 
       $BB ln -sf "$DASH" /tmp/tools/sh
 
-      # egrep/fgrep symlinks (some sub-configures use them directly).
-      cat > /tmp/tools/egrep << 'EGEOF'
-#!/bin/sh
-exec grep -E "$@"
-EGEOF
-      chmod +x /tmp/tools/egrep
-      cat > /tmp/tools/fgrep << 'FGEOF'
-#!/bin/sh
-exec grep -F "$@"
-FGEOF
-      chmod +x /tmp/tools/fgrep
+      # egrep/fgrep wrappers. Must use /tmp/tools/sh as interpreter.
+      echo '#!/tmp/tools/sh' > /tmp/tools/egrep
+      echo 'exec /tmp/tools/grep -E "$@"' >> /tmp/tools/egrep
+      $BB chmod +x /tmp/tools/egrep
+      echo '#!/tmp/tools/sh' > /tmp/tools/fgrep
+      echo 'exec /tmp/tools/grep -F "$@"' >> /tmp/tools/fgrep
+      $BB chmod +x /tmp/tools/fgrep
 
       # Find source tarballs.
       GCC_SRC="" GMP_SRC="" MPFR_SRC="" MPC_SRC=""
