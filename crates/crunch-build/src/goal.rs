@@ -185,6 +185,9 @@ impl Goal {
                     Ok(false)
                 }
             }
+            // Already failed via propagation from another dep.
+            // A second dep completing successfully is a no-op.
+            GoalState::Failed => Ok(false),
             other => Err(Error::Store(format!(
                 "goal {}: notify_dep_done() called in {other:?} state, expected Waiting",
                 self.drv_path.name(),
@@ -763,9 +766,11 @@ mod tests {
         g.notify_dep_failed().unwrap();
         assert_eq!(g.state, GoalState::Failed);
 
-        // Nothing should work on a Failed goal.
+        // Nothing should work on a Failed goal (except notify_dep_done
+        // which is a no-op — a second dep completing after the first
+        // failed is harmless).
         assert!(g.inspect(vec![]).is_err());
-        assert!(g.notify_dep_done().is_err());
+        assert_eq!(g.notify_dep_done().unwrap(), false);
         assert!(g.notify_dep_failed().is_err());
         assert!(g.mark_building().is_err());
         assert!(g.mark_done().is_err());

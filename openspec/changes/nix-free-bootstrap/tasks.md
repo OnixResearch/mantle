@@ -19,7 +19,7 @@
 
 ## Phase 3: Build core tools from source
 
-- [ ] Write `bootstrap/make.ncl`: fetch gnumake tarball, build with musl-gcc from seed
+- [~] Write `bootstrap/make.ncl`: fetch gnumake tarball, build with musl-gcc from seed ⏱ started: 2026-04-05T16:55Z (WIP: source fetches work, compile needs config.h tuning — busybox grep too limited for autoconf configure, using direct compilation approach)
 - [ ] Test: `crunch build bootstrap/make.ncl` produces a working `make` binary
 - [ ] Write `bootstrap/bash.ncl`: fetch bash tarball, build with musl-gcc + make
 - [ ] Test: the built bash works as a builder in subsequent derivations
