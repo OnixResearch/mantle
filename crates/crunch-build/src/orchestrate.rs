@@ -611,15 +611,29 @@ where
         let mut all_source_paths: Vec<StorePath<String>> =
             derivation.input_sources.iter().cloned().collect();
 
-        // Source inputs are seed packages — always physically at
-        // /nix/store/ regardless of --store output dir.
         for source_path in &derivation.input_sources {
+            // Crunch-built outputs already have their dependencies
+            // tracked via input_derivations — no Nix closure needed.
+            // A source path is crunch-built if it already has a node
+            // in output_nodes (built in this session) or exists in the
+            // crunch output dir but NOT in the host /nix/store/.
+            if self.is_crunch_built(source_path) {
+                debug!(
+                    path = %source_path,
+                    "skipping closure resolution (crunch-built)"
+                );
+                continue;
+            }
+
+            // Nix-provided source: must exist at /nix/store/.
             let abs = source_path.to_absolute_path();
             if !PathBuf::from(&abs).exists() {
                 return Err(Error::SourceNotFound {
                     path: source_path.clone(),
                 });
             }
+
+            // Resolve Nix runtime closure for dynamically-linked inputs.
             for closure_abs in resolve_nix_closure(&abs) {
                 if let Some(sp) = parse_store_path(&closure_abs, LOGICAL_STORE_DIR) {
                     if !all_source_paths.contains(&sp) {
@@ -630,30 +644,61 @@ where
         }
 
         // Ingest all source paths (declared + closure) into castore.
-        // Source/closure paths live at /nix/store/ on the host.
         for source_path in &all_source_paths {
-            let abs = PathBuf::from(source_path.to_absolute_path());
-            if !abs.exists() {
-                debug!(path = %source_path, "closure path not found on disk, skipping");
+            if self.output_nodes.contains_key(source_path) {
                 continue;
             }
-            if !self.output_nodes.contains_key(source_path) {
-                let node = ingest_path::<_, _, _, &[u8]>(
-                    self.blob_service.clone(),
-                    self.directory_service.clone(),
-                    &abs,
-                    None,
-                )
-                .await
-                .map_err(|e| Error::Sandbox(std::io::Error::other(format!(
-                    "failed to ingest source {}: {e}",
-                    source_path
-                ))))?;
-                self.output_nodes.insert(source_path.clone(), node);
-            }
+
+            // Try the crunch output dir first, then fall back to
+            // /nix/store/ for Nix-provided sources.
+            let crunch_abs = PathBuf::from(
+                source_path.to_absolute_path_with_prefix(&self.output_dir_str)
+            );
+            let nix_abs = PathBuf::from(source_path.to_absolute_path());
+            let abs = if crunch_abs.exists() {
+                crunch_abs
+            } else if nix_abs.exists() {
+                nix_abs
+            } else {
+                debug!(path = %source_path, "source path not found on disk, skipping");
+                continue;
+            };
+
+            let node = ingest_path::<_, _, _, &[u8]>(
+                self.blob_service.clone(),
+                self.directory_service.clone(),
+                &abs,
+                None,
+            )
+            .await
+            .map_err(|e| Error::Sandbox(std::io::Error::other(format!(
+                "failed to ingest source {}: {e}",
+                source_path
+            ))))?;
+            self.output_nodes.insert(source_path.clone(), node);
         }
 
         Ok(all_source_paths)
+    }
+
+    /// Check if a source path is crunch-built (not from the host Nix store).
+    ///
+    /// A path is crunch-built if:
+    /// - It already has a node in output_nodes (built in this session), or
+    /// - It exists in the crunch output dir (when --store != /nix/store)
+    fn is_crunch_built(&self, path: &StorePath<String>) -> bool {
+        // Already built in this session.
+        if self.output_nodes.contains_key(path) {
+            return true;
+        }
+        // If --store is a custom dir, check if the path exists there.
+        // When output_dir == /nix/store, we can't distinguish, so
+        // fall through to Nix closure resolution (safe default).
+        if self.output_dir_str != LOGICAL_STORE_DIR {
+            let custom_abs = path.to_absolute_path_with_prefix(&self.output_dir_str);
+            return PathBuf::from(&custom_abs).exists();
+        }
+        false
     }
 
     /// Gather all castore nodes needed as sandbox inputs: built
@@ -1029,26 +1074,34 @@ where
         // Fetcher outputs land on disk at the physical output dir.
         let out_abs = out_path.to_absolute_path_with_prefix(&self.output_dir_str);
 
-        info!(drv = %drv_name, "fetching");
-        let fetch_clone = fetch.clone();
-        let out_abs_clone = out_abs.clone();
-        tokio::task::spawn_blocking(move || {
-            crate::fetcher::fetch_to_store(&fetch_clone, &out_abs_clone)
-        })
-        .await
-        .map_err(|e| Error::Sandbox(std::io::Error::other(format!("spawn_blocking: {e}"))))?
-        .map_err(|e| Error::BuildFailed {
-            name: drv_name.clone(),
-            exit_code: "fetch".to_string(),
-            log: e.to_string(),
-        })?;
-
-        if !PathBuf::from(&out_abs).exists() {
-            return Err(Error::BuildFailed {
+        // Skip download if the output already exists on disk (e.g.,
+        // from a prior `crunch bootstrap --fetch` run). The castore
+        // content may be missing (in-memory only), so we still need
+        // to re-ingest below.
+        if PathBuf::from(&out_abs).exists() {
+            info!(drv = %drv_name, path = %out_abs, "fetcher output exists on disk, skipping download");
+        } else {
+            info!(drv = %drv_name, "fetching");
+            let fetch_clone = fetch.clone();
+            let out_abs_clone = out_abs.clone();
+            tokio::task::spawn_blocking(move || {
+                crate::fetcher::fetch_to_store(&fetch_clone, &out_abs_clone)
+            })
+            .await
+            .map_err(|e| Error::Sandbox(std::io::Error::other(format!("spawn_blocking: {e}"))))?
+            .map_err(|e| Error::BuildFailed {
                 name: drv_name.clone(),
                 exit_code: "fetch".to_string(),
-                log: format!("fetcher did not produce output at {out_abs}"),
-            });
+                log: e.to_string(),
+            })?;
+
+            if !PathBuf::from(&out_abs).exists() {
+                return Err(Error::BuildFailed {
+                    name: drv_name.clone(),
+                    exit_code: "fetch".to_string(),
+                    log: format!("fetcher did not produce output at {out_abs}"),
+                });
+            }
         }
 
         // Verify flat hash for URL fetches (before ingest).

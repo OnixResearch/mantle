@@ -80,7 +80,13 @@ enum Command {
         #[arg(short, long, default_value = "seed.ncl")]
         output: PathBuf,
 
-        /// Packages to include (nixpkgs attribute names)
+        /// Fetch static toolchain tarballs instead of querying Nix.
+        /// Downloads a statically-linked musl-gcc, persists it as a
+        /// FOD in --store, and writes seed.ncl. No Nix required.
+        #[arg(long)]
+        fetch: bool,
+
+        /// Packages to include (nixpkgs attribute names, ignored with --fetch)
         #[arg(default_values_t = [
             "bash".to_string(),
             "coreutils".to_string(),
@@ -175,7 +181,13 @@ fn run(args: Args) -> Result<(), RunError> {
             let sub_url = if no_substitute { None } else { Some(substituters) };
             cmd_build(&file, &import_paths, &args.store, args.verbose, fix, max_jobs, sub_url.as_deref())
         }
-        Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
+        Command::Bootstrap { output, fetch, packages } => {
+            if fetch {
+                cmd_bootstrap_fetch(&output, &args.store, args.verbose)
+            } else {
+                cmd_bootstrap(&output, &packages)
+            }
+        }
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
         Command::Store { action } => cmd_store(action),
     }
@@ -798,6 +810,27 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
 }
 
 // ── cmd_bootstrap ──────────────────────────────────────────────────────
+
+fn cmd_bootstrap_fetch(
+    output: &std::path::Path,
+    store_dir: &std::path::Path,
+    verbose: bool,
+) -> Result<(), RunError> {
+    if !store_dir.exists() {
+        return Err(RunError::Internal(format!(
+            "store directory {} does not exist.\n\
+             Create it with: sudo mkdir -p {0} && sudo chown $USER {0}",
+            store_dir.display()
+        )));
+    }
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+
+    rt.block_on(async {
+        bootstrap::bootstrap_fetch(store_dir, output, verbose).await
+    })
+}
 
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
     eprintln!("Resolving store paths for {} packages...", packages.len());
