@@ -102,11 +102,25 @@ pub fn derivation_to_build_request(
         command_args,
         outputs: derivation
             .outputs
-            .values()
-            .map(|o| {
+            .iter()
+            .map(|(output_name, o)| {
                 let path_str = o.path_str();
-                // Strip leading '/' — BuildRequest wants relative paths
-                PathBuf::from(&path_str[1..])
+                if path_str.is_empty() {
+                    // CA derivation: use the placeholder path (from env)
+                    // as the sandbox output location.
+                    let placeholder = derivation.environment
+                        .get(output_name)
+                        .map(|v| String::from_utf8_lossy(v).to_string())
+                        .unwrap_or_default();
+                    if placeholder.starts_with('/') {
+                        PathBuf::from(&placeholder[1..])
+                    } else {
+                        PathBuf::from(&placeholder)
+                    }
+                } else {
+                    // Strip leading '/' — BuildRequest wants relative paths
+                    PathBuf::from(&path_str[1..])
+                }
             })
             .collect(),
         environment_vars: env

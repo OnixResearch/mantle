@@ -27,7 +27,7 @@
 - [x] `build()` signature changed to `&mut KnownPaths` for resolve_output
 - [x] Self-reference rewriting: `rewrite_node()` reads blobs from BlobService, rewrites bytes, writes back. Builder does provisional→marker→hash→compute CA path→marker→final sequence via rewrite_node on castore Node trees (files + directories)
 - [ ] Input provisional → final CA path rewriting for transitive CA deps (needs resolved CA paths of inputs during output rewriting)
-- [ ] Tests with mock BuildService: CA derivation gets content-based path; two derivations with identical mock output get identical paths
+- [x] Tests with mock BuildService: CA derivation gets content-based path (`ca_derivation_gets_content_based_path`); same name + same content = same path (`ca_same_name_same_content_same_path`); different names + same content have ca field set (`ca_identical_outputs_same_path`)
 
 ## Phase 5: Multi-output and cache
 

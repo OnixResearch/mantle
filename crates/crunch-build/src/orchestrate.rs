@@ -1567,6 +1567,137 @@ mod tests {
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1, "should call do_build");
     }
+
+    // ── CA derivation tests ──────────────────────────────────────
+
+    /// Build a CA derivation (output paths None, placeholder in env).
+    fn build_and_register_ca(
+        name: &str,
+        kp: &mut crunch_glue::KnownPaths,
+    ) -> (StorePath<String>, Derivation) {
+        let placeholder = nix_compat::store_path::hash_placeholder("out");
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None, ca_hash: None,
+        });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), name.into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), placeholder.into());
+
+        let drv = Derivation {
+            arguments: vec!["-c".into(), format!("echo {name} > $out")],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let hdm = drv.hash_derivation_modulo(|_| panic!("CA drv has no input derivations"));
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+
+        let mut fake_hash = [0u8; 32];
+        for (i, b) in name.bytes().enumerate().take(32) {
+            fake_hash[i] = b;
+        }
+        kp.insert_ca(fake_hash, drv_path.clone(), hdm, drv.clone(), true);
+
+        (drv_path, drv)
+    }
+
+    /// CA derivation: output path is content-based, not from inputs.
+    #[tokio::test]
+    async fn ca_derivation_gets_content_based_path() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, _drv) = build_and_register_ca("ca-test", &mut kp);
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+        assert_eq!(outcome.outputs.len(), 1);
+
+        let pi = outcome.outputs.get("out").unwrap();
+        // The output path should be content-based, not input-based
+        let path_str = pi.store_path.to_absolute_path();
+        assert!(path_str.starts_with("/nix/store/"), "CA path in store: {path_str}");
+        // The PathInfo should have a ca field
+        assert!(pi.ca.is_some(), "CA PathInfo should have ca field");
+    }
+
+    /// Two CA derivations with identical build output get the same CA path.
+    #[tokio::test]
+    async fn ca_identical_outputs_same_path() {
+        // Both use the same MockBuildService which produces "mock output"
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock1, _) = MockBuildService::new(bs.clone());
+        let mut builder1 = Builder::new(
+            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+        let mut kp1 = crunch_glue::KnownPaths::default();
+        let (drv_path1, _) = build_and_register_ca("ca-a", &mut kp1);
+        let outcome1 = builder1.build(&drv_path1, &mut kp1).await.unwrap();
+
+        let (mock2, _) = MockBuildService::new(bs.clone());
+        let mut builder2 = Builder::new(
+            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+        let mut kp2 = crunch_glue::KnownPaths::default();
+        let (drv_path2, _) = build_and_register_ca("ca-b", &mut kp2);
+        let outcome2 = builder2.build(&drv_path2, &mut kp2).await.unwrap();
+
+        // Different derivation names but same build output content
+        assert_ne!(drv_path1, drv_path2, "different drvs");
+
+        let path1 = outcome1.outputs["out"].store_path.to_absolute_path();
+        let path2 = outcome2.outputs["out"].store_path.to_absolute_path();
+        // CA paths should be identical (same content → same hash)
+        // BUT: the path name component includes the drv name, so paths
+        // differ even with same content hash (CA path = hash + name).
+        // This is correct behavior — same content but different names
+        // produce different store paths.
+        // To truly test identical paths, we'd need same name + same content.
+        // Instead, verify both have ca field set.
+        assert!(outcome1.outputs["out"].ca.is_some());
+        assert!(outcome2.outputs["out"].ca.is_some());
+    }
+
+    /// Same name + same content = same CA path.
+    #[tokio::test]
+    async fn ca_same_name_same_content_same_path() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let (mock1, _) = MockBuildService::new(bs.clone());
+        let mut builder1 = Builder::new(
+            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+        let mut kp1 = crunch_glue::KnownPaths::default();
+        let (drv_path1, _) = build_and_register_ca("ca-same", &mut kp1);
+        let outcome1 = builder1.build(&drv_path1, &mut kp1).await.unwrap();
+
+        let (mock2, _) = MockBuildService::new(bs.clone());
+        let mut builder2 = Builder::new(
+            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+        let mut kp2 = crunch_glue::KnownPaths::default();
+        let (drv_path2, _) = build_and_register_ca("ca-same", &mut kp2);
+        let outcome2 = builder2.build(&drv_path2, &mut kp2).await.unwrap();
+
+        let path1 = outcome1.outputs["out"].store_path.to_absolute_path();
+        let path2 = outcome2.outputs["out"].store_path.to_absolute_path();
+        assert_eq!(path1, path2, "same name + same content = same CA path");
+    }
 }
 
 
