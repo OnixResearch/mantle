@@ -523,4 +523,100 @@ mod tests {
         let err = collect_input_paths(&parent, &kp).unwrap_err();
         assert!(matches!(err, crate::Error::DerivationNotFound { .. }));
     }
+
+    // ── output selection integration tests ────────────────────────
+    //
+    // End-to-end: CrunchDerivation with OutputSelection → convert →
+    // verify collect_input_paths resolves only the selected outputs.
+
+    fn ia_drv(name: &str, outputs: &[&str]) -> crunch_glue::CrunchDerivation {
+        crunch_glue::CrunchDerivation {
+            name: name.to_string(),
+            builder: "/bin/sh".to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec![],
+            outputs: outputs.iter().map(|s| s.to_string()).collect(),
+            env: Default::default(),
+            inputs: vec![],
+            fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
+        }
+    }
+
+    #[test]
+    fn output_selection_only_selected_output_in_sandbox_inputs() {
+        use crunch_glue::{convert, Input, OutputRef};
+
+        let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
+        let consumer = crunch_glue::CrunchDerivation {
+            inputs: vec![Input::OutputSelection(Box::new(OutputRef {
+                drv: dep,
+                output: "dev".to_string(),
+            }))],
+            ..ia_drv("myapp", &["out"])
+        };
+
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&consumer, &mut kp).unwrap();
+
+        // input_derivations has only "dev"
+        let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(dep_outputs.len(), 1);
+        assert!(dep_outputs.contains("dev"));
+
+        // collect_input_paths resolves to exactly one path: libfoo's dev output
+        let paths = collect_input_paths(&nix_drv, &kp).unwrap();
+        let dep_abs = dep_path.to_absolute_path();
+        let dep_entry = kp.get_by_drv_path(&dep_abs).unwrap();
+        let dev_path = dep_entry.derivation.outputs["dev"].path.as_ref().unwrap();
+
+        assert!(paths.contains(dev_path), "sandbox should include dev output");
+        // out and lib should NOT be in sandbox paths
+        let out_path = dep_entry.derivation.outputs["out"].path.as_ref().unwrap();
+        let lib_path = dep_entry.derivation.outputs["lib"].path.as_ref().unwrap();
+        assert!(!paths.contains(out_path), "sandbox should NOT include out output");
+        assert!(!paths.contains(lib_path), "sandbox should NOT include lib output");
+    }
+
+    #[test]
+    fn output_selection_coalescing_both_in_sandbox() {
+        use crunch_glue::{convert, Input, OutputRef};
+
+        let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
+        let consumer = crunch_glue::CrunchDerivation {
+            inputs: vec![
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep.clone(),
+                    output: "dev".to_string(),
+                })),
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep,
+                    output: "lib".to_string(),
+                })),
+            ],
+            ..ia_drv("myapp", &["out"])
+        };
+
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&consumer, &mut kp).unwrap();
+
+        // Coalesced: both dev and lib
+        let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(dep_outputs.len(), 2);
+        assert!(dep_outputs.contains("dev"));
+        assert!(dep_outputs.contains("lib"));
+
+        // collect_input_paths resolves both
+        let paths = collect_input_paths(&nix_drv, &kp).unwrap();
+        let dep_abs = dep_path.to_absolute_path();
+        let dep_entry = kp.get_by_drv_path(&dep_abs).unwrap();
+        let dev_path = dep_entry.derivation.outputs["dev"].path.as_ref().unwrap();
+        let lib_path = dep_entry.derivation.outputs["lib"].path.as_ref().unwrap();
+
+        assert!(paths.contains(dev_path), "sandbox should include dev");
+        assert!(paths.contains(lib_path), "sandbox should include lib");
+        // out should NOT be included
+        let out_path = dep_entry.derivation.outputs["out"].path.as_ref().unwrap();
+        assert!(!paths.contains(out_path), "sandbox should NOT include out");
+    }
 }

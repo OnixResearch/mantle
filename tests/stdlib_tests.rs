@@ -37,7 +37,7 @@ fn contract_allows_extra_fields() {
         r#"let crunch = import "lib.ncl" in { name = "x", builder = "/bin/sh", bogus = true } | crunch.Derivation"#,
         &stdlib_import_path(),
     );
-    assert!(result.is_ok(), "extra fields should be allowed: {result:?}");
+    assert!(result.is_ok(), "extra fields should be allowed: {}", result.err().map(|e| e.to_string()).unwrap_or_default());
 }
 
 #[test]
@@ -285,4 +285,80 @@ fn fetchurl_invalid_hash_passes_eval() {
         &stdlib_import_path(),
     );
     assert!(result.is_ok(), "eval should succeed; Rust layer validates hash format");
+}
+
+// ── Output selection stdlib tests ─────────────────────────────────────
+
+#[test]
+fn select_produces_correct_structure() {
+    #[derive(serde::Deserialize, Debug)]
+    struct OutputRef {
+        drv: crunch_glue::CrunchDerivation,
+        output: String,
+    }
+
+    let oref: OutputRef = crunch_eval::evaluate_str_and_deserialize(
+        r#"let crunch = import "lib.ncl" in
+           let pkg = { name = "libfoo", builder = "/bin/sh", outputs = ["out", "dev"] } | crunch.Derivation in
+           crunch.select pkg "dev""#,
+        &stdlib_import_path(),
+    ).unwrap();
+
+    assert_eq!(oref.output, "dev");
+    assert_eq!(oref.drv.name, "libfoo");
+    assert_eq!(oref.drv.outputs, vec!["out", "dev"]);
+}
+
+#[test]
+fn mixed_inputs_array_validates() {
+    // All three Input forms pass the contract in a single array.
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           let dep = { name = "dep", builder = "/bin/sh", outputs = ["out", "dev"] } | crunch.Derivation in
+           {
+             name = "consumer",
+             builder = "/bin/sh",
+             inputs = [
+               "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash",
+               dep,
+               crunch.select dep "dev",
+             ],
+           } | crunch.Derivation"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "mixed inputs should validate: {:?}", result.err());
+}
+
+#[test]
+fn select_round_trip_through_glue() {
+    // Nickel select → serde → crunch-glue convert: the selected output
+    // appears in input_derivations with only that output name.
+    use crunch_glue::{CrunchDerivation, Input};
+
+    let drv: CrunchDerivation = crunch_eval::evaluate_str_and_deserialize(
+        r#"let crunch = import "lib.ncl" in
+           let dep = { name = "libfoo", builder = "/bin/sh", outputs = ["out", "dev", "lib"], addressing_mode = 'input-addressed } | crunch.Derivation in
+           {
+             name = "consumer",
+             builder = "/bin/sh",
+             addressing_mode = 'input-addressed,
+             inputs = [ crunch.select dep "dev" ],
+           } | crunch.Derivation"#,
+        &stdlib_import_path(),
+    ).unwrap();
+
+    // Verify the Input deserialized as OutputSelection.
+    assert_eq!(drv.inputs.len(), 1);
+    assert!(
+        matches!(&drv.inputs[0], Input::OutputSelection(oref) if oref.output == "dev"),
+        "expected OutputSelection, got: {:?}", drv.inputs[0]
+    );
+
+    // Convert through glue and check input_derivations.
+    let mut kp = crunch_glue::KnownPaths::default();
+    let (_, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    assert_eq!(nix_drv.input_derivations.len(), 1);
+    let (_, outputs) = nix_drv.input_derivations.iter().next().unwrap();
+    assert_eq!(outputs.len(), 1);
+    assert!(outputs.contains("dev"));
 }

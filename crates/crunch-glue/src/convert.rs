@@ -97,12 +97,32 @@ fn resolve_inputs(
                 let store_path = parse_store_path(path_str)?;
                 input_sources.insert(store_path);
             }
+            Input::OutputSelection(output_ref) => {
+                // Validate the selected output exists.
+                if !output_ref.drv.outputs.contains(&output_ref.output) {
+                    return Err(Error::InvalidOutputSelection {
+                        drv_name: output_ref.drv.name.clone(),
+                        output: output_ref.output.clone(),
+                        available: output_ref.drv.outputs.join(", "),
+                    });
+                }
+                let (nested_drv_path, _nested_nix_drv) =
+                    convert_with_depth(&output_ref.drv, known_paths, depth.saturating_add(1))?;
+                // Coalesce: merge into existing entry if same drv appears twice.
+                input_derivations
+                    .entry(nested_drv_path)
+                    .or_default()
+                    .insert(output_ref.output.clone());
+            }
             Input::Derivation(nested_drv) => {
                 let (nested_drv_path, _nested_nix_drv) =
                     convert_with_depth(nested_drv, known_paths, depth.saturating_add(1))?;
                 let output_names: BTreeSet<String> =
                     nested_drv.outputs.iter().cloned().collect();
-                input_derivations.insert(nested_drv_path, output_names);
+                input_derivations
+                    .entry(nested_drv_path)
+                    .or_default()
+                    .extend(output_names);
             }
         }
     }
@@ -883,5 +903,196 @@ mod tests {
         }"#;
         let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
         assert_eq!(drv.addressing_mode, "content-addressed");
+    }
+
+    // ── output selection tests ─────────────────────────────────────
+
+    fn multi_output_drv(name: &str) -> CrunchDerivation {
+        CrunchDerivation {
+            outputs: vec!["out".to_string(), "dev".to_string(), "lib".to_string()],
+            ..minimal_drv(name, "/bin/sh")
+        }
+    }
+
+    #[test]
+    fn deserialize_output_selection_from_json() {
+        let json = r#"{
+            "drv": {
+                "name": "libfoo",
+                "builder": "/bin/sh",
+                "outputs": ["out", "dev", "lib"]
+            },
+            "output": "dev"
+        }"#;
+        let input: Input = serde_json::from_str(json).unwrap();
+        match input {
+            Input::OutputSelection(oref) => {
+                assert_eq!(oref.drv.name, "libfoo");
+                assert_eq!(oref.output, "dev");
+            }
+            other => panic!("expected OutputSelection, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serde_ordering_output_selection_before_derivation() {
+        // A record with `drv` + `output` must parse as OutputSelection,
+        // NOT as Derivation (even though both are records).
+        let json_selection = r#"{
+            "drv": { "name": "x", "builder": "/bin/sh" },
+            "output": "dev"
+        }"#;
+        let json_derivation = r#"{
+            "name": "x",
+            "builder": "/bin/sh"
+        }"#;
+
+        assert!(matches!(
+            serde_json::from_str::<Input>(json_selection).unwrap(),
+            Input::OutputSelection(_)
+        ));
+        assert!(matches!(
+            serde_json::from_str::<Input>(json_derivation).unwrap(),
+            Input::Derivation(_)
+        ));
+    }
+
+    #[test]
+    fn serde_source_still_works() {
+        let json = r#""/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash""#;
+        let input: Input = serde_json::from_str(json).unwrap();
+        assert!(matches!(input, Input::Source(_)));
+    }
+
+    #[test]
+    fn output_selection_single_output_in_input_derivations() {
+        let dep = multi_output_drv("libfoo");
+        let drv = CrunchDerivation {
+            inputs: vec![Input::OutputSelection(Box::new(OutputRef {
+                drv: dep,
+                output: "dev".to_string(),
+            }))],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.input_derivations.len(), 1);
+        let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert!(
+            dep_path.to_absolute_path().ends_with("-libfoo.drv"),
+            "dep path: {}", dep_path.to_absolute_path()
+        );
+        // Only the selected output, not all three.
+        assert_eq!(dep_outputs.len(), 1);
+        assert!(dep_outputs.contains("dev"));
+        assert!(!dep_outputs.contains("out"));
+        assert!(!dep_outputs.contains("lib"));
+    }
+
+    #[test]
+    fn output_selection_coalescing_same_dep() {
+        let dep = multi_output_drv("libfoo");
+        let drv = CrunchDerivation {
+            inputs: vec![
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep.clone(),
+                    output: "dev".to_string(),
+                })),
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep,
+                    output: "lib".to_string(),
+                })),
+            ],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        // Same dep appears once with both outputs coalesced.
+        assert_eq!(nix_drv.input_derivations.len(), 1);
+        let (_, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(dep_outputs.len(), 2);
+        assert!(dep_outputs.contains("dev"));
+        assert!(dep_outputs.contains("lib"));
+    }
+
+    #[test]
+    fn output_selection_coalescing_with_bare_derivation() {
+        // OutputSelection("dev") + bare Derivation (all outputs) coalesce.
+        let dep = multi_output_drv("libfoo");
+        let drv = CrunchDerivation {
+            inputs: vec![
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep.clone(),
+                    output: "dev".to_string(),
+                })),
+                Input::Derivation(Box::new(dep)),
+            ],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        // Coalesced: dev + all three = all three.
+        assert_eq!(nix_drv.input_derivations.len(), 1);
+        let (_, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(dep_outputs.len(), 3);
+        assert!(dep_outputs.contains("out"));
+        assert!(dep_outputs.contains("dev"));
+        assert!(dep_outputs.contains("lib"));
+    }
+
+    #[test]
+    fn output_selection_invalid_output_rejected() {
+        let dep = multi_output_drv("libfoo");
+        let drv = CrunchDerivation {
+            inputs: vec![Input::OutputSelection(Box::new(OutputRef {
+                drv: dep,
+                output: "headers".to_string(),
+            }))],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let err = convert(&drv, &mut kp).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("libfoo"),
+            "error should name the derivation, got: {msg}"
+        );
+        assert!(
+            msg.contains("headers"),
+            "error should name the invalid output, got: {msg}"
+        );
+        assert!(
+            msg.contains("out, dev, lib"),
+            "error should list available outputs, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn output_selection_duplicate_same_output_idempotent() {
+        // Selecting "dev" twice from the same dep is fine — coalesces to one.
+        let dep = multi_output_drv("libfoo");
+        let drv = CrunchDerivation {
+            inputs: vec![
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep.clone(),
+                    output: "dev".to_string(),
+                })),
+                Input::OutputSelection(Box::new(OutputRef {
+                    drv: dep,
+                    output: "dev".to_string(),
+                })),
+            ],
+            ..minimal_drv("myapp", "/bin/sh")
+        };
+        let mut kp = KnownPaths::default();
+        let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.input_derivations.len(), 1);
+        let (_, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
+        assert_eq!(dep_outputs.len(), 1);
+        assert!(dep_outputs.contains("dev"));
     }
 }

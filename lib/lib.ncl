@@ -40,6 +40,14 @@ let pkg = import "mk_derivation.ncl" in
   Url = fetch.Url,
   Hash = fetch.Hash,
 
+  # Output selection
+  select
+    | doc "Select a single output from a multi-output derivation. Returns a record suitable for the `inputs` array."
+    = fun drv output_name =>
+      let the_drv = drv in
+      let the_output = output_name in
+      { drv = the_drv, output = the_output },
+
   # Package authoring
   mkStdenv = pkg.mkStdenv,
   callPackage = pkg.callPackage,

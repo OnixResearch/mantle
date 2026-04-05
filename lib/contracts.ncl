@@ -45,15 +45,25 @@
     = [| 'native, 'oci, 'wasm |],
 
   Input
-    | doc "A build input: either a StorePath string or a Derivation record."
+    | doc m%"
+      A build input: a StorePath string, a Derivation record (all outputs),
+      or an output selection record `{ drv, output }` (single output).
+    "%
     = std.contract.from_validator (fun value =>
       if std.is_string value then
         if std.string.is_match "^/nix/store/[a-z0-9]{32}-.+$" value
         then 'Ok
         else 'Error { message = "input string must be a valid store path, got: %{value}" }
       else if std.is_record value then
-        'Ok
+        if std.record.has_field "drv" value && std.record.has_field "output" value then
+          # Output selection: { drv = <Derivation>, output = "dev" }
+          if std.is_record value.drv && std.is_string value.output then
+            'Ok
+          else
+            'Error { message = "output selection: 'drv' must be a record, 'output' must be a string" }
+        else
+          'Ok  # Bare derivation record
       else
-        'Error { message = "input must be a Derivation record or a StorePath string" }
+        'Error { message = "input must be a Derivation record, output selection { drv, output }, or a StorePath string" }
     ),
 }

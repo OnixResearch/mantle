@@ -48,16 +48,33 @@ fn default_outputs() -> Vec<String> {
     vec!["out".to_string()]
 }
 
-/// An input is either a derivation to be built or a pre-existing store path.
+/// An input is either a derivation to be built, a pre-existing store path,
+/// or a selected output of a multi-output derivation.
 ///
-/// Serde untagged: a JSON string → `Source`, a JSON object → `Derivation`.
+/// Serde untagged: a JSON string → `Source`, a record with `drv` + `output`
+/// → `OutputSelection`, a record with `name` + `builder` → `Derivation`.
+/// Ordering matters: `OutputSelection` must precede `Derivation` because
+/// both are records; the distinguishing field is `drv` vs `name`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum Input {
     /// A pre-existing store path (e.g., from the seed toolchain).
     Source(String),
-    /// A derivation that must be built first.
+    /// A specific output of a multi-output derivation.
+    OutputSelection(Box<OutputRef>),
+    /// A derivation that must be built first (all outputs).
     Derivation(Box<CrunchDerivation>),
+}
+
+/// Reference to a specific output of a derivation.
+///
+/// Used in the `inputs` array as `{ drv = some_pkg, output = "dev" }`.
+/// The `drv` field is the full derivation record; `output` is the single
+/// output name to depend on.
+#[derive(Debug, Clone, Deserialize)]
+pub struct OutputRef {
+    pub drv: CrunchDerivation,
+    pub output: String,
 }
 
 /// Fixed-output derivation parameters.
