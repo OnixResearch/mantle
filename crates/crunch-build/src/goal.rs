@@ -1,0 +1,610 @@
+//! Goal state machine for build scheduling.
+//!
+//! Each derivation in the build graph becomes a `Goal`. Goals track
+//! their state, dependencies (waitees), and reverse dependencies
+//! (waiters). The Worker drives state transitions.
+//!
+//! This module is pure data — no I/O, no async, no Builder references.
+//! State transitions are validated and return errors on invalid moves.
+
+use nix_compat::derivation::Derivation;
+use nix_compat::store_path::StorePath;
+use std::collections::HashMap;
+
+use crate::error::Error;
+
+/// Maximum number of goals a Worker can track. Prevents runaway
+/// graphs from pathological inputs.
+pub const MAX_GOALS: u32 = 10_000;
+
+/// Lifecycle state of a build goal.
+///
+/// Transitions:
+/// ```text
+/// Pending → Waiting  (has unbuilt deps)
+/// Pending → Ready    (all deps done or no deps)
+/// Waiting → Ready    (last dep completed)
+/// Waiting → Failed   (a dep failed)
+/// Ready   → Building (build slot acquired)
+/// Building → Done    (build succeeded)
+/// Building → Failed  (build error)
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GoalState {
+    /// Created but dependencies not yet inspected.
+    Pending,
+    /// Waiting for `remaining_deps` dependencies to complete.
+    Waiting { remaining_deps: u32 },
+    /// All dependencies satisfied, eligible for a build slot.
+    Ready,
+    /// Sandbox build dispatched, awaiting completion.
+    Building,
+    /// Build completed successfully.
+    Done,
+    /// Build or dependency failed.
+    Failed,
+}
+
+/// A single build goal representing one derivation.
+#[derive(Debug)]
+pub struct Goal {
+    /// The derivation's store path (the .drv path).
+    pub drv_path: StorePath<String>,
+    /// The derivation to build. `None` if the derivation hasn't been
+    /// obtained yet (future: dynamic derivations).
+    pub derivation: Option<Derivation>,
+    /// Current lifecycle state.
+    pub state: GoalState,
+    /// Absolute drv-path keys of goals that this one waits on.
+    /// Populated during `inspect()`.
+    pub waitees: Vec<String>,
+    /// Absolute drv-path keys of goals waiting for this one.
+    /// Populated by the Worker when wiring dependencies.
+    pub waiters: Vec<String>,
+    /// Whether this goal was explicitly requested by the user.
+    pub is_root: bool,
+}
+
+impl Goal {
+    /// Create a new goal in `Pending` state.
+    pub fn new(drv_path: StorePath<String>, derivation: Derivation) -> Self {
+        Self {
+            drv_path,
+            derivation: Some(derivation),
+            state: GoalState::Pending,
+            waitees: Vec::new(),
+            waiters: Vec::new(),
+            is_root: false,
+        }
+    }
+
+    /// Create a new root goal in `Pending` state.
+    pub fn new_root(drv_path: StorePath<String>, derivation: Derivation) -> Self {
+        let mut goal = Self::new(drv_path, derivation);
+        goal.is_root = true;
+        goal
+    }
+
+    /// Inspect dependencies and transition from Pending to Waiting or Ready.
+    ///
+    /// `unbuilt_dep_keys`: absolute drv-path strings of deps that are
+    /// NOT yet Done. If empty, the goal is Ready immediately.
+    ///
+    /// Returns the new state. Errors if not in Pending state.
+    pub fn inspect(&mut self, unbuilt_dep_keys: Vec<String>) -> Result<&GoalState, Error> {
+        // Tiger Style: assert precondition.
+        if self.state != GoalState::Pending {
+            return Err(Error::Store(format!(
+                "goal {}: inspect() called in {:?} state, expected Pending",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+
+        let dep_count = unbuilt_dep_keys.len();
+        debug_assert!(dep_count <= MAX_GOALS as usize, "dep count exceeds MAX_GOALS");
+
+        self.waitees = unbuilt_dep_keys;
+
+        if dep_count == 0 {
+            self.state = GoalState::Ready;
+        } else {
+            self.state = GoalState::Waiting {
+                remaining_deps: dep_count as u32,
+            };
+        }
+
+        Ok(&self.state)
+    }
+
+    /// Notify that one dependency has completed. Decrements the
+    /// remaining count. Transitions to Ready when it hits zero.
+    ///
+    /// Returns `true` if the goal just became Ready.
+    /// Errors if not in Waiting state.
+    pub fn notify_dep_done(&mut self) -> Result<bool, Error> {
+        match &mut self.state {
+            GoalState::Waiting { remaining_deps } => {
+                // Tiger Style: assert positive space.
+                debug_assert!(*remaining_deps > 0, "remaining_deps already zero");
+
+                *remaining_deps = remaining_deps.saturating_sub(1);
+                if *remaining_deps == 0 {
+                    self.state = GoalState::Ready;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            other => Err(Error::Store(format!(
+                "goal {}: notify_dep_done() called in {other:?} state, expected Waiting",
+                self.drv_path.name(),
+            ))),
+        }
+    }
+
+    /// Notify that a dependency has failed. Transitions to Failed.
+    ///
+    /// Errors if not in Waiting state.
+    pub fn notify_dep_failed(&mut self) -> Result<(), Error> {
+        if !matches!(self.state, GoalState::Waiting { .. }) {
+            return Err(Error::Store(format!(
+                "goal {}: notify_dep_failed() in {:?}, expected Waiting",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        self.state = GoalState::Failed;
+        Ok(())
+    }
+
+    /// Transition from Ready to Building.
+    pub fn mark_building(&mut self) -> Result<(), Error> {
+        if self.state != GoalState::Ready {
+            return Err(Error::Store(format!(
+                "goal {}: mark_building() in {:?}, expected Ready",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        self.state = GoalState::Building;
+        Ok(())
+    }
+
+    /// Transition from Building to Done.
+    pub fn mark_done(&mut self) -> Result<(), Error> {
+        if self.state != GoalState::Building {
+            return Err(Error::Store(format!(
+                "goal {}: mark_done() in {:?}, expected Building",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        self.state = GoalState::Done;
+        Ok(())
+    }
+
+    /// Transition from Building to Failed.
+    pub fn mark_build_failed(&mut self) -> Result<(), Error> {
+        if self.state != GoalState::Building {
+            return Err(Error::Store(format!(
+                "goal {}: mark_build_failed() in {:?}, expected Building",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        self.state = GoalState::Failed;
+        Ok(())
+    }
+}
+
+/// Pure goal registry. No I/O, no scheduling — just tracks goals
+/// and their relationships. The Worker uses this as its core data
+/// structure.
+#[derive(Debug)]
+pub struct GoalRegistry {
+    /// Goals keyed by absolute drv path.
+    goals: HashMap<String, Goal>,
+}
+
+impl GoalRegistry {
+    pub fn new() -> Self {
+        Self {
+            goals: HashMap::new(),
+        }
+    }
+
+    /// Number of tracked goals.
+    pub fn len(&self) -> u32 {
+        self.goals.len() as u32
+    }
+
+    /// Whether the registry is empty.
+    pub fn is_empty(&self) -> bool {
+        self.goals.is_empty()
+    }
+
+    /// Check if a goal exists for the given key.
+    pub fn contains(&self, key: &str) -> bool {
+        self.goals.contains_key(key)
+    }
+
+    /// Get a reference to a goal.
+    pub fn get(&self, key: &str) -> Option<&Goal> {
+        self.goals.get(key)
+    }
+
+    /// Get a mutable reference to a goal.
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut Goal> {
+        self.goals.get_mut(key)
+    }
+
+    /// Insert a new goal. Returns error if MAX_GOALS exceeded or
+    /// key already exists.
+    pub fn insert(&mut self, key: String, goal: Goal) -> Result<(), Error> {
+        if self.goals.len() as u32 >= MAX_GOALS {
+            return Err(Error::Store(format!(
+                "goal limit ({MAX_GOALS}) exceeded"
+            )));
+        }
+        if self.goals.contains_key(&key) {
+            return Err(Error::Store(format!(
+                "goal already exists: {key}"
+            )));
+        }
+
+        // Tiger Style: assert postcondition.
+        let old_len = self.goals.len();
+        self.goals.insert(key, goal);
+        debug_assert_eq!(self.goals.len(), old_len + 1);
+
+        Ok(())
+    }
+
+    /// Get or create a goal. Returns the key and whether it was newly
+    /// created. This is the dedup mechanism — same drv path → same goal.
+    pub fn get_or_insert(
+        &mut self,
+        key: String,
+        make_goal: impl FnOnce() -> Goal,
+    ) -> Result<(&mut Goal, bool), Error> {
+        if self.goals.contains_key(&key) {
+            let goal = self.goals.get_mut(&key).unwrap();
+            Ok((goal, false))
+        } else {
+            if self.goals.len() as u32 >= MAX_GOALS {
+                return Err(Error::Store(format!(
+                    "goal limit ({MAX_GOALS}) exceeded"
+                )));
+            }
+            self.goals.entry(key).or_insert_with(make_goal);
+            // Re-borrow to satisfy the borrow checker.
+            // entry().or_insert_with returns &mut V but we need
+            // the borrow from self.goals, not the entry API.
+            let goal = self.goals.values_mut().last().unwrap();
+            Ok((goal, true))
+        }
+    }
+
+    /// Iterate over all goals.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Goal)> {
+        self.goals.iter().map(|(k, v)| (k.as_str(), v))
+    }
+
+    /// Count goals in a given state.
+    pub fn count_in_state(&self, state: &GoalState) -> u32 {
+        self.goals
+            .values()
+            .filter(|g| &g.state == state)
+            .count() as u32
+    }
+
+    /// Count root goals.
+    pub fn root_count(&self) -> u32 {
+        self.goals.values().filter(|g| g.is_root).count() as u32
+    }
+
+    /// Check if all root goals are terminal (Done or Failed).
+    pub fn all_roots_terminal(&self) -> bool {
+        self.goals
+            .values()
+            .filter(|g| g.is_root)
+            .all(|g| matches!(g.state, GoalState::Done | GoalState::Failed))
+    }
+
+    /// Collect outcomes: root goals that are Done.
+    pub fn root_done_keys(&self) -> Vec<String> {
+        self.goals
+            .iter()
+            .filter(|(_, g)| g.is_root && g.state == GoalState::Done)
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+
+    /// Collect failed root goal keys.
+    pub fn root_failed_keys(&self) -> Vec<String> {
+        self.goals
+            .iter()
+            .filter(|(_, g)| g.is_root && g.state == GoalState::Failed)
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+}
+
+impl Default for GoalRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix_compat::derivation::Output;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn make_drv() -> Derivation {
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
+        Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: BTreeMap::new(),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        }
+    }
+
+    fn fake_sp(name: &str) -> StorePath<String> {
+        let mut digest = [0u8; 20];
+        for (i, b) in name.bytes().enumerate() {
+            digest[i % 20] ^= b;
+        }
+        StorePath::from_name_and_digest_fixed(name, digest).unwrap()
+    }
+
+    // ── Goal state transitions ──────────────────────────────────
+
+    #[test]
+    fn new_goal_is_pending() {
+        let g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert_eq!(g.state, GoalState::Pending);
+        assert!(!g.is_root);
+    }
+
+    #[test]
+    fn new_root_goal_is_pending_and_root() {
+        let g = Goal::new_root(fake_sp("a.drv"), make_drv());
+        assert_eq!(g.state, GoalState::Pending);
+        assert!(g.is_root);
+    }
+
+    #[test]
+    fn inspect_no_deps_goes_ready() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        let state = g.inspect(vec![]).unwrap();
+        assert_eq!(*state, GoalState::Ready);
+    }
+
+    #[test]
+    fn inspect_with_deps_goes_waiting() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        let state = g.inspect(vec!["dep1".into(), "dep2".into()]).unwrap();
+        assert_eq!(*state, GoalState::Waiting { remaining_deps: 2 });
+        assert_eq!(g.waitees.len(), 2);
+    }
+
+    #[test]
+    fn inspect_not_pending_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap(); // → Ready
+        let err = g.inspect(vec![]);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn notify_dep_done_decrements() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec!["d1".into(), "d2".into()]).unwrap();
+
+        let became_ready = g.notify_dep_done().unwrap();
+        assert!(!became_ready);
+        assert_eq!(g.state, GoalState::Waiting { remaining_deps: 1 });
+
+        let became_ready = g.notify_dep_done().unwrap();
+        assert!(became_ready);
+        assert_eq!(g.state, GoalState::Ready);
+    }
+
+    #[test]
+    fn notify_dep_done_not_waiting_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap(); // → Ready
+        assert!(g.notify_dep_done().is_err());
+    }
+
+    #[test]
+    fn notify_dep_failed_goes_failed() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec!["d1".into()]).unwrap();
+        g.notify_dep_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn notify_dep_failed_not_waiting_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert!(g.notify_dep_failed().is_err());
+    }
+
+    #[test]
+    fn mark_building_from_ready() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        assert_eq!(g.state, GoalState::Building);
+    }
+
+    #[test]
+    fn mark_building_not_ready_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert!(g.mark_building().is_err());
+    }
+
+    #[test]
+    fn mark_done_from_building() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        g.mark_done().unwrap();
+        assert_eq!(g.state, GoalState::Done);
+    }
+
+    #[test]
+    fn mark_done_not_building_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        assert!(g.mark_done().is_err());
+    }
+
+    #[test]
+    fn mark_build_failed_from_building() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        g.mark_build_failed().unwrap();
+        assert_eq!(g.state, GoalState::Failed);
+    }
+
+    #[test]
+    fn mark_build_failed_not_building_errors() {
+        let mut g = Goal::new(fake_sp("a.drv"), make_drv());
+        g.inspect(vec![]).unwrap();
+        assert!(g.mark_build_failed().is_err());
+    }
+
+    // ── Full lifecycle ──────────────────────────────────────────
+
+    #[test]
+    fn full_lifecycle_leaf() {
+        let mut g = Goal::new(fake_sp("leaf.drv"), make_drv());
+        assert_eq!(g.state, GoalState::Pending);
+
+        g.inspect(vec![]).unwrap();
+        assert_eq!(g.state, GoalState::Ready);
+
+        g.mark_building().unwrap();
+        assert_eq!(g.state, GoalState::Building);
+
+        g.mark_done().unwrap();
+        assert_eq!(g.state, GoalState::Done);
+    }
+
+    #[test]
+    fn full_lifecycle_with_deps() {
+        let mut g = Goal::new(fake_sp("top.drv"), make_drv());
+
+        g.inspect(vec!["dep.drv".into()]).unwrap();
+        assert_eq!(g.state, GoalState::Waiting { remaining_deps: 1 });
+
+        g.notify_dep_done().unwrap();
+        assert_eq!(g.state, GoalState::Ready);
+
+        g.mark_building().unwrap();
+        g.mark_done().unwrap();
+        assert_eq!(g.state, GoalState::Done);
+    }
+
+    // ── GoalRegistry ────────────────────────────────────────────
+
+    #[test]
+    fn registry_insert_and_get() {
+        let mut reg = GoalRegistry::new();
+        let sp = fake_sp("a.drv");
+        let key = sp.to_absolute_path();
+
+        reg.insert(key.clone(), Goal::new(sp, make_drv())).unwrap();
+
+        assert_eq!(reg.len(), 1);
+        assert!(reg.contains(&key));
+        assert!(reg.get(&key).is_some());
+    }
+
+    #[test]
+    fn registry_duplicate_insert_errors() {
+        let mut reg = GoalRegistry::new();
+        let sp = fake_sp("a.drv");
+        let key = sp.to_absolute_path();
+
+        reg.insert(key.clone(), Goal::new(sp.clone(), make_drv())).unwrap();
+        let err = reg.insert(key, Goal::new(sp, make_drv()));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn registry_get_or_insert_dedup() {
+        let mut reg = GoalRegistry::new();
+        let sp = fake_sp("a.drv");
+        let key = sp.to_absolute_path();
+
+        let (_, created1) = reg.get_or_insert(key.clone(), || Goal::new(sp.clone(), make_drv())).unwrap();
+        assert!(created1);
+
+        let (_, created2) = reg.get_or_insert(key, || Goal::new(sp, make_drv())).unwrap();
+        assert!(!created2);
+
+        assert_eq!(reg.len(), 1);
+    }
+
+    #[test]
+    fn registry_count_in_state() {
+        let mut reg = GoalRegistry::new();
+
+        let sp1 = fake_sp("a.drv");
+        let sp2 = fake_sp("b.drv");
+        reg.insert(sp1.to_absolute_path(), Goal::new(sp1, make_drv())).unwrap();
+        reg.insert(sp2.to_absolute_path(), Goal::new(sp2, make_drv())).unwrap();
+
+        assert_eq!(reg.count_in_state(&GoalState::Pending), 2);
+        assert_eq!(reg.count_in_state(&GoalState::Ready), 0);
+    }
+
+    #[test]
+    fn registry_all_roots_terminal() {
+        let mut reg = GoalRegistry::new();
+
+        let sp = fake_sp("root.drv");
+        let key = sp.to_absolute_path();
+        let mut g = Goal::new_root(sp, make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        g.mark_done().unwrap();
+        reg.insert(key, g).unwrap();
+
+        assert!(reg.all_roots_terminal());
+    }
+
+    #[test]
+    fn registry_roots_not_terminal_when_building() {
+        let mut reg = GoalRegistry::new();
+
+        let sp = fake_sp("root.drv");
+        let key = sp.to_absolute_path();
+        let mut g = Goal::new_root(sp, make_drv());
+        g.inspect(vec![]).unwrap();
+        g.mark_building().unwrap();
+        reg.insert(key, g).unwrap();
+
+        assert!(!reg.all_roots_terminal());
+    }
+
+    #[test]
+    fn registry_empty_is_terminal() {
+        let reg = GoalRegistry::new();
+        assert!(reg.all_roots_terminal());
+    }
+}

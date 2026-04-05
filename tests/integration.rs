@@ -552,3 +552,27 @@ fn fix_flag_rewrites_hash() {
         "new SRI hash should be in the file: {updated}"
     );
 }
+
+// ── CLI flag tests ────────────────────────────────────────────────
+
+#[test]
+fn build_accepts_jobs_flag() {
+    // --jobs should be accepted without error (even if the build itself
+    // fails due to missing store, bwrap, etc.).
+    crunch_cmd()
+        .args(["build", "--jobs", "2"])
+        .arg(fixture("simple.ncl"))
+        .assert()
+        // We don't assert success — the build may fail (no bwrap, read-only
+        // store, etc.). We just verify clap accepts the flag.
+        .stderr(predicate::str::contains("unrecognized").not());
+}
+
+#[test]
+fn build_accepts_short_j_flag() {
+    crunch_cmd()
+        .args(["build", "-j", "1"])
+        .arg(fixture("simple.ncl"))
+        .assert()
+        .stderr(predicate::str::contains("unrecognized").not());
+}

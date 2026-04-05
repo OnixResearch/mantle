@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
@@ -25,9 +26,6 @@ use crate::fod::verify_fod_hash;
 use crate::references::{parse_store_path, resolve_nix_closure, resolve_references};
 use crate::Error;
 
-/// Maximum recursive build depth. Prevents stack overflow from cyclic
-/// or pathologically deep dependency graphs.
-const MAX_BUILD_DEPTH: u32 = 256;
 
 /// The result of building a single derivation.
 #[derive(Debug, Clone)]
@@ -46,12 +44,30 @@ pub struct BuildOutcome {
 /// layout, and KnownPaths lookups always use this. Matches Nix convention.
 const LOGICAL_STORE_DIR: &str = "/nix/store";
 
+/// Metadata saved during `prepare_build`, consumed by `finish_build`.
+pub(crate) struct PreparedBuild {
+    pub(crate) drv_path: StorePath<String>,
+    pub(crate) drv_name: String,
+    pub(crate) derivation: Derivation,
+    pub(crate) build_request: snix_build::buildservice::BuildRequest,
+    pub(crate) sandbox_inputs: BTreeMap<StorePath<String>, Node>,
+    pub(crate) input_rewrites: Vec<(String, String)>,
+    pub(crate) is_ca: bool,
+}
+
+/// Result of `prepare_build`: either already done (cached/fetcher) or
+/// needs a sandbox build.
+pub(crate) enum PrepareResult {
+    Done(BuildOutcome),
+    NeedsBuild(PreparedBuild),
+}
+
 /// Orchestrates the build pipeline: evaluating dependencies, checking
 /// cache, running builds, persisting results.
 pub struct Builder<BS, DS, BServ, PIS> {
     blob_service: BS,
     directory_service: DS,
-    build_service: BServ,
+    build_service: Arc<BServ>,
     pathinfo_service: PIS,
     /// Physical output directory on the host filesystem. This is where
     /// crunch writes build outputs (from `--store`). May differ from
@@ -77,7 +93,7 @@ impl<BS, DS, BServ, PIS> Builder<BS, DS, BServ, PIS>
 where
     BS: BlobService + Clone + 'static,
     DS: DirectoryService + Clone + 'static,
-    BServ: BuildService,
+    BServ: BuildService + 'static,
     PIS: PathInfoService,
 {
     pub fn new(
@@ -111,7 +127,7 @@ where
         Self {
             blob_service,
             directory_service,
-            build_service,
+            build_service: Arc::new(build_service),
             pathinfo_service,
             output_dir,
             output_dir_str,
@@ -125,94 +141,115 @@ where
 
     /// Build a derivation and all its dependencies. Returns the outcome.
     ///
-    /// `known_paths` must contain the derivation and all its transitive
-    /// input derivations (populated by crunch-glue's `convert()`).
+    /// Delegates to `build_all` with a single root and max_jobs=1.
+    /// Get a cloned Arc to the build service (for spawning tasks).
+    pub(crate) fn build_service(&self) -> Arc<BServ> {
+        self.build_service.clone()
+    }
+
+    /// Prefer `build_all` when building multiple roots.
     pub async fn build(
         &mut self,
         drv_path: &StorePath<String>,
         known_paths: &mut KnownPaths,
     ) -> Result<BuildOutcome, Error> {
-        let entry = known_paths
-            .get_by_drv_path(&drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR))
-            .ok_or_else(|| Error::DerivationNotFound {
-                path: drv_path.clone(),
-            })?;
-        let derivation = entry.derivation.clone();
-
-        self.build_derivation_at_depth(drv_path, &derivation, known_paths, 0)
-            .await
+        let mut outcomes = self.build_all(&[drv_path.clone()], known_paths, 1).await?;
+        outcomes.pop().ok_or_else(|| Error::DerivationNotFound {
+            path: drv_path.clone(),
+        })
     }
 
-    /// Recursive build implementation.
+    /// Build multiple root derivations and all their dependencies,
+    /// using the lazy goal-based scheduler.
     ///
-    /// Boxed because it's a recursive async fn — Rust can't compute the
-    /// layout of the future without indirection.
-    fn build_derivation_at_depth<'a>(
-        &'a mut self,
-        drv_path: &'a StorePath<String>,
-        derivation: &'a Derivation,
-        known_paths: &'a mut KnownPaths,
-        depth: u32,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<BuildOutcome, Error>> + 'a>> {
-        Box::pin(self.build_derivation_inner(drv_path, derivation, known_paths, depth))
+    /// Creates goals lazily via `Worker::want()`, then runs the
+    /// dispatch loop which handles cache hits inline and spawns
+    /// sandbox builds concurrently up to `max_jobs`.
+    ///
+    /// Returns outcomes for root derivations only.
+    pub async fn build_all(
+        &mut self,
+        roots: &[StorePath<String>],
+        known_paths: &mut KnownPaths,
+        max_jobs: u32,
+    ) -> Result<Vec<BuildOutcome>, Error> {
+        use crate::worker::Worker;
+
+        if roots.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");
+
+        let mut worker = Worker::new(max_jobs);
+
+        for root in roots {
+            worker.want(root, known_paths, true)?;
+        }
+
+        let result = worker.run(self, known_paths).await?;
+
+        if !result.failed.is_empty() {
+            return Err(Error::Store(format!(
+                "{} root build(s) failed",
+                result.failed.len(),
+            )));
+        }
+
+        Ok(result.outcomes)
     }
 
-    /// Core build logic. Phases:
-    /// 1. Check cache
-    /// 2. Handle builtin fetchers
-    /// 3. Build input derivations recursively
-    /// 4. Resolve source inputs and Nix closures
-    /// 5. Collect sandbox inputs
-    /// 6. Execute the sandbox build
-    /// 7. Process each output (rewrite, hash, persist, export)
-    async fn build_derivation_inner(
+    /// Prepare a single derivation for building. Handles cache hits and
+    /// fetchers inline; for sandbox builds, returns the prepared metadata
+    /// needed to dispatch `do_build` and later `finish_build`.
+    pub(crate) async fn prepare_build(
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         known_paths: &mut KnownPaths,
-        depth: u32,
-    ) -> Result<BuildOutcome, Error> {
-        // Tiger Style: fixed limit on recursion depth.
-        if depth >= MAX_BUILD_DEPTH {
-            return Err(Error::Store(format!(
-                "build depth limit ({MAX_BUILD_DEPTH}) exceeded at {}",
-                drv_path.name()
-            )));
-        }
-
+    ) -> Result<PrepareResult, Error> {
         let drv_name = drv_path.name().to_string();
 
         // 1. Cache check
         if let Some(cached_outputs) = self.check_cache(drv_path, derivation).await? {
             info!(drv = %drv_name, "all outputs cached, skipping build");
-            return Ok(BuildOutcome {
+            return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
                 outputs: cached_outputs,
                 cached: true,
                 log: None,
-            });
+            }));
         }
 
-        // 2. Builtin fetcher bypass
+        // 2. Builtin fetcher bypass (runs inline, not dispatched).
         if crate::fetcher::is_builtin_fetcher(derivation) {
-            return self
+            let outcome = self
                 .build_fetcher(drv_path, derivation, known_paths)
-                .await;
+                .await?;
+            return Ok(PrepareResult::Done(outcome));
         }
 
-        // 3. Build input derivations
-        self.build_input_derivations(derivation, known_paths, depth).await?;
+        // 3. Ensure input derivation outputs are in castore.
+        for (input_drv_path, _output_names) in &derivation.input_derivations {
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
+                let input_drv = entry.derivation.clone();
+                self.ensure_input_nodes(&input_drv).await?;
+            }
+        }
 
-        // 4. Resolve source inputs + closures, ingest into castore
+        // 4. Resolve source inputs + closures.
         let all_source_paths = self.resolve_and_ingest_sources(derivation).await?;
 
-        // 5. Collect sandbox inputs
+        // 5. Collect sandbox inputs.
         let sandbox_inputs = self
             .collect_sandbox_inputs(derivation, known_paths, &all_source_paths)
             .await?;
 
-        // 6. Build
-        let build_request = derivation_to_build_request(derivation, &sandbox_inputs, LOGICAL_STORE_DIR)?;
+        // 6. Create build request.
+        let build_request = derivation_to_build_request(
+            derivation, &sandbox_inputs, LOGICAL_STORE_DIR,
+        )?;
 
         info!(drv = %drv_name, "building");
         if self.verbose {
@@ -220,30 +257,37 @@ where
                 drv = %drv_name,
                 inputs = sandbox_inputs.len(),
                 outputs = build_request.outputs.len(),
-                "starting sandbox build"
+                "dispatching sandbox build"
             );
         }
 
         let input_rewrites = self.collect_ca_input_rewrites(derivation, known_paths);
-
-        let build_result = self
-            .build_service
-            .do_build(build_request.clone())
-            .await
-            .map_err(|e| Error::BuildFailed {
-                name: drv_name.clone(),
-                exit_code: "unknown".to_string(),
-                log: e.to_string(),
-            })?;
-
-        // 7. Process outputs
         let is_ca = derivation.outputs.values()
             .all(|o| o.path.is_none() && o.ca_hash.is_none());
 
-        let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
-        let output_names: Vec<String> = derivation.outputs.keys().cloned().collect();
+        Ok(PrepareResult::NeedsBuild(PreparedBuild {
+            drv_path: drv_path.clone(),
+            drv_name,
+            derivation: derivation.clone(),
+            build_request,
+            sandbox_inputs,
+            input_rewrites,
+            is_ca,
+        }))
+    }
 
-        for (i, (output_name, output)) in derivation.outputs.iter().enumerate() {
+    /// Process a completed sandbox build: apply rewrites, hash outputs,
+    /// persist PathInfo, export to disk.
+    pub(crate) async fn finish_build(
+        &mut self,
+        prepared: &PreparedBuild,
+        build_result: snix_build::buildservice::BuildResult,
+        known_paths: &mut KnownPaths,
+    ) -> Result<BuildOutcome, Error> {
+        let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
+        let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
+
+        for (i, (output_name, output)) in prepared.derivation.outputs.iter().enumerate() {
             let build_output = build_result.outputs.get(i).ok_or_else(|| {
                 Error::OutputMissing {
                     output: output_name.clone(),
@@ -252,17 +296,17 @@ where
 
             let path_info = self
                 .process_output(
-                    drv_path,
-                    &drv_name,
+                    &prepared.drv_path,
+                    &prepared.drv_name,
                     output_name,
                     output,
                     build_output,
-                    &input_rewrites,
-                    &sandbox_inputs,
-                    &build_request,
-                    derivation,
+                    &prepared.input_rewrites,
+                    &prepared.sandbox_inputs,
+                    &prepared.build_request,
+                    &prepared.derivation,
                     known_paths,
-                    is_ca,
+                    prepared.is_ca,
                 )
                 .await?;
 
@@ -270,56 +314,20 @@ where
         }
 
         info!(
-            drv = %drv_name,
+            drv = %prepared.drv_name,
             outputs = ?output_names.iter()
-                .filter_map(|n| derivation.outputs.get(n)?.path.as_ref())
+                .filter_map(|n| prepared.derivation.outputs.get(n)?.path.as_ref())
                 .map(|p| p.to_absolute_path_with_prefix(&self.output_dir_str))
                 .collect::<Vec<_>>(),
             "build succeeded"
         );
 
         Ok(BuildOutcome {
-            drv_path: drv_path.clone(),
+            drv_path: prepared.drv_path.clone(),
             outputs: output_infos,
             cached: false,
             log: build_result.log,
         })
-    }
-
-    /// Recursively build all input derivations. Skips inputs whose
-    /// outputs already exist (built earlier this session or on disk).
-    async fn build_input_derivations(
-        &mut self,
-        derivation: &Derivation,
-        known_paths: &mut KnownPaths,
-        depth: u32,
-    ) -> Result<(), Error> {
-        for (input_drv_path, _output_names) in &derivation.input_derivations {
-            let input_entry = known_paths
-                .get_by_drv_path(&input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR))
-                .ok_or_else(|| Error::DerivationNotFound {
-                    path: input_drv_path.clone(),
-                })?;
-            let input_drv = input_entry.derivation.clone();
-
-            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
-            let already_built = input_drv.outputs.keys().all(|output_name| {
-                if let Some(resolved) = known_paths.get_output_path(&input_abs, output_name) {
-                    self.output_nodes.contains_key(&resolved) || self.output_exists_on_disk(&resolved)
-                } else {
-                    false
-                }
-            });
-
-            if !already_built {
-                self.build_derivation_at_depth(
-                    input_drv_path, &input_drv, known_paths, depth.saturating_add(1),
-                ).await?;
-            } else {
-                self.ensure_input_nodes(&input_drv).await?;
-            }
-        }
-        Ok(())
     }
 
     /// Validate source inputs, resolve Nix closures, and ingest all
@@ -902,13 +910,6 @@ where
         Ok(Some(infos))
     }
 
-    /// Check if a crunch-built output exists on the host filesystem.
-    /// Uses the physical output dir, not the logical store prefix.
-    fn output_exists_on_disk(&self, path: &StorePath<String>) -> bool {
-        let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str));
-        abs.exists()
-    }
-
     /// Resolve a store path to its host filesystem location.
     /// Source inputs (from input_sources) live at /nix/store/.
     /// Built outputs live at the physical output dir.
@@ -1483,5 +1484,139 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "no build needed for cached output");
+    }
+
+    // ── build_all tests ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn build_all_multiple_roots_shared_dep() {
+        // A (leaf) → B (root), A → C (root).
+        // build_all([B, C]) should build A once, then B and C.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a_path, _) = build_and_register("shared", &[], &mut kp);
+        let (b_path, _) = build_and_register("root-b", &[(a_path.clone(), "out")], &mut kp);
+        let (c_path, _) = build_and_register("root-c", &[(a_path.clone(), "out")], &mut kp);
+
+        let outcomes = builder
+            .build_all(&[b_path.clone(), c_path.clone()], &mut kp, 2)
+            .await
+            .unwrap();
+
+        // Should return outcomes for roots only.
+        assert_eq!(outcomes.len(), 2, "should return 2 root outcomes");
+        let outcome_drv_names: Vec<String> = outcomes.iter()
+            .map(|o| o.drv_path.name().to_string())
+            .collect();
+        assert!(
+            outcome_drv_names.iter().any(|n| n.contains("root-b")),
+            "should include root-b: {outcome_drv_names:?}"
+        );
+        assert!(
+            outcome_drv_names.iter().any(|n| n.contains("root-c")),
+            "should include root-c: {outcome_drv_names:?}"
+        );
+
+        // Shared dep 'shared' should build exactly once.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3, "should build shared + root-b + root-c: {:?}", *recorded);
+        let shared_builds = recorded.iter()
+            .filter(|args| args.iter().any(|a| a.contains("shared")))
+            .count();
+        assert_eq!(shared_builds, 1, "shared dep should build once");
+    }
+
+    #[tokio::test]
+    async fn build_all_empty_roots() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let outcomes = builder.build_all(&[], &mut kp, 2).await.unwrap();
+        assert!(outcomes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn build_all_ordering_deps_before_dependents() {
+        // A (leaf) → B → C (root).
+        // Build order must be A, B, C.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a_path, _) = build_and_register("leaf-a", &[], &mut kp);
+        let (b_path, _) = build_and_register("mid-b", &[(a_path.clone(), "out")], &mut kp);
+        let (c_path, _) = build_and_register("top-c", &[(b_path.clone(), "out")], &mut kp);
+
+        let outcomes = builder
+            .build_all(&[c_path.clone()], &mut kp, 2)
+            .await
+            .unwrap();
+
+        assert_eq!(outcomes.len(), 1, "one root");
+        assert!(outcomes[0].drv_path.name().contains("top-c"));
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+
+        // Verify ordering: leaf-a before mid-b before top-c.
+        let pos_a = recorded.iter().position(|args| args.iter().any(|a| a.contains("leaf-a"))).unwrap();
+        let pos_b = recorded.iter().position(|args| args.iter().any(|a| a.contains("mid-b"))).unwrap();
+        let pos_c = recorded.iter().position(|args| args.iter().any(|a| a.contains("top-c"))).unwrap();
+        assert!(pos_a < pos_b, "leaf-a must build before mid-b");
+        assert!(pos_b < pos_c, "mid-b must build before top-c");
+    }
+
+    #[tokio::test]
+    async fn build_all_disjoint_trees() {
+        // Two independent trees: A→B and C→D.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+        );
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (a_path, _) = build_and_register("tree1-leaf", &[], &mut kp);
+        let (b_path, _) = build_and_register("tree1-root", &[(a_path.clone(), "out")], &mut kp);
+        let (c_path, _) = build_and_register("tree2-leaf", &[], &mut kp);
+        let (d_path, _) = build_and_register("tree2-root", &[(c_path.clone(), "out")], &mut kp);
+
+        let outcomes = builder
+            .build_all(&[b_path.clone(), d_path.clone()], &mut kp, 2)
+            .await
+            .unwrap();
+
+        assert_eq!(outcomes.len(), 2);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 4, "all 4 nodes should build");
+
+        // Each leaf must build before its root.
+        let pos_a = recorded.iter().position(|args| args.iter().any(|a| a.contains("tree1-leaf"))).unwrap();
+        let pos_b = recorded.iter().position(|args| args.iter().any(|a| a.contains("tree1-root"))).unwrap();
+        let pos_c = recorded.iter().position(|args| args.iter().any(|a| a.contains("tree2-leaf"))).unwrap();
+        let pos_d = recorded.iter().position(|args| args.iter().any(|a| a.contains("tree2-root"))).unwrap();
+        assert!(pos_a < pos_b, "tree1-leaf before tree1-root");
+        assert!(pos_c < pos_d, "tree2-leaf before tree2-root");
     }
 }

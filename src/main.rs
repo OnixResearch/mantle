@@ -49,6 +49,10 @@ enum Command {
         /// Auto-fix FOD hash mismatches by rewriting the .ncl source
         #[arg(long)]
         fix: bool,
+
+        /// Maximum number of concurrent builds (default: CPU count, max 16)
+        #[arg(short, long)]
+        jobs: Option<u32>,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -156,9 +160,10 @@ fn run(args: Args) -> Result<(), RunError> {
             println!("{json}");
             Ok(())
         }
-        Command::Build { file, import_paths, fix } => {
+        Command::Build { file, import_paths, fix, jobs } => {
             let import_paths = build_import_paths(&import_paths)?;
-            cmd_build(&file, &import_paths, &args.store, args.verbose, fix)
+            let max_jobs = resolve_max_jobs(jobs);
+            cmd_build(&file, &import_paths, &args.store, args.verbose, fix, max_jobs)
         }
         Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
@@ -172,12 +177,24 @@ fn run(args: Args) -> Result<(), RunError> {
 /// layout, and KnownPaths lookups always use this.
 const LOGICAL_STORE_DIR: &str = "/nix/store";
 
+/// Resolve --jobs: user value clamped to [1, 16], or available_parallelism.
+fn resolve_max_jobs(user: Option<u32>) -> u32 {
+    const MAX_JOBS_CAP: u32 = 16;
+    match user {
+        Some(j) => j.clamp(1, MAX_JOBS_CAP),
+        None => std::thread::available_parallelism()
+            .map(|n| (n.get() as u32).min(MAX_JOBS_CAP))
+            .unwrap_or(1),
+    }
+}
+
 fn cmd_build(
     file: &std::path::Path,
     import_paths: &[OsString],
     output_dir: &std::path::Path,
     verbose: bool,
     fix: bool,
+    max_jobs: u32,
 ) -> Result<(), RunError> {
     if !output_dir.exists() {
         return Err(RunError::Internal(format!(
@@ -212,6 +229,7 @@ fn cmd_build(
             file,
             verbose,
             fix,
+            max_jobs,
         )
         .await
     })
@@ -287,6 +305,7 @@ fn deserialize_derivations(
 
 /// Imperative shell: set up build services and execute all builds.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn execute_builds(
     drv_paths: &[(String, StorePath<String>)],
     known_paths: &mut crunch_glue::KnownPaths,
@@ -296,6 +315,7 @@ async fn execute_builds(
     source_file: &std::path::Path,
     verbose: bool,
     fix: bool,
+    max_jobs: u32,
 ) -> Result<(), RunError> {
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
@@ -339,19 +359,72 @@ async fn execute_builds(
             verbose,
         );
 
-        for (label, drv_path) in drv_paths {
-            build_one_derivation(
-                &mut builder,
-                drv_path,
-                label,
-                known_paths,
-                output_dir_str,
-                log_dir,
-                source_file,
-                verbose,
-                fix,
-            )
-            .await?;
+        // Collect just the StorePaths for build_all.
+        let root_paths: Vec<StorePath<String>> =
+            drv_paths.iter().map(|(_, sp)| sp.clone()).collect();
+
+        let outcomes = match builder.build_all(&root_paths, known_paths, max_jobs).await {
+            Ok(outcomes) => outcomes,
+            Err(crunch_build::Error::FodHashMismatch {
+                ref name,
+                ref expected_sri,
+                ref actual_sri,
+            }) => {
+                // Find the matching drv_path/label for the FOD error.
+                let (label, drv_path) = drv_paths
+                    .iter()
+                    .find(|(_, sp)| sp.name().contains(name.as_str()))
+                    .unwrap_or(&drv_paths[0]);
+                return handle_fod_mismatch(
+                    name, expected_sri, actual_sri, drv_path, label,
+                    log_dir, source_file, fix,
+                );
+            }
+            Err(e) => {
+                let log_msg = format!("{e}");
+                if let Some((label, drv_path)) = drv_paths.first() {
+                    write_log(log_dir, drv_path, label, false, &log_msg);
+                }
+                return Err(RunError::Build(log_msg));
+            }
+        };
+
+        // Build a label lookup from drv path string.
+        let label_by_drv: std::collections::HashMap<String, &str> = drv_paths
+            .iter()
+            .map(|(label, sp)| {
+                (sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR), label.as_str())
+            })
+            .collect();
+
+        for outcome in &outcomes {
+            let drv_abs = outcome.drv_path
+                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let label = label_by_drv.get(drv_abs.as_str()).copied().unwrap_or("?");
+
+            if let Some(log) = &outcome.log {
+                write_log(log_dir, &outcome.drv_path, label, true, log);
+                if verbose {
+                    eprintln!("--- build log: {label} ---");
+                    eprintln!("{log}");
+                    eprintln!("--- end log ---");
+                }
+            } else if !outcome.cached {
+                write_log(
+                    log_dir, &outcome.drv_path, label, true,
+                    "(no output captured)",
+                );
+            }
+
+            for (_output_name, path_info) in &outcome.outputs {
+                let path = path_info.store_path
+                    .to_absolute_path_with_prefix(output_dir_str);
+                if outcome.cached {
+                    println!("{path} (cached)");
+                } else {
+                    println!("{path}");
+                }
+            }
         }
     }
 
@@ -402,70 +475,6 @@ async fn open_pathinfo_service(
             .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
         }
     }
-}
-
-/// Build a single derivation, handling errors, logs, and output.
-async fn build_one_derivation(
-    builder: &mut crunch_build::Builder<
-        snix_castore::blobservice::MemoryBlobService,
-        snix_castore::directoryservice::RedbDirectoryService,
-        snix_build::buildservice::BubblewrapBuildService<
-            snix_castore::blobservice::MemoryBlobService,
-            snix_castore::directoryservice::RedbDirectoryService,
-        >,
-        snix_store::pathinfoservice::RedbPathInfoService,
-    >,
-    drv_path: &StorePath<String>,
-    label: &str,
-    known_paths: &mut crunch_glue::KnownPaths,
-    output_dir_str: &str,
-    log_dir: &std::path::Path,
-    source_file: &std::path::Path,
-    verbose: bool,
-    fix: bool,
-) -> Result<(), RunError> {
-    let outcome = match builder.build(drv_path, known_paths).await {
-        Ok(o) => o,
-        Err(crunch_build::Error::FodHashMismatch {
-            ref name,
-            ref expected_sri,
-            ref actual_sri,
-        }) => {
-            return handle_fod_mismatch(
-                name, expected_sri, actual_sri, drv_path, label,
-                log_dir, source_file, fix,
-            );
-        }
-        Err(e) => {
-            let log_msg = format!("{e}");
-            write_log(log_dir, drv_path, label, false, &log_msg);
-            return Err(RunError::Build(log_msg));
-        }
-    };
-
-    // Log success.
-    if let Some(log) = &outcome.log {
-        write_log(log_dir, drv_path, label, true, log);
-        if verbose {
-            eprintln!("--- build log: {label} ---");
-            eprintln!("{log}");
-            eprintln!("--- end log ---");
-        }
-    } else if !outcome.cached {
-        write_log(log_dir, drv_path, label, true, "(no output captured)");
-    }
-
-    // Print output paths.
-    for (_output_name, path_info) in &outcome.outputs {
-        let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
-        if outcome.cached {
-            println!("{path} (cached)");
-        } else {
-            println!("{path}");
-        }
-    }
-
-    Ok(())
 }
 
 /// Handle a FOD hash mismatch: optionally auto-fix, always log.

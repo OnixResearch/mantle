@@ -11,12 +11,16 @@ mod error;
 mod export;
 pub mod fetcher;
 mod fod;
+pub mod goal;
 mod hash;
 mod orchestrate;
 mod references;
 pub mod rewrite;
+pub mod worker;
 
 pub use build_request::derivation_to_build_request;
 pub use error::Error;
 pub use fetcher::{Fetch, FetchError};
+pub use goal::{Goal, GoalRegistry, GoalState};
 pub use orchestrate::{BuildOutcome, Builder};
+pub use worker::{Worker, WorkerResult};

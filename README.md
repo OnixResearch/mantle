@@ -190,6 +190,7 @@ ncurses, etc.) in the sandbox.
 
 ```
 crunch build <file.ncl>     Evaluate and build
+crunch build -j 4 <file>    Build with max 4 concurrent jobs (plumbing; sequential for now)
 crunch build --fix <file>   Build, auto-fix FOD hash mismatches in .ncl source
 crunch eval <file.ncl>      Evaluate and print JSON
 crunch bootstrap [-o seed.ncl] [packages...]   Generate seed from Nix store
@@ -239,7 +240,8 @@ crunch --store /tmp/mystore build hello.ncl
 - **Read-only `/nix/store`**: builds succeed (output is in the PathInfo
   database and castore) but output files are not written to disk. Use an
   overlay mount or a writable store.
-- **Builds are sequential**: independent derivations in the dependency graph
-  are not yet built concurrently. The async infrastructure supports it; the
-  scheduler is not implemented yet.
+- **Concurrent builds**: independent derivations run in parallel (up to
+  `--jobs N`, default: CPU count, max 16). The DAG scheduler dispatches
+  builds in topological order; sandbox execution is concurrent via
+  `tokio::JoinSet`. Preparation and output processing are sequential.
 - **No garbage collection**: `crunch store gc` is not implemented.
