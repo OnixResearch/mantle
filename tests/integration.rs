@@ -418,3 +418,137 @@ fn log_subcommand_query_not_found() {
         .code(3)
         .stderr(predicate::str::contains("no log matching"));
 }
+
+// ── Phase: Fetcher hash mismatch + --fix ─────────────────────────
+
+#[test]
+fn fetchurl_wrong_hash_shows_correct_hash() {
+    // Spin up a local HTTP server serving known content.
+    let content = b"auto-fix test content";
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        use std::io::Write;
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = std::io::Read::read(&mut stream, &mut buf);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                content.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(content);
+        }
+    });
+
+    // Write a .ncl file with a wrong hash
+    let store_dir = tempfile::tempdir().unwrap();
+    let work_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work_dir.path().join("fetch-test.ncl");
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+               crunch.fetchurl {{
+                 url = "http://{addr}/test.txt",
+                 hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+               }}"#
+        ),
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("build")
+        .arg(&ncl_file)
+        .output()
+        .unwrap();
+
+    handle.join().unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Should contain both the wrong and correct hash
+    assert!(
+        stderr.contains("hash mismatch"),
+        "stderr should mention hash mismatch: {stderr}"
+    );
+    assert!(
+        stderr.contains("sha256-"),
+        "stderr should contain SRI hash: {stderr}"
+    );
+    // Should suggest the update
+    assert!(
+        stderr.contains("update") || stderr.contains("got:"),
+        "stderr should suggest the correct hash: {stderr}"
+    );
+    assert!(
+        !output.status.success(),
+        "build should fail on hash mismatch"
+    );
+}
+
+#[test]
+fn fix_flag_rewrites_hash() {
+    // Spin up a local HTTP server
+    let content = b"fix-flag test content";
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        use std::io::Write;
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = std::io::Read::read(&mut stream, &mut buf);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                content.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(content);
+        }
+    });
+
+    let store_dir = tempfile::tempdir().unwrap();
+    let work_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work_dir.path().join("fix-test.ncl");
+    let wrong_hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+               crunch.fetchurl {{
+                 url = "http://{addr}/test.txt",
+                 hash = "{wrong_hash}",
+               }}"#
+        ),
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("build")
+        .arg("--fix")
+        .arg(&ncl_file)
+        .output()
+        .unwrap();
+
+    handle.join().unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("fixed:"),
+        "stderr should confirm the fix: {stderr}"
+    );
+
+    // The .ncl file should have been rewritten
+    let updated = std::fs::read_to_string(&ncl_file).unwrap();
+    assert!(
+        !updated.contains(wrong_hash),
+        "old hash should be gone from the file"
+    );
+    assert!(
+        updated.contains("sha256-"),
+        "new SRI hash should be in the file: {updated}"
+    );
+}

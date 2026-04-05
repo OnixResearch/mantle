@@ -17,11 +17,11 @@ pub enum Error {
     #[error("output not produced by build: {output}")]
     OutputMissing { output: String },
 
-    #[error("FOD hash mismatch for {name}: expected {expected}, got {actual}")]
+    #[error("FOD hash mismatch for {name}: expected {expected_sri}, got {actual_sri}")]
     FodHashMismatch {
         name: String,
-        expected: String,
-        actual: String,
+        expected_sri: String,
+        actual_sri: String,
     },
 
     #[error("flat-mode FOD output is not a file: {name}")]

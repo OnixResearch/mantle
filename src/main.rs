@@ -43,6 +43,10 @@ enum Command {
         /// Additional import paths for Nickel
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<PathBuf>,
+
+        /// Auto-fix FOD hash mismatches by rewriting the .ncl source
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -150,9 +154,9 @@ fn run(args: Args) -> Result<(), RunError> {
             println!("{json}");
             Ok(())
         }
-        Command::Build { file, import_paths } => {
+        Command::Build { file, import_paths, fix } => {
             let import_paths = build_import_paths(&import_paths)?;
-            cmd_build(&file, &import_paths, &args.store, args.verbose)
+            cmd_build(&file, &import_paths, &args.store, args.verbose, fix)
         }
         Command::Bootstrap { output, packages } => cmd_bootstrap(&output, &packages),
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
@@ -165,6 +169,7 @@ fn cmd_build(
     import_paths: &[OsString],
     store_dir: &std::path::Path,
     verbose: bool,
+    fix: bool,
 ) -> Result<(), RunError> {
     // 0. Verify store directory exists (or explain how to create it)
     if !store_dir.exists() {
@@ -299,14 +304,53 @@ fn cmd_build(
             );
 
             for (label, drv_path) in &drv_paths {
-                let outcome = builder
+                let outcome = match builder
                     .build(drv_path, &mut known_paths)
                     .await
-                    .map_err(|e| {
+                {
+                    Ok(o) => o,
+                    Err(crunch_build::Error::FodHashMismatch {
+                        ref name,
+                        ref expected_sri,
+                        ref actual_sri,
+                    }) => {
+                        let msg = format!(
+                            "hash mismatch for '{name}':\n\
+                             \x20 expected: {expected_sri}\n\
+                             \x20 got:      {actual_sri}"
+                        );
+                        if fix {
+                            match auto_fix_hash(file, expected_sri, actual_sri) {
+                                Ok(()) => {
+                                    eprintln!("{msg}");
+                                    eprintln!("  fixed: updated {} with correct hash", file.display());
+                                    // Rebuild: return the mismatch as an error so the
+                                    // user re-runs. A full retry loop is future work.
+                                    return Err(RunError::Build(format!(
+                                        "{msg}\n  fixed: re-run to build with the corrected hash"
+                                    )));
+                                }
+                                Err(fix_err) => {
+                                    eprintln!("{msg}");
+                                    eprintln!("  --fix failed: {fix_err}");
+                                }
+                            }
+                        } else {
+                            eprintln!("{msg}");
+                            eprintln!(
+                                "  update {}: hash = \"{actual_sri}\"",
+                                file.display()
+                            );
+                        }
+                        write_log(&log_dir, drv_path, label, false, &msg);
+                        return Err(RunError::Build(msg));
+                    }
+                    Err(e) => {
                         let log_msg = format!("{e}");
                         write_log(&log_dir, drv_path, label, false, &log_msg);
-                        RunError::Build(log_msg)
-                    })?;
+                        return Err(RunError::Build(log_msg));
+                    }
+                };
 
                 // Persist the build log (success)
                 if let Some(ref log) = outcome.log {
@@ -586,6 +630,43 @@ fn cmd_store(action: StoreAction) -> Result<(), RunError> {
 }
 
 /// Write a build log file with metadata header.
+/// Replace an old hash string with a new one in a .ncl file.
+///
+/// Reads the file, finds the old hash (must appear exactly once),
+/// replaces it, and writes back. Returns an error if the old hash
+/// appears zero or more than one time.
+fn auto_fix_hash(
+    file: &std::path::Path,
+    old_hash: &str,
+    new_hash: &str,
+) -> Result<(), String> {
+    let content = std::fs::read_to_string(file)
+        .map_err(|e| format!("reading {}: {e}", file.display()))?;
+
+    let count = content.matches(old_hash).count();
+    if count == 0 {
+        return Err(format!(
+            "hash '{}' not found in {}",
+            old_hash,
+            file.display()
+        ));
+    }
+    if count > 1 {
+        return Err(format!(
+            "hash '{}' appears {} times in {} — ambiguous, not fixing",
+            old_hash,
+            count,
+            file.display()
+        ));
+    }
+
+    let fixed = content.replacen(old_hash, new_hash, 1);
+    std::fs::write(file, &fixed)
+        .map_err(|e| format!("writing {}: {e}", file.display()))?;
+
+    Ok(())
+}
+
 fn write_log(
     log_dir: &std::path::Path,
     drv_path: &nix_compat::store_path::StorePath<String>,

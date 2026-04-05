@@ -581,8 +581,8 @@ where
                         actual,
                     } => Error::FodHashMismatch {
                         name,
-                        expected,
-                        actual,
+                        expected_sri: expected,
+                        actual_sri: actual,
                     },
                     other => Error::BuildFailed {
                         name: drv_name.clone(),
@@ -803,17 +803,19 @@ async fn verify_fod_hash(
             if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
-                    expected: data_encoding::HEXLOWER.encode(expected_hash.digest_as_bytes()),
-                    actual: data_encoding::HEXLOWER.encode(actual.digest_as_bytes()),
+                    expected_sri: crate::fetcher::nix_hash_to_sri(expected_hash),
+                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual),
                 });
             }
         }
         CAHash::Nar(NixHash::Sha256(expected_digest)) => {
             if nar_sha256 != expected_digest {
+                let expected_h = NixHash::Sha256(*expected_digest);
+                let actual_h = NixHash::Sha256(*nar_sha256);
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
-                    expected: data_encoding::HEXLOWER.encode(expected_digest),
-                    actual: data_encoding::HEXLOWER.encode(nar_sha256),
+                    expected_sri: crate::fetcher::nix_hash_to_sri(&expected_h),
+                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual_h),
                 });
             }
         }
@@ -828,17 +830,19 @@ async fn verify_fod_hash(
             if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
-                    expected: data_encoding::HEXLOWER.encode(expected_hash.digest_as_bytes()),
-                    actual: data_encoding::HEXLOWER.encode(actual.digest_as_bytes()),
+                    expected_sri: crate::fetcher::nix_hash_to_sri(expected_hash),
+                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual),
                 });
             }
         }
         CAHash::Text(expected_digest) => {
             if nar_sha256 != expected_digest {
+                let expected_h = NixHash::Sha256(*expected_digest);
+                let actual_h = NixHash::Sha256(*nar_sha256);
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
-                    expected: data_encoding::HEXLOWER.encode(expected_digest),
-                    actual: data_encoding::HEXLOWER.encode(nar_sha256),
+                    expected_sri: crate::fetcher::nix_hash_to_sri(&expected_h),
+                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual_h),
                 });
             }
         }

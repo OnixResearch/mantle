@@ -37,13 +37,13 @@
 
 ## Phase 4: Hash mismatch reporting + auto-fix
 
-- [ ] On FOD hash mismatch in fetcher, compute correct hash in SRI format
-- [ ] Format error message: expected hash, actual hash, source file + suggested update
-- [ ] Add `--fix` flag to `crunch build` CLI
-- [ ] Implement `auto_fix_hash()`: read .ncl source, find old SRI/hex hash string, replace with correct SRI, write back
-- [ ] Guard: only fix if old hash string appears exactly once in the file (warn + skip if ambiguous)
-- [ ] Integration test: fetchurl with wrong hash, verify error message contains correct hash
-- [ ] Integration test: `--fix` rewrites hash in .ncl file and build succeeds on retry
+- [x] On FOD hash mismatch in fetcher, compute correct hash in SRI format
+- [x] Format error message: expected hash, actual hash, source file + suggested update
+- [x] Add `--fix` flag to `crunch build` CLI
+- [x] Implement `auto_fix_hash()`: read .ncl source, find old SRI/hex hash string, replace with correct SRI, write back
+- [x] Guard: only fix if old hash string appears exactly once in the file (warn + skip if ambiguous)
+- [x] Integration test: fetchurl with wrong hash, verify error message contains correct hash
+- [x] Integration test: `--fix` rewrites hash in .ncl file and build succeeds on retry
 
 ## Phase 5: End-to-end examples
 
