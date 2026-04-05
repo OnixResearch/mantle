@@ -511,19 +511,34 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                     .link_name()
                     .map_err(|e| FetchError::TarError(e.to_string()))?
                 {
-                    // Validate symlink target: must be relative and
-                    // must not escape the output directory.
+                    // Validate symlink target doesn't escape the output dir.
                     let target_path = target.as_ref();
-                    if target_path.is_absolute() {
-                        return Err(FetchError::TarError(format!(
-                            "tar symlink has absolute target: {} -> {}",
-                            relative.display(),
-                            target_path.display()
-                        )));
-                    }
-                    // Resolve the symlink relative to its parent dir
-                    // and check for escape via '..' traversal.
-                    let resolved = dest.parent().unwrap_or(out_path).join(target_path);
+                    let effective_target = if target_path.is_absolute() {
+                        // Absolute symlinks in tarballs are self-referential
+                        // (e.g., /lib/libc.so inside a toolchain tarball).
+                        // Strip the tarball prefix and rewrite as relative
+                        // to the output directory.
+                        match &prefix_to_strip {
+                            Some(pfx) => {
+                                let stripped = target_path
+                                    .strip_prefix("/")
+                                    .unwrap_or(target_path)
+                                    .strip_prefix(pfx)
+                                    .unwrap_or(
+                                        target_path.strip_prefix("/").unwrap_or(target_path)
+                                    );
+                                stripped.to_path_buf()
+                            }
+                            None => target_path
+                                .strip_prefix("/")
+                                .unwrap_or(target_path)
+                                .to_path_buf(),
+                        }
+                    } else {
+                        target_path.to_path_buf()
+                    };
+                    // Check the effective target doesn't escape via '..'.
+                    let resolved = dest.parent().unwrap_or(out_path).join(&effective_target);
                     let mut depth: i32 = 0;
                     for comp in resolved.components() {
                         match comp {
@@ -539,7 +554,7 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                             )));
                         }
                     }
-                    std::os::unix::fs::symlink(target_path, &dest)?;
+                    std::os::unix::fs::symlink(&effective_target, &dest)?;
                 }
             }
             tar::EntryType::Link => {

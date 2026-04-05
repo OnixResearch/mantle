@@ -215,11 +215,15 @@ fn cmd_build(
         )));
     }
 
-    // Phase 1: Evaluate Nickel expression (sync, fast).
+    // Phase 1: Evaluate Nickel expression → JSON → derivations.
+    // Uses Nickel's JSON export which correctly serializes enum tags
+    // to strings. Direct Expr::to_serde() fails on nested derivations
+    // in inputs[] because serde's #[serde(untagged)] can't handle
+    // Nickel enum variants.
     info!(file = %file.display(), "evaluating");
-    let expr = crunch_eval::evaluate(file, import_paths)
+    let json_str = crunch_eval::evaluate_to_json(file, import_paths)
         .map_err(|e| RunError::Eval(format!("{e}")))?;
-    let derivations = deserialize_derivations(&expr)?;
+    let derivations = deserialize_derivations_from_json(&json_str)?;
     debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 
     // Phase 2: Convert each root derivation and stream to build Worker.
@@ -251,34 +255,36 @@ fn cmd_build(
 
 
 
-/// Deserialize a Nickel expression into a list of named derivations.
+/// Deserialize derivations from a JSON string (Nickel's JSON export).
 ///
 /// Handles both single-derivation records (has a "name" field) and
 /// package sets (each field is a derivation).
-fn deserialize_derivations(
-    expr: &crunch_eval::Expr,
+fn deserialize_derivations_from_json(
+    json_str: &str,
 ) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
-    let Some(record) = expr.as_record() else {
+    let json_val: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| RunError::Eval(format!("parsing JSON: {e}")))?;
+
+    let Some(obj) = json_val.as_object() else {
         return Err(RunError::Eval(
             "expected a Derivation record or a record of Derivations".to_string(),
         ));
     };
 
-    if record.value_by_name("name").is_some_and(|v| v.as_str().is_some()) {
-        let drv: crunch_glue::CrunchDerivation = expr.to_serde()
+    // Single derivation: has a "name" field with a string value.
+    if obj.get("name").is_some_and(|v| v.is_string()) {
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_value(json_val)
             .map_err(|e| RunError::Eval(format!("deserializing derivation: {e}")))?;
         let name = drv.name.clone();
         return Ok(vec![(name, drv)]);
     }
 
+    // Package set: each field is a derivation.
     let mut derivations = Vec::new();
-    for (key, maybe_value) in record.iter() {
-        let value = maybe_value.ok_or_else(|| {
-            RunError::Eval(format!("field '{key}' has no value"))
-        })?;
-        let drv: crunch_glue::CrunchDerivation = value.to_serde()
+    for (key, value) in obj {
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_value(value.clone())
             .map_err(|e| RunError::Eval(format!("deserializing derivation '{key}': {e}")))?;
-        derivations.push((key.to_string(), drv));
+        derivations.push((key.clone(), drv));
     }
     Ok(derivations)
 }

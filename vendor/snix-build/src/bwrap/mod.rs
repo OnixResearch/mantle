@@ -202,7 +202,11 @@ impl Bwrap {
         ]);
 
         if let Some(shell) = spec.provide_shell() {
-            args.extend_from_slice(&["--ro-bind".into(), shell.into(), "/bin/sh".into()]);
+            args.extend_from_slice(&["--ro-bind".into(), shell.clone().into(), "/bin/sh".into()]);
+            // Also mount as /bin/busybox so that busybox applets can be
+            // invoked via `busybox <applet>` or via symlinks named after
+            // the applet pointing to /bin/busybox.
+            args.extend_from_slice(&["--ro-bind".into(), shell.into(), "/bin/busybox".into()]);
         }
 
         for file in spec.additional_files() {
