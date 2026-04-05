@@ -1,0 +1,67 @@
+name: Rust
+
+on:
+  push:
+    branches: '*'
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, ppc64le, riscv64, s390x]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Cache cargo
+      uses: Swatinem/rust-cache@v2.2.0
+      with:
+        cache-on-failure: true
+        key: ${{ runner.os }}-cargo-${{ matrix.arch }}
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: build and check
+      run: |
+        declare -A rust_target_map=( ["amd64"]="x86_64-unknown-linux-musl" ["arm64"]="aarch64-unknown-linux-musl" ["ppc64le"]="powerpc64le-unknown-linux-gnu" ["riscv64"]="riscv64gc-unknown-linux-gnu" ["s390x"]="s390x-unknown-linux-gnu")
+        RUST_TARGET=${rust_target_map[${{ matrix.arch }}]}
+        cargo install --version 0.2.4 cross
+        rustup component add rustfmt clippy
+        make -e RUST_TARGET=$RUST_TARGET -e CARGO=cross check
+    - name: smoke
+      if: ${{ matrix.arch == 'amd64' }}
+      run: |
+        echo user_allow_other | sudo tee --append /etc/fuse.conf
+        make test
+        make smoke-all
+
+  Macos-CI:
+    runs-on: macos-latest
+    steps:
+      - name: Install macfuse
+        run: |
+          brew install --cask macfuse
+          wget https://github.com/macos-fuse-t/fuse-t/releases/download/1.0.24/fuse-t-macos-installer-1.0.24.pkg
+          sudo installer -pkg fuse-t-macos-installer-1.0.24.pkg -target /
+      - uses: actions/checkout@v3
+      - name: build and check
+        run: make smoke-macos
+
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1

@@ -1,0 +1,75 @@
+name: xfstests
+
+on:
+  push:
+    branches: '*'
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  xfstests_on_passthrough:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Build passthrough binary
+      run: |
+        cd tests/passthrough
+        cargo build --release
+        sudo install -t /usr/sbin/ -m 700 ./target/release/passthrough
+    - name: Setup and run xfstest
+      run: |
+        cd $GITHUB_WORKSPACE
+        sudo ./tests/scripts/xfstests_pathr.sh
+
+  xfstests_on_overlayfs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Build overlay binary
+      run: |
+        cd tests/overlay
+        cargo build --release
+        sudo install -t /usr/sbin/ -m 700 ./target/release/overlay
+    - name: Setup and run xfstest
+      run: |
+        cd $GITHUB_WORKSPACE
+        sudo ./tests/scripts/xfstests_overlay.sh
+
+  unionmount_testsuite_on_overlayfs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Build overlay binary
+      run: |
+        cd tests/overlay
+        cargo build --release
+        sudo install -t /usr/sbin/ -m 700 ./target/release/overlay
+    - name: Setup and run unionmount testsuite
+      run: |
+        cd $GITHUB_WORKSPACE
+        sudo ./tests/scripts/unionmount_test_overlay.sh
