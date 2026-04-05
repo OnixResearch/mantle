@@ -406,10 +406,12 @@ where
                 let ca_hash = nix_compat::nixhash::CAHash::Nar(
                     nix_compat::nixhash::NixHash::Sha256(marker_nar_sha256),
                 );
+                // Use the derivation name without .drv suffix.
+                let base_name = drv_name.strip_suffix(".drv").unwrap_or(&drv_name);
                 let path_name = if output_name == "out" {
-                    drv_name.clone()
+                    base_name.to_string()
                 } else {
-                    format!("{drv_name}-{output_name}")
+                    format!("{base_name}-{output_name}")
                 };
                 let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
                     &path_name,
