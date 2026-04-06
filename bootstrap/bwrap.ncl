@@ -136,10 +136,18 @@ static inline int cap_from_name(const char *name __attribute__((unused)),
 #endif
 CAPEOF
 
+      # Find the seed musl-gcc toolchain for extra kernel headers.
+      SEED=""
+      for d in /nix/store/*-musl-gcc; do
+        if [ -d "$d/include/linux" ]; then SEED="$d"; break; fi
+      done
+      SEED_INC=""
+      if [ -n "$SEED" ]; then SEED_INC="-I$SEED/include"; fi
+
       echo "Compiling bubblewrap..."
       gcc -static -Os -pipe \
         -D_GNU_SOURCE \
-        -I. \
+        -I. $SEED_INC \
         -o bwrap \
         bubblewrap.c bind-mount.c network.c utils.c \
         || { echo "ERROR: bwrap compilation failed" >&2; exit 1; }
