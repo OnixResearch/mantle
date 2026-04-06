@@ -1,54 +1,67 @@
-# Castore Export Drops Large Files
-
 ## Why
 
-`export_castore_to_disk()` silently produces empty files or empty directories
-when exporting large build outputs. The self-build proved this: crunch compiles
-itself successfully inside the bwrap sandbox (exit 0, PathInfo persisted to
-redb, NAR hash computed), but the exported output at `--store /tmp/crunch-store`
-contains `bin/` with zero entries. The ~30MB crunch binary exists in the
-in-memory castore blob service but never reaches the filesystem.
+crunch uses `MemoryBlobService` for all blob storage — a `HashMap<B3Digest, Vec<u8>>`
+in RAM. Every file from every build output lives entirely in memory. This causes
+three problems:
 
-Smaller outputs (selftest, dash, make) export fine. The failure correlates
-with blob size but the exact threshold is unknown.
+1. **Memory pressure on large builds.** Compiling crunch itself produces hundreds
+   of megabytes of object files, libraries, and binaries. All of it accumulates
+   in the HashMap. Under memory pressure the process gets OOM-killed mid-export,
+   leaving directories created on disk but files empty or missing (the "empty
+   dirs" symptom noted in the napkin).
 
-This blocks the self-build from producing a usable binary on disk. The build
-is correct — rerunning with the same drv hash would hit the castore cache and
-report "cached" — but the user gets an empty output directory.
+2. **No persistence across sessions.** PathInfo is persisted in redb, but blobs
+   vanish when the process exits. On the next run `castore_has_content` fails →
+   forced rebuild of everything, even if nothing changed. The persistent
+   PathInfo becomes dead weight.
+
+3. **Unbounded growth within a session.** Each build appends to the HashMap.
+   Multi-package builds accumulate all intermediate outputs, even though only
+   root outputs need export. The castore-only optimization (intermediate deps
+   skip disk export) helps disk I/O but not RAM.
+
+The directory service already uses `RedbDirectoryService` (on-disk, persistent).
+Blob storage is the only component still in-memory.
 
 ## What Changes
 
-1. **Diagnose**: instrument `export_castore_to_disk()` to log blob sizes and
-   any I/O errors during file writes. Currently errors are silently swallowed
-   (`Ok(())` on permission denied, `?` on other I/O but no logging).
+Replace `MemoryBlobService` with `ObjectStoreBlobService` backed by a local
+filesystem directory for production use (main.rs, bootstrap.rs). Tests keep
+`MemoryBlobService` for speed and isolation.
 
-2. **Fix the write path**: the likely cause is one of:
-   - Blob chunking: large blobs may be stored as multiple chunks in the
-     `BlobService`. The export reads via `open_read()` which returns a stream.
-     If the stream isn't fully consumed (early drop, async cancellation),
-     the file is created but truncated to zero.
-   - Async/sync mismatch: `export_castore_to_disk` is called from sync
-     context via `block_on`. If the blob read future is dropped before
-     completion, the file ends up empty.
-   - FUSE read path: if the output was originally read from a FUSE mount
-     and the mount is torn down before export completes, reads fail silently.
-
-3. **Add size verification**: after writing each file, compare bytes written
-   against the blob's declared size. Fail loudly on mismatch.
-
-4. **Test with the self-build**: the crunch self-build (`bootstrap/crunch.ncl`)
-   is the regression test. A successful build should produce a runnable binary
-   at `$store/...-crunch/bin/crunch`.
+- **Blob storage directory**: `~/.local/state/crunch/blobs/` (same parent as
+  `pathinfo.redb`). Created on first use.
+- **Chunked storage**: `ObjectStoreBlobService` uses FastCDC chunking (256 KiB
+  avg). Large files are split into content-defined chunks, enabling cross-build
+  dedup when the same libraries appear in multiple outputs.
+- **Persistent cache**: blobs survive process restarts. Combined with the
+  existing PathInfo redb + `castore_has_content` check, previously-built
+  outputs are fully cached without rebuilding.
+- **Bounded RAM**: blob data flows through a 64 KiB buffer during
+  ingest/export, not accumulated in a HashMap.
 
 ## Capabilities
 
+### New Capabilities
+- `persistent-blob-store`: Blob data persists across crunch invocations,
+  matching PathInfo persistence. Full build cache without Nix.
+- `bounded-memory-builds`: Large builds no longer accumulate all blob data
+  in RAM. Memory usage proportional to concurrent build count, not total
+  output size.
+
 ### Modified Capabilities
-- `castore-export`: export must handle blobs of any size, not just small ones
-- `build-output`: root build outputs must be fully materialized on disk
+- `castore-cache-check`: `castore_has_content` now hits disk-backed blobs,
+  so cache hits work across sessions (previously always missed after restart).
 
 ## Impact
 
-- **Files**: `crates/crunch-build/src/export.rs`, possibly `orchestrate.rs`
-- **APIs**: no public API changes
-- **Dependencies**: none
-- **Testing**: self-build integration test; unit test with a large synthetic blob
+- **Files**: `src/main.rs`, `src/bootstrap.rs` — swap MemoryBlobService →
+  ObjectStoreBlobService construction. `crates/crunch-build/` unchanged (generic
+  over `BS: BlobService`).
+- **APIs**: No API changes. `Builder` is already generic over blob service.
+- **Dependencies**: `object_store` already in the dependency tree via
+  snix-castore. `ObjectStoreBlobService` is already compiled. No new deps.
+- **Testing**: Unit/integration tests keep MemoryBlobService. One new
+  integration test verifies blob persistence across Builder instantiations.
+- **Disk usage**: `~/.local/state/crunch/blobs/` will grow with build history.
+  No automatic GC in this change (future work).
