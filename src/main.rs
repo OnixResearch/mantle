@@ -334,23 +334,16 @@ async fn execute_builds(
     fix: bool,
     max_jobs: u32,
 ) -> Result<(), RunError> {
-    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir(),
+        remote_cache_url: None,
+    })
+    .await
+    .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;
 
-    let state_dir = state_dir();
-    let _ = std::fs::create_dir_all(&state_dir);
-
-    let blob_service = open_blob_service(&state_dir)?;
-    let directory_service = RedbDirectoryService::new_temporary(
-        "crunch".to_string(),
-        RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        },
-    )
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let pathinfo_service = open_pathinfo_service(&state_dir).await?;
+    let blob_service = store.blob_service();
+    let directory_service = store.directory_service();
+    let pathinfo_service = store.pathinfo_service();
 
     #[cfg(target_os = "linux")]
     {
@@ -372,7 +365,7 @@ async fn execute_builds(
             build_service,
             pathinfo_service,
             output_dir.to_path_buf(),
-            Some(state_dir.clone()),
+            Some(store.state_dir().to_path_buf()),
             None, // no remote substitution in legacy path
             verbose,
         );
@@ -477,51 +470,19 @@ async fn execute_builds_streaming(
     max_jobs: u32,
     substituter_url: Option<&str>,
 ) -> Result<(), RunError> {
-    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
     use tokio::sync::mpsc;
 
-    let state_dir = state_dir();
-    let _ = std::fs::create_dir_all(&state_dir);
+    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir(),
+        remote_cache_url: substituter_url.map(|s| s.to_string()),
+    })
+    .await
+    .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;
 
-    let blob_service = open_blob_service(&state_dir)?;
-    let directory_service = RedbDirectoryService::new_temporary(
-        "crunch".to_string(),
-        RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        },
-    )
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let pathinfo_service = open_pathinfo_service(&state_dir).await?;
-
-    // Build the remote PathInfoService for binary cache substitution.
-    let remote_pathinfo: Option<
-        std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
-    > = match substituter_url {
-        Some(url_str) => {
-            match build_remote_pathinfo(
-                url_str,
-                blob_service.clone(),
-                directory_service.clone(),
-            ) {
-                Ok(svc) => {
-                    info!(url = %url_str, "binary cache substitution enabled");
-                    Some(svc)
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        url = %url_str,
-                        err = %e,
-                        "failed to configure remote cache, substitution disabled"
-                    );
-                    None
-                }
-            }
-        }
-        None => None,
-    };
+    let blob_service = store.blob_service();
+    let directory_service = store.directory_service();
+    let pathinfo_service = store.pathinfo_service();
+    let remote_pathinfo = store.remote_pathinfo();
 
     #[cfg(target_os = "linux")]
     {
@@ -543,7 +504,7 @@ async fn execute_builds_streaming(
             build_service,
             pathinfo_service,
             output_dir.to_path_buf(),
-            Some(state_dir.clone()),
+            Some(store.state_dir().to_path_buf()),
             remote_pathinfo,
             verbose,
         );
@@ -681,65 +642,7 @@ async fn execute_builds_streaming(
     Ok(())
 }
 
-/// Open the persistent PathInfo database, falling back to in-memory.
-async fn open_pathinfo_service(
-    state_dir: &std::path::Path,
-) -> Result<
-    snix_store::pathinfoservice::RedbPathInfoService,
-    RunError,
-> {
-    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
-
-    let db_path = state_dir.join("pathinfo.redb");
-    match RedbPathInfoService::new(
-        "crunch".to_string(),
-        RedbPathInfoServiceConfig {
-            path: Some(db_path.clone()),
-            read_only: false,
-            cache_size: None,
-        },
-    )
-    .await
-    {
-        Ok(svc) => {
-            info!(path = %db_path.display(), "PathInfo database opened");
-            Ok(svc)
-        }
-        Err(e) => {
-            tracing::warn!(
-                path = %db_path.display(),
-                err = %e,
-                "failed to open PathInfo database, using in-memory fallback"
-            );
-            RedbPathInfoService::new_temporary(
-                "crunch".to_string(),
-                RedbPathInfoServiceConfig::default(),
-            )
-            .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
-        }
-    }
-}
-
-/// Open or create a persistent blob service backed by the local filesystem.
-///
-/// Blobs are stored as content-addressed chunks under `{state_dir}/blobs/`.
-/// If the directory doesn't exist, it's created. Falls back to in-memory
-/// if the filesystem path can't be opened (e.g., read-only mount).
-fn open_blob_service(
-    state_dir: &std::path::Path,
-) -> Result<std::sync::Arc<snix_castore::blobservice::ObjectStoreBlobService>, RunError> {
-    use snix_castore::blobservice::ObjectStoreBlobService;
-
-    let blob_dir = state_dir.join("blobs");
-    std::fs::create_dir_all(&blob_dir)
-        .map_err(|e| RunError::Internal(format!("creating blob dir {}: {e}", blob_dir.display())))?;
-
-    let svc = ObjectStoreBlobService::new_local(&blob_dir)
-        .map_err(|e| RunError::Internal(format!("opening blob service at {}: {e}", blob_dir.display())))?;
-
-    info!(path = %blob_dir.display(), "blob service opened");
-    Ok(std::sync::Arc::new(svc))
-}
+// Service construction moved to crunch_store::StoreHandle::open().
 
 /// Handle a FOD hash mismatch: optionally auto-fix, always log.
 fn handle_fod_mismatch(
@@ -1070,27 +973,15 @@ fn cmd_store(action: StoreAction) -> Result<(), RunError> {
 async fn cmd_store_list(
     svc: &impl snix_store::pathinfoservice::PathInfoService,
 ) -> Result<(), RunError> {
-    use futures::StreamExt;
-
-    let mut stream = svc.list();
-    let mut count: u32 = 0;
-    while let Some(result) = stream.next().await {
-        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-        let deriver_name = pi
-            .deriver
-            .as_ref()
-            .map(|d| d.name().to_string())
-            .unwrap_or_else(|| "-".to_string());
-        println!(
-            "{}  deriver={}  nar_size={}",
-            pi.store_path, deriver_name, pi.nar_size
-        );
-        count = count.saturating_add(1);
-    }
-    if count == 0 {
+    let entries = crunch_store::store_list(svc).await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    if entries.is_empty() {
         eprintln!("No paths in PathInfo database.");
     } else {
-        eprintln!("{count} path(s)");
+        for (store_path, deriver, nar_size) in &entries {
+            println!("{store_path}  deriver={deriver}  nar_size={nar_size}");
+        }
+        eprintln!("{} path(s)", entries.len());
     }
     Ok(())
 }
@@ -1099,41 +990,30 @@ async fn cmd_store_info(
     svc: &impl snix_store::pathinfoservice::PathInfoService,
     path: &str,
 ) -> Result<(), RunError> {
-    use futures::StreamExt;
-
-    let mut stream = svc.list();
-    let mut found = false;
-    while let Some(result) = stream.next().await {
-        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-        let sp_str = pi.store_path.to_string();
-        if !sp_str.contains(path) {
-            continue;
-        }
-        println!("store_path: {}", pi.store_path);
-        println!("nar_size:   {}", pi.nar_size);
-        println!(
-            "nar_sha256: {}",
-            data_encoding::HEXLOWER.encode(&pi.nar_sha256)
-        );
-        if let Some(ref d) = pi.deriver {
-            println!("deriver:    {d}");
-        }
-        if !pi.references.is_empty() {
-            println!("references:");
-            for r in &pi.references {
-                println!("  {r}");
-            }
-        }
-        if let Some(ref ca) = pi.ca {
-            println!("ca:         {ca:?}");
-        }
-        println!("node:       {:?}", pi.node);
-        found = true;
-    }
-    if !found {
+    let details = crunch_store::store_info(svc, path).await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    if details.is_empty() {
         return Err(RunError::Internal(format!(
             "no PathInfo matching '{path}'"
         )));
+    }
+    for d in &details {
+        println!("store_path: {}", d.store_path);
+        println!("nar_size:   {}", d.nar_size);
+        println!("nar_sha256: {}", data_encoding::HEXLOWER.encode(&d.nar_sha256));
+        if let Some(ref deriver) = d.deriver {
+            println!("deriver:    {deriver}");
+        }
+        if !d.references.is_empty() {
+            println!("references:");
+            for r in &d.references {
+                println!("  {r}");
+            }
+        }
+        if let Some(ref ca) = d.ca {
+            println!("ca:         {ca}");
+        }
+        println!("node:       {}", d.node);
     }
     Ok(())
 }
@@ -1142,61 +1022,24 @@ async fn cmd_store_verify(
     svc: &impl snix_store::pathinfoservice::PathInfoService,
     path_filter: Option<&str>,
 ) -> Result<(), RunError> {
-    use futures::StreamExt;
-    use snix_castore::blobservice::MemoryBlobService;
-    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-    use snix_castore::import::fs::ingest_path;
-    use snix_store::nar::{NarCalculationService, SimpleRenderer};
+    let results = crunch_store::store_verify(svc, path_filter).await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
 
-    let bs = MemoryBlobService::default();
-    let ds = RedbDirectoryService::new_temporary(
-        "verify".to_string(),
-        RedbDirectoryServiceConfig::default(),
-    )
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let mut stream = svc.list();
     let mut checked: u32 = 0;
     let mut mismatches: u32 = 0;
-
-    while let Some(result) = stream.next().await {
-        let pi = result.map_err(|e| RunError::Internal(format!("listing: {e}")))?;
-        let sp_str = pi.store_path.to_string();
-
-        if let Some(filter) = path_filter {
-            if !sp_str.contains(filter) {
-                continue;
+    for result in &results {
+        match result {
+            crunch_store::VerifyResult::Ok(path) => {
+                println!("OK {path}");
             }
-        }
-
-        let abs = std::path::Path::new("/nix/store").join(sp_str);
-        if !abs.exists() {
-            println!("MISSING {}", pi.store_path);
-            mismatches = mismatches.saturating_add(1);
-            checked = checked.saturating_add(1);
-            continue;
-        }
-
-        let node = ingest_path::<_, _, _, &[u8]>(bs.clone(), ds.clone(), &abs, None)
-            .await
-            .map_err(|e| RunError::Internal(format!("ingest {}: {e}", pi.store_path)))?;
-
-        let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
-        let (_nar_size, nar_sha256) = renderer
-            .calculate_nar(&node)
-            .await
-            .map_err(|e| RunError::Internal(format!("NAR calc: {e}")))?;
-
-        if nar_sha256 == pi.nar_sha256 {
-            println!("OK {}", pi.store_path);
-        } else {
-            println!(
-                "MISMATCH {}  stored={}  actual={}",
-                pi.store_path,
-                data_encoding::HEXLOWER.encode(&pi.nar_sha256),
-                data_encoding::HEXLOWER.encode(&nar_sha256),
-            );
-            mismatches = mismatches.saturating_add(1);
+            crunch_store::VerifyResult::Missing(path) => {
+                println!("MISSING {path}");
+                mismatches = mismatches.saturating_add(1);
+            }
+            crunch_store::VerifyResult::Mismatch { path, stored_hash, actual_hash } => {
+                println!("MISMATCH {path}  stored={stored_hash}  actual={actual_hash}");
+                mismatches = mismatches.saturating_add(1);
+            }
         }
         checked = checked.saturating_add(1);
     }
@@ -1301,35 +1144,4 @@ fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
     Ok(paths)
 }
 
-/// Construct a `NixHTTPPathInfoService` from a cache URL string.
-///
-/// Shares the caller's blob/directory services so downloaded NARs are
-/// immediately available to the Builder.
-fn build_remote_pathinfo<BS, DS>(
-    url_str: &str,
-    blob_service: BS,
-    directory_service: DS,
-) -> Result<std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>, RunError>
-where
-    BS: snix_castore::blobservice::BlobService + Send + Sync + Clone + 'static,
-    DS: snix_castore::directoryservice::DirectoryService + Send + Sync + Clone + 'static,
-{
-    use snix_store::pathinfoservice::{NixHTTPPathInfoService, NixHTTPPathInfoServiceConfig};
-
-    // NixHTTPPathInfoServiceConfig::try_from expects "nix+https://..." scheme.
-    let nix_url_str = format!("nix+{url_str}");
-    let nix_url: url::Url = nix_url_str.parse()
-        .map_err(|e| RunError::Internal(format!("invalid substituter URL '{url_str}': {e}")))?;
-
-    let config: NixHTTPPathInfoServiceConfig = nix_url.try_into()
-        .map_err(|e| RunError::Internal(format!("remote cache config for '{url_str}': {e}")))?;
-
-    let svc = NixHTTPPathInfoService::try_build(
-        "crunch-remote".to_string(),
-        config,
-        blob_service,
-        directory_service,
-    ).map_err(|e| RunError::Internal(format!("building remote cache client: {e}")))?;
-
-    Ok(std::sync::Arc::new(svc))
-}
+// Remote PathInfo construction moved to crunch_store::StoreHandle::open().

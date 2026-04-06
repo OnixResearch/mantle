@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 crunch-glue = { path = "../crunch-glue" }
+crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
 snix-build = { path = "../../vendor/snix-build" }
 snix-castore = { path = "../../vendor/snix-castore" }

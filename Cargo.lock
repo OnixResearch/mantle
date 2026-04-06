@@ -980,6 +980,7 @@ dependencies = [
  "crunch-build",
  "crunch-eval",
  "crunch-glue",
+ "crunch-store",
  "data-encoding",
  "flate2",
  "futures",
@@ -1009,6 +1010,7 @@ dependencies = [
  "bytes",
  "bzip2-rs",
  "crunch-glue",
+ "crunch-store",
  "data-encoding",
  "digest",
  "flate2",
@@ -1059,6 +1061,26 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "crunch-store"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "data-encoding",
+ "futures",
+ "nix-compat",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "snix-castore",
+ "snix-store",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
