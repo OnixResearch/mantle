@@ -67,66 +67,76 @@ pub(crate) enum PrepareResult {
 
 /// Orchestrates the build pipeline: evaluating dependencies, checking
 /// cache, running builds, persisting results.
-pub struct Builder<BS, DS, BServ, PIS> {
-    blob_service: BS,
-    directory_service: DS,
+///
+/// `BServ` is the only remaining generic: the sandbox dispatch point.
+/// All store operations (blob, directory, pathinfo) go through
+/// `Arc<dyn ...>` services extracted from constructor args or a
+/// `StoreHandle`.
+pub struct Builder<BServ> {
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
     build_service: Arc<BServ>,
-    pathinfo_service: PIS,
+    pathinfo_service: Arc<dyn PathInfoService>,
     /// Optional remote PathInfoService for binary cache substitution.
-    /// Queried on local cache miss. Remote hits are persisted locally
-    /// (write-through). `NixHTTPPathInfoService` shares the same
-    /// blob/directory services, so ingested NARs are immediately
-    /// available to the Builder.
-    remote_pathinfo: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
-    /// Physical output directory on the host filesystem. This is where
-    /// crunch writes build outputs (from `--store`). May differ from
-    /// `LOGICAL_STORE_DIR` — e.g., `/tmp/mystore` while derivation
-    /// paths still use `/nix/store`.
+    remote_pathinfo: Option<Arc<dyn PathInfoService>>,
+    /// Physical output directory on the host filesystem.
     #[allow(dead_code)] // used indirectly via output_dir_str
     output_dir: PathBuf,
     output_dir_str: String,
-    /// Output store path → PathInfo for outputs built in this session.
+    /// Output store path -> PathInfo for outputs built in this session.
     built_outputs: HashMap<String, PathInfo>,
-    /// Output store path → Node (castore root node) for outputs built or
-    /// ingested in this session. Needed by downstream builds that reference
-    /// these as inputs.
+    /// Output store path -> Node (castore root node) for outputs built or
+    /// ingested in this session.
     output_nodes: HashMap<StorePath<String>, Node>,
-    /// Persistent CA derivation → output path mapping.
+    /// Persistent CA derivation -> output path mapping.
     ca_mappings: CaMappings,
     /// State directory for persisting ca_mappings.
     state_dir: Option<PathBuf>,
     verbose: bool,
 }
 
-impl<BS, DS, BServ, PIS> Builder<BS, DS, BServ, PIS>
+impl<BServ> Builder<BServ>
 where
-    BS: BlobService + Clone + 'static,
-    DS: DirectoryService + Clone + 'static,
     BServ: BuildService + 'static,
-    PIS: PathInfoService,
 {
-    pub fn new(
+    /// Create a Builder from individual services.
+    ///
+    /// Accepts any types that implement the service traits. Internally
+    /// wraps them in `Arc<dyn ...>` so the Builder stores trait objects.
+    pub fn new<BS, DS, PIS>(
         blob_service: BS,
         directory_service: DS,
         build_service: BServ,
         pathinfo_service: PIS,
         output_dir: PathBuf,
         verbose: bool,
-    ) -> Self {
-        Self::with_state_dir(blob_service, directory_service, build_service,
-            pathinfo_service, output_dir, None, None, verbose)
+    ) -> Self
+    where
+        BS: BlobService + 'static,
+        DS: DirectoryService + 'static,
+        PIS: PathInfoService + 'static,
+    {
+        Self::with_state_dir(
+            Arc::new(blob_service) as Arc<dyn BlobService>,
+            Arc::new(directory_service) as Arc<dyn DirectoryService>,
+            build_service,
+            Arc::new(pathinfo_service) as Arc<dyn PathInfoService>,
+            output_dir, None, None, verbose,
+        )
     }
 
     /// Create a Builder with a state directory for persistent CA mappings
     /// and an optional remote PathInfoService for binary cache substitution.
+    ///
+    /// Accepts pre-wrapped `Arc<dyn ...>` services (e.g., from a StoreHandle).
     pub fn with_state_dir(
-        blob_service: BS,
-        directory_service: DS,
+        blob_service: Arc<dyn BlobService>,
+        directory_service: Arc<dyn DirectoryService>,
         build_service: BServ,
-        pathinfo_service: PIS,
+        pathinfo_service: Arc<dyn PathInfoService>,
         output_dir: PathBuf,
         state_dir: Option<PathBuf>,
-        remote_pathinfo: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
+        remote_pathinfo: Option<Arc<dyn PathInfoService>>,
         verbose: bool,
     ) -> Self {
         let output_dir_str = output_dir.to_str()
@@ -880,7 +890,7 @@ where
         working_node: &Node,
         derivation: &Derivation,
         known_paths: &mut KnownPaths,
-        nar_renderer: &SimpleRenderer<BS, DS>,
+        nar_renderer: &SimpleRenderer<Arc<dyn BlobService>, Arc<dyn DirectoryService>>,
     ) -> Result<(StorePath<String>, Node, u64, [u8; 32]), Error> {
         // 1. Get the provisional (input-addressed) path from the env.
         let provisional = derivation.environment
@@ -2337,7 +2347,7 @@ mod tests {
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
             Arc::new(remote_pis);
         let mut builder = Builder::with_state_dir(
-            bs, ds, mock, local_pis,
+            Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
             None, Some(remote), false,
         );
@@ -2364,7 +2374,7 @@ mod tests {
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
             Arc::new(remote_pis);
         let mut builder = Builder::with_state_dir(
-            bs, ds, mock, local_pis,
+            Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
             None, Some(remote), false,
         );
@@ -2410,7 +2420,7 @@ mod tests {
             Arc::new(remote_pis);
         let (mock1, _) = MockBuildService::new(bs.clone());
         let mut builder = Builder::with_state_dir(
-            bs.clone(), ds.clone(), mock1, local_pis.clone(),
+            Arc::new(bs.clone()) as Arc<dyn BlobService>, Arc::new(ds.clone()) as Arc<dyn DirectoryService>, mock1, Arc::new(local_pis.clone()) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
             None, Some(remote), false,
         );
@@ -2496,7 +2506,7 @@ mod tests {
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
             Arc::new(remote_pis);
         let mut builder = Builder::with_state_dir(
-            bs, ds, mock, local_pis,
+            Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
             None, Some(remote), false,
         );
@@ -2552,7 +2562,7 @@ mod tests {
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
             Arc::new(FailingRemoteService);
         let mut builder = Builder::with_state_dir(
-            bs, ds, mock, local_pis,
+            Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
             None, Some(remote), false,
         );

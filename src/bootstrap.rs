@@ -287,10 +287,10 @@ pub async fn bootstrap_fetch(
     #[cfg(target_os = "linux")]
     {
         let mut builder = crunch_build::Builder::with_state_dir(
-            blob_service,
-            directory_service,
+            blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
+            std::sync::Arc::new(directory_service) as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
             build_service,
-            pathinfo_service,
+            std::sync::Arc::new(pathinfo_service) as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             store_dir.to_path_buf(),
             Some(state_dir),
             None, // no remote substitution for bootstrap

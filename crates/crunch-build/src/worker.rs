@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildService;
-use snix_castore::blobservice::BlobService;
-use snix_castore::directoryservice::DirectoryService;
-use snix_store::pathinfoservice::PathInfoService;
+
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tracing::{debug, info};
@@ -225,16 +223,13 @@ impl Worker {
     /// Dispatches Ready goals through the Builder, spawns sandbox
     /// builds on a JoinSet, and processes completions. Cache hits
     /// and fetchers complete synchronously via `prepare_build`.
-    pub async fn run<BS, DS, BServ, PIS>(
+    pub async fn run<BServ>(
         &mut self,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
     ) -> Result<WorkerResult, Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         let total_goals = self.registry.len();
         let root_count = self.registry.root_count();
@@ -298,17 +293,14 @@ impl Worker {
     ///
     /// Terminates when: the channel is closed (eval done) AND all
     /// root goals are terminal.
-    pub async fn run_streaming<BS, DS, BServ, PIS>(
+    pub async fn run_streaming<BServ>(
         &mut self,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
         rx: &mut mpsc::Receiver<EvalMessage>,
     ) -> Result<WorkerResult, Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
         let mut join_set = JoinSet::new();
@@ -357,12 +349,12 @@ impl Worker {
     /// Wait for either a build completion or an eval message.
     /// Centralized select! to avoid duplicating handle_build_completion.
     #[allow(clippy::too_many_arguments)]
-    async fn wait_for_event<BS, DS, BServ, PIS>(
+    async fn wait_for_event<BServ>(
         &mut self,
         eval_done: &mut bool,
         rx: &mut mpsc::Receiver<EvalMessage>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
@@ -370,10 +362,7 @@ impl Worker {
         completed_count: &mut u32,
     ) -> Result<(), Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         if *eval_done {
             let Some(join_result) = join_set.join_next().await else { return Ok(()); };
@@ -439,20 +428,17 @@ impl Worker {
     /// Process a JoinSet result: unwrap the join, then handle success
     /// or failure. Build errors are caught and routed to 
     /// instead of aborting the entire Worker.
-    async fn process_join_result<BS, DS, BServ, PIS>(
+    async fn process_join_result<BServ>(
         &mut self,
         join_result: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
@@ -481,21 +467,18 @@ impl Worker {
     /// Handle a completed sandbox build: finish_build, detect dynamic
     /// derivations, and notify waiters. Errors from finish_build are
     /// caught and routed to  for partial failure.
-    async fn handle_build_completion<BS, DS, BServ, PIS>(
+    async fn handle_build_completion<BServ>(
         &mut self,
         drv_key: &str,
         build_result: snix_build::buildservice::BuildResult,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         let prepared = pending_meta.remove(drv_key).ok_or_else(|| {
             Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}"))
@@ -527,18 +510,15 @@ impl Worker {
     ///
     /// Any goals in `AwaitingDerivation` state that reference this
     /// build as their producer are activated.
-    async fn detect_dynamic_derivations<BS, DS, BServ, PIS>(
+    async fn detect_dynamic_derivations<BServ>(
         &mut self,
         producer_key: &str,
         outcome: &BuildOutcome,
-        builder: &Builder<BS, DS, BServ, PIS>,
+        builder: &Builder<BServ>,
         known_paths: &mut KnownPaths,
     ) -> Result<(), Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         // 1. Scan outputs for .drv files.
         let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::new();
@@ -636,9 +616,9 @@ impl Worker {
     /// - Call `prepare_build` (may resolve as cache hit or fetcher)
     /// - If cache/fetcher: complete immediately, notify waiters
     /// - If sandbox build: spawn on JoinSet with Semaphore
-    async fn dispatch_ready<BS, DS, BServ, PIS>(
+    async fn dispatch_ready<BServ>(
         &mut self,
-        builder: &mut Builder<BS, DS, BServ, PIS>,
+        builder: &mut Builder<BServ>,
         known_paths: &mut KnownPaths,
         sem: &Arc<Semaphore>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
@@ -647,10 +627,7 @@ impl Worker {
         failed: &mut Vec<FailedGoal>,
     ) -> Result<u32, Error>
     where
-        BS: BlobService + Clone + 'static,
-        DS: DirectoryService + Clone + 'static,
         BServ: BuildService + 'static,
-        PIS: PathInfoService,
     {
         let mut dispatched: u32 = 0;
 

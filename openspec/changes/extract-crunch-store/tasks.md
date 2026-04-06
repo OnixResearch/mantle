@@ -19,10 +19,13 @@
 
 ## Phase 3: Update Builder
 
-- [ ] Change Builder generic signature from `<BS, DS, BServ, PIS>` to `<BServ>`
-- [ ] Replace direct service calls in Builder with StoreHandle method calls
-- [ ] Move `output_nodes` and `built_outputs` caches into StoreHandle (session-scoped)
-- [ ] Update all tests in orchestrate.rs to construct StoreHandle
+- [x] Change Builder generic signature from `<BS, DS, BServ, PIS>` to `<BServ>` ✅
+- [x] Builder stores `Arc<dyn BlobService>`, `Arc<dyn DirectoryService>`, `Arc<dyn PathInfoService>` ✅
+- [x] `new()` accepts concrete types (wraps in Arc), `with_state_dir()` accepts Arc<dyn> ✅
+- [x] Worker methods simplified from `<BS, DS, BServ, PIS>` to `<BServ>` ✅
+- [x] Update all tests (orchestrate.rs: 5 with_state_dir calls, worker.rs: 17 new() calls) ✅
+- [x] Fix bootstrap.rs to wrap concrete services in Arc ✅
+- [ ] Move `output_nodes` and `built_outputs` caches into StoreHandle (deferred: tightly coupled to session lifecycle)
 
 ## Phase 4: Update main.rs
 
