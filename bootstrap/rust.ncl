@@ -84,6 +84,7 @@ let rust_src = crunch.fetchTarball {
       # The install.sh script needs a real shell (not busybox sh).
       $BB ln -sf "$DASH/bin/dash" /tmp/tools/sh
 
+      set -ex
       echo "=== Installing Rust toolchain ==="
 
       # Skip install.sh (needs bash). Copy components directly.
@@ -93,14 +94,14 @@ let rust_src = crunch.fetchTarball {
       cp $RUST_SRC/rustc/bin/rustc $out/bin/
       cp $RUST_SRC/rustc/bin/rustdoc $out/bin/
       cp -r $RUST_SRC/rustc/lib/* $out/lib/
+      # Fetched tarball has read-only permissions. Make writable so
+      # we can add the std libs into the same rustlib tree.
+      chmod -R u+w $out/lib/
 
       # cargo
       cp $RUST_SRC/cargo/bin/cargo $out/bin/
 
       # rust-std (standard library for the musl target)
-      # The std libs go into rustlib/<target>/lib/ alongside rustc's bin/
-      # Use cp -r on the directory, not glob — busybox sh glob may not
-      # expand inside FUSE-mounted store paths.
       cp -r $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib/x86_64-unknown-linux-musl/lib \
         $out/lib/rustlib/x86_64-unknown-linux-musl/
 

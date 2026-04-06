@@ -42,7 +42,7 @@ let rust = (import "rust.ncl") in
 
 let crunch_src = crunch.fetchTarball {
   url = "file:///tmp/crunch-src.tar.xz",
-  hash = "blake3-t2CpCm9MzHhElSaBt8HadYIdhjEGFqpph2z8d5NZmWE=",
+  hash = "blake3-+Fj/I3X+w8OdwuUACJTD/y6F91Fj7KRERZh+l4kJN24=",
   name = "crunch-src",
 } in
 
@@ -148,8 +148,14 @@ let crunch_src = crunch.fetchTarball {
       # - Use gcc instead of clang
       # - Use system ld instead of mold
       # - Point to vendored deps
+      # Determine library search path for libgcc_s.so.
+      GCC_LIB=""
+      if [ -n "$MUSL_GCC" ]; then GCC_LIB="$MUSL_GCC/lib"
+      elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
+      fi
+
       $BB mkdir -p .cargo
-      cat > .cargo/config.toml << 'CARGOEOF'
+      cat > .cargo/config.toml << CARGOEOF
 [source.crates-io]
 replace-with = "vendored-sources"
 
@@ -165,8 +171,11 @@ target = "x86_64-unknown-linux-musl"
 
 [target.x86_64-unknown-linux-musl]
 linker = "gcc"
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-lgcc_s"]
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-L${GCC_LIB}"]
 CARGOEOF
+
+      echo "=== .cargo/config.toml ==="
+      cat .cargo/config.toml
 
       # Set environment for the Rust build.
       export CARGO_HOME=/tmp/cargo-home
@@ -179,6 +188,11 @@ CARGOEOF
       export TARGET_CC=gcc
       export TARGET_AR=ar
       export HOST_CC=gcc
+
+      # GCC linker search path for libgcc_s.so (needed by proc-macro .so linking).
+      if [ -n "$GCC_LIB" ]; then
+        export LIBRARY_PATH="$GCC_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
+      fi
 
       # Debug: verify std lib is findable
       echo "=== Sysroot check ==="
