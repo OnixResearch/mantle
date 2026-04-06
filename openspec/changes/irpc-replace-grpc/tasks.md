@@ -15,7 +15,7 @@
 - [x] Add `Serialize, Deserialize` derives to castore types (Directory, Entry, etc.) ✅ (done in Phase 1)
 - [x] Add `Serialize, Deserialize` derives to store types (PathInfo, NarInfo, etc.) ✅ (done in Phase 1)
 - [x] Add `Serialize, Deserialize` derives to build types (BuildRequest, BuildResponse, etc.) ✅ (done in Phase 1)
-- [ ] Verify postcard round-trip for each type with a unit test
+- [x] Verify postcard round-trip for each type with a unit test ✅
 
 ## Phase 3: Define irpc services
 
@@ -24,7 +24,8 @@
 - [x] Define `DirectoryServiceProtocol` with Get, Put in snix-castore ✅
 - [x] Define `PathInfoServiceProtocol` with Get, Put in snix-store ✅
 - [x] Define `BuildServiceProtocol` with DoBuild in snix-build ✅
-- [ ] Write irpc client wrappers implementing the existing `BlobService`, `DirectoryService`, `PathInfoService`, `BuildService` traits
+- [x] Write irpc client wrappers for DirectoryService, PathInfoService, BuildService ✅
+- [ ] Write irpc client wrapper for BlobService (needs streaming I/O design)
 
 ## Phase 4: Replace gRPC impls
 
