@@ -219,18 +219,24 @@ hash mismatches with `--fix`:
 2. Find the old hash string in the `.ncl` source file
 3. Replace it with the correct hash
 4. Report the change
-5. Continue the build (the fixed derivation gets a new output path)
+5. Exit with an error instructing the user to re-run
+
+The build MUST NOT continue after a `--fix` rewrite. The hash
+change alters the derivation's ATerm, which changes its `.drv`
+store path and output path. The current session's `KnownPaths`,
+goal registry, and any in-flight dependency edges reference the
+old paths. Re-evaluating from scratch is the only safe option.
 
 Without `--fix`, the mismatch is reported as an error with the
 suggested fix (but the file is not modified).
 
-#### Scenario: Auto-fix updates hash
+#### Scenario: Auto-fix updates hash and exits
 
 - GIVEN `hello.ncl` with `hash = "sha256-AAAA..."` and actual is
   `sha256-BBBB...`
 - WHEN `crunch build --fix hello.ncl` runs
 - THEN `hello.ncl` is updated: `sha256-AAAA...` → `sha256-BBBB...`
-- AND the build continues with the new hash
+- AND crunch exits with an error: "re-run to build with the corrected hash"
 
 #### Scenario: Auto-fix without --fix just reports
 

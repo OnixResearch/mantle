@@ -36,40 +36,69 @@ defaults spec. The inner content hash (the NAR hash) also uses BLAKE3.
 - WHEN both builds complete
 - THEN the output paths differ
 
-### Requirement: Provisional paths and placeholders
+### Requirement: Provisional paths via input-addressed computation
 
 Before a CA build starts, the system MUST assign provisional output
-paths using `hash_placeholder(output_name)`. These placeholders are
-set in the build environment so the builder can reference `$out`.
+paths computed as input-addressed paths from the derivation
+environment. These are store paths with the same derivation name and
+the standard `/nix/store/<hash>-<name>` format. The builder sees
+them as `$out` (and `$lib`, `$dev`, etc. for multi-output).
 
-After the build, the provisional paths are replaced with the final
-content-addressed paths.
+The system MUST NOT use `hash_placeholder(output_name)` for
+provisionals. `hash_placeholder` produces a 63-character string
+(`/1rz4g4znpz...`), while final CA store paths are
+`/nix/store/<32-char-hash>-<name>` (length varies with name). The
+length mismatch breaks byte-level self-reference rewriting: replacing
+a 63-char placeholder with a 54-char store path corrupts fixed-offset
+binary formats (ELF, ar archives).
+
+Input-addressed provisionals have the same name as the final CA path,
+so both are standard store paths with identical length. Byte-level
+replacement works correctly.
+
+After the build, the system rewrites provisional self-references to
+final CA paths and moves the output.
 
 #### Scenario: Builder sees $out
 
 - GIVEN a CA derivation with output "out"
 - WHEN the build script runs
-- THEN `$out` contains a placeholder path that the builder can
-  write to
+- THEN `$out` is a `/nix/store/<hash>-<name>` path computed from
+  the derivation inputs (input-addressed)
 
-#### Scenario: Placeholder is replaced post-build
+#### Scenario: Provisional replaced with CA path post-build
 
 - GIVEN a build that writes files to `$out`
-- WHEN the build completes
-- THEN the output is moved from the placeholder path to the
-  final content-addressed path
+- WHEN the build completes and the content hash is computed
+- THEN occurrences of the provisional path in the output are
+  rewritten to the final content-addressed path
 
-### Requirement: Self-reference rewriting
+### Requirement: Self-reference rewriting via blake3 markers
 
 If a CA build output contains references to its own provisional
 path (e.g., a binary with an embedded RPATH, or a script with
 a hardcoded store path), the system MUST rewrite those references
 to the final content-addressed path.
 
-The rewriting MUST be byte-level: scan the output for occurrences
-of the provisional path string and replace with the final path
-string. Both strings MUST have the same length (they do — store
-paths are fixed-width).
+The rewriting uses a two-pass approach:
+
+1. **Replace provisionals with markers.** For each output, compute
+   `blake3::hash("crunch-ca-marker:{output_name}")` and cycle the
+   hash bytes to fill a marker the same length as the provisional
+   path. Replace all provisional occurrences with this marker.
+2. **Hash the canonical form.** Compute the NAR hash of the
+   marker-replaced output to determine the final CA path.
+3. **Replace markers with final paths.** Substitute each marker
+   with the corresponding final CA store path.
+
+The marker MUST NOT be all-zeros. ELF binaries contain zero-padded
+alignment regions that match the length of a store path, so an
+all-zero marker produces false positive replacements that corrupt
+section headers and BSS segments.
+
+Both provisional and final paths MUST have the same length (they
+do — both are store paths with the same derivation name). The
+marker is also the same length.
 
 #### Scenario: Binary with embedded store path
 

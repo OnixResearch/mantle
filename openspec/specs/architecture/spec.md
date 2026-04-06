@@ -36,6 +36,7 @@ The workspace MUST contain the following crates:
 | `crunch` (binary) | CLI entry point, wires everything together |
 | `crunch-eval` | Nickel evaluation wrapper — takes a file path, returns structured JSON |
 | `crunch-glue` | Converts evaluated Nickel records to Derivation structs, manages KnownPaths |
+| `crunch-build` | Goal scheduler (Worker), build dispatch, output processing, CA rewriting |
 | `nix-compat` (vendored) | Derivation struct, store path calculation, ATerm, NAR, nixbase32 |
 | `snix-build` (vendored) | BuildService trait, BuildRequest, sandbox execution |
 | `snix-castore` (vendored) | Content-addressed blob and directory storage |

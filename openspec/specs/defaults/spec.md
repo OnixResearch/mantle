@@ -281,7 +281,8 @@ rebuild.
 
 - GIVEN the same mismatch
 - WHEN `crunch build --fix hello.ncl` is run
-- THEN crunch updates the hash in `hello.ncl` directly and retries
+- THEN crunch updates the hash in `hello.ncl` and exits, instructing
+  the user to re-run (the derivation path changed)
 
 ### Requirement: Hash algorithm in Nickel contracts
 

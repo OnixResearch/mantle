@@ -19,12 +19,14 @@ which:
 3. Validates all contracts
 4. Produces a fully-resolved `NickelValue`
 
-The resulting `NickelValue` is passed directly to the glue layer. No JSON
-serialization step. `NickelValue` implements `serde::Deserializer`, so the
-glue layer deserializes directly into typed Rust structs via `#[derive(Deserialize)]`.
+The build pipeline uses Nickel's JSON export to produce a JSON string,
+then deserializes into typed Rust structs via `serde_json::from_value()`.
+This JSON round-trip is intentional: `Expr::to_serde()` fails on Nickel
+enum tags in nested derivation inputs (e.g., an `Input::Derivation` whose
+`system` field is `'x86_64-linux`). Nickel's JSON export pipeline converts
+enum variants to plain strings, which `serde_json` handles correctly.
 
-`crunch eval` MAY serialize to JSON for human-readable debug output, but
-the build pipeline MUST NOT use JSON as an intermediate format.
+`crunch eval <file>` also outputs this JSON for human-readable debug output.
 
 #### Scenario: Evaluate and deserialize
 
@@ -38,9 +40,9 @@ the build pipeline MUST NOT use JSON as an intermediate format.
   }
   ```
 - WHEN crunch-eval evaluates it
-- THEN the returned `NickelValue` contains `name`, `builder`, `system`
-  (no `_internal`), and the glue layer can deserialize it directly into
-  a `CrunchDerivation` Rust struct
+- THEN the exported JSON contains `name`, `builder`, `system`
+  (no `_internal`), and the glue layer deserializes it into
+  a `CrunchDerivation` Rust struct via `serde_json`
 
 #### Scenario: Evaluation error with source location
 
@@ -56,9 +58,10 @@ in derivation descriptions (missing fields, wrong types, invalid enum
 variants) MUST be caught by Nickel contracts during evaluation, before the
 Rust glue layer runs.
 
-The crunch stdlib's `Derivation` contract is a closed record contract.
-Missing required fields, extra unknown fields, and type mismatches are all
-Nickel contract violations.
+The crunch stdlib's `Derivation` contract is an open record contract
+(see nickel-stdlib spec). Missing required fields and type mismatches
+are Nickel contract violations. Extra fields pass through and are
+ignored by the Rust glue layer.
 
 #### Scenario: Missing required field
 
@@ -172,17 +175,26 @@ crunch-eval MUST configure Nickel's import resolution to find:
 - WHEN `crunch build hello.ncl` is run
 - THEN the import resolves relative to `hello.ncl`'s directory
 
-### Requirement: Value passing is in-process, no serialization
+### Requirement: Value passing via JSON export
 
-crunch-eval MUST return `NickelValue` directly to crunch-glue in-process.
-No intermediate files, no JSON serialization step. The `NickelValue` type
-(which implements `serde::Deserializer`) is the contract boundary between
-evaluation and derivation construction.
+crunch-eval MUST evaluate the Nickel expression in-process and export
+the result to a JSON string via Nickel's export pipeline. The JSON
+string is then deserialized into typed Rust structs (`CrunchDerivation`)
+via `serde_json`. No intermediate files are written — the JSON exists
+only as an in-memory `String`.
 
 The glue layer defines `#[derive(serde::Deserialize)]` Rust structs that
-mirror the Nickel Derivation contract. Deserialization from `NickelValue`
-handles records → structs, arrays → Vec, enum variants → Rust enums,
-nullable → Option automatically.
+mirror the Nickel Derivation contract. Deserialization handles
+objects → structs, arrays → Vec, strings → enums (via `NickelString`
+wrapper), nullable → Option.
+
+The JSON round-trip exists because Nickel's `Expr::to_serde()` does not
+convert enum tags to strings for fields typed as `String` on the Rust
+side. The `NickelString` serde wrapper in crunch-glue accepts both plain
+strings and enum-tag representations via `deserialize_any`, but nested
+derivation inputs (where a full `CrunchDerivation` appears inside an
+`Input` array) still fail through `to_serde()`. The JSON export path
+handles all cases correctly.
 
 ### Requirement: Explicit input declarations
 

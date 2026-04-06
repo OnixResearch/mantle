@@ -36,42 +36,46 @@ MUST contain:
 - WHEN `crunch build` is run again and the output is cached
 - THEN the existing PathInfo is returned without re-ingesting
 
-### Requirement: Cache check uses PathInfoService
+### Requirement: Cache check uses PathInfoService and castore
 
 The cache check MUST query `PathInfoService::get()` using the
 output path's 20-byte digest. A cache hit requires BOTH:
 
 1. `PathInfoService::get(digest)` returns `Some(path_info)`
-2. The output path exists on the filesystem
+2. The content referenced by `path_info.node` exists in the
+   castore (blob service for files, directory service for dirs)
 
-If the PathInfo exists but the file doesn't (garbage collected or
-manually deleted), the system MUST treat it as a cache miss and
-rebuild. It SHOULD log a warning that the store is inconsistent.
+The cache check MUST NOT use filesystem existence checks. Build
+outputs live in the castore; only root outputs requested by the
+user are exported to disk (see castore-store spec). Intermediate
+dependency outputs may never exist on disk.
 
-If the file exists but no PathInfo is found, the system MUST
-treat it as a cache miss and rebuild (re-ingesting the output
-would produce PathInfo, but we can't trust untracked paths).
+If PathInfo exists but the castore content is missing, the system
+MUST treat it as a cache miss and rebuild. It SHOULD log a warning
+that the store is inconsistent.
 
-#### Scenario: PathInfo + file = cache hit
+If no PathInfo exists, the system MUST treat it as a cache miss
+and rebuild.
+
+#### Scenario: PathInfo + castore content = cache hit
 
 - GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
-- AND the path exists on disk
+- AND the blob referenced by PathInfo.node exists in the blob service
 - WHEN `crunch build` processes this derivation
 - THEN the build is skipped (cache hit)
+- AND `output_nodes` is populated from PathInfo for downstream use
 
-#### Scenario: PathInfo but no file = cache miss
+#### Scenario: PathInfo but missing castore content = cache miss
 
 - GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
-- BUT the path was deleted from disk
+- BUT the blob referenced by PathInfo.node is absent from the blob service
 - WHEN `crunch build` processes this derivation
 - THEN the derivation is rebuilt
-- AND a warning is logged about the inconsistency
+- AND a warning is logged about missing castore content
 
-#### Scenario: File but no PathInfo = cache miss
+#### Scenario: No PathInfo = cache miss
 
-- GIVEN `/nix/store/<hash>-hello` exists on disk (from Nix or
-  manual copy)
-- BUT no PathInfo is in the database
+- GIVEN no PathInfo in the database for an output
 - WHEN `crunch build` processes this derivation
 - THEN the derivation is rebuilt
 

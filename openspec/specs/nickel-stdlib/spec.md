@@ -44,7 +44,17 @@ published as independent Nickel packages that `import` the crunch stdlib.
 
 ### Requirement: Derivation contract with enums and validators
 
-The stdlib MUST provide a closed `Derivation` contract:
+The stdlib MUST provide an open `Derivation` contract (with `..` tail).
+The contract enforces required fields and types for the fields crunch
+consumes, but allows extra fields to pass through. The Rust glue layer
+ignores unknown fields during deserialization (no `deny_unknown_fields`).
+
+The contract is open because `mkDerivation` and package authoring
+patterns add fields that crunch itself does not consume: `pname`,
+`version`, `meta`, `passthru`, `overrideAttrs`, build phase hooks, etc.
+A closed contract would reject these, forcing the stdlib to enumerate
+every possible extension field. Opening the contract pushes validation
+of extension fields to the packages that define them.
 
 ```nickel
 {
@@ -73,6 +83,7 @@ The stdlib MUST provide a closed `Derivation` contract:
   sandbox | Sandbox
     | doc "Sandbox backend. Default is native (bwrap on Linux). Use 'wasm for single-process WASM builds."
     | default = 'native,
+  ..  # Extra fields (pname, version, meta, passthru, overrideAttrs) pass through.
 }
 ```
 
@@ -88,11 +99,12 @@ The stdlib MUST provide a closed `Derivation` contract:
 - WHEN evaluated
 - THEN Nickel reports a contract violation for missing `name`
 
-#### Scenario: Extra field rejected
+#### Scenario: Extra fields allowed
 
-- GIVEN `{ name = "foo", builder = "/bin/sh", bogus = true } | crunch.Derivation`
+- GIVEN `{ name = "foo", builder = "/bin/sh", version = "1.0" } | crunch.Derivation`
 - WHEN evaluated
-- THEN Nickel rejects the extra field (closed contract)
+- THEN the extra `version` field passes through (open contract)
+- AND the Rust glue layer ignores it during deserialization
 
 ### Requirement: System enum
 
@@ -171,8 +183,16 @@ automatically: string → `Input::Source`, object → `Input::Derivation`.
 let Sandbox = [| 'wasm, 'native, 'oci |] in
 ```
 
-`'wasm` is the default. `'native` uses the platform-specific sandbox
-(bwrap on Linux). `'oci` uses an OCI container runtime.
+`'native` is the default. It uses the platform-specific sandbox
+(bwrap on Linux). `'oci` uses an OCI container runtime. `'wasm`
+uses a WASI runtime (wasmtime) but is limited to single-process
+builds because standard WASI has no process spawning (`fork`,
+`exec`, `spawn`). Build scripts that invoke multiple tools (bash
+calling gcc, make, cp) cannot run under `'wasm`. See the
+portability spec for the full rationale.
+
+Once WASI gains subprocess support (on the standards roadmap),
+`'wasm` may become the default.
 
 ### Requirement: FixedOutput contract
 
