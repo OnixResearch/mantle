@@ -42,7 +42,9 @@ let busybox_src = crunch.fetchTarball {
       for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
                  tr head tail sort wc expr test basename dirname \
                  install find xargs readlink sleep touch date od \
-                 uname id hostname diff cmp true false tee sh; do
+                 uname id hostname diff cmp true false tee sh \
+                 bzip2 bunzip2 bzcat gzip gunzip zcat which env \
+                 cut paste comm uniq dd whoami printenv; do
         $BB ln -sf $BB /tmp/tools/$cmd
       done
       export PATH="/tmp/tools"
