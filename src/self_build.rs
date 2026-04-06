@@ -134,6 +134,8 @@ let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
 let rust = (import "rust.ncl") in
+let busybox = (import "busybox.ncl") in
+let bwrap = (import "bwrap.ncl") in
 
 {{
   name = "crunch",
@@ -212,7 +214,10 @@ let rust = (import "rust.ncl") in
         fi
       done
 
-      export PATH="/tmp/tools:$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
+      # Add bwrap to PATH if available.
+      BWRAP_PATH=""
+      if [ -n "$BWRAP_BIN" ]; then BWRAP_PATH="$BWRAP_BIN:"; fi
+      export PATH="/tmp/tools:${{BWRAP_PATH}}$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
 
       echo "=== Tool versions ==="
       rustc --version
@@ -252,7 +257,23 @@ CARGOEOF
 
       export CARGO_HOME=/tmp/cargo-home
       export CARGO_TARGET_DIR=/tmp/cargo-target
-      export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
+      # Use crunch-built busybox as the sandbox shell baked into the binary.
+      # Find it from the inputs.
+      BUSYBOX_BIN=""
+      for d in /nix/store/*-busybox; do
+        if [ -x "$d/bin/busybox" ]; then BUSYBOX_BIN="$d/bin/busybox"; break; fi
+      done
+      if [ -n "$BUSYBOX_BIN" ]; then
+        export SNIX_BUILD_SANDBOX_SHELL="$BUSYBOX_BIN"
+      else
+        export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
+      fi
+
+      # Find crunch-built bwrap for PATH.
+      BWRAP_BIN=""
+      for d in /nix/store/*-bwrap; do
+        if [ -x "$d/bin/bwrap" ]; then BWRAP_BIN="$d/bin"; break; fi
+      done
       export CC=gcc
       export AR=ar
       export TARGET_CC=gcc
@@ -278,6 +299,7 @@ CARGOEOF
   ],
   inputs = [
     toolchain, gnumake, dash, binutils, musl, gcc, rust,
+    busybox, bwrap,
     "/nix/store/{src_store_path}",
   ],
 }} | crunch.Derivation
@@ -414,6 +436,8 @@ mod tests {
         assert!(ncl.contains("import \"musl.ncl\""));
         assert!(ncl.contains("import \"gcc.ncl\""));
         assert!(ncl.contains("import \"rust.ncl\""));
+        assert!(ncl.contains("import \"busybox.ncl\""));
+        assert!(ncl.contains("import \"bwrap.ncl\""));
     }
 
     #[test]
