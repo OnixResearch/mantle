@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use futures::{TryStreamExt, stream::BoxStream};
 use nix_compat::nixbase32;
 use snix_castore::composition::{CompositionContext, ServiceBuilder};
-use tonic::async_trait;
+
 use tracing::{debug, instrument};
 
 use crate::pathinfoservice;
@@ -30,6 +31,7 @@ impl<PS1, PS2> Cache<PS1, PS2> {
         }
     }
 }
+
 
 #[async_trait]
 impl<PS1, PS2> PathInfoService for Cache<PS1, PS2>
@@ -106,6 +108,7 @@ impl TryFrom<url::Url> for CacheConfig {
         Err(Error::URLNotSupported)?
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for CacheConfig {

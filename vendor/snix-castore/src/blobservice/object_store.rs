@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::{
     collections::{HashMap, hash_map},
     io::{self, Cursor},
@@ -11,9 +12,9 @@ use fastcdc::v2020::AsyncStreamCDC;
 use futures::{Future, TryStreamExt};
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use pin_project_lite::pin_project;
-use prost::Message;
+
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use tonic::async_trait;
+
 use tracing::{Level, debug, instrument, trace};
 use url::Url;
 
@@ -109,6 +110,7 @@ fn derive_chunk_path(base_path: &Path, digest: &B3Digest) -> Path {
         .child(HEXLOWER.encode(&digest[..2]))
         .child(HEXLOWER.encode(&digest[..]))
 }
+
 
 #[async_trait]
 impl BlobService for ObjectStoreBlobService {
@@ -223,7 +225,7 @@ impl BlobService for ObjectStoreBlobService {
                 // fetch the data at the blob path
                 let blob_data = get_result.bytes().await?;
                 // parse into StatBlobResponse
-                let stat_blob_response: StatBlobResponse = StatBlobResponse::decode(blob_data)?;
+                let stat_blob_response: StatBlobResponse = postcard::from_bytes(&blob_data).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
                 debug!(
                     chunk.count = stat_blob_response.chunks.len(),
@@ -308,6 +310,7 @@ impl TryFrom<url::Url> for ObjectStoreBlobServiceConfig {
         })
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for ObjectStoreBlobServiceConfig {
@@ -411,7 +414,7 @@ async fn chunk_and_upload<R: AsyncRead + Unpin>(
                 "uploading blob"
             );
             object_store
-                .put(&blob_path, stat_blob_response.encode_to_vec().into())
+                .put(&blob_path, postcard::to_stdvec(&stat_blob_response).expect("serialize").into())
                 .await?;
         }
         Err(err) => {
@@ -542,6 +545,7 @@ where
         std::task::Poll::Ready(Ok(()))
     }
 }
+
 
 #[async_trait]
 impl<W, Fut> BlobWriter for ObjectStoreBlobWriter<W, Fut>

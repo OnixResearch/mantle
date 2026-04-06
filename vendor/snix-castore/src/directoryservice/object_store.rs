@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::collections::hash_map;
 use std::sync::Arc;
@@ -9,10 +10,10 @@ use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use object_store::ObjectStoreExt;
 use object_store::{ObjectStore, path::Path};
-use prost::Message;
+
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::LengthDelimitedCodec;
-use tonic::async_trait;
+
 use tracing::{Level, instrument, trace, warn};
 use url::Url;
 
@@ -59,7 +60,7 @@ where
     }
 
     let directory_proto =
-        proto::Directory::decode(encoded_directory).map_err(Error::ProtobufDecode)?;
+        postcard::from_bytes::<proto::Directory>(&encoded_directory).map_err(Error::PostcardDecode)?;
 
     Directory::try_from(directory_proto).map_err(Error::DirectoryValidation)
 }
@@ -101,6 +102,7 @@ impl ObjectStoreDirectoryService {
         }
     }
 }
+
 
 #[async_trait]
 impl DirectoryService for ObjectStoreDirectoryService {
@@ -195,8 +197,8 @@ enum Error {
     DirectoryOrdering(#[from] crate::directoryservice::OrderingError),
     #[error("requested directory has unexpected digest {0}")]
     UnexpectedDigest(B3Digest),
-    #[error("failed to decode protobuf: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
+    #[error("failed to decode: {0}")]
+    PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate directory: {0}")]
     DirectoryValidation(#[from] crate::DirectoryError),
 
@@ -242,6 +244,7 @@ impl TryFrom<url::Url> for ObjectStoreDirectoryServiceConfig {
         })
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for ObjectStoreDirectoryServiceConfig {
@@ -294,6 +297,7 @@ impl<'a> ObjectStoreDirectoryPutter<'a> {
     }
 }
 
+
 #[async_trait]
 impl DirectoryPutter for ObjectStoreDirectoryPutter<'_> {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]
@@ -343,7 +347,7 @@ impl DirectoryPutter for ObjectStoreDirectoryPutter<'_> {
                 // Drain the graph in *Root-To-Leaves*, order, as that's how we write it to storage.
                 for directory in directory_graph.drain_root_to_leaves() {
                     directories_sink
-                        .send(proto::Directory::from(directory).encode_to_vec().into())
+                        .send(postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize").into())
                         .await?;
                 }
 

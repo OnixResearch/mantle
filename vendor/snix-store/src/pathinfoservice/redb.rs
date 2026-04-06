@@ -1,13 +1,14 @@
+use async_trait::async_trait;
 use super::{PathInfo, PathInfoService};
 use crate::{pathinfoservice, proto};
 use data_encoding::BASE64;
 use futures::{StreamExt, TryStreamExt, stream::BoxStream};
-use prost::Message;
+
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
 use snix_castore::composition::{CompositionContext, ServiceBuilder};
 use std::{path::PathBuf, sync::Arc};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::async_trait;
+
 use tracing::instrument;
 
 const PATHINFO_TABLE: TableDefinition<[u8; 20], Vec<u8>> = TableDefinition::new("pathinfo");
@@ -140,6 +141,7 @@ fn create_schema(db: &redb::Database) -> Result<(), Error> {
     Ok(())
 }
 
+
 #[async_trait]
 impl PathInfoService for RedbPathInfoService {
     #[instrument(level = "trace", skip_all, fields(path_info.digest = BASE64.encode(&digest), instance_name = %self.instance_name))]
@@ -161,7 +163,7 @@ impl PathInfoService for RedbPathInfoService {
         };
 
         let pathinfo_proto =
-            proto::PathInfo::decode(path_info_bytes.as_slice()).map_err(Error::ProtobufDecode)?;
+            postcard::from_bytes::<proto::PathInfo>(path_info_bytes.as_slice()).map_err(Error::PostcardDecode)?;
         let path_info = PathInfo::try_from(pathinfo_proto).map_err(Error::PathInfoValidation)?;
 
         return Ok(Some(path_info));
@@ -178,7 +180,7 @@ impl PathInfoService for RedbPathInfoService {
                     let mut table = txn.open_table(PATHINFO_TABLE)?;
                     table.insert(
                         *path_info.store_path.digest(),
-                        proto::PathInfo::from(path_info).encode_to_vec(),
+                        postcard::to_stdvec(&proto::PathInfo::from(path_info)).expect("serialize"),
                     )?;
                 }
                 txn.commit()?;
@@ -204,7 +206,7 @@ impl PathInfoService for RedbPathInfoService {
                 let table_iter = table.iter()?;
 
                 for elem in table_iter {
-                    let path_info_proto = proto::PathInfo::decode(elem?.1.value().as_slice())?;
+                    let path_info_proto: proto::PathInfo = postcard::from_bytes::<proto::PathInfo>(elem?.1.value().as_slice()).map_err(|e| Error::PostcardDecode(e))?;
 
                     let path_info = PathInfo::try_from(path_info_proto)?;
 
@@ -232,8 +234,8 @@ pub enum Error {
     #[error("serde-qs error: {0}")]
     SerdeQS(#[from] serde_qs::Error),
 
-    #[error("failed to decode protobuf: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
+    #[error("failed to decode: {0}")]
+    PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate PathInfo: {0}")]
     PathInfoValidation(#[from] crate::proto::ValidatePathInfoError),
 
@@ -303,6 +305,7 @@ impl TryFrom<url::Url> for RedbPathInfoServiceConfig {
         Ok(config)
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for RedbPathInfoServiceConfig {

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::*;
 
-#[async_trait]
+
 impl AsyncFileSystem for Vfs {
     async fn async_lookup(
         &self,

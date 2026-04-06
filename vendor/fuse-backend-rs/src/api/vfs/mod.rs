@@ -1155,7 +1155,7 @@ mod tests {
         use async_trait::async_trait;
 
         #[allow(unused_variables)]
-        #[async_trait]
+        
         impl AsyncFileSystem for FakeFileSystemOne {
             async fn async_lookup(
                 &self,
@@ -1286,7 +1286,7 @@ mod tests {
         }
 
         #[allow(unused_variables)]
-        #[async_trait]
+        
         impl AsyncFileSystem for FakeFileSystemTwo {
             async fn async_lookup(
                 &self,

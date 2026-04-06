@@ -1,6 +1,7 @@
 //! Native closure resolution: walk the reference graph in PathInfo
 //! (local redb + optional remote binary cache) instead of shelling
 //! out to `nix-store -qR`.
+use async_trait::async_trait;
 
 use std::collections::BTreeSet;
 
@@ -132,7 +133,7 @@ mod tests {
         }
     }
 
-    #[tonic::async_trait]
+    
     impl PathInfoService for MockPathInfoService {
         async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
             Ok(self.entries.lock().unwrap().get(&digest).cloned())

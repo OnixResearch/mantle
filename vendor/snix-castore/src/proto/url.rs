@@ -1,6 +1,5 @@
 use crate::proto;
 use data_encoding::BASE64URL_NOPAD;
-use prost::Message;
 use tracing::warn;
 
 /// From a given root node and nar_size, writes a castore-infused NAR path to the writer.
@@ -9,7 +8,9 @@ pub fn write_infused_nar_path(
     node: crate::Node,
     nar_size: u64,
 ) -> Result<(), std::fmt::Error> {
-    let proto_node = proto::Entry::from_name_and_node("".into(), node).encode_to_vec();
+    let proto_node = postcard::to_stdvec(
+        &proto::Entry::from_name_and_node("".into(), node),
+    ).expect("Entry serialization cannot fail");
 
     write!(
         w,
@@ -51,10 +52,10 @@ pub fn parse_urlsafe_proto(node_enc: impl AsRef<[u8]>) -> Option<crate::Node> {
         })
         .ok()?;
 
-    // parse the proto
-    let node_proto: proto::Entry = Message::decode(node_bytes.as_slice())
+    // parse the entry
+    let node_proto: proto::Entry = postcard::from_bytes(&node_bytes)
         .inspect_err(|err| {
-            warn!(%err, "unable to decode node proto");
+            warn!(%err, "unable to decode node");
         })
         .ok()?;
 

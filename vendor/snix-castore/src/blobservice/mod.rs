@@ -1,7 +1,8 @@
+use async_trait::async_trait;
 use std::io;
 
 use auto_impl::auto_impl;
-use tonic::async_trait;
+
 
 use crate::B3Digest;
 use crate::composition::{Registry, ServiceBuilder};
@@ -10,7 +11,6 @@ use crate::proto::stat_blob_response::ChunkMeta;
 mod chunked_reader;
 mod combinator;
 mod from_addr;
-mod grpc;
 mod memory;
 mod object_store;
 
@@ -20,7 +20,6 @@ pub mod tests;
 pub use self::chunked_reader::ChunkedReader;
 pub use self::combinator::{CombinedBlobService, CombinedBlobServiceConfig};
 pub use self::from_addr::from_addr;
-pub use self::grpc::{GRPCBlobService, GRPCBlobServiceConfig};
 pub use self::memory::{MemoryBlobService, MemoryBlobServiceConfig};
 pub use self::object_store::{ObjectStoreBlobService, ObjectStoreBlobServiceConfig};
 
@@ -29,6 +28,7 @@ pub use self::object_store::{ObjectStoreBlobService, ObjectStoreBlobServiceConfi
 /// a way to read (and seek) a blob, and a method to create a blobwriter handle,
 /// which will implement a writer interface, and also provides a close funtion,
 /// to finalize a blob and get its digest.
+
 #[async_trait]
 #[auto_impl(&, &mut, Arc, Box)]
 pub trait BlobService: Send + Sync {
@@ -64,6 +64,7 @@ pub trait BlobService: Send + Sync {
 
 /// A [tokio::io::AsyncWrite] that the user needs to close() afterwards for persist.
 /// On success, it returns the digest of the written blob.
+
 #[async_trait]
 pub trait BlobWriter: tokio::io::AsyncWrite + Send + Unpin {
     /// Signal there's no more data to be written, and return the digest of the
@@ -88,5 +89,4 @@ pub(crate) fn register_blob_services(reg: &mut Registry) {
     reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::ObjectStoreBlobServiceConfig>("objectstore");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::MemoryBlobServiceConfig>("memory");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::CombinedBlobServiceConfig>("combined");
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::GRPCBlobServiceConfig>("grpc");
 }

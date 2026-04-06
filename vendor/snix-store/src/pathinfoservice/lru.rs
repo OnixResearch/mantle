@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use async_stream::try_stream;
 use futures::stream::BoxStream;
 use lru::LruCache;
@@ -5,7 +6,7 @@ use nix_compat::nixbase32;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tonic::async_trait;
+
 use tracing::instrument;
 
 use snix_castore::composition::{CompositionContext, ServiceBuilder};
@@ -27,6 +28,7 @@ impl LruPathInfoService {
         }
     }
 }
+
 
 #[async_trait]
 impl PathInfoService for LruPathInfoService {
@@ -76,6 +78,7 @@ impl TryFrom<url::Url> for LruPathInfoServiceConfig {
         Err(Error::URLNotSupported)?
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for LruPathInfoServiceConfig {

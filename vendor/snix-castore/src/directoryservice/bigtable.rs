@@ -1,12 +1,13 @@
+use async_trait::async_trait;
 use bigtable_rs::{bigtable, google::bigtable::v2 as bigtable_v2};
 use data_encoding::HEXLOWER;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
-use prost::Message;
+
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
 use std::sync::Arc;
-use tonic::async_trait;
+
 use tracing::{instrument, trace, warn};
 
 use super::{Directory, DirectoryPutter, DirectoryService, SimplePutter};
@@ -156,6 +157,7 @@ fn derive_directory_key(digest: &B3Digest) -> String {
     HEXLOWER.encode(digest.as_slice())
 }
 
+
 #[async_trait]
 impl DirectoryService for BigtableDirectoryService {
     #[instrument(skip(self, digest), err, fields(directory.digest = %digest, instance_name=%self.instance_name))]
@@ -245,7 +247,7 @@ impl DirectoryService for BigtableDirectoryService {
 
         // Try to parse the value into a Directory message.
         let directory_proto =
-            proto::Directory::decode(row_cell.value.as_slice()).map_err(Error::ProtobufDecode)?;
+            postcard::from_bytes::<proto::Directory>(row_cell.value.as_slice()).map_err(Error::PostcardDecode)?;
         let directory = Directory::try_from(directory_proto).map_err(Error::DirectoryValidation)?;
 
         Ok(Some(directory))
@@ -257,7 +259,7 @@ impl DirectoryService for BigtableDirectoryService {
         let mut client = self.client.clone();
         let directory_key = derive_directory_key(&directory_digest);
 
-        let data = proto::Directory::from(directory).encode_to_vec();
+        let data = postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize");
         if data.len() as u64 > CELL_SIZE_LIMIT {
             Err(Error::DirectoryTooBig)?;
         }
@@ -331,8 +333,8 @@ pub enum Error {
     #[error("serde-qs error: {0}")]
     SerdeQS(#[from] serde_qs::Error),
 
-    #[error("failed to decode protobuf: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
+    #[error("failed to decode: {0}")]
+    PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate directory: {0}")]
     DirectoryValidation(#[from] crate::DirectoryError),
     #[error("Directory has unexpected digest")]
@@ -390,6 +392,7 @@ fn default_channel_size() -> usize {
 fn default_timeout() -> Option<std::time::Duration> {
     Some(std::time::Duration::from_secs(4))
 }
+
 
 #[async_trait]
 impl ServiceBuilder for BigtableParameters {

@@ -4,18 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bytes = "1.7.1"
+bytes = { version = "1.7.1", features = ["serde"] }
+async-trait = "0.1"
 clap = { version = "4.5.16", features = ["derive", "env"] }
 itertools = "0.12.1"
-prost = "0.13.1"
+postcard = { version = "1", features = ["use-std"] }
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
 thiserror = "2.0"
 tokio = { version = "1.39.3", features = ["process"] }
-tonic = { version = "0.13.1", features = ["tls-ring", "tls-native-roots"] }
 snix-castore = { path = "../snix-castore", features = ["fuse"] }
 tracing = "0.1.40"
 url = "2.5.2"
 mimalloc = "0.1.43"
-tonic-reflection = { version = "0.13.1", optional = true }
 
 anyhow = "1.0.79"
 blake3 = "1.5.0"
@@ -29,12 +30,9 @@ uuid = { version = "1.7.0", features = ["v4"] }
 typed-builder = "0.22.0"
 
 [build-dependencies]
-prost-build = "0.13.1"
-tonic-build = "0.13.1"
 
 [features]
 default = []
-tonic-reflection = ["dep:tonic-reflection", "snix-castore/tonic-reflection"]
 
 [dev-dependencies]
 rstest = { version = "0.26.1", default-features = false }

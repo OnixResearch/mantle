@@ -1,7 +1,7 @@
 #[cfg(target_os = "linux")]
 use crate::buildservice::bwrap::BubblewrapBuildService;
 
-use super::{BuildService, DummyBuildService, grpc::GRPCBuildService};
+use super::{BuildService, DummyBuildService};
 use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService};
 use url::Url;
 
@@ -67,21 +67,10 @@ where
             ))
         }
         scheme => {
-            if scheme.starts_with("grpc+") {
-                let client = crate::proto::build_service_client::BuildServiceClient::new(
-                    snix_castore::tonic::channel_from_url(&url)
-                        .await
-                        .map_err(std::io::Error::other)?,
-                );
-                // FUTUREWORK: also allow responding to {blob,directory}_service
-                // requests from the remote BuildService?
-                Box::new(GRPCBuildService::from_client(client))
-            } else {
-                Err(std::io::Error::other(format!(
-                    "unknown scheme: {}",
-                    url.scheme()
-                )))?
-            }
+            Err(std::io::Error::other(format!(
+                "unknown scheme: {}",
+                scheme
+            )))?
         }
     })
 }

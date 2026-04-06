@@ -1,4 +1,5 @@
 //! This module provides a [PathInfoService] implementation that signs narinfos
+use async_trait::async_trait;
 
 use super::{PathInfo, PathInfoService};
 use crate::pathinfoservice;
@@ -6,7 +7,7 @@ use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tonic::async_trait;
+
 
 use snix_castore::composition::{CompositionContext, ServiceBuilder};
 
@@ -40,6 +41,7 @@ impl<T, S> SigningPathInfoService<T, S> {
         }
     }
 }
+
 
 #[async_trait]
 impl<T, S> PathInfoService for SigningPathInfoService<T, S>
@@ -106,6 +108,7 @@ impl TryFrom<url::Url> for KeyFileSigningPathInfoServiceConfig {
         Err(Error::URLNotSupported)?
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for KeyFileSigningPathInfoServiceConfig {

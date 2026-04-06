@@ -1,4 +1,5 @@
-use tonic::async_trait;
+use async_trait::async_trait;
+
 use tracing::instrument;
 
 use super::BuildService;
@@ -6,6 +7,7 @@ use crate::buildservice::{BuildRequest, BuildResult};
 
 #[derive(Default)]
 pub struct DummyBuildService {}
+
 
 #[async_trait]
 impl BuildService for DummyBuildService {

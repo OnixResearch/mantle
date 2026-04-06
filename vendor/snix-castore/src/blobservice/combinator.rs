@@ -1,6 +1,7 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 
-use tonic::async_trait;
+
 use tracing::instrument;
 
 use crate::B3Digest;
@@ -34,6 +35,7 @@ where
         }
     }
 }
+
 
 #[async_trait]
 impl<BL, BR> BlobService for CombinedBlobService<BL, BR>
@@ -106,6 +108,7 @@ impl TryFrom<url::Url> for CombinedBlobServiceConfig {
         Err("Instantiating a CombinedBlobService from a url is not supported".into())
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for CombinedBlobServiceConfig {

@@ -1,8 +1,9 @@
+use async_trait::async_trait;
 use auto_impl::auto_impl;
 use snix_castore::B3Digest;
 use snix_castore::Node;
 use snix_castore::directoryservice::OrderingError;
-use tonic::async_trait;
+
 
 mod hashing_reader;
 mod import;
@@ -14,6 +15,7 @@ pub use renderer::calculate_size_and_sha256;
 pub use renderer::write_nar;
 
 use crate::pathinfoservice;
+
 
 #[async_trait]
 #[auto_impl(&, &mut, Arc, Box)]

@@ -1,24 +1,12 @@
-use prost::Message;
-
 use std::cmp::Ordering;
-
-mod grpc_blobservice_wrapper;
-mod grpc_directoryservice_wrapper;
 
 mod url;
 
 use crate::{B3Digest, DirectoryError, path::PathComponent};
-pub use grpc_blobservice_wrapper::GRPCBlobServiceWrapper;
-pub use grpc_directoryservice_wrapper::GRPCDirectoryServiceWrapper;
 pub use url::{parse_infused_nar_path, parse_urlsafe_proto, write_infused_nar_path};
 
-tonic::include_proto!("snix.castore.v1");
-
-#[cfg(feature = "tonic-reflection")]
-/// Compiled file descriptors for implementing [gRPC
-/// reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md) with e.g.
-/// [`tonic_reflection`](https://docs.rs/tonic-reflection).
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("snix.castore.v1");
+// Data types — plain Rust structs with serde derives.
+include!("../generated/snix.castore.v1.rs");
 
 #[cfg(test)]
 mod tests;
@@ -56,16 +44,13 @@ impl Directory {
         ])
     }
 
-    /// Calculates the digest of a Directory, which is the blake3 hash of a
-    /// Directory protobuf message, serialized in protobuf canonical form.
+    /// Calculates the digest of a Directory, which is the blake3 hash of
+    /// its postcard-serialized canonical form.
     pub fn digest(&self) -> B3Digest {
+        let encoded = postcard::to_stdvec(self)
+            .expect("Directory serialization cannot fail");
         let mut hasher = blake3::Hasher::new();
-
-        hasher
-            .update(&self.encode_to_vec())
-            .finalize()
-            .as_bytes()
-            .into()
+        hasher.update(&encoded).finalize().as_bytes().into()
     }
 }
 

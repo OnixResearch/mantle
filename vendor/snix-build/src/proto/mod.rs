@@ -4,19 +4,10 @@ use std::path::{Path, PathBuf};
 use itertools::Itertools;
 use snix_castore::{DirectoryError, Node, PathComponent};
 
-mod grpc_buildservice_wrapper;
-
-pub use grpc_buildservice_wrapper::GRPCBuildServiceWrapper;
-
 use crate::buildservice::BuildResult;
 
-tonic::include_proto!("snix.build.v1");
-
-#[cfg(feature = "tonic-reflection")]
-/// Compiled file descriptors for implementing [gRPC
-/// reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md) with e.g.
-/// [`tonic_reflection`](https://docs.rs/tonic-reflection).
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("snix.build.v1");
+// Data types — plain Rust structs with serde derives.
+include!("../generated/snix.build.v1.rs");
 
 /// Errors that occur during the validation of [BuildRequest] messages.
 #[derive(Debug, thiserror::Error)]
@@ -79,11 +70,6 @@ pub enum ValidateBuildResultError {
 fn is_clean_path<P: AsRef<Path>>(p: P) -> bool {
     let p = p.as_ref();
 
-    // Look at all components, bail in case of ".", ".." and empty normal
-    // segments (superfluous slashes)
-    // We still need to assemble a cleaned PathBuf, and compare the OsString
-    // later, as .components() already does do some normalization before
-    // yielding.
     let mut cleaned_p = PathBuf::new();
     for component in p.components() {
         match component {
@@ -100,7 +86,6 @@ fn is_clean_path<P: AsRef<Path>>(p: P) -> bool {
         cleaned_p.push(component);
     }
 
-    // if cleaned_p looks like p, we're good.
     if cleaned_p.as_os_str() != p.as_os_str() {
         return false;
     }
@@ -420,11 +405,6 @@ impl TryFrom<build_request::BuildConstraints> for HashSet<crate::buildservice::B
 }
 
 #[cfg(test)]
-// TODO: add testcases for constraints special cases. The default cases in the protos
-// should result in the constraints not being added. For example min_memory 0 can be omitted.
-// Also interesting testcases are "merging semantics". MimMemory(1) and MinMemory(100) will
-// result in mim_memory 100, multiple AvailableReadOnlyPaths need to be merged. Contradicting
-// system constraints need to fail somewhere (maybe an assertion, as only buggy code can construct it)
 mod tests {
     use super::{is_clean_path, is_clean_relative_path};
     use rstest::rstest;
@@ -449,6 +429,4 @@ mod tests {
     fn test_is_clean_relative_path(#[case] s: &str, #[case] expected: bool) {
         assert_eq!(is_clean_relative_path(s), expected);
     }
-
-    // TODO: add tests for BuildRequest validation itself
 }

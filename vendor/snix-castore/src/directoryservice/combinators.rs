@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use tonic::async_trait;
+
 use tracing::{instrument, trace};
 
 use super::{Directory, DirectoryService, SimplePutter};
@@ -34,6 +35,7 @@ impl<DS1, DS2> Cache<DS1, DS2> {
         }
     }
 }
+
 
 #[async_trait]
 impl<DS1, DS2> DirectoryService for Cache<DS1, DS2>
@@ -179,6 +181,7 @@ impl TryFrom<url::Url> for CacheConfig {
         Ok(serde_qs::from_str(url.query().unwrap_or_default())?)
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for CacheConfig {

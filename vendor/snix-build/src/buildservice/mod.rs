@@ -1,10 +1,10 @@
-use tonic::async_trait;
+use async_trait::async_trait;
+
 
 pub mod build_request;
 pub use crate::buildservice::build_request::*;
 mod dummy;
 mod from_addr;
-mod grpc;
 
 #[cfg(target_os = "linux")]
 mod oci;
@@ -17,6 +17,7 @@ pub use from_addr::from_addr;
 
 #[cfg(target_os = "linux")]
 pub use bwrap::BubblewrapBuildService;
+
 
 #[async_trait]
 pub trait BuildService: Send + Sync {

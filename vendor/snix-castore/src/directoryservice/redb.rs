@@ -1,8 +1,9 @@
+use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream::BoxStream};
-use prost::Message;
+
 use redb::{ReadableDatabase, TableDefinition};
 use std::{path::PathBuf, sync::Arc};
-use tonic::async_trait;
+
 use tracing::{instrument, warn};
 
 use super::{Directory, DirectoryPutter, DirectoryService, traversal};
@@ -141,6 +142,7 @@ fn create_schema(db: &redb::Database) -> Result<(), Error> {
     Ok(())
 }
 
+
 #[async_trait]
 impl DirectoryService for RedbDirectoryService {
     #[instrument(skip(self, digest), fields(directory.digest = %digest, instance_name = %self.instance_name))]
@@ -172,7 +174,7 @@ impl DirectoryService for RedbDirectoryService {
 
         // Attempt to decode the retrieved protobuf-encoded Directory
         let proto_directory =
-            proto::Directory::decode(directory_data.as_slice()).map_err(Error::ProtobufDecode)?;
+            postcard::from_bytes::<proto::Directory>(directory_data.as_slice()).map_err(Error::PostcardDecode)?;
         let directory = Directory::try_from(proto_directory).map_err(Error::DirectoryValidation)?;
 
         Ok(Some(directory))
@@ -190,7 +192,7 @@ impl DirectoryService for RedbDirectoryService {
                 let mut table = txn.open_table(DIRECTORY_TABLE)?;
                 table.insert(
                     digest.as_ref(),
-                    proto::Directory::from(directory).encode_to_vec(),
+                    postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize"),
                 )?;
             }
             txn.commit()?;
@@ -237,6 +239,7 @@ pub struct RedbDirectoryPutter<'a> {
     builder: Option<DirectoryGraphBuilder>,
 }
 
+
 #[async_trait]
 impl DirectoryPutter for RedbDirectoryPutter<'_> {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]
@@ -275,7 +278,7 @@ impl DirectoryPutter for RedbDirectoryPutter<'_> {
                     for directory in directory_graph.drain_leaves_to_root() {
                         table.insert(
                             directory.digest().as_ref(),
-                            proto::Directory::from(directory).encode_to_vec(),
+                            postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize"),
                         )?;
                     }
                 }
@@ -311,8 +314,8 @@ pub enum Error {
         expected: B3Digest,
         actual: B3Digest,
     },
-    #[error("failed to decode protobuf: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
+    #[error("failed to decode: {0}")]
+    PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate directory: {0}")]
     DirectoryValidation(#[from] crate::DirectoryError),
 
@@ -382,6 +385,7 @@ impl TryFrom<url::Url> for RedbDirectoryServiceConfig {
         Ok(config)
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for RedbDirectoryServiceConfig {

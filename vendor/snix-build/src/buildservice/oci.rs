@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use anyhow::Context;
 use bstr::BStr;
 use snix_castore::{
@@ -8,7 +9,7 @@ use snix_castore::{
     refscan::{ReferencePattern, ReferenceScanner},
 };
 use tokio::process::{Child, Command};
-use tonic::async_trait;
+
 use tracing::{Span, debug, instrument, warn};
 use uuid::Uuid;
 
@@ -49,6 +50,7 @@ impl<BS, DS> OCIBuildService<BS, DS> {
         }
     }
 }
+
 
 #[async_trait]
 impl<BS, DS> BuildService for OCIBuildService<BS, DS>

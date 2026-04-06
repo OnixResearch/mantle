@@ -67,7 +67,7 @@ pub trait AsyncZeroCopyWriter: ZeroCopyWriter {
 
 /// The main trait that connects a file system with a transport with asynchronous IO.
 #[allow(unused_variables)]
-#[async_trait]
+
 pub trait AsyncFileSystem: FileSystem {
     /// Look up a directory entry by name and get its attributes.
     ///

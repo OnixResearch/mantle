@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use nix_compat::store_path::StorePathRef;
 use snix_castore::fs::RootNodes;
 use snix_castore::{Node, PathComponent};
-use tonic::async_trait;
+
 
 use super::PathInfoService;
 
@@ -30,6 +31,7 @@ pub struct Error(#[from] super::Error);
 /// directory structure like /nix/store where each entry in the root filesystem
 /// directory corresponds to a CA node.
 #[cfg(any(feature = "fuse", feature = "virtiofs"))]
+
 #[async_trait]
 impl<T> RootNodes for RootNodesWrapper<T>
 where

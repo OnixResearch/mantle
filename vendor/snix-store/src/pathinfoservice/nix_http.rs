@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use super::{PathInfo, PathInfoService};
 use crate::{
     nar::{NarIngestionError, ingest_nar_and_hash},
@@ -15,7 +16,7 @@ use snix_castore::composition::{CompositionContext, ServiceBuilder};
 use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService};
 use std::sync::Arc;
 use tokio::io::{self, AsyncRead};
-use tonic::async_trait;
+
 use tracing::{Span, instrument, warn};
 use url::Url;
 
@@ -129,6 +130,7 @@ pub enum Error {
     #[error("list not supported")]
     ListNotSupported,
 }
+
 
 #[async_trait]
 impl<BS, DS> PathInfoService for NixHTTPPathInfoService<BS, DS>
@@ -364,6 +366,7 @@ impl TryFrom<Url> for NixHTTPPathInfoServiceConfig {
         })
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for NixHTTPPathInfoServiceConfig {

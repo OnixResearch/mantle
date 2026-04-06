@@ -1,8 +1,9 @@
+use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::io::{self, Cursor, Write};
 use std::task::Poll;
 use std::{collections::HashMap, sync::Arc};
-use tonic::async_trait;
+
 use tracing::{Level, instrument};
 
 use super::{BlobReader, BlobService, BlobWriter};
@@ -14,6 +15,7 @@ pub struct MemoryBlobService {
     instance_name: String,
     db: Arc<RwLock<HashMap<B3Digest, Vec<u8>>>>,
 }
+
 
 #[async_trait]
 impl BlobService for MemoryBlobService {
@@ -53,6 +55,7 @@ impl TryFrom<url::Url> for MemoryBlobServiceConfig {
         Ok(MemoryBlobServiceConfig {})
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for MemoryBlobServiceConfig {
@@ -127,6 +130,7 @@ impl tokio::io::AsyncWrite for MemoryBlobWriter {
         Poll::Ready(Ok(()))
     }
 }
+
 
 #[async_trait]
 impl BlobWriter for MemoryBlobWriter {

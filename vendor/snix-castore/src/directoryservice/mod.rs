@@ -1,13 +1,13 @@
+use async_trait::async_trait;
 use crate::composition::{Registry, ServiceBuilder};
 use crate::{B3Digest, Directory};
 
 use auto_impl::auto_impl;
 use futures::stream::BoxStream;
-use tonic::async_trait;
+
 mod combinators;
 mod directory_graph;
 mod from_addr;
-mod grpc;
 mod object_store;
 mod order_validator;
 mod redb;
@@ -20,7 +20,6 @@ pub mod tests;
 pub use self::combinators::{Cache, CacheConfig};
 pub use self::directory_graph::{DirectoryGraph, DirectoryGraphBuilder};
 pub use self::from_addr::from_addr;
-pub use self::grpc::{GRPCDirectoryService, GRPCDirectoryServiceConfig};
 pub use self::object_store::{ObjectStoreDirectoryService, ObjectStoreDirectoryServiceConfig};
 pub use self::order_validator::{LeavesToRootValidator, OrderingError, RootToLeavesValidator};
 pub use self::redb::{RedbDirectoryService, RedbDirectoryServiceConfig};
@@ -37,6 +36,7 @@ pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// The base trait all Directory services need to implement.
 /// This is a simple get and put of [Directory], returning their
 /// digest.
+
 #[async_trait]
 #[auto_impl(&, &mut, Arc, Box)]
 pub trait DirectoryService: Send + Sync {
@@ -89,6 +89,7 @@ pub trait DirectoryService: Send + Sync {
 /// and then dropped without calling [DirectoryPutter::close],
 /// for example when ingesting a path that ends up not pointing to a directory,
 /// but a single file or symlink.
+
 #[async_trait]
 pub trait DirectoryPutter: Send {
     /// Put a individual [Directory] into the store.
@@ -107,7 +108,6 @@ pub trait DirectoryPutter: Send {
 /// Registers the builtin DirectoryService implementations with the registry
 pub(crate) fn register_directory_services(reg: &mut Registry) {
     reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::CacheConfig>("cache");
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::GRPCDirectoryServiceConfig>("grpc");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::ObjectStoreDirectoryServiceConfig>("objectstore");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::RedbDirectoryServiceConfig>("redb");
     #[cfg(feature = "cloud")]

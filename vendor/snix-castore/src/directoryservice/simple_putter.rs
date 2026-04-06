@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use super::Directory;
 use super::DirectoryPutter;
 use super::DirectoryService;
 use crate::B3Digest;
 use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
-use tonic::async_trait;
+
 use tracing::instrument;
 use tracing::warn;
 
@@ -28,6 +29,8 @@ where
     }
 }
 
+
+#[async_trait]
 #[async_trait]
 impl<DS: DirectoryService + 'static> DirectoryPutter for SimplePutter<'_, DS> {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]

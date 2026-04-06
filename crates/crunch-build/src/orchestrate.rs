@@ -1,5 +1,6 @@
 //! Build orchestration: recursively build derivations, check cache,
 //! persist outputs.
+use async_trait::async_trait;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -1242,7 +1243,7 @@ mod tests {
         }
     }
 
-    #[tonic::async_trait]
+    
     impl BuildService for MockBuildService {
         async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
             self.calls.lock().unwrap().push(request.command_args.clone());
@@ -2326,7 +2327,7 @@ mod tests {
     /// A PathInfoService that always fails on get().
     struct FailingRemoteService;
 
-    #[tonic::async_trait]
+    
     impl snix_store::pathinfoservice::PathInfoService for FailingRemoteService {
         async fn get(
             &self, _digest: [u8; 20],

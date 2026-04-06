@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use super::{PathInfo, PathInfoService};
 use crate::{pathinfoservice, proto};
 use async_stream::try_stream;
@@ -5,12 +6,12 @@ use bigtable_rs::{bigtable, google::bigtable::v2 as bigtable_v2};
 use data_encoding::HEXLOWER;
 use futures::{StreamExt, TryStreamExt, stream::BoxStream};
 use nix_compat::nixbase32;
-use prost::Message;
+
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
 use snix_castore::composition::{CompositionContext, ServiceBuilder};
 use std::sync::Arc;
-use tonic::async_trait;
+
 use tracing::{Span, instrument, trace};
 
 /// There should not be more than 10 MiB in a single cell.
@@ -153,6 +154,7 @@ fn derive_pathinfo_key(digest: &[u8; 20]) -> String {
     HEXLOWER.encode(digest)
 }
 
+
 #[async_trait]
 impl PathInfoService for BigtablePathInfoService {
     #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
@@ -236,7 +238,7 @@ impl PathInfoService for BigtablePathInfoService {
 
         // Try to parse the value into a PathInfo message
         let path_info_proto =
-            proto::PathInfo::decode(cell.value.as_slice()).map_err(Error::ProtobufDecode)?;
+            postcard::from_bytes::<proto::PathInfo>(cell.value.as_slice()).map_err(Error::PostcardDecode)?;
 
         let path_info = PathInfo::try_from(path_info_proto).map_err(Error::PathInfoValidation)?;
 
@@ -252,7 +254,7 @@ impl PathInfoService for BigtablePathInfoService {
         let mut client = self.client.clone();
         let path_info_key = derive_pathinfo_key(path_info.store_path.digest());
 
-        let data = proto::PathInfo::from(path_info.clone()).encode_to_vec();
+        let data = postcard::to_stdvec(&proto::PathInfo::from(path_info.clone())).expect("serialize");
         if data.len() as u64 > CELL_SIZE_LIMIT {
             Err(Error::PathInfoTooBig)?;
         }
@@ -347,7 +349,7 @@ impl PathInfoService for BigtablePathInfoService {
 
                 // Try to parse the value into a PathInfo message.
                 let path_info_proto =
-                    proto::PathInfo::decode(cell.value.as_slice()).map_err(Error::ProtobufDecode)?;
+                    postcard::from_bytes::<proto::PathInfo>(cell.value.as_slice()).map_err(Error::PostcardDecode)?;
 
                 let path_info =
                     PathInfo::try_from(path_info_proto).map_err(Error::PathInfoValidation)?;
@@ -372,8 +374,8 @@ pub enum Error {
     #[error("serde-qs error: {0}")]
     SerdeQS(#[from] serde_qs::Error),
 
-    #[error("failed to decode protobuf: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
+    #[error("failed to decode: {0}")]
+    PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate PathInfo: {0}")]
     PathInfoValidation(#[from] crate::proto::ValidatePathInfoError),
     #[error("PathInfo has unexpected digest")]
@@ -443,6 +445,7 @@ impl BigtableParameters {
         }
     }
 }
+
 
 #[async_trait]
 impl ServiceBuilder for BigtableParameters {

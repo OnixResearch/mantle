@@ -2,7 +2,6 @@
 use bstr::ByteSlice;
 use bytes::Bytes;
 use data_encoding::BASE64;
-// https://github.com/hyperium/tonic/issues/1056
 use nix_compat::{
     narinfo::{Signature, SignatureError},
     nixhash::{CAHash, NixHash},
@@ -11,19 +10,10 @@ use nix_compat::{
 use snix_castore::DirectoryError;
 use thiserror::Error;
 
-mod grpc_pathinfoservice_wrapper;
-
-pub use grpc_pathinfoservice_wrapper::GRPCPathInfoServiceWrapper;
-
-tonic::include_proto!("snix.store.v1");
+// Data types — plain Rust structs with serde derives.
+include!("../generated/snix.store.v1.rs");
 
 use snix_castore::proto as castorepb;
-
-#[cfg(feature = "tonic-reflection")]
-/// Compiled file descriptors for implementing [gRPC
-/// reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md) with e.g.
-/// [`tonic_reflection`](https://docs.rs/tonic-reflection).
-pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("snix.store.v1");
 
 #[cfg(test)]
 mod tests;

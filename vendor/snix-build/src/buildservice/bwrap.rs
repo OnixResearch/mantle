@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::path::PathBuf;
 
 use bstr::BStr;
@@ -8,7 +9,7 @@ use snix_castore::{
     import::fs::ingest_path,
     refscan::{ReferencePattern, ReferenceScanner},
 };
-use tonic::async_trait;
+
 use tracing::{Span, debug, info, instrument, warn};
 use uuid::Uuid;
 
@@ -47,6 +48,7 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
         }
     }
 }
+
 
 #[async_trait]
 impl<BS, DS> BuildService for BubblewrapBuildService<BS, DS>

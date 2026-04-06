@@ -23,7 +23,7 @@
 //! struct MyBlobServiceConfig {
 //! }
 //!
-//! #[tonic::async_trait]
+//! 
 //! impl ServiceBuilder for MyBlobServiceConfig {
 //!     type Output = dyn BlobService;
 //!     async fn build(&self, _: &str, _: &CompositionContext) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -95,6 +95,7 @@
 //! result in a new, distinct anonymous store each time, so creating
 //! two `memory://` stores with this method will not share the same view.
 //! This behavior might change in the future.
+use async_trait::async_trait;
 
 use erased_serde::deserialize;
 use futures::FutureExt;
@@ -108,7 +109,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, LazyLock};
-use tonic::async_trait;
+
 
 /// Resolves tag names to the corresponding Config type.
 // Registry implementation details:
@@ -430,9 +431,10 @@ impl CompositionContext<'_> {
     }
 }
 
-#[async_trait]
+
 /// This is the trait usually implemented on a per-store-type Config struct and
 /// used to instantiate it.
+#[async_trait]
 pub trait ServiceBuilder: Send + Sync {
     type Output: ?Sized;
     async fn build(
