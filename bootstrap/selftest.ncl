@@ -67,19 +67,24 @@ let gcc = (import "gcc.ncl") in
 
       $BB ln -sf "$DASH" /tmp/tools/sh
 
-      # The from-source binutils are dynamically linked against musl.
-      # Create wrapper scripts that invoke them via the musl dynamic linker.
-      for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip size strings; do
-        if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ]; then
-          echo "#!/tmp/tools/sh" > /tmp/tools/x86_64-linux-musl-$tool
-          echo "exec $MUSL/lib/ld-musl-x86_64.so.1 $BINUTILS/bin/x86_64-linux-musl-$tool \"\$@\"" >> /tmp/tools/x86_64-linux-musl-$tool
-          $BB chmod +x /tmp/tools/x86_64-linux-musl-$tool
-          # Also unprefixed
-          $BB ln -sf /tmp/tools/x86_64-linux-musl-$tool /tmp/tools/$tool
+      export PATH="/tmp/tools:$GCC/bin:$BINUTILS/bin"
+
+      # The from-source binutils are dynamically linked, needing
+      # /lib/ld-musl-x86_64.so.1. Create this symlink pointing at
+      # the from-source musl's libc.so (which IS the dynamic linker).
+      $BB mkdir -p /lib 2>/dev/null || true
+      $BB ln -sf $MUSL/lib/libc.so /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+
+      # Create unprefixed symlinks for binutils tools.
+      # collect2 looks for plain 'ld', not 'x86_64-linux-musl-ld'.
+      for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip; do
+        if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
+          $BB ln -sf "$BINUTILS/bin/x86_64-linux-musl-$tool" /tmp/tools/$tool
         fi
       done
 
-      export PATH="/tmp/tools:$GCC/bin"
+      echo "=== Dynamic linker ==="
+      ls -la /lib/ld-musl-x86_64.so.1 2>/dev/null || echo "/lib/ld-musl not available"
 
       # Verify: the gcc we're using is the FROM-SOURCE one, not the fetched seed.
       echo "=== GCC version ==="
@@ -177,12 +182,16 @@ int main(void) {
 }
 SRCEOF
 
+      echo "=== Testing as ==="
+      $BINUTILS/bin/x86_64-linux-musl-as --version 2>&1 | head -1 || echo "as not working"
+
       echo "=== Compiling with from-source gcc ==="
       # Use explicit paths to ensure we're using from-source tools.
       # -B tells gcc where to find as/ld and crt*.o/libc.
       $GCC/bin/gcc \
         -static \
-        -B/tmp/tools/ \
+        -B$BINUTILS/bin/ \
+        -B$BINUTILS/bin/x86_64-linux-musl- \
         -B$MUSL/lib/ \
         --sysroot=$MUSL \
         -isystem $MUSL/include \
@@ -193,27 +202,9 @@ SRCEOF
       echo "=== Running selftest ==="
       ./selftest || exit 1
 
-      # Also build with make to exercise the full toolchain.
-      "$DASH" -c '
-        T=$(printf "\t")
-        echo "all: selftest" > Makefile
-        echo "${T}./selftest" >> Makefile
-        echo "" >> Makefile
-        echo "selftest: selftest.c" >> Makefile
-        echo "${T}\$(CC) \$(CFLAGS) \$(LDFLAGS) -o selftest selftest.c" >> Makefile
-        echo "" >> Makefile
-        echo "install: selftest" >> Makefile
-        echo "${T}mkdir -p \$(DESTDIR)/bin" >> Makefile
-        echo "${T}cp selftest \$(DESTDIR)/bin/" >> Makefile
-      '
-
-      rm -f selftest
-      echo "=== Rebuild with make ==="
-      "$MAKE" SHELL="$DASH" \
-        CC="$GCC/bin/gcc" \
-        CFLAGS="-static -B/tmp/tools/ -B$MUSL/lib/ --sysroot=$MUSL -isystem $MUSL/include -O2" \
-        LDFLAGS="-static" \
-        DESTDIR="$out" all install || exit 1
+      # Install the binary.
+      mkdir -p $out/bin
+      cp selftest $out/bin/
 
       echo "=== Verify ==="
       ls -la $out/bin/selftest

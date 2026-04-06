@@ -78,11 +78,17 @@ let binutils_src = crunch.fetchTarball {
       echo 'exec /tmp/tools/grep -F "$@"' >> /tmp/tools/fgrep
       $BB chmod +x /tmp/tools/fgrep
 
-      # Stub out perl/pod2man (man page generation).
+      # Stub out perl/pod2man — create empty output files.
+      # pod2man is invoked as: pod2man ... > output.1
+      # perl is invoked as: perl ... > output
+      # Since make redirects output, just producing nothing is fine.
+      # But some recipes check exit code, so exit 0.
+      echo '#!/tmp/tools/sh' > /tmp/tools/pod2man
+      echo 'exit 0' >> /tmp/tools/pod2man
+      $BB chmod +x /tmp/tools/pod2man
       echo '#!/tmp/tools/sh' > /tmp/tools/perl
       echo 'exit 0' >> /tmp/tools/perl
       $BB chmod +x /tmp/tools/perl
-      $BB ln -sf /tmp/tools/perl /tmp/tools/pod2man
 
       # Find binutils source.
       SRCDIR=""
@@ -123,6 +129,7 @@ let binutils_src = crunch.fetchTarball {
       # an absolute /nix/store path with the sandbox shell).
       export am_cv_ar_interface=ar
 
+
       # Copy source to writable /tmp.
       mkdir -p /tmp/binutils-build
       $BB cp -r "$SRCDIR" /tmp/binutils-src 2>/dev/null
@@ -130,26 +137,10 @@ let binutils_src = crunch.fetchTarball {
 
       cd /tmp/binutils-build
 
-      # Touch pre-generated files so make doesn't try to regenerate
-      # them with yacc/bison/flex/lex (which we don't have).
-      find /tmp/binutils-src -name '*.c' -newer /tmp/binutils-src -exec touch {} + 2>/dev/null
-      for f in /tmp/binutils-src/ld/ldgram.c /tmp/binutils-src/ld/ldgram.h \
-               /tmp/binutils-src/ld/ldlex.c /tmp/binutils-src/ld/deffilep.c \
-               /tmp/binutils-src/ld/deffilep.h \
-               /tmp/binutils-src/gas/itbl-parse.c /tmp/binutils-src/gas/itbl-parse.h \
-               /tmp/binutils-src/gas/itbl-lex.c \
-               /tmp/binutils-src/binutils/arparse.c /tmp/binutils-src/binutils/arparse.h \
-               /tmp/binutils-src/binutils/arlex.c \
-               /tmp/binutils-src/binutils/sysinfo.c /tmp/binutils-src/binutils/sysinfo.h \
-               /tmp/binutils-src/binutils/syslex.c \
-               /tmp/binutils-src/binutils/defparse.c /tmp/binutils-src/binutils/defparse.h \
-               /tmp/binutils-src/binutils/deflex.c \
-               /tmp/binutils-src/binutils/rcparse.c /tmp/binutils-src/binutils/rcparse.h \
-               /tmp/binutils-src/binutils/rclex.c; do
-        if [ -f "$f" ]; then
-          touch "$f"
-        fi
-      done
+      # Touch ALL pre-generated .c/.h files so make doesn't try to
+      # regenerate them with yacc/bison/flex/lex (which we don't have).
+      find /tmp/binutils-src -name '*.c' -exec touch {} + 2>/dev/null
+      find /tmp/binutils-src -name '*.h' -exec touch {} + 2>/dev/null
 
       echo "=== Configuring binutils ==="
       "$DASH" /tmp/binutils-src/configure \

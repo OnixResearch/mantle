@@ -170,6 +170,12 @@ let mpc_src = crunch.fetchTarball {
         echo "Linked $lib -> $(readlink "$GSRC/$lib")"
       done
 
+      # Touch pre-generated flex/yacc/gperf files so make doesn't
+      # try to regenerate them (we have no flex/bison/gperf).
+      find $GSRC -name '*.cc' -exec touch {} + 2>/dev/null
+      find $GSRC -name '*.c' -exec touch {} + 2>/dev/null
+      find $GSRC -name '*.h' -exec touch {} + 2>/dev/null
+
       mkdir -p /tmp/gcc-build
       cd /tmp/gcc-build
 
