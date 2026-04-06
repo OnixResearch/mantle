@@ -24,8 +24,7 @@
 - [x] Define `DirectoryServiceProtocol` with Get, Put in snix-castore ✅
 - [x] Define `PathInfoServiceProtocol` with Get, Put in snix-store ✅
 - [x] Define `BuildServiceProtocol` with DoBuild in snix-build ✅
-- [x] Write irpc client wrappers for DirectoryService, PathInfoService, BuildService ✅
-- [ ] Write irpc client wrapper for BlobService (needs streaming I/O design)
+- [x] Write irpc client wrappers for all four services (Blob, Directory, PathInfo, Build) ✅
 
 ## Phase 4: Replace gRPC impls
 
