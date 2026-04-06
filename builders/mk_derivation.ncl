@@ -1,12 +1,13 @@
-# crunch stdlib: mkDerivation.
+# crunch builders: mkDerivation.
 #
 # A function that takes a simplified package description and produces
 # a Derivation record with build phases, PATH composition, and metadata.
+# This is part of the builders package, not the core stdlib.
 #
 # Usage:
-#   let crunch = import "lib.ncl" in
+#   let builders = import "builders/lib.ncl" in
 #   let seed = import "seed.ncl" in
-#   let stdenv = crunch.mkStdenv seed in
+#   let stdenv = builders.mkStdenv seed in
 #   stdenv.mkDerivation {
 #     pname = "hello",
 #     version = "1.0",
@@ -233,14 +234,14 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     outputs = resolved.outputs,
     env = build_env & path_env & src_env & resolved.env,
     inputs = src_inputs @ all_inputs,
-    pname = resolved.pname,
-    version = resolved.version,
-    meta = resolved.meta,
-    passthru = resolved.passthru,
+    pname | not_exported = resolved.pname,
+    version | not_exported = resolved.version,
+    meta | not_exported = resolved.meta,
+    passthru | not_exported = resolved.passthru,
     overrideAttrs | not_exported = fun f =>
       mk_derivation_with_shell shell (apply_patches resolved (f resolved)),
   } in
-  drv | Derivation
+  drv
 in
 
 # Construct a stdenv from a seed toolchain.

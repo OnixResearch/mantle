@@ -18,43 +18,54 @@ crunch's core ships the schema; the ecosystem ships the opinions.
 
 The stdlib MUST contain only:
 
-1. **Contracts** that describe the derivation record shape the glue layer consumes
-2. **Enums** for categorical fields (system, hash algorithm, hash mode)
-3. **Validators** for structured string values (store paths, derivation names)
-4. **Conversion helpers** (enum → string via `match`)
+1. **Contracts** — Derivation, FixedOutput, Input, OutputRef
+2. **Enums** — System, HashAlgo, HashMode, Sandbox
+3. **Validators** — StorePath, Name
+4. **Conversion helpers** — enum→string via match
+5. **Fetchers** — fetchurl, fetchTarball, fetchGit (these produce
+   Derivation records, not builder logic)
+6. **Output selection** — the `select` function
 
 The stdlib MUST NOT contain:
 
-- Builder templates (bash builder, mkDerivation, etc.)
-- Build phase abstractions (unpack/configure/build/install)
-- Input set bundles (std_build_inputs, etc.)
-- Anything resembling stdenv or a module system
-- Package set definitions
-- Overlay/override mechanisms
+- `mkDerivation` or any phase-based builder
+- `mkStdenv` or any stdenv-like wrapper
+- `mkShell` or any dev environment helper
+- `callPackage` or any dependency injection helper
+- `MkDerivationArgs` or any builder-specific contract
+- `overrideAttrs` or any override mechanism
+- Default phase implementations (unpackPhase, configurePhase, etc.)
 
-These are legitimate concerns but they are separate layers. They can be
-published as independent Nickel packages that `import` the crunch stdlib.
+These MUST live in a separate Nickel package (`builders/`) that
+imports the crunch stdlib.
 
 #### Scenario: Core stdlib has no builder logic
 
-- GIVEN the crunch stdlib files
+- GIVEN the crunch stdlib files in `lib/`
 - WHEN inspected
-- THEN no file contains build phase names, shell script templates, or
-  references to specific tools (gcc, make, etc.)
+- THEN no file contains `mkDerivation`, `mkStdenv`, `mkShell`,
+  phase names, or shell script templates
+
+#### Scenario: Builder package imports stdlib
+
+- GIVEN the builder package in `builders/`
+- WHEN it defines `mkDerivation`
+- THEN it does `import "derivation.ncl"` and `import "contracts.ncl"`
+  via the import path, applying the Derivation contract to its output records
 
 ### Requirement: Derivation contract with enums and validators
 
-The stdlib MUST provide an open `Derivation` contract (with `..` tail).
-The contract enforces required fields and types for the fields crunch
-consumes, but allows extra fields to pass through. The Rust glue layer
-ignores unknown fields during deserialization (no `deny_unknown_fields`).
+The stdlib MUST provide a closed `Derivation` contract (no `..` tail).
+Extra fields MUST be rejected. Builder-specific fields (`pname`,
+`version`, `meta`, `passthru`, `overrideAttrs`) belong in the builder
+package's contract, not the core Derivation contract.
 
-The contract is open because `mkDerivation` and package authoring
-patterns add fields that crunch itself does not consume: `pname`,
-`version`, `meta`, `passthru`, `overrideAttrs`, build phase hooks, etc.
-A closed contract would reject these, forcing the stdlib to enumerate
-every possible extension field. Opening the contract pushes validation
-of extension fields to the packages that define them.
+The Derivation contract MUST allow exactly these fields:
+
+- `name`, `builder`, `system`, `args`, `outputs`, `env`, `inputs`
+- `fixed_output` (optional)
+- `addressing_mode`
+- `sandbox`
 
 ```nickel
 {
@@ -80,10 +91,12 @@ of extension fields to the packages that define them.
   fixed_output | FixedOutput
     | doc "Fixed-output derivation parameters. Present only for FODs."
     | optional,
+  addressing_mode | [| 'input-addressed, 'content-addressed |]
+    | doc "How output paths are computed."
+    | default = 'content-addressed,
   sandbox | Sandbox
-    | doc "Sandbox backend. Default is native (bwrap on Linux). Use 'wasm for single-process WASM builds."
+    | doc "Sandbox backend. Default is native (bwrap on Linux)."
     | default = 'native,
-  ..  # Extra fields (pname, version, meta, passthru, overrideAttrs) pass through.
 }
 ```
 
@@ -99,12 +112,19 @@ of extension fields to the packages that define them.
 - WHEN evaluated
 - THEN Nickel reports a contract violation for missing `name`
 
-#### Scenario: Extra fields allowed
+#### Scenario: Extra field rejected
 
-- GIVEN `{ name = "foo", builder = "/bin/sh", version = "1.0" } | crunch.Derivation`
+- GIVEN `{ name = "foo", builder = "/bin/sh", bogus = true } | crunch.Derivation`
 - WHEN evaluated
-- THEN the extra `version` field passes through (open contract)
-- AND the Rust glue layer ignores it during deserialization
+- THEN Nickel rejects the extra field
+
+#### Scenario: Builder package uses its own contract
+
+- GIVEN `{ pname = "foo", version = "1.0", ... } | builders.MkDerivationArgs`
+- WHEN evaluated by the builder package
+- THEN pname and version are accepted by the builder contract
+- AND the builder produces a record that the Rust glue layer can
+  deserialize as a CrunchDerivation
 
 ### Requirement: System enum
 
@@ -277,25 +297,47 @@ discoverability.
 
 ### Requirement: Stdlib entry point
 
-`lib/lib.ncl` MUST re-export all contracts, enums, validators, and helpers
-as a single record:
+`lib/lib.ncl` MUST re-export:
 
 ```nickel
 {
-  Derivation = ...,
-  FixedOutput = ...,
-  System = ...,
-  HashAlgo = ...,
-  HashMode = ...,
-  StorePath = ...,
-  Name = ...,
-  system_to_string = ...,
-  hash_algo_to_string = ...,
-  hash_mode_to_string = ...,
+  Derivation, FixedOutput,
+  StorePath, Name,
+  System, HashAlgo, HashMode, Sandbox, Input,
+  system_to_string, hash_algo_to_string, hash_mode_to_string,
+  fetchurl, fetchTarball, fetchGit,
+  Url, Hash,
+  select,
 }
 ```
 
-Users import one file: `let crunch = import "crunch/lib.ncl" in`
+It MUST NOT re-export mkStdenv, mkShell, mkDerivation, callPackage,
+or MkDerivationArgs.
+
+Users import one file: `let crunch = import "lib.ncl" in`
+
+### Requirement: Builder package location
+
+A builder package MUST exist at `builders/lib.ncl` that provides
+mkDerivation, mkStdenv, mkShell, callPackage, and MkDerivationArgs.
+This package is separate from the core stdlib.
+
+`builders/mk_derivation.ncl` imports `derivation.ncl` and
+`contracts.ncl` from the stdlib via the Nickel import path (not
+relative imports, to avoid circular imports with `builders/lib.ncl`).
+
+#### Scenario: Builder package exists
+
+- GIVEN the crunch source tree
+- WHEN `builders/lib.ncl` is inspected
+- THEN it contains mkStdenv, mkDerivation, mkShell, callPackage
+
+#### Scenario: Bootstrap uses raw Derivation contract
+
+- GIVEN `bootstrap/hello.ncl`
+- WHEN it needs to build something
+- THEN it uses `crunch.Derivation` directly (bootstrap files do not
+  use mkDerivation)
 
 ### Requirement: Stdlib ships with the binary
 

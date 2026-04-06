@@ -17,6 +17,10 @@ fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
 }
 
+fn crunch_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 // ── Phase 2: Eval tests ─────────────────────────────────────────
 
 #[test]
@@ -602,8 +606,8 @@ fn eval_mkderivation_has_default_phases() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("test.ncl"),
-        r#"let crunch = import "lib.ncl" in
-let stdenv = crunch.mkStdenv {
+        r#"let builders = import "builders/lib.ncl" in
+let stdenv = builders.mkStdenv {
   bash = "/nix/store/00000000000000000000000000000000-bash",
   coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
 } in
@@ -618,6 +622,8 @@ stdenv.mkDerivation {
         .arg("eval")
         .arg("-I")
         .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
         .arg(dir.path().join("test.ncl"))
         .output()
         .expect("should run");
@@ -636,8 +642,8 @@ fn eval_mkderivation_custom_phase_overrides_default() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("test.ncl"),
-        r#"let crunch = import "lib.ncl" in
-let stdenv = crunch.mkStdenv {
+        r#"let builders = import "builders/lib.ncl" in
+let stdenv = builders.mkStdenv {
   bash = "/nix/store/00000000000000000000000000000000-bash",
   coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
 } in
@@ -654,6 +660,8 @@ stdenv.mkDerivation {
         .arg("eval")
         .arg("-I")
         .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
         .arg(dir.path().join("test.ncl"))
         .output()
         .expect("should run");
@@ -672,8 +680,8 @@ fn eval_mkderivation_empty_phase_skips() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("test.ncl"),
-        r#"let crunch = import "lib.ncl" in
-let stdenv = crunch.mkStdenv {
+        r#"let builders = import "builders/lib.ncl" in
+let stdenv = builders.mkStdenv {
   bash = "/nix/store/00000000000000000000000000000000-bash",
   coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
 } in
@@ -691,6 +699,8 @@ stdenv.mkDerivation {
         .arg("eval")
         .arg("-I")
         .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
         .arg(dir.path().join("test.ncl"))
         .output()
         .expect("should run");
@@ -707,8 +717,8 @@ fn eval_mkshell_produces_valid_derivation() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("test.ncl"),
-        r#"let crunch = import "lib.ncl" in
-crunch.mkShell {
+        r#"let builders = import "builders/lib.ncl" in
+builders.mkShell {
   bash = "/nix/store/00000000000000000000000000000000-bash",
   name = "test-shell",
   buildInputs = ["/nix/store/00000000000000000000000000000001-gcc"],
@@ -721,6 +731,8 @@ crunch.mkShell {
         .arg("eval")
         .arg("-I")
         .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
         .arg(dir.path().join("test.ncl"))
         .output()
         .expect("should run");
@@ -740,8 +752,8 @@ fn eval_mkderivation_src_wired_to_env() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("test.ncl"),
-        r#"let crunch = import "lib.ncl" in
-let stdenv = crunch.mkStdenv {
+        r#"let builders = import "builders/lib.ncl" in
+let stdenv = builders.mkStdenv {
   bash = "/nix/store/00000000000000000000000000000000-bash",
   coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
 } in
@@ -759,6 +771,8 @@ stdenv.mkDerivation {
         .arg("eval")
         .arg("-I")
         .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
         .arg(dir.path().join("test.ncl"))
         .output()
         .expect("should run");

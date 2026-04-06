@@ -1,8 +1,9 @@
 # crunch stdlib: Derivation contract.
 #
-# Open record contract describing what the Rust glue layer consumes.
-# Extra fields (pname, version, meta, passthru, overrideAttrs) are
-# allowed — the glue layer ignores them during deserialization.
+# Closed record contract describing what the Rust glue layer consumes.
+# Only fields the glue layer uses are permitted. Builder-specific
+# fields (pname, version, meta, passthru, overrideAttrs) belong in
+# the builders package, not here.
 # Every field has a doc annotation for `nickel query` discoverability.
 
 let { Name, System, Input, Sandbox, .. } = import "contracts.ncl" in
@@ -46,6 +47,4 @@ let { FixedOutput } = import "fixed_output.ncl" in
   sandbox | Sandbox
     | doc "Sandbox backend. 'native = bwrap (Linux), 'oci = OCI container, 'wasm = WASI (single-process)."
     | default = 'native,
-
-  ..  # Allow extra fields (pname, version, meta, passthru, overrideAttrs).
 }

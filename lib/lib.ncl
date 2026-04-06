@@ -6,7 +6,6 @@ let contracts = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
 let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
-let pkg = import "mk_derivation.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -47,10 +46,4 @@ let pkg = import "mk_derivation.ncl" in
       let the_drv = drv in
       let the_output = output_name in
       { drv = the_drv, output = the_output },
-
-  # Package authoring
-  mkStdenv = pkg.mkStdenv,
-  mkShell = pkg.mkShell,
-  callPackage = pkg.callPackage,
-  MkDerivationArgs = pkg.MkDerivationArgs,
 }

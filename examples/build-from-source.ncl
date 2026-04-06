@@ -8,11 +8,12 @@
 #
 # Usage:
 #   1. Generate seed: crunch bootstrap -o examples/seed.ncl
-#   2. Build: crunch build examples/build-from-source.ncl -I examples
+#   2. Build: crunch build examples/build-from-source.ncl -I examples -I builders
 
 let crunch = import "lib.ncl" in
+let builders = import "builders/lib.ncl" in
 let seed = import "seed.ncl" in
-let stdenv = crunch.mkStdenv seed in
+let stdenv = builders.mkStdenv seed in
 
 stdenv.mkDerivation {
   pname = "greet",
