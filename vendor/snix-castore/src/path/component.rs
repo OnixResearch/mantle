@@ -7,7 +7,7 @@ use std::fmt::{self, Debug, Display};
 /// '.', '..' and the empty string.
 /// It also rejects components that are too long (> 255 bytes).
 #[repr(transparent)]
-#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct PathComponent {
     pub(super) inner: bytes::Bytes,
 }

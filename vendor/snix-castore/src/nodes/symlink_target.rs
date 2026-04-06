@@ -5,7 +5,7 @@ use std::fmt::{self, Debug, Display};
 /// Internally uses a [bytes::Bytes], but disallows empty targets and those
 /// containing null bytes.
 #[repr(transparent)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SymlinkTarget {
     inner: bytes::Bytes,
 }

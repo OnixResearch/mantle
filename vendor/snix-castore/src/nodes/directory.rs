@@ -8,7 +8,7 @@ use crate::{B3Digest, Node, errors::DirectoryError, path::PathComponent, proto};
 ///  - MUST not contain slashes or null bytes
 ///  - MUST not be '.' or '..'
 ///  - MUST be unique across all three lists
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Directory {
     nodes: BTreeMap<PathComponent, Node>,
 }

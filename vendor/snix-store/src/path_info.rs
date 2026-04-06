@@ -9,7 +9,7 @@ use nix_compat::{
 /// This is somewhat equivalent to the information Nix holds in its SQLite
 /// database, or publishes as .narinfo files, except we also embed the
 /// [snix_castore::Node] describing the contents in the castore model.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PathInfo {
     /// The store path this is about.
     pub store_path: StorePath<String>,

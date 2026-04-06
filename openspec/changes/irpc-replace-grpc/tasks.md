@@ -19,7 +19,7 @@
 
 ## Phase 3: Define irpc services
 
-- [ ] Add `irpc` to workspace dependencies
+- [~] Add `irpc` to workspace dependencies ⏱ started: 2026-04-05T12:51Z
 - [ ] Define `BlobServiceRequest` enum with `Stat`, `Read` (server stream), `Put` (client stream) in snix-castore
 - [ ] Define `DirectoryServiceRequest` enum with `Get` (server stream), `Put` (client stream) in snix-castore
 - [ ] Define `PathInfoServiceRequest` enum with `Get`, `Put`, `CalculateNAR`, `List` (server stream) in snix-store

@@ -22,6 +22,7 @@ pub use path::{Path, PathBuf, PathComponent, PathComponentError};
 
 pub mod import;
 pub mod proto;
+pub mod rpc;
 
 // Used as user agent in various HTTP Clients
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));

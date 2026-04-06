@@ -6,5 +6,6 @@ pub mod bwrap;
 #[cfg(target_os = "linux")]
 mod oci;
 pub mod proto;
+pub mod rpc;
 
 pub mod sandbox;

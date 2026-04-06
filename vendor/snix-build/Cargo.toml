@@ -7,6 +7,7 @@ edition = "2024"
 bytes = { version = "1.7.1", features = ["serde"] }
 async-trait = "0.1"
 clap = { version = "4.5.16", features = ["derive", "env"] }
+irpc = { version = "0.13", default-features = false, features = ["derive"] }
 itertools = "0.12.1"
 postcard = { version = "1", features = ["use-std"] }
 serde = { version = "1", features = ["derive"] }

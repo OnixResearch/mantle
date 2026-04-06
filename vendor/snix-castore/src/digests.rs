@@ -3,7 +3,7 @@ use data_encoding::BASE64;
 use std::str::FromStr;
 use thiserror::Error;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[repr(transparent)]
 pub struct B3Digest([u8; Self::LENGTH]);
 

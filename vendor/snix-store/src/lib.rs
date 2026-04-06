@@ -7,6 +7,7 @@ pub mod nar;
 pub mod path_info;
 pub mod pathinfoservice;
 pub mod proto;
+pub mod rpc;
 pub mod utils;
 
 #[cfg(test)]
