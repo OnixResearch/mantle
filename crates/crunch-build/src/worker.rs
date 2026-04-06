@@ -39,8 +39,7 @@ pub struct EvalMessage {
     pub drv_path: StorePath<String>,
 }
 
-/// Logical store prefix — must match orchestrate.rs.
-const LOGICAL_STORE_DIR: &str = "/nix/store";
+
 
 /// Maximum concurrent in-flight builds. Clamped by the semaphore but
 /// tracked here for assertions.
@@ -150,7 +149,7 @@ impl Worker {
             }
 
             // Look up derivation.
-            let drv_abs = sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let drv_abs = sp.to_absolute_path_with_prefix(known_paths.store_dir());
             let entry = known_paths.get_by_drv_path(&drv_abs).ok_or_else(|| {
                 Error::DerivationNotFound { path: sp.clone() }
             })?;
@@ -534,8 +533,9 @@ impl Worker {
                 .await?;
 
             if let Some(drv) = crate::dynamic::parse_drv_bytes(&content)? {
+                let sd = known_paths.store_dir().to_string();
                 let drv_path = crate::dynamic::register_dynamic_drv(
-                    &drv, known_paths, LOGICAL_STORE_DIR,
+                    &drv, known_paths, &sd,
                 )?;
 
                 info!(
@@ -581,7 +581,7 @@ impl Worker {
                     let dep_key = dep_sp.to_absolute_path();
                     if !self.registry.contains(&dep_key) {
                         // Dep must be in DerivationRegistry (registered above).
-                        let dep_abs = dep_sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                        let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
                         if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
                             let dep_goal = crate::goal::Goal::new(
                                 dep_sp.clone(),

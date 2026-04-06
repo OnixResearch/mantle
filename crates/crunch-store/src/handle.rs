@@ -26,21 +26,22 @@ use crate::CaMappings;
 use crate::export::export_castore_to_disk;
 use crate::Error;
 
-/// The logical store prefix. Derivation paths and output paths always
-/// use this, regardless of the physical `--store` directory.
-const LOGICAL_STORE_DIR: &str = "/nix/store";
-
 /// Configuration for opening a store.
 pub struct StoreConfig {
     /// State directory for persistent data (pathinfo.redb, blobs/, ca_mappings.json).
     pub state_dir: PathBuf,
 
     /// Physical output directory (from CLI `--store`). Where root build
-    /// outputs are exported on disk. Defaults to `/nix/store`.
+    /// outputs are exported on disk. Defaults to the store_dir.
     pub output_dir: PathBuf,
 
     /// Optional remote binary cache URL (e.g., "https://cache.nixos.org").
     pub remote_cache_url: Option<String>,
+
+    /// The logical store prefix for derivation paths (e.g. "/crunch/store"
+    /// or "/nix/store" in compat mode). Derivation hashes, output paths,
+    /// and sandbox layout all use this prefix.
+    pub store_dir: String,
 }
 
 /// Return type for a successful cache lookup on a single output.
@@ -63,6 +64,8 @@ pub struct StoreHandle {
     state_dir: PathBuf,
     /// Physical output dir string (from `--store`).
     output_dir_str: String,
+    /// Logical store prefix (e.g. "/crunch/store" or "/nix/store").
+    store_dir: String,
     /// Output store path -> Node for outputs built/ingested this session.
     pub output_nodes: HashMap<StorePath<String>, Node>,
     /// Absolute output path -> PathInfo for outputs built this session.
@@ -113,7 +116,7 @@ impl StoreHandle {
         };
 
         let output_dir_str = config.output_dir.to_str()
-            .unwrap_or(LOGICAL_STORE_DIR).to_string();
+            .unwrap_or(&config.store_dir).to_string();
         let ca_mappings = CaMappings::load(&config.state_dir);
 
         Ok(Self {
@@ -123,6 +126,7 @@ impl StoreHandle {
             remote_pathinfo,
             state_dir: config.state_dir,
             output_dir_str,
+            store_dir: config.store_dir,
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             ca_mappings,
@@ -138,6 +142,23 @@ impl StoreHandle {
         state_dir: PathBuf,
         output_dir_str: String,
     ) -> Self {
+        Self::from_services_with_store_dir(
+            blob_service, directory_service, pathinfo_service,
+            remote_pathinfo, state_dir, output_dir_str,
+            nix_compat::store_path::STORE_DIR.to_string(),
+        )
+    }
+
+    /// Like [StoreHandle::from_services] but with a custom store directory prefix.
+    pub fn from_services_with_store_dir(
+        blob_service: Arc<dyn BlobService>,
+        directory_service: Arc<dyn DirectoryService>,
+        pathinfo_service: Arc<dyn PathInfoService>,
+        remote_pathinfo: Option<Arc<dyn PathInfoService>>,
+        state_dir: PathBuf,
+        output_dir_str: String,
+        store_dir: String,
+    ) -> Self {
         let ca_mappings = CaMappings::load(&state_dir);
         Self {
             blob_service,
@@ -146,6 +167,7 @@ impl StoreHandle {
             remote_pathinfo,
             state_dir,
             output_dir_str,
+            store_dir,
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             ca_mappings,
@@ -175,6 +197,11 @@ impl StoreHandle {
     /// The state directory backing this store.
     pub fn state_dir(&self) -> &Path {
         &self.state_dir
+    }
+
+    /// The logical store prefix (e.g. "/crunch/store").
+    pub fn store_dir(&self) -> &str {
+        &self.store_dir
     }
 
     /// Check whether the castore has the content referenced by a Node.
@@ -255,7 +282,7 @@ impl StoreHandle {
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         let mut infos = HashMap::new();
-        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+        let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
 
         let is_fod = derivation.outputs.values().any(|o| o.ca_hash.is_some());
 

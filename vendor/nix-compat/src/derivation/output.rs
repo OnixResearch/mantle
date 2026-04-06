@@ -59,6 +59,14 @@ impl Output {
         }
     }
 
+    /// Like [Output::path_str] but with a custom store directory prefix.
+    pub fn path_str_with_prefix(&self, store_dir: &str) -> Cow<'_, str> {
+        match &self.path {
+            None => Cow::Borrowed(""),
+            Some(path) => Cow::Owned(path.to_absolute_path_with_prefix(store_dir)),
+        }
+    }
+
     pub fn validate(&self, validate_output_paths: bool) -> Result<(), OutputError> {
         if let Some(fixed_output_hash) = &self.ca_hash {
             match fixed_output_hash {

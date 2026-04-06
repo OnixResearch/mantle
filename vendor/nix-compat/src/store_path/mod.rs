@@ -178,6 +178,18 @@ where
         }
     }
 
+    /// Like [StorePath::from_absolute_path] but with a custom store directory prefix.
+    pub fn from_absolute_path_with_prefix<'a>(s: &'a [u8], store_dir: &str) -> Result<Self, Error>
+    where
+        S: From<&'a str>,
+    {
+        let prefix = format!("{store_dir}/");
+        match s.strip_prefix(prefix.as_bytes()) {
+            Some(s_stripped) => Self::from_bytes(s_stripped),
+            None => Err(Error::MissingStoreDir),
+        }
+    }
+
     /// Decompose a string into a [StorePath] and a [std::path::Path] containing
     /// the rest of the path, or an error.
     pub fn from_absolute_path_full<'p: 'sp, 'sp, P>(
@@ -187,10 +199,23 @@ where
         S: From<&'sp str>,
         P: AsRef<std::path::Path> + 'p + ?Sized,
     {
-        // strip [STORE_DIR_WITH_SLASH] from path
+        Self::from_absolute_path_full_with_prefix(path, STORE_DIR)
+    }
+
+    /// Like [StorePath::from_absolute_path_full] but with a custom store directory prefix.
+    pub fn from_absolute_path_full_with_prefix<'p: 'sp, 'sp, P>(
+        path: &'p P,
+        store_dir: &str,
+    ) -> Result<(Self, &'p std::path::Path), Error>
+    where
+        S: From<&'sp str>,
+        P: AsRef<std::path::Path> + 'p + ?Sized,
+    {
+        let prefix = format!("{store_dir}/");
+        // strip store dir prefix from path
         let p = path
             .as_ref()
-            .strip_prefix(STORE_DIR_WITH_SLASH)
+            .strip_prefix(&prefix)
             .map_err(|_| Error::MissingStoreDir)?;
 
         let mut components = p.components();

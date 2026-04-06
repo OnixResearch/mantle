@@ -102,6 +102,15 @@ impl Derivation {
         self.to_aterm_bytes_with_replacements(&self.input_derivations)
     }
 
+    /// Like [Derivation::to_aterm_bytes] but with a custom store directory prefix.
+    pub fn to_aterm_bytes_with_store_dir(&self, store_dir: &str) -> Vec<u8> {
+        let store_dir_with_slash = format!("{store_dir}/");
+        let mut buffer: Vec<u8> = Vec::new();
+        self.serialize_with_store_dir(&mut buffer, store_dir, &store_dir_with_slash)
+            .unwrap();
+        buffer
+    }
+
     /// Like `to_aterm_bytes`, but accept a different BTreeMap for input_derivations.
     /// This is used to render the ATerm representation of a Derivation "modulo
     /// fixed-output derivations".
@@ -118,6 +127,85 @@ impl Derivation {
             .unwrap();
 
         buffer
+    }
+
+    /// Serialize with a custom store directory prefix. Input derivations use
+    /// the normal StorePath keys (not hash replacements).
+    fn serialize_with_store_dir(
+        &self,
+        writer: &mut impl std::io::Write,
+        store_dir: &str,
+        store_dir_with_slash: &str,
+    ) -> Result<(), io::Error> {
+        use write::*;
+
+        writer.write_all(DERIVATION_PREFIX.as_bytes())?;
+        write_char(writer, PAREN_OPEN)?;
+
+        write_outputs_with_prefix(writer, &self.outputs, store_dir_with_slash)?;
+        write_char(writer, COMMA)?;
+
+        write_input_derivations_with_prefix(writer, &self.input_derivations, store_dir)?;
+        write_char(writer, COMMA)?;
+
+        write_input_sources_with_prefix(writer, &self.input_sources, store_dir)?;
+        write_char(writer, COMMA)?;
+
+        write_system(writer, &self.system)?;
+        write_char(writer, COMMA)?;
+
+        write_builder(writer, &self.builder)?;
+        write_char(writer, COMMA)?;
+
+        write_arguments(writer, &self.arguments)?;
+        write_char(writer, COMMA)?;
+
+        write_environment(writer, &self.environment)?;
+
+        write_char(writer, PAREN_CLOSE)?;
+
+        Ok(())
+    }
+
+    /// Serialize for hash_derivation_modulo with a custom store dir.
+    /// Input derivation keys are replaced with hash digests (no store dir needed).
+    /// Output paths and input sources still use the store dir prefix.
+    fn serialize_hdm_with_store_dir(
+        &self,
+        writer: &mut impl std::io::Write,
+        input_derivations: &BTreeMap<[u8; 32], BTreeSet<String>>,
+        store_dir: &str,
+        store_dir_with_slash: &str,
+    ) -> Result<(), io::Error> {
+        use write::*;
+
+        writer.write_all(DERIVATION_PREFIX.as_bytes())?;
+        write_char(writer, PAREN_OPEN)?;
+
+        write_outputs_with_prefix(writer, &self.outputs, store_dir_with_slash)?;
+        write_char(writer, COMMA)?;
+
+        // Input derivation keys are [u8; 32] digests — no store dir needed
+        write_input_derivations(writer, input_derivations)?;
+        write_char(writer, COMMA)?;
+
+        write_input_sources_with_prefix(writer, &self.input_sources, store_dir)?;
+        write_char(writer, COMMA)?;
+
+        write_system(writer, &self.system)?;
+        write_char(writer, COMMA)?;
+
+        write_builder(writer, &self.builder)?;
+        write_char(writer, COMMA)?;
+
+        write_arguments(writer, &self.arguments)?;
+        write_char(writer, COMMA)?;
+
+        write_environment(writer, &self.environment)?;
+
+        write_char(writer, PAREN_CLOSE)?;
+
+        Ok(())
     }
 
     /// Parse an Derivation in ATerm serialization, and validate it passes our
@@ -157,8 +245,14 @@ impl Derivation {
             .map(|p| p.to_absolute_path_with_prefix(store_dir))
             .collect();
 
-        build_text_path_with_store_dir(&name, self.to_aterm_bytes(), references, store_dir)
-            .map_err(|_e| DerivationError::InvalidOutputName(name))
+        // ATerm bytes must also use the custom store dir for correct hashing
+        build_text_path_with_store_dir(
+            &name,
+            self.to_aterm_bytes_with_store_dir(store_dir),
+            references,
+            store_dir,
+        )
+        .map_err(|_e| DerivationError::InvalidOutputName(name))
     }
 
     /// Returns the FOD digest, if the derivation is fixed-output, or None if
@@ -167,6 +261,11 @@ impl Derivation {
     /// [CAHash::Flat], what's fed to `build_store_path_from_fingerprint_parts`
     /// (except the out_output.path being an empty string)
     pub fn fod_digest(&self) -> Option<[u8; 32]> {
+        self.fod_digest_with_store_dir(crate::store_path::STORE_DIR)
+    }
+
+    /// Like [Derivation::fod_digest] but with a custom store directory prefix.
+    pub fn fod_digest_with_store_dir(&self, store_dir: &str) -> Option<[u8; 32]> {
         if self.outputs.len() != 1 {
             return None;
         }
@@ -181,7 +280,7 @@ impl Derivation {
             out_output
                 .path
                 .as_ref()
-                .map(StorePath::to_absolute_path)
+                .map(|sp| sp.to_absolute_path_with_prefix(store_dir))
                 .unwrap_or_default(),
         ))
     }
@@ -207,28 +306,55 @@ impl Derivation {
     where
         F: Fn(&StorePathRef) -> [u8; 32],
     {
+        self.hash_derivation_modulo_with_store_dir(
+            fn_lookup_hash_derivation_modulo,
+            crate::store_path::STORE_DIR,
+        )
+    }
+
+    /// Like [Derivation::hash_derivation_modulo] but with a custom store dir.
+    ///
+    /// The store dir affects the ATerm serialization of output paths and input
+    /// sources, which in turn affects the BLAKE3 hash.
+    pub fn hash_derivation_modulo_with_store_dir<F>(
+        &self,
+        fn_lookup_hash_derivation_modulo: F,
+        store_dir: &str,
+    ) -> [u8; 32]
+    where
+        F: Fn(&StorePathRef) -> [u8; 32],
+    {
         // Fixed-output derivations return a fixed hash.
         // Non-Fixed-output derivations return the sha256 digest of the ATerm
         // notation, but with all input_derivation paths replaced by a recursive
         // call to this function.
         // We call [fn_lookup_hash_derivation_modulo] rather than recursing
         // ourselves, so callers can precompute this.
-        self.fod_digest().unwrap_or({
+        self.fod_digest_with_store_dir(store_dir).unwrap_or({
+            let store_dir_with_slash = format!("{store_dir}/");
             // For each input_derivation, look up the hash derivation modulo,
-            // and replace the derivation path in the aterm with it's HEXLOWER digest.
-            let aterm_bytes = self.to_aterm_bytes_with_replacements(&BTreeMap::from_iter(
+            // and replace the derivation path in the aterm with its HEXLOWER digest.
+            let replacements = BTreeMap::from_iter(
                 self.input_derivations
                     .iter()
                     .map(|(drv_path, output_names)| {
                         let hash = fn_lookup_hash_derivation_modulo(&drv_path.as_ref());
-
                         (hash, output_names.to_owned())
                     }),
-            ));
+            );
+
+            let mut buffer: Vec<u8> = Vec::new();
+            self.serialize_hdm_with_store_dir(
+                &mut buffer,
+                &replacements,
+                store_dir,
+                &store_dir_with_slash,
+            )
+            .unwrap();
 
             // write the ATerm of that to the hash function and return its digest.
             // crunch: BLAKE3 instead of SHA-256
-            *blake3::hash(&aterm_bytes).as_bytes()
+            *blake3::hash(&buffer).as_bytes()
         })
     }
 

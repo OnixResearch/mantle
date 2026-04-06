@@ -39,9 +39,6 @@ pub struct BuildOutcome {
     pub log: Option<String>,
 }
 
-/// The logical store prefix. Derivation paths, output hashing, sandbox
-/// layout, and DerivationRegistry lookups always use this. Matches Nix convention.
-const LOGICAL_STORE_DIR: &str = "/nix/store";
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
 pub(crate) struct PreparedBuild {
@@ -100,8 +97,9 @@ where
         DS: DirectoryService + 'static,
         PIS: PathInfoService + 'static,
     {
+        let store_dir = nix_compat::store_path::STORE_DIR;
         let output_dir_str = output_dir.to_str()
-            .unwrap_or(LOGICAL_STORE_DIR).to_string();
+            .unwrap_or(store_dir).to_string();
         let store = crunch_store::StoreHandle::from_services(
             Arc::new(blob_service) as Arc<dyn BlobService>,
             Arc::new(directory_service) as Arc<dyn DirectoryService>,
@@ -131,8 +129,9 @@ where
         remote_pathinfo: Option<Arc<dyn PathInfoService>>,
         verbose: bool,
     ) -> Self {
+        let store_dir = nix_compat::store_path::STORE_DIR;
         let output_dir_str = output_dir.to_str()
-            .unwrap_or(LOGICAL_STORE_DIR).to_string();
+            .unwrap_or(store_dir).to_string();
         let sd = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
         let store = crunch_store::StoreHandle::from_services(
             blob_service,
@@ -155,6 +154,11 @@ where
     /// Get a cloned Arc to the build service (for spawning tasks).
     pub(crate) fn build_service(&self) -> Arc<BServ> {
         self.build_service.clone()
+    }
+
+    /// The logical store directory prefix.
+    pub fn store_dir(&self) -> &str {
+        self.store.store_dir()
     }
 
     /// Read the full content of a blob from castore.
@@ -284,7 +288,7 @@ where
 
         // 3. Ensure input derivation outputs are in castore.
         for (input_drv_path, _output_names) in &derivation.input_derivations {
-            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 let input_drv = entry.derivation.clone();
                 self.ensure_input_nodes(&input_drv).await?;
@@ -301,7 +305,7 @@ where
 
         // 6. Create build request.
         let build_request = derivation_to_build_request(
-            derivation, &sandbox_inputs, LOGICAL_STORE_DIR,
+            derivation, &sandbox_inputs, self.store.store_dir(),
         )?;
 
         info!(drv = %drv_name, "building");
@@ -499,7 +503,7 @@ where
                 format!("{base_name}-{output_name}")
             };
             let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
-                &path_name, &ca_hash, Vec::<&str>::new(), false, LOGICAL_STORE_DIR,
+                &path_name, &ca_hash, Vec::<&str>::new(), false, self.store.store_dir(),
             ).map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
 
             intermediates.push(CaOutputIntermediate {
@@ -516,13 +520,13 @@ where
             .zip(intermediates.iter())
             .map(|((_name, marker, _len), intermediate)| {
                 let final_abs = intermediate.ca_path
-                    .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                    .to_absolute_path_with_prefix(self.store.store_dir());
                 (marker.as_slice(), final_abs.into_bytes())
             })
             .collect();
 
         // Pass 2: Replace all markers with final CA paths, persist.
-        let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+        let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
 
         for intermediate in &intermediates {
@@ -544,7 +548,7 @@ where
             );
 
             let final_abs = intermediate.ca_path
-                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                .to_absolute_path_with_prefix(self.store.store_dir());
             self.store.insert_ca_mapping(&drv_abs, &intermediate.name, &final_abs);
 
             let display_abs = intermediate.ca_path
@@ -697,7 +701,7 @@ where
         // If --store is a custom dir, check if the path exists there.
         // When output_dir == /nix/store, we can't distinguish, so
         // fall through to Nix closure resolution (safe default).
-        if self.store.output_dir_str() != LOGICAL_STORE_DIR {
+        if self.store.output_dir_str() != self.store.store_dir() {
             let custom_abs = path.to_absolute_path_with_prefix(&self.store.output_dir_str());
             return PathBuf::from(&custom_abs).exists();
         }
@@ -759,7 +763,7 @@ where
     ) -> Vec<(String, String)> {
         let mut rewrites: Vec<(String, String)> = Vec::new();
         for (input_drv_path, output_names) in &derivation.input_derivations {
-            let input_abs = input_drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+            let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 if entry.content_addressed {
                     for on in output_names {
@@ -769,7 +773,7 @@ where
                             .unwrap_or_default();
                         if let Some(resolved) = entry.resolved_outputs.get(on) {
                             // CA rewrites operate in sandbox space (logical prefix).
-                            let resolved_abs = resolved.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                            let resolved_abs = resolved.to_absolute_path_with_prefix(self.store.store_dir());
                             if placeholder.len() == resolved_abs.len() {
                                 rewrites.push((placeholder, resolved_abs));
                             }
@@ -932,12 +936,12 @@ where
             &ca_hash,
             Vec::<&str>::new(),
             false,
-            LOGICAL_STORE_DIR,
+            self.store.store_dir(),
         )
         .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
 
         // 5. Replace zero markers with the final CA path (in sandbox/logical space).
-        let final_abs = ca_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+        let final_abs = ca_path.to_absolute_path_with_prefix(self.store.store_dir());
         let final_bytes = final_abs.as_bytes();
         let final_node = if marker.len() == final_bytes.len() {
             let (node, _) = crate::rewrite::rewrite_node(
@@ -953,7 +957,7 @@ where
         };
 
         // Register the resolved path.
-        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+        let drv_abs = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
 
         // Persist CA mapping for cache across restarts.

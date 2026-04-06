@@ -338,6 +338,7 @@ async fn execute_builds(
         state_dir: state_dir(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_url: None,
+        store_dir: LOGICAL_STORE_DIR.to_string(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;
@@ -477,6 +478,7 @@ async fn execute_builds_streaming(
         state_dir: state_dir(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_url: substituter_url.map(|s| s.to_string()),
+        store_dir: LOGICAL_STORE_DIR.to_string(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;

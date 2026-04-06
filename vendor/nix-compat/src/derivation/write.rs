@@ -10,6 +10,24 @@ use crate::store_path::{STORE_DIR_WITH_SLASH, StorePath};
 use bstr::BString;
 use data_encoding::HEXLOWER;
 
+/// Write a [StorePath] to the writer in ATerm quoted format using a custom
+/// store directory prefix. Same as [AtermWriteable] for StorePath but
+/// parameterised over the prefix.
+pub(crate) fn write_store_path_with_prefix<S: AsRef<str>>(
+    writer: &mut impl Write,
+    sp: &StorePath<S>,
+    store_dir: &str,
+) -> std::io::Result<()> {
+    write_char(writer, QUOTE)?;
+    writer.write_all(store_dir.as_bytes())?;
+    write_char(writer, '/')?;
+    writer.write_all(nixbase32::encode(sp.digest()).as_bytes())?;
+    write_char(writer, '-')?;
+    writer.write_all(sp.name().as_ref().as_bytes())?;
+    write_char(writer, QUOTE)?;
+    Ok(())
+}
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     io,
@@ -109,6 +127,16 @@ pub(crate) fn write_outputs(
     writer: &mut impl Write,
     outputs: &BTreeMap<String, Output>,
 ) -> Result<(), io::Error> {
+    write_outputs_with_prefix(writer, outputs, STORE_DIR_WITH_SLASH)
+}
+
+/// Like [write_outputs] but with a custom store directory prefix.
+/// `store_dir_with_slash` must end with '/'.
+pub(crate) fn write_outputs_with_prefix(
+    writer: &mut impl Write,
+    outputs: &BTreeMap<String, Output>,
+    store_dir_with_slash: &str,
+) -> Result<(), io::Error> {
     write_char(writer, BRACKET_OPEN)?;
     for (ii, (output_name, output)) in outputs.iter().enumerate() {
         if ii > 0 {
@@ -117,7 +145,9 @@ pub(crate) fn write_outputs(
 
         write_char(writer, PAREN_OPEN)?;
 
-        let path_str = output.path_str();
+        let path_str = output.path_str_with_prefix(
+            &store_dir_with_slash[..store_dir_with_slash.len().saturating_sub(1)],
+        );
         let mut elements: Vec<&str> = vec![output_name, &path_str];
 
         let (mode_and_algo, digest) = match &output.ca_hash {
@@ -173,16 +203,62 @@ pub(crate) fn write_input_derivations(
     Ok(())
 }
 
+/// Like [write_input_derivations] but writes StorePath keys with a custom
+/// store directory prefix. Used for the normal (non-replacement) serialization
+/// path where keys are StorePaths rather than hash digests.
+pub(crate) fn write_input_derivations_with_prefix(
+    writer: &mut impl Write,
+    input_derivations: &BTreeMap<StorePath<String>, BTreeSet<String>>,
+    store_dir: &str,
+) -> Result<(), io::Error> {
+    write_char(writer, BRACKET_OPEN)?;
+
+    for (ii, (drv_path, output_names)) in input_derivations.iter().enumerate() {
+        if ii > 0 {
+            write_char(writer, COMMA)?;
+        }
+
+        write_char(writer, PAREN_OPEN)?;
+        write_store_path_with_prefix(writer, drv_path, store_dir)?;
+        write_char(writer, COMMA)?;
+
+        write_char(writer, BRACKET_OPEN)?;
+        write_array_elements(
+            writer,
+            &output_names
+                .iter()
+                .map(String::as_bytes)
+                .collect::<Vec<_>>(),
+        )?;
+        write_char(writer, BRACKET_CLOSE)?;
+
+        write_char(writer, PAREN_CLOSE)?;
+    }
+
+    write_char(writer, BRACKET_CLOSE)?;
+
+    Ok(())
+}
+
 pub(crate) fn write_input_sources(
     writer: &mut impl Write,
     input_sources: &BTreeSet<StorePath<String>>,
+) -> Result<(), io::Error> {
+    write_input_sources_with_prefix(writer, input_sources, crate::store_path::STORE_DIR)
+}
+
+/// Like [write_input_sources] but with a custom store directory prefix.
+pub(crate) fn write_input_sources_with_prefix(
+    writer: &mut impl Write,
+    input_sources: &BTreeSet<StorePath<String>>,
+    store_dir: &str,
 ) -> Result<(), io::Error> {
     write_char(writer, BRACKET_OPEN)?;
     write_array_elements(
         writer,
         &input_sources
             .iter()
-            .map(StorePath::to_absolute_path)
+            .map(|sp| sp.to_absolute_path_with_prefix(store_dir))
             .collect::<Vec<_>>(),
     )?;
     write_char(writer, BRACKET_CLOSE)?;
