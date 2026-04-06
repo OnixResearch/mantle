@@ -115,10 +115,26 @@ CONFIGEOF
       # Compile all source files.
       # bwrap uses raw capget/capset syscalls (linux kernel headers),
       # not libcap. No -lcap needed.
-      # Patch: use linux/capability.h instead of sys/capability.h.
-      # sys/capability.h comes from libcap (userspace). bwrap only uses
-      # raw capget/capset syscalls which are in linux/capability.h.
-      sed -i 's|#include <sys/capability.h>|#include <linux/capability.h>|' bubblewrap.c
+      # Create a minimal sys/capability.h shim.
+      # The real sys/capability.h comes from libcap. bwrap uses both
+      # raw kernel types (capget/capset) and libcap types (cap_value_t,
+      # cap_from_name). We provide the kernel header + stubs for the
+      # libcap types.
+      mkdir -p sys
+      cat > sys/capability.h << 'CAPEOF'
+#ifndef _SYS_CAPABILITY_H
+#define _SYS_CAPABILITY_H
+#include <linux/capability.h>
+typedef int cap_value_t;
+/* Stub: cap_from_name is only used for --cap-add/--cap-drop parsing.
+ * Return -1 (not found) so the feature gracefully degrades. */
+static inline int cap_from_name(const char *name __attribute__((unused)),
+                                cap_value_t *cap __attribute__((unused))) {
+    return -1;
+}
+#define cap_valid(x) ((x) >= 0 && (x) <= __CAP_BITS)
+#endif
+CAPEOF
 
       echo "Compiling bubblewrap..."
       gcc -static -Os -pipe \
