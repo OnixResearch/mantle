@@ -18,6 +18,8 @@ let toolchain = crunch.fetchTarball {
   name = "musl-gcc",
 } in
 
+let binutils = (import "binutils.ncl") in
+let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
 
 let bwrap_src = crunch.fetchTarball {
@@ -32,10 +34,13 @@ let bwrap_src = crunch.fetchTarball {
   args = [
     "-c",
     m%"
+      set -e
       BB=/bin/busybox
       $BB mkdir -p /tmp/tools
-      for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep \
-                 install find readlink touch; do
+      for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
+                 tr head tail sort wc expr test basename dirname \
+                 install find xargs readlink sleep touch date od \
+                 uname id true false tee sh env which; do
         $BB ln -sf $BB /tmp/tools/$cmd
       done
       export PATH="/tmp/tools"
@@ -48,7 +53,36 @@ let bwrap_src = crunch.fetchTarball {
       if [ -z "$GCC" ]; then
         echo "ERROR: gcc not found" >&2; exit 1
       fi
-      export PATH="$GCC/bin:$PATH"
+      # Find binutils.
+      BINUTILS=""
+      for d in /nix/store/*-binutils; do
+        if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
+      done
+      # Symlink unprefixed binutils tools.
+      if [ -n "$BINUTILS" ]; then
+        for tool in as ld ar nm objcopy objdump ranlib readelf strip; do
+          if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
+            $BB ln -sf "$BINUTILS/bin/x86_64-linux-musl-$tool" /tmp/tools/$tool
+          fi
+        done
+      fi
+
+      export PATH="$GCC/bin${BINUTILS:+:$BINUTILS/bin}:$PATH"
+
+      # Create musl dynamic linker symlink.
+      MUSL=""
+      for d in /nix/store/*-musl; do
+        if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+      done
+      if [ -z "$MUSL" ]; then
+        for d in /nix/store/*-musl-gcc; do
+          if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+        done
+      fi
+      if [ -n "$MUSL" ]; then
+        $BB mkdir -p /lib 2>/dev/null || true
+        $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+      fi
 
       # Find bwrap source.
       SRCDIR=""
@@ -86,7 +120,13 @@ CONFIGEOF
         -D_GNU_SOURCE \
         -I. \
         -o bwrap \
-        bubblewrap.c bind-mount.c network.c utils.c
+        bubblewrap.c bind-mount.c network.c utils.c \
+        || { echo "ERROR: bwrap compilation failed" >&2; exit 1; }
+
+      if [ ! -f bwrap ]; then
+        echo "ERROR: bwrap binary not found after build" >&2
+        exit 1
+      fi
 
       # Install.
       mkdir -p $out/bin
@@ -100,5 +140,5 @@ CONFIGEOF
     "%
   ],
   system = "x86_64-linux",
-  inputs = [toolchain, gcc, bwrap_src],
+  inputs = [toolchain, binutils, musl, gcc, bwrap_src],
 }
