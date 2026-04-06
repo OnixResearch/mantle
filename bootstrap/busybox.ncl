@@ -64,6 +64,17 @@ let busybox_src = crunch.fetchTarball {
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
 
+      # Symlink unprefixed binutils tools (as, ld, ar, etc.)
+      # The bootstrap GCC targets x86_64-linux-musl and looks for
+      # prefixed tools. Also create unprefixed symlinks for make/scripts.
+      if [ -n "$BINUTILS" ]; then
+        for tool in as ld ar nm objcopy objdump ranlib readelf strip; do
+          if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
+            $BB ln -sf "$BINUTILS/bin/x86_64-linux-musl-$tool" /tmp/tools/$tool
+          fi
+        done
+      fi
+
       export PATH="$GCC/bin${BINUTILS:+:$BINUTILS/bin}:$PATH"
 
       # Find GNU Make.
