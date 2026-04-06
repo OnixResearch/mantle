@@ -875,25 +875,8 @@ mod tests {
         assert!(out.ca_hash.is_some(), "FOD should have ca_hash");
     }
 
-    #[test]
-    fn ca_resolve_output_updates_known_paths() {
-        let drv = ca_drv("ca-resolve", "/bin/sh");
-        let mut kp = ConversionCache::default();
-        let (drv_path, _) = convert(&drv, &mut kp).unwrap();
-        let drv_abs = drv_path.to_absolute_path();
-
-        // Before resolve: no output path
-        assert!(kp.get_output_path(&drv_abs, "out").is_none());
-
-        // Simulate post-build resolution
-        let final_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed(
-            "ca-resolve", [0xbb; 20]
-        ).unwrap();
-        kp.resolve_output(&drv_abs, "out", final_path.clone());
-
-        // After resolve: output path available
-        assert_eq!(kp.get_output_path(&drv_abs, "out").unwrap(), final_path);
-    }
+    // ca_resolve_output test moved to crunch-build/src/registry.rs
+    // (resolve_output/get_output_path are DerivationRegistry methods)
 
     #[test]
     fn ca_json_default_is_content_addressed() {
