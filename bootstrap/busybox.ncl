@@ -96,9 +96,10 @@ let busybox_src = crunch.fetchTarball {
       if [ "$JOBS" = "0" ] || [ -z "$JOBS" ]; then JOBS=4; fi
 
       # Host tools (scripts/basic/fixdep) must be statically linked
-      # because the bwrap sandbox has no dynamic linker.
-      export HOSTCC=gcc
-      export HOSTLDFLAGS=-static
+      # because the bwrap sandbox has no dynamic linker at /lib/ld-musl-*.
+      # Set HOSTCC to include -static so kbuild's single-step compile+link
+      # produces a static binary.
+      export HOSTCC="gcc -static"
 
       # Generate default config.
       $MAKE defconfig CC=gcc
