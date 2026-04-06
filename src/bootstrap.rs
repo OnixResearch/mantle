@@ -208,7 +208,6 @@ pub async fn bootstrap_fetch(
     output: &Path,
     verbose: bool,
 ) -> Result<(), RunError> {
-    use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
 
     debug_assert!(!FETCH_SEEDS.is_empty(), "must have at least one seed package");
@@ -242,7 +241,19 @@ pub async fn bootstrap_fetch(
     }
 
     // 2. Set up services for the Builder.
-    let blob_service = MemoryBlobService::default();
+    let state_dir = resolve_state_dir();
+    let _ = std::fs::create_dir_all(&state_dir);
+
+    let blob_service = {
+        use snix_castore::blobservice::ObjectStoreBlobService;
+        let blob_dir = state_dir.join("blobs");
+        std::fs::create_dir_all(&blob_dir)
+            .map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
+        std::sync::Arc::new(
+            ObjectStoreBlobService::new_local(&blob_dir)
+                .map_err(|e| RunError::Internal(format!("blob service: {e}")))?
+        )
+    };
     let directory_service = RedbDirectoryService::new_temporary(
         "bootstrap".to_string(),
         RedbDirectoryServiceConfig {
@@ -252,9 +263,6 @@ pub async fn bootstrap_fetch(
         },
     )
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let state_dir = resolve_state_dir();
-    let _ = std::fs::create_dir_all(&state_dir);
 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
 

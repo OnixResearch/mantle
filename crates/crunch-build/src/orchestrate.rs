@@ -2564,4 +2564,105 @@ mod tests {
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1, "should call do_build");
     }
+
+    // ── Blob persistence across Builder instances ─────────────
+
+    /// Helper: write bytes into an ObjectStoreBlobService-backed store.
+    async fn put_blob_obj(
+        bs: &snix_castore::blobservice::ObjectStoreBlobService,
+        content: &[u8],
+    ) -> Node {
+        let mut writer = BlobService::open_write(bs).await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn persistent_blob_cache_hit_across_builder_instances() {
+        use snix_castore::blobservice::ObjectStoreBlobService;
+        use snix_store::pathinfoservice::{
+            PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let blob_dir = tmp.path().join("blobs");
+        let pis_path = tmp.path().join("pathinfo.redb");
+        std::fs::create_dir_all(&blob_dir).unwrap();
+
+        let mut kp = crunch_glue::KnownPaths::default();
+        let (drv_path, drv) = build_and_register("persist-test", &[], &mut kp);
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+
+        // --- First Builder instance: populate castore + pathinfo ---
+        {
+            let bs = std::sync::Arc::new(
+                ObjectStoreBlobService::new_local(&blob_dir).unwrap(),
+            );
+            let pis = RedbPathInfoService::new(
+                "test".to_string(),
+                RedbPathInfoServiceConfig {
+                    path: Some(pis_path.clone()),
+                    read_only: false,
+                    cache_size: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let node = put_blob_obj(&bs, b"persistent content").await;
+
+            let path_info = PathInfo {
+                store_path: out_path.clone(),
+                node,
+                references: vec![],
+                nar_size: 0,
+                nar_sha256: [0u8; 32],
+                signatures: vec![],
+                deriver: Some(drv_path.clone()),
+                ca: None,
+            };
+            pis.put(path_info).await.unwrap();
+            // Builder and services dropped here
+        }
+
+        // --- Second Builder instance: same dirs, fresh services ---
+        {
+            let bs = std::sync::Arc::new(
+                ObjectStoreBlobService::new_local(&blob_dir).unwrap(),
+            );
+            let ds = tmp_ds();
+            let (mock, calls) = MockBuildService::new(MemoryBlobService::default());
+            let pis = RedbPathInfoService::new(
+                "test".to_string(),
+                RedbPathInfoServiceConfig {
+                    path: Some(pis_path.clone()),
+                    read_only: false,
+                    cache_size: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let mut builder = Builder::new(
+                bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+            );
+
+            let mut kp2 = crunch_glue::KnownPaths::default();
+            let (drv_path2, _) = build_and_register("persist-test", &[], &mut kp2);
+
+            let outcome = builder.build(&drv_path2, &mut kp2).await.unwrap();
+            assert!(outcome.cached, "should be cached from persistent blob store");
+
+            let recorded = calls.lock().unwrap();
+            assert_eq!(
+                recorded.len(), 0,
+                "should NOT call do_build — blobs persisted on disk",
+            );
+        }
+    }
 }

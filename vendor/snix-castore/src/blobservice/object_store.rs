@@ -75,6 +75,23 @@ pub struct ObjectStoreBlobService {
     avg_chunk_size: u32,
 }
 
+impl ObjectStoreBlobService {
+    /// Create an ObjectStoreBlobService backed by a local filesystem directory.
+    ///
+    /// The directory is created if it doesn't exist. Blobs are stored as
+    /// content-addressed chunks under `{path}/blobs/` and `{path}/chunks/`.
+    pub fn new_local(path: impl AsRef<std::path::Path>) -> io::Result<Self> {
+        let local = object_store::local::LocalFileSystem::new_with_prefix(path.as_ref())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(Self {
+            instance_name: String::new(),
+            object_store: Arc::new(local),
+            base_path: Path::default(),
+            avg_chunk_size: default_avg_chunk_size(),
+        })
+    }
+}
+
 #[instrument(level=Level::TRACE, skip_all,fields(base_path=%base_path,blob.digest=%digest),ret(Display))]
 fn derive_blob_path(base_path: &Path, digest: &B3Digest) -> Path {
     base_path
@@ -573,11 +590,62 @@ where
 mod test {
     use super::{chunk_and_upload, default_avg_chunk_size};
     use crate::{
-        blobservice::{BlobService, ObjectStoreBlobService},
+        blobservice::{BlobService, BlobWriter as _, ObjectStoreBlobService},
         fixtures::{BLOB_A, BLOB_A_DIGEST, BLOB_B, BLOB_B_DIGEST},
     };
     use std::{io::Cursor, sync::Arc};
+    use tokio::io::AsyncWriteExt;
     use url::Url;
+
+    #[tokio::test]
+    async fn new_local_roundtrip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let svc = ObjectStoreBlobService::new_local(tmp.path()).unwrap();
+
+        let data = b"hello persistent blobs";
+
+        // Write
+        let mut writer = svc.open_write().await;
+        writer.write_all(data).await.unwrap();
+        let digest = writer.close().await.unwrap();
+
+        // Verify existence
+        assert!(svc.has(&digest).await.unwrap());
+
+        // Read back
+        let mut reader = svc.open_read(&digest).await.unwrap()
+            .expect("blob should exist");
+        let mut buf = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut buf).await.unwrap();
+        assert_eq!(buf, data);
+    }
+
+    #[tokio::test]
+    async fn new_local_persists_across_instances() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = b"survives restart";
+        let digest;
+
+        // First instance: write a blob
+        {
+            let svc = ObjectStoreBlobService::new_local(tmp.path()).unwrap();
+            let mut writer = svc.open_write().await;
+            writer.write_all(data).await.unwrap();
+            digest = writer.close().await.unwrap();
+        }
+
+        // Second instance: read it back
+        {
+            let svc = ObjectStoreBlobService::new_local(tmp.path()).unwrap();
+            assert!(svc.has(&digest).await.unwrap(), "blob should persist");
+
+            let mut reader = svc.open_read(&digest).await.unwrap()
+                .expect("blob should exist in second instance");
+            let mut buf = Vec::new();
+            tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut buf).await.unwrap();
+            assert_eq!(buf, data);
+        }
+    }
 
     /// Tests chunk_and_upload directly, bypassing the BlobWriter at open_write().
     #[rstest::rstest]

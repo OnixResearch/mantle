@@ -314,10 +314,12 @@ async fn execute_builds(
     fix: bool,
     max_jobs: u32,
 ) -> Result<(), RunError> {
-    use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
 
-    let blob_service = MemoryBlobService::default();
+    let state_dir = state_dir();
+    let _ = std::fs::create_dir_all(&state_dir);
+
+    let blob_service = open_blob_service(&state_dir)?;
     let directory_service = RedbDirectoryService::new_temporary(
         "crunch".to_string(),
         RedbDirectoryServiceConfig {
@@ -328,8 +330,6 @@ async fn execute_builds(
     )
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
 
-    let state_dir = state_dir();
-    let _ = std::fs::create_dir_all(&state_dir);
     let pathinfo_service = open_pathinfo_service(&state_dir).await?;
 
     #[cfg(target_os = "linux")]
@@ -457,11 +457,13 @@ async fn execute_builds_streaming(
     max_jobs: u32,
     substituter_url: Option<&str>,
 ) -> Result<(), RunError> {
-    use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
     use tokio::sync::mpsc;
 
-    let blob_service = MemoryBlobService::default();
+    let state_dir = state_dir();
+    let _ = std::fs::create_dir_all(&state_dir);
+
+    let blob_service = open_blob_service(&state_dir)?;
     let directory_service = RedbDirectoryService::new_temporary(
         "crunch".to_string(),
         RedbDirectoryServiceConfig {
@@ -472,8 +474,6 @@ async fn execute_builds_streaming(
     )
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
 
-    let state_dir = state_dir();
-    let _ = std::fs::create_dir_all(&state_dir);
     let pathinfo_service = open_pathinfo_service(&state_dir).await?;
 
     // Build the remote PathInfoService for binary cache substitution.
@@ -698,6 +698,27 @@ async fn open_pathinfo_service(
             .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
         }
     }
+}
+
+/// Open or create a persistent blob service backed by the local filesystem.
+///
+/// Blobs are stored as content-addressed chunks under `{state_dir}/blobs/`.
+/// If the directory doesn't exist, it's created. Falls back to in-memory
+/// if the filesystem path can't be opened (e.g., read-only mount).
+fn open_blob_service(
+    state_dir: &std::path::Path,
+) -> Result<std::sync::Arc<snix_castore::blobservice::ObjectStoreBlobService>, RunError> {
+    use snix_castore::blobservice::ObjectStoreBlobService;
+
+    let blob_dir = state_dir.join("blobs");
+    std::fs::create_dir_all(&blob_dir)
+        .map_err(|e| RunError::Internal(format!("creating blob dir {}: {e}", blob_dir.display())))?;
+
+    let svc = ObjectStoreBlobService::new_local(&blob_dir)
+        .map_err(|e| RunError::Internal(format!("opening blob service at {}: {e}", blob_dir.display())))?;
+
+    info!(path = %blob_dir.display(), "blob service opened");
+    Ok(std::sync::Arc::new(svc))
 }
 
 /// Handle a FOD hash mismatch: optionally auto-fix, always log.
