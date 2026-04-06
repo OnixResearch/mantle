@@ -19,11 +19,11 @@
 
 ## Phase 3: Define irpc services
 
-- [~] Add `irpc` to workspace dependencies ⏱ started: 2026-04-05T12:51Z
-- [ ] Define `BlobServiceRequest` enum with `Stat`, `Read` (server stream), `Put` (client stream) in snix-castore
-- [ ] Define `DirectoryServiceRequest` enum with `Get` (server stream), `Put` (client stream) in snix-castore
-- [ ] Define `PathInfoServiceRequest` enum with `Get`, `Put`, `CalculateNAR`, `List` (server stream) in snix-store
-- [ ] Define `BuildServiceRequest` enum with `DoBuild` (unary) in snix-build
+- [x] Add `irpc` to workspace dependencies ✅ 7m (started: 2026-04-05T12:51Z -> completed: 2026-04-05T12:58Z)
+- [x] Define `BlobServiceProtocol` with Has, Read, Put, Chunks in snix-castore ✅
+- [x] Define `DirectoryServiceProtocol` with Get, Put in snix-castore ✅
+- [x] Define `PathInfoServiceProtocol` with Get, Put in snix-store ✅
+- [x] Define `BuildServiceProtocol` with DoBuild in snix-build ✅
 - [ ] Write irpc client wrappers implementing the existing `BlobService`, `DirectoryService`, `PathInfoService`, `BuildService` traits
 
 ## Phase 4: Replace gRPC impls
