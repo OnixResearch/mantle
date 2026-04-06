@@ -95,10 +95,13 @@ let busybox_src = crunch.fetchTarball {
       JOBS=${NIX_BUILD_CORES:-4}
       if [ "$JOBS" = "0" ] || [ -z "$JOBS" ]; then JOBS=4; fi
 
+      # Host tools (scripts/basic/fixdep) must be statically linked
+      # because the bwrap sandbox has no dynamic linker.
+      export HOSTCC=gcc
+      export HOSTLDFLAGS=-static
+
       # Generate default config.
-      # HOSTCC and HOSTLDFLAGS=-static ensure host tools (fixdep etc.)
-      # are statically linked — the bwrap sandbox has no dynamic linker.
-      $MAKE defconfig CC=gcc HOSTCC=gcc HOSTLDFLAGS=-static
+      $MAKE defconfig CC=gcc
 
       # Patch config for static build.
       sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
