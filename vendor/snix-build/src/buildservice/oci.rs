@@ -19,7 +19,14 @@ use std::{ffi::OsStr, path::PathBuf, process::Stdio};
 
 use super::BuildService;
 
-const SANDBOX_SHELL: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+/// Compile-time default for the sandbox shell.
+const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+
+/// Resolve the sandbox shell path at runtime.
+fn sandbox_shell() -> String {
+    std::env::var("SNIX_BUILD_SANDBOX_SHELL")
+        .unwrap_or_else(|_| SANDBOX_SHELL_DEFAULT.to_string())
+}
 const MAX_CONCURRENT_BUILDS: usize = 2; // TODO: make configurable
 
 pub struct OCIBuildService<BS, DS> {
@@ -68,7 +75,7 @@ where
         let span = Span::current();
         span.record("bundle_name", bundle_name.to_string());
 
-        let mut runtime_spec = make_spec(&request, true, SANDBOX_SHELL)
+        let mut runtime_spec = make_spec(&request, true, &sandbox_shell())
             .context("failed to create spec")
             .map_err(std::io::Error::other)?;
 

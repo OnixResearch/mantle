@@ -19,7 +19,16 @@ use crate::{
     bwrap::Bwrap,
     sandbox::SandboxSpec,
 };
-const SANDBOX_SHELL: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+/// Compile-time default for the sandbox shell.
+const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+
+/// Resolve the sandbox shell path at runtime.
+/// Checks the `SNIX_BUILD_SANDBOX_SHELL` environment variable first,
+/// then falls back to the compile-time default.
+fn sandbox_shell() -> String {
+    std::env::var("SNIX_BUILD_SANDBOX_SHELL")
+        .unwrap_or_else(|_| SANDBOX_SHELL_DEFAULT.to_string())
+}
 
 pub struct BubblewrapBuildService<BS, DS> {
     /// Root path in which all builds run
@@ -102,7 +111,7 @@ where
                 request
                     .constraints
                     .contains(&BuildConstraints::ProvideBinSh)
-                    .then_some(SANDBOX_SHELL.into()),
+                    .then_some(sandbox_shell().into()),
             )
             .build();
 
