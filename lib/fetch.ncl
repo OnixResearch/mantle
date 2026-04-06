@@ -37,6 +37,16 @@ let url_basename = fun url =>
   std.array.last parts
 in
 
+# Detect hash algorithm from SRI prefix ("blake3-..." -> 'blake3).
+# Falls back to 'sha256 for hex hashes or unknown prefixes.
+let detect_algo = fun hash =>
+  if std.string.is_match "^blake3-" hash then 'blake3
+  else if std.string.is_match "^sha512-" hash then 'sha512
+  else if std.string.is_match "^sha1-" hash then 'sha1
+  else if std.string.is_match "^md5-" hash then 'md5
+  else 'sha256
+in
+
 {
   fetchurl
     | doc "Download a file by URL. Hash is over raw file bytes (flat mode)."
@@ -48,7 +58,8 @@ in
         then params.name
         else url_basename the_url
       in
-      let the_fixed_output = { hash = the_hash, algo = 'sha256, mode = 'flat } in
+      let the_algo = detect_algo the_hash in
+      let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'flat } in
       let the_env = { url = the_url } in
       {
         name = the_name,
@@ -80,7 +91,8 @@ in
             |> std.string.replace ".tgz" ""
             |> std.string.replace ".txz" ""
       in
-      let the_fixed_output = { hash = the_hash, algo = 'sha256, mode = 'recursive } in
+      let the_algo = detect_algo the_hash in
+      let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'recursive } in
       let the_env = { url = the_url, unpack = "1" } in
       {
         name = the_name,
@@ -108,7 +120,8 @@ in
           url_basename the_url
             |> std.string.replace ".git" ""
       in
-      let the_fixed_output = { hash = the_hash, algo = 'sha256, mode = 'recursive } in
+      let the_algo = detect_algo the_hash in
+      let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'recursive } in
       let the_env = { url = the_url, type = "git", rev = the_rev } in
       {
         name = the_name,

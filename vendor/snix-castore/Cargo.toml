@@ -46,7 +46,7 @@ tokio-stream = { version = "0.1.15", features = ["fs", "net"] }
 tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
 tokio-util = { version = "0.7.11", features = ["io", "io-util", "codec"] }
 toml = { version = "0.8.19", optional = true }
-tonic = { version = "0.13.1", features = ["tls-aws-lc", "tls-native-roots"] }
+tonic = { version = "0.13.1", features = ["tls-ring", "tls-native-roots"] }
 tonic-health = { version = "0.13.1", default-features = false }
 tonic-reflection = { version = "0.13.1", optional = true }
 tower = { version = "0.4.13", features = ["util"] }

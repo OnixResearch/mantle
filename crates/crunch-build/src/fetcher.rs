@@ -345,13 +345,7 @@ fn fetch_agent() -> ureq::Agent {
 /// Download a URL and write the raw content to a file.
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
-    let resp = fetch_agent().get(url)
-        .call()
-        .map_err(|e| FetchError::HttpError {
-            url: url.to_string(),
-            reason: e.to_string(),
-        })?;
-    let reader = resp.into_body().into_reader();
+    let reader: Box<dyn Read + Send> = open_url_reader(url)?;
     let mut limited = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(out)?;
     let bytes_written = io::copy(&mut limited, &mut file)?;
@@ -361,16 +355,29 @@ fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
 
 /// Download a tarball, decompress, and extract to a directory.
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
-    let resp = fetch_agent().get(url)
-        .call()
-        .map_err(|e| FetchError::HttpError {
-            url: url.to_string(),
-            reason: e.to_string(),
-        })?;
-    let reader = resp.into_body().into_reader();
+    let reader = open_url_reader(url)?;
     let decompressed = decompress_reader(url, reader)?;
     extract_tar(decompressed, out)?;
     Ok(())
+}
+
+/// Open a reader for a URL. Supports http(s):// and file:// schemes.
+fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
+    if let Some(path) = url.strip_prefix("file://") {
+        let file = std::fs::File::open(path).map_err(|e| FetchError::HttpError {
+            url: url.to_string(),
+            reason: format!("opening local file: {e}"),
+        })?;
+        Ok(Box::new(io::BufReader::new(file)))
+    } else {
+        let resp = fetch_agent().get(url)
+            .call()
+            .map_err(|e| FetchError::HttpError {
+                url: url.to_string(),
+                reason: e.to_string(),
+            })?;
+        Ok(Box::new(resp.into_body().into_reader()))
+    }
 }
 
 // ── Decompression ──────────────────────────────────────────────────────

@@ -42,7 +42,7 @@ tokio = { version = "1.39.3", features = [
 ] }
 tokio-stream = { version = "0.1.15", features = ["fs"] }
 tokio-util = { version = "0.7.11", features = ["io", "io-util", "compat"] }
-tonic = { version = "0.13.1", features = ["tls-aws-lc", "tls-native-roots"] }
+tonic = { version = "0.13.1", features = ["tls-ring", "tls-native-roots"] }
 tower = "0.4.13"
 tower-http = { version = "0.6.2", features = ["trace"] }
 snix-castore = { path = "../snix-castore" }
