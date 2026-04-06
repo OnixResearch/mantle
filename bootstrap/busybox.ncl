@@ -35,6 +35,7 @@ let busybox_src = crunch.fetchTarball {
   args = [
     "-c",
     m%"
+      set -e
       BB=/bin/busybox
       $BB mkdir -p /tmp/tools
       for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
@@ -84,25 +85,39 @@ let busybox_src = crunch.fetchTarball {
       chmod -R u+w /tmp/build
       cd /tmp/build
 
-      # Generate default config.
-      $MAKE defconfig CC=gcc HOSTCC=gcc
-
-      # Patch config for static build.
-      sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
-      sed -i 's/# CONFIG_INSTALL_NO_USR is not set/CONFIG_INSTALL_NO_USR=y/' .config
-
       # Set up musl library paths for GCC.
       # The bootstrap GCC targets musl, so -static links against musl libc.
       GCC_LIB=$(dirname $(gcc -print-libgcc-file-name))
       export LIBRARY_PATH="$GCC_LIB:${LIBRARY_PATH:-}"
 
+      # Compute job count — NIX_BUILD_CORES is 0 in sandbox, which is
+      # invalid for make. Default to 4 if 0 or unset.
+      JOBS=${NIX_BUILD_CORES:-4}
+      if [ "$JOBS" = "0" ] || [ -z "$JOBS" ]; then JOBS=4; fi
+
+      # Generate default config.
+      # HOSTCC and HOSTLDFLAGS=-static ensure host tools (fixdep etc.)
+      # are statically linked — the bwrap sandbox has no dynamic linker.
+      $MAKE defconfig CC=gcc HOSTCC=gcc HOSTLDFLAGS=-static
+
+      # Patch config for static build.
+      sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+      sed -i 's/# CONFIG_INSTALL_NO_USR is not set/CONFIG_INSTALL_NO_USR=y/' .config
+
       echo "Building busybox with static musl linking..."
-      $MAKE -j${NIX_BUILD_CORES:-4} \
+      $MAKE -j$JOBS \
         CC=gcc \
         HOSTCC=gcc \
+        HOSTLDFLAGS="-static" \
         LDFLAGS="-static" \
         CFLAGS="-Os -pipe" \
-        V=0
+        V=0 || { echo "ERROR: busybox build failed" >&2; exit 1; }
+
+      # Verify the binary was produced.
+      if [ ! -f busybox ]; then
+        echo "ERROR: busybox binary not found after build" >&2
+        exit 1
+      fi
 
       # Install.
       mkdir -p $out/bin
