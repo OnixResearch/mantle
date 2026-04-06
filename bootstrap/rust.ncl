@@ -98,17 +98,13 @@ let rust_src = crunch.fetchTarball {
       cp $RUST_SRC/cargo/bin/cargo $out/bin/
 
       # rust-std (standard library for the musl target)
-      cp -r $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib $out/lib/rustlib-std-tmp
-      # Merge into the rustc rustlib
-      if [ -d $out/lib/rustlib/x86_64-unknown-linux-musl ]; then
-        # Already have the target dir from rustc, just add std libs
-        cp $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib/x86_64-unknown-linux-musl/lib/* \
-          $out/lib/rustlib/x86_64-unknown-linux-musl/lib/
-      else
-        cp -r $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib/x86_64-unknown-linux-musl \
-          $out/lib/rustlib/
-      fi
-      rm -rf $out/lib/rustlib-std-tmp
+      # The std libs go into rustlib/<target>/lib/ alongside rustc's bin/
+      # Use cp -r on the directory, not glob — busybox sh glob may not
+      # expand inside FUSE-mounted store paths.
+      cp -r $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib/x86_64-unknown-linux-musl/lib \
+        $out/lib/rustlib/x86_64-unknown-linux-musl/
+
+      echo "std lib count: $(ls $out/lib/rustlib/x86_64-unknown-linux-musl/lib/ | wc -l)"
 
       echo "=== Verify ==="
       ls -la /lib/ld-musl-x86_64.so.1

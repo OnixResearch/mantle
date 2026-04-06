@@ -42,7 +42,7 @@ let rust = (import "rust.ncl") in
 
 let crunch_src = crunch.fetchTarball {
   url = "file:///tmp/crunch-src.tar.xz",
-  hash = "blake3-1fn8jNrrMBkcoaWCzOwQvjw/r/GbGNy+lg1gz2PU3Pc=",
+  hash = "blake3-t2CpCm9MzHhElSaBt8HadYIdhjEGFqpph2z8d5NZmWE=",
   name = "crunch-src",
 } in
 
@@ -160,9 +160,12 @@ replace-with = "vendored-sources"
 [source.vendored-sources]
 directory = "vendor-deps"
 
+[build]
+target = "x86_64-unknown-linux-musl"
+
 [target.x86_64-unknown-linux-musl]
 linker = "gcc"
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-lgcc_s"]
 CARGOEOF
 
       # Set environment for the Rust build.
@@ -177,18 +180,23 @@ CARGOEOF
       export TARGET_AR=ar
       export HOST_CC=gcc
 
-      # Build for musl target (static binary, no glibc dependency).
+      # Debug: verify std lib is findable
+      echo "=== Sysroot check ==="
+      SYSROOT=$($RUST/bin/rustc --print sysroot 2>&1) || true
+      echo "sysroot=$SYSROOT"
+      ls "$SYSROOT/lib/rustlib/x86_64-unknown-linux-musl/lib/" 2>&1 | head -5 || echo "no std libs found!"
+
+      # Build for the host target (musl, since rustc itself is musl-linked).
       echo "=== Building crunch ==="
       cargo build \
         --release \
-        --target x86_64-unknown-linux-musl \
         --locked \
         -j 4 \
         2>&1 || exit 1
 
       echo "=== Installing ==="
       mkdir -p $out/bin
-      cp /tmp/cargo-target/x86_64-unknown-linux-musl/release/crunch $out/bin/
+      cp /tmp/cargo-target/release/crunch $out/bin/
 
       echo "=== Verify ==="
       ls -la $out/bin/crunch
