@@ -115,6 +115,11 @@ CONFIGEOF
       # Compile all source files.
       # bwrap uses raw capget/capset syscalls (linux kernel headers),
       # not libcap. No -lcap needed.
+      # Patch: use linux/capability.h instead of sys/capability.h.
+      # sys/capability.h comes from libcap (userspace). bwrap only uses
+      # raw capget/capset syscalls which are in linux/capability.h.
+      sed -i 's|#include <sys/capability.h>|#include <linux/capability.h>|' bubblewrap.c
+
       echo "Compiling bubblewrap..."
       gcc -static -Os -pipe \
         -D_GNU_SOURCE \
