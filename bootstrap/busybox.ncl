@@ -21,6 +21,7 @@ let toolchain = crunch.fetchTarball {
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
+let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
 
 let busybox_src = crunch.fetchTarball {
@@ -90,6 +91,24 @@ let busybox_src = crunch.fetchTarball {
       GCC_LIB=$(dirname $(gcc -print-libgcc-file-name))
       export LIBRARY_PATH="$GCC_LIB:${LIBRARY_PATH:-}"
 
+      # Create musl dynamic linker symlink for host tools.
+      # The bootstrap GCC produces musl-linked binaries. Host tools
+      # (fixdep etc.) run during the build and need the dynamic linker.
+      MUSL=""
+      for d in /nix/store/*-musl; do
+        if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+      done
+      if [ -z "$MUSL" ]; then
+        # Fall back to the seed musl-gcc toolchain.
+        for d in /nix/store/*-musl-gcc; do
+          if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+        done
+      fi
+      if [ -n "$MUSL" ]; then
+        $BB mkdir -p /lib 2>/dev/null || true
+        $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+      fi
+
       # Compute job count — NIX_BUILD_CORES is 0 in sandbox, which is
       # invalid for make. Default to 4 if 0 or unset.
       JOBS=${NIX_BUILD_CORES:-4}
@@ -141,5 +160,5 @@ let busybox_src = crunch.fetchTarball {
     "%
   ],
   system = "x86_64-linux",
-  inputs = [toolchain, gnumake, dash, gcc, busybox_src],
+  inputs = [toolchain, gnumake, dash, musl, gcc, busybox_src],
 }
