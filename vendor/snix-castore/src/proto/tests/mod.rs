@@ -2,6 +2,7 @@ use super::{Entry, SymlinkEntry, entry};
 use crate::DirectoryError;
 
 mod directory;
+mod postcard_roundtrip;
 
 /// Create an entry with an empty symlink target, and ensure it fails validation.
 #[test]
