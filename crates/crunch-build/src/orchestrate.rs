@@ -73,25 +73,10 @@ pub(crate) enum PrepareResult {
 /// `Arc<dyn ...>` services extracted from constructor args or a
 /// `StoreHandle`.
 pub struct Builder<BServ> {
-    blob_service: Arc<dyn BlobService>,
-    directory_service: Arc<dyn DirectoryService>,
+    /// All store operations (blob, directory, pathinfo, cache, export,
+    /// session caches, CA mappings) go through the StoreHandle.
+    pub(crate) store: crunch_store::StoreHandle,
     build_service: Arc<BServ>,
-    pathinfo_service: Arc<dyn PathInfoService>,
-    /// Optional remote PathInfoService for binary cache substitution.
-    remote_pathinfo: Option<Arc<dyn PathInfoService>>,
-    /// Physical output directory on the host filesystem.
-    #[allow(dead_code)] // used indirectly via output_dir_str
-    output_dir: PathBuf,
-    output_dir_str: String,
-    /// Output store path -> PathInfo for outputs built in this session.
-    built_outputs: HashMap<String, PathInfo>,
-    /// Output store path -> Node (castore root node) for outputs built or
-    /// ingested in this session.
-    output_nodes: HashMap<StorePath<String>, Node>,
-    /// Persistent CA derivation -> output path mapping.
-    ca_mappings: CaMappings,
-    /// State directory for persisting ca_mappings.
-    state_dir: Option<PathBuf>,
     verbose: bool,
 }
 
@@ -102,7 +87,7 @@ where
     /// Create a Builder from individual services.
     ///
     /// Accepts any types that implement the service traits. Internally
-    /// wraps them in `Arc<dyn ...>` so the Builder stores trait objects.
+    /// wraps them in `Arc<dyn ...>` and constructs a StoreHandle.
     pub fn new<BS, DS, PIS>(
         blob_service: BS,
         directory_service: DS,
@@ -116,13 +101,21 @@ where
         DS: DirectoryService + 'static,
         PIS: PathInfoService + 'static,
     {
-        Self::with_state_dir(
+        let output_dir_str = output_dir.to_str()
+            .unwrap_or(LOGICAL_STORE_DIR).to_string();
+        let store = crunch_store::StoreHandle::from_services(
             Arc::new(blob_service) as Arc<dyn BlobService>,
             Arc::new(directory_service) as Arc<dyn DirectoryService>,
-            build_service,
             Arc::new(pathinfo_service) as Arc<dyn PathInfoService>,
-            output_dir, None, None, verbose,
-        )
+            None,
+            PathBuf::from("/tmp/crunch-test"),
+            output_dir_str,
+        );
+        Self {
+            store,
+            build_service: Arc::new(build_service),
+            verbose,
+        }
     }
 
     /// Create a Builder with a state directory for persistent CA mappings
@@ -141,22 +134,18 @@ where
     ) -> Self {
         let output_dir_str = output_dir.to_str()
             .unwrap_or(LOGICAL_STORE_DIR).to_string();
-        let ca_mappings = state_dir
-            .as_ref()
-            .map(|d| CaMappings::load(d))
-            .unwrap_or_default();
-        Self {
+        let sd = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
+        let store = crunch_store::StoreHandle::from_services(
             blob_service,
             directory_service,
-            build_service: Arc::new(build_service),
             pathinfo_service,
             remote_pathinfo,
-            output_dir,
+            sd,
             output_dir_str,
-            built_outputs: HashMap::new(),
-            output_nodes: HashMap::new(),
-            ca_mappings,
-            state_dir,
+        );
+        Self {
+            store,
+            build_service: Arc::new(build_service),
             verbose,
         }
     }
@@ -197,7 +186,7 @@ where
             }
         };
 
-        let mut reader = self.blob_service.open_read(&digest).await
+        let mut reader = self.store.blob_service().open_read(&digest).await
             .map_err(|e| Error::Store(format!("opening blob: {e}")))?
             .ok_or_else(|| Error::Store(format!(
                 "blob not found in castore: {}",
@@ -396,7 +385,7 @@ where
             outputs = ?output_names.iter()
                 .filter_map(|n| {
                     output_infos.get(n).map(|pi| {
-                        pi.store_path.to_absolute_path_with_prefix(&self.output_dir_str)
+                        pi.store_path.to_absolute_path_with_prefix(&self.store.output_dir_str())
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -425,8 +414,8 @@ where
         known_paths: &mut KnownPaths,
     ) -> Result<HashMap<String, PathInfo>, Error> {
         let nar_renderer = SimpleRenderer::new(
-            self.blob_service.clone(),
-            self.directory_service.clone(),
+            self.store.blob_service(),
+            self.store.directory_service(),
         );
 
         // Collect all provisionals for this derivation's outputs.
@@ -479,7 +468,7 @@ where
             for (old_placeholder, new_path) in &prepared.input_rewrites {
                 let (rewritten, _) = crate::rewrite::rewrite_node(
                     &node, old_placeholder.as_bytes(), new_path.as_bytes(),
-                    &self.blob_service, &self.directory_service,
+                    &self.store.blob_service(), &self.store.directory_service(),
                 ).await?;
                 node = rewritten;
             }
@@ -490,7 +479,7 @@ where
             {
                 let (rewritten, _) = crate::rewrite::rewrite_node(
                     &node, prov.as_bytes(), marker,
-                    &self.blob_service, &self.directory_service,
+                    &self.store.blob_service(), &self.store.directory_service(),
                 ).await?;
                 node = rewritten;
             }
@@ -544,7 +533,7 @@ where
                 if marker.len() == final_bytes.len() {
                     let (rewritten, _) = crate::rewrite::rewrite_node(
                         &final_node, marker, final_bytes,
-                        &self.blob_service, &self.directory_service,
+                        &self.store.blob_service(), &self.store.directory_service(),
                     ).await?;
                     final_node = rewritten;
                 }
@@ -557,13 +546,10 @@ where
 
             let final_abs = intermediate.ca_path
                 .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
-            self.ca_mappings.insert(&drv_abs, &intermediate.name, &final_abs);
-            if let Some(ref sd) = self.state_dir {
-                self.ca_mappings.save(sd);
-            }
+            self.store.insert_ca_mapping(&drv_abs, &intermediate.name, &final_abs);
 
             let display_abs = intermediate.ca_path
-                .to_absolute_path_with_prefix(&self.output_dir_str);
+                .to_absolute_path_with_prefix(&self.store.output_dir_str());
             info!(
                 drv = %drv_name,
                 output = %intermediate.name,
@@ -655,14 +641,14 @@ where
 
         // Ingest all source paths (declared + closure) into castore.
         for source_path in &all_source_paths {
-            if self.output_nodes.contains_key(source_path) {
+            if self.store.output_nodes.contains_key(source_path) {
                 continue;
             }
 
             // Try the crunch output dir first, then fall back to
             // /nix/store/ for Nix-provided sources.
             let crunch_abs = PathBuf::from(
-                source_path.to_absolute_path_with_prefix(&self.output_dir_str)
+                source_path.to_absolute_path_with_prefix(&self.store.output_dir_str())
             );
             let nix_abs = PathBuf::from(source_path.to_absolute_path());
             let abs = if crunch_abs.exists() {
@@ -675,8 +661,8 @@ where
             };
 
             let node = ingest_path::<_, _, _, &[u8]>(
-                self.blob_service.clone(),
-                self.directory_service.clone(),
+                self.store.blob_service(),
+                self.store.directory_service(),
                 &abs,
                 None,
             )
@@ -685,7 +671,7 @@ where
                 "failed to ingest source {}: {e}",
                 source_path
             ))))?;
-            self.output_nodes.insert(source_path.clone(), node);
+            self.store.output_nodes.insert(source_path.clone(), node);
         }
 
         Ok(all_source_paths)
@@ -698,14 +684,14 @@ where
     /// - It exists in the crunch output dir (when --store != /nix/store)
     fn is_crunch_built(&self, path: &StorePath<String>) -> bool {
         // Already built in this session.
-        if self.output_nodes.contains_key(path) {
+        if self.store.output_nodes.contains_key(path) {
             return true;
         }
         // If --store is a custom dir, check if the path exists there.
         // When output_dir == /nix/store, we can't distinguish, so
         // fall through to Nix closure resolution (safe default).
-        if self.output_dir_str != LOGICAL_STORE_DIR {
-            let custom_abs = path.to_absolute_path_with_prefix(&self.output_dir_str);
+        if self.store.output_dir_str() != LOGICAL_STORE_DIR {
+            let custom_abs = path.to_absolute_path_with_prefix(&self.store.output_dir_str());
             return PathBuf::from(&custom_abs).exists();
         }
         false
@@ -726,7 +712,7 @@ where
 
         let mut sandbox_inputs: BTreeMap<StorePath<String>, Node> = BTreeMap::new();
         for input_path in &input_paths {
-            if let Some(node) = self.output_nodes.get(input_path) {
+            if let Some(node) = self.store.output_nodes.get(input_path) {
                 sandbox_inputs.insert(input_path.clone(), node.clone());
             } else {
                 // Try ingesting from disk as fallback.
@@ -734,8 +720,8 @@ where
                 let abs = self.resolve_host_path(input_path, derivation);
                 if abs.exists() {
                     let node = ingest_path::<_, _, _, &[u8]>(
-                        self.blob_service.clone(),
-                        self.directory_service.clone(),
+                        self.store.blob_service(),
+                        self.store.directory_service(),
                         &abs,
                         None,
                     )
@@ -744,7 +730,7 @@ where
                         "failed to ingest input {}: {e}",
                         input_path
                     ))))?;
-                    self.output_nodes.insert(input_path.clone(), node.clone());
+                    self.store.output_nodes.insert(input_path.clone(), node.clone());
                     sandbox_inputs.insert(input_path.clone(), node);
                 } else {
                     return Err(Error::SourceNotFound {
@@ -807,8 +793,8 @@ where
         is_root: bool,
     ) -> Result<PathInfo, Error> {
         let nar_renderer = SimpleRenderer::new(
-            self.blob_service.clone(),
-            self.directory_service.clone(),
+            self.store.blob_service(),
+            self.store.directory_service(),
         );
 
         // Apply transitive CA input rewrites.
@@ -818,8 +804,8 @@ where
                 &working_node,
                 old_placeholder.as_bytes(),
                 new_path.as_bytes(),
-                &self.blob_service,
-                &self.directory_service,
+                &self.store.blob_service(),
+                &self.store.directory_service(),
             ).await?;
             working_node = rewritten;
         }
@@ -848,7 +834,7 @@ where
         if let Some(ca_hash) = &output.ca_hash {
             verify_fod_hash(
                 drv_name, output_name, ca_hash, nar_size, &nar_sha256,
-                &final_node, &self.blob_service, &self.directory_service,
+                &final_node, &self.store.blob_service(), &self.store.directory_service(),
             ).await?;
         }
 
@@ -914,8 +900,8 @@ where
             working_node,
             provisional_bytes,
             &marker,
-            &self.blob_service,
-            &self.directory_service,
+            &self.store.blob_service(),
+            &self.store.directory_service(),
         ).await?;
 
         // 3. Compute NAR hash of marker-replaced content (canonical form).
@@ -951,8 +937,8 @@ where
                 &marked_node,
                 &marker,
                 final_bytes,
-                &self.blob_service,
-                &self.directory_service,
+                &self.store.blob_service(),
+                &self.store.directory_service(),
             ).await?;
             node
         } else {
@@ -964,12 +950,9 @@ where
         known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
 
         // Persist CA mapping for cache across restarts.
-        self.ca_mappings.insert(&drv_abs, output_name, &final_abs);
-        if let Some(ref sd) = self.state_dir {
-            self.ca_mappings.save(sd);
-        }
+        self.store.insert_ca_mapping(&drv_abs, output_name, &final_abs);
 
-        let display_abs = ca_path.to_absolute_path_with_prefix(&self.output_dir_str);
+        let display_abs = ca_path.to_absolute_path_with_prefix(self.store.output_dir_str());
         info!(
             drv = %drv_name,
             output = %output_name,
@@ -980,7 +963,7 @@ where
         Ok((ca_path, final_node, marker_nar_size, marker_nar_sha256))
     }
 
-    /// Create PathInfo, persist to PathInfoService, and export to disk.
+    /// Delegates to `self.store.persist_and_export_output()`.
     async fn persist_and_export_output(
         &mut self,
         drv_path: &StorePath<String>,
@@ -992,62 +975,10 @@ where
         ca: Option<nix_compat::nixhash::CAHash>,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
-        // Tiger Style: assert the NAR hash is not all zeros
-        // (would indicate a hashing bug or uninitialized memory).
-        debug_assert!(
-            nar_sha256 != [0u8; 32],
-            "NAR sha256 must not be all zeros for {}",
-            output_path.name()
-        );
-
-        let path_info = PathInfo {
-            store_path: output_path.clone(),
-            node: final_node.clone(),
-            references,
-            nar_size,
-            nar_sha256,
-            signatures: vec![],
-            deriver: Some(drv_path.clone()),
-            ca,
-        };
-
-        self.pathinfo_service
-            .put(path_info.clone())
-            .await
-            .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
-
-        // Host filesystem: write outputs to the physical output dir.
-        let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
-        self.built_outputs.insert(abs_path.clone(), path_info.clone());
-        self.output_nodes
-            .insert(output_path.clone(), final_node.clone());
-
-        // Only export to disk for root derivations (user-requested).
-        // Intermediate deps stay in castore only — downstream builds
-        // access them via output_nodes.
-        if is_root && !PathBuf::from(&abs_path).exists() {
-            match export_castore_to_disk(
-                &final_node, &abs_path,
-                &self.blob_service, &self.directory_service,
-            ).await {
-                Ok(()) => {}
-                Err(e) if e.contains("Read-only file system")
-                       || e.contains("Permission denied") => {
-                    tracing::warn!(
-                        path = %abs_path,
-                        "could not export output to disk (read-only store), \
-                         output is available in castore"
-                    );
-                }
-                Err(e) => {
-                    return Err(Error::Store(format!(
-                        "exporting output {abs_path} to disk: {e}"
-                    )));
-                }
-            }
-        }
-
-        Ok(path_info)
+        self.store.persist_and_export_output(
+            drv_path, output_path, final_node, references,
+            nar_size, nar_sha256, ca, is_root,
+        ).await.map_err(|e| Error::Store(format!("{e}")))
     }
 
     /// Execute a builtin fetcher derivation (e.g., `builtin:fetchurl`).
@@ -1082,7 +1013,7 @@ where
             drv_name: drv_name.clone(),
         })?;
         // Fetcher outputs land on disk at the physical output dir.
-        let out_abs = out_path.to_absolute_path_with_prefix(&self.output_dir_str);
+        let out_abs = out_path.to_absolute_path_with_prefix(&self.store.output_dir_str());
 
         // Skip download if the output already exists on disk (e.g.,
         // from a prior `crunch bootstrap --fetch` run). The castore
@@ -1138,8 +1069,8 @@ where
 
         // Ingest output into castore.
         let node = ingest_path::<_, _, _, &[u8]>(
-            self.blob_service.clone(),
-            self.directory_service.clone(),
+            self.store.blob_service(),
+            self.store.directory_service(),
             PathBuf::from(&out_abs).as_path(),
             None,
         )
@@ -1152,8 +1083,8 @@ where
 
         // Compute NAR hash.
         let nar_renderer = SimpleRenderer::new(
-            self.blob_service.clone(),
-            self.directory_service.clone(),
+            self.store.blob_service(),
+            self.store.directory_service(),
         );
         let (nar_size, nar_sha256) = nar_renderer
             .calculate_nar(&node)
@@ -1164,7 +1095,7 @@ where
         if let Some(ca_hash) = &out_output.ca_hash {
             verify_fod_hash(
                 &drv_name, "out", ca_hash, nar_size, &nar_sha256,
-                &node, &self.blob_service, &self.directory_service,
+                &node, &self.store.blob_service(), &self.store.directory_service(),
             ).await?;
         }
 
@@ -1197,149 +1128,25 @@ where
 
     /// Check cache: every output must have PathInfo AND exist on disk.
     /// For CA derivations, uses ca_mappings to find the resolved path.
-    /// Returns Some(outputs) on full cache hit, None on any miss.
-    /// Check whether the castore has the content referenced by a Node.
-    /// Files: probe blob_service. Directories: probe directory_service.
-    /// Symlinks: always present (target is inline in the Node).
-    async fn castore_has_content(&self, node: &Node) -> Result<bool, Error> {
-        match node {
-            Node::File { digest, .. } => {
-                self.blob_service.has(digest).await
-                    .map_err(|e| Error::Store(format!("blob existence check: {e}")))
-            }
-            Node::Directory { digest, .. } => {
-                self.directory_service.get(digest).await
-                    .map(|opt| opt.is_some())
-                    .map_err(|e| Error::Store(format!("directory existence check: {e}")))
-            }
-            Node::Symlink { .. } => Ok(true),
-        }
-    }
-
+    /// Delegates to `self.store.check_cache()`.
     async fn check_cache(
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
-        let mut infos = HashMap::new();
-        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
-
-        // FODs (any output has ca_hash) and CA derivations (output.path
-        // is None with no CA mapping) should not query the remote cache.
-        // FODs: the fetcher pipeline handles them. CA: output paths
-        // aren't known until after build.
-        let is_fod = derivation.outputs.values().any(|o| o.ca_hash.is_some());
-
-        for (output_name, output) in &derivation.outputs {
-            let output_path: StorePath<String> = match output.path.as_ref() {
-                Some(p) => p.clone(),
-                None => {
-                    match self.ca_mappings.get(&drv_abs, output_name) {
-                        Some(ca_abs) => {
-                            StorePath::from_absolute_path(ca_abs.as_bytes())
-                                .map_err(|_| Error::Store(format!(
-                                    "invalid CA mapping path: {ca_abs}"
-                                )))?
-                        }
-                        None => return Ok(None),
-                    }
-                }
-            };
-
-            // Cache check: PathInfo + castore content = cached.
-            // No filesystem existence check — the castore IS the store.
-            let digest = *output_path.digest();
-
-            let stored = self.pathinfo_service.get(digest).await
-                .map_err(|e| Error::Store(format!("PathInfo lookup: {e}")))?;
-
-            match stored {
-                Some(path_info) => {
-                    if self.castore_has_content(&path_info.node).await? {
-                        self.output_nodes.insert(output_path.clone(), path_info.node.clone());
-                        self.built_outputs.insert(
-                            output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                            path_info.clone(),
-                        );
-                        infos.insert(output_name.clone(), path_info);
-                    } else {
-                        tracing::warn!(
-                            path = %output_path,
-                            "PathInfo exists but castore content missing, rebuilding"
-                        );
-                        return Ok(None);
-                    }
-                }
-                None => {
-                    // Local miss — try remote binary cache substitution.
-                    if !is_fod {
-                        if let Some(remote_pi) = self
-                            .try_substitute_remote(digest, &output_path, output_name)
-                            .await?
-                        {
-                            infos.insert(output_name.clone(), remote_pi);
-                            continue;
-                        }
-                    }
-                    return Ok(None);
-                }
-            }
-        }
-
-        Ok(Some(infos))
+        self.store.check_cache(drv_path, derivation).await
+            .map_err(|e| Error::Store(format!("{e}")))
     }
 
-    /// Try to fetch a single output from the remote binary cache.
-    ///
-    /// On hit: persists PathInfo locally (write-through), caches the
-    /// output node, and returns the PathInfo. On miss or error: returns
-    /// None. Remote errors are logged as warnings and treated as misses.
+    /// Delegates to `self.store.try_substitute_remote()`.
     async fn try_substitute_remote(
         &mut self,
         digest: [u8; 20],
         output_path: &StorePath<String>,
         output_name: &str,
     ) -> Result<Option<PathInfo>, Error> {
-        let remote = match &self.remote_pathinfo {
-            Some(r) => r.clone(),
-            None => return Ok(None),
-        };
-
-        match remote.get(digest).await {
-            Ok(Some(remote_pi)) => {
-                info!(
-                    path = %output_path,
-                    output = %output_name,
-                    "substituting from remote cache"
-                );
-
-                // Write-through: persist to local pathinfo for next time.
-                self.pathinfo_service
-                    .put(remote_pi.clone())
-                    .await
-                    .map_err(|e| Error::Store(format!(
-                        "persisting substituted PathInfo: {e}"
-                    )))?;
-
-                self.output_nodes
-                    .insert(output_path.clone(), remote_pi.node.clone());
-                self.built_outputs.insert(
-                    output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                    remote_pi.clone(),
-                );
-
-                Ok(Some(remote_pi))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => {
-                tracing::warn!(
-                    path = %output_path,
-                    err = %e,
-                    "remote cache query failed, building locally"
-                );
-                Ok(None)
-            }
-        }
+        self.store.try_substitute_remote(digest, output_path, output_name).await
+            .map_err(|e| Error::Store(format!("{e}")))
     }
 
     /// Resolve a store path to its host filesystem location.
@@ -1350,7 +1157,7 @@ where
         if is_source {
             PathBuf::from(path.to_absolute_path())
         } else {
-            PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str))
+            PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()))
         }
     }
 
@@ -1359,13 +1166,13 @@ where
     async fn ensure_input_nodes(&mut self, derivation: &Derivation) -> Result<(), Error> {
         for output in derivation.outputs.values() {
             if let Some(path) = &output.path {
-                if !self.output_nodes.contains_key(path) {
+                if !self.store.output_nodes.contains_key(path) {
                     // Built outputs are at the physical output dir.
-                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.output_dir_str));
+                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
                     if abs.exists() {
                         let node = ingest_path::<_, _, _, &[u8]>(
-                            self.blob_service.clone(),
-                            self.directory_service.clone(),
+                            self.store.blob_service(),
+                            self.store.directory_service(),
                             &abs,
                             None,
                         )
@@ -1374,7 +1181,7 @@ where
                             "failed to ingest existing output {}: {e}",
                             path
                         ))))?;
-                        self.output_nodes.insert(path.clone(), node);
+                        self.store.output_nodes.insert(path.clone(), node);
                     }
                 }
             }

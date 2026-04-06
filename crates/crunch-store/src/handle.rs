@@ -2,9 +2,12 @@
 //! pathinfo services. Consumers receive a StoreHandle — they do not
 //! construct or own individual services.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use nix_compat::derivation::Derivation;
+use nix_compat::store_path::StorePath;
 use snix_castore::blobservice::{BlobService, ObjectStoreBlobService};
 use snix_castore::directoryservice::{
     DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig,
@@ -16,15 +19,35 @@ use snix_store::pathinfoservice::{
 };
 use tracing::info;
 
+use snix_store::path_info::PathInfo;
+use tracing::info as trace_info;
+
+use crate::CaMappings;
+use crate::export::export_castore_to_disk;
 use crate::Error;
+
+/// The logical store prefix. Derivation paths and output paths always
+/// use this, regardless of the physical `--store` directory.
+const LOGICAL_STORE_DIR: &str = "/nix/store";
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
     /// State directory for persistent data (pathinfo.redb, blobs/, ca_mappings.json).
     pub state_dir: PathBuf,
 
+    /// Physical output directory (from CLI `--store`). Where root build
+    /// outputs are exported on disk. Defaults to `/nix/store`.
+    pub output_dir: PathBuf,
+
     /// Optional remote binary cache URL (e.g., "https://cache.nixos.org").
     pub remote_cache_url: Option<String>,
+}
+
+/// Return type for a successful cache lookup on a single output.
+#[derive(Debug, Clone)]
+pub struct CacheHit {
+    pub path_info: PathInfo,
+    pub node: Node,
 }
 
 /// Bundles all store services behind `Arc<dyn ...>`. The single point of
@@ -38,6 +61,14 @@ pub struct StoreHandle {
     pathinfo_service: Arc<dyn PathInfoService>,
     remote_pathinfo: Option<Arc<dyn PathInfoService>>,
     state_dir: PathBuf,
+    /// Physical output dir string (from `--store`).
+    output_dir_str: String,
+    /// Output store path -> Node for outputs built/ingested this session.
+    pub output_nodes: HashMap<StorePath<String>, Node>,
+    /// Absolute output path -> PathInfo for outputs built this session.
+    pub built_outputs: HashMap<String, PathInfo>,
+    /// Persistent CA derivation -> output path mapping.
+    pub ca_mappings: CaMappings,
 }
 
 impl StoreHandle {
@@ -81,12 +112,20 @@ impl StoreHandle {
             None => None,
         };
 
+        let output_dir_str = config.output_dir.to_str()
+            .unwrap_or(LOGICAL_STORE_DIR).to_string();
+        let ca_mappings = CaMappings::load(&config.state_dir);
+
         Ok(Self {
             blob_service,
             directory_service,
             pathinfo_service,
             remote_pathinfo,
             state_dir: config.state_dir,
+            output_dir_str,
+            output_nodes: HashMap::new(),
+            built_outputs: HashMap::new(),
+            ca_mappings,
         })
     }
 
@@ -97,13 +136,19 @@ impl StoreHandle {
         pathinfo_service: Arc<dyn PathInfoService>,
         remote_pathinfo: Option<Arc<dyn PathInfoService>>,
         state_dir: PathBuf,
+        output_dir_str: String,
     ) -> Self {
+        let ca_mappings = CaMappings::load(&state_dir);
         Self {
             blob_service,
             directory_service,
             pathinfo_service,
             remote_pathinfo,
             state_dir,
+            output_dir_str,
+            output_nodes: HashMap::new(),
+            built_outputs: HashMap::new(),
+            ca_mappings,
         }
     }
 
@@ -184,6 +229,210 @@ impl StoreHandle {
             .map_err(|e| Error::BlobService(format!("reading blob: {e}")))?;
 
         Ok(buf)
+    }
+
+    /// The output directory string (from `--store`).
+    pub fn output_dir_str(&self) -> &str {
+        &self.output_dir_str
+    }
+
+    /// Record a CA mapping and persist to disk.
+    pub fn insert_ca_mapping(&mut self, drv_abs: &str, output_name: &str, ca_abs: &str) {
+        self.ca_mappings.insert(drv_abs, output_name, ca_abs);
+        self.ca_mappings.save(&self.state_dir);
+    }
+
+    // -- Cache checking --
+
+    /// Check whether all outputs of a derivation are cached.
+    ///
+    /// Returns `Some(outputs)` on full hit, `None` on any miss.
+    /// Checks local PathInfo + castore content, falls back to remote
+    /// binary cache substitution.
+    pub async fn check_cache(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+    ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
+        let mut infos = HashMap::new();
+        let drv_abs = drv_path.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+
+        let is_fod = derivation.outputs.values().any(|o| o.ca_hash.is_some());
+
+        for (output_name, output) in &derivation.outputs {
+            let output_path: StorePath<String> = match output.path.as_ref() {
+                Some(p) => p.clone(),
+                None => {
+                    match self.ca_mappings.get(&drv_abs, output_name) {
+                        Some(ca_abs) => {
+                            StorePath::from_absolute_path(ca_abs.as_bytes())
+                                .map_err(|_| Error::Cache(format!(
+                                    "invalid CA mapping path: {ca_abs}"
+                                )))?
+                        }
+                        None => return Ok(None),
+                    }
+                }
+            };
+
+            let digest = *output_path.digest();
+
+            let stored = self.pathinfo_service.get(digest).await
+                .map_err(|e| Error::Cache(format!("PathInfo lookup: {e}")))?;
+
+            match stored {
+                Some(path_info) => {
+                    if self.castore_has_content(&path_info.node).await? {
+                        self.output_nodes.insert(output_path.clone(), path_info.node.clone());
+                        self.built_outputs.insert(
+                            output_path.to_absolute_path_with_prefix(&self.output_dir_str),
+                            path_info.clone(),
+                        );
+                        infos.insert(output_name.clone(), path_info);
+                    } else {
+                        tracing::warn!(
+                            path = %output_path,
+                            "PathInfo exists but castore content missing, rebuilding"
+                        );
+                        return Ok(None);
+                    }
+                }
+                None => {
+                    if !is_fod {
+                        if let Some(remote_pi) = self
+                            .try_substitute_remote(digest, &output_path, output_name)
+                            .await?
+                        {
+                            infos.insert(output_name.clone(), remote_pi);
+                            continue;
+                        }
+                    }
+                    return Ok(None);
+                }
+            }
+        }
+
+        Ok(Some(infos))
+    }
+
+    /// Try to fetch a single output from the remote binary cache.
+    ///
+    /// On hit: persists PathInfo locally (write-through), caches the
+    /// output node, and returns the PathInfo.
+    pub async fn try_substitute_remote(
+        &mut self,
+        digest: [u8; 20],
+        output_path: &StorePath<String>,
+        output_name: &str,
+    ) -> Result<Option<PathInfo>, Error> {
+        let remote = match &self.remote_pathinfo {
+            Some(r) => r.clone(),
+            None => return Ok(None),
+        };
+
+        match remote.get(digest).await {
+            Ok(Some(remote_pi)) => {
+                trace_info!(
+                    path = %output_path,
+                    output = %output_name,
+                    "substituting from remote cache"
+                );
+
+                self.pathinfo_service
+                    .put(remote_pi.clone())
+                    .await
+                    .map_err(|e| Error::Cache(format!(
+                        "persisting substituted PathInfo: {e}"
+                    )))?;
+
+                self.output_nodes
+                    .insert(output_path.clone(), remote_pi.node.clone());
+                self.built_outputs.insert(
+                    output_path.to_absolute_path_with_prefix(&self.output_dir_str),
+                    remote_pi.clone(),
+                );
+
+                Ok(Some(remote_pi))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => {
+                tracing::warn!(
+                    path = %output_path,
+                    err = %e,
+                    "remote cache query failed, building locally"
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    // -- Persistence + realization --
+
+    /// Create PathInfo, persist to PathInfoService, and export to disk.
+    ///
+    /// Only root outputs (user-requested) are exported to the filesystem.
+    /// Intermediate deps stay in castore.
+    pub async fn persist_and_export_output(
+        &mut self,
+        drv_path: &StorePath<String>,
+        output_path: &StorePath<String>,
+        final_node: Node,
+        references: Vec<StorePath<String>>,
+        nar_size: u64,
+        nar_sha256: [u8; 32],
+        ca: Option<nix_compat::nixhash::CAHash>,
+        is_root: bool,
+    ) -> Result<PathInfo, Error> {
+        debug_assert!(
+            nar_sha256 != [0u8; 32],
+            "NAR sha256 must not be all zeros for {}",
+            output_path.name()
+        );
+
+        let path_info = PathInfo {
+            store_path: output_path.clone(),
+            node: final_node.clone(),
+            references,
+            nar_size,
+            nar_sha256,
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca,
+        };
+
+        self.pathinfo_service
+            .put(path_info.clone())
+            .await
+            .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
+
+        let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
+        self.built_outputs.insert(abs_path.clone(), path_info.clone());
+        self.output_nodes
+            .insert(output_path.clone(), final_node.clone());
+
+        if is_root && !PathBuf::from(&abs_path).exists() {
+            match export_castore_to_disk(
+                &final_node, &abs_path,
+                &self.blob_service, &self.directory_service,
+            ).await {
+                Ok(()) => {}
+                Err(e) if e.contains("Read-only file system")
+                       || e.contains("Permission denied") => {
+                    tracing::warn!(
+                        path = %abs_path,
+                        "could not export output to disk (read-only store), \
+                         output is available in castore"
+                    );
+                }
+                Err(e) => {
+                    return Err(Error::Export(format!(
+                        "exporting output {abs_path} to disk: {e}"
+                    )));
+                }
+            }
+        }
+
+        Ok(path_info)
     }
 }
 

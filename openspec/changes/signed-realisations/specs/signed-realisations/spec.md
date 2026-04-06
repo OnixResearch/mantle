@@ -2,33 +2,50 @@
 
 ## Purpose
 
-Defines how crunch signs build outputs and verifies signatures on
-substituted paths, enabling trust in binary caches and remote builders.
+Defines how crunch signs build outputs and verifies signatures on all
+cache hits, providing integrity guarantees for binary caches, remote
+builders, and local store consistency.
 
 ## Requirements
 
-### Requirement: Sign PathInfo after build
+### Requirement: Always sign PathInfo after build
 
 The system MUST sign each PathInfo with an ed25519 key before persisting
-it, when a signing key is configured. The signature MUST cover the
-canonical narinfo fingerprint: `1;<store_path>;sha256:<nar_hash_nix32>;<nar_size>;<references>`.
+it. The signature MUST cover the canonical narinfo fingerprint:
+`1;<store_path>;sha256:<nar_hash_nix32>;<nar_size>;<references>`.
 
-If no signing key is configured, PathInfo MUST be persisted unsigned
-(backwards-compatible).
+There is no unsigned mode. Every persisted PathInfo has at least one
+signature.
 
-#### Scenario: Build with signing key
+#### Scenario: Build produces signed PathInfo
 
-- GIVEN `--signing-key /path/to/key` is provided
-- AND the key file contains a valid Nix-format ed25519 keypair
+- GIVEN a signing key is configured (explicitly or auto-generated)
 - WHEN a derivation is built successfully
 - THEN the persisted PathInfo contains exactly one signature
 - AND the signature verifies against the corresponding public key
 
-#### Scenario: Build without signing key
+### Requirement: Auto-generate signing key on first run
 
-- GIVEN no `--signing-key` flag is provided
-- WHEN a derivation is built successfully
-- THEN the persisted PathInfo has `signatures: []`
+If no signing key is configured via `--signing-key` and no key exists at
+`$CRUNCH_CONFIG_DIR/signing-key`, the system MUST generate a new ed25519
+keypair, write it to that path with 0600 permissions, and use it.
+
+The key name MUST be `crunch-<hostname>-1`.
+
+#### Scenario: First run auto-generates key
+
+- GIVEN no `--signing-key` flag
+- AND `$CRUNCH_CONFIG_DIR/signing-key` does not exist
+- WHEN `crunch build` is invoked
+- THEN a new keypair is written to `$CRUNCH_CONFIG_DIR/signing-key`
+- AND the build proceeds with that key
+
+#### Scenario: Explicit key overrides auto-generation
+
+- GIVEN `--signing-key /path/to/my-key`
+- WHEN `crunch build` is invoked
+- THEN the provided key is used
+- AND no auto-generation occurs
 
 ### Requirement: Nix-compatible key format
 
@@ -52,14 +69,30 @@ Trusted public keys MUST use the Nix format:
 - WHEN `--signing-key` points to this file
 - THEN crunch exits with a clear error before any build starts
 
-### Requirement: Verify signatures on substituted paths
+### Requirement: Verify signatures on all cache hits
 
-When fetching a PathInfo from a remote binary cache, the system MUST
-verify that at least one signature matches a trusted public key.
+Every `check_cache` hit MUST verify that at least one signature matches
+a trusted public key. This applies to both local redb entries and remote
+binary cache entries.
 
-If no signature matches any trusted key, the system MUST treat the
-path as a cache miss (fall through to local build) unless
-`--trust-unsigned` is passed.
+If no signature matches any trusted key, the system MUST treat the path
+as a cache miss and rebuild it.
+
+#### Scenario: Valid local signature
+
+- GIVEN a PathInfo in local redb signed by the current builder's key
+- WHEN `check_cache` runs
+- THEN the signature is verified
+- AND the entry is returned as a cache hit
+
+#### Scenario: Corrupted local signature
+
+- GIVEN a PathInfo in local redb whose signature does not verify
+  (e.g., redb bitrot, interrupted write)
+- WHEN `check_cache` runs
+- THEN the entry is treated as a cache miss
+- AND a warning is logged about the verification failure
+- AND the derivation is rebuilt
 
 #### Scenario: Valid remote signature
 
@@ -77,39 +110,52 @@ path as a cache miss (fall through to local build) unless
 - THEN the path is rejected (treated as cache miss)
 - AND a warning is logged naming the untrusted signers
 
-#### Scenario: Trust-unsigned override
+### Requirement: Trust-unsigned escape hatch
+
+The CLI MUST provide `--trust-unsigned` which disables signature
+verification on cache hits. This is for migration from unsigned stores
+and debugging.
+
+#### Scenario: Trust-unsigned accepts unsigned path
 
 - GIVEN `--trust-unsigned` is passed
-- AND the remote narinfo has no valid signatures
-- WHEN the narinfo is fetched during substitution
-- THEN the path is accepted despite missing signatures
-
-### Requirement: Local PathInfo trusted without verification
-
-PathInfo entries already in the local redb database MUST NOT be
-re-verified on cache check. The local database is trusted storage.
-
-#### Scenario: Local cache hit skips verification
-
-- GIVEN a PathInfo in the local redb database (with or without signatures)
+- AND a PathInfo in local redb has no signatures
 - WHEN `check_cache` runs
-- THEN the entry is returned as a cache hit with no signature check
+- THEN the entry is returned as a cache hit with no verification
+
+### Requirement: Local builder key implicitly trusted
+
+The public key corresponding to the configured signing key MUST be
+implicitly added to the trusted key set. Users MUST NOT need to
+separately list their own public key in `--trusted-public-keys`.
+
+#### Scenario: Builder trusts its own key
+
+- GIVEN a signing key `my-builder-1:<keypair>`
+- AND `--trusted-public-keys` is not set
+- WHEN a previously-built PathInfo signed by `my-builder-1` is
+  checked for cache hit
+- THEN the signature is accepted (key implicitly trusted)
 
 ### Requirement: Default trusted keys
 
 The system MUST include `cache.nixos.org-1` in the default set of
-trusted public keys, so substitution from the default cache works
-without extra configuration.
+trusted public keys.
 
-The default MAY be overridden by `--trusted-public-keys` or a
-config file at `$CRUNCH_CONFIG_DIR/trusted-public-keys`.
+`--trusted-public-keys` on the CLI overrides the default set entirely
+(does not append).
 
 #### Scenario: Default cache.nixos.org trust
 
 - GIVEN no `--trusted-public-keys` flag
-- AND no config file
 - WHEN substitution fetches a narinfo signed by `cache.nixos.org-1`
 - THEN the signature is accepted
+
+#### Scenario: Override replaces defaults
+
+- GIVEN `--trusted-public-keys my-cache-1:<key>`
+- WHEN substitution fetches a narinfo signed by `cache.nixos.org-1`
+- THEN the signature is rejected (cache.nixos.org-1 is no longer trusted)
 
 ### Requirement: Re-sign existing PathInfo
 
@@ -118,14 +164,17 @@ a new signature using the provided signing key, append it to
 `signatures`, and persist it back.
 
 If the PathInfo already has a signature from the same key name, the
-system SHOULD replace it rather than duplicate.
+system MUST replace it rather than duplicate.
 
-#### Scenario: Sign an unsigned path
+`crunch store sign --all` MUST iterate all PathInfo entries in redb and
+sign each one. This is the migration path for existing unsigned stores.
 
-- GIVEN an unsigned PathInfo in redb for `/nix/store/<hash>-hello`
-- WHEN `crunch store sign /nix/store/<hash>-hello --signing-key <key>`
-- THEN the PathInfo gains one signature
-- AND `crunch store info` shows the signature
+#### Scenario: Bulk sign unsigned store
+
+- GIVEN 50 unsigned PathInfo entries in redb
+- WHEN `crunch store sign --all --signing-key <key>` is run
+- THEN all 50 entries gain a signature
+- AND subsequent `check_cache` hits verify successfully
 
 #### Scenario: Re-sign with same key
 

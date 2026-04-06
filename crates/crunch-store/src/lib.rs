@@ -13,5 +13,5 @@ mod query;
 pub use ca_mapping::{CaMappings, OutputMap};
 pub use error::Error;
 pub use export::{export_castore_to_disk, MAX_EXPORT_DEPTH};
-pub use handle::{StoreConfig, StoreHandle};
+pub use handle::{CacheHit, StoreConfig, StoreHandle};
 pub use query::{PathInfoDetail, VerifyResult, store_info, store_list, store_verify};

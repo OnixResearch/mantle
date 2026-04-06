@@ -12,10 +12,10 @@
 - [x] Move `castore_has_content()` to StoreHandle ✅ (done in Phase 1, StoreHandle::castore_has_content)
 - [x] Move `read_blob()` to StoreHandle ✅ (done in Phase 1, StoreHandle::read_blob)
 - [x] Move store query functions (`cmd_store_list/info/verify` logic) to crunch-store ✅ (query.rs with store_list/store_info/store_verify)
-- [ ] Move `check_cache()` logic from Builder to `StoreHandle::check_cache()`
-- [ ] Move `try_substitute_remote()` to StoreHandle
-- [ ] Move `persist_and_export_output()` store operations to StoreHandle (PathInfo put, disk export)
-- [ ] Define `CacheHit` return type with PathInfo + node data
+- [x] Move `check_cache()` logic from Builder to `StoreHandle::check_cache()` ✅
+- [x] Move `try_substitute_remote()` to StoreHandle ✅
+- [x] Move `persist_and_export_output()` store operations to StoreHandle ✅
+- [x] Define `CacheHit` return type with PathInfo + node data ✅
 
 ## Phase 3: Update Builder
 
@@ -25,7 +25,8 @@
 - [x] Worker methods simplified from `<BS, DS, BServ, PIS>` to `<BServ>` ✅
 - [x] Update all tests (orchestrate.rs: 5 with_state_dir calls, worker.rs: 17 new() calls) ✅
 - [x] Fix bootstrap.rs to wrap concrete services in Arc ✅
-- [ ] Move `output_nodes` and `built_outputs` caches into StoreHandle (deferred: tightly coupled to session lifecycle)
+- [x] Move `output_nodes` and `built_outputs` caches into StoreHandle ✅ (plus ca_mappings, output_dir_str)
+- [x] Builder struct reduced to: `store: StoreHandle`, `build_service: Arc<BServ>`, `verbose: bool` ✅
 
 ## Phase 4: Update main.rs
 

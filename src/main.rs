@@ -336,6 +336,7 @@ async fn execute_builds(
 ) -> Result<(), RunError> {
     let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir(),
+        output_dir: output_dir.to_path_buf(),
         remote_cache_url: None,
     })
     .await
@@ -474,6 +475,7 @@ async fn execute_builds_streaming(
 
     let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir(),
+        output_dir: output_dir.to_path_buf(),
         remote_cache_url: substituter_url.map(|s| s.to_string()),
     })
     .await

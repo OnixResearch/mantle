@@ -2,7 +2,7 @@
 
 Every PathInfo crunch persists today has `signatures: vec![]`. There is
 no way for a consumer to verify that a build output actually came from a
-trusted builder. This matters in two scenarios that are coming up fast:
+trusted builder. This matters in three scenarios:
 
 1. **Binary cache publishing.** When crunch serves narinfos (or writes
    them to S3/GCS), downstream Nix and crunch clients need at least one
@@ -14,6 +14,11 @@ trusted builder. This matters in two scenarios that are coming up fast:
    returned by a worker haven't been tampered with. Signatures on
    realisations are the standard mechanism for this.
 
+3. **Local store integrity.** Bitrot, interrupted writes, bugs in crunch
+   itself — any of these can corrupt redb entries silently. Verifying
+   signatures on cache hits catches corruption at the trust boundary
+   rather than propagating bad data into downstream builds.
+
 Nix already defines the format: an ed25519 signature over a fingerprint
 of `(store_path, nar_sha256, nar_size, references)`. The vendored
 nix-compat crate has `SigningKey`, `VerifyingKey`, `Signature`, and the
@@ -22,22 +27,24 @@ wrapper that signs on `put()`. None of this is wired into crunch.
 
 ## What Changes
 
-Wire signing and verification into the build pipeline:
+Wire signing and verification into the build pipeline as a mandatory,
+always-on feature:
 
 1. **Key management.** Accept a signing key via `--signing-key <path>`
-   (Nix-format keypair file, same as `nix-store --generate-binary-cache-key`
-   output). Accept trusted public keys via `--trusted-public-keys <name:key,...>`
-   for verification. Store defaults in `$CRUNCH_CONFIG_DIR/signing-key`
-   and `$CRUNCH_CONFIG_DIR/trusted-public-keys`.
+   (Nix-format keypair file). If no key is provided and none exists at
+   `$CRUNCH_CONFIG_DIR/signing-key`, generate one automatically on first
+   run. Accept trusted public keys via
+   `--trusted-public-keys <name:key,...>`. The local builder's own public
+   key is always implicitly trusted.
 
 2. **Sign on build.** After `persist_and_export_output` computes the
-   PathInfo, sign it before calling `PathInfoService::put()`. Use
-   the nix-compat `SigningKey::sign()` over the narinfo fingerprint.
+   PathInfo, sign it before calling `PathInfoService::put()`. Every
+   PathInfo gets a signature. No unsigned output.
 
-3. **Verify on substitute.** When fetching a narinfo from a remote
-   cache, verify that at least one signature matches a trusted public
-   key. Reject paths with zero valid signatures unless
-   `--trust-unsigned` is passed.
+3. **Verify on every cache hit.** Both local redb lookups and remote
+   substitutions verify at least one signature against trusted keys.
+   Reject paths with zero valid signatures. `--trust-unsigned` available
+   as an escape hatch for migration/debugging.
 
 4. **CLI surface.** `crunch store sign <path>` re-signs an existing
    PathInfo. `crunch store verify <path>` checks signatures against
@@ -48,20 +55,24 @@ Wire signing and verification into the build pipeline:
 ### New Capabilities
 - `sign_pathinfo`: signs a PathInfo using a local ed25519 signing key
 - `verify_pathinfo_signatures`: checks signatures against trusted keys
+- Auto-generated signing key on first run
 - `--signing-key`, `--trusted-public-keys`, `--trust-unsigned` CLI flags
 - `crunch store sign` subcommand
 
 ### Modified Capabilities
-- `persist_and_export_output`: signs PathInfo before persistence
-- `check_cache` (remote substitution path): verifies signatures
+- `persist_and_export_output`: always signs PathInfo before persistence
+- `check_cache` (both local and remote paths): verifies signatures
 - `crunch store verify`: additionally checks signatures
 
 ## Impact
 
 - **Files**: new `crates/crunch-build/src/signing.rs`, modified
   `orchestrate.rs`, `main.rs`, `crates/crunch-store/` (if extracted)
-- **APIs**: `Builder::new()` gains optional `SigningKey` parameter;
-  `check_cache` gains list of trusted `VerifyingKey`s
+- **APIs**: `Builder::new()` takes a `SigningKey` (required, not optional);
+  `check_cache` takes list of trusted `VerifyingKey`s
 - **Dependencies**: `ed25519-dalek` already in nix-compat; no new deps
 - **Testing**: unit tests with the existing `DUMMY_KEYPAIR` from
   snix-store fixtures; integration tests verifying round-trip sign+verify
+- **Migration**: existing unsigned redb entries fail verification on
+  first access after upgrade. `crunch store sign --all` bulk-signs them.
+  `--trust-unsigned` as a temporary escape hatch.
