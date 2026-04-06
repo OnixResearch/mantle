@@ -861,11 +861,10 @@ fn cmd_self_build(
 ) -> Result<(), RunError> {
     eprintln!("=== crunch self-build ===");
 
-    // Locate the source tree (directory containing Cargo.toml).
+    // Locate the source tree.
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
 
-    // Locate bootstrap/ directory (for import paths).
     let bootstrap_dir = src_dir.join("bootstrap");
     if !bootstrap_dir.exists() {
         return Err(RunError::Internal(format!(
@@ -874,32 +873,25 @@ fn cmd_self_build(
         )));
     }
 
-    // 1. Create the source tarball.
-    eprintln!("\n[1/4] Creating source tarball...");
+    // 1. Stage source tree into the output store.
+    //    No tarball, no NAR hash, no FOD. Just copy the files.
+    eprintln!("\n[1/3] Staging source...");
+    let store_name = self_build::stage_source(&src_dir, output_dir)?;
+
+    // 2. Generate .ncl and build.
+    eprintln!("\n[2/3] Building...");
+    let ncl_content = self_build::generate_self_build_ncl(&store_name);
+
     let tmp_dir = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("creating temp dir: {e}")))?;
-    let tarball = self_build::create_source_tarball(&src_dir, tmp_dir.path())?;
-
-    // 2. Compute NAR hash of the unpacked tarball.
-    eprintln!("\n[2/4] Computing NAR hash...");
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| RunError::Internal(format!("tokio: {e}")))?;
-    let tarball_hash = rt.block_on(self_build::hash_unpacked_tarball(&tarball))?;
-
-    // 3. Generate the .ncl and build.
-    eprintln!("\n[3/4] Building...");
-    let tarball_url = format!("file://{}", tarball.display());
-    let ncl_content = self_build::generate_self_build_ncl(&tarball_url, &tarball_hash);
-
+        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
     let ncl_path = tmp_dir.path().join("self-build.ncl");
     std::fs::write(&ncl_path, &ncl_content)
         .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
 
-    // Import paths: bootstrap/ (for make.ncl etc) + lib/ (for lib.ncl).
     let lib_dir = src_dir.join("lib");
     let import_paths: Vec<OsString> = {
-        let mut paths = build_import_paths(&[lib_dir.clone()])?;
-        paths.push(bootstrap_dir.clone().into());
+        let mut paths = build_import_paths(&[lib_dir])?;
+        paths.push(bootstrap_dir.into());
         paths
     };
 
@@ -914,19 +906,18 @@ fn cmd_self_build(
         &import_paths,
         output_dir,
         verbose,
-        false, // no --fix
+        false,
         max_jobs,
         sub_url,
     )?;
 
-    // 4. Verify the output binary.
+    // 3. Verify the output binary.
     if !no_verify {
-        eprintln!("\n[4/4] Verifying output...");
-        // Find the crunch binary in the output dir.
+        eprintln!("\n[3/3] Verifying output...");
         let crunch_bin = find_self_built_binary(output_dir)?;
         self_build::verify_binary(&crunch_bin)?;
     } else {
-        eprintln!("\n[4/4] Verification skipped (--no-verify).");
+        eprintln!("\n[3/3] Verification skipped (--no-verify).");
     }
 
     eprintln!("\n=== self-build complete ===");

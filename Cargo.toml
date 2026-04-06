@@ -45,6 +45,7 @@ data-encoding = "2.6"
 futures = "0.3"
 url = "2"
 tempfile = "3"
+blake3 = "=1.8.2"
 
 [patch.crates-io]
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }

@@ -1,37 +1,40 @@
 //! Self-build: crunch builds itself from source.
 //!
-//! Creates a source tarball (with vendored Cargo deps), computes its
-//! NAR hash, generates a temporary Nickel derivation, and delegates
-//! to the normal build pipeline. The output is a statically-linked
-//! crunch binary compiled inside a bwrap sandbox using only the
-//! bootstrap toolchain (from-source GCC + fetched Rust).
+//! Copies the source tree (with vendored Cargo deps) directly into
+//! the output store, generates a Nickel derivation that references it
+//! as a plain source input, and delegates to the normal build pipeline.
 //!
-//! No Nix runtime is needed. The only host tools required are `git`
-//! (for `git archive`) and `cargo` (for `cargo vendor`).
+//! No tarball hashing, no NAR serialization, no FOD. The source tree
+//! is just a directory in the store, like any other Nix source path.
+//!
+//! The output is a statically-linked crunch binary compiled inside a
+//! bwrap sandbox using only the bootstrap toolchain.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::errors::RunError;
 
-/// Maximum tarball size: 2 GiB. The crunch source + vendored deps
-/// (668 crates) can reach ~800 MiB uncompressed.
-const MAX_TARBALL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Maximum source tree size: 2 GiB.
+const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
-/// Create a source tarball with vendored dependencies.
+/// Stage the crunch source tree into the output store.
 ///
-/// 1. `cargo vendor --locked vendor-deps` (updates vendor dir)
-/// 2. `git archive --prefix=crunch-src/ HEAD` (tracked files)
-/// 3. Append vendor-deps/ into the tarball
-/// 4. Compress with xz
+/// 1. `cargo vendor --locked vendor-deps`
+/// 2. `git archive HEAD | tar -x` into staging
+/// 3. Copy vendor-deps/ into staging
+/// 4. Move staging into `$store_dir/$hash-crunch-src/`
 ///
-/// Returns the path to the compressed tarball.
-pub fn create_source_tarball(
+/// Returns the store path name (e.g., "abcdef...-crunch-src").
+pub fn stage_source(
     src_dir: &Path,
-    out_dir: &Path,
-) -> Result<PathBuf, RunError> {
-    let tar_path = out_dir.join("crunch-src.tar");
-    let xz_path = out_dir.join("crunch-src.tar.xz");
+    store_dir: &Path,
+) -> Result<String, RunError> {
+    let staging = tempfile::tempdir()
+        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+    let stage_root = staging.path().join("crunch-src");
+    std::fs::create_dir_all(&stage_root)
+        .map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
 
     // 1. Vendor dependencies.
     eprintln!("  vendoring cargo dependencies...");
@@ -42,29 +45,20 @@ pub fn create_source_tarball(
         "cargo vendor",
     )?;
 
-    // 2. Build a staging directory, then tar it.
-    //
-    // We stage into crunch-src/ so the tarball has a single top-level
-    // directory. The fetch pipeline's strip logic removes this prefix,
-    // leaving Cargo.toml etc at the output root.
-    eprintln!("  staging source tree...");
-    let staging = out_dir.join("crunch-src");
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging)
-        .map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
-
-    // Git-tracked files → staging.
+    // 2. Git-tracked files → staging.
+    eprintln!("  exporting git-tracked files...");
     run_cmd(
         Command::new("sh")
             .args(["-c", &format!(
                 "cd '{}' && git archive HEAD | tar -x -C '{}'",
                 src_dir.display(),
-                staging.display(),
+                stage_root.display(),
             )]),
         "git archive | tar extract",
     )?;
 
-    // Vendor-deps → staging.
+    // 3. Copy vendor-deps.
+    eprintln!("  copying vendored deps...");
     assert!(
         src_dir.join("vendor-deps").exists(),
         "vendor-deps/ must exist after cargo vendor"
@@ -73,138 +67,56 @@ pub fn create_source_tarball(
         Command::new("cp")
             .args(["-a"])
             .arg(src_dir.join("vendor-deps"))
-            .arg(staging.join("vendor-deps")),
+            .arg(stage_root.join("vendor-deps")),
         "cp vendor-deps",
     )?;
 
-    // 3. Tar the staging directory.
-    eprintln!("  creating tarball...");
-    run_cmd(
-        Command::new("tar")
-            .arg("cf")
-            .arg(&tar_path)
-            .arg("crunch-src")
-            .current_dir(out_dir),
-        "tar create",
-    )?;
-
     // Size check.
-    let tar_size = std::fs::metadata(&tar_path)
-        .map_err(|e| RunError::Internal(format!("stat tarball: {e}")))?
-        .len();
-
+    let size = dir_size(&stage_root);
     assert!(
-        tar_size <= MAX_TARBALL_BYTES,
-        "tarball {} MiB exceeds {} MiB limit",
-        tar_size / (1024 * 1024),
-        MAX_TARBALL_BYTES / (1024 * 1024),
+        size <= MAX_SOURCE_BYTES,
+        "source tree {} MiB exceeds {} MiB limit",
+        size / (1024 * 1024),
+        MAX_SOURCE_BYTES / (1024 * 1024),
     );
+    eprintln!("  source tree: {} MiB", size / (1024 * 1024));
 
-    // 4. Compress with xz.
-    eprintln!("  compressing ({} MiB uncompressed)...", tar_size / (1024 * 1024));
-    let _ = std::fs::remove_file(&xz_path);
+    // 4. Compute a content fingerprint for the store path name.
+    //
+    // Not a NAR hash — just a quick fingerprint for a unique name.
+    // Hash the file listing (paths + sizes) with blake3, then encode
+    // the first 20 bytes as nix-base32 (the store path digest format).
+    let fingerprint = tree_fingerprint(&stage_root);
+    let digest_bytes = data_encoding::HEXLOWER.decode(fingerprint.as_bytes())
+        .unwrap_or_else(|_| vec![0u8; 32]);
+    let store_hash = nix_compat::nixbase32::encode(&digest_bytes[..20]);
+    let store_name = format!("{store_hash}-crunch-src");
+    let dest = store_dir.join(&store_name);
 
+    if dest.exists() {
+        eprintln!("  source already staged: {}", dest.display());
+        return Ok(store_name);
+    }
+
+    // Move staging into store. Use cp + rm since rename() doesn't
+    // work across filesystems (tmpfs → disk).
     run_cmd(
-        Command::new("xz").args(["-T0"]).arg(&tar_path),
-        "xz",
+        Command::new("cp")
+            .args(["-a"])
+            .arg(&stage_root)
+            .arg(&dest),
+        "cp to store",
     )?;
 
-    assert!(xz_path.exists(), "xz did not produce output file");
-
-    let xz_size = std::fs::metadata(&xz_path)
-        .map_err(|e| RunError::Internal(format!("stat xz: {e}")))?
-        .len();
-    eprintln!(
-        "  tarball: {} ({} MiB)",
-        xz_path.display(),
-        xz_size / (1024 * 1024),
-    );
-
-    Ok(xz_path)
+    eprintln!("  staged: {}", dest.display());
+    Ok(store_name)
 }
 
-/// Compute the sha256 NAR hash of an unpacked tarball.
+/// Generate the Nickel derivation for building crunch.
 ///
-/// Unpacks to a temp dir, ingests into castore, serializes to NAR,
-/// hashes. Returns an SRI string like "sha256-base64...".
-pub async fn hash_unpacked_tarball(
-    tarball_path: &Path,
-) -> Result<String, RunError> {
-    use snix_castore::blobservice::ObjectStoreBlobService;
-    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-    use snix_castore::import::fs::ingest_path;
-    use snix_store::nar::NarCalculationService;
-    use snix_store::nar::SimpleRenderer;
-
-    // Unpack tarball to a temp dir (reuses crunch's own unpack logic).
-    let unpack_dir = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("creating temp dir: {e}")))?;
-
-    let url_str = format!("file://{}", tarball_path.display());
-    let out_path = unpack_dir.path().join("unpacked");
-
-    tokio::task::spawn_blocking({
-        let url = url_str.clone();
-        let out = out_path.display().to_string();
-        move || crunch_build::fetcher::fetch_and_unpack(&url, &out)
-    })
-    .await
-    .map_err(|e| RunError::Internal(format!("spawn_blocking: {e}")))?
-    .map_err(|e| RunError::Internal(format!("unpacking tarball: {e}")))?;
-
-    assert!(out_path.exists(), "tarball unpacked but output dir missing");
-
-    // Temporary castore services for hashing.
-    let blob_dir = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("creating blob temp dir: {e}")))?;
-
-    let blob_service = std::sync::Arc::new(
-        ObjectStoreBlobService::new_local(blob_dir.path())
-            .map_err(|e| RunError::Internal(format!("blob service: {e}")))?
-    );
-
-    let directory_service = RedbDirectoryService::new_temporary(
-        "hash".to_string(),
-        RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        },
-    )
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    // Ingest the unpacked tree.
-    let node = ingest_path::<_, _, _, &[u8]>(
-        blob_service.clone(),
-        directory_service.clone(),
-        out_path.as_path(),
-        None,
-    )
-    .await
-    .map_err(|e| RunError::Internal(format!("ingesting unpacked tarball: {e}")))?;
-
-    // Compute NAR → sha256.
-    let nar_renderer = SimpleRenderer::new(blob_service, directory_service);
-    let (_nar_size, nar_sha256) = nar_renderer
-        .calculate_nar(&node)
-        .await
-        .map_err(|e| RunError::Internal(format!("NAR hash: {e}")))?;
-
-    let sri = format!(
-        "sha256-{}",
-        data_encoding::BASE64.encode(nar_sha256.as_slice()),
-    );
-
-    eprintln!("  NAR hash: {sri}");
-    Ok(sri)
-}
-
-/// Generate the Nickel derivation source for building crunch.
-///
-/// Embeds the tarball URL and hash into the bootstrap template.
+/// The source tree is referenced as a plain input path (not a FOD).
 pub fn generate_self_build_ncl(
-    tarball_url: &str,
-    tarball_hash: &str,
+    src_store_path: &str,
 ) -> String {
     format!(
         r#"# Auto-generated by `crunch self-build`.
@@ -222,12 +134,6 @@ let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
 let rust = (import "rust.ncl") in
-
-let crunch_src = crunch.fetchTarball {{
-  url = "{tarball_url}",
-  hash = "{tarball_hash}",
-  name = "crunch-src",
-}} in
 
 {{
   name = "crunch",
@@ -269,18 +175,21 @@ let crunch_src = crunch.fetchTarball {{
       for d in /nix/store/*-rust; do
         if [ -x "$d/bin/rustc" ]; then RUST="$d"; break; fi
       done
-      CRUNCH_SRC=""
-      for d in /nix/store/*-crunch-src; do
-        if [ -f "$d/Cargo.toml" ]; then CRUNCH_SRC="$d"; break; fi
-      done
 
-      for tool in GCC BINUTILS MUSL DASH MAKE RUST CRUNCH_SRC; do
+      CRUNCH_SRC="/nix/store/{src_store_path}"
+      if [ ! -f "$CRUNCH_SRC/Cargo.toml" ]; then
+        echo "ERROR: CRUNCH_SRC not found at $CRUNCH_SRC" >&2
+        exit 1
+      fi
+
+      for tool in GCC BINUTILS MUSL DASH MAKE RUST; do
         eval val=\$$tool
         if [ -z "$val" ]; then
           echo "ERROR: $tool not found" >&2; exit 1
         fi
         echo "$tool=$val"
       done
+      echo "CRUNCH_SRC=$CRUNCH_SRC"
 
       $BB mkdir -p /lib 2>/dev/null || true
       $BB ln -sf $MUSL/lib/libc.so /lib/ld-musl-x86_64.so.1 2>/dev/null || true
@@ -367,7 +276,10 @@ CARGOEOF
       $out/bin/crunch --version 2>/dev/null || $out/bin/crunch --help 2>&1 | head -3
     "%,
   ],
-  inputs = [toolchain, gnumake, dash, binutils, musl, gcc, rust, crunch_src],
+  inputs = [
+    toolchain, gnumake, dash, binutils, musl, gcc, rust,
+    "/nix/store/{src_store_path}",
+  ],
 }} | crunch.Derivation
 "#
     )
@@ -402,6 +314,8 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+// ── helpers ────────────────────────────────────────────────────────────
+
 /// Run a command, returning an error with stderr on failure.
 fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
     let out = cmd.output().map_err(|e| {
@@ -419,25 +333,81 @@ fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
     Ok(())
 }
 
+/// Quick blake3 fingerprint of a directory tree (paths + sizes).
+///
+/// Not a NAR hash — just enough to get a unique store path name.
+/// We created this tree ourselves, so integrity verification against
+/// a known hash is pointless.
+fn tree_fingerprint(dir: &Path) -> String {
+    use std::io::Write;
+
+    let mut hasher = blake3::Hasher::new();
+    let mut entries: Vec<PathBuf> = Vec::new();
+
+    collect_paths(dir, dir, &mut entries);
+    entries.sort();
+
+    for entry in &entries {
+        let meta = std::fs::symlink_metadata(entry).ok();
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let rel = entry.strip_prefix(dir).unwrap_or(entry);
+        let _ = write!(hasher, "{}:{}\n", rel.display(), size);
+    }
+
+    let hash = hasher.finalize();
+    hash.to_hex().to_string()
+}
+
+fn collect_paths(base: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        out.push(path.clone());
+        if path.is_dir() && !path.is_symlink() {
+            collect_paths(base, &path, out);
+        }
+    }
+}
+
+/// Total size of a directory tree in bytes.
+fn dir_size(dir: &Path) -> u64 {
+    let mut total: u64 = 0;
+    let mut paths: Vec<PathBuf> = Vec::new();
+    collect_paths(dir, dir, &mut paths);
+    for p in &paths {
+        if let Ok(meta) = std::fs::symlink_metadata(p) {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    total
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn generate_ncl_contains_url_and_hash() {
-        let ncl = generate_self_build_ncl(
-            "file:///tmp/test.tar.xz",
-            "sha256-AAAA",
-        );
-        assert!(ncl.contains("file:///tmp/test.tar.xz"));
-        assert!(ncl.contains("sha256-AAAA"));
-        assert!(ncl.contains("crunch-src"));
+    fn generate_ncl_has_source_path() {
+        let ncl = generate_self_build_ncl("abc123-crunch-src");
+        assert!(ncl.contains("/nix/store/abc123-crunch-src"));
         assert!(ncl.contains("crunch.Derivation"));
     }
 
     #[test]
+    fn generate_ncl_source_is_plain_input() {
+        // The source tree should be a string input (source path),
+        // not a fetchTarball FOD.
+        let ncl = generate_self_build_ncl("abc123-crunch-src");
+        assert!(!ncl.contains("crunch-src\",\n  hash"));
+        assert!(ncl.contains("\"/nix/store/abc123-crunch-src\""));
+    }
+
+    #[test]
     fn generate_ncl_has_all_bootstrap_deps() {
-        let ncl = generate_self_build_ncl("file:///x", "sha256-X");
+        let ncl = generate_self_build_ncl("x");
         assert!(ncl.contains("import \"make.ncl\""));
         assert!(ncl.contains("import \"dash.ncl\""));
         assert!(ncl.contains("import \"binutils.ncl\""));
@@ -448,7 +418,7 @@ mod tests {
 
     #[test]
     fn generate_ncl_has_build_essentials() {
-        let ncl = generate_self_build_ncl("file:///x", "sha256-X");
+        let ncl = generate_self_build_ncl("x");
         assert!(ncl.contains("cargo build"));
         assert!(ncl.contains("--release"));
         assert!(ncl.contains("$out/bin/crunch"));
@@ -456,15 +426,28 @@ mod tests {
     }
 
     #[test]
-    fn generate_ncl_shell_vars_escaped() {
-        // format!() turns {{ → {, so the output has Nickel m%"..."
-        // interpolation escapes: ${GCC_LIB} for heredocs (shell expands),
-        // ${LD_LIBRARY_PATH...} for shell vars in Nickel multiline strings.
-        let ncl = generate_self_build_ncl("file:///x", "sha256-X");
-        assert!(ncl.contains("${GCC_LIB}"));
-        assert!(ncl.contains("LD_LIBRARY_PATH"));
-        // Build script essentials.
-        assert!(ncl.contains("CARGO_HOME"));
+    fn tree_fingerprint_deterministic() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub/b.txt"), "world").unwrap();
+
+        let h1 = tree_fingerprint(dir.path());
+        let h2 = tree_fingerprint(dir.path());
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 64); // blake3 hex
+    }
+
+    #[test]
+    fn tree_fingerprint_changes_with_content() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let h1 = tree_fingerprint(dir.path());
+
+        // Different file content → different size → different hash.
+        std::fs::write(dir.path().join("a.txt"), "hello world").unwrap();
+        let h2 = tree_fingerprint(dir.path());
+        assert_ne!(h1, h2);
     }
 
     #[test]
@@ -474,5 +457,14 @@ mod tests {
             "test-false",
         ).unwrap_err();
         assert!(err.message().contains("test-false"));
+    }
+
+    #[test]
+    fn dir_size_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a"), "12345").unwrap();
+        std::fs::write(dir.path().join("b"), "67").unwrap();
+        let s = dir_size(dir.path());
+        assert_eq!(s, 7);
     }
 }
