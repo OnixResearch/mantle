@@ -17,7 +17,7 @@ use snix_castore::Node;
 use snix_store::pathinfoservice::LruPathInfoService;
 use tokio::io::AsyncWriteExt;
 
-use crunch_glue::KnownPaths;
+use crate::registry::DerivationRegistry;
 
 /// Create a temporary in-memory directory service.
 pub fn tmp_ds() -> RedbDirectoryService {
@@ -85,14 +85,14 @@ impl BuildService for MockBuildService {
     }
 }
 
-/// Build a nix_compat::Derivation, compute paths, register in KnownPaths.
+/// Build a nix_compat::Derivation, compute paths, register in DerivationRegistry.
 ///
 /// `input_drvs`: `&[(parent_store_path, output_name)]` — parents must
 /// already be registered in `kp`.
 pub fn build_and_register(
     name: &str,
     input_drvs: &[(StorePath<String>, &str)],
-    kp: &mut KnownPaths,
+    kp: &mut DerivationRegistry,
 ) -> (StorePath<String>, Derivation) {
     let mut outputs = BTreeMap::new();
     outputs.insert(
@@ -137,7 +137,7 @@ pub fn build_and_register(
     for (i, b) in name.bytes().enumerate().take(32) {
         fake_hash[i] = b;
     }
-    kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+    kp.insert(drv_path.clone(), hdm, drv.clone(), false);
 
     (drv_path, drv)
 }
@@ -150,7 +150,7 @@ pub fn build_and_register_multi(
     name: &str,
     output_names: &[&str],
     input_drvs: &[(StorePath<String>, &str)],
-    kp: &mut KnownPaths,
+    kp: &mut DerivationRegistry,
 ) -> (StorePath<String>, Derivation) {
     assert!(!output_names.is_empty(), "must have at least one output");
 
@@ -201,7 +201,7 @@ pub fn build_and_register_multi(
     for (i, b) in name.bytes().enumerate().take(32) {
         fake_hash[i] = b;
     }
-    kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+    kp.insert(drv_path.clone(), hdm, drv.clone(), false);
 
     (drv_path, drv)
 }
@@ -211,7 +211,7 @@ pub fn build_and_register_multi(
 #[allow(dead_code)]
 pub fn build_and_register_producer(
     name: &str,
-    kp: &mut KnownPaths,
+    kp: &mut DerivationRegistry,
 ) -> (StorePath<String>, Derivation) {
     // Producer name ends with .drv so output path triggers detection.
     let producer_name = format!("{name}.drv");

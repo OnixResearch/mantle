@@ -16,7 +16,7 @@ use snix_store::nar::{NarCalculationService, SimpleRenderer};
 use snix_store::path_info::PathInfo;
 use tracing::{debug, info};
 
-use crunch_glue::KnownPaths;
+use crate::registry::DerivationRegistry;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::build_request::{collect_input_paths, derivation_to_build_request};
@@ -41,7 +41,7 @@ pub struct BuildOutcome {
 }
 
 /// The logical store prefix. Derivation paths, output hashing, sandbox
-/// layout, and KnownPaths lookups always use this. Matches Nix convention.
+/// layout, and DerivationRegistry lookups always use this. Matches Nix convention.
 const LOGICAL_STORE_DIR: &str = "/nix/store";
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
@@ -204,7 +204,7 @@ where
     pub async fn build(
         &mut self,
         drv_path: &StorePath<String>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<BuildOutcome, Error> {
         let mut outcomes = self.build_all(&[drv_path.clone()], known_paths, 1).await?;
         outcomes.pop().ok_or_else(|| Error::DerivationNotFound {
@@ -223,7 +223,7 @@ where
     pub async fn build_all(
         &mut self,
         roots: &[StorePath<String>],
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         max_jobs: u32,
     ) -> Result<Vec<BuildOutcome>, Error> {
         use crate::worker::Worker;
@@ -259,7 +259,7 @@ where
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         is_root: bool,
     ) -> Result<PrepareResult, Error> {
         let drv_name = drv_path.name().to_string();
@@ -341,7 +341,7 @@ where
         &mut self,
         prepared: &PreparedBuild,
         build_result: snix_build::buildservice::BuildResult,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<BuildOutcome, Error> {
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
@@ -411,7 +411,7 @@ where
         &mut self,
         prepared: &PreparedBuild,
         build_result: &snix_build::buildservice::BuildResult,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<HashMap<String, PathInfo>, Error> {
         let nar_renderer = SimpleRenderer::new(
             self.store.blob_service(),
@@ -702,7 +702,7 @@ where
     async fn collect_sandbox_inputs(
         &mut self,
         derivation: &Derivation,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
         source_paths: &[StorePath<String>],
     ) -> Result<BTreeMap<StorePath<String>, Node>, Error> {
         let mut input_paths = collect_input_paths(derivation, known_paths)?;
@@ -748,7 +748,7 @@ where
     fn collect_ca_input_rewrites(
         &self,
         derivation: &Derivation,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
     ) -> Vec<(String, String)> {
         let mut rewrites: Vec<(String, String)> = Vec::new();
         for (input_drv_path, output_names) in &derivation.input_derivations {
@@ -788,7 +788,7 @@ where
         sandbox_inputs: &BTreeMap<StorePath<String>, Node>,
         build_request: &snix_build::buildservice::BuildRequest,
         derivation: &Derivation,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         is_ca: bool,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
@@ -875,7 +875,7 @@ where
         output_name: &str,
         working_node: &Node,
         derivation: &Derivation,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         nar_renderer: &SimpleRenderer<Arc<dyn BlobService>, Arc<dyn DirectoryService>>,
     ) -> Result<(StorePath<String>, Node, u64, [u8; 32]), Error> {
         // 1. Get the provisional (input-addressed) path from the env.
@@ -990,7 +990,7 @@ where
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
-        _known_paths: &mut KnownPaths,
+        _known_paths: &mut DerivationRegistry,
         is_root: bool,
     ) -> Result<BuildOutcome, Error> {
         let drv_name = drv_path.name().to_string();
@@ -1273,11 +1273,11 @@ mod tests {
         }
     }
 
-    /// Build a nix_compat::Derivation, compute paths, register in KnownPaths.
+    /// Build a nix_compat::Derivation, compute paths, register in DerivationRegistry.
     fn build_and_register(
         name: &str,
         input_drvs: &[(StorePath<String>, &str)],
-        kp: &mut crunch_glue::KnownPaths,
+        kp: &mut crate::registry::DerivationRegistry,
     ) -> (StorePath<String>, Derivation) {
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
@@ -1318,7 +1318,7 @@ mod tests {
         for (i, b) in name.bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
 
         (drv_path, drv)
     }
@@ -1333,7 +1333,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _) = build_and_register("solo", &[], &mut kp);
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1354,7 +1354,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_path, _) = build_and_register("dep", &[], &mut kp);
         let (top_path, _) = build_and_register("top", &[(dep_path.clone(), "out")], &mut kp);
 
@@ -1383,7 +1383,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a_path, _) = build_and_register("aaa", &[], &mut kp);
         let (b_path, _) = build_and_register("bbb", &[(a_path.clone(), "out")], &mut kp);
         let (c_path, _) = build_and_register("ccc", &[(a_path.clone(), "out")], &mut kp);
@@ -1413,7 +1413,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("cached-test", &[], &mut kp);
 
         // Put content into castore (no file on disk needed).
@@ -1451,7 +1451,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("orphan", &[], &mut kp);
 
         // PathInfo references a blob digest that doesn't exist in the
@@ -1494,7 +1494,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _drv) = build_and_register("untracked", &[], &mut kp);
 
         let mut builder = Builder::new(
@@ -1512,7 +1512,7 @@ mod tests {
 
     fn build_and_register_ca(
         name: &str,
-        kp: &mut crunch_glue::KnownPaths,
+        kp: &mut crate::registry::DerivationRegistry,
     ) -> (StorePath<String>, Derivation) {
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
@@ -1547,7 +1547,7 @@ mod tests {
         for (i, b) in name.bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert_ca(fake_hash, drv_path.clone(), hdm, drv.clone(), true);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), true);
 
         (drv_path, drv)
     }
@@ -1562,7 +1562,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _drv) = build_and_register_ca("ca-test", &mut kp);
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1583,7 +1583,7 @@ mod tests {
         let mut builder1 = Builder::new(
             bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
         );
-        let mut kp1 = crunch_glue::KnownPaths::default();
+        let mut kp1 = DerivationRegistry::default();
         let (drv_path1, _) = build_and_register_ca("ca-a", &mut kp1);
         let outcome1 = builder1.build(&drv_path1, &mut kp1).await.unwrap();
 
@@ -1591,7 +1591,7 @@ mod tests {
         let mut builder2 = Builder::new(
             bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
         );
-        let mut kp2 = crunch_glue::KnownPaths::default();
+        let mut kp2 = DerivationRegistry::default();
         let (drv_path2, _) = build_and_register_ca("ca-b", &mut kp2);
         let outcome2 = builder2.build(&drv_path2, &mut kp2).await.unwrap();
 
@@ -1612,7 +1612,7 @@ mod tests {
         let mut builder1 = Builder::new(
             bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
         );
-        let mut kp1 = crunch_glue::KnownPaths::default();
+        let mut kp1 = DerivationRegistry::default();
         let (drv_path1, _) = build_and_register_ca("ca-same", &mut kp1);
         let outcome1 = builder1.build(&drv_path1, &mut kp1).await.unwrap();
 
@@ -1620,7 +1620,7 @@ mod tests {
         let mut builder2 = Builder::new(
             bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
         );
-        let mut kp2 = crunch_glue::KnownPaths::default();
+        let mut kp2 = DerivationRegistry::default();
         let (drv_path2, _) = build_and_register_ca("ca-same", &mut kp2);
         let outcome2 = builder2.build(&drv_path2, &mut kp2).await.unwrap();
 
@@ -1634,7 +1634,7 @@ mod tests {
     #[tokio::test]
     async fn custom_output_dir_writes_output_there() {
         // Builder with output_dir = temp dir (not /nix/store).
-        // KnownPaths uses /nix/store (default/logical).
+        // DerivationRegistry uses /nix/store (default/logical).
         // Verifies output lands in the custom dir, not /nix/store.
         let output_tmp = tempfile::tempdir().unwrap();
 
@@ -1647,7 +1647,7 @@ mod tests {
             output_tmp.path().to_path_buf(), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _) = build_and_register("custom-dir-test", &[], &mut kp);
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1688,7 +1688,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("cached-custom", &[], &mut kp);
 
         // Put content in castore, nothing on disk.
@@ -1736,7 +1736,7 @@ mod tests {
             output_tmp.path().to_path_buf(), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_path, dep_drv) = build_and_register("dep-lib", &[], &mut kp);
         let (root_path, root_drv) = build_and_register(
             "root-app", &[(dep_path.clone(), "out")], &mut kp,
@@ -1779,7 +1779,7 @@ mod tests {
             bs, ds, mock, test_pis(), fake_dir, false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _drv) = build_and_register("ro-test", &[], &mut kp);
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1801,7 +1801,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a_path, _) = build_and_register("shared", &[], &mut kp);
         let (b_path, _) = build_and_register("root-b", &[(a_path.clone(), "out")], &mut kp);
         let (c_path, _) = build_and_register("root-c", &[(a_path.clone(), "out")], &mut kp);
@@ -1844,7 +1844,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let outcomes = builder.build_all(&[], &mut kp, 2).await.unwrap();
         assert!(outcomes.is_empty());
     }
@@ -1861,7 +1861,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a_path, _) = build_and_register("leaf-a", &[], &mut kp);
         let (b_path, _) = build_and_register("mid-b", &[(a_path.clone(), "out")], &mut kp);
         let (c_path, _) = build_and_register("top-c", &[(b_path.clone(), "out")], &mut kp);
@@ -1896,7 +1896,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a_path, _) = build_and_register("tree1-leaf", &[], &mut kp);
         let (b_path, _) = build_and_register("tree1-root", &[(a_path.clone(), "out")], &mut kp);
         let (c_path, _) = build_and_register("tree2-leaf", &[], &mut kp);
@@ -1935,7 +1935,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register_multi(
             "multi-out", &["out", "dev", "lib"], &[], &mut kp,
         );
@@ -1967,7 +1967,7 @@ mod tests {
     async fn multi_output_env_has_outputs_var() {
         use crate::test_support::build_and_register_multi;
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (_drv_path, drv) = build_and_register_multi(
             "env-test", &["out", "dev", "man"], &[], &mut kp,
         );
@@ -1992,7 +1992,7 @@ mod tests {
     async fn multi_output_distinct_store_paths() {
         use crate::test_support::build_and_register_multi;
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (_drv_path, drv) = build_and_register_multi(
             "paths-test", &["out", "dev", "lib"], &[], &mut kp,
         );
@@ -2024,7 +2024,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_path, _dep_drv) = build_and_register_multi(
             "multi-dep", &["out", "dev"], &[], &mut kp,
         );
@@ -2066,7 +2066,7 @@ mod tests {
         for (i, b) in "consumer".bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(fake_hash, parent_drv_path.clone(), hdm, parent_drv.clone());
+        kp.insert(parent_drv_path.clone(), hdm, parent_drv.clone(), false);
 
         let outcome = builder.build(&parent_drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
@@ -2087,7 +2087,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register_multi(
             "partial-cache", &["out", "dev"], &[], &mut kp,
         );
@@ -2131,7 +2131,7 @@ mod tests {
         let local_pis = test_pis();
         let remote_pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("remote-hit", &[], &mut kp);
 
         // Put content in castore + remote PathInfo.
@@ -2175,7 +2175,7 @@ mod tests {
         // Remote is empty — no PathInfo.
         let remote_pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _drv) = build_and_register("remote-miss", &[], &mut kp);
 
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
@@ -2204,7 +2204,7 @@ mod tests {
         // Wrap local PIS in Arc so both builders share it.
         let local_pis = Arc::new(test_pis());
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("persist-local", &[], &mut kp);
 
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
@@ -2259,7 +2259,7 @@ mod tests {
         let remote_pis = test_pis();
 
         // Build a FOD derivation (has ca_hash on the output).
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
             path: None,
@@ -2292,7 +2292,7 @@ mod tests {
         for (i, b) in "fod-test".bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
 
         // Put PathInfo in remote for the FOD output path.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
@@ -2363,7 +2363,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
         let local_pis = test_pis();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, _drv) = build_and_register("remote-err", &[], &mut kp);
 
         let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> =
@@ -2411,7 +2411,7 @@ mod tests {
         let pis_path = tmp.path().join("pathinfo.redb");
         std::fs::create_dir_all(&blob_dir).unwrap();
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = build_and_register("persist-test", &[], &mut kp);
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
 
@@ -2469,7 +2469,7 @@ mod tests {
                 bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
             );
 
-            let mut kp2 = crunch_glue::KnownPaths::default();
+            let mut kp2 = DerivationRegistry::default();
             let (drv_path2, _) = build_and_register("persist-test", &[], &mut kp2);
 
             let outcome = builder.build(&drv_path2, &mut kp2).await.unwrap();

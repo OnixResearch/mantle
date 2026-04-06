@@ -2,7 +2,7 @@
 //!
 //! The Worker owns the `GoalRegistry` and orchestrates builds by:
 //! 1. Creating goals lazily via `want()` — deduplicates by drv path
-//! 2. Inspecting deps from `KnownPaths` to wire waiters
+//! 2. Inspecting deps from `DerivationRegistry` to wire waiters
 //! 3. Dispatching Ready goals through `Builder::prepare_build()`
 //! 4. Spawning sandbox builds on a `JoinSet` with `Semaphore` concurrency
 //! 5. Completing builds via `Builder::finish_build()`, notifying waiters
@@ -21,7 +21,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tracing::{debug, info};
 
-use crunch_glue::KnownPaths;
+use crate::registry::DerivationRegistry;
 
 use tokio::sync::mpsc;
 
@@ -101,7 +101,7 @@ impl Worker {
     pub fn want(
         &mut self,
         drv_path: &StorePath<String>,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
         is_root: bool,
     ) -> Result<(), Error> {
         // Pass 1: BFS to create all goals. Collect (key, dep_paths)
@@ -122,7 +122,7 @@ impl Worker {
     fn create_goals_bfs(
         &mut self,
         drv_path: &StorePath<String>,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
         is_root: bool,
     ) -> Result<Vec<(String, Vec<StorePath<String>>)>, Error> {
         let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
@@ -226,7 +226,7 @@ impl Worker {
     pub async fn run<BServ>(
         &mut self,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<WorkerResult, Error>
     where
         BServ: BuildService + 'static,
@@ -296,7 +296,7 @@ impl Worker {
     pub async fn run_streaming<BServ>(
         &mut self,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         rx: &mut mpsc::Receiver<EvalMessage>,
     ) -> Result<WorkerResult, Error>
     where
@@ -355,7 +355,7 @@ impl Worker {
         rx: &mut mpsc::Receiver<EvalMessage>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
         failed: &mut Vec<FailedGoal>,
@@ -396,7 +396,7 @@ impl Worker {
     fn drain_eval_messages(
         &mut self,
         rx: &mut mpsc::Receiver<EvalMessage>,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
         eval_done: &mut bool,
     ) -> Result<(), Error> {
         let drain_limit: u32 = 256;
@@ -419,7 +419,7 @@ impl Worker {
     fn accept_eval_message(
         &mut self,
         msg: EvalMessage,
-        known_paths: &KnownPaths,
+        known_paths: &DerivationRegistry,
     ) -> Result<(), Error> {
         debug!(label = %msg.label, drv = %msg.drv_path, "received derivation from eval");
         self.want(&msg.drv_path, known_paths, true)
@@ -432,7 +432,7 @@ impl Worker {
         &mut self,
         join_result: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
         failed: &mut Vec<FailedGoal>,
@@ -472,7 +472,7 @@ impl Worker {
         drv_key: &str,
         build_result: snix_build::buildservice::BuildResult,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         pending_meta: &mut HashMap<String, PreparedBuild>,
         outcomes: &mut Vec<BuildOutcome>,
         failed: &mut Vec<FailedGoal>,
@@ -515,7 +515,7 @@ impl Worker {
         producer_key: &str,
         outcome: &BuildOutcome,
         builder: &Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
@@ -580,7 +580,7 @@ impl Worker {
                 for dep_sp in &dep_drv_paths {
                     let dep_key = dep_sp.to_absolute_path();
                     if !self.registry.contains(&dep_key) {
-                        // Dep must be in KnownPaths (registered above).
+                        // Dep must be in DerivationRegistry (registered above).
                         let dep_abs = dep_sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
                         if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
                             let dep_goal = crate::goal::Goal::new(
@@ -619,7 +619,7 @@ impl Worker {
     async fn dispatch_ready<BServ>(
         &mut self,
         builder: &mut Builder<BServ>,
-        known_paths: &mut KnownPaths,
+        known_paths: &mut DerivationRegistry,
         sem: &Arc<Semaphore>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         pending_meta: &mut HashMap<String, PreparedBuild>,
@@ -887,7 +887,7 @@ mod tests {
         StorePath::from_name_and_digest_fixed(name, digest).unwrap()
     }
 
-    fn register_drv(kp: &mut KnownPaths, name: &str, drv: &Derivation) -> StorePath<String> {
+    fn register_drv(kp: &mut DerivationRegistry, name: &str, drv: &Derivation) -> StorePath<String> {
         let sp = fake_sp(name);
         let aterm = drv.to_aterm_bytes();
         let aterm_hash = {
@@ -900,7 +900,7 @@ mod tests {
             hash
         };
         let hdm = aterm_hash; // Use same for simplicity in tests.
-        kp.insert(aterm_hash, sp.clone(), hdm, drv.clone());
+        kp.insert(sp.clone(), hdm, drv.clone(), false);
         sp
     }
 
@@ -908,7 +908,7 @@ mod tests {
 
     #[test]
     fn want_single_leaf() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let drv = make_drv();
         let sp = register_drv(&mut kp, "leaf.drv", &drv);
 
@@ -924,7 +924,7 @@ mod tests {
 
     #[test]
     fn want_chain_creates_all_goals() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
@@ -959,7 +959,7 @@ mod tests {
 
     #[test]
     fn want_diamond_deduplicates() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
@@ -987,7 +987,7 @@ mod tests {
 
     #[test]
     fn want_duplicate_is_noop() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let drv = make_drv();
         let sp = register_drv(&mut kp, "leaf.drv", &drv);
 
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn want_upgrades_to_root() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let drv = make_drv();
         let sp = register_drv(&mut kp, "leaf.drv", &drv);
 
@@ -1018,7 +1018,7 @@ mod tests {
 
     #[test]
     fn want_unknown_drv_errors() {
-        let kp = KnownPaths::default();
+        let kp = DerivationRegistry::default();
         let sp = fake_sp("unknown.drv");
 
         let mut w = Worker::new(1);
@@ -1027,7 +1027,7 @@ mod tests {
 
     #[test]
     fn want_disjoint_trees() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let a_drv = make_drv();
         let a_sp = register_drv(&mut kp, "a.drv", &a_drv);
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn complete_goal_notifies_waiters() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
@@ -1091,7 +1091,7 @@ mod tests {
 
     #[test]
     fn complete_goal_collects_root_outcome() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let drv = make_drv();
         let sp = register_drv(&mut kp, "root.drv", &drv);
 
@@ -1115,7 +1115,7 @@ mod tests {
 
     #[test]
     fn complete_diamond_shared_dep_unblocks_both() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
@@ -1161,7 +1161,7 @@ mod tests {
 
     #[test]
     fn fail_goal_propagates_to_waiters() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
@@ -1198,7 +1198,7 @@ mod tests {
 
     #[test]
     fn fail_goal_only_propagates_to_waiting() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
@@ -1250,7 +1250,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (sp, _) = build_and_register("solo", &[], &mut kp);
 
         let mut w = Worker::new(1);
@@ -1275,7 +1275,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_path, _) = build_and_register("dep", &[], &mut kp);
         let (mid_path, _) = build_and_register("mid", &[(dep_path.clone(), "out")], &mut kp);
         let (top_path, _) = build_and_register("top", &[(mid_path.clone(), "out")], &mut kp);
@@ -1308,7 +1308,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (shared, _) = build_and_register("shared", &[], &mut kp);
         let (left, _) = build_and_register("left", &[(shared.clone(), "out")], &mut kp);
         let (right, _) = build_and_register("right", &[(shared.clone(), "out")], &mut kp);
@@ -1338,7 +1338,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a, _) = build_and_register("tree1-leaf", &[], &mut kp);
         let (b, _) = build_and_register("tree1-root", &[(a.clone(), "out")], &mut kp);
         let (c, _) = build_and_register("tree2-leaf", &[], &mut kp);
@@ -1374,7 +1374,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let mut w = Worker::new(1);
 
         // No roots — debug_assert catches this.
@@ -1393,7 +1393,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (sp, _) = build_and_register("solo", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
@@ -1420,7 +1420,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a, _) = build_and_register("pkg-a", &[], &mut kp);
         let (b, _) = build_and_register("pkg-b", &[], &mut kp);
 
@@ -1451,7 +1451,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (shared, _) = build_and_register("shared", &[], &mut kp);
         let (top_a, _) = build_and_register("top-a", &[(shared.clone(), "out")], &mut kp);
         let (top_b, _) = build_and_register("top-b", &[(shared.clone(), "out")], &mut kp);
@@ -1485,7 +1485,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (_tx, mut rx) = mpsc::channel::<EvalMessage>(16);
         drop(_tx); // Immediately close.
 
@@ -1508,7 +1508,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a, _) = build_and_register("first", &[], &mut kp);
         let (b, _) = build_and_register("second", &[], &mut kp);
 
@@ -1556,7 +1556,7 @@ mod tests {
         let ds = tmp_ds();
 
         // Create the "inner" derivation that will be discovered dynamically.
-        let mut inner_kp = crunch_glue::KnownPaths::default();
+        let mut inner_kp = DerivationRegistry::default();
         let (_, inner_drv) = build_and_register("inner-hello", &[], &mut inner_kp);
         let inner_aterm = inner_drv.to_aterm_bytes();
 
@@ -1573,7 +1573,7 @@ mod tests {
 
         // Register the producer derivation. Its output path name must
         // end in .drv for detection to work.
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (producer_sp, _) = build_and_register("producer-gen.drv", &[], &mut kp);
 
         let mut w = Worker::new(1);
@@ -1603,7 +1603,7 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
 
-        let mut inner_kp = crunch_glue::KnownPaths::default();
+        let mut inner_kp = DerivationRegistry::default();
         let (_, inner_drv) = build_and_register("streamed-inner", &[], &mut inner_kp);
         let inner_aterm = inner_drv.to_aterm_bytes();
 
@@ -1616,7 +1616,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (producer_sp, _) = build_and_register("stream-producer.drv", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
@@ -1650,7 +1650,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         // Name does NOT end in .drv.
         let (sp, _) = build_and_register("normal-pkg", &[], &mut kp);
 
@@ -1685,7 +1685,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (good_sp, _) = build_and_register("good-pkg", &[], &mut kp);
         let (bad_sp, _) = build_and_register("bad-pkg", &[], &mut kp);
 
@@ -1735,7 +1735,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (bad_dep, _) = build_and_register("bad-dep", &[], &mut kp);
         let (top_bad, _) = build_and_register("top-bad", &[(bad_dep.clone(), "out")], &mut kp);
         let (good_sp, _) = build_and_register("good-pkg", &[], &mut kp);
@@ -1781,7 +1781,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (a, _) = build_and_register("fail-a", &[], &mut kp);
         let (b, _) = build_and_register("fail-b", &[], &mut kp);
 
@@ -1810,7 +1810,7 @@ mod tests {
             bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
         );
 
-        let mut kp = crunch_glue::KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (bad_sp, _) = build_and_register("stream-bad", &[], &mut kp);
         let (good_sp, _) = build_and_register("stream-good", &[], &mut kp);
 

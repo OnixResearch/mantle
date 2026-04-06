@@ -2,7 +2,7 @@
 //!
 //! After a build completes, its outputs are inspected for `.drv` files.
 //! If found, the ATerm content is read from the castore, parsed into
-//! a `nix_compat::Derivation`, and registered in KnownPaths for the
+//! a `nix_compat::Derivation`, and registered in DerivationRegistry for the
 //! Worker to schedule.
 //!
 //! This module is the pure core — no async, no BuildService references.
@@ -13,7 +13,7 @@ use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
 use snix_castore::Node;
 
-use crunch_glue::KnownPaths;
+use crate::registry::DerivationRegistry;
 
 use crate::Error;
 
@@ -86,16 +86,16 @@ pub fn parse_drv_bytes(content: &[u8]) -> Result<Option<Derivation>, Error> {
     Ok(Some(drv))
 }
 
-/// Register a dynamically-discovered derivation in KnownPaths.
+/// Register a dynamically-discovered derivation in DerivationRegistry.
 ///
 /// Computes the ATerm hash, HDM, and derivation path, then inserts
-/// into KnownPaths. Returns the computed derivation store path.
+/// into DerivationRegistry. Returns the computed derivation store path.
 ///
 /// The `store_dir` must match the logical store prefix used by the
 /// rest of the build pipeline (typically "/nix/store").
 pub fn register_dynamic_drv(
     drv: &Derivation,
-    known_paths: &mut KnownPaths,
+    known_paths: &mut DerivationRegistry,
     store_dir: &str,
 ) -> Result<StorePath<String>, Error> {
     let aterm_bytes = drv.to_aterm_bytes();
@@ -139,7 +139,7 @@ pub fn register_dynamic_drv(
     let is_ca = drv.outputs.values()
         .all(|o| o.path.is_none() && o.ca_hash.is_none());
 
-    known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, drv.clone(), is_ca);
+    known_paths.insert(drv_path.clone(), hdm, drv.clone(), is_ca);
 
     Ok(drv_path)
 }
@@ -270,7 +270,7 @@ mod tests {
         drv.calculate_output_paths("hello", &hdm).unwrap();
         let drv_path = drv.calculate_derivation_path("hello").unwrap();
 
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let registered = register_dynamic_drv(&drv, &mut kp, "/nix/store").unwrap();
 
         assert_eq!(registered, drv_path);
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn register_deduplicates() {
         let drv = simple_drv();
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
 
         let path1 = register_dynamic_drv(&drv, &mut kp, "/nix/store").unwrap();
         let path2 = register_dynamic_drv(&drv, &mut kp, "/nix/store").unwrap();
@@ -299,7 +299,7 @@ mod tests {
         let aterm = drv.to_aterm_bytes();
         let parsed = parse_drv_bytes(&aterm).unwrap().unwrap();
 
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let drv_path = register_dynamic_drv(&parsed, &mut kp, "/nix/store").unwrap();
 
         let entry = kp.get_by_drv_path(

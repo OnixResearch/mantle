@@ -16,6 +16,7 @@ pub mod goal;
 mod hash;
 mod orchestrate;
 mod references;
+pub mod registry;
 pub mod rewrite;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -27,4 +28,5 @@ pub use error::Error;
 pub use fetcher::{Fetch, FetchError};
 pub use goal::{Goal, GoalRegistry, GoalState};
 pub use orchestrate::{BuildOutcome, Builder};
+pub use registry::{DerivationRegistry, RegistryEntry, populate_registry};
 pub use worker::{EvalMessage, FailedGoal, Worker, WorkerResult};

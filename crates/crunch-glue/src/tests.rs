@@ -1,5 +1,5 @@
 use crate::convert::convert;
-use crate::known_paths::KnownPaths;
+use crate::conversion_cache::ConversionCache;
 use crate::types::*;
 
 /// Helper: minimal derivation with just name/builder.
@@ -20,7 +20,7 @@ fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
 #[test]
 fn convert_minimal() {
     let drv = minimal_drv("hello", "/bin/sh");
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     // drv path has .drv suffix
@@ -45,10 +45,10 @@ fn convert_minimal() {
 fn convert_deterministic() {
     let drv = minimal_drv("test", "/bin/sh");
 
-    let mut kp1 = KnownPaths::default();
+    let mut kp1 = ConversionCache::default();
     let (path1, nix1) = convert(&drv, &mut kp1).unwrap();
 
-    let mut kp2 = KnownPaths::default();
+    let mut kp2 = ConversionCache::default();
     let (path2, nix2) = convert(&drv, &mut kp2).unwrap();
 
     assert_eq!(path1, path2, "drv path must be deterministic");
@@ -60,7 +60,7 @@ fn convert_different_names_different_paths() {
     let drv_a = minimal_drv("alpha", "/bin/sh");
     let drv_b = minimal_drv("beta", "/bin/sh");
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (path_a, _) = convert(&drv_a, &mut kp).unwrap();
     let (path_b, _) = convert(&drv_b, &mut kp).unwrap();
 
@@ -83,7 +83,7 @@ fn convert_with_source_input() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     assert_eq!(nix_drv.input_sources.len(), 1);
@@ -117,7 +117,7 @@ fn convert_with_derivation_input() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     // libfoo should appear in input_derivations
@@ -145,7 +145,7 @@ fn convert_fixed_output_sha256() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     let out = nix_drv.outputs.get("out").unwrap();
@@ -167,7 +167,7 @@ fn convert_multiple_outputs() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     assert_eq!(nix_drv.outputs.len(), 3);
@@ -241,7 +241,7 @@ fn convert_diamond_dependency() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&a, &mut kp).unwrap();
 
     // A should have B and C as input derivations
@@ -281,7 +281,7 @@ fn convert_circular_dependency_detected() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let result = convert(&outer, &mut kp);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
@@ -306,7 +306,7 @@ fn convert_user_env_preserved() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     assert_eq!(nix_drv.environment.get("CC").unwrap(), "/usr/bin/gcc");
@@ -330,7 +330,7 @@ fn convert_invalid_source_path() {
             addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let result = convert(&drv, &mut kp);
     assert!(result.is_err());
 }
@@ -353,7 +353,7 @@ fn convert_invalid_hash_algo() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let result = convert(&drv, &mut kp);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("hash algorithm"));
@@ -374,7 +374,7 @@ fn convert_from_json_serde() {
     }"#;
 
     let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
     assert!(drv_path.to_string().ends_with("from-json.drv"));
@@ -406,7 +406,7 @@ fn json_with_extra_mkderivation_fields_deserializes() {
     assert_eq!(drv.addressing_mode, "content-addressed");
 
     // Extra fields don't appear on the struct — they're dropped.
-    let mut kp = KnownPaths::default();
+    let mut kp = ConversionCache::default();
     let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
     assert!(drv_path.to_string().ends_with("hello-1.0.drv"));
 

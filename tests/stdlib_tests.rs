@@ -175,7 +175,7 @@ fn full_serde_round_trip() {
     assert_eq!(drv.inputs.len(), 1);
 
     // Convert through glue
-    let mut kp = crunch_glue::KnownPaths::default();
+    let mut kp = crunch_glue::ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
     assert!(drv_path.to_string().ends_with("hello.drv"));
     assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
@@ -356,7 +356,7 @@ fn select_round_trip_through_glue() {
     );
 
     // Convert through glue and check input_derivations.
-    let mut kp = crunch_glue::KnownPaths::default();
+    let mut kp = crunch_glue::ConversionCache::default();
     let (_, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
     assert_eq!(nix_drv.input_derivations.len(), 1);
     let (_, outputs) = nix_drv.input_derivations.iter().next().unwrap();

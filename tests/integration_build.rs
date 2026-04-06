@@ -8,7 +8,8 @@ use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
-use crunch_glue::{CrunchDerivation, Input, KnownPaths};
+use crunch_glue::{CrunchDerivation, ConversionCache, Input};
+use crunch_build::{DerivationRegistry, populate_registry};
 
 fn stdlib_import_path() -> Vec<OsString> {
     let lib_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
@@ -58,9 +59,11 @@ fn cache_hit_skips_build() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
-    let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_build::buildservice::DummyBuildService;
@@ -141,9 +144,11 @@ fn fod_hash_mismatch_error() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     // The FOD has ca_hash set — verify it was constructed
     let out = nix_drv.outputs.get("out").unwrap();
     assert!(out.ca_hash.is_some(), "FOD should have ca_hash on output");
@@ -189,9 +194,11 @@ fn end_to_end_trivial_build() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     let out_path = nix_drv
         .outputs
         .get("out")
@@ -307,9 +314,11 @@ fn end_to_end_ca_build() {
         addressing_mode: "content-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     // CA derivation: output paths are None before build
     assert!(
         nix_drv.outputs["out"].path.is_none(),
@@ -449,8 +458,8 @@ fn eval_hello_world_with_seed() {
     }
 
     // Convert through glue
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
     assert!(drv_path.to_string().ends_with("hello-world.drv"));
     // CA derivations have None output paths until after build.
     // Input-addressed derivations have Some.
@@ -528,9 +537,11 @@ fn fetchurl_downloads_and_verifies_hash() {
 
     // KnownPaths uses /nix/store (logical prefix), output_dir is
     // the physical location where the Builder writes outputs.
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     let out_path = nix_drv
         .outputs
         .get("out")
@@ -645,9 +656,11 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         addressing_mode: "input-addressed".to_string(),
     };
 
-    let mut kp = KnownPaths::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
+        let mut kp = DerivationRegistry::default();
+        populate_registry(&mut kp, cc.iter_entries());
     let out_path = nix_drv
         .outputs
         .get("out")

@@ -15,7 +15,7 @@ use nix_compat::{nixbase32, store_path::StorePath};
 use snix_build::buildservice::{BuildConstraints, BuildRequest, EnvVar};
 use snix_castore::Node;
 
-use crunch_glue::KnownPaths;
+use crate::registry::DerivationRegistry;
 
 /// Environment variables that crunch sets in every sandbox build,
 /// matching Nix's sandbox conventions for compatibility with build
@@ -171,7 +171,7 @@ pub fn derivation_to_build_request(
 /// derivation output.
 pub fn collect_input_paths(
     derivation: &Derivation,
-    known_paths: &KnownPaths,
+    known_paths: &DerivationRegistry,
 ) -> Result<BTreeSet<StorePath<String>>, crate::Error> {
     let mut paths = BTreeSet::new();
 
@@ -183,7 +183,7 @@ pub fn collect_input_paths(
     // Derivation input outputs
     for (drv_path, output_names) in &derivation.input_derivations {
         let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
-        // Verify the derivation is in KnownPaths
+        // Verify the derivation is in DerivationRegistry
         if known_paths.get_by_drv_path(&drv_abs).is_none() {
             return Err(crate::Error::DerivationNotFound {
                 path: drv_path.clone(),
@@ -239,7 +239,7 @@ mod tests {
     use nix_compat::derivation::Derivation;
     use std::collections::BTreeMap;
 
-    // ── Helper: build a derivation and register in KnownPaths ──
+    // ── Helper: build a derivation and register in DerivationRegistry ──
 
     fn make_drv_with_name(name: &str) -> Derivation {
         let mut outputs = BTreeMap::new();
@@ -268,7 +268,7 @@ mod tests {
         drv
     }
 
-    fn register_drv(name: &str, kp: &mut KnownPaths) -> (StorePath<String>, Derivation) {
+    fn register_drv(name: &str, kp: &mut DerivationRegistry) -> (StorePath<String>, Derivation) {
         let drv = make_drv_with_name(name);
         // Use drv name bytes as a unique fake aterm hash
         let mut fake_hash = [0u8; 32];
@@ -277,7 +277,7 @@ mod tests {
         }
         let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
         let drv_path = drv.calculate_derivation_path(name).unwrap();
-        kp.insert(fake_hash, drv_path.clone(), hdm, drv.clone());
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
         (drv_path, drv)
     }
 
@@ -466,7 +466,7 @@ mod tests {
         ).unwrap();
         drv.input_sources.insert(source.clone());
 
-        let kp = KnownPaths::default();
+        let kp = DerivationRegistry::default();
         let paths = collect_input_paths(&drv, &kp).unwrap();
         assert!(paths.contains(&source));
         assert_eq!(paths.len(), 1);
@@ -474,7 +474,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_derivation_only() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_drv_path, dep_drv) = register_drv("dep", &mut kp);
 
         let mut parent = test_derivation();
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_mixed() {
-        let mut kp = KnownPaths::default();
+        let mut kp = DerivationRegistry::default();
         let (dep_drv_path, dep_drv) = register_drv("mixdep", &mut kp);
 
         let source: StorePath<String> = StorePath::from_absolute_path(
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn collect_inputs_missing_drv_returns_error() {
-        let kp = KnownPaths::default();
+        let kp = DerivationRegistry::default();
         let mut parent = test_derivation();
         let fake_drv: StorePath<String> = StorePath::from_absolute_path(
             "/nix/store/cccccccccccccccccccccccccccccccc-missing.drv".as_bytes()
@@ -543,9 +543,20 @@ mod tests {
         }
     }
 
+    /// Convert via ConversionCache, then bridge to DerivationRegistry.
+    fn convert_and_bridge(
+        drv: &crunch_glue::CrunchDerivation,
+    ) -> (DerivationRegistry, StorePath<String>, Derivation) {
+        let mut cc = crunch_glue::ConversionCache::default();
+        let (drv_path, nix_drv) = crunch_glue::convert(drv, &mut cc).unwrap();
+        let mut reg = DerivationRegistry::default();
+        crate::registry::populate_registry(&mut reg, cc.iter_entries());
+        (reg, drv_path, nix_drv)
+    }
+
     #[test]
     fn output_selection_only_selected_output_in_sandbox_inputs() {
-        use crunch_glue::{convert, Input, OutputRef};
+        use crunch_glue::{Input, OutputRef};
 
         let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
         let consumer = crunch_glue::CrunchDerivation {
@@ -556,8 +567,7 @@ mod tests {
             ..ia_drv("myapp", &["out"])
         };
 
-        let mut kp = KnownPaths::default();
-        let (_, nix_drv) = convert(&consumer, &mut kp).unwrap();
+        let (reg, _, nix_drv) = convert_and_bridge(&consumer);
 
         // input_derivations has only "dev"
         let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
@@ -565,13 +575,12 @@ mod tests {
         assert!(dep_outputs.contains("dev"));
 
         // collect_input_paths resolves to exactly one path: libfoo's dev output
-        let paths = collect_input_paths(&nix_drv, &kp).unwrap();
+        let paths = collect_input_paths(&nix_drv, &reg).unwrap();
         let dep_abs = dep_path.to_absolute_path();
-        let dep_entry = kp.get_by_drv_path(&dep_abs).unwrap();
+        let dep_entry = reg.get_by_drv_path(&dep_abs).unwrap();
         let dev_path = dep_entry.derivation.outputs["dev"].path.as_ref().unwrap();
 
         assert!(paths.contains(dev_path), "sandbox should include dev output");
-        // out and lib should NOT be in sandbox paths
         let out_path = dep_entry.derivation.outputs["out"].path.as_ref().unwrap();
         let lib_path = dep_entry.derivation.outputs["lib"].path.as_ref().unwrap();
         assert!(!paths.contains(out_path), "sandbox should NOT include out output");
@@ -580,7 +589,7 @@ mod tests {
 
     #[test]
     fn output_selection_coalescing_both_in_sandbox() {
-        use crunch_glue::{convert, Input, OutputRef};
+        use crunch_glue::{Input, OutputRef};
 
         let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
         let consumer = crunch_glue::CrunchDerivation {
@@ -597,8 +606,7 @@ mod tests {
             ..ia_drv("myapp", &["out"])
         };
 
-        let mut kp = KnownPaths::default();
-        let (_, nix_drv) = convert(&consumer, &mut kp).unwrap();
+        let (reg, _, nix_drv) = convert_and_bridge(&consumer);
 
         // Coalesced: both dev and lib
         let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
@@ -606,16 +614,14 @@ mod tests {
         assert!(dep_outputs.contains("dev"));
         assert!(dep_outputs.contains("lib"));
 
-        // collect_input_paths resolves both
-        let paths = collect_input_paths(&nix_drv, &kp).unwrap();
+        let paths = collect_input_paths(&nix_drv, &reg).unwrap();
         let dep_abs = dep_path.to_absolute_path();
-        let dep_entry = kp.get_by_drv_path(&dep_abs).unwrap();
+        let dep_entry = reg.get_by_drv_path(&dep_abs).unwrap();
         let dev_path = dep_entry.derivation.outputs["dev"].path.as_ref().unwrap();
         let lib_path = dep_entry.derivation.outputs["lib"].path.as_ref().unwrap();
 
         assert!(paths.contains(dev_path), "sandbox should include dev");
         assert!(paths.contains(lib_path), "sandbox should include lib");
-        // out should NOT be included
         let out_path = dep_entry.derivation.outputs["out"].path.as_ref().unwrap();
         assert!(!paths.contains(out_path), "sandbox should NOT include out");
     }

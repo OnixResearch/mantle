@@ -8,7 +8,7 @@ use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
 use nix_compat::store_path::StorePath;
 
 use crate::error::Error;
-use crate::known_paths::KnownPaths;
+use crate::conversion_cache::ConversionCache;
 use crate::types::{CrunchDerivation, FixedOutput, Input};
 
 /// Maximum derivation dependency depth before we bail out.
@@ -24,14 +24,14 @@ const MAX_RECURSION_DEPTH: u32 = 512;
 /// Returns `(drv_store_path, derivation)`.
 pub fn convert(
     drv: &CrunchDerivation,
-    known_paths: &mut KnownPaths,
+    known_paths: &mut ConversionCache,
 ) -> Result<(StorePath<String>, Derivation), Error> {
     convert_with_depth(drv, known_paths, 0)
 }
 
 fn convert_with_depth(
     drv: &CrunchDerivation,
-    known_paths: &mut KnownPaths,
+    known_paths: &mut ConversionCache,
     depth: u32,
 ) -> Result<(StorePath<String>, Derivation), Error> {
     // Tiger Style: fixed limit on recursion depth.
@@ -61,7 +61,7 @@ fn convert_with_depth(
 
 fn convert_inner(
     drv: &CrunchDerivation,
-    known_paths: &mut KnownPaths,
+    known_paths: &mut ConversionCache,
     depth: u32,
 ) -> Result<(StorePath<String>, Derivation), Error> {
     let store_dir = known_paths.store_dir().to_string();
@@ -82,7 +82,7 @@ fn convert_inner(
 /// recursively converted and registered in `known_paths`.
 fn resolve_inputs(
     inputs: &[Input],
-    known_paths: &mut KnownPaths,
+    known_paths: &mut ConversionCache,
     depth: u32,
 ) -> Result<(
     BTreeMap<StorePath<String>, BTreeSet<String>>,
@@ -182,7 +182,7 @@ fn build_nix_derivation(
 fn finalize_and_register(
     drv: &CrunchDerivation,
     nix_drv: &mut Derivation,
-    known_paths: &mut KnownPaths,
+    known_paths: &mut ConversionCache,
     store_dir: &str,
 ) -> Result<(StorePath<String>, Derivation), Error> {
     let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
@@ -273,7 +273,7 @@ fn derivation_identity(drv: &CrunchDerivation) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::known_paths::KnownPaths;
+    use crate::conversion_cache::ConversionCache;
     use crate::types::*;
     use nix_compat::nixhash::CAHash;
 
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn simple_drv_exact_store_path() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
         let out_path = nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap();
 
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn builder_and_system_propagate() {
         let drv = minimal_drv("hello", "/usr/bin/env");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.builder, "/usr/bin/env");
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn environment_auto_populated() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.environment.get("system").unwrap(), "x86_64-linux");
@@ -362,7 +362,7 @@ mod tests {
             outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert!(drv_path.to_absolute_path().ends_with("-multi.drv"));
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn outputs_env_var_set_single() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         let outputs_env: &[u8] = nix_drv.environment.get("outputs").unwrap().as_ref();
@@ -388,7 +388,7 @@ mod tests {
             outputs: vec!["out".to_string(), "dev".to_string(), "lib".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         let outputs_env: &[u8] = nix_drv.environment.get("outputs").unwrap().as_ref();
@@ -401,7 +401,7 @@ mod tests {
             outputs: vec!["out".to_string(), "dev".to_string(), "lib".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         // Each output name has its own env var with a store path
@@ -429,7 +429,7 @@ mod tests {
             outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
             ..minimal_drv("multi", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         let out = nix_drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
@@ -455,7 +455,7 @@ mod tests {
             )],
             ..minimal_drv("with-src", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_sources.len(), 1);
@@ -471,7 +471,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(dep))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_derivations.len(), 1);
@@ -490,7 +490,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(dep))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (parent_path, _) = convert(&drv, &mut kp).unwrap();
 
         // Both parent and dep are in KnownPaths
@@ -498,7 +498,7 @@ mod tests {
         // The nested dep should also be registered. Find it by name.
         let libfoo_registered = kp.get_by_drv_path(
             &{
-                let mut kp2 = KnownPaths::default();
+                let mut kp2 = ConversionCache::default();
                 let (p, _) = convert(&minimal_drv("libfoo", "/bin/sh"), &mut kp2).unwrap();
                 p.to_absolute_path()
             },
@@ -524,7 +524,7 @@ mod tests {
             ],
             ..minimal_drv("top", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&top, &mut kp).unwrap();
 
         // top depends on left and right
@@ -532,7 +532,7 @@ mod tests {
 
         // shared's drv path appears once in KnownPaths (dedup via identity)
         let shared_path = {
-            let mut kp_check = KnownPaths::default();
+            let mut kp_check = ConversionCache::default();
             let (p, _) = convert(&minimal_drv("shared", "/bin/sh"), &mut kp_check).unwrap();
             p.to_absolute_path()
         };
@@ -547,7 +547,7 @@ mod tests {
             inputs: vec![Input::Derivation(Box::new(inner))],
             ..minimal_drv("loop", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let err = convert(&outer, &mut kp).unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -569,7 +569,7 @@ mod tests {
             }),
             ..minimal_drv("src-flat", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert!(drv_path.to_absolute_path().ends_with("-src-flat.drv"));
@@ -593,7 +593,7 @@ mod tests {
             }),
             ..minimal_drv("src-rec", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert!(drv_path.to_absolute_path().ends_with("-src-rec.drv"));
@@ -616,7 +616,7 @@ mod tests {
             }),
             ..minimal_drv("src-sri", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert!(drv_path.to_absolute_path().ends_with("-src-sri.drv"));
@@ -667,7 +667,7 @@ mod tests {
             }),
             ..minimal_drv("bad-algo", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         assert!(
             err.to_string().contains("hash algorithm"),
@@ -686,7 +686,7 @@ mod tests {
             }),
             ..minimal_drv("bad-mode", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         assert!(
             err.to_string().contains("hash mode"),
@@ -719,10 +719,10 @@ mod tests {
     fn convert_custom_store_dir_produces_different_paths() {
         let drv = minimal_drv("hello", "/bin/sh");
 
-        let mut kp_default = KnownPaths::default();
+        let mut kp_default = ConversionCache::default();
         let (drv_path_default, nix_drv_default) = convert(&drv, &mut kp_default).unwrap();
 
-        let mut kp_custom = KnownPaths::new("/opt/crunch");
+        let mut kp_custom = ConversionCache::new("/opt/crunch");
         let (drv_path_custom, nix_drv_custom) = convert(&drv, &mut kp_custom).unwrap();
 
         // Drv paths differ
@@ -746,10 +746,10 @@ mod tests {
     fn convert_default_store_dir_matches_existing() {
         let drv = minimal_drv("hello", "/bin/sh");
 
-        let mut kp1 = KnownPaths::default();
+        let mut kp1 = ConversionCache::default();
         let (path1, drv1) = convert(&drv, &mut kp1).unwrap();
 
-        let mut kp2 = KnownPaths::new("/nix/store");
+        let mut kp2 = ConversionCache::new("/nix/store");
         let (path2, drv2) = convert(&drv, &mut kp2).unwrap();
 
         assert_eq!(path1, path2);
@@ -759,7 +759,7 @@ mod tests {
     #[test]
     fn known_paths_custom_store_dir_lookup() {
         let drv = minimal_drv("hello", "/bin/sh");
-        let mut kp = KnownPaths::new("/opt/crunch");
+        let mut kp = ConversionCache::new("/opt/crunch");
         let (drv_path, _) = convert(&drv, &mut kp).unwrap();
 
         // Lookup with the custom prefix must succeed
@@ -783,7 +783,7 @@ mod tests {
     #[test]
     fn ca_derivation_has_none_output_paths() {
         let drv = ca_drv("ca-hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         // drv path still computed (needed for build graph)
@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn ca_derivation_env_has_provisional_path() {
         let drv = ca_drv("ca-hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         let env_out: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
@@ -821,7 +821,7 @@ mod tests {
     #[test]
     fn ca_known_paths_marked_content_addressed() {
         let drv = ca_drv("ca-hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, _) = convert(&drv, &mut kp).unwrap();
 
         let entry = kp.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
@@ -831,7 +831,7 @@ mod tests {
     #[test]
     fn input_addressed_known_paths_not_ca() {
         let drv = minimal_drv("ia-hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, _) = convert(&drv, &mut kp).unwrap();
 
         let entry = kp.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
@@ -841,7 +841,7 @@ mod tests {
     #[test]
     fn ia_derivation_has_some_output_paths() {
         let drv = minimal_drv("ia-hello", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         for (name, output) in &nix_drv.outputs {
@@ -866,7 +866,7 @@ mod tests {
             }),
             ..minimal_drv("fod-ca", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         // FOD output path is always computed (from declared hash)
@@ -878,7 +878,7 @@ mod tests {
     #[test]
     fn ca_resolve_output_updates_known_paths() {
         let drv = ca_drv("ca-resolve", "/bin/sh");
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (drv_path, _) = convert(&drv, &mut kp).unwrap();
         let drv_abs = drv_path.to_absolute_path();
 
@@ -974,7 +974,7 @@ mod tests {
             }))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_derivations.len(), 1);
@@ -1006,7 +1006,7 @@ mod tests {
             ],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         // Same dep appears once with both outputs coalesced.
@@ -1031,7 +1031,7 @@ mod tests {
             ],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         // Coalesced: dev + all three = all three.
@@ -1053,7 +1053,7 @@ mod tests {
             }))],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -1087,7 +1087,7 @@ mod tests {
             ],
             ..minimal_drv("myapp", "/bin/sh")
         };
-        let mut kp = KnownPaths::default();
+        let mut kp = ConversionCache::default();
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         assert_eq!(nix_drv.input_derivations.len(), 1);

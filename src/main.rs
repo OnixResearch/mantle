@@ -216,7 +216,7 @@ fn run(args: Args) -> Result<(), RunError> {
 // ── cmd_build: eval → convert → build ──────────────────────────────────
 
 /// The logical store prefix. Derivation paths, output hashing, sandbox
-/// layout, and KnownPaths lookups always use this.
+/// layout, and DerivationRegistry lookups always use this.
 const LOGICAL_STORE_DIR: &str = "/nix/store";
 
 /// Resolve --jobs: user value clamped to [1, 16], or available_parallelism.
@@ -325,7 +325,7 @@ fn deserialize_derivations_from_json(
 #[allow(clippy::too_many_arguments)]
 async fn execute_builds(
     drv_paths: &[(String, StorePath<String>)],
-    known_paths: &mut crunch_glue::KnownPaths,
+    known_paths: &mut crunch_build::DerivationRegistry,
     output_dir: &std::path::Path,
     output_dir_str: &str,
     log_dir: &std::path::Path,
@@ -511,17 +511,21 @@ async fn execute_builds_streaming(
             verbose,
         );
 
-        // Convert all derivations (sync, fast — CPU-only, no I/O).
-        // KnownPaths is fully populated before builds start.
-        let mut known_paths = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
+        // Convert all derivations into ConversionCache, then bridge
+        // to DerivationRegistry for the build engine.
+        let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
         let mut drv_paths: Vec<(String, StorePath<String>)> = Vec::new();
 
         for (label, drv) in &derivations {
-            let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut known_paths)
+            let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut cache)
                 .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
             info!(drv = %drv_path, label = %label, "derivation constructed");
             drv_paths.push((label.clone(), drv_path));
         }
+
+        // Bridge: populate DerivationRegistry from ConversionCache.
+        let mut known_paths = crunch_build::DerivationRegistry::new(LOGICAL_STORE_DIR);
+        crunch_build::populate_registry(&mut known_paths, cache.iter_entries());
 
         // Stream roots to the Worker over a channel. The Worker starts
         // building each root's deps as soon as it arrives, concurrently

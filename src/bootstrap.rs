@@ -214,13 +214,13 @@ pub async fn bootstrap_fetch(
 
     eprintln!("Fetching {} seed package(s)...", FETCH_SEEDS.len());
 
-    // 1. Convert all seeds to derivations + compute output paths.
-    let mut known_paths = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
+    // 1. Convert all seeds to derivations, then bridge to registry.
+    let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
     let mut drv_paths = Vec::new();
 
     for seed in FETCH_SEEDS {
         let crunch_drv = make_fetch_derivation(seed);
-        let (drv_path, nix_drv) = crunch_glue::convert(&crunch_drv, &mut known_paths)
+        let (drv_path, nix_drv) = crunch_glue::convert(&crunch_drv, &mut cache)
             .map_err(|e| RunError::Build(format!("converting {}: {e}", seed.name)))?;
 
         let out_path = nix_drv.outputs.get("out")
@@ -297,7 +297,10 @@ pub async fn bootstrap_fetch(
             verbose,
         );
 
-        // 3. Build each seed (fetch + persist).
+        // 3. Bridge conversion cache to build registry, then build.
+        let mut known_paths = crunch_build::DerivationRegistry::new(LOGICAL_STORE_DIR);
+        crunch_build::populate_registry(&mut known_paths, cache.iter_entries());
+
         let root_paths: Vec<nix_compat::store_path::StorePath<String>> =
             drv_paths.iter().map(|(_, _, sp)| sp.clone()).collect();
 
@@ -506,7 +509,7 @@ mod tests {
     fn make_fetch_derivation_converts_to_fod() {
         let seed = &FETCH_SEEDS[0];
         let drv = make_fetch_derivation(seed);
-        let mut kp = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
+        let mut kp = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
 
         let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut kp).unwrap();
 
@@ -542,8 +545,8 @@ mod tests {
         let drv1 = make_fetch_derivation(seed);
         let drv2 = make_fetch_derivation(seed);
 
-        let mut kp1 = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
-        let mut kp2 = crunch_glue::KnownPaths::new(LOGICAL_STORE_DIR);
+        let mut kp1 = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
+        let mut kp2 = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
 
         let (_, nix1) = crunch_glue::convert(&drv1, &mut kp1).unwrap();
         let (_, nix2) = crunch_glue::convert(&drv2, &mut kp2).unwrap();
