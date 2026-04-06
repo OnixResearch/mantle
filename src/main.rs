@@ -1,5 +1,6 @@
 mod bootstrap;
 mod errors;
+mod self_build;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -112,6 +113,21 @@ enum Command {
         #[command(subcommand)]
         action: StoreAction,
     },
+
+    /// Build crunch from its own source (self-hosting)
+    SelfBuild {
+        /// Maximum concurrent builds (default: CPU count, max 16)
+        #[arg(short, long)]
+        jobs: Option<u32>,
+
+        /// Disable remote binary cache substitution
+        #[arg(long)]
+        no_substitute: bool,
+
+        /// Skip verification of the output binary
+        #[arg(long)]
+        no_verify: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -190,6 +206,10 @@ fn run(args: Args) -> Result<(), RunError> {
         }
         Command::Log { query, list } => cmd_log(query.as_deref(), list),
         Command::Store { action } => cmd_store(action),
+        Command::SelfBuild { jobs, no_substitute, no_verify } => {
+            let max_jobs = resolve_max_jobs(jobs);
+            cmd_self_build(&args.store, args.verbose, max_jobs, no_substitute, no_verify)
+        }
     }
 }
 
@@ -828,6 +848,153 @@ fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
             "no log matching '{query}' in {}", dir.display()
         ))),
     }
+}
+
+// ── cmd_self_build ─────────────────────────────────────────────────────
+
+fn cmd_self_build(
+    output_dir: &std::path::Path,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    no_verify: bool,
+) -> Result<(), RunError> {
+    eprintln!("=== crunch self-build ===");
+
+    // Locate the source tree (directory containing Cargo.toml).
+    let src_dir = find_source_dir()?;
+    eprintln!("source: {}", src_dir.display());
+
+    // Locate bootstrap/ directory (for import paths).
+    let bootstrap_dir = src_dir.join("bootstrap");
+    if !bootstrap_dir.exists() {
+        return Err(RunError::Internal(format!(
+            "bootstrap/ directory not found at {}",
+            bootstrap_dir.display(),
+        )));
+    }
+
+    // 1. Create the source tarball.
+    eprintln!("\n[1/4] Creating source tarball...");
+    let tmp_dir = tempfile::tempdir()
+        .map_err(|e| RunError::Internal(format!("creating temp dir: {e}")))?;
+    let tarball = self_build::create_source_tarball(&src_dir, tmp_dir.path())?;
+
+    // 2. Compute NAR hash of the unpacked tarball.
+    eprintln!("\n[2/4] Computing NAR hash...");
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| RunError::Internal(format!("tokio: {e}")))?;
+    let tarball_hash = rt.block_on(self_build::hash_unpacked_tarball(&tarball))?;
+
+    // 3. Generate the .ncl and build.
+    eprintln!("\n[3/4] Building...");
+    let tarball_url = format!("file://{}", tarball.display());
+    let ncl_content = self_build::generate_self_build_ncl(&tarball_url, &tarball_hash);
+
+    let ncl_path = tmp_dir.path().join("self-build.ncl");
+    std::fs::write(&ncl_path, &ncl_content)
+        .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
+
+    // Import paths: bootstrap/ (for make.ncl etc) + lib/ (for lib.ncl).
+    let lib_dir = src_dir.join("lib");
+    let import_paths: Vec<OsString> = {
+        let mut paths = build_import_paths(&[lib_dir.clone()])?;
+        paths.push(bootstrap_dir.clone().into());
+        paths
+    };
+
+    let sub_url = if no_substitute {
+        None
+    } else {
+        Some("https://cache.nixos.org")
+    };
+
+    cmd_build(
+        &ncl_path,
+        &import_paths,
+        output_dir,
+        verbose,
+        false, // no --fix
+        max_jobs,
+        sub_url,
+    )?;
+
+    // 4. Verify the output binary.
+    if !no_verify {
+        eprintln!("\n[4/4] Verifying output...");
+        // Find the crunch binary in the output dir.
+        let crunch_bin = find_self_built_binary(output_dir)?;
+        self_build::verify_binary(&crunch_bin)?;
+    } else {
+        eprintln!("\n[4/4] Verification skipped (--no-verify).");
+    }
+
+    eprintln!("\n=== self-build complete ===");
+    Ok(())
+}
+
+/// Find the crunch source directory.
+///
+/// Walks up from the current executable or cwd looking for Cargo.toml
+/// with `name = "crunch"`. Falls back to cwd if it has bootstrap/.
+fn find_source_dir() -> Result<PathBuf, RunError> {
+    // Try cwd first.
+    let cwd = std::env::current_dir()
+        .map_err(|e| RunError::Internal(format!("cwd: {e}")))?;
+
+    if cwd.join("Cargo.toml").exists() && cwd.join("bootstrap").exists() {
+        return Ok(cwd);
+    }
+
+    // Check if we're inside the crunch tree.
+    let mut dir = cwd.as_path();
+    for _ in 0..8_u32 {
+        if dir.join("Cargo.toml").exists() && dir.join("bootstrap").exists() {
+            return Ok(dir.to_path_buf());
+        }
+        match dir.parent() {
+            Some(p) => dir = p,
+            None => break,
+        }
+    }
+
+    Err(RunError::Internal(
+        "could not locate crunch source directory.\n\
+         Run `crunch self-build` from the crunch repo root."
+            .to_string(),
+    ))
+}
+
+/// Find the self-built crunch binary in the output directory.
+///
+/// Scans for `*-crunch/bin/crunch`.
+fn find_self_built_binary(output_dir: &std::path::Path) -> Result<PathBuf, RunError> {
+    use std::fs;
+
+    let entries = fs::read_dir(output_dir)
+        .map_err(|e| RunError::Internal(format!(
+            "reading output dir {}: {e}", output_dir.display()
+        )))?;
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-crunch") {
+            let bin = entry.path().join("bin").join("crunch");
+            if bin.exists() {
+                return Ok(bin);
+            }
+        }
+    }
+
+    Err(RunError::Internal(format!(
+        "could not find self-built crunch binary in {}",
+        output_dir.display(),
+    )))
 }
 
 // ── cmd_bootstrap ──────────────────────────────────────────────────────
