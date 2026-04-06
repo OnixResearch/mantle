@@ -1244,6 +1244,7 @@ mod tests {
     }
 
     
+    #[async_trait]
     impl BuildService for MockBuildService {
         async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
             self.calls.lock().unwrap().push(request.command_args.clone());
@@ -2328,6 +2329,7 @@ mod tests {
     struct FailingRemoteService;
 
     
+    #[async_trait]
     impl snix_store::pathinfoservice::PathInfoService for FailingRemoteService {
         async fn get(
             &self, _digest: [u8; 20],

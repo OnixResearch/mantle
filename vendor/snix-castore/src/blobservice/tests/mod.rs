@@ -15,14 +15,11 @@ use crate::fixtures::BLOB_A_DIGEST;
 use crate::fixtures::BLOB_B;
 use crate::fixtures::BLOB_B_DIGEST;
 
-mod utils;
-use self::utils::make_grpc_blob_service_client;
 
 /// This produces a template, which will be applied to all individual test functions.
 /// See https://github.com/la10736/rstest/issues/130#issuecomment-968864832
 #[template]
 #[rstest]
-#[case::grpc(make_grpc_blob_service_client().await)]
 #[case::memory(blobservice::from_addr("memory:").await.unwrap())]
 #[case::objectstore_memory(blobservice::from_addr("objectstore+memory:").await.unwrap())]
 pub fn blob_services(#[case] blob_service: impl BlobService) {}

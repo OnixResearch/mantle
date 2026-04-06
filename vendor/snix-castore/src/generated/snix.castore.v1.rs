@@ -22,7 +22,7 @@ impl Default for Directory {
 }
 
 /// A DirectoryEntry represents a directory.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DirectoryEntry {
     
     pub name: Bytes,
@@ -32,7 +32,7 @@ pub struct DirectoryEntry {
 }
 
 /// A FileEntry represents a regular or executable file.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FileEntry {
     
     pub name: Bytes,
@@ -43,7 +43,7 @@ pub struct FileEntry {
 }
 
 /// A SymlinkEntry represents a symbolic link.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SymlinkEntry {
     
     pub name: Bytes,
@@ -52,7 +52,7 @@ pub struct SymlinkEntry {
 }
 
 /// An Entry is either a DirectoryEntry, FileEntry or SymlinkEntry.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Entry {
     pub entry: Option<entry::Entry>,
 }

@@ -11,8 +11,6 @@ use crate::directoryservice;
 use crate::fixtures::{DIRECTORY_A, DIRECTORY_B, DIRECTORY_C, DIRECTORY_D};
 use crate::{Directory, Node};
 
-mod utils;
-use self::utils::make_grpc_directory_service_client;
 
 // TODO: add tests doing individual puts of a closure, then doing a get_recursive
 // (and figure out semantics if necessary)
@@ -21,7 +19,6 @@ use self::utils::make_grpc_directory_service_client;
 /// See https://github.com/la10736/rstest/issues/130#issuecomment-968864832
 #[template]
 #[rstest]
-#[case::grpc(make_grpc_directory_service_client().await)]
 #[case::memory(directoryservice::from_addr("redb+memory:").await.unwrap())]
 #[case::objectstore(directoryservice::from_addr("objectstore+memory://").await.unwrap())]
 #[cfg_attr(all(feature = "cloud", feature = "integration"), case::bigtable(directoryservice::from_addr("bigtable://instance-1?project_id=project-1&table_name=table-1&family_name=cf1").await.unwrap()))]

@@ -2,9 +2,9 @@
 //!
 //! Provides MockBuildService, build_and_register, and factory functions
 //! for in-memory blob/directory/pathinfo services.
-use async_trait::async_trait;
-
 #![cfg(test)]
+
+use async_trait::async_trait;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -58,6 +58,7 @@ impl MockBuildService {
 }
 
 
+#[async_trait]
 #[async_trait]
 impl BuildService for MockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
@@ -253,6 +254,7 @@ impl DrvProducingMockBuildService {
 
 
 #[async_trait]
+#[async_trait]
 impl BuildService for DrvProducingMockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
         self.calls
@@ -318,6 +320,7 @@ impl FailingMockBuildService {
 }
 
 
+#[async_trait]
 #[async_trait]
 impl BuildService for FailingMockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {

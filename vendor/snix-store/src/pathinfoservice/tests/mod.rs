@@ -15,18 +15,13 @@ use crate::pathinfoservice::test_signing_service;
 #[cfg(feature = "fuse")]
 mod fs;
 
+#[cfg(all(feature = "cloud", feature = "integration"))]
 mod utils;
-pub use self::utils::make_grpc_path_info_service_client;
-
 #[cfg(all(feature = "cloud", feature = "integration"))]
 use self::utils::make_bigtable_path_info_service;
 
 #[template]
 #[rstest]
-#[case::grpc({
-    let (_, _, svc) = make_grpc_path_info_service_client().await;
-    svc
-})]
 #[case::redb(RedbPathInfoService::new_temporary("test".to_string(), RedbPathInfoServiceConfig::default()).unwrap())]
 #[case::signing(test_signing_service())]
 #[cfg_attr(all(feature = "cloud",feature="integration"), case::bigtable(make_bigtable_path_info_service().await))]

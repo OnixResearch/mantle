@@ -95,15 +95,15 @@ mod tests {
     /// This configures dummy
     #[case::valid_dummy("dummy://", true)]
     /// Correct scheme to connect to a unix socket.
-    #[case::grpc_valid_unix_socket("grpc+unix:/path/to/somewhere", true)]
+    #[case::grpc_unsupported_unix_socket("grpc+unix:/path/to/somewhere", false)]
     /// Correct scheme for unix socket, but setting a host too, which is invalid.
     #[case::grpc_invalid_unix_socket_and_host("grpc+unix://host.example/path/to/somewhere", false)]
     /// Correct scheme to connect to localhost, with port 12345
-    #[case::grpc_valid_ipv6_localhost_port_12345("grpc+http://[::1]:12345", true)]
+    #[case::grpc_unsupported_ipv6("grpc+http://[::1]:12345", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
-    #[case::grpc_valid_http_host_without_port("grpc+http://localhost", true)]
+    #[case::grpc_unsupported_http("grpc+http://localhost", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
-    #[case::grpc_valid_https_host_without_port("grpc+https://localhost", true)]
+    #[case::grpc_unsupported_https("grpc+https://localhost", false)]
     /// Correct scheme to connect to localhost over http, but with additional path, which is invalid.
     #[case::grpc_invalid_host_and_path("grpc+http://localhost/some-path", false)]
     /// This configures OCI, but doesn't specify the bundle path

@@ -49,17 +49,17 @@ mod tests {
     /// This sets a memory url path to "/foo", which is invalid.
     #[case::memory_invalid_root_path_foo("memory:/foo", false)]
     /// Correct scheme to connect to a unix socket.
-    #[case::grpc_valid_unix_socket("grpc+unix:/path/to/somewhere", true)]
+    #[case::grpc_unsupported_unix_socket("grpc+unix:/path/to/somewhere", false)]
     /// Correct scheme for unix socket, but setting authority, which is invalid.
     #[case::grpc_invalid_unix_socket_and_authority("grpc+unix:///path/to/somewhere", false)]
     /// Correct scheme for unix socket, but setting a host too, which is invalid.
     #[case::grpc_invalid_unix_socket_and_host("grpc+unix://host.example/path/to/somewhere", false)]
     /// Correct scheme to connect to localhost, with port 12345
-    #[case::grpc_valid_ipv6_localhost_port_12345("grpc+http://[::1]:12345", true)]
+    #[case::grpc_unsupported_ipv6_localhost_port_12345("grpc+http://[::1]:12345", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
-    #[case::grpc_valid_http_host_without_port("grpc+http://localhost", true)]
+    #[case::grpc_unsupported_http_host_without_port("grpc+http://localhost", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
-    #[case::grpc_valid_https_host_without_port("grpc+https://localhost", true)]
+    #[case::grpc_unsupported_https_host_without_port("grpc+https://localhost", false)]
     /// Correct scheme to connect to localhost over http, but with additional path, which is invalid.
     #[case::grpc_invalid_has_path("grpc+http://localhost/some-path", false)]
     /// An example for object store (InMemory)

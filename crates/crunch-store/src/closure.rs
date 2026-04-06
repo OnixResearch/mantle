@@ -134,6 +134,7 @@ mod tests {
     }
 
     
+    #[async_trait]
     impl PathInfoService for MockPathInfoService {
         async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
             Ok(self.entries.lock().unwrap().get(&digest).cloned())
