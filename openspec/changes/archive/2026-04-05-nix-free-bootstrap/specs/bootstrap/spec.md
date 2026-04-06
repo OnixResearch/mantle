@@ -60,10 +60,9 @@ PATH-accessible applets (mkdir, cp, cat, etc.).
 
 ### Requirement: Source-built toolchain
 
-The system SHOULD support building core tools (make, bash, sed, grep) from
-fetched source tarballs using the static musl-gcc seed. These derivations
-live in a `bootstrap/` directory as regular `.ncl` files, not special-cased
-in Rust.
+The system MUST support building core tools from fetched source tarballs
+using the static musl-gcc seed. These derivations live in a `bootstrap/`
+directory as regular `.ncl` files, not special-cased in Rust.
 
 #### Scenario: Build make from source
 
@@ -71,6 +70,33 @@ in Rust.
 - WHEN `crunch build bootstrap/make.ncl` is run
 - THEN a working `make` binary is produced in the crunch store
 - AND it can be used as an input to subsequent derivations
+
+#### Scenario: Build dash from source
+
+- GIVEN the fetched musl-gcc seed and from-source make
+- WHEN `crunch build bootstrap/dash.ncl` is run
+- THEN a working POSIX shell is produced (static-pie ELF)
+
+### Requirement: From-source compiler toolchain
+
+The system MUST support building a complete C compiler toolchain from
+source: binutils (assembler, linker), musl libc (headers, CRT objects,
+libc.a), and GCC (C compiler). Each tool is a `.ncl` derivation that
+chains off earlier bootstrap stages.
+
+#### Scenario: Build complete toolchain from source
+
+- GIVEN the bootstrap chain (musl-gcc seed → make → dash)
+- WHEN `crunch build bootstrap/gcc.ncl` is run
+- THEN GCC, binutils, and musl are all built from source
+- AND the from-source GCC can compile C programs
+
+#### Scenario: Self-test with from-source toolchain
+
+- GIVEN from-source gcc, binutils, and musl (no fetched musl-gcc in direct inputs)
+- WHEN `crunch build bootstrap/selftest.ncl` is run
+- THEN a C test program compiles and passes 1010 assertions
+- AND the binary is statically linked against the from-source musl
 
 ## MODIFIED Requirements
 

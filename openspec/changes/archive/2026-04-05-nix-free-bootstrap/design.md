@@ -105,24 +105,37 @@ have their dependencies tracked via `input_derivations`.
 `resolve_nix_closure()` for paths that exist in the physical
 `/nix/store/` (actual Nix store), not for paths in `--store`.
 
-### 5. Phase 3 build order
+### 5. Build order (as implemented)
 
-Build core tools in dependency order, each using the previous stage's
-output:
+The full bootstrap chain, each stage using the previous stage's output:
 
 ```
-musl-gcc (fetched)
-  → make (from source, built with musl-gcc)
-  → bash (from source, built with musl-gcc + make)
-  → coreutils (from source, or keep busybox)
-  → patch, sed, grep, awk, findutils
+musl-gcc (fetched, 89MB static toolchain from musl.cc)
+  → make 4.4.1 (hand-written config.h, bypasses autoconf)
+  → dash 0.5.12 (POSIX shell, code generators compiled static for bwrap)
+  → binutils 2.42 (autoconf configure, pre-set GREP/SED/AWK)
+  → musl 1.2.5 (hand-written configure, cleanest build)
+  → GCC 13.3.0 (C-only, GMP/MPFR/MPC in-tree, static CC wrapper)
+  → selftest (1010 assertions, from-source toolchain only)
 ```
 
-Each builds as a `crunch.Derivation` using `mkDerivation` with the
-fetched seed. Each is a FOD or CA derivation — reproducible and cached.
+Key design decisions per stage:
 
-These are Nickel files in a `bootstrap/` directory, not hard-coded in
-Rust. crunch builds them like any other derivation.
+- **make/dash**: bypass autoconf entirely (busybox grep too limited for
+  long-line test). Hand-written config.h tuned for musl.
+- **dash over bash**: 28 source files vs 150+. POSIX-sufficient for scripts.
+- **binutils/gcc**: use autoconf configure with pre-set tool variables
+  (GREP, SED, AWK, am_cv_ar_interface) to bypass probes that fail with
+  busybox.
+- **gcc**: static CC wrapper ensures all configure test binaries are
+  statically linked (bwrap sandbox has no dynamic linker at /lib/).
+  Touch all .cc/.c/.h to prevent flex/bison/gperf regeneration.
+- **selftest**: creates /lib/ld-musl-x86_64.so.1 symlink in sandbox
+  so dynamically-linked binutils can run. Proves from-source gcc +
+  binutils + musl can compile real C programs.
+
+All stages are Nickel files in `bootstrap/`, not hard-coded in Rust.
+crunch builds them like any other derivation.
 
 ## Risks / Trade-offs
 
@@ -141,7 +154,12 @@ may not. Mitigation: the Phase 4 gcc rebuild can target glibc if needed.
 the tarball in crunch's own infrastructure. The hash pin means any mirror
 with the right content works.
 
-**[Scope creep]** → Building gcc from source (Phase 4) is a multi-week
-project. Mitigation: Phase 4 is optional — Phases 1-3 provide a working
-Nix-free build environment for most C projects. Phase 4 is only needed
-for self-hosting the compiler.
+**[Scope creep]** → Phase 4 (gcc from source) was expected to take weeks
+but completed in one session (~2 hours). The key enabler: using the
+fetched musl-gcc as a cross-compiler bootstrap, not trying to build
+gcc without any compiler.
+
+**[Dynamic binutils]** → Binutils outputs are dynamically linked against
+musl despite -static in CFLAGS (libtool overrides). The selftest works
+around this by creating /lib/ld-musl-x86_64.so.1 in the sandbox.
+Long-term fix: patch binutils libtool or use -all-static.

@@ -1,87 +1,113 @@
-# Bootstrap Specification
+# Bootstrap Specification — Delta
 
-## Purpose
+## ADDED Requirements
 
-Defines how crunch obtains its initial build toolchain (stage 0) without
-depending on a Nix evaluator.
+### Requirement: Fetch-based bootstrap
 
-## Requirements
+The system MUST support `crunch bootstrap --fetch` which downloads a static
+C toolchain from a pinned URL, persists it as a FOD in the crunch store,
+and generates `seed.ncl`.
 
-### Requirement: Seed toolchain
+The fetched seed MUST NOT require Nix to be installed. The toolchain MUST
+be statically linked so that no closure resolution is needed.
 
-The system MUST support bootstrapping from a pre-built toolchain containing
-at minimum:
+#### Scenario: Bootstrap from fetch on a machine without Nix
 
-- A C compiler (gcc or clang)
-- binutils (as, ld)
-- A C library (glibc or musl)
-- bash
-- coreutils (cp, mkdir, chmod, etc.)
-- make
+- GIVEN a machine with crunch installed but no Nix
+- WHEN `crunch bootstrap --fetch --store ~/crunch-store -o seed.ncl` is run
+- THEN a seed.ncl is generated with a valid store path to the fetched toolchain
+- AND `crunch build hello-world.ncl -I seed.ncl --store ~/crunch-store` succeeds
 
-These MUST be available as store paths that crunch derivations can reference.
+#### Scenario: Reproducible fetch
 
-#### Scenario: Seed from static binaries
+- GIVEN the same musl-gcc tarball URL and hash
+- WHEN `crunch bootstrap --fetch` is run on two different machines
+- THEN both produce the same store path and seed.ncl content
 
-- GIVEN a tarball of statically-linked musl-based tools
-- WHEN imported into the crunch store as a fixed-output derivation
-- THEN derivations can reference `%{seed}/bin/gcc`, `%{seed}/bin/bash`, etc.
+### Requirement: Closure-free inputs
 
-#### Scenario: Seed from Nix store
+For source inputs that are crunch-built outputs (exist in `--store`, not in
+the host's `/nix/store/`), the system MUST NOT attempt `nix-store -qR`
+closure resolution. Static binaries have no runtime closure.
 
-- GIVEN an existing Nix installation with a stdenv
-- WHEN the seed is extracted from the Nix store (copying the relevant paths)
-- THEN those paths are usable as crunch inputs without invoking the Nix
-  evaluator
+#### Scenario: Build without nix-store on PATH
 
-### Requirement: Seed import mechanism
+- GIVEN a seed from `--fetch` (all static, crunch-built)
+- AND `nix-store` is not on PATH
+- WHEN `crunch build` runs a derivation using the seed
+- THEN the build succeeds (closure resolution returns empty gracefully)
 
-The CLI MUST provide a `crunch bootstrap` subcommand implemented in Rust
-that imports the seed toolchain into the store. No shell scripts. Options:
+#### Scenario: Mixed seed (some Nix, some fetched)
 
-- `crunch bootstrap --seed <tarball>` — imports a tarball as a FOD
-- `crunch bootstrap --from-nix` — queries an existing Nix store for tool
-  paths (via `nix-store --query` or by reading the store database directly)
-  and generates `seed.ncl`
-- Manual: user writes `seed.ncl` by hand with known store paths
+- GIVEN a seed with some paths from Nix and some from `--fetch`
+- WHEN `crunch build` runs
+- THEN Nix-origin paths get closure resolution via `nix-store -qR`
+- AND fetched paths skip closure resolution
 
-The simplest viable option SHOULD be implemented first.
+### Requirement: Busybox applet access in sandbox
 
-### Requirement: Self-hosting goal
+The sandbox MUST mount the `SNIX_BUILD_SANDBOX_SHELL` binary at both
+`/bin/sh` (for shell scripts) and `/bin/busybox` (for applet dispatch).
+Build scripts MUST be able to create symlinks to `/bin/busybox` to get
+PATH-accessible applets (mkdir, cp, cat, etc.).
 
-The bootstrap process SHOULD be designed so that crunch can eventually build
-its own toolchain. The path is:
+#### Scenario: Busybox applets in build script
 
-1. Stage 0: external seed (WASM-compiled tools, static binaries, or Nix-provided)
-2. Stage 1: crunch builds gcc + glibc + coreutils from source using stage 0
-3. Stage 2: crunch rebuilds everything with stage 1 tools
-4. Stage 3: crunch builds itself (the crunch binary) with stage 2
+- GIVEN a derivation with `builder = "/bin/sh"`
+- WHEN the build script runs `/bin/busybox mkdir -p /tmp/tools`
+- THEN the directory is created
+- AND `ln -sf /bin/busybox /tmp/tools/mkdir` creates a working mkdir command
 
-Stages 1-3 are NOT required for v0. v0 only needs stage 0.
+### Requirement: Source-built toolchain
 
-### Requirement: WASM seed toolchain (future)
+The system MUST support building core tools from fetched source tarballs
+using the static musl-gcc seed. These derivations live in a `bootstrap/`
+directory as regular `.ncl` files, not special-cased in Rust.
 
-A WASM seed toolchain is the long-term goal for cross-platform bootstrap.
-However, standard WASI currently lacks subprocess spawning (`fork`/`exec`),
-which prevents running build scripts that call multiple tools. A WASM seed
-is NOT viable for v0.
+#### Scenario: Build make from source
 
-Once WASI gains process spawning support, the seed toolchain SHOULD be
-available as WASM modules for maximum portability. The architecture MUST
-not foreclose this.
+- GIVEN the fetched musl-gcc seed
+- WHEN `crunch build bootstrap/make.ncl` is run
+- THEN a working `make` binary is produced in the crunch store
+- AND it can be used as an input to subsequent derivations
 
-### Requirement: Seed description in Nickel
+#### Scenario: Build dash from source
 
-The seed toolchain SHOULD be described as a Nickel record so that other
-derivations can reference its components:
+- GIVEN the fetched musl-gcc seed and from-source make
+- WHEN `crunch build bootstrap/dash.ncl` is run
+- THEN a working POSIX shell is produced (static-pie ELF)
 
-```nickel
-{
-  bash = "/nix/store/...-bash-5.2",
-  gcc = "/nix/store/...-gcc-13.2.0",
-  coreutils = "/nix/store/...-coreutils-9.4",
-  # ...
-}
-```
+### Requirement: From-source compiler toolchain
 
-This record is generated by `crunch bootstrap` (in Rust) or written manually.
+The system MUST support building a complete C compiler toolchain from
+source: binutils (assembler, linker), musl libc (headers, CRT objects,
+libc.a), and GCC (C compiler). Each tool is a `.ncl` derivation that
+chains off earlier bootstrap stages.
+
+#### Scenario: Build complete toolchain from source
+
+- GIVEN the bootstrap chain (musl-gcc seed → make → dash)
+- WHEN `crunch build bootstrap/gcc.ncl` is run
+- THEN GCC, binutils, and musl are all built from source
+- AND the from-source GCC can compile C programs
+
+#### Scenario: Self-test with from-source toolchain
+
+- GIVEN from-source gcc, binutils, and musl (no fetched musl-gcc in direct inputs)
+- WHEN `crunch build bootstrap/selftest.ncl` is run
+- THEN a C test program compiles and passes 1010 assertions
+- AND the binary is statically linked against the from-source musl
+
+## MODIFIED Requirements
+
+### Requirement: Seed import mechanism (modified)
+
+The CLI `crunch bootstrap` subcommand MUST support two modes:
+
+- `crunch bootstrap` (default, renamed from `--from-nix`): queries Nix store
+  for tool paths. Requires Nix installed.
+- `crunch bootstrap --fetch`: downloads static toolchain tarballs. Does NOT
+  require Nix installed.
+
+Both modes produce a `seed.ncl` file. The `--fetch` mode SHOULD be
+recommended for new installations.
