@@ -39,7 +39,7 @@
 ## Phase 5: Verify and clean up
 
 - [x] `cargo build` succeeds without protoc on PATH ✅
-- [ ] `cargo test` passes for all workspace crates
-- [ ] Update AGENTS.md to remove protoc from build requirements
+- [x] `cargo test` passes for all workspace crates (excluding crunch-glue pre-existing failures) ✅
+- [x] Update AGENTS.md to remove protoc from build requirements ✅
 - [x] Update any `from_addr` parsing that referenced `grpc+` URL schemes ✅ (done in Phase 1)
 - [x] Remove `vendor/proto/` directory ✅ (done in Phase 1)
