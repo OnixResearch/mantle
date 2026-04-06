@@ -67,6 +67,17 @@ impl CaMappings {
         self.mappings.get(drv_path_abs)
     }
 
+    /// Return the first drv key that does NOT start with the given prefix,
+    /// or None if all keys match (or the map is empty).
+    pub fn first_key_with_wrong_prefix(&self, prefix: &str) -> Option<&str> {
+        for key in self.mappings.keys() {
+            if !key.starts_with(prefix) {
+                return Some(key.as_str());
+            }
+        }
+        None
+    }
+
     fn file_path(state_dir: &Path) -> PathBuf {
         state_dir.join("ca_mappings.json")
     }

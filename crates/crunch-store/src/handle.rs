@@ -119,6 +119,19 @@ impl StoreHandle {
             .unwrap_or(&config.store_dir).to_string();
         let ca_mappings = CaMappings::load(&config.state_dir);
 
+        // Warn if CA mappings contain paths from a different store prefix.
+        // This happens when switching from /nix/store to /crunch/store (or vice versa).
+        let prefix_with_slash = format!("{}/", config.store_dir);
+        if let Some(first_stale) = ca_mappings.first_key_with_wrong_prefix(&prefix_with_slash) {
+            tracing::warn!(
+                stale_path = %first_stale,
+                expected_prefix = %config.store_dir,
+                "CA mappings contain paths from a different store prefix. \
+                 Clear the state directory ({}) to reset.",
+                config.state_dir.display(),
+            );
+        }
+
         Ok(Self {
             blob_service,
             directory_service,
