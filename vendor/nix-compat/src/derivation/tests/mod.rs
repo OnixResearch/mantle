@@ -524,6 +524,65 @@ fn output_paths_with_store_dir_default() {
     assert_eq!(drv1.environment, drv2.environment);
 }
 
+/// hash_derivation_modulo_with_store_dir: custom dir produces different HDM.
+/// This exercises the ATerm serialization path (write_outputs_with_prefix,
+/// write_input_sources_with_prefix) which affects the BLAKE3 hash.
+#[cfg(feature = "serde")]
+#[test]
+fn hdm_with_store_dir_custom() {
+    let nix_drv = Derivation::from_aterm_bytes(
+        &fs::read(format!(
+            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
+        ))
+        .expect("unable to read .drv"),
+    )
+    .expect("must succeed");
+
+    let hdm_default = nix_drv.hash_derivation_modulo(|_| panic!("FOD"));
+    let hdm_custom = nix_drv.hash_derivation_modulo_with_store_dir(
+        |_| panic!("FOD"),
+        "/opt/crunch",
+    );
+
+    // FOD digests include the output path string, which has the prefix.
+    // Different prefixes produce different FOD digests.
+    assert_ne!(hdm_default, hdm_custom,
+        "FOD HDM should differ with different store dir (path string changes)");
+}
+
+/// hash_derivation_modulo_with_store_dir: non-FOD derivation produces
+/// different HDM with different store dir because the ATerm bytes differ.
+#[cfg(feature = "serde")]
+#[test]
+fn hdm_with_store_dir_non_fod() {
+    // Build a non-FOD derivation with input_sources to exercise the
+    // ATerm serialization path.
+    let mut drv = Derivation::default();
+    drv.builder = ":".to_string();
+    drv.system = ":".to_string();
+    drv.outputs.insert(
+        "out".to_string(),
+        crate::derivation::Output {
+            path: None,
+            ca_hash: None,
+        },
+    );
+    // Add an input source so the ATerm changes with different prefixes
+    let sp = crate::store_path::StorePath::from_bytes(
+        b"00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60"
+    ).unwrap();
+    drv.input_sources.insert(sp);
+
+    let hdm_default = drv.hash_derivation_modulo(|_| unreachable!());
+    let hdm_custom = drv.hash_derivation_modulo_with_store_dir(
+        |_| unreachable!(),
+        "/opt/crunch",
+    );
+
+    assert_ne!(hdm_default, hdm_custom,
+        "non-FOD derivation HDM must differ with different store dir");
+}
+
 /// calculate_output_paths_with_store_dir: custom dir differs from default.
 #[cfg(feature = "serde")]
 #[test]
