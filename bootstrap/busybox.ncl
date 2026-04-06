@@ -21,6 +21,7 @@ let toolchain = crunch.fetchTarball {
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
+let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 let gcc = (import "gcc.ncl") in
 
@@ -57,7 +58,13 @@ let busybox_src = crunch.fetchTarball {
       if [ -z "$GCC" ]; then
         echo "ERROR: gcc not found" >&2; exit 1
       fi
-      export PATH="$GCC/bin:$PATH"
+      # Find binutils (as, ld, ar, etc.).
+      BINUTILS=""
+      for d in /nix/store/*-binutils; do
+        if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
+      done
+
+      export PATH="$GCC/bin${BINUTILS:+:$BINUTILS/bin}:$PATH"
 
       # Find GNU Make.
       MAKE=""
@@ -162,5 +169,5 @@ let busybox_src = crunch.fetchTarball {
     "%
   ],
   system = "x86_64-linux",
-  inputs = [toolchain, gnumake, dash, musl, gcc, busybox_src],
+  inputs = [toolchain, gnumake, dash, binutils, musl, gcc, busybox_src],
 }
