@@ -147,13 +147,22 @@ let busybox_src = crunch.fetchTarball {
       sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
       sed -i 's/# CONFIG_INSTALL_NO_USR is not set/CONFIG_INSTALL_NO_USR=y/' .config
 
+      # Add seed musl-gcc include path for kernel headers the bootstrap
+      # GCC is missing (linux/kd.h, linux/vt.h, etc.).
+      SEED=""
+      for d in /nix/store/*-musl-gcc; do
+        if [ -d "$d/include/linux" ]; then SEED="$d"; break; fi
+      done
+      SEED_INC=""
+      if [ -n "$SEED" ]; then SEED_INC="-I$SEED/include"; fi
+
       echo "Building busybox with static musl linking..."
       $MAKE -j$JOBS \
         CC=gcc \
         HOSTCC=gcc \
         HOSTLDFLAGS="-static" \
         LDFLAGS="-static" \
-        CFLAGS="-Os -pipe" \
+        CFLAGS="-Os -pipe $SEED_INC" \
         V=0 || { echo "ERROR: busybox build failed" >&2; exit 1; }
 
       # Verify the binary was produced.
