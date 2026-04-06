@@ -1021,6 +1021,7 @@ name = "crunch"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "base64",
  "blake3",
  "clap",
  "crunch-build",
