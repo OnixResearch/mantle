@@ -5,12 +5,14 @@
 //! `StoreHandle` — they do not construct or own individual services.
 
 mod ca_mapping;
+mod closure;
 mod error;
 mod export;
 mod handle;
 mod query;
 
 pub use ca_mapping::{CaMappings, OutputMap};
+pub use closure::{resolve_closure, MAX_CLOSURE_DEPTH};
 pub use error::Error;
 pub use export::{export_castore_to_disk, MAX_EXPORT_DEPTH};
 pub use handle::{CacheHit, StoreConfig, StoreHandle};

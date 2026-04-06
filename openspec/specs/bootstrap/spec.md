@@ -27,21 +27,24 @@ be statically linked so that no closure resolution is needed.
 ### Requirement: Closure-free inputs
 
 For source inputs that are crunch-built outputs (exist in `--store`, not in
-the host's `/nix/store/`), the system MUST NOT attempt `nix-store -qR`
-closure resolution. Static binaries have no runtime closure.
+the host's `/nix/store/`), the system MUST skip closure resolution entirely.
+Static binaries have no runtime closure.
+
+For Nix-origin source inputs, closure resolution MUST use PathInfo
+references (local redb + remote binary cache narinfo), not `nix-store -qR`.
 
 #### Scenario: Build without nix-store on PATH
 
 - GIVEN a seed from `--fetch` (all static, crunch-built)
 - AND `nix-store` is not on PATH
 - WHEN `crunch build` runs a derivation using the seed
-- THEN the build succeeds (closure resolution returns empty gracefully)
+- THEN the build succeeds (crunch-built paths skip closure walk)
 
 #### Scenario: Mixed seed (some Nix, some fetched)
 
 - GIVEN a seed with some paths from Nix and some from `--fetch`
 - WHEN `crunch build` runs
-- THEN Nix-origin paths get closure resolution via `nix-store -qR`
+- THEN Nix-origin paths get closure resolution via PathInfo/narinfo
 - AND fetched paths skip closure resolution
 
 ### Requirement: Busybox applet access in sandbox

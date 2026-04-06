@@ -34,36 +34,7 @@ pub(crate) fn resolve_references(
         .collect()
 }
 
-/// Query the Nix store for the runtime closure of a store path.
-///
-/// Runs `nix-store -qR <path>` and returns the list of absolute paths.
-/// Returns an empty vec if nix-store is not available or the query fails
-/// (graceful degradation — the build may still work if dependencies are
-/// statically linked or the closure is incomplete).
-pub(crate) fn resolve_nix_closure(abs_path: &str) -> Vec<String> {
-    let output = std::process::Command::new("nix-store")
-        .args(["-qR", abs_path])
-        .output();
 
-    match output {
-        Ok(out) if out.status.success() => {
-            String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(|l| l.to_string())
-                .collect()
-        }
-        _ => vec![],
-    }
-}
-
-/// Parse an absolute store path string into a `StorePath`, given the
-/// store directory prefix. Returns `None` if the path doesn't start
-/// with the prefix or can't be parsed.
-pub(crate) fn parse_store_path(abs: &str, store_dir: &str) -> Option<StorePath<String>> {
-    let suffix = abs.strip_prefix(store_dir)?.strip_prefix('/')?;
-    StorePath::<String>::from_bytes(suffix.as_bytes()).ok().map(|sp| sp.to_owned())
-}
 
 #[cfg(test)]
 mod tests {

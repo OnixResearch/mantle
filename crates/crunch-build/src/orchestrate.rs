@@ -20,10 +20,8 @@ use crate::registry::DerivationRegistry;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::build_request::{collect_input_paths, derivation_to_build_request};
-use crate::ca_mapping::CaMappings;
-use crate::export::export_castore_to_disk;
 use crate::fod::verify_fod_hash;
-use crate::references::{parse_store_path, resolve_nix_closure, resolve_references};
+use crate::references::resolve_references;
 use crate::Error;
 
 
@@ -597,9 +595,9 @@ where
         Ok(output_infos)
     }
 
-    /// Validate source inputs, resolve Nix closures, and ingest all
-    /// paths into castore. Returns the full set of source paths
-    /// (declared + transitive closure).
+    /// Validate source inputs, resolve closures via PathInfo/narinfo,
+    /// and ingest all paths into castore. Returns the full set of
+    /// source paths (declared + transitive closure).
     async fn resolve_and_ingest_sources(
         &mut self,
         derivation: &Derivation,
@@ -609,10 +607,7 @@ where
 
         for source_path in &derivation.input_sources {
             // Crunch-built outputs already have their dependencies
-            // tracked via input_derivations — no Nix closure needed.
-            // A source path is crunch-built if it already has a node
-            // in output_nodes (built in this session) or exists in the
-            // crunch output dir but NOT in the host /nix/store/.
+            // tracked via input_derivations — no closure walk needed.
             if self.is_crunch_built(source_path) {
                 debug!(
                     path = %source_path,
@@ -629,12 +624,23 @@ where
                 });
             }
 
-            // Resolve Nix runtime closure for dynamically-linked inputs.
-            for closure_abs in resolve_nix_closure(&abs) {
-                if let Some(sp) = parse_store_path(&closure_abs, LOGICAL_STORE_DIR) {
-                    if !all_source_paths.contains(&sp) {
-                        all_source_paths.push(sp);
-                    }
+            // Resolve runtime closure via PathInfo (local redb +
+            // optional binary cache narinfo). No subprocess call.
+            let remote_ref = self.store.remote_pathinfo();
+            let remote_dyn: Option<&dyn snix_store::pathinfoservice::PathInfoService> =
+                remote_ref.as_deref();
+            let closure = crunch_store::resolve_closure(
+                source_path,
+                self.store.pathinfo_service().as_ref(),
+                remote_dyn,
+            ).await
+            .map_err(|e| Error::Store(format!(
+                "closure resolution failed for {}: {e}", source_path
+            )))?;
+
+            for sp in closure {
+                if !all_source_paths.contains(&sp) {
+                    all_source_paths.push(sp);
                 }
             }
         }
@@ -1135,17 +1141,6 @@ where
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         self.store.check_cache(drv_path, derivation).await
-            .map_err(|e| Error::Store(format!("{e}")))
-    }
-
-    /// Delegates to `self.store.try_substitute_remote()`.
-    async fn try_substitute_remote(
-        &mut self,
-        digest: [u8; 20],
-        output_path: &StorePath<String>,
-        output_name: &str,
-    ) -> Result<Option<PathInfo>, Error> {
-        self.store.try_substitute_remote(digest, output_path, output_name).await
             .map_err(|e| Error::Store(format!("{e}")))
     }
 

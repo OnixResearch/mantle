@@ -1,104 +1,46 @@
 # Architecture Specification — Delta
 
-## ADDED Requirements
+## MODIFIED Requirements
 
-### Requirement: crunch-pipeline crate
+### Requirement: Crate layout
 
-The workspace MUST contain a `crunch-pipeline` crate that owns the
-eval→build→realize pipeline. The binary crate (`crunch`) MUST be a
-thin CLI shell that parses arguments and calls into crunch-pipeline.
+The workspace MUST contain the following crates:
 
 | Crate | Role |
 |---|---|
-| `crunch` (binary) | CLI argument parsing, output formatting. Under 200 lines. |
-| `crunch-pipeline` | Pipeline orchestration: eval, convert, build, collect results |
-| `crunch-eval` | Nickel evaluation |
-| `crunch-glue` | Nickel→Derivation conversion, ConversionCache |
-| `crunch-build` | Goal scheduler, Worker, build dispatch |
-| `crunch-store` | Store services, caching, realization |
+| `crunch` (binary) | CLI parsing, error formatting, log writing, bootstrap, self-build dispatch |
+| `crunch-pipeline` | Eval->convert->build integration, store/builder construction |
+| `crunch-eval` | Nickel evaluation wrapper |
+| `crunch-glue` | CrunchDerivation -> nix_compat::Derivation conversion |
+| `crunch-build` | Goal scheduler, build dispatch, output processing |
+| `crunch-store` | StoreHandle, cache checking, castore export, queries |
 | vendored crates | Data layer (nix-compat, snix-build, snix-castore, snix-store) |
 
 #### Scenario: Library embedding
 
 - GIVEN a Rust program that depends on `crunch-pipeline`
-- WHEN it calls `pipeline::build(file, opts)`
+- WHEN it calls `crunch_pipeline::build(&config).await`
 - THEN a build executes and returns structured results
 - AND no CLI parsing or terminal output occurs
 
-#### Scenario: Binary crate is thin
+#### Scenario: Binary delegates to pipeline
 
-- GIVEN the `src/main.rs` file
-- WHEN its line count is measured
-- THEN it is under 200 lines
+- GIVEN `crunch build hello.ncl`
+- WHEN the binary processes the command
+- THEN it constructs a `BuildConfig` and calls `crunch_pipeline::build()`
+- AND formats the returned `PipelineResult` for the terminal
 
-### Requirement: Pipeline entry points
+### Requirement: Pipeline stages
 
-`crunch-pipeline` MUST provide at minimum:
+Pipeline stages are unchanged, but the wiring between stages
+MUST live in `crunch-pipeline`, not in the binary crate:
 
-```rust
-pub async fn build(opts: BuildOpts) -> Result<BuildResult, Error>;
-pub fn eval(opts: EvalOpts) -> Result<String, Error>;
-pub async fn bootstrap(opts: BootstrapOpts) -> Result<(), Error>;
-```
+1. Nickel source -> evaluated JSON (crunch-eval)
+2. JSON -> Derivation structs (crunch-glue)
+3. Derivation stream -> Worker dispatch (crunch-pipeline)
+4. Worker -> BuildService (crunch-build)
+5. BuildResult -> PathInfo persistence (crunch-store)
 
-Each function is self-contained: it constructs services, runs the
-pipeline, and returns structured results. The caller does not wire
-services together.
-
-#### Scenario: Build returns structured results
-
-- GIVEN a valid .ncl file
-- WHEN `pipeline::build(opts)` is called
-- THEN `BuildResult` contains output paths, per-package outcomes,
-  logs, and failure details
-
-#### Scenario: Eval returns JSON
-
-- GIVEN a valid .ncl file
-- WHEN `pipeline::eval(opts)` is called
-- THEN a JSON string is returned (same as `crunch eval` output)
-
-### Requirement: Derivation deserialization in pipeline
-
-The logic for detecting single-derivation vs package-set JSON and
-deserializing into `CrunchDerivation` MUST live in `crunch-pipeline`,
-not in the binary crate.
-
-#### Scenario: Package set handling
-
-- GIVEN JSON with multiple top-level fields (no "name" key)
-- WHEN `pipeline::build()` processes it
-- THEN each field is treated as a separate derivation
-
-### Requirement: Log management in pipeline
-
-Build log persistence (`write_log`), retrieval (`cmd_log`), and
-state directory resolution (`state_dir`, `log_dir`) MUST live in
-`crunch-pipeline` or `crunch-store`, not in the binary crate.
-
-#### Scenario: Retrieve logs from library
-
-- GIVEN a completed build
-- WHEN `pipeline::logs(query)` is called from library code
-- THEN matching build logs are returned
-
-### Requirement: FOD error handling in pipeline
-
-FOD hash mismatch detection, `--fix` source rewriting, and the
-re-run error message MUST live in `crunch-pipeline`, not in the
-binary crate.
-
-## MODIFIED Requirements
-
-### Requirement: Pipeline stages (modified)
-
-The architecture spec's pipeline stages are unchanged, but the
-wiring MUST live in `crunch-pipeline`:
-
-1. Nickel source → evaluated record (crunch-eval)
-2. Evaluated record → Derivation structs (crunch-glue)
-3. Derivation → stream to Worker (crunch-pipeline)
-4. Worker → BuildService dispatch (crunch-build)
-5. BuildResult → PathInfo persistence (crunch-store)
-
-The binary crate MUST NOT contain any of steps 1–5.
+The binary crate MUST NOT contain steps 1-5. It MAY call
+`crunch_store` directly for `crunch store list/info/verify`
+commands (store queries don't involve the build pipeline).
