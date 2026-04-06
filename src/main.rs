@@ -33,6 +33,17 @@ struct Args {
     #[arg(long, global = true, default_value = "/nix/store")]
     store: PathBuf,
 
+    /// Logical store path prefix for derivation hashes. All output
+    /// paths and ATerm hashes are computed against this prefix.
+    /// Default: /crunch/store. Use --nix-compat for /nix/store.
+    #[arg(long, global = true, default_value = "/crunch/store")]
+    store_prefix: String,
+
+    /// Shorthand for --store-prefix=/nix/store. For interop testing
+    /// with Nix-computed derivations.
+    #[arg(long, global = true)]
+    nix_compat: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -183,6 +194,7 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<(), RunError> {
+    let store_prefix = resolve_store_prefix(&args);
     match args.command {
         Command::Eval { file, import_paths } => {
             let import_paths = build_import_paths(&import_paths)?;
@@ -195,7 +207,7 @@ fn run(args: Args) -> Result<(), RunError> {
             let import_paths = build_import_paths(&import_paths)?;
             let max_jobs = resolve_max_jobs(jobs);
             let sub_url = if no_substitute { None } else { Some(substituters) };
-            cmd_build(&file, &import_paths, &args.store, args.verbose, fix, max_jobs, sub_url.as_deref())
+            cmd_build(&file, &import_paths, &args.store, &store_prefix, args.verbose, fix, max_jobs, sub_url.as_deref())
         }
         Command::Bootstrap { output, fetch, packages } => {
             if fetch {
@@ -215,9 +227,15 @@ fn run(args: Args) -> Result<(), RunError> {
 
 // ── cmd_build: eval → convert → build ──────────────────────────────────
 
-/// The logical store prefix. Derivation paths, output hashing, sandbox
-/// layout, and DerivationRegistry lookups always use this.
-const LOGICAL_STORE_DIR: &str = "/nix/store";
+/// Resolve the effective store prefix from CLI args.
+/// --nix-compat overrides --store-prefix to /nix/store.
+fn resolve_store_prefix(args: &Args) -> String {
+    if args.nix_compat {
+        "/nix/store".to_string()
+    } else {
+        args.store_prefix.clone()
+    }
+}
 
 /// Resolve --jobs: user value clamped to [1, 16], or available_parallelism.
 fn resolve_max_jobs(user: Option<u32>) -> u32 {
@@ -234,6 +252,7 @@ fn cmd_build(
     file: &std::path::Path,
     import_paths: &[OsString],
     output_dir: &std::path::Path,
+    store_prefix: &str,
     verbose: bool,
     fix: bool,
     max_jobs: u32,
@@ -264,7 +283,7 @@ fn cmd_build(
     let log_dir = log_dir();
     let _ = std::fs::create_dir_all(&log_dir);
 
-    let output_dir_str = output_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
+    let output_dir_str = output_dir.to_str().unwrap_or(store_prefix);
 
     let rt = tokio::runtime::Runtime::new()
         .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
@@ -274,6 +293,7 @@ fn cmd_build(
             derivations,
             output_dir,
             output_dir_str,
+            store_prefix,
             &log_dir,
             file,
             verbose,
@@ -328,6 +348,7 @@ async fn execute_builds(
     known_paths: &mut crunch_build::DerivationRegistry,
     output_dir: &std::path::Path,
     output_dir_str: &str,
+    store_prefix: &str,
     log_dir: &std::path::Path,
     source_file: &std::path::Path,
     verbose: bool,
@@ -338,7 +359,7 @@ async fn execute_builds(
         state_dir: state_dir(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_url: None,
-        store_dir: LOGICAL_STORE_DIR.to_string(),
+        store_dir: store_prefix.to_string(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;
@@ -406,13 +427,13 @@ async fn execute_builds(
         let label_by_drv: std::collections::HashMap<String, &str> = drv_paths
             .iter()
             .map(|(label, sp)| {
-                (sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR), label.as_str())
+                (sp.to_absolute_path_with_prefix(store_prefix), label.as_str())
             })
             .collect();
 
         for outcome in &outcomes {
             let drv_abs = outcome.drv_path
-                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                .to_absolute_path_with_prefix(store_prefix);
             let label = label_by_drv.get(drv_abs.as_str()).copied().unwrap_or("?");
 
             if let Some(log) = &outcome.log {
@@ -465,6 +486,7 @@ async fn execute_builds_streaming(
     derivations: Vec<(String, crunch_glue::CrunchDerivation)>,
     output_dir: &std::path::Path,
     output_dir_str: &str,
+    store_prefix: &str,
     log_dir: &std::path::Path,
     source_file: &std::path::Path,
     verbose: bool,
@@ -478,7 +500,7 @@ async fn execute_builds_streaming(
         state_dir: state_dir(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_url: substituter_url.map(|s| s.to_string()),
-        store_dir: LOGICAL_STORE_DIR.to_string(),
+        store_dir: store_prefix.to_string(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))?;
@@ -515,7 +537,7 @@ async fn execute_builds_streaming(
 
         // Convert all derivations into ConversionCache, then bridge
         // to DerivationRegistry for the build engine.
-        let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
+        let mut cache = crunch_glue::ConversionCache::new(store_prefix);
         let mut drv_paths: Vec<(String, StorePath<String>)> = Vec::new();
 
         for (label, drv) in &derivations {
@@ -526,7 +548,7 @@ async fn execute_builds_streaming(
         }
 
         // Bridge: populate DerivationRegistry from ConversionCache.
-        let mut known_paths = crunch_build::DerivationRegistry::new(LOGICAL_STORE_DIR);
+        let mut known_paths = crunch_build::DerivationRegistry::new(store_prefix);
         crunch_build::populate_registry(&mut known_paths, cache.iter_entries());
 
         // Stream roots to the Worker over a channel. The Worker starts
@@ -578,13 +600,13 @@ async fn execute_builds_streaming(
         let label_by_drv: std::collections::HashMap<String, &str> = drv_paths
             .iter()
             .map(|(label, sp)| {
-                (sp.to_absolute_path_with_prefix(LOGICAL_STORE_DIR), label.as_str())
+                (sp.to_absolute_path_with_prefix(store_prefix), label.as_str())
             })
             .collect();
 
         for outcome in &result.outcomes {
             let drv_abs = outcome.drv_path
-                .to_absolute_path_with_prefix(LOGICAL_STORE_DIR);
+                .to_absolute_path_with_prefix(store_prefix);
             let label = label_by_drv.get(drv_abs.as_str()).copied().unwrap_or("?");
 
             if let Some(log) = &outcome.log {
@@ -816,6 +838,7 @@ fn cmd_self_build(
         &ncl_path,
         &import_paths,
         output_dir,
+        nix_compat::store_path::STORE_DIR,
         verbose,
         false,
         max_jobs,
