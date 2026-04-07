@@ -172,6 +172,52 @@ fn check_detects_drift() {
 }
 
 #[test]
+fn refresh_reports_lockfile_warnings_for_unlocked_patches() {
+    let dir = TempDir::new().unwrap();
+
+    // Write a manifest that references a patch, but the StubResolver
+    // can't hash local files, so the patch stays unlocked.
+    let manifest = r#"{
+  version = "1.0.0",
+  inputs = [
+    {
+      name = "pkg",
+      kind = { type = "file", url = "https://example.com/pkg" },
+      patches = ["mypatch"],
+    },
+  ],
+  patches = [
+    {
+      name = "mypatch",
+      source = { type = "local", path = "patches/fix.patch" },
+    },
+  ],
+}
+"#;
+    std::fs::write(dir.path().join("crunch-project.ncl"), manifest).unwrap();
+
+    // Write an empty lock so refresh has something to work with
+    std::fs::write(
+        dir.path().join("crunch.lock"),
+        r#"{"version":"1.0.0","inputs":{},"patches":{}}"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join(".crunch")).unwrap();
+    std::fs::write(dir.path().join(".crunch/inputs.ncl"), "{}").unwrap();
+
+    // Refresh should succeed but print a lockfile warning about the
+    // unlocked patch.
+    crunch()
+        .arg("refresh")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("lockfile warning").or(
+            predicate::str::contains("1 input(s) updated"),
+        ));
+}
+
+#[test]
 fn check_detects_missing_inputs_file() {
     let dir = TempDir::new().unwrap();
 
