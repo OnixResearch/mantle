@@ -301,6 +301,7 @@ $ nl -ba crates/crunch-pipeline/tests/integration_build.rs | sed -n '12,18p'
     18  }
 
 $ cargo test -p crunch-pipeline pipeline_reports_fod_mismatch_without_aborting_other_roots -- --exact
+...
 running 1 test
 test pipeline_reports_fod_mismatch_without_aborting_other_roots ... ok
 

@@ -97,8 +97,9 @@ continue building other derivations.
 
 The pipeline crate MUST NOT depend on `clap`. It MUST NOT write to
 stdout or stderr. It MUST NOT read environment variables for CLI
-configuration (it MAY read `CRUNCH_STATE_DIR` as a default if no
-`state_dir` is provided). It MUST NOT perform `--fix` source rewriting.
+configuration. It MUST NOT perform `--fix` source rewriting.
+The caller is responsible for resolving `state_dir` before constructing
+`BuildConfig`.
 
 #### Scenario: No direct output
 
