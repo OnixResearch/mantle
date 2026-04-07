@@ -103,7 +103,7 @@ fn smoke_build_directory_output_with_structure() {
 {
   name = "dir-output",
   builder = "/bin/sh",
-  args = ["-c", "mkdir -p $out/bin $out/lib && echo '#!/bin/sh' > $out/bin/run && echo 'libfoo' > $out/lib/foo.txt && chmod +x $out/bin/run"],
+  args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin $out/lib && echo '#!/bin/sh' > $out/bin/run && echo 'libfoo' > $out/lib/foo.txt && $BB chmod +x $out/bin/run"],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         store.path(),
@@ -141,7 +141,7 @@ fn smoke_build_and_run_shell_script() {
 {
   name = "runnable",
   builder = "/bin/sh",
-  args = ["-c", "mkdir -p $out/bin && printf '#!/bin/sh\necho hello-from-crunch\nexit 0\n' > $out/bin/greet && chmod +x $out/bin/greet"],
+  args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin && $BB printf '#!/bin/sh\necho hello-from-crunch\nexit 0\n' > $out/bin/greet && $BB chmod +x $out/bin/greet"],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         store.path(),
@@ -408,7 +408,7 @@ fn smoke_build_symlink_in_output() {
 {
   name = "with-symlink",
   builder = "/bin/sh",
-  args = ["-c", "mkdir -p $out/bin && echo '#!/bin/sh' > $out/bin/real && chmod +x $out/bin/real && ln -s real $out/bin/alias"],
+  args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin && echo '#!/bin/sh' > $out/bin/real && $BB chmod +x $out/bin/real && $BB ln -s real $out/bin/alias"],
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#,
         store.path(),
