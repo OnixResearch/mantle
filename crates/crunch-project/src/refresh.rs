@@ -352,6 +352,9 @@ pub fn resolve_patches_into_lock(
 }
 
 /// Check if a locked patch still matches its manifest definition.
+///
+/// Compares source type, path/url, AND hash algo/expected for remote
+/// patches. Any mismatch means the locked patch is stale.
 fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
     match (&locked.source, &def.source) {
         (
@@ -360,8 +363,25 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
         ) => locked_path == def_path,
         (
             LockedPatchSource::Remote { url: locked_url },
-            PatchSource::Remote { url: def_url, .. },
-        ) => locked_url == def_url,
+            PatchSource::Remote { url: def_url, hash: def_hash },
+        ) => {
+            if locked_url != def_url {
+                return false;
+            }
+            // Algo change means the locked hash is under a different
+            // algorithm than what the manifest now requests.
+            if locked.hash.algo != def_hash.algo {
+                return false;
+            }
+            // If the manifest declares an expected hash and it differs
+            // from what we locked, the definition changed.
+            if let Some(ref expected) = def_hash.expected {
+                if locked.hash.value != *expected {
+                    return false;
+                }
+            }
+            true
+        }
         _ => false, // type changed (local <-> remote)
     }
 }
@@ -913,6 +933,213 @@ mod tests {
         assert_eq!(result.inputs_changed, 0);
         assert!(result.has_changes()); // critical: this must be true
         assert!(result.lock.patches.contains_key("newpatch"));
+    }
+
+    #[test]
+    fn remote_patch_algo_change_triggers_relock() {
+        let resolver = PatchResolver {
+            url_hash: Some("blake3-newhash=".into()),
+            local_hash: None,
+        };
+
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["rpatch".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "rpatch".into(),
+                source: PatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                    hash: HashSpec {
+                        algo: HashAlgo::Blake3, // changed from sha256
+                        expected: None,
+                    },
+                },
+            }],
+        };
+
+        // Lock has the same URL but sha256 algo
+        let mut lock = empty_lock();
+        lock.inputs.insert(
+            "pkg".into(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-pkghash=".into(),
+                },
+                patches: vec!["rpatch".into()],
+                mirrors: vec![],
+            },
+        );
+        lock.patches.insert(
+            "rpatch".into(),
+            LockedPatch {
+                source: LockedPatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256, // old algo
+                    value: "sha256-oldhash=".into(),
+                },
+            },
+        );
+
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Patch must be re-resolved with blake3 algo
+        let locked = &result.lock.patches["rpatch"];
+        assert_eq!(locked.hash.algo, HashAlgo::Blake3);
+        assert_eq!(locked.hash.value, "blake3-newhash=");
+        assert!(result.patches_changed);
+    }
+
+    #[test]
+    fn remote_patch_expected_hash_change_triggers_relock() {
+        let resolver = PatchResolver {
+            url_hash: Some("sha256-newexpected=".into()),
+            local_hash: None,
+        };
+
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["rpatch".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "rpatch".into(),
+                source: PatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(), // same URL
+                    hash: HashSpec {
+                        algo: HashAlgo::Sha256,
+                        expected: Some("sha256-newexpected=".into()), // changed expected
+                    },
+                },
+            }],
+        };
+
+        // Lock has the same URL and algo, but a different hash value
+        let mut lock = empty_lock();
+        lock.inputs.insert(
+            "pkg".into(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-pkghash=".into(),
+                },
+                patches: vec!["rpatch".into()],
+                mirrors: vec![],
+            },
+        );
+        lock.patches.insert(
+            "rpatch".into(),
+            LockedPatch {
+                source: LockedPatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-oldhash=".into(), // differs from new expected
+                },
+            },
+        );
+
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Patch must be re-resolved; expected hash from manifest takes priority
+        let locked = &result.lock.patches["rpatch"];
+        assert_eq!(locked.hash.value, "sha256-newexpected=");
+        assert!(result.patches_changed);
+    }
+
+    #[test]
+    fn remote_patch_same_url_same_hash_not_relocked() {
+        let resolver = PatchResolver {
+            url_hash: Some("sha256-resolved=".into()),
+            local_hash: None,
+        };
+
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["rpatch".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "rpatch".into(),
+                source: PatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                    hash: HashSpec {
+                        algo: HashAlgo::Sha256,
+                        expected: None, // no explicit expected
+                    },
+                },
+            }],
+        };
+
+        // Lock already has the correct entry
+        let mut lock = empty_lock();
+        lock.inputs.insert(
+            "pkg".into(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-pkghash=".into(),
+                },
+                patches: vec!["rpatch".into()],
+                mirrors: vec![],
+            },
+        );
+        lock.patches.insert(
+            "rpatch".into(),
+            LockedPatch {
+                source: LockedPatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-existing=".into(),
+                },
+            },
+        );
+
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Nothing should change
+        assert!(!result.patches_changed);
+        assert_eq!(result.lock.patches["rpatch"].hash.value, "sha256-existing=");
     }
 
     #[test]

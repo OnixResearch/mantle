@@ -207,6 +207,12 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     let result = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
 
     if result.has_changes() {
+        let problems = result.lock.validate();
+        if !problems.is_empty() {
+            for p in &problems {
+                eprintln!("lockfile warning: {p}");
+            }
+        }
         write_lockfile(dir, &result.lock)?;
         write_inputs_ncl(dir, &result.lock)?;
         if result.inputs_changed > 0 {
