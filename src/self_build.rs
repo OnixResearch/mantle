@@ -223,12 +223,17 @@ let bwrap = (import "bwrap.ncl") in
       done
 
       # Add bwrap to PATH if available.
+      # bwrap is a declared input, so the scheduler builds it before this
+      # derivation. The else branch is a defensive guard. bwrap is not
+      # needed inside this sandbox (we are compiling crunch, not running
+      # builds), but having it on PATH is useful if the verify step ever
+      # runs a crunch command that invokes bwrap.
       BWRAP_PATH=""
       if [ -n "$BWRAP_BIN" ]; then
         echo "Using crunch-built bwrap: $BWRAP_BIN"
         BWRAP_PATH="$BWRAP_BIN:"
       else
-        echo "WARNING: crunch-built bwrap not found in inputs, falling back to PATH bwrap" >&2
+        echo "WARNING: crunch-built bwrap not found among inputs" >&2
       fi
       export PATH="/tmp/tools:${{BWRAP_PATH}}$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
 
@@ -415,6 +420,47 @@ fn dir_size(dir: &Path) -> u64 {
     total
 }
 
+/// Check whether bwrap is available on the host PATH.
+///
+/// The bootstrap chain builds a crunch-owned bwrap from source, but the
+/// very first `crunch self-build` on a bare machine needs an external
+/// bwrap to run the sandbox. This function warns when falling back to
+/// the host PATH and errors if bwrap is missing entirely.
+fn check_host_bwrap() -> Result<(), RunError> {
+    match find_on_path("bwrap") {
+        Some(path) => {
+            let path_str = path.display().to_string();
+            if path_str.contains("crunch") {
+                eprintln!("  bwrap: {} (crunch-built)", path_str);
+            } else {
+                eprintln!(
+                    "  WARNING: using external bwrap at {} (first bootstrap only; \
+                     subsequent self-builds use the crunch-built bwrap)",
+                    path_str,
+                );
+            }
+            Ok(())
+        }
+        None => Err(RunError::Build(
+            "bwrap (bubblewrap) not found on PATH. The first self-build requires an \
+             external bwrap. Install it from https://github.com/containers/bubblewrap"
+                .to_string(),
+        )),
+    }
+}
+
+/// Search PATH for a named binary, returning the first match.
+fn find_on_path(name: &str) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 pub fn cmd_self_build(
     output_dir: &Path,
     state_dir: &Path,
@@ -425,6 +471,10 @@ pub fn cmd_self_build(
     no_verify: bool,
 ) -> Result<(), RunError> {
     eprintln!("=== crunch self-build ===");
+
+    // The sandbox needs bwrap on the host. Warn early if it's missing
+    // or if we're falling back to an external (non-crunch-built) binary.
+    check_host_bwrap()?;
 
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
@@ -643,5 +693,69 @@ mod tests {
         std::fs::write(dir.path().join("b"), "67").unwrap();
         let s = dir_size(dir.path());
         assert_eq!(s, 7);
+    }
+
+    #[test]
+    fn generate_ncl_has_bwrap_warning_branch() {
+        // The generated script must handle the case where BWRAP_BIN
+        // is empty (defensive guard — shouldn't happen since bwrap
+        // is a declared input).
+        let ncl = generate_self_build_ncl("x", "/nix/store");
+        assert!(
+            ncl.contains("crunch-built bwrap not found"),
+            "NCL must have a warning for missing bwrap: not found in output",
+        );
+        assert!(
+            ncl.contains("Using crunch-built bwrap"),
+            "NCL must have a success message for found bwrap: not found in output",
+        );
+    }
+
+    #[test]
+    fn generate_ncl_discovers_bwrap_before_path_export() {
+        // Regression: BWRAP_BIN must be discovered BEFORE the PATH
+        // export that references it. Verify the discovery loop appears
+        // before the PATH export in the script.
+        let ncl = generate_self_build_ncl("x", "/nix/store");
+        let discover_pos = ncl.find("$NIX_STORE/*-bwrap")
+            .expect("bwrap discovery loop missing");
+        let path_export_pos = ncl.find("${BWRAP_PATH}")
+            .expect("BWRAP_PATH in PATH export missing");
+        assert!(
+            discover_pos < path_export_pos,
+            "bwrap discovery (pos {discover_pos}) must come before PATH export (pos {path_export_pos})",
+        );
+    }
+
+    #[test]
+    fn check_host_bwrap_finds_bwrap_on_path() {
+        // bwrap should be on PATH in this test environment.
+        // If not, the test is inconclusive (not a failure).
+        if find_on_path("bwrap").is_none() {
+            eprintln!("skipping: bwrap not on PATH");
+            return;
+        }
+        check_host_bwrap().expect("bwrap should be found");
+    }
+
+    #[test]
+    fn check_host_bwrap_fails_with_empty_path() {
+        // Temporarily set PATH to empty to simulate missing bwrap.
+        let original = std::env::var_os("PATH");
+        unsafe { std::env::set_var("PATH", "") };
+        let result = check_host_bwrap();
+        // Restore PATH before asserting.
+        match original {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+        assert!(result.is_err(), "should fail when bwrap is not on PATH");
+        let msg = result.unwrap_err().message().to_string();
+        assert!(msg.contains("not found on PATH"), "error should say not found: {msg}");
+    }
+
+    #[test]
+    fn find_on_path_returns_none_for_nonexistent() {
+        assert!(find_on_path("this-binary-does-not-exist-crunch-test").is_none());
     }
 }
