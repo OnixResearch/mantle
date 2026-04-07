@@ -6,6 +6,9 @@
 - `ProjectManifest.version` as a bare `String` without validation is a bug. Always parse and validate version fields during `validate()`, not just at usage time.
 - CLI commands need assert_cmd tests. `cargo check -p crunch` proves compilation, not behavior.
 - Commit `Cargo.lock` changes in the same commit as the code that changed it.
+- `unwrap_or_default()` on hash values produces empty strings, which violate lock validation (`lockfile_detects_empty_hash`). Use `?` to propagate None instead.
+- "Already locked" skip logic (`if lock.patches.contains_key(name) { continue }`) goes stale when the manifest definition changes. Always compare the locked entry against the current definition.
+- Refresh CLI must always run `apply_outcomes` and check `has_changes()`, not gate on `updated_count > 0`. Patch-only changes (no input changes) must still write the lockfile.
 
 ## Build Environment
 - cargo/rustc are at `$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin` and `$HOME/.cargo/bin` — NOT on default PATH. Must prepend to PATH in pueue_run commands.
