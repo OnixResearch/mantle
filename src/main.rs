@@ -559,41 +559,57 @@ async fn execute_builds_streaming(
             verbose,
         );
 
-        // Convert all derivations into ConversionCache, then bridge
-        // to DerivationRegistry for the build engine.
-        let mut cache = crunch_glue::ConversionCache::new(store_prefix);
-        let mut drv_paths: Vec<(String, StorePath<String>)> = Vec::new();
-
-        for (label, drv) in &derivations {
-            let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut cache)
-                .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
-            info!(drv = %drv_path, label = %label, "derivation constructed");
-            drv_paths.push((label.clone(), drv_path));
-        }
-
-        // Bridge: populate DerivationRegistry from ConversionCache.
-        let mut known_paths = crunch_build::DerivationRegistry::new(store_prefix);
-        crunch_build::populate_registry(&mut known_paths, cache.iter_entries());
-
-        // Stream roots to the Worker over a channel. The Worker starts
-        // building each root's deps as soon as it arrives, concurrently
-        // with processing later roots.
+        // Stream roots to the Worker over a channel. The convert loop
+        // runs on a blocking thread; the Worker builds concurrently.
+        // Leaf deps of root 0 start building while root 1 is still
+        // being converted.
         let (tx, mut rx) = mpsc::channel::<crunch_build::EvalMessage>(16);
 
-        // Send all roots, then close the channel.
-        for (label, drv_path) in &drv_paths {
-            tx.send(crunch_build::EvalMessage {
-                label: label.clone(),
-                drv_path: drv_path.clone(),
-            }).await.map_err(|e| RunError::Internal(format!("channel send: {e}")))?;
-        }
-        drop(tx);
+        // Spawn the convert loop on a blocking thread. Each root is
+        // converted, its new entries drained, and sent over the channel.
+        // The Worker receives entries + drv_path and builds incrementally.
+        let prefix_owned = store_prefix.to_string();
+        let convert_handle = tokio::task::spawn_blocking(move || {
+            let mut cache = crunch_glue::ConversionCache::new(&prefix_owned);
+            let mut drv_paths: Vec<(String, StorePath<String>)> = Vec::new();
 
-        // Run the Worker.
+            for (label, drv) in &derivations {
+                let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut cache)
+                    .map_err(|e| RunError::Build(format!("{label}: {e}")))?;
+
+                let new_entries = cache.drain_pending();
+                info!(drv = %drv_path, label = %label,
+                      entries = new_entries.len(), "converted, sending to worker");
+
+                tx.blocking_send(crunch_build::EvalMessage {
+                    label: label.clone(),
+                    drv_path: drv_path.clone(),
+                    new_entries,
+                }).map_err(|e| RunError::Internal(format!("channel send: {e}")))?;
+
+                drv_paths.push((label.clone(), drv_path));
+            }
+
+            drop(tx); // Close channel — convert done.
+            Ok::<_, RunError>(drv_paths)
+        });
+
+        // Run the Worker concurrently. It receives EvalMessages as
+        // the convert thread produces them and starts building deps.
+        let mut known_paths = crunch_build::DerivationRegistry::new(store_prefix);
         let mut worker = crunch_build::Worker::new(max_jobs);
         let worker_result = worker
             .run_streaming(&mut builder, &mut known_paths, &mut rx)
             .await;
+
+        // Await the convert thread. If it failed, that error takes
+        // priority (the Worker saw a channel-close and may have
+        // succeeded with partial results).
+        let drv_paths = convert_handle
+            .await
+            .map_err(|e| RunError::Internal(format!("convert thread panicked: {e}")))?;
+        // If convert failed, report that error (Worker saw channel-close).
+        let drv_paths = drv_paths?;
 
         let result = match worker_result {
             Ok(r) => r,

@@ -30,13 +30,24 @@ use crate::orchestrate::{BuildOutcome, Builder};
 use crate::Error;
 
 /// A derivation arriving from the eval thread.
-/// Contains everything the Worker needs to create a root goal.
+///
+/// Contains the root drv_path plus all newly-converted entries
+/// (the root and its transitive deps). The Worker inserts these
+/// into `DerivationRegistry` before calling `want()`, enabling
+/// true eval/build overlap: leaf deps start building while later
+/// roots are still being converted.
 #[derive(Debug, Clone)]
 pub struct EvalMessage {
     /// Human-readable label (e.g., package name).
     pub label: String,
     /// The root derivation's store path.
     pub drv_path: StorePath<String>,
+    /// Derivation entries discovered during this root's conversion.
+    /// Each tuple: (drv_path, hash_derivation_modulo, Derivation, is_ca).
+    /// Inserted into `DerivationRegistry` before `want()` so deps
+    /// are known. Diamond deps already in the registry are skipped
+    /// (insert is idempotent by drv path).
+    pub new_entries: Vec<(StorePath<String>, [u8; 32], nix_compat::derivation::Derivation, bool)>,
 }
 
 
@@ -395,7 +406,7 @@ impl Worker {
     fn drain_eval_messages(
         &mut self,
         rx: &mut mpsc::Receiver<EvalMessage>,
-        known_paths: &DerivationRegistry,
+        known_paths: &mut DerivationRegistry,
         eval_done: &mut bool,
     ) -> Result<(), Error> {
         let drain_limit: u32 = 256;
@@ -414,13 +425,28 @@ impl Worker {
         Ok(())
     }
 
-    /// Process a single eval message: create a root goal.
+    /// Process a single eval message: insert new entries into the
+    /// registry, then create a root goal.
+    ///
+    /// Entries arrive from the convert thread. Diamond deps that
+    /// were already registered by an earlier message are silently
+    /// skipped (DerivationRegistry.insert is idempotent by drv path).
     fn accept_eval_message(
         &mut self,
         msg: EvalMessage,
-        known_paths: &DerivationRegistry,
+        known_paths: &mut DerivationRegistry,
     ) -> Result<(), Error> {
-        debug!(label = %msg.label, drv = %msg.drv_path, "received derivation from eval");
+        debug!(
+            label = %msg.label,
+            drv = %msg.drv_path,
+            new_entries = msg.new_entries.len(),
+            "received derivation from eval",
+        );
+
+        for (drv_path, hdm, derivation, content_addressed) in msg.new_entries {
+            known_paths.insert(drv_path, hdm, derivation, content_addressed);
+        }
+
         self.want(&msg.drv_path, known_paths, true)
     }
 
@@ -1397,7 +1423,7 @@ mod tests {
         let (sp, _) = build_and_register("solo", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "solo".into(), drv_path: sp.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "solo".into(), drv_path: sp.clone(), new_entries: vec![] }).await.unwrap();
         drop(tx); // Close channel — eval done.
 
         let mut w = Worker::new(1);
@@ -1427,9 +1453,9 @@ mod tests {
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
 
         // Send first root.
-        tx.send(EvalMessage { label: "pkg-a".into(), drv_path: a.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "pkg-a".into(), drv_path: a.clone(), new_entries: vec![] }).await.unwrap();
         // Send second root.
-        tx.send(EvalMessage { label: "pkg-b".into(), drv_path: b.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "pkg-b".into(), drv_path: b.clone(), new_entries: vec![] }).await.unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);
@@ -1457,8 +1483,8 @@ mod tests {
         let (top_b, _) = build_and_register("top-b", &[(shared.clone(), "out")], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "top-a".into(), drv_path: top_a.clone() }).await.unwrap();
-        tx.send(EvalMessage { label: "top-b".into(), drv_path: top_b.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "top-a".into(), drv_path: top_a.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage { label: "top-b".into(), drv_path: top_b.clone(), new_entries: vec![] }).await.unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);
@@ -1515,7 +1541,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
 
         // Send first root only.
-        tx.send(EvalMessage { label: "first".into(), drv_path: a.clone() }).await.unwrap();
+        tx.send(EvalMessage { label: "first".into(), drv_path: a.clone(), new_entries: vec![] }).await.unwrap();
 
         // Spawn a task that sends second root after a short delay
         // (simulating slow eval).
@@ -1523,7 +1549,7 @@ mod tests {
         let b2 = b.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            tx2.send(EvalMessage { label: "second".into(), drv_path: b2 }).await.unwrap();
+            tx2.send(EvalMessage { label: "second".into(), drv_path: b2, new_entries: vec![] }).await.unwrap();
             // Drop tx2 but tx is still alive — don't close channel yet.
         });
 
@@ -1540,6 +1566,118 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2);
+    }
+
+    // ── Entries-in-message tests ─────────────────────────────
+    // These verify the eval/build streaming overlap: registry
+    // entries arrive WITH the EvalMessage and are inserted by
+    // accept_eval_message before want() is called.
+
+    #[tokio::test]
+    async fn streaming_entries_populate_registry_on_arrival() {
+        // Registry starts EMPTY. Entries arrive via EvalMessage.
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR, false,
+        );
+
+        // Build the derivation entries outside the registry.
+        let mut scratch_kp = DerivationRegistry::default();
+        let (sp, drv) = build_and_register("via-msg", &[], &mut scratch_kp);
+        let hdm = scratch_kp
+            .get_hdm_by_drv_path(&sp.to_absolute_path())
+            .unwrap();
+
+        // Empty registry — the Worker has no knowledge of "via-msg" yet.
+        let mut kp = DerivationRegistry::default();
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        tx.send(EvalMessage {
+            label: "via-msg".into(),
+            drv_path: sp.clone(),
+            new_entries: vec![(sp.clone(), hdm, drv, false)],
+        }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(1);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        // Registry was populated by the message.
+        assert!(!kp.is_empty(), "registry should have entries from message");
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(result.failed.is_empty());
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn streaming_entries_with_deps_arrive_incrementally() {
+        // Two roots with a shared dep. First message carries
+        // [shared, root_a]; second carries [root_b] (shared already
+        // in registry from first message).
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+
+        let mut builder = Builder::new(
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR, false,
+        );
+
+        // Build derivation entries in a scratch registry.
+        let mut scratch = DerivationRegistry::default();
+        let (shared_sp, shared_drv) = build_and_register("shared", &[], &mut scratch);
+        let (a_sp, a_drv) = build_and_register(
+            "root-a", &[(shared_sp.clone(), "out")], &mut scratch,
+        );
+        let (b_sp, b_drv) = build_and_register(
+            "root-b", &[(shared_sp.clone(), "out")], &mut scratch,
+        );
+
+        let shared_hdm = scratch.get_hdm_by_drv_path(&shared_sp.to_absolute_path()).unwrap();
+        let a_hdm = scratch.get_hdm_by_drv_path(&a_sp.to_absolute_path()).unwrap();
+        let b_hdm = scratch.get_hdm_by_drv_path(&b_sp.to_absolute_path()).unwrap();
+
+        let mut kp = DerivationRegistry::default();
+
+        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+        // First root brings shared + root-a.
+        tx.send(EvalMessage {
+            label: "root-a".into(),
+            drv_path: a_sp.clone(),
+            new_entries: vec![
+                (shared_sp.clone(), shared_hdm, shared_drv, false),
+                (a_sp.clone(), a_hdm, a_drv, false),
+            ],
+        }).await.unwrap();
+        // Second root only brings root-b (shared already known).
+        tx.send(EvalMessage {
+            label: "root-b".into(),
+            drv_path: b_sp.clone(),
+            new_entries: vec![
+                (b_sp.clone(), b_hdm, b_drv, false),
+            ],
+        }).await.unwrap();
+        drop(tx);
+
+        let mut w = Worker::new(2);
+        let result = w.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+
+        assert_eq!(result.outcomes.len(), 2);
+        assert!(result.failed.is_empty());
+
+        // shared + root-a + root-b = 3 builds, shared only once.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+        let shared_builds = recorded.iter()
+            .filter(|a| a.iter().any(|s| s.contains("shared")))
+            .count();
+        assert_eq!(shared_builds, 1);
     }
 
     // ── Dynamic derivation integration tests ─────────────────
@@ -1623,6 +1761,7 @@ mod tests {
         tx.send(EvalMessage {
             label: "stream-producer.drv".into(),
             drv_path: producer_sp.clone(),
+            new_entries: vec![],
         }).await.unwrap();
         drop(tx);
 
@@ -1815,8 +1954,8 @@ mod tests {
         let (good_sp, _) = build_and_register("stream-good", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "bad".into(), drv_path: bad_sp }).await.unwrap();
-        tx.send(EvalMessage { label: "good".into(), drv_path: good_sp }).await.unwrap();
+        tx.send(EvalMessage { label: "bad".into(), drv_path: bad_sp, new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage { label: "good".into(), drv_path: good_sp, new_entries: vec![] }).await.unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);

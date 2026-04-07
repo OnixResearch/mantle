@@ -12,6 +12,10 @@ use std::collections::HashMap;
 ///
 /// Memoizes already-converted derivations to avoid redundant work
 /// and enables diamond dependency dedup via ATerm hash.
+/// Maximum pending entries before drain_pending() must be called.
+/// Prevents unbounded memory growth if callers forget to drain.
+const MAX_PENDING: u32 = 16_384;
+
 pub struct ConversionCache {
     /// derivation ATerm hash -> (drv store path, hash_derivation_modulo, Derivation)
     by_aterm_hash: HashMap<[u8; 32], ConversionEntry>,
@@ -24,6 +28,9 @@ pub struct ConversionCache {
     in_progress: std::collections::HashSet<String>,
     /// Store directory prefix (e.g. "/nix/store" or "/opt/crunch").
     store_dir: String,
+    /// Entries added since the last `drain_pending()`. Enables
+    /// incremental bridging to DerivationRegistry while converting.
+    pending: Vec<(StorePath<String>, [u8; 32], Derivation, bool)>,
 }
 
 /// A derivation entry produced during conversion.
@@ -44,6 +51,7 @@ impl ConversionCache {
             drv_path_to_aterm: HashMap::new(),
             in_progress: std::collections::HashSet::new(),
             store_dir: store_dir.to_string(),
+            pending: Vec::new(),
         }
     }
 
@@ -84,6 +92,18 @@ impl ConversionCache {
         let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
         self.drv_path_to_aterm.insert(drv_path_str.clone(), aterm_hash);
+        self.pending.push((
+            drv_path.clone(),
+            hdm,
+            derivation.clone(),
+            content_addressed,
+        ));
+        debug_assert!(
+            (self.pending.len() as u32) <= MAX_PENDING,
+            "pending entries exceeded limit ({}); call drain_pending()",
+            MAX_PENDING,
+        );
+
         self.by_aterm_hash.insert(aterm_hash, ConversionEntry {
             drv_path,
             hash_derivation_modulo: hdm,
@@ -138,6 +158,23 @@ impl ConversionCache {
                 e.content_addressed,
             )
         })
+    }
+
+    /// Drain entries added since the last drain. Returns new entries
+    /// for incremental bridging to `DerivationRegistry` while the
+    /// convert loop is still running.
+    ///
+    /// Call after each `convert()` to get derivations produced by
+    /// that root and its transitive deps.
+    pub fn drain_pending(
+        &mut self,
+    ) -> Vec<(StorePath<String>, [u8; 32], Derivation, bool)> {
+        std::mem::take(&mut self.pending)
+    }
+
+    /// Number of pending entries not yet drained.
+    pub fn pending_count(&self) -> u32 {
+        self.pending.len() as u32
     }
 }
 
@@ -290,5 +327,52 @@ mod tests {
         // One should be CA, one not.
         let ca_count = entries.iter().filter(|(_, _, _, ca)| *ca).count();
         assert_eq!(ca_count, 1);
+    }
+
+    #[test]
+    fn drain_pending_returns_new_entries() {
+        let mut cc = ConversionCache::default();
+        assert_eq!(cc.pending_count(), 0);
+
+        cc.insert([1u8; 32], fake_store_path("a.drv"), [10u8; 32], dummy_derivation("a"));
+        cc.insert([2u8; 32], fake_store_path("b.drv"), [20u8; 32], dummy_derivation("b"));
+        assert_eq!(cc.pending_count(), 2);
+
+        let batch = cc.drain_pending();
+        assert_eq!(batch.len(), 2);
+        assert_eq!(cc.pending_count(), 0);
+
+        // Second drain returns nothing.
+        let batch2 = cc.drain_pending();
+        assert!(batch2.is_empty());
+    }
+
+    #[test]
+    fn drain_pending_incremental() {
+        let mut cc = ConversionCache::default();
+
+        // First insert + drain.
+        cc.insert([1u8; 32], fake_store_path("a.drv"), [10u8; 32], dummy_derivation("a"));
+        let batch1 = cc.drain_pending();
+        assert_eq!(batch1.len(), 1);
+
+        // Second insert + drain only gets the new entry.
+        cc.insert([2u8; 32], fake_store_path("b.drv"), [20u8; 32], dummy_derivation("b"));
+        let batch2 = cc.drain_pending();
+        assert_eq!(batch2.len(), 1);
+
+        // iter_entries still yields all 2.
+        let all: Vec<_> = cc.iter_entries().collect();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn drain_pending_ca_entries_marked() {
+        let mut cc = ConversionCache::default();
+
+        cc.insert_ca([1u8; 32], fake_store_path("ca.drv"), [10u8; 32], dummy_derivation("ca"), true);
+        let batch = cc.drain_pending();
+        assert_eq!(batch.len(), 1);
+        assert!(batch[0].3, "CA flag should be true");
     }
 }
