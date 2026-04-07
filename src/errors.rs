@@ -99,6 +99,18 @@ impl fmt::Display for RunError {
     }
 }
 
+impl From<crunch_pipeline::Error> for RunError {
+    fn from(error: crunch_pipeline::Error) -> Self {
+        match error {
+            crunch_pipeline::Error::Eval(msg) => Self::Eval(msg),
+            crunch_pipeline::Error::Deserialize(msg) => Self::Eval(msg),
+            crunch_pipeline::Error::Convert(msg) => Self::Build(msg),
+            crunch_pipeline::Error::Build(msg) => Self::Build(msg),
+            crunch_pipeline::Error::Internal(msg) => Self::Internal(msg),
+        }
+    }
+}
+
 /// Extract the builder-relevant portion from a build error message.
 ///
 /// The bwrap service wraps build failures in generic messages like

@@ -27,13 +27,13 @@ The workspace MUST contain the following crates:
 
 - GIVEN `crunch build hello.ncl`
 - WHEN the binary processes the command
-- THEN it constructs a `BuildConfig` and calls `crunch_pipeline::build()`
+- THEN it constructs a `BuildConfig` and ultimately calls `crunch_pipeline::build(&config)`
 - AND formats the returned `PipelineResult` for the terminal
 
 ### Requirement: Pipeline stages
 
 Pipeline stages are unchanged, but the wiring between stages
-MUST live in `crunch-pipeline`, not in the binary crate:
+MUST live in `crunch-pipeline` for the standard build path:
 
 1. Nickel source -> evaluated JSON (crunch-eval)
 2. JSON -> Derivation structs (crunch-glue)
@@ -41,6 +41,16 @@ MUST live in `crunch-pipeline`, not in the binary crate:
 4. Worker -> BuildService (crunch-build)
 5. BuildResult -> PathInfo persistence (crunch-store)
 
-The binary crate MUST NOT contain steps 1-5. It MAY call
-`crunch_store` directly for `crunch store list/info/verify`
-commands (store queries don't involve the build pipeline).
+The binary crate MUST delegate the standard build path (`crunch build`
+and the build portion of `crunch self-build`) to `crunch-pipeline`.
+It MAY still call lower layers directly for helper commands that are
+outside the standard build path, including `crunch eval`, bootstrap
+fetch/staging helpers, and `crunch store list/info/verify`.
+
+#### Scenario: Helper commands keep direct lower-layer calls
+
+- GIVEN a helper command that is not the standard build path
+- WHEN the binary handles `crunch eval`, bootstrap fetch/staging work,
+  or `crunch store` queries
+- THEN it MAY call the lower crates directly
+- AND that does not violate the pipeline extraction requirement

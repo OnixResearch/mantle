@@ -5,6 +5,7 @@ members = [
   "crates/crunch-glue",
   "crates/crunch-store",
   "crates/crunch-build",
+  "crates/crunch-pipeline",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -29,6 +30,7 @@ name = "crunch"
 path = "src/main.rs"
 
 [dependencies]
+crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-build = { path = "crates/crunch-build" }
@@ -38,14 +40,10 @@ snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }
 snix-store = { path = "vendor/snix-store" }
 tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive", "env"] }
 data-encoding = "2.6"
-futures = "0.3"
-url = "2"
 tempfile = "3"
 blake3 = "=1.8.2"
 
@@ -57,6 +55,8 @@ pretty_assertions = "1.0"
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sha2 = "0.10.8"
 base64 = "0.22"
 tar = "0.4"

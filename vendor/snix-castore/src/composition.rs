@@ -23,7 +23,8 @@
 //! struct MyBlobServiceConfig {
 //! }
 //!
-//! 
+//!
+//! #[async_trait::async_trait]
 //! impl ServiceBuilder for MyBlobServiceConfig {
 //!     type Output = dyn BlobService;
 //!     async fn build(&self, _: &str, _: &CompositionContext) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync + 'static>> {

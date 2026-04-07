@@ -13,6 +13,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::build_cmd::{build_import_paths, report_build_result, run_build};
 use crate::errors::RunError;
 
 /// Maximum source tree size: 2 GiB.
@@ -406,6 +407,131 @@ fn dir_size(dir: &Path) -> u64 {
         }
     }
     total
+}
+
+pub fn cmd_self_build(
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    no_verify: bool,
+) -> Result<(), RunError> {
+    eprintln!("=== crunch self-build ===");
+
+    let src_dir = find_source_dir()?;
+    eprintln!("source: {}", src_dir.display());
+
+    let bootstrap_dir = src_dir.join("bootstrap");
+    if !bootstrap_dir.exists() {
+        return Err(RunError::Internal(format!(
+            "bootstrap/ directory not found at {}",
+            bootstrap_dir.display(),
+        )));
+    }
+
+    eprintln!("\n[1/3] Staging source...");
+    let store_name = stage_source(&src_dir, output_dir)?;
+
+    eprintln!("\n[2/3] Building...");
+    let ncl_content = generate_self_build_ncl(&store_name, store_dir);
+
+    let tmp_dir = tempfile::tempdir()
+        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+    let ncl_path = tmp_dir.path().join("self-build.ncl");
+    std::fs::write(&ncl_path, &ncl_content)
+        .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
+
+    let lib_dir = src_dir.join("lib");
+    let import_paths: Vec<std::ffi::OsString> = {
+        let mut paths = build_import_paths(&[lib_dir])?;
+        paths.push(bootstrap_dir.into());
+        paths
+    };
+
+    let config = crunch_pipeline::BuildConfig {
+        file: ncl_path.clone(),
+        import_paths,
+        output_dir: output_dir.to_path_buf(),
+        state_dir: state_dir.to_path_buf(),
+        store_dir: store_dir.to_string(),
+        verbose,
+        max_jobs,
+        substituter_url: if no_substitute {
+            None
+        } else {
+            Some("https://cache.nixos.org".to_string())
+        },
+    };
+
+    let result = run_build(&config)?;
+    report_build_result(&config, &result, false)?;
+
+    if !no_verify {
+        eprintln!("\n[3/3] Verifying output...");
+        let crunch_bin = find_self_built_binary(output_dir)?;
+        verify_binary(&crunch_bin)?;
+    } else {
+        eprintln!("\n[3/3] Verification skipped (--no-verify).");
+    }
+
+    eprintln!("\n=== self-build complete ===");
+    Ok(())
+}
+
+fn find_source_dir() -> Result<PathBuf, RunError> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| RunError::Internal(format!("cwd: {e}")))?;
+
+    if cwd.join("Cargo.toml").exists() && cwd.join("bootstrap").exists() {
+        return Ok(cwd);
+    }
+
+    let mut dir = cwd.as_path();
+    for _ in 0..8_u32 {
+        if dir.join("Cargo.toml").exists() && dir.join("bootstrap").exists() {
+            return Ok(dir.to_path_buf());
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => break,
+        }
+    }
+
+    Err(RunError::Internal(
+        "could not locate crunch source directory.\nRun `crunch self-build` from the crunch repo root."
+            .to_string(),
+    ))
+}
+
+fn find_self_built_binary(output_dir: &Path) -> Result<PathBuf, RunError> {
+    let entries = std::fs::read_dir(output_dir).map_err(|e| {
+        RunError::Internal(format!(
+            "reading output dir {}: {e}",
+            output_dir.display(),
+        ))
+    })?;
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-crunch") {
+            let binary = entry.path().join("bin").join("crunch");
+            if binary.exists() {
+                return Ok(binary);
+            }
+        }
+    }
+
+    Err(RunError::Internal(format!(
+        "could not find self-built crunch binary in {}",
+        output_dir.display(),
+    )))
 }
 
 #[cfg(test)]

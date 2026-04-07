@@ -24,13 +24,14 @@ between stages, which makes it the biggest and least-tested crate.
 - New `crunch-pipeline` crate in `crates/crunch-pipeline/`.
 - Owns: eval dispatch, JSON deserialization, convert loop, registry
   bridging, store+builder construction, streaming Worker invocation,
-  result reporting, FOD mismatch handling, log writing, `--fix` rewriting.
-- Does NOT own: CLI args (`clap`), stderr formatting, exit codes,
-  bootstrap, self-build. Those stay in the binary.
-- `main.rs` becomes a thin shell: parse args, call `crunch_pipeline::build()`,
-  format and print the result.
-- `cmd_self_build` delegates to `crunch_pipeline::build()` instead of
-  reimplementing store/builder/worker setup.
+  result collection, and FOD mismatch detection as returned data.
+- The binary keeps: CLI args (`clap`), stderr formatting, exit codes,
+  log writing, `--fix` source rewriting, bootstrap staging, and self-build
+  verification.
+- `main.rs` becomes a thin shell for the standard build path: parse args,
+  call `crunch_pipeline::build()`, then format and print the result.
+- `cmd_self_build` delegates the actual build to `crunch_pipeline::build()`
+  instead of reimplementing store/builder/worker setup.
 
 ## Capabilities
 
@@ -53,9 +54,10 @@ between stages, which makes it the biggest and least-tested crate.
   pipeline). `Cargo.toml` gets a new workspace member + dependency.
 - **APIs**: Public `crunch_pipeline::build()` function. Public
   `BuildConfig` struct replacing the 9-parameter function signature.
-  Public `BuildResult` aggregating outcomes + failures.
+  Public `PipelineResult` aggregating outcomes + failures.
 - **Dependencies**: crunch-pipeline depends on crunch-eval, crunch-glue,
-  crunch-build, crunch-store. The binary depends on crunch-pipeline
-  instead of those four directly.
+  crunch-build, crunch-store. The binary uses crunch-pipeline for the
+  standard build path and keeps direct dependencies that remain necessary
+  for `eval`, `bootstrap`, and `store` helpers.
 - **Testing**: New integration tests in crunch-pipeline exercising the
   full eval->build path on trivial .ncl files.

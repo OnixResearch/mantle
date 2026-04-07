@@ -39,6 +39,7 @@ pub struct BuildConfig {
     pub import_paths: Vec<OsString>,
     pub output_dir: PathBuf,
     pub state_dir: PathBuf,
+    pub store_dir: String,
     pub verbose: bool,
     pub max_jobs: u32,
     pub substituter_url: Option<String>,
@@ -53,8 +54,10 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error>;
 ```
 
 **Rationale:** A config struct replaces the 9-arg `execute_builds_streaming`.
-Adding fields (e.g., `dry_run: bool`) doesn't break callers. The result is
-a data structure — the caller decides how to format/print it.
+It also carries the logical store prefix, which the pipeline already needs for
+ATerm hashing and output-path formatting. Adding fields (e.g., `dry_run: bool`)
+doesn't break callers. The result is a data structure; the caller decides how
+to format or print it.
 
 **Alternative:** Trait-based pipeline with pluggable stages. Rejected —
 the stages are fixed (eval->convert->build) and there's no second
@@ -111,12 +114,14 @@ enum.
 
 ### 6. Crate depends on crunch-eval, crunch-glue, crunch-build, crunch-store
 
-**Choice:** crunch-pipeline depends on all four crates. The binary depends
-only on crunch-pipeline (plus clap, tracing-subscriber, tempfile).
+**Choice:** crunch-pipeline depends on all four crates. The binary uses
+crunch-pipeline for the standard build path and keeps direct deps that are
+still needed by `eval`, `bootstrap`, and `store` helpers.
 
 **Rationale:** The pipeline IS the integration of these four stages. Having
-all four as direct deps is correct. The binary drops direct deps on the
-inner crates (except for types re-exported through crunch-pipeline).
+all four as direct deps is correct. The binary drops direct deps where the
+extraction made them redundant, but helper commands outside the standard
+build path still have live call sites in the inner crates.
 
 ## Risks / Trade-offs
 

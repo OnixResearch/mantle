@@ -17,6 +17,7 @@ The system MUST provide a `build()` async function that takes a
 - `import_paths: Vec<OsString>` — Nickel import search paths
 - `output_dir: PathBuf` — physical store directory for root outputs
 - `state_dir: PathBuf` — persistent state (pathinfo.redb, blobs/)
+- `store_dir: String` — logical store prefix used for drv/output path hashing
 - `verbose: bool`
 - `max_jobs: u32`
 - `substituter_url: Option<String>`

@@ -1027,10 +1027,10 @@ dependencies = [
  "crunch-build",
  "crunch-eval",
  "crunch-glue",
+ "crunch-pipeline",
  "crunch-store",
  "data-encoding",
  "flate2",
- "futures",
  "nix-compat",
  "predicates",
  "pretty_assertions",
@@ -1045,7 +1045,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -1108,6 +1107,23 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "crunch-pipeline"
+version = "0.1.0"
+dependencies = [
+ "crunch-build",
+ "crunch-eval",
+ "crunch-glue",
+ "crunch-store",
+ "nix-compat",
+ "serde_json",
+ "snix-build",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

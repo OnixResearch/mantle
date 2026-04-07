@@ -674,8 +674,10 @@ mod tests {
 
     #[test]
     fn test_new_channel() {
-        let fd = nix::unistd::dup(std::io::stdout().as_raw_fd()).unwrap();
-        let file = unsafe { File::from_raw_fd(fd) };
+        let (read_end, write_end) = nix::unistd::pipe().unwrap();
+        let file = unsafe { File::from_raw_fd(read_end) };
+        let write_end = unsafe { File::from_raw_fd(write_end) };
+        drop(write_end);
         let _ = FuseChannel::new(file, 3).unwrap();
     }
 
