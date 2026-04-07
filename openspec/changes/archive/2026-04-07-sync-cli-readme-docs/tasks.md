@@ -46,7 +46,7 @@ Changes made:
 - [x] Confirm the documented examples and defaults match the current implementation before landing the change
 
 Verification:
-- All 11 commands + 4 store subcommands confirmed present via `--help`
+- All 12 top-level commands + 4 store subcommands confirmed present via `--help`
 - `--store` default: `/nix/store` ✓
 - `--store-prefix` default: `/crunch/store` ✓
 - `--substituters` default: `https://cache.nixos.org` ✓

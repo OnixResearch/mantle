@@ -32,9 +32,12 @@ crunch eval hello.ncl
 crunch build hello.ncl
 ```
 
-Output lands in `/crunch/store/<hash>-hello` by default. Use
-`--store /tmp/mystore` to write outputs elsewhere, or `--nix-compat`
-to switch the logical store prefix to `/nix/store` for interop testing.
+Output lands in `/nix/store/<hash>-hello` by default (the `--store`
+default). Derivation hashes are computed under the `/crunch/store`
+logical prefix (`--store-prefix`). Use `--store /tmp/mystore` to
+write outputs elsewhere, or `--nix-compat` to switch the logical
+prefix to `/nix/store` for interop testing. See
+[Store Paths and Prefixes](#store-paths-and-prefixes) for details.
 
 ## Fetchers
 
@@ -152,7 +155,7 @@ crunch-glue (nix-compat)      Record → nix_compat::Derivation + BLAKE3 store p
 crunch-build (goal + worker)  Lazy goal scheduler → bwrap sandbox → PathInfo
     │                         (or builtin fetcher for fetchurl/fetchTarball/fetchGit)
     ▼
-/crunch/store/<hash>-<name>   Output in the store
+/nix/store/<hash>-<name>      Output on disk (--store default)
 ```
 
 The scheduler is a lazy goal-based system (not an eager DAG). Each
@@ -259,7 +262,8 @@ crunch build --nix-compat hello.ncl
 
 crunch signs PathInfo entries with ed25519 keys. If no `--signing-key` is
 provided, an auto-generated key is created at
-`$CRUNCH_CONFIG_DIR/signing-key`.
+`$CRUNCH_CONFIG_DIR/signing-key` (or `$state_dir/signing-key` when
+`CRUNCH_CONFIG_DIR` is unset — same directory as `pathinfo.redb`).
 
 ```bash
 # Build with an explicit signing key
