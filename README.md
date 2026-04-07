@@ -9,7 +9,7 @@ Nix evaluator in the loop.
 ## Quick Start
 
 ```bash
-# Build crunch (requires Rust nightly, protoc, clang, mold, openssl-dev)
+# Build crunch (requires Rust nightly, clang, mold, openssl-dev)
 cargo build --release
 
 # Generate a seed toolchain from your Nix store
@@ -18,21 +18,23 @@ crunch bootstrap -o seed.ncl
 # Write a derivation
 cat > hello.ncl << 'EOF'
 let crunch = import "lib.ncl" in
-let seed = import "seed.ncl" in
 {
   name = "hello",
-  builder = "%{seed.bash}/bin/bash",
-  args = ["-c", "echo 'Hello!' > $out"],
-  inputs = [seed.bash],
+  builder = "/bin/sh",
+  args = ["-c", "echo 'Hello, crunch!' > $out"],
 } | crunch.Derivation
 EOF
 
 # Evaluate (print JSON, no build)
 crunch eval hello.ncl
 
-# Build (requires Linux + bwrap + writable /nix/store)
+# Build (requires Linux + bwrap)
 crunch build hello.ncl
 ```
+
+Output lands in `/crunch/store/<hash>-hello` by default. Use
+`--store /tmp/mystore` to write outputs elsewhere, or `--nix-compat`
+to switch the logical store prefix to `/nix/store` for interop testing.
 
 ## Fetchers
 
@@ -150,7 +152,7 @@ crunch-glue (nix-compat)      Record → nix_compat::Derivation + BLAKE3 store p
 crunch-build (goal + worker)  Lazy goal scheduler → bwrap sandbox → PathInfo
     │                         (or builtin fetcher for fetchurl/fetchTarball/fetchGit)
     ▼
-/nix/store/<hash>-<name>      Output in the store
+/crunch/store/<hash>-<name>   Output in the store
 ```
 
 The scheduler is a lazy goal-based system (not an eager DAG). Each
@@ -169,10 +171,13 @@ added without restructuring the scheduler.
 
 | Crate | Role |
 |---|---|
-| `crunch` | CLI binary — `build`, `eval`, `bootstrap`, `store`, `log` |
+| `crunch` | CLI binary — build, eval, bootstrap, store, log, project management, self-build |
 | `crunch-eval` | Nickel evaluation, stdlib embedding |
-| `crunch-glue` | `CrunchDerivation` → `nix_compat::Derivation`, KnownPaths |
+| `crunch-glue` | `CrunchDerivation` → `nix_compat::Derivation`, ConversionCache |
 | `crunch-build` | `Derivation` → `BuildRequest`, goal scheduler, build orchestration, fetchers |
+| `crunch-pipeline` | eval → deserialize → convert → build wiring |
+| `crunch-project` | Project manifest, lockfile, refresh, stale detection, upgrade |
+| `crunch-store` | Store export, closure resolution, StoreHandle, signing, query |
 | `vendor/nix-compat` | Store paths, ATerm, NAR (BLAKE3-modified) |
 | `vendor/snix-build` | `BuildService` trait, bwrap sandbox |
 | `vendor/snix-castore` | Blob and directory content-addressed storage |
@@ -202,12 +207,13 @@ let crunch = import "lib.ncl" in
   },
   addressing_mode              # | default = 'content-addressed
     = 'content-addressed,      #   content-addressed | input-addressed
+  sandbox                      # | default = 'native
+    = 'native,                 #   native | oci | wasm
 } | crunch.Derivation
 ```
 
 Contracts catch errors at eval time:
 - Missing required fields (`name`, `builder`)
-- Extra fields (closed contract)
 - Invalid store paths, derivation names
 - Wrong enum variants
 
@@ -218,97 +224,217 @@ Contracts catch errors at eval time:
 | Config language | Nix | Nickel |
 | Derivation hash | SHA-256 | BLAKE3 |
 | Default addressing | Input-addressed | Content-addressed |
+| Default store prefix | `/nix/store` | `/crunch/store` (`--nix-compat` for `/nix/store`) |
 | Inputs | String context (implicit) | Explicit `inputs` field |
-| Store paths | Compatible with Nix | Different (BLAKE3) |
 | Hash algorithms | sha256/sha512/sha1/md5 | + blake3 (first-class) |
 | Sandbox | Nix sandbox | bwrap (via snix-build) |
-| Builder templates | stdenv, mkDerivation | None (separate packages) |
-| FOD hash fix | Manual copy-paste | `--fix` auto-rewrites .ncl |
+| Closure resolution | `nix-store -qR` | Own PathInfo walk (no Nix required) |
+| Serialization | protobuf/gRPC | postcard |
+
+## Store Paths and Prefixes
+
+crunch separates two concepts:
+
+- **Logical prefix** (`--store-prefix`, default `/crunch/store`): used for
+  derivation hash computation, ATerm serialization, and output path names.
+  Different prefixes produce different derivation hashes.
+- **Physical directory** (`--store`, default `/nix/store`): where crunch
+  writes build outputs on disk. Source inputs (seed packages) are always
+  read from `/nix/store`.
+
+```bash
+# Default: logical paths under /crunch/store, outputs written to /nix/store
+crunch build hello.ncl
+
+# Write outputs to a custom directory
+crunch build --store /tmp/mystore hello.ncl
+
+# Nix-compatible hashes (for interop testing)
+crunch build --nix-compat hello.ncl
+```
+
+`--nix-compat` is shorthand for `--store-prefix=/nix/store`.
+
+## Signing and Trust
+
+crunch signs PathInfo entries with ed25519 keys. If no `--signing-key` is
+provided, an auto-generated key is created at
+`$CRUNCH_CONFIG_DIR/signing-key`.
+
+```bash
+# Build with an explicit signing key
+crunch build --signing-key ./my-key hello.ncl
+
+# Verify signatures against trusted public keys
+crunch store verify --trusted-public-keys "mykey-1:base64pubkey..."
+
+# Sign all unsigned PathInfo entries (migration from unsigned stores)
+crunch store sign --all
+
+# Accept unsigned PathInfo on cache hits (escape hatch)
+crunch build --trust-unsigned hello.ncl
+```
+
+By default, cached PathInfo must be signed by a trusted key. The default
+trust set includes `cache.nixos.org-1`. Use `--trusted-public-keys` to
+override.
 
 ## Bootstrap
 
-crunch needs existing binaries to build anything. The `bootstrap` command
-queries your Nix installation for tool paths:
+crunch needs existing binaries to build anything. Two modes:
+
+### From Nix (default)
+
+The `bootstrap` command queries your Nix installation for tool paths:
 
 ```bash
 crunch bootstrap -o seed.ncl bash coreutils gcc gnumake binutils
 ```
 
-This generates a `seed.ncl` with `StorePath`-validated entries. Pin them
-as GC roots so Nix doesn't garbage-collect them:
+This generates a `seed.ncl` with `StorePath`-validated entries. Source
+inputs automatically have their runtime closure resolved and mounted in
+the sandbox.
+
+### Without Nix (`--fetch`)
+
+Downloads a static musl-gcc toolchain — no Nix installation required:
 
 ```bash
-nix-store --add-root /nix/var/nix/gcroots/crunch-seed -r /nix/store/...-bash
+crunch bootstrap --fetch -o seed.ncl
 ```
 
-Source inputs automatically resolve their Nix runtime closure — listing
-`seed.bash` as an input mounts bash and all its dependencies (glibc,
-ncurses, etc.) in the sandbox.
+This fetches pre-built tarballs, persists them as fixed-output
+derivations, and writes `seed.ncl`.
+
+## Self-Build
+
+crunch can build itself from source with zero Nix runtime dependency:
+
+```bash
+crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
+```
+
+This builds the full bootstrap chain (musl-gcc → make → dash → binutils →
+musl → gcc → busybox → bwrap → rust), then compiles crunch from source
+inside a bwrap sandbox. Output is a ~31 MiB static-pie musl-linked
+binary.
+
+First bootstrap requires `git`, `cargo`, `tar`, `xz`, `bwrap` on PATH.
+After the first self-build, the crunch-built bwrap and busybox are used
+for subsequent builds.
+
+## Project Management
+
+crunch has built-in dependency management for project inputs — git repos,
+tarballs, and files declared in a Nickel manifest (`crunch-project.ncl`).
+
+```bash
+# Create a new project (manifest, lockfile, .crunch/ directory)
+crunch init
+
+# Validate manifest, lockfile, and generated inputs
+crunch check
+
+# Show resolved input state from the lockfile
+crunch show
+
+# Refresh all inputs (or specific ones)
+crunch refresh
+crunch refresh nixpkgs my-lib
+
+# Check which inputs would change without modifying anything
+crunch list-stale
+
+# Migrate project files to the current schema version
+crunch upgrade
+```
+
+The lockfile (`crunch.lock`) stores resolved revisions and NAR hashes.
+`crunch refresh` resolves upstream references (git ls-remote, content
+hashing) and updates both `crunch.lock` and `.crunch/inputs.ncl`
+(generated Nickel bindings).
 
 ## CLI
 
+### Commands
+
 ```
-crunch build <file.ncl>     Evaluate and build
-crunch build -j 4 <file>    Build with max 4 concurrent jobs
-crunch build --fix <file>   Build, auto-fix FOD hash mismatches in .ncl source
-crunch eval <file.ncl>      Evaluate and print JSON
-crunch bootstrap [-o seed.ncl] [packages...]   Generate seed from Nix store
-crunch store list            List all known store paths
-crunch store info <path>     Show PathInfo for a store path
-crunch store verify [<path>] Verify NAR hashes
-crunch log [query]           Show stored build logs
-crunch log --list            List all stored logs
+crunch build <file.ncl>          Evaluate and build
+crunch build -j 4 <file>         Build with max 4 concurrent jobs
+crunch build --fix <file>        Build, auto-fix FOD hash mismatches in .ncl source
+crunch eval <file.ncl>           Evaluate and print JSON
+crunch bootstrap [-o seed.ncl]   Generate seed from Nix store (or --fetch for Nix-free)
+crunch self-build                Build crunch from its own source
+crunch store list                List all known store paths
+crunch store info <path>         Show PathInfo for a store path
+crunch store verify [<path>]     Verify NAR hashes and signatures
+crunch store sign [<path>]       Sign PathInfo entries (or --all)
+crunch log [query]               Show a stored build log
+crunch log --list                List all stored logs
+crunch init                      Initialize a new project
+crunch check                     Validate project manifest and lockfile
+crunch show                      Show resolved input state
+crunch refresh [names...]        Refresh project inputs
+crunch list-stale                List inputs that would change on refresh
+crunch upgrade                   Migrate project files to current schema
+```
 
-Flags:
-  --store <path>        Store directory (default: /nix/store)
-  --substituters <url>  Binary cache URL (default: cache.nixos.org)
-  --no-substitute       Disable binary cache substitution
-  -v, --verbose         Debug logging
-  --log-level <lvl>     trace|debug|info|warn|error
-  -I <path>             Additional Nickel import paths
+### Global flags
 
-Exit codes:
-  0  success
-  1  build failure
-  2  evaluation error
-  3  internal error
+```
+--store <path>              Physical output directory (default: /nix/store)
+--store-prefix <prefix>     Logical store prefix (default: /crunch/store)
+--nix-compat                Shorthand for --store-prefix=/nix/store
+--state-dir <path>          State directory for databases and blobs
+                            (default: $CRUNCH_STATE_DIR or ~/.local/state/crunch)
+--json                      Emit errors as JSON for tooling integration
+-v, --verbose               Debug logging
+--log-level <lvl>           trace|debug|info|warn|error
+```
+
+### Build flags
+
+```
+-j, --jobs <N>                   Max concurrent builds (default: CPU count, max 16)
+--fix                            Auto-fix FOD hash mismatches in .ncl source
+-I, --import-path <path>         Additional Nickel import paths
+--substituters <url>             Binary cache URLs (default: https://cache.nixos.org)
+--no-substitute                  Disable binary cache substitution
+--signing-key <path>             Path to ed25519 signing keypair file
+--trusted-public-keys <keys>     Trusted public keys for signature verification
+--trust-unsigned                 Accept unsigned PathInfo on cache hits
 ```
 
 ## Requirements
 
+**Build time** (compiling crunch itself):
+- Linux
+- Rust nightly
+- clang + mold (linker)
+- pkg-config + openssl-dev
+
+**Run time** (building derivations):
 - Linux (bwrap sandbox requires user namespaces)
-- Rust nightly + protoc + clang + mold + openssl-dev (build time)
-- bwrap (bubblewrap) in PATH (run time)
-- Writable `/nix/store` for build outputs to land on disk
-- Nix installation (for `bootstrap` and runtime closure resolution)
+- bwrap (bubblewrap) in PATH
 
-## Custom Output Directory
-
-`--store` controls where crunch writes build outputs on disk. Source
-inputs (seed packages) are always read from `/nix/store`. Derivation
-path computation always uses `/nix/store` as the logical store prefix,
-matching Nix convention.
-
-```bash
-mkdir -p /tmp/mystore
-crunch --store /tmp/mystore build hello.ncl
-# Output lands at /tmp/mystore/<hash>-hello
-# Source inputs (bash, coreutils, ...) read from /nix/store
-```
+**Not required**:
+- protoc — gRPC/protobuf replaced with postcard serialization
+- Nix — closure resolution uses crunch's own PathInfo, not `nix-store`.
+  A Nix installation is only needed for `crunch bootstrap` (without
+  `--fetch`)
+- Writable `/nix/store` — the castore is the primary store. Cache
+  validation uses PathInfo + castore content probes, not filesystem
+  existence. If the output directory is not writable, builds succeed
+  with outputs in castore only
 
 ## Known Limitations
 
-- **Read-only `/nix/store`**: works. The castore is the primary store.
-  Cache validation uses PathInfo + castore content probes, not
-  filesystem existence. Only root outputs (derivations you asked to
-  build) are exported to disk. Intermediate deps stay in castore.
-  If the output dir is not writable, the build succeeds with a warning.
+- **No garbage collection**: `crunch store gc` is not implemented.
 - **Concurrent builds**: independent derivations run in parallel (up to
-  `--jobs N`, default: CPU count, max 16). The lazy goal scheduler
+  `-j N`, default: CPU count, max 16). The lazy goal scheduler
   dispatches builds as their dependencies complete; sandbox execution
   is concurrent via `tokio::JoinSet`. Preparation and output processing
   are sequential.
-- **No garbage collection**: `crunch store gc` is not implemented.
 - **Multi-output**: outputs work end-to-end. Output *selection* is
   supported via `crunch.select dep "dev"` to mount a single output of
   a multi-output dependency in the sandbox (like Nix's `pkg.dev`).
