@@ -248,9 +248,11 @@ Building derivations (not just compiling crunch) requires:
   dynamically-linked builders fail with "library not found" (clear error).
 - **Castore export**: `export_castore_to_disk()` writes build outputs from the
   in-memory castore to the filesystem. Skips silently on read-only stores.
-- **Fetcher bypass**: `builder = "builtin:fetchurl"` derivations bypass the
-  bwrap sandbox entirely. The orchestrator downloads directly via ureq (in
-  `spawn_blocking`), then runs the standard post-build pipeline.
+- **Fetcher as BuildService**: `builder = "builtin:fetchurl"` derivations flow
+  through `FetchBuildService` (not inline in the orchestrator). `DispatchBuildService`
+  routes between `FetchBuildService` and `BubblewrapBuildService` based on
+  `command_args[0]`. The orchestrator treats all derivations the same: prepare →
+  dispatch → finish. `build_fetcher()` was removed from Builder.
 - **Pipeline FOD mismatch tests**: the cheapest end-to-end coverage is two
   `crunch.fetchurl` roots using `file://` URLs — one correct hash, one wrong.
   That exercises `PipelineResult.fod_mismatches` and sibling-root continuation

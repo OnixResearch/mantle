@@ -49,6 +49,15 @@
 - **Castore export**: `export_castore_to_disk()` walks the Node tree and writes files/dirs/symlinks. `SymlinkTarget::as_ref()` returns `&[u8]`, needs `OsStr::from_bytes()` for `std::os::unix::fs::symlink`. `PathComponent::as_ref()` returns `&[u8]`, needs `std::str::from_utf8()`.
 - The `Builder` struct is generic over `BS: BlobService`, `DS: DirectoryService`, `BServ: BuildService`.
 
+## FetchBuildService Refactor (2026-04-07)
+- `fetcher::fetch_flat` and `fetcher::fetch_git` are now `pub(crate)` (were private). `fetch_and_unpack` was already `pub`.
+- `FetchBuildService` downloads to `tempfile::tempdir()` then ingests via `ingest_path`. Temp dir cleanup is RAII (TempDir drop).
+- `DispatchBuildService` routes by `command_args[0]`; the `is_fetch_request()` helper checks for `"builtin:fetchurl"`.
+- `build_fetcher()` removed from orchestrate.rs. The disk-caching optimization (skip download if output exists on disk from prior bootstrap --fetch) is lost. Cache check in `prepare_build` step 1 still works for the PathInfo+castore case.
+- `async_trait` import removed from orchestrate.rs non-test code; added to `#[cfg(test)]` imports instead.
+- `Builder` generic is still `BServ: BuildService`. `DispatchBuildService<FetchBuildService<...>, BubblewrapBuildService<...>>` is the concrete `BServ` at the pipeline/bootstrap call sites.
+- `tempfile` added as a regular dependency (not just dev-dep) for FetchBuildService temp dir.
+
 - **StorePath Ord only compares digest, not name.** `nix_compat::StorePath<S>::Ord` compares `self.digest.iter().rev()` — the name is ignored. Two store paths with the same 20-byte digest but different names are `Equal` under Ord, so they collide in BTreeMap. Test helpers must use unique digests (derive from name bytes), not a shared constant.
 - **`resolve_host_path` method**: Checks `derivation.input_sources.contains(path)` to decide `/nix/store/` vs `output_dir`. Used in `collect_sandbox_inputs` fallback path.
 - **`output_exists_on_disk` (was `path_exists_on_disk`)**: renamed to clarify it checks the physical output dir, not /nix/store.
