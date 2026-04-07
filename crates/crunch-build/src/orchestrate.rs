@@ -2337,12 +2337,9 @@ mod tests {
     //
     // These verify that fetcher derivations flow through the full
     // prepare → DispatchBuildService → FetchBuildService → finish_build
-    // pipeline, proving:
-    //   1. DispatchBuildService routes fetchers to FetchBuildService
-    //   2. The sandbox service is NOT called for fetcher derivations
-    //   3. finish_build's verify_fod_hash handles match and mismatch
+    // pipeline for both flat and recursive (NAR) hash modes.
 
-    /// Build a fetchurl derivation with a flat sha256 hash.
+    /// Build a fetchurl-style derivation. No `unpack` flag set.
     fn make_fetcher_drv_for_build(
         name: &str,
         url: &str,
@@ -2375,6 +2372,87 @@ mod tests {
         let drv_path = drv.calculate_derivation_path(name).unwrap();
         kp.insert(drv_path.clone(), hdm, drv.clone(), false);
         (drv_path, drv)
+    }
+
+    /// Build a fetchurl-style derivation with `unpack=1` (tarball mode).
+    /// Uses `CAHash::Nar` for recursive hash verification.
+    fn make_fetcher_drv_for_build_unpack(
+        name: &str,
+        url: &str,
+        ca_hash: Option<nix_compat::nixhash::CAHash>,
+        kp: &mut DerivationRegistry,
+    ) -> (StorePath<String>, Derivation) {
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash,
+        });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), name.into());
+        environment.insert("system".to_string(), "builtin".into());
+        environment.insert("builder".to_string(), "builtin:fetchurl".into());
+        environment.insert("url".to_string(), url.into());
+        environment.insert("unpack".to_string(), "1".into());
+        environment.insert("out".to_string(), "".into());
+
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment,
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "builtin".to_string(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        (drv_path, drv)
+    }
+
+    /// Create a gzipped tarball with a single file, return the path.
+    fn create_test_tarball(file_name: &str, content: &[u8]) -> tempfile::NamedTempFile {
+        use std::io::Write;
+
+        let tmp_src = tempfile::tempdir().unwrap();
+        let inner = tmp_src.path().join("project-v1");
+        std::fs::create_dir(&inner).unwrap();
+        std::fs::write(inner.join(file_name), content).unwrap();
+
+        let tar_file = tempfile::NamedTempFile::new().unwrap();
+        {
+            let gz = flate2::write::GzEncoder::new(
+                std::fs::File::create(tar_file.path()).unwrap(),
+                flate2::Compression::fast(),
+            );
+            let mut builder = tar::Builder::new(gz);
+            builder.append_dir_all("project-v1", &inner).unwrap();
+            builder.into_inner().unwrap().finish().unwrap();
+        }
+        tar_file
+    }
+
+    /// Compute the NAR sha256 of a tarball's unpacked content, using
+    /// the same extract+ingest path that FetchBuildService uses.
+    async fn nar_sha256_of_tarball(tarball_path: &std::path::Path) -> [u8; 32] {
+        let extract_dir = tempfile::tempdir().unwrap();
+        let url = format!("file://{}", tarball_path.display());
+        crate::fetcher::fetch_and_unpack(&url, extract_dir.path().to_str().unwrap()).unwrap();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+            bs.clone(), ds.clone(), extract_dir.path(), None,
+        ).await.unwrap();
+
+        use snix_store::nar::NarCalculationService;
+        let renderer = snix_store::nar::SimpleRenderer::new(
+            std::sync::Arc::new(bs) as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
+            std::sync::Arc::new(ds) as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+        );
+        let (_size, sha256) = renderer.calculate_nar(&node).await.unwrap();
+        sha256
     }
 
     /// A mock sandbox service that panics if called. Proves the
@@ -2521,6 +2599,130 @@ mod tests {
         assert!(
             pi.is_ok() && pi.unwrap().is_none(),
             "PathInfo must NOT be persisted for hash-mismatched output"
+        );
+        // Verify the output node was NOT stored in the session cache.
+        assert!(
+            !builder.store.output_nodes.contains_key(out_path),
+            "output_nodes must NOT contain the mismatched output"
+        );
+    }
+
+    // ── Recursive (NAR) fetcher tests ─────────────────────────────
+
+    #[tokio::test]
+    async fn fetcher_recursive_through_dispatch_hash_match() {
+        use nix_compat::nixhash::{CAHash, NixHash};
+
+        // Create a tarball and pre-compute its NAR sha256.
+        let tarball = create_test_tarball("hello.txt", b"recursive test content");
+        let nar_sha256 = nar_sha256_of_tarball(tarball.path()).await;
+        let ca = CAHash::Nar(NixHash::Sha256(nar_sha256));
+        let url = format!("file://{}", tarball.path().display());
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
+            bs.clone(), ds.clone(),
+        );
+        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(
+            fetch_svc, PanicSandboxService,
+        );
+
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut builder = Builder::new(
+            bs, ds, dispatch, test_pis(),
+            output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, _drv) = make_fetcher_drv_for_build_unpack(
+            "fetch-recursive-match", &url, Some(ca), &mut kp,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+
+        assert!(!outcome.cached);
+        assert!(outcome.outputs.contains_key("out"));
+        let path_info = &outcome.outputs["out"];
+        assert!(path_info.nar_size > 0);
+        // CA must be NAR (recursive), not Flat.
+        match &path_info.ca {
+            Some(nix_compat::nixhash::CAHash::Nar(NixHash::Sha256(h))) => {
+                assert_eq!(h, &nar_sha256, "persisted CA hash must match declared NAR hash");
+            }
+            other => panic!("expected CAHash::Nar(Sha256), got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fetcher_recursive_through_dispatch_hash_mismatch() {
+        use nix_compat::nixhash::{CAHash, NixHash};
+        use crate::worker::Worker;
+
+        // Tarball with wrong NAR hash.
+        let tarball = create_test_tarball("data.txt", b"recursive mismatch content");
+        let wrong_ca = CAHash::Nar(NixHash::Sha256([0xBB; 32]));
+        let url = format!("file://{}", tarball.path().display());
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
+            bs.clone(), ds.clone(),
+        );
+        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(
+            fetch_svc, PanicSandboxService,
+        );
+
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut builder = Builder::new(
+            bs, ds, dispatch, test_pis(),
+            output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, drv) = make_fetcher_drv_for_build_unpack(
+            "fetch-recursive-mismatch", &url, Some(wrong_ca), &mut kp,
+        );
+
+        let mut worker = Worker::new(1);
+        worker.want(&drv_path, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+
+        assert!(result.outcomes.is_empty());
+        assert_eq!(result.failed.len(), 1);
+        let err_str = &result.failed[0].error;
+
+        assert!(
+            err_str.contains("FOD hash mismatch"),
+            "recursive mismatch must report FOD hash mismatch, got: {err_str}"
+        );
+        assert!(
+            err_str.contains("expected sha256-"),
+            "must report expected NAR hash in SRI, got: {err_str}"
+        );
+        assert!(
+            err_str.contains(", got sha256-"),
+            "must report actual NAR hash in SRI, got: {err_str}"
+        );
+
+        // No PathInfo persisted.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let pi = builder.store.pathinfo_service()
+            .get(*out_path.digest()).await;
+        assert!(
+            pi.is_ok() && pi.unwrap().is_none(),
+            "PathInfo must NOT be persisted for NAR hash mismatch"
+        );
+        // No output node stored.
+        assert!(
+            !builder.store.output_nodes.contains_key(out_path),
+            "output_nodes must NOT contain the mismatched recursive output"
         );
     }
 }

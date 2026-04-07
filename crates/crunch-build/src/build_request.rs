@@ -699,7 +699,8 @@ mod tests {
     }
 
     #[test]
-    fn fetcher_build_request_preserves_unpack_and_type_env_vars() {
+    fn fetcher_build_request_preserves_all_fetch_env_vars() {
+        // All five fetch-specific env vars must survive conversion.
         let mut drv = make_fetcher_drv("https://example.com/src.tar.gz", None);
         drv.environment.insert("unpack".to_string(), "1".into());
         drv.environment.insert("type".to_string(), "git".into());
@@ -714,10 +715,20 @@ mod tests {
             .map(|e| (e.key.as_str(), e.value.as_ref()))
             .collect();
 
-        assert_eq!(*env_map.get("unpack").unwrap(), b"1");
-        assert_eq!(*env_map.get("type").unwrap(), b"git");
-        assert_eq!(*env_map.get("rev").unwrap(), b"abc123");
-        assert_eq!(*env_map.get("executable").unwrap(), b"1");
+        // url (set by make_fetcher_drv)
+        assert_eq!(
+            *env_map.get("url").unwrap(),
+            b"https://example.com/src.tar.gz",
+            "url must be preserved"
+        );
+        // unpack
+        assert_eq!(*env_map.get("unpack").unwrap(), b"1", "unpack must be preserved");
+        // type
+        assert_eq!(*env_map.get("type").unwrap(), b"git", "type must be preserved");
+        // rev
+        assert_eq!(*env_map.get("rev").unwrap(), b"abc123", "rev must be preserved");
+        // executable
+        assert_eq!(*env_map.get("executable").unwrap(), b"1", "executable must be preserved");
     }
 
     #[test]
