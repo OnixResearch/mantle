@@ -167,7 +167,8 @@ If the PathInfo already has a signature from the same key name, the
 system MUST replace it rather than duplicate.
 
 `crunch store sign --all` MUST iterate all PathInfo entries in redb and
-sign each one. This is the migration path for existing unsigned stores.
+sign each unsigned one. Existing signed entries MUST be left unchanged.
+This is the migration path for existing unsigned stores.
 
 #### Scenario: Bulk sign unsigned store
 
@@ -181,6 +182,13 @@ sign each one. This is the migration path for existing unsigned stores.
 - GIVEN a PathInfo already signed by `my-key-1`
 - WHEN `crunch store sign ... --signing-key <my-key-1-keypair>`
 - THEN the PathInfo still has exactly one signature from `my-key-1`
+
+#### Scenario: Bulk sign skips already-signed entries
+
+- GIVEN a PathInfo already signed by `backup-cache-1`
+- WHEN `crunch store sign --all --signing-key <my-key-1-keypair>` is run
+- THEN that PathInfo keeps exactly one signature from `backup-cache-1`
+- AND only unsigned entries gain new signatures
 
 ### Requirement: Signature reporting in store commands
 
