@@ -23,11 +23,11 @@
 
 ## Phase 4: CLI integration
 
-- [ ] Add `crunch init` to scaffold a project manifest, lockfile, and `.crunch/` ignore rules
-- [ ] Add `crunch check` to validate manifest, lock, and generated inputs
-- [ ] Add `crunch show` to render the resolved input state
-- [ ] Add `crunch refresh`, `crunch list-stale`, and `crunch upgrade`
-- [ ] Keep the binary crate limited to argument parsing, output formatting, and delegation into `crunch-project`
+- [x] Add `crunch init` to scaffold a project manifest, lockfile, and `.crunch/` ignore rules ✅ cmd_init()
+- [x] Add `crunch check` to validate manifest, lock, and generated inputs ✅ cmd_check()
+- [x] Add `crunch show` to render the resolved input state ✅ cmd_show()
+- [x] Add `crunch refresh`, `crunch list-stale`, and `crunch upgrade` ✅ cmd_refresh(), cmd_list_stale(), cmd_upgrade()
+- [x] Keep the binary crate limited to argument parsing, output formatting, and delegation into `crunch-project` ✅ project_cmd.rs delegates to crunch-project
 
 ## Phase 5: Mirrors, patches, and upgrades
 

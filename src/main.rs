@@ -3,6 +3,7 @@ mod build_cmd;
 mod errors;
 mod fix;
 mod log_cmd;
+mod project_cmd;
 mod self_build;
 mod store_cmd;
 
@@ -133,6 +134,27 @@ enum Command {
         action: StoreAction,
     },
 
+    /// Initialize a new crunch project (manifest, lockfile, .crunch/)
+    Init,
+
+    /// Validate project manifest, lockfile, and generated inputs
+    Check,
+
+    /// Show resolved input state from the lockfile
+    Show,
+
+    /// Refresh selected or all project inputs
+    Refresh {
+        /// Input names to refresh (default: all non-frozen)
+        names: Vec<String>,
+    },
+
+    /// List inputs that would change on refresh (read-only)
+    ListStale,
+
+    /// Migrate project files to the current schema version
+    Upgrade,
+
     /// Build crunch from its own source (self-hosting)
     SelfBuild {
         /// Maximum concurrent builds (default: CPU count, max 16)
@@ -256,6 +278,14 @@ fn run(args: Args) -> Result<(), RunError> {
         }
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), list),
         Command::Store { action } => store_cmd::cmd_store(action),
+        Command::Init => project_cmd::cmd_init(&std::env::current_dir().unwrap()),
+        Command::Check => project_cmd::cmd_check(&std::env::current_dir().unwrap()),
+        Command::Show => project_cmd::cmd_show(&std::env::current_dir().unwrap()),
+        Command::Refresh { names } => {
+            project_cmd::cmd_refresh(&std::env::current_dir().unwrap(), &names)
+        }
+        Command::ListStale => project_cmd::cmd_list_stale(&std::env::current_dir().unwrap()),
+        Command::Upgrade => project_cmd::cmd_upgrade(&std::env::current_dir().unwrap()),
         Command::SelfBuild {
             jobs,
             no_substitute,
