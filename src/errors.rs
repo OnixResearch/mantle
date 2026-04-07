@@ -172,7 +172,10 @@ fn build_suggestions(msg: &str) -> String {
             "  - Building requires Linux with bubblewrap (bwrap) installed"
         );
         suggestions.push(
-            "  - Install bwrap: nix-env -iA nixpkgs.bubblewrap"
+            "  - Install bwrap: https://github.com/containers/bubblewrap"
+        );
+        suggestions.push(
+            "  - Or run `crunch self-build` to bootstrap bwrap from source"
         );
     }
 

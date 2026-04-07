@@ -2,6 +2,9 @@
 
 ## Done-Review Lessons (2026-04-07)
 - `apply_outcomes()` must take the manifest and resolver, not just the lock and outcomes. Patch names in lock entries are useless without the corresponding LockedPatch in `Lockfile.patches` -- lock validation catches this, but it's easy to miss in tests that don't call `validate()` on the result.
+- `crunch-project` tarball lock hashes must match `crunch.fetchTarball` semantics: recursive/NAR hash of the unpacked tree, not a flat hash of the downloaded archive bytes. `lib/fetch.ncl` and `crunch-build::fetcher` are the source of truth.
+- A "real" `RefreshResolver` is incomplete if it only implements git + URL hashing. Local patch locking goes through `RefreshResolver::hash_local_file()` during `apply_outcomes()`, so leaving the default `Ok(None)` keeps patch locks broken.
+- OpenSpec examples that mention Nickel-ish enum/tag syntax are easy to make ambiguous in prose review. Prefer unambiguous prose (`configured to follow the main branch`) over inline pseudo-manifest literals when the literal isn't the point.
 - Generated files must include ALL relevant lockfile data. If `Lockfile.patches` exists but `generate_inputs_ncl()` doesn't emit it, consumers lose patch source/hash info.
 - `ProjectManifest.version` as a bare `String` without validation is a bug. Always parse and validate version fields during `validate()`, not just at usage time.
 - CLI commands need assert_cmd tests. `cargo check -p crunch` proves compilation, not behavior.
@@ -9,6 +12,11 @@
 - `unwrap_or_default()` on hash values produces empty strings, which violate lock validation (`lockfile_detects_empty_hash`). Use `?` to propagate None instead.
 - "Already locked" skip logic (`if lock.patches.contains_key(name) { continue }`) goes stale when the manifest definition changes. Always compare the locked entry against the current definition.
 - Refresh CLI must always run `apply_outcomes` and check `has_changes()`, not gate on `updated_count > 0`. Patch-only changes (no input changes) must still write the lockfile.
+
+## OpenSpec Review Lessons (2026-04-07)
+- Generated shell scripts in Rust format strings can have ordering bugs that unit tests miss because the tests check for substring presence, not execution order. The `BWRAP_BIN` variable was used before being set in `generate_self_build_ncl()`.
+- `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
+- OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 
 ## Build Environment
 - cargo/rustc are at `$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin` and `$HOME/.cargo/bin` — NOT on default PATH. Must prepend to PATH in pueue_run commands.

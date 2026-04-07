@@ -56,7 +56,7 @@ Nix-compatible (they aren't).
 ## Impact
 
 - **Files**: nix_compat (vendored STORE_DIR patch), all files with
-  `LOGICAL_STORE_DIR`, build_request.rs (NIX_STORE env → CRUNCH_STORE),
+  `LOGICAL_STORE_DIR`, build_request.rs (NIX_STORE env set to configured prefix),
   bootstrap/*.ncl (new files), self_build.rs, main.rs (new flags)
 - **APIs**: ConversionCache::new, DerivationRegistry::new, BuildRequest,
   Worker — all gain a store_prefix parameter

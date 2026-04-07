@@ -216,6 +216,12 @@ let bwrap = (import "bwrap.ncl") in
         fi
       done
 
+      # Find crunch-built bwrap for PATH.
+      BWRAP_BIN=""
+      for d in $NIX_STORE/*-bwrap; do
+        if [ -x "$d/bin/bwrap" ]; then BWRAP_BIN="$d/bin"; break; fi
+      done
+
       # Add bwrap to PATH if available.
       BWRAP_PATH=""
       if [ -n "$BWRAP_BIN" ]; then BWRAP_PATH="$BWRAP_BIN:"; fi
@@ -271,11 +277,6 @@ CARGOEOF
         export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
       fi
 
-      # Find crunch-built bwrap for PATH.
-      BWRAP_BIN=""
-      for d in $NIX_STORE/*-bwrap; do
-        if [ -x "$d/bin/bwrap" ]; then BWRAP_BIN="$d/bin"; break; fi
-      done
       export CC=gcc
       export AR=ar
       export TARGET_CC=gcc

@@ -295,7 +295,7 @@ fn run(args: Args) -> Result<(), RunError> {
             self_build::cmd_self_build(
                 &args.store,
                 &resolved_state_dir,
-                nix_compat::store_path::STORE_DIR,
+                &store_prefix,
                 args.verbose,
                 max_jobs,
                 no_substitute,

@@ -43,7 +43,7 @@ The store prefix MUST be used consistently in:
 3. Hash derivation modulo computation
 4. Content-addressed output path computation
 5. BuildRequest output path construction
-6. Sandbox `NIX_STORE` environment variable (renamed to `STORE_DIR`)
+6. Sandbox `NIX_STORE` environment variable (set to the configured prefix)
 7. ConversionCache and DerivationRegistry construction
 8. PathInfo store path references
 

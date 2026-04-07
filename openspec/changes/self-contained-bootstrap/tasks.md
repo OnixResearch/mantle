@@ -38,9 +38,9 @@
 
 ## Phase 5: Cleanup
 
-- [x] Remove `SNIX_BUILD_SANDBOX_SHELL` from AGENTS.md build env (replaced by crunch-built path) ✅ (updated AGENTS.md build env section)
+- [x] Update AGENTS.md build env to document crunch-built busybox/bwrap as post-self-build default ✅ (SNIX_BUILD_SANDBOX_SHELL still documented for dev builds, which is correct)
 - [x] Remove hardcoded Nix store paths from AGENTS.md (bwrap, busybox nix store paths) ✅ (removed from Nix store paths list)
-- [x] Update error messages in errors.rs to not reference `nix-env`, `nix-store`, `nixpkgs` ✅ (none found — already clean)
+- [x] Update error messages in errors.rs to not reference `nix-env`, `nix-store`, `nixpkgs` ✅ (replaced nix-env install suggestion with upstream URL + self-build hint)
 - [x] Add state migration warning: detect old `/nix/store`-prefixed pathinfo.redb entries, print clear error ✅ (CA mappings prefix check in StoreHandle::open)
 - [ ] Update README / examples to use `/crunch/store` paths (deferred — README is minimal, examples use /nix/store as --nix-compat default)
 - [x] ADR documenting the prefix change and why ✅ adr/0003-configurable-store-prefix.md
