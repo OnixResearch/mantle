@@ -1,0 +1,291 @@
+//! Self-hosting proof: stage0 -> stage1 -> stage2.
+//!
+//! This test is expensive (~30 min) and requires:
+//!   - bwrap on PATH
+//!   - git, cargo, tar, xz, cp on PATH
+//!   - ~4 GiB free disk in /tmp
+//!   - Internet access (for initial bootstrap fetch)
+//!
+//! Run with:
+//!   cargo test -p crunch --test self_hosting -- --ignored --nocapture
+//!
+//! The test:
+//! 1. Runs `crunch self-build` (stage0) using the checkout binary
+//! 2. Finds the stage1 binary in the output store
+//! 3. Invalidates the prior `*-crunch` output
+//! 4. Runs `stage1/bin/crunch self-build` (stage2) with a fresh state dir
+//! 5. Verifies stage2 produced a working binary
+//! 6. Checks that stage2 used crunch-built bwrap (not host fallback)
+
+use assert_cmd::Command;
+use std::path::{Path, PathBuf};
+
+/// Check prerequisites for the proof.
+fn can_self_build() -> bool {
+    // Need bwrap, git, cargo, tar on PATH.
+    let tools = ["bwrap", "git", "cargo", "tar"];
+    for tool in tools {
+        if std::process::Command::new(tool)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            eprintln!("SKIP: {tool} not on PATH");
+            return false;
+        }
+    }
+    // Need the crunch source tree (Cargo.toml + bootstrap/ in cwd or parents).
+    let cwd = std::env::current_dir().unwrap();
+    if !cwd.join("Cargo.toml").exists() || !cwd.join("bootstrap").exists() {
+        eprintln!("SKIP: not in crunch source tree");
+        return false;
+    }
+    true
+}
+
+/// Find the crunch binary in an output store (`*-crunch/bin/crunch`).
+fn find_crunch_binary(store: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(store).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-crunch") {
+            let binary = entry.path().join("bin").join("crunch");
+            if binary.exists() {
+                return Some(binary);
+            }
+        }
+    }
+    None
+}
+
+/// Remove all `*-crunch` output directories from a store.
+fn remove_crunch_outputs(store: &Path) -> u32 {
+    let mut removed: u32 = 0;
+    let entries = match std::fs::read_dir(store) {
+        Ok(e) => e,
+        Err(_) => return 0,
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-crunch") {
+            if std::fs::remove_dir_all(entry.path()).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
+/// Check if the store has a crunch-built bwrap (`*-bwrap/bin/bwrap`).
+fn has_crunch_bwrap(store: &Path) -> bool {
+    let entries = match std::fs::read_dir(store) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-bwrap") {
+            let bin = entry.path().join("bin").join("bwrap");
+            if bin.exists() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Parse proof lines from stderr.
+fn extract_proof_field<'a>(stderr: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("self-build-proof: {key}=");
+    for line in stderr.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix(&prefix) {
+            return Some(rest);
+        }
+    }
+    None
+}
+
+#[test]
+#[ignore]
+fn self_hosting_stage0_stage1_stage2() {
+    if !can_self_build() {
+        eprintln!("SKIP: prerequisites not met");
+        return;
+    }
+
+    let proof_dir = tempfile::tempdir().expect("tempdir for proof");
+    let store = proof_dir.path().join("store");
+    std::fs::create_dir_all(&store).unwrap();
+
+    // ── Stage 0: checkout binary builds stage1 ──────────────────
+
+    eprintln!("\n=== PROOF: Stage 0 (checkout -> stage1) ===\n");
+
+    let stage0_state = proof_dir.path().join("state0");
+    std::fs::create_dir_all(&stage0_state).unwrap();
+
+    let stage0 = Command::cargo_bin("crunch")
+        .expect("crunch binary built")
+        .arg("--store")
+        .arg(&store)
+        .arg("--state-dir")
+        .arg(&stage0_state)
+        .arg("--nix-compat")
+        .arg("self-build")
+        .arg("--no-substitute")
+        .arg("-j")
+        .arg("4")
+        .output()
+        .expect("stage0 should execute");
+
+    let stage0_stderr = String::from_utf8_lossy(&stage0.stderr);
+    eprintln!("{stage0_stderr}");
+
+    assert!(
+        stage0.status.success(),
+        "stage0 failed (exit {}):\n{stage0_stderr}",
+        stage0.status.code().unwrap_or(-1),
+    );
+
+    // Find the stage1 binary.
+    let stage1_binary = find_crunch_binary(&store)
+        .expect("stage0 should produce *-crunch/bin/crunch");
+    eprintln!("stage1 binary: {}", stage1_binary.display());
+
+    // Verify stage1 runs.
+    let stage1_help = std::process::Command::new(&stage1_binary)
+        .arg("--help")
+        .output()
+        .expect("stage1 binary should run");
+    assert!(
+        stage1_help.status.success(),
+        "stage1 --help failed",
+    );
+
+    // ── Prepare for Stage 2 ─────────────────────────────────────
+
+    // The store now has the full bootstrap chain + the stage1 crunch.
+    // Remove only *-crunch so stage2 must rebuild the final binary.
+    // Keep bwrap, busybox, rust, gcc, etc. for reuse.
+
+    assert!(
+        has_crunch_bwrap(&store),
+        "store should have crunch-built bwrap after stage0",
+    );
+
+    let removed = remove_crunch_outputs(&store);
+    assert!(removed >= 1, "should have removed at least 1 *-crunch dir");
+    assert!(
+        find_crunch_binary(&store).is_none(),
+        "crunch output should be gone after invalidation",
+    );
+
+    // Fresh state dir so pathinfo.redb doesn't give a false cache hit
+    // on the final crunch output.
+    let stage2_state = proof_dir.path().join("state2");
+    std::fs::create_dir_all(&stage2_state).unwrap();
+
+    // ── Stage 2: stage1 binary rebuilds crunch ──────────────────
+
+    eprintln!("\n=== PROOF: Stage 2 (stage1 -> stage2) ===\n");
+
+    let stage2 = std::process::Command::new(&stage1_binary)
+        .arg("--store")
+        .arg(&store)
+        .arg("--state-dir")
+        .arg(&stage2_state)
+        .arg("--nix-compat")
+        .arg("self-build")
+        .arg("--no-substitute")
+        .arg("-j")
+        .arg("4")
+        .output()
+        .expect("stage2 should execute");
+
+    let stage2_stderr = String::from_utf8_lossy(&stage2.stderr);
+    eprintln!("{stage2_stderr}");
+
+    assert!(
+        stage2.status.success(),
+        "stage2 failed (exit {}):\n{stage2_stderr}",
+        stage2.status.code().unwrap_or(-1),
+    );
+
+    // ── Verify stage2 output ────────────────────────────────────
+
+    let stage2_binary = find_crunch_binary(&store)
+        .expect("stage2 should produce *-crunch/bin/crunch");
+    eprintln!("stage2 binary: {}", stage2_binary.display());
+
+    // Stage2 binary should run.
+    let stage2_help = std::process::Command::new(&stage2_binary)
+        .arg("--help")
+        .output()
+        .expect("stage2 binary should run");
+    assert!(
+        stage2_help.status.success(),
+        "stage2 --help failed",
+    );
+    let stage2_stdout = String::from_utf8_lossy(&stage2_help.stdout);
+    assert!(
+        stage2_stdout.contains("crunch"),
+        "stage2 --help should mention crunch",
+    );
+
+    // ── Verify proof markers ────────────────────────────────────
+
+    // Stage2 was driven by stage1 binary.
+    let s2_invoking = extract_proof_field(&stage2_stderr, "invoking-binary");
+    assert!(
+        s2_invoking.is_some(),
+        "stage2 should emit invoking-binary proof line",
+    );
+    // The invoking binary should be the stage1 binary path.
+    let s2_invoking_path = PathBuf::from(s2_invoking.unwrap());
+    assert!(
+        s2_invoking_path.ends_with("bin/crunch"),
+        "invoking binary should end with bin/crunch, got: {}",
+        s2_invoking_path.display(),
+    );
+
+    // Stage2 should use crunch-built bwrap.
+    let s2_bwrap = extract_proof_field(&stage2_stderr, "bwrap-source");
+    assert!(
+        s2_bwrap.is_some(),
+        "stage2 should emit bwrap-source proof line",
+    );
+    let bwrap_val = s2_bwrap.unwrap();
+    assert!(
+        bwrap_val.starts_with("crunch-built:"),
+        "stage2 bwrap should be crunch-built, got: {bwrap_val}",
+    );
+
+    // Stage2 should record a busybox path.
+    let s2_busybox = extract_proof_field(&stage2_stderr, "busybox-path");
+    assert!(
+        s2_busybox.is_some(),
+        "stage2 should emit busybox-path proof line",
+    );
+    assert_ne!(
+        s2_busybox.unwrap(),
+        "none",
+        "stage2 should have a crunch-built busybox, not none",
+    );
+
+    // Output binary recorded.
+    let s2_output = extract_proof_field(&stage2_stderr, "output-binary");
+    assert!(
+        s2_output.is_some(),
+        "stage2 should emit output-binary proof line",
+    );
+
+    eprintln!("\n=== PROOF PASSED ===");
+    eprintln!("stage1: {}", stage1_binary.display());
+    eprintln!("stage2: {}", stage2_binary.display());
+    eprintln!("bwrap:  {bwrap_val}");
+    eprintln!("busybox: {}", s2_busybox.unwrap());
+}

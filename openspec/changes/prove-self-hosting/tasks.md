@@ -6,11 +6,11 @@
 
 ## Phase 2: Stage0 -> stage1 -> stage2 proof run
 
-- [ ] Add a slow self-hosting proof test/helper that runs the checkout binary for stage0 and the produced stage1 binary for stage2.
-- [ ] Give stage2 a fresh state directory and invalidate the prior final `*-crunch` output so the second stage cannot pass on a final-binary cache hit.
-- [ ] Assert that stage2 reports a crunch-built bwrap selection when `*-bwrap` exists in the proof store.
-- [ ] Assert that stage2 records the busybox path used for `SNIX_BUILD_SANDBOX_SHELL`.
-- [ ] Assert that the produced stage2 binary runs `crunch --help` or `crunch --version` successfully.
+- [x] Add a slow self-hosting proof test/helper that runs the checkout binary for stage0 and the produced stage1 binary for stage2. ✅ `tests/self_hosting.rs` with `#[ignore]` test, run via `cargo test -p crunch --test self_hosting -- --ignored --nocapture`
+- [x] Give stage2 a fresh state directory and invalidate the prior final `*-crunch` output so the second stage cannot pass on a final-binary cache hit. ✅ removes `*-crunch` dirs between stages, uses separate state dirs
+- [x] Assert that stage2 reports a crunch-built bwrap selection when `*-bwrap` exists in the proof store. ✅ checks `self-build-proof: bwrap-source=crunch-built:*`
+- [x] Assert that stage2 records the busybox path used for `SNIX_BUILD_SANDBOX_SHELL`. ✅ checks `self-build-proof: busybox-path=` is not `none`
+- [x] Assert that the produced stage2 binary runs `crunch --help` or `crunch --version` successfully. ✅ runs stage2 binary `--help`, checks stdout contains `crunch`
 
 ## Phase 3: Docs and cleanup
 
