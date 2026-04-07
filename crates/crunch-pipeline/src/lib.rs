@@ -2,8 +2,14 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use crunch_build::{BuildOutcome, Builder, DerivationRegistry, EvalMessage, FailedGoal, Worker};
-use crunch_glue::{ConversionCache, CrunchDerivation};
+use crunch_build::BuildOutcome;
+use crunch_build::Builder;
+use crunch_build::DerivationRegistry;
+use crunch_build::EvalMessage;
+use crunch_build::FailedGoal;
+use crunch_build::Worker;
+use crunch_glue::ConversionCache;
+use crunch_glue::CrunchDerivation;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -53,17 +59,13 @@ pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
     const MAX_JOBS_CAP: u32 = 16;
     match user {
         Some(j) => j.clamp(1, MAX_JOBS_CAP),
-        None => std::thread::available_parallelism()
-            .map(|n| (n.get() as u32).min(MAX_JOBS_CAP))
-            .unwrap_or(1),
+        None => std::thread::available_parallelism().map(|n| (n.get() as u32).min(MAX_JOBS_CAP)).unwrap_or(1),
     }
 }
 
-pub fn deserialize_derivations_from_json(
-    json_str: &str,
-) -> Result<Vec<(String, CrunchDerivation)>, Error> {
-    let json_val: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| Error::Deserialize(format!("parsing JSON: {e}")))?;
+pub fn deserialize_derivations_from_json(json_str: &str) -> Result<Vec<(String, CrunchDerivation)>, Error> {
+    let json_val: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| Error::Deserialize(format!("parsing JSON: {e}")))?;
 
     if let Some(arr) = json_val.as_array() {
         let mut derivations = Vec::new();
@@ -77,8 +79,7 @@ pub fn deserialize_derivations_from_json(
 
     let Some(obj) = json_val.as_object() else {
         return Err(Error::Deserialize(
-            "expected a Derivation record, array of Derivations, or record of Derivations"
-                .to_string(),
+            "expected a Derivation record, array of Derivations, or record of Derivations".to_string(),
         ));
     };
 
@@ -102,8 +103,9 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
     let rest = err.strip_prefix("FOD hash mismatch for ")?;
     let (name, rest) = rest.split_once(": expected ")?;
     let (expected_sri, actual_sri) = rest.split_once(", got ")?;
+    let normalized_name = name.strip_suffix(".drv").unwrap_or(name);
     Some(FodMismatch {
-        name: name.to_string(),
+        name: normalized_name.to_string(),
         expected_sri: expected_sri.to_string(),
         actual_sri: actual_sri.to_string(),
     })
@@ -112,8 +114,8 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
 
-    let json_str = crunch_eval::evaluate_to_json(&config.file, &config.import_paths)
-        .map_err(|e| Error::Eval(format!("{e}")))?;
+    let json_str =
+        crunch_eval::evaluate_to_json(&config.file, &config.import_paths).map_err(|e| Error::Eval(format!("{e}")))?;
     let derivations = deserialize_derivations_from_json(&json_str)?;
     debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 
@@ -136,14 +138,9 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
         let remote_pathinfo = store.remote_pathinfo();
 
         let workdir = std::env::temp_dir().join("crunch-builds");
-        std::fs::create_dir_all(&workdir)
-            .map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
+        std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
 
-        let build_service = BubblewrapBuildService::new(
-            workdir,
-            blob_service.clone(),
-            directory_service.clone(),
-        );
+        let build_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
 
         let mut builder = Builder::with_state_dir(
             blob_service,
@@ -159,21 +156,22 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
         let store_dir = config.store_dir.clone();
-        let convert_handle = tokio::task::spawn_blocking(move || {
-            convert_all(derivations, &store_dir, tx)
-        });
+        let convert_handle = tokio::task::spawn_blocking(move || convert_all(derivations, &store_dir, tx));
 
         let mut known_paths = DerivationRegistry::new(&config.store_dir);
         let mut worker = Worker::new(config.max_jobs);
-        let worker_result = worker
-            .run_streaming(&mut builder, &mut known_paths, &mut rx)
-            .await
-            .map_err(|e| Error::Build(format!("{e}")));
+        let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx).await;
 
-        let root_drv_paths = convert_handle
-            .await
-            .map_err(|e| Error::Internal(format!("convert thread panicked: {e}")))??;
-        let mut worker_result = worker_result?;
+        let root_drv_paths =
+            convert_handle.await.map_err(|e| Error::Internal(format!("convert thread panicked: {e}")))??;
+
+        // Per-root build failures, including FOD mismatches, are recorded in
+        // WorkerResult.failed. Reaching Err(...) here means the scheduler
+        // itself broke, not that one root produced a normal build failure.
+        let mut worker_result = match worker_run {
+            Ok(result) => result,
+            Err(err) => return Err(Error::Build(format!("{err}"))),
+        };
         normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
         let root_labels = build_root_labels(&root_drv_paths, &config.store_dir);
         let fod_mismatches = collect_fod_mismatches(&worker_result.failed);
@@ -189,9 +187,7 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     #[cfg(not(target_os = "linux"))]
     {
         let _ = store;
-        Err(Error::Build(
-            "building is only supported on Linux (requires bwrap)".to_string(),
-        ))
+        Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
 }
 
@@ -209,10 +205,7 @@ fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
         return Err(Error::Internal("store_dir must not be empty".to_string()));
     }
     if !config.store_dir.starts_with('/') {
-        return Err(Error::Internal(format!(
-            "store_dir must be an absolute path: {}",
-            config.store_dir,
-        )));
+        return Err(Error::Internal(format!("store_dir must be an absolute path: {}", config.store_dir,)));
     }
     Ok(())
 }
@@ -226,8 +219,8 @@ fn convert_all(
     let mut drv_paths = Vec::new();
 
     for (label, drv) in &derivations {
-        let (drv_path, _nix_drv) = crunch_glue::convert(drv, &mut cache)
-            .map_err(|e| Error::Convert(format!("{label}: {e}")))?;
+        let (drv_path, _nix_drv) =
+            crunch_glue::convert(drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
 
         let new_entries = cache.drain_pending();
         info!(drv = %drv_path, label = %label, entries = new_entries.len(), "converted, sending to worker");
@@ -246,10 +239,7 @@ fn convert_all(
     Ok(drv_paths)
 }
 
-fn build_root_labels(
-    root_drv_paths: &[(String, StorePath<String>)],
-    store_dir: &str,
-) -> HashMap<String, String> {
+fn build_root_labels(root_drv_paths: &[(String, StorePath<String>)], store_dir: &str) -> HashMap<String, String> {
     let mut labels = HashMap::new();
     for (label, drv_path) in root_drv_paths {
         let key = drv_path.to_absolute_path_with_prefix(store_dir);
@@ -271,10 +261,7 @@ fn normalize_failed_goal_keys(failed: &mut [FailedGoal], store_dir: &str) {
 }
 
 fn collect_fod_mismatches(failed: &[FailedGoal]) -> Vec<FodMismatch> {
-    failed
-        .iter()
-        .filter_map(|failed_goal| parse_fod_mismatch_error(&failed_goal.error))
-        .collect()
+    failed.iter().filter_map(|failed_goal| parse_fod_mismatch_error(&failed_goal.error)).collect()
 }
 
 pub fn drv_key_for(store_dir: &str, drv_path: &StorePath<String>) -> String {
@@ -345,10 +332,8 @@ mod tests {
 
     #[test]
     fn parse_fod_mismatch_valid() {
-        let mismatch = parse_fod_mismatch_error(
-            "FOD hash mismatch for src: expected sha256-aaa, got sha256-bbb",
-        )
-        .unwrap();
+        let mismatch =
+            parse_fod_mismatch_error("FOD hash mismatch for src: expected sha256-aaa, got sha256-bbb").unwrap();
         assert_eq!(mismatch.name, "src");
         assert_eq!(mismatch.expected_sri, "sha256-aaa");
         assert_eq!(mismatch.actual_sri, "sha256-bbb");
@@ -372,6 +357,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_fod_mismatch_strips_drv_suffix() {
+        let mismatch =
+            parse_fod_mismatch_error("FOD hash mismatch for src-1.drv: expected sha256-aaa, got sha256-bbb").unwrap();
+        assert_eq!(mismatch.name, "src-1");
+        assert_eq!(mismatch.expected_sri, "sha256-aaa");
+        assert_eq!(mismatch.actual_sri, "sha256-bbb");
+    }
+
+    #[test]
     fn parse_drv_key_round_trip() {
         let drv_path = StorePath::from_name_and_digest_fixed("hello.drv", [7u8; 20]).unwrap();
         let key = drv_key_for("/crunch/store", &drv_path);
@@ -381,8 +375,7 @@ mod tests {
 
     #[test]
     fn normalize_failed_goal_keys_rewrites_nix_store_keys() {
-        let drv_path: StorePath<String> =
-            StorePath::from_name_and_digest_fixed("hello.drv", [9u8; 20]).unwrap();
+        let drv_path: StorePath<String> = StorePath::from_name_and_digest_fixed("hello.drv", [9u8; 20]).unwrap();
         let mut failed = vec![FailedGoal {
             drv_key: drv_path.to_absolute_path(),
             error: "boom".to_string(),

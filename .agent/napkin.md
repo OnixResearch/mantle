@@ -331,4 +331,5 @@
 - `tx.blocking_send()` from `spawn_blocking` context (can't use `.await`). Channel capacity 16 provides backpressure.
 - Convert thread returns `Ok::<_, RunError>(drv_paths)`. Main task awaits the `JoinHandle` after Worker completes to get `drv_paths` for output display. Convert errors take priority over Worker results.
 - `Derivation`, `StorePath<String>`, `ConversionCache`, `CrunchDerivation` are all `Send` — no issues crossing thread boundary.
+- Pipeline FOD mismatch integration tests are easiest with two `crunch.fetchurl` roots pointing at local `file://` URLs: one good hash, one bad hash. No network needed, and `PipelineResult.fod_mismatches` gets exercised for real. Still gate the test with `can_build()` because `crunch_pipeline::build()` returns a platform error on non-Linux hosts.
 - Test count: crunch-glue 65->68 (3 drain_pending tests). crunch-build 222->224 (2 entries-in-message tests). Total workspace: 385.

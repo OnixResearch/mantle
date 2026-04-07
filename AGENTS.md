@@ -230,7 +230,7 @@ Building derivations (not just compiling crunch) requires:
 
 - **Pipeline crate split**: `crates/crunch-pipeline` now owns eval -> deserialize -> convert -> build wiring. The binary shell is split across `src/build_cmd.rs`, `src/fix.rs`, `src/log_cmd.rs`, `src/store_cmd.rs`, and `src/self_build.rs`; `src/main.rs` is only CLI parsing and dispatch.
 - **Worker goal keys still use `/nix/store` formatting internally**: `crunch-build::Worker`/`GoalRegistry` key derivations with `StorePath::to_absolute_path()`. `crunch-pipeline` normalizes failed goal keys back to the configured `store_dir` before returning `PipelineResult`, otherwise `--fix` and root-label lookup break under non-default prefixes.
-- **Workspace test gotchas**: `vendor/fuse-backend-rs` had a Linux test that registered a dup of stdout with epoll; on this host stdout isn't epollable, so the test now uses a pipe read-end and must explicitly close/drop the pipe write end. `vendor/snix-castore` had a doctest for `ServiceBuilder` that now needs `#[async_trait::async_trait]` on the impl example to compile.
+- **Workspace test gotchas**: `vendor/fuse-backend-rs` had a Linux test that registered a dup of stdout with epoll; on this host stdout isn't epollable, so the test now uses a pipe read-end and must explicitly close/drop the pipe write end. `vendor/snix-castore` had a doctest for `ServiceBuilder` that now needs `#[async_trait::async_trait]` on the impl example to compile. `crates/crunch-pipeline/tests/integration_build.rs` should reuse `can_build()` for any `build()` integration test, even fetcher-only ones, because `crunch_pipeline::build()` is `Error::Build("building is only supported on Linux (requires bwrap)")` on non-Linux hosts.
 - **Configurable store prefix**: `--store-prefix /crunch/store` (default) or
   `--nix-compat` for `/nix/store`. The prefix flows through
   ConversionCache → DerivationRegistry → StoreConfig → Builder → Worker.
@@ -251,6 +251,11 @@ Building derivations (not just compiling crunch) requires:
 - **Fetcher bypass**: `builder = "builtin:fetchurl"` derivations bypass the
   bwrap sandbox entirely. The orchestrator downloads directly via ureq (in
   `spawn_blocking`), then runs the standard post-build pipeline.
+- **Pipeline FOD mismatch tests**: the cheapest end-to-end coverage is two
+  `crunch.fetchurl` roots using `file://` URLs — one correct hash, one wrong.
+  That exercises `PipelineResult.fod_mismatches` and sibling-root continuation
+  without needing bwrap or network. `parse_fod_mismatch_error()` also strips a
+  trailing `.drv` from the reported mismatch name.
 - **BLAKE3 everywhere**: `HashAlgo::Blake3` + `NixHash::Blake3` in nix-compat,
   `NAR_BLAKE3`/`FLAT_BLAKE3` in pathinfo.proto, blake3 branches in
   `nar_hash()`/`hash_blob()`/`verify_flat_hash()`/`HashingReader`. The
