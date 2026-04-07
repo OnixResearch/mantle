@@ -60,8 +60,10 @@ Wrap the fetcher in a `BuildService` implementation:
 
 ## Impact
 
-- **Files**: new files in `crates/crunch-build/src/`, modified
-  `orchestrate.rs`, modified `fetcher.rs`, modified `build_request.rs`
+- **Files**: new files `fetch_build_service.rs`, `dispatch_build_service.rs`
+  in `crates/crunch-build/src/`; modified `orchestrate.rs` (removed
+  `build_fetcher`), `fetcher.rs` (pub(crate) helpers), `lib.rs`
+  (module registration)
 - **APIs**: BuildService remains the same; new implementations added
 - **Dependencies**: none
 - **Testing**: FetchBuildService and DispatchBuildService testable

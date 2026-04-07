@@ -2332,4 +2332,130 @@ mod tests {
             );
         }
     }
+
+    // ── Fetcher through finish_build tests ──────────────────────────────
+    //
+    // These verify that fetcher derivations flow through the full
+    // prepare → dispatch → finish pipeline, including FOD hash
+    // verification in finish_build.
+
+    /// Build a fetchurl derivation with a flat sha256 hash.
+    fn make_fetcher_drv_for_build(
+        name: &str,
+        url: &str,
+        ca_hash: Option<nix_compat::nixhash::CAHash>,
+        kp: &mut DerivationRegistry,
+    ) -> (StorePath<String>, Derivation) {
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash,
+        });
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), name.into());
+        environment.insert("system".to_string(), "builtin".into());
+        environment.insert("builder".to_string(), "builtin:fetchurl".into());
+        environment.insert("url".to_string(), url.into());
+        environment.insert("out".to_string(), "".into());
+
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment,
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "builtin".to_string(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        (drv_path, drv)
+    }
+
+    #[tokio::test]
+    async fn fetcher_through_dispatch_service_hash_match() {
+        use nix_compat::nixhash::{CAHash, NixHash};
+        use sha2::Digest;
+
+        let content = b"fetcher integration test content";
+        let digest: [u8; 32] = sha2::Sha256::digest(content).into();
+        let ca = CAHash::Flat(NixHash::Sha256(digest));
+
+        // Write a local file to serve via file:// URL.
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), content).unwrap();
+        let url = format!("file://{}", tmp.path().display());
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        // Create FetchBuildService as the build service.
+        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
+            bs.clone(), ds.clone(),
+        );
+
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut builder = Builder::new(
+            bs, ds, fetch_svc, test_pis(),
+            output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, _drv) = make_fetcher_drv_for_build(
+            "fetch-hash-match", &url, Some(ca), &mut kp,
+        );
+
+        // Build through the full pipeline.
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+
+        // finish_build must have verified the FOD hash and persisted PathInfo.
+        assert!(!outcome.cached, "first build should not be cached");
+        assert!(outcome.outputs.contains_key("out"), "must produce 'out' output");
+        let path_info = &outcome.outputs["out"];
+        assert!(path_info.nar_size > 0, "PathInfo must have non-zero NAR size");
+    }
+
+    #[tokio::test]
+    async fn fetcher_through_dispatch_service_hash_mismatch() {
+        use nix_compat::nixhash::{CAHash, NixHash};
+
+        // Deliberately wrong hash.
+        let wrong_hash = CAHash::Flat(NixHash::Sha256([0xAA; 32]));
+
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"mismatch test content").unwrap();
+        let url = format!("file://{}", tmp.path().display());
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+
+        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
+            bs.clone(), ds.clone(),
+        );
+
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut builder = Builder::new(
+            bs, ds, fetch_svc, test_pis(),
+            output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, _drv) = make_fetcher_drv_for_build(
+            "fetch-hash-mismatch", &url, Some(wrong_hash), &mut kp,
+        );
+
+        // Build should fail with FOD hash mismatch through finish_build.
+        let err = builder.build(&drv_path, &mut kp).await.unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("failed"),
+            "error should indicate build failure: {err_str}"
+        );
+    }
 }

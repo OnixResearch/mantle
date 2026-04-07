@@ -141,66 +141,116 @@ directory MUST NOT appear in the output.
 - WHEN the fetch runs
 - THEN the error includes the git stderr with the failed checkout
 
-### Requirement: Builtin fetcher bypass in orchestrator
+### Requirement: Fetch BuildRequest encoding
 
-When the build orchestrator encounters a derivation with
-`builder == "builtin:fetchurl"`, it MUST NOT invoke the sandbox
-(`BuildService::do_build`). Instead, it MUST execute the fetch
-directly.
+Fetcher derivations MUST reuse the existing `BuildRequest` fields.
+They MUST NOT require a new request format.
 
-The fetch execution MUST:
-1. Parse the derivation environment to determine fetch type
-   (URL/tarball/git based on `env.unpack` and `env.type`)
-2. Download the resource
-3. Verify the content hash against the FOD's declared hash
-4. Compute NAR hash and size of the output
-5. Scan for store path references
-6. Persist PathInfo
+A fetch request is encoded as follows:
+- `command_args[0] == "builtin:fetchurl"`
+- `environment_vars` carries the fetch parameters by their existing
+  names: `url`, `unpack`, `type`, `rev`, `executable`
+- `outputs[0]` is the fetch output path
 
-Steps 4-6 are identical to the post-build processing for regular
-derivations.
+#### Scenario: fetchurl request uses existing BuildRequest fields
 
-#### Scenario: Fetcher skips sandbox
+- GIVEN a fetchurl derivation converted to `BuildRequest`
+- WHEN the request is inspected
+- THEN `command_args[0]` is `builtin:fetchurl`
+- AND `environment_vars` still contains `url`
+- AND no new BuildRequest fields are needed
 
-- GIVEN a derivation with `builder = "builtin:fetchurl"`
-- WHEN the orchestrator processes it
-- THEN `do_build` is NOT called
-- AND the fetch executes with network access
+### Requirement: FetchBuildService
 
-#### Scenario: Non-FOD builtin rejected
+The system MUST provide a `FetchBuildService` that implements the
+`BuildService` trait. When `do_build()` receives a fetch request, it
+MUST parse fetch parameters from the existing `BuildRequest` fields,
+perform the download or extraction, ingest the result into castore, and
+produce a `BuildResult` with the output node.
 
-- GIVEN a derivation with `builder = "builtin:fetchurl"` but no
-  `fixed_output`
-- WHEN the orchestrator processes it
-- THEN an error is returned: fetchers must be fixed-output derivations
+`FetchBuildService` MUST NOT perform fixed-output hash verification,
+`PathInfo` persistence, or disk export. Those steps stay in the shared
+post-build path.
+
+#### Scenario: Fetcher produces BuildResult
+
+- GIVEN a BuildRequest with `command_args[0] = "builtin:fetchurl"`
+- AND `environment_vars` contains `url`
+- WHEN `fetch_service.do_build(request)` is called
+- THEN the resource is downloaded or unpacked
+- AND a `BuildResult` is returned with the output node
+
+#### Scenario: Non-fetch request rejected
+
+- GIVEN a BuildRequest with `command_args[0] = "/bin/sh"`
+- WHEN `fetch_service.do_build(request)` is called
+- THEN an error is returned (this service only handles fetchers)
+
+### Requirement: DispatchBuildService
+
+The system MUST provide a `DispatchBuildService` that wraps a
+`FetchBuildService` and a sandbox `BuildService`. It inspects
+`request.command_args[0]` and routes to the appropriate implementation.
+
+#### Scenario: Fetch derivation dispatched to fetch service
+
+- GIVEN a DispatchBuildService wrapping fetch + sandbox services
+- WHEN a BuildRequest with `command_args[0] = "builtin:fetchurl"` arrives
+- THEN it is dispatched to the FetchBuildService
+- AND the sandbox service is not called
+
+#### Scenario: Regular derivation dispatched to sandbox
+
+- GIVEN a DispatchBuildService wrapping fetch + sandbox services
+- WHEN a BuildRequest with `command_args[0] = "/bin/sh"` arrives
+- THEN it is dispatched to the sandbox BuildService
+
+### Requirement: Uniform orchestrator dispatch
+
+The orchestrator MUST NOT contain fetcher-specific branching or inline
+fetch execution. The `prepare_build()` method MUST treat all derivations
+the same: it constructs a `BuildRequest` and dispatches via the
+`BuildService` trait.
+
+Fetcher derivations still bypass the sandbox, but they do so by being
+routed to `FetchBuildService` through `DispatchBuildService`, not by
+bypassing `BuildService::do_build()` entirely.
+
+#### Scenario: No is_builtin_fetcher check
+
+- GIVEN the orchestrator's `prepare_build()` method
+- WHEN inspected
+- THEN it does not check `is_builtin_fetcher()` or call `build_fetcher()`
+- AND all derivations go through the same dispatch path
 
 ### Requirement: Hash verification
 
-After a fetch completes, the system MUST verify the output against
-the declared hash:
+After a fetch build returns a `BuildResult`, the shared post-build path
+(`finish_build`) MUST verify the output against the declared hash:
 
-- For `mode = 'flat` (fetchurl): hash the raw file bytes
-- For `mode = 'recursive` (fetchTarball, fetchGit): compute the
-  NAR hash of the output tree
+- For `mode = 'flat` (fetchurl): hash the raw file bytes from the
+  produced file node
+- For `mode = 'recursive` (fetchTarball, fetchGit): compute the NAR hash
+  of the produced output tree
 
 A mismatch MUST:
-1. Delete the fetched output (prevent storing bad content)
+1. Delete the produced output before persist/export
 2. Report both expected and actual hash in SRI format
-3. Report the `.ncl` source file and approximate location of the
-   hash to update
+3. Report the `.ncl` source file and approximate location of the hash to
+   update
 
 #### Scenario: Hash matches
 
 - GIVEN a fetchurl with `hash = "sha256-XXXX..."` and the downloaded
   file hashes to the same value
-- WHEN verification runs
+- WHEN verification runs in the shared post-build path
 - THEN the fetch succeeds
 
 #### Scenario: Hash mismatch
 
 - GIVEN a fetchurl with `hash = "sha256-AAAA..."` but the actual
   content hashes to `sha256-BBBB...`
-- WHEN verification runs
+- WHEN verification runs in the shared post-build path
 - THEN the output is deleted
 - AND the error reports:
   ```
@@ -293,12 +343,20 @@ rust_backend, lzma-rs, bzip2-rs, ruzstd) for portability.
 
 ### Requirement: Network isolation
 
-Fetcher execution MUST happen outside the build sandbox. The
-orchestrator MUST NOT pass fetch derivations to `BuildService`.
+Fetcher execution MUST happen outside the build sandbox. Fetch
+requests MAY flow through a composite `BuildService`, but they MUST be
+routed to a non-sandbox implementation such as `FetchBuildService`.
 
-Regular (non-fetcher) derivations MUST NOT have network access.
-The sandbox MUST continue to block network for all non-builtin
+Regular (non-fetcher) derivations MUST NOT have network access. The
+sandbox BuildService MUST continue to block network for all non-builtin
 builders.
+
+#### Scenario: Fetch request bypasses the sandbox service
+
+- GIVEN a fetch derivation encoded as a BuildRequest
+- WHEN DispatchBuildService handles it
+- THEN FetchBuildService runs with network access
+- AND the sandbox BuildService is not called
 
 #### Scenario: Regular build has no network
 

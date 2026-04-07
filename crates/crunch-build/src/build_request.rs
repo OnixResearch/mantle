@@ -627,4 +627,118 @@ mod tests {
         let out_path = dep_entry.derivation.outputs["out"].path.as_ref().unwrap();
         assert!(!paths.contains(out_path), "sandbox should NOT include out");
     }
+
+    // ── Fetcher BuildRequest encoding tests ────────────────────
+    //
+    // Verify that derivation_to_build_request preserves the builder
+    // selector and fetch environment variables for builtin:fetchurl.
+
+    /// Build a fetchurl derivation with the given env, similar to what
+    /// crunch.fetchurl produces after convert().
+    fn make_fetcher_drv(url: &str, hash: Option<nix_compat::nixhash::CAHash>) -> Derivation {
+        use nix_compat::nixhash::CAHash;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert(
+            "out".to_string(),
+            Output { path: None, ca_hash: hash },
+        );
+        let mut environment = BTreeMap::new();
+        environment.insert("name".to_string(), "test-fetch".into());
+        environment.insert("system".to_string(), "builtin".into());
+        environment.insert("builder".to_string(), "builtin:fetchurl".into());
+        environment.insert("url".to_string(), url.into());
+        environment.insert("out".to_string(), "".into());
+        environment.insert("preferLocalBuild".to_string(), "1".into());
+
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment,
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs,
+            system: "builtin".to_string(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
+        drv.calculate_output_paths("test-fetch", &hdm).unwrap();
+        drv
+    }
+
+    #[test]
+    fn fetcher_build_request_has_builtin_builder() {
+        let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        assert_eq!(req.command_args[0], "builtin:fetchurl");
+        // Fetcher derivations have no arguments.
+        assert_eq!(req.command_args.len(), 1);
+    }
+
+    #[test]
+    fn fetcher_build_request_preserves_url_env_var() {
+        let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        let env_map: BTreeMap<&str, &[u8]> = req
+            .environment_vars
+            .iter()
+            .map(|e| (e.key.as_str(), e.value.as_ref()))
+            .collect();
+
+        assert_eq!(
+            *env_map.get("url").unwrap(),
+            b"https://example.com/foo.tar.gz",
+            "url env var must be preserved in BuildRequest"
+        );
+        assert_eq!(
+            *env_map.get("builder").unwrap(),
+            b"builtin:fetchurl",
+            "builder env var must be preserved"
+        );
+    }
+
+    #[test]
+    fn fetcher_build_request_preserves_unpack_and_type_env_vars() {
+        let mut drv = make_fetcher_drv("https://example.com/src.tar.gz", None);
+        drv.environment.insert("unpack".to_string(), "1".into());
+        drv.environment.insert("type".to_string(), "git".into());
+        drv.environment.insert("rev".to_string(), "abc123".into());
+        drv.environment.insert("executable".to_string(), "1".into());
+
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        let env_map: BTreeMap<&str, &[u8]> = req
+            .environment_vars
+            .iter()
+            .map(|e| (e.key.as_str(), e.value.as_ref()))
+            .collect();
+
+        assert_eq!(*env_map.get("unpack").unwrap(), b"1");
+        assert_eq!(*env_map.get("type").unwrap(), b"git");
+        assert_eq!(*env_map.get("rev").unwrap(), b"abc123");
+        assert_eq!(*env_map.get("executable").unwrap(), b"1");
+    }
+
+    #[test]
+    fn fetcher_build_request_is_recognized_by_is_fetch_request() {
+        let drv = make_fetcher_drv("https://example.com/file.txt", None);
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        assert!(
+            crate::fetch_build_service::is_fetch_request(&req),
+            "BuildRequest from a fetchurl derivation must be recognized as a fetch request"
+        );
+    }
+
+    #[test]
+    fn sandbox_build_request_is_not_fetch_request() {
+        let drv = test_derivation();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        assert!(
+            !crate::fetch_build_service::is_fetch_request(&req),
+            "BuildRequest from a normal derivation must NOT be recognized as a fetch request"
+        );
+    }
 }

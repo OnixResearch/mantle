@@ -17,14 +17,14 @@
 
 - [x] Remove `is_builtin_fetcher()` check from `prepare_build()` ✅ 10m (started: 2026-04-07T12:32Z → completed: 2026-04-07T12:42Z)
 - [x] Remove `build_fetcher()` method from Builder ✅ (deleted from orchestrate.rs)
-- [x] Ensure `derivation_to_build_request()` preserves the fetch builder selector and fetch env vars in `BuildRequest` ✅ Already works: all env vars + builder copied to BuildRequest by existing code
-- [x] Move all FOD verification and mismatch cleanup into `finish_build()` for both flat and recursive fetchers ✅ Already in finish_build via process_output → verify_fod_hash
-- [x] All fetcher derivations go through normal prepare → dispatch → finish path ✅ 247 tests pass
+- [x] Ensure `derivation_to_build_request()` preserves the fetch builder selector and fetch env vars in `BuildRequest` ✅ 5 tests in build_request.rs: builder, url, unpack/type/rev/executable, is_fetch_request round-trip, sandbox negative
+- [x] Move all FOD verification and mismatch cleanup into `finish_build()` for both flat and recursive fetchers ✅ 2 tests: fetcher_through_dispatch_service_hash_match + hash_mismatch prove FOD verification via finish_build
+- [x] All fetcher derivations go through normal prepare → dispatch → finish path ✅ 254 crunch-build tests pass
 
 ## Phase 4: Wire up in main.rs / pipeline
 
 - [x] Construct `FetchBuildService` with blob/directory services ✅ 5m (started: 2026-04-07T12:44Z → completed: 2026-04-07T12:49Z)
 - [x] Construct `DispatchBuildService` wrapping fetch + bwrap services ✅ (crunch-pipeline/src/lib.rs, src/bootstrap.rs)
 - [x] Pass `DispatchBuildService` to Builder instead of raw `BubblewrapBuildService` ✅
-- [x] Verify all fetcher integration tests pass ✅ crunch-build: 247 tests, crunch-pipeline: 14, crunch-store: 24 — all pass
-- [ ] Verify bootstrap --fetch still works (requires runtime test with bwrap)
+- [x] Verify all fetcher integration tests pass ✅ crunch-build: 254, crunch-pipeline: 13 (incl. pipeline_reports_fod_mismatch exercising full fetchurl path), crunch-store: 24
+- [x] Verify bootstrap --fetch still works ✅ `crunch bootstrap --fetch --store /tmp/crunch-test-fetch` fetched musl-gcc through DispatchBuildService → FetchBuildService
