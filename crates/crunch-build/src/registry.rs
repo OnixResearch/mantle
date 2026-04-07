@@ -139,19 +139,27 @@ impl DerivationRegistry {
     }
 
     /// Register a CA derivation's resolved output path after build.
+    ///
+    /// Returns an error if `drv_abs` is not registered or is not a CA
+    /// derivation.
     pub fn resolve_output(
         &mut self,
         drv_abs: &str,
         output_name: &str,
         final_path: StorePath<String>,
-    ) {
-        let entry = self.entries.get_mut(drv_abs)
-            .expect("BUG: resolve_output called for unknown drv path");
-        debug_assert!(
-            entry.content_addressed,
-            "resolve_output called on non-CA derivation"
-        );
+    ) -> Result<(), crate::Error> {
+        let entry = self.entries.get_mut(drv_abs).ok_or_else(|| {
+            crate::Error::Store(format!(
+                "resolve_output: derivation not registered: {drv_abs}"
+            ))
+        })?;
+        if !entry.content_addressed {
+            return Err(crate::Error::Store(format!(
+                "resolve_output called on non-CA derivation: {drv_abs}"
+            )));
+        }
         entry.resolved_outputs.insert(output_name.to_string(), final_path);
+        Ok(())
     }
 }
 
@@ -275,7 +283,7 @@ mod tests {
         // Before resolve: no output path (outputs have path: None).
         assert_eq!(reg.get_output_path(&abs, "out"), None);
 
-        reg.resolve_output(&abs, "out", final_sp.clone());
+        reg.resolve_output(&abs, "out", final_sp.clone()).unwrap();
 
         assert_eq!(reg.get_output_path(&abs, "out"), Some(final_sp));
     }
@@ -367,5 +375,30 @@ mod tests {
         entry.content_addressed = true;
 
         assert!(reg.get_by_drv_path(&abs).unwrap().content_addressed);
+    }
+
+    #[test]
+    fn resolve_output_unknown_drv_returns_error() {
+        let mut reg = DerivationRegistry::default();
+        let bogus = "/nix/store/00000000000000000000000000000000-ghost.drv";
+        let sp = fake_sp("resolved");
+
+        let result = reg.resolve_output(bogus, "out", sp);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("not registered"), "error should say 'not registered': {msg}");
+    }
+
+    #[test]
+    fn resolve_output_non_ca_returns_error() {
+        let mut reg = DerivationRegistry::default();
+        let sp = fake_sp("ia.drv");
+        reg.insert(sp.clone(), [6u8; 32], dummy_derivation(), false);
+
+        let abs = sp.to_absolute_path();
+        let result = reg.resolve_output(&abs, "out", fake_sp("resolved"));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("non-CA"), "error should say 'non-CA': {msg}");
     }
 }

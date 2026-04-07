@@ -547,7 +547,7 @@ where
             // Register resolved output.
             known_paths.resolve_output(
                 &drv_abs, &intermediate.name, intermediate.ca_path.clone(),
-            );
+            )?;
 
             let final_abs = intermediate.ca_path
                 .to_absolute_path_with_prefix(self.store.store_dir());
@@ -960,7 +960,7 @@ where
 
         // Register the resolved path.
         let drv_abs = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
-        known_paths.resolve_output(&drv_abs, output_name, ca_path.clone());
+        known_paths.resolve_output(&drv_abs, output_name, ca_path.clone())?;
 
         // Persist CA mapping for cache across restarts.
         self.store.insert_ca_mapping(&drv_abs, output_name, &final_abs);

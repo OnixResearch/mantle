@@ -185,15 +185,23 @@ fn finalize_and_register(
     known_paths: &mut ConversionCache,
     store_dir: &str,
 ) -> Result<(StorePath<String>, Derivation), Error> {
+    // Pre-validate: every input derivation must already be registered.
+    // The nix-compat HDM callback is infallible, so we check up front.
+    for parent_drv_path in nix_drv.input_derivations.keys() {
+        let abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+        if known_paths.get_hdm_by_drv_path(&abs).is_none() {
+            return Err(Error::InvalidStorePath(format!(
+                "parent derivation {} not in KnownPaths during HDM computation for '{}'",
+                parent_drv_path, drv.name,
+            )));
+        }
+    }
+
     let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
+        // Safety: pre-validated above — all parents are present.
         known_paths
             .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir))
-            .unwrap_or_else(|| {
-                panic!(
-                    "BUG: parent derivation {} not in KnownPaths during HDM computation",
-                    parent_drv_path
-                )
-            })
+            .expect("pre-validated parent missing")
     });
 
     let is_ca = drv.addressing_mode == "content-addressed" && drv.fixed_output.is_none();

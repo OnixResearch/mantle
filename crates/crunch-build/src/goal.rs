@@ -323,21 +323,15 @@ impl GoalRegistry {
         key: String,
         make_goal: impl FnOnce() -> Goal,
     ) -> Result<(&mut Goal, bool), Error> {
-        if self.goals.contains_key(&key) {
-            let goal = self.goals.get_mut(&key).unwrap();
-            Ok((goal, false))
-        } else {
-            if self.goals.len() as u32 >= MAX_GOALS {
-                return Err(Error::Store(format!(
-                    "goal limit ({MAX_GOALS}) exceeded"
-                )));
-            }
-            self.goals.entry(key).or_insert_with(make_goal);
-            // Re-borrow to satisfy the borrow checker.
-            // entry().or_insert_with returns &mut V but we need
-            // the borrow from self.goals, not the entry API.
-            let goal = self.goals.values_mut().last().unwrap();
-            Ok((goal, true))
+        if self.goals.len() as u32 >= MAX_GOALS && !self.goals.contains_key(&key) {
+            return Err(Error::Store(format!(
+                "goal limit ({MAX_GOALS}) exceeded"
+            )));
+        }
+        use std::collections::hash_map::Entry;
+        match self.goals.entry(key) {
+            Entry::Occupied(e) => Ok((e.into_mut(), false)),
+            Entry::Vacant(e) => Ok((e.insert(make_goal()), true)),
         }
     }
 
@@ -945,5 +939,52 @@ mod tests {
         g.is_root = true;
         reg.insert(sp.to_absolute_path(), g).unwrap();
         assert!(!reg.all_roots_terminal());
+    }
+
+    // ── get_or_insert correctness ───────────────────────────────
+
+    #[test]
+    fn get_or_insert_returns_correct_goal_with_multiple_entries() {
+        // Regression: previously used HashMap::values_mut().last()
+        // which returned an arbitrary entry, not the just-inserted one.
+        let mut reg = GoalRegistry::new();
+
+        // Insert several goals first to populate the map.
+        for i in 0..20_u32 {
+            let name = format!("pre-{i}.drv");
+            let sp = fake_sp(&name);
+            let g = Goal::new(sp.clone(), make_drv());
+            reg.insert(sp.to_absolute_path(), g).unwrap();
+        }
+
+        // Now get_or_insert a new goal and verify it's the right one.
+        let target_sp = fake_sp("target.drv");
+        let target_key = target_sp.to_absolute_path();
+        let (goal, is_new) = reg.get_or_insert(
+            target_key.clone(),
+            || Goal::new_root(target_sp.clone(), make_drv()),
+        ).unwrap();
+
+        assert!(is_new, "should be newly created");
+        assert!(goal.is_root, "returned goal must be the root one we created");
+        assert_eq!(goal.drv_path, target_sp, "returned goal must have the target drv_path");
+    }
+
+    #[test]
+    fn get_or_insert_existing_returns_same_goal() {
+        let mut reg = GoalRegistry::new();
+        let sp = fake_sp("exist.drv");
+        let key = sp.to_absolute_path();
+
+        let g = Goal::new(sp.clone(), make_drv());
+        reg.insert(key.clone(), g).unwrap();
+
+        let (goal, is_new) = reg.get_or_insert(
+            key.clone(),
+            || panic!("should not call make_goal for existing entry"),
+        ).unwrap();
+
+        assert!(!is_new);
+        assert_eq!(goal.drv_path, sp);
     }
 }

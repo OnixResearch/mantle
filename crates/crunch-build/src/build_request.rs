@@ -143,18 +143,20 @@ pub fn derivation_to_build_request(
                 value: Bytes::from(value),
             })
             .collect(),
-        inputs: inputs
-            .iter()
-            .map(|(path, node)| {
-                (
-                    path.to_string()
-                        .as_str()
-                        .try_into()
-                        .expect("store path basename must be valid PathComponent"),
-                    node.clone(),
-                )
-            })
-            .collect(),
+        inputs: {
+            let mut input_map = BTreeMap::new();
+            for (path, node) in inputs {
+                let component = path.to_string()
+                    .as_str()
+                    .try_into()
+                    .map_err(|e| crate::Error::Store(format!(
+                        "invalid store path component '{}': {e}",
+                        path,
+                    )))?;
+                input_map.insert(component, node.clone());
+            }
+            input_map
+        },
         inputs_dir: store_dir[1..].into(),
         constraints,
         working_dir: "build".into(),
