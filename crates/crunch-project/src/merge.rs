@@ -4,7 +4,7 @@
 //! to detect missing entries, stale inputs, orphaned lock entries,
 //! and inconsistencies. No I/O, no network.
 
-use crate::lock::{LockEntry, Lockfile};
+use crate::lock::Lockfile;
 use crate::manifest::{InputKind, ManifestInput, ProjectManifest};
 
 /// Maximum number of validation issues before we stop collecting.

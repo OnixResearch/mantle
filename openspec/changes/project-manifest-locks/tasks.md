@@ -15,11 +15,11 @@
 
 ## Phase 3: Refresh and stale detection
 
-- [ ] Implement `refresh` for selected or all inputs
-- [ ] Implement `list-stale` without mutating files
-- [ ] Implement `frozen` input handling
-- [ ] Implement kind-specific refresh helpers for URL, tarball, and git inputs
-- [ ] Add integration tests covering unchanged, updated, and frozen inputs
+- [x] Implement `refresh` for selected or all inputs ✅ refresh_inputs() with RefreshResolver trait
+- [x] Implement `list-stale` without mutating files ✅ list_stale() in refresh.rs
+- [x] Implement `frozen` input handling ✅ frozen inputs skipped in refresh_one()
+- [x] Implement kind-specific refresh helpers for URL, tarball, and git inputs ✅ resolve_input() handles File/Tarball/Git
+- [x] Add integration tests covering unchanged, updated, and frozen inputs ✅ 8 tests in refresh.rs
 
 ## Phase 4: CLI integration
 

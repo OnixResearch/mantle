@@ -12,6 +12,7 @@ mod generate;
 mod lock;
 mod manifest;
 mod merge;
+mod refresh;
 mod upgrade;
 mod version;
 
@@ -28,6 +29,10 @@ pub use manifest::{
 pub use merge::{
     MergeIssue, MergeReport, Severity, check_manifest_lock, filter_inputs,
     inputs_needing_refresh, orphaned_lock_entries,
+};
+pub use refresh::{
+    RefreshOutcome, RefreshResolver, ResolvedInput, apply_outcomes,
+    list_stale, refresh_inputs,
 };
 pub use upgrade::upgrade_lockfile;
 pub use version::{SchemaVersion, parse_version};
