@@ -31,8 +31,8 @@
 
 ## Phase 5: Mirrors, patches, and upgrades
 
-- [ ] Add mirrors to the manifest and lock models
-- [ ] Add patch definitions and per-input patch lists to the manifest and lock models
-- [ ] Connect locked mirrors and patches to the existing fetch/build pipeline
-- [ ] Implement manifest and lock schema migrations in `crunch-project`
-- [ ] Add end-to-end tests covering upgrades from at least one older schema version
+- [x] Add mirrors to the manifest and lock models ✅ mirrors.rs with validation + url_with_mirrors()
+- [x] Add patch definitions and per-input patch lists to the manifest and lock models ✅ PatchDef, PatchSource, LockedPatch in manifest.rs/lock.rs
+- [x] Connect locked mirrors and patches to the existing fetch/build pipeline ✅ mirrors/patches carried through refresh -> lock -> generated inputs
+- [x] Implement manifest and lock schema migrations in `crunch-project` ✅ 0.9.0 -> 1.0.0 migration in upgrade.rs
+- [x] Add end-to-end tests covering upgrades from at least one older schema version ✅ 2 upgrade tests (data preservation + migration)

@@ -12,6 +12,7 @@ mod generate;
 mod lock;
 mod manifest;
 mod merge;
+mod mirrors;
 mod refresh;
 mod upgrade;
 mod version;
@@ -34,5 +35,6 @@ pub use refresh::{
     RefreshOutcome, RefreshResolver, ResolvedInput, apply_outcomes,
     list_stale, refresh_inputs,
 };
-pub use upgrade::upgrade_lockfile;
+pub use mirrors::{url_with_mirrors, validate_mirrors};
+pub use upgrade::{upgrade_lockfile, OLDEST_SUPPORTED};
 pub use version::{SchemaVersion, parse_version};
