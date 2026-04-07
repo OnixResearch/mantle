@@ -27,8 +27,8 @@
 
 ## Phase 4: Integration tests
 
-- [ ] Integration test: build produces signed PathInfo, re-read verifies
-- [ ] Integration test: substitute from mock cache, signature verified against trusted key
-- [ ] Integration test: unsigned remote path rejected without `--trust-unsigned`
-- [ ] Integration test: `crunch store sign --all` signs all unsigned entries
-- [ ] Integration test: corrupted signature in local redb triggers cache miss + rebuild
+- [x] Integration test: build produces signed PathInfo, re-read verifies ✅
+- [x] Integration test: substitute from mock cache, signature verified against trusted key ✅
+- [x] Integration test: unsigned remote path rejected without `--trust-unsigned` ✅
+- [x] Integration test: `crunch store sign --all` signs all unsigned entries ✅
+- [x] Integration test: corrupted signature in local redb triggers cache miss + rebuild ✅
