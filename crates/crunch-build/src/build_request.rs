@@ -741,4 +741,41 @@ mod tests {
             "BuildRequest from a normal derivation must NOT be recognized as a fetch request"
         );
     }
+
+    #[test]
+    fn fetcher_build_request_outputs_contain_fetch_output_path() {
+        use nix_compat::nixhash::{CAHash, NixHash};
+
+        // Create a fetcher drv with a known flat hash so the output path
+        // is deterministic (FOD path computation).
+        let drv = make_fetcher_drv(
+            "https://example.com/foo.txt",
+            Some(CAHash::Flat(NixHash::Sha256([0xBB; 32]))),
+        );
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+
+        // Must have exactly one output (fetchers produce "out" only).
+        assert_eq!(req.outputs.len(), 1, "fetcher must have exactly one output");
+
+        // The output path must be relative (no leading /) and under
+        // the store dir, matching the derivation's computed output path.
+        let out_path = &req.outputs[0];
+        assert!(
+            !out_path.starts_with("/"),
+            "output path must be relative: {out_path:?}"
+        );
+        assert!(
+            out_path.starts_with("nix/store"),
+            "output must be under nix/store: {out_path:?}"
+        );
+
+        // Verify it matches the derivation's own output path (stripped of /).
+        let drv_out = drv.outputs["out"].path.as_ref().unwrap();
+        let expected_relative = &drv_out.to_absolute_path()[1..]; // strip leading /
+        assert_eq!(
+            out_path.to_str().unwrap(),
+            expected_relative,
+            "BuildRequest.outputs[0] must match the derivation's computed output path"
+        );
+    }
 }

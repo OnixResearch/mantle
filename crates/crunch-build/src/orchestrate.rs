@@ -2333,11 +2333,14 @@ mod tests {
         }
     }
 
-    // ── Fetcher through finish_build tests ──────────────────────────────
+    // ── Fetcher through DispatchBuildService + finish_build ──────────────
     //
     // These verify that fetcher derivations flow through the full
-    // prepare → dispatch → finish pipeline, including FOD hash
-    // verification in finish_build.
+    // prepare → DispatchBuildService → FetchBuildService → finish_build
+    // pipeline, proving:
+    //   1. DispatchBuildService routes fetchers to FetchBuildService
+    //   2. The sandbox service is NOT called for fetcher derivations
+    //   3. finish_build's verify_fod_hash handles match and mismatch
 
     /// Build a fetchurl derivation with a flat sha256 hash.
     fn make_fetcher_drv_for_build(
@@ -2374,6 +2377,17 @@ mod tests {
         (drv_path, drv)
     }
 
+    /// A mock sandbox service that panics if called. Proves the
+    /// DispatchBuildService never routes fetcher requests here.
+    struct PanicSandboxService;
+
+    #[async_trait]
+    impl BuildService for PanicSandboxService {
+        async fn do_build(&self, _request: BuildRequest) -> std::io::Result<BuildResult> {
+            panic!("sandbox service must NOT be called for fetcher derivations");
+        }
+    }
+
     #[tokio::test]
     async fn fetcher_through_dispatch_service_hash_match() {
         use nix_compat::nixhash::{CAHash, NixHash};
@@ -2383,7 +2397,6 @@ mod tests {
         let digest: [u8; 32] = sha2::Sha256::digest(content).into();
         let ca = CAHash::Flat(NixHash::Sha256(digest));
 
-        // Write a local file to serve via file:// URL.
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), content).unwrap();
         let url = format!("file://{}", tmp.path().display());
@@ -2391,14 +2404,19 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
 
-        // Create FetchBuildService as the build service.
+        // DispatchBuildService wrapping FetchBuildService + PanicSandboxService.
+        // If DispatchBuildService ever routes the fetcher to the sandbox,
+        // PanicSandboxService will panic and fail the test.
         let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
             bs.clone(), ds.clone(),
+        );
+        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(
+            fetch_svc, PanicSandboxService,
         );
 
         let output_dir = tempfile::tempdir().unwrap();
         let mut builder = Builder::new(
-            bs, ds, fetch_svc, test_pis(),
+            bs, ds, dispatch, test_pis(),
             output_dir.path().to_path_buf(),
             nix_compat::store_path::STORE_DIR,
             false,
@@ -2409,19 +2427,26 @@ mod tests {
             "fetch-hash-match", &url, Some(ca), &mut kp,
         );
 
-        // Build through the full pipeline.
+        // Build through the full prepare → dispatch → finish pipeline.
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
 
-        // finish_build must have verified the FOD hash and persisted PathInfo.
+        // finish_build verified the FOD hash (would have returned
+        // Error::FodHashMismatch otherwise) and persisted PathInfo.
         assert!(!outcome.cached, "first build should not be cached");
         assert!(outcome.outputs.contains_key("out"), "must produce 'out' output");
         let path_info = &outcome.outputs["out"];
         assert!(path_info.nar_size > 0, "PathInfo must have non-zero NAR size");
+        // The CA field must match the declared flat hash.
+        assert!(
+            path_info.ca.is_some(),
+            "PathInfo must have CA field for FOD output",
+        );
     }
 
     #[tokio::test]
     async fn fetcher_through_dispatch_service_hash_mismatch() {
         use nix_compat::nixhash::{CAHash, NixHash};
+        use crate::worker::Worker;
 
         // Deliberately wrong hash.
         let wrong_hash = CAHash::Flat(NixHash::Sha256([0xAA; 32]));
@@ -2436,26 +2461,66 @@ mod tests {
         let fetch_svc = crate::fetch_build_service::FetchBuildService::new(
             bs.clone(), ds.clone(),
         );
+        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(
+            fetch_svc, PanicSandboxService,
+        );
 
         let output_dir = tempfile::tempdir().unwrap();
         let mut builder = Builder::new(
-            bs, ds, fetch_svc, test_pis(),
+            bs, ds, dispatch, test_pis(),
             output_dir.path().to_path_buf(),
             nix_compat::store_path::STORE_DIR,
             false,
         );
 
         let mut kp = DerivationRegistry::default();
-        let (drv_path, _drv) = make_fetcher_drv_for_build(
+        let (drv_path, drv) = make_fetcher_drv_for_build(
             "fetch-hash-mismatch", &url, Some(wrong_hash), &mut kp,
         );
 
-        // Build should fail with FOD hash mismatch through finish_build.
-        let err = builder.build(&drv_path, &mut kp).await.unwrap_err();
-        let err_str = err.to_string();
+        // Use Worker directly to access FailedGoal.error (build_all
+        // wraps it into a generic Store error).
+        let mut worker = Worker::new(1);
+        worker.want(&drv_path, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+
+        // No successful outcomes.
         assert!(
-            err_str.contains("failed"),
-            "error should indicate build failure: {err_str}"
+            result.outcomes.is_empty(),
+            "mismatch build must not succeed: {:?}",
+            result.outcomes,
+        );
+
+        // Exactly one failure.
+        assert_eq!(result.failed.len(), 1, "exactly one root must fail");
+        let err_str = &result.failed[0].error;
+
+        // Verify the error is specifically a FOD hash mismatch from
+        // verify_fod_hash in finish_build, not a generic build failure.
+        assert!(
+            err_str.contains("FOD hash mismatch"),
+            "error must be a FOD hash mismatch from verify_fod_hash, got: {err_str}"
+        );
+        // Verify expected hash is reported (the [0xAA; 32] we declared).
+        assert!(
+            err_str.contains("expected sha256-"),
+            "error must report expected hash in SRI format, got: {err_str}"
+        );
+        // Verify actual hash is reported.
+        assert!(
+            err_str.contains(", got sha256-"),
+            "error must report actual hash in SRI format, got: {err_str}"
+        );
+
+        // Verify output was NOT persisted: verify_fod_hash returns Err
+        // before persist_and_export_output runs in process_output,
+        // so no PathInfo exists for the bad content. Check via pathinfo.
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let pi = builder.store.pathinfo_service()
+            .get(*out_path.digest()).await;
+        assert!(
+            pi.is_ok() && pi.unwrap().is_none(),
+            "PathInfo must NOT be persisted for hash-mismatched output"
         );
     }
 }

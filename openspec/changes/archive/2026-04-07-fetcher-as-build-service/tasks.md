@@ -17,14 +17,14 @@
 
 - [x] Remove `is_builtin_fetcher()` check from `prepare_build()` ✅ 10m (started: 2026-04-07T12:32Z → completed: 2026-04-07T12:42Z)
 - [x] Remove `build_fetcher()` method from Builder ✅ (deleted from orchestrate.rs)
-- [x] Ensure `derivation_to_build_request()` preserves the fetch builder selector and fetch env vars in `BuildRequest` ✅ 5 tests in build_request.rs: builder, url, unpack/type/rev/executable, is_fetch_request round-trip, sandbox negative
-- [x] Move all FOD verification and mismatch cleanup into `finish_build()` for both flat and recursive fetchers ✅ 2 tests: fetcher_through_dispatch_service_hash_match + hash_mismatch prove FOD verification via finish_build
-- [x] All fetcher derivations go through normal prepare → dispatch → finish path ✅ 254 crunch-build tests pass
+- [x] Ensure `derivation_to_build_request()` preserves the fetch builder selector and fetch env vars in `BuildRequest` ✅ 6 tests in build_request.rs: builder, url, unpack/type/rev/executable, is_fetch_request round-trip, sandbox negative, outputs[0] matches derivation output path
+- [x] Move all FOD verification and mismatch cleanup into `finish_build()` for both flat and recursive fetchers ✅ 2 tests use DispatchBuildService(FetchBuildService, PanicSandboxService): hash_match verifies PathInfo+CA persisted; hash_mismatch asserts "FOD hash mismatch", expected/actual SRI, and no PathInfo persisted
+- [x] All fetcher derivations go through normal prepare → dispatch → finish path ✅ 255 crunch-build tests pass (PanicSandboxService proves dispatch routing)
 
 ## Phase 4: Wire up in main.rs / pipeline
 
 - [x] Construct `FetchBuildService` with blob/directory services ✅ 5m (started: 2026-04-07T12:44Z → completed: 2026-04-07T12:49Z)
 - [x] Construct `DispatchBuildService` wrapping fetch + bwrap services ✅ (crunch-pipeline/src/lib.rs, src/bootstrap.rs)
 - [x] Pass `DispatchBuildService` to Builder instead of raw `BubblewrapBuildService` ✅
-- [x] Verify all fetcher integration tests pass ✅ crunch-build: 254, crunch-pipeline: 13 (incl. pipeline_reports_fod_mismatch exercising full fetchurl path), crunch-store: 24
+- [x] Verify all fetcher integration tests pass ✅ crunch-build: 255, crunch-pipeline: 13 (incl. pipeline_reports_fod_mismatch exercising full fetchurl path), crunch-store: 24
 - [x] Verify bootstrap --fetch still works ✅ `crunch bootstrap --fetch --store /tmp/crunch-test-fetch` fetched musl-gcc through DispatchBuildService → FetchBuildService
