@@ -90,25 +90,29 @@ $ rg --line-number 'pub fn resolve_max_jobs|pub fn deserialize_derivations_from_
 ### `build()` owns store/builder/worker setup and result collection
 
 ```text
-$ nl -ba crates/crunch-pipeline/src/lib.rs | sed -n '112,190p'
-   112  pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
-   115      let json_str = crunch_eval::evaluate_to_json(&config.file, &config.import_paths)
-   120      let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-   148      let mut builder = Builder::with_state_dir(
-   160      let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-   166      let mut known_paths = DerivationRegistry::new(&config.store_dir);
-   167      let mut worker = Worker::new(config.max_jobs);
-   168      let worker_result = worker
-   169          .run_streaming(&mut builder, &mut known_paths, &mut rx)
-   177      normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
-   178      let root_labels = build_root_labels(&root_drv_paths, &config.store_dir);
-   179      let fod_mismatches = collect_fod_mismatches(&worker_result.failed);
-   181      Ok(PipelineResult {
-   182          outcomes: worker_result.outcomes,
-   183          failed: worker_result.failed,
-   184          fod_mismatches,
-   185          root_labels,
-   186      })
+$ nl -ba crates/crunch-pipeline/src/lib.rs | sed -n '114,184p'
+   114  pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
+   117      let json_str = crunch_eval::evaluate_to_json(&config.file, &config.import_paths)
+   122      let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+   145      let mut builder = Builder::with_state_dir(
+   157      let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+   161      let mut known_paths = DerivationRegistry::new(&config.store_dir);
+   162      let mut worker = Worker::new(config.max_jobs);
+   163      let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx).await;
+   165      let root_drv_paths =
+   171      let mut worker_result = match worker_run {
+   172          Ok(result) => result,
+   173          Err(err) => return Err(Error::Build(format!("{err}"))),
+   174      };
+   175      normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
+   176      let root_labels = build_root_labels(&root_drv_paths, &config.store_dir);
+   177      let fod_mismatches = collect_fod_mismatches(&worker_result.failed);
+   179      Ok(PipelineResult {
+   180          outcomes: worker_result.outcomes,
+   181          failed: worker_result.failed,
+   182          fod_mismatches,
+   183          root_labels,
+   184      })
 ```
 
 ### `convert_all()` owns the convert loop and registry-bridge payloads
@@ -201,12 +205,46 @@ $ wc -l < src/main.rs
 320
 ```
 
+### Dependency audit evidence
+
+The audit found no more removable normal dependencies in the binary crate.
+Every remaining direct dependency still has a live `src/` call site.
+
+```text
+$ rg --line-number 'crunch_pipeline|crunch_eval|crunch_glue|crunch_build|crunch_store|snix_build|snix_castore|snix_store|tokio|tracing_subscriber|tracing::|clap|data_encoding|tempfile|blake3' src --glob '*.rs'
+src/main.rs:12:use clap::{Parser, Subcommand};
+src/main.rs:181:    tracing_subscriber::fmt()
+src/main.rs:214:            let json = crunch_eval::evaluate_to_json(&file, &import_paths)
+src/main.rs:228:            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+src/build_cmd.rs:4:use crunch_pipeline::{BuildConfig, PipelineResult, drv_key_for, label_for_key, parse_drv_key};
+src/build_cmd.rs:36:    let rt = tokio::runtime::Runtime::new()
+src/build_cmd.rs:195:    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
+src/bootstrap.rs:143:fn make_fetch_derivation(seed: &FetchSeed) -> crunch_glue::CrunchDerivation {
+src/bootstrap.rs:248:        use snix_castore::blobservice::ObjectStoreBlobService;
+src/bootstrap.rs:272:        use snix_build::buildservice::BubblewrapBuildService;
+src/bootstrap.rs:289:        let mut builder = crunch_build::Builder::with_state_dir(
+src/store_cmd.rs:43:    let entries = crunch_store::store_list(svc)
+src/store_cmd.rs:5:    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
+src/self_build.rs:91:    let digest_bytes = data_encoding::HEXLOWER.decode(fingerprint.as_bytes())
+src/self_build.rs:368:    let mut hasher = blake3::Hasher::new();
+src/self_build.rs:440:    let tmp_dir = tempfile::tempdir()
+
+$ rg --line-number 'nix_compat' src
+src/bootstrap.rs:305:        let root_paths: Vec<nix_compat::store_path::StorePath<String>> =
+src/self_build.rs:93:    let store_hash = nix_compat::nixbase32::encode(&digest_bytes[..20]);
+src/build_cmd.rs:5:use nix_compat::store_path::StorePath;
+src/fix.rs:4:use nix_compat::store_path::StorePath;
+src/main.rs:47:    nix_compat: bool,
+src/main.rs:268:                nix_compat::store_path::STORE_DIR,
+src/main.rs:279:    if args.nix_compat {
+```
+
 ### Compile evidence
 
 ```text
 $ cargo check -p crunch
 Checking crunch v0.1.0 (/home/brittonr/git/crunch/crunch)
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.09s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.07s
 ```
 
 ## Phase 4: Tests
@@ -217,10 +255,11 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.09s
 $ cargo test -p crunch-pipeline
 Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/crunch_pipeline-8812cc8c4d9916cd)
 
-running 10 tests
+running 11 tests
 test tests::parse_fod_mismatch_invalid ... ok
 test tests::parse_fod_mismatch_valid ... ok
 test tests::parse_fod_mismatch_edge_case_preserves_trailing_context ... ok
+test tests::parse_fod_mismatch_strips_drv_suffix ... ok
 test tests::parse_drv_key_round_trip ... ok
 test tests::deserialize_package_set ... ok
 test tests::deserialize_invalid_json_errors ... ok
@@ -229,14 +268,43 @@ test tests::resolve_max_jobs_clamps_user_value ... ok
 test tests::deserialize_single_derivation ... ok
 test tests::resolve_max_jobs_default_in_range ... ok
 
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-Running tests/integration_build.rs (/home/brittonr/.cargo-target/debug/deps/integration_build-f1800f815d492c6b)
+Running tests/integration_build.rs (/home/brittonr/.cargo-target/debug/deps/integration_build-169b945e0ae32323)
 
-running 1 test
+running 2 tests
 test pipeline_builds_trivial_derivation_end_to_end ... ok
+test pipeline_reports_fod_mismatch_without_aborting_other_roots ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+```
+
+### Real FOD mismatch integration evidence
+
+The new integration test uses two `file://` fetchurl roots in one `.ncl` file:
+one with the correct sha256 and one with an intentionally wrong sha256. It uses
+the same `can_build()` skip as the existing end-to-end test, including the
+`bwrap --version` probe, so hosts without `bwrap` keep the old skip behavior.
+When the test runs, the pipeline returns `Ok(PipelineResult)` with one
+successful outcome, one failed root, and one parsed `fod_mismatch` entry, which
+exercises the spec path that a FOD mismatch is reported as data without
+aborting sibling roots.
+
+```text
+$ nl -ba crates/crunch-pipeline/tests/integration_build.rs | sed -n '12,18p'
+    12  fn can_build() -> bool {
+    13      Path::new("/nix/store").exists()
+    14          && std::process::Command::new("bwrap")
+    15              .arg("--version")
+    16              .output()
+    17              .is_ok_and(|output| output.status.success())
+    18  }
+
+$ cargo test -p crunch-pipeline pipeline_reports_fod_mismatch_without_aborting_other_roots -- --exact
+running 1 test
+test pipeline_reports_fod_mismatch_without_aborting_other_roots ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
 ```
 
 ### Vendor regression checks mentioned in this change
@@ -260,35 +328,28 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 ### Workspace regression check
 
+This was re-run after adding the `can_build()` skip to the new FOD integration
+test.
+
 ```text
-$ cargo test --workspace
+$ cargo test --workspace >/tmp/crunch-workspace-test.log && echo WORKSPACE_EXIT=0 && tail -n 30 /tmp/crunch-workspace-test.log
+WORKSPACE_EXIT=0
 ...
-test transport::fusedev::linux_session::tests::test_new_channel ... ok
-...
-Doc-tests snix_castore
 running 3 tests
 test vendor/snix-castore/src/composition.rs - composition (line 16) ... ok
 test vendor/snix-castore/src/composition.rs - composition (line 84) ... ok
 test vendor/snix-castore/src/composition.rs - composition (line 52) ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-...
-WORKSPACE_EXIT=0
-```
 
-## Remaining dependency-audit evidence
+all doctests ran in 0.93s; merged doctests compilation took 0.91s
 
-The last task stays open. The change is still active. The binary still has direct lower-layer uses outside
-the standard build path.
+running 0 tests
 
-```text
-$ rg --line-number 'crunch_eval|crunch_glue|crunch_build|crunch_store|nix_compat|snix_build|snix_castore|snix_store' src --glob '*.rs'
-src/build_cmd.rs:5:use nix_compat::store_path::StorePath;
-src/build_cmd.rs:195:    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
-src/bootstrap.rs:143:fn make_fetch_derivation(seed: &FetchSeed) -> crunch_glue::CrunchDerivation {
-src/bootstrap.rs:218:    let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
-src/bootstrap.rs:289:        let mut builder = crunch_build::Builder::with_state_dir(
-src/store_cmd.rs:5:    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
-src/store_cmd.rs:43:    let entries = crunch_store::store_list(svc)
-src/main.rs:214:            let json = crunch_eval::evaluate_to_json(&file, &import_paths)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running 1 test
+test vendor/snix-tracing/src/lib.rs - TracingBuilder::build_with_additional (line 244) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```

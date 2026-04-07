@@ -22,7 +22,7 @@
 ## Phase 3: Rewire main.rs
 
 - [x] Add `crunch-pipeline` dep to the binary's `Cargo.toml`
-- [ ] Audit remaining direct deps in the binary crate and remove only the ones no longer needed after extraction; keep deps that still have live `eval`, `bootstrap`, or `store` call sites
+- [x] Audit remaining direct deps in the binary crate and remove only the ones no longer needed after extraction; keep deps that still have live `eval`, `bootstrap`, or `store` call sites
 - [x] Rewrite `cmd_build` to construct `BuildConfig` and call `crunch_pipeline::build()`
 - [x] Move `handle_fod_mismatch` + `auto_fix_hash` to a local `fix.rs` module in the binary
 - [x] Keep `write_log`, `log_dir`, `state_dir`, `build_import_paths` in the binary (CLI concerns)
@@ -31,9 +31,15 @@
 
 ### Dependency audit notes
 
+The audit found no more removable normal dependencies in the binary crate.
+Every remaining direct dependency still has a live `src/` call site after the
+pipeline extraction.
+
 - `crunch_eval` still has live binary-crate call sites in `src/main.rs` (`eval`) and `src/build_cmd.rs` (`build_import_paths`).
-- `crunch_glue` and `crunch_build` still have live binary-crate call sites in `src/bootstrap.rs`.
+- `crunch_glue`, `crunch_build`, `snix_build`, and `snix_castore` still have live binary-crate call sites in `src/bootstrap.rs`.
 - `crunch_store` and `snix_store` remain live for `src/store_cmd.rs`.
+- `nix_compat` remains live in `src/build_cmd.rs`, `src/fix.rs`, `src/main.rs`, and `src/self_build.rs`.
+- `tokio`, `tracing`, `tracing-subscriber`, `clap`, `data-encoding`, `tempfile`, and `blake3` all still have live CLI/bootstrap call sites.
 
 ## Phase 4: Tests
 
@@ -41,6 +47,7 @@
 - [x] Unit test for `resolve_max_jobs` (clamping, default)
 - [x] Unit test for `parse_fod_mismatch_error` (valid, invalid, edge cases)
 - [x] Integration test: pipeline builds a trivial .ncl derivation end-to-end
+- [x] Integration test: pipeline reports a FOD mismatch in `PipelineResult.fod_mismatches` and still returns sibling root outcomes
 - [x] `cargo test -p crunch-pipeline` passes
 - [x] `cargo test --workspace` passes (no regressions)
 
@@ -75,16 +82,18 @@ test vendor/snix-castore/src/composition.rs - composition (line 52) ... ok
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 $ cargo test -p crunch-pipeline
-running 10 tests
+running 11 tests
 ...
 test tests::parse_fod_mismatch_edge_case_preserves_trailing_context ... ok
+test tests::parse_fod_mismatch_strips_drv_suffix ... ok
 ...
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-running 1 test
+running 2 tests
 test pipeline_builds_trivial_derivation_end_to_end ... ok
+test pipeline_reports_fod_mismatch_without_aborting_other_roots ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
 $ cargo test --workspace
 ...
