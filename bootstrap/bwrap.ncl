@@ -47,7 +47,7 @@ let bwrap_src = crunch.fetchTarball {
 
       # Find GCC.
       GCC=""
-      for d in /nix/store/*-gcc; do
+      for d in $NIX_STORE/*-gcc; do
         if [ -x "$d/bin/gcc" ]; then GCC="$d"; break; fi
       done
       if [ -z "$GCC" ]; then
@@ -55,7 +55,7 @@ let bwrap_src = crunch.fetchTarball {
       fi
       # Find binutils.
       BINUTILS=""
-      for d in /nix/store/*-binutils; do
+      for d in $NIX_STORE/*-binutils; do
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
       # Symlink unprefixed binutils tools.
@@ -71,11 +71,11 @@ let bwrap_src = crunch.fetchTarball {
 
       # Create musl dynamic linker symlink.
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
       done
       if [ -z "$MUSL" ]; then
-        for d in /nix/store/*-musl-gcc; do
+        for d in $NIX_STORE/*-musl-gcc; do
           if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
         done
       fi
@@ -86,7 +86,7 @@ let bwrap_src = crunch.fetchTarball {
 
       # Find bwrap source.
       SRCDIR=""
-      for d in /nix/store/*-bwrap-src; do
+      for d in $NIX_STORE/*-bwrap-src; do
         if [ -d "$d" ]; then SRCDIR="$d"; break; fi
       done
       if [ -z "$SRCDIR" ]; then
@@ -138,7 +138,7 @@ CAPEOF
 
       # Find the seed musl-gcc toolchain for extra kernel headers.
       SEED=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d/include/linux" ]; then SEED="$d"; break; fi
       done
       SEED_INC=""

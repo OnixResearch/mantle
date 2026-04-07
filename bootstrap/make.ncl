@@ -42,7 +42,7 @@ let make_src = crunch.fetchTarball {
 
       # Find the musl-gcc toolchain.
       TOOLCHAIN=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d" ]; then TOOLCHAIN="$d"; break; fi
       done
       if [ -z "$TOOLCHAIN" ]; then
@@ -51,7 +51,7 @@ let make_src = crunch.fetchTarball {
 
       # Find make source.
       SRCDIR=""
-      for d in /nix/store/*-make-src; do
+      for d in $NIX_STORE/*-make-src; do
         if [ -d "$d" ]; then SRCDIR="$d"; break; fi
       done
       if [ -z "$SRCDIR" ]; then

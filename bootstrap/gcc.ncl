@@ -70,23 +70,23 @@ let mpc_src = crunch.fetchTarball {
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
       done
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d/bin/dash"; break; fi
       done
       BINUTILS=""
-      for d in /nix/store/*-binutils; do
+      for d in $NIX_STORE/*-binutils; do
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -d "$d/include" ]; then MUSL="$d"; break; fi
       done
 
@@ -110,16 +110,16 @@ let mpc_src = crunch.fetchTarball {
 
       # Find source tarballs.
       GCC_SRC="" GMP_SRC="" MPFR_SRC="" MPC_SRC=""
-      for d in /nix/store/*-gcc-src; do
+      for d in $NIX_STORE/*-gcc-src; do
         if [ -d "$d" ]; then GCC_SRC="$d"; fi
       done
-      for d in /nix/store/*-gmp-src; do
+      for d in $NIX_STORE/*-gmp-src; do
         if [ -d "$d" ]; then GMP_SRC="$d"; fi
       done
-      for d in /nix/store/*-mpfr-src; do
+      for d in $NIX_STORE/*-mpfr-src; do
         if [ -d "$d" ]; then MPFR_SRC="$d"; fi
       done
-      for d in /nix/store/*-mpc-src; do
+      for d in $NIX_STORE/*-mpc-src; do
         if [ -d "$d" ]; then MPC_SRC="$d"; fi
       done
 

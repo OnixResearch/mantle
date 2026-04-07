@@ -54,7 +54,7 @@ let dash_src = crunch.fetchTarball {
 
       # Find the musl-gcc toolchain.
       TOOLCHAIN=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d" ]; then TOOLCHAIN="$d"; break; fi
       done
       if [ -z "$TOOLCHAIN" ]; then
@@ -63,7 +63,7 @@ let dash_src = crunch.fetchTarball {
 
       # Find GNU Make.
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
       done
       if [ -z "$MAKE" ]; then
@@ -72,7 +72,7 @@ let dash_src = crunch.fetchTarball {
 
       # Find dash source.
       SRCDIR=""
-      for d in /nix/store/*-dash-src; do
+      for d in $NIX_STORE/*-dash-src; do
         if [ -d "$d" ]; then SRCDIR="$d"; break; fi
       done
       if [ -z "$SRCDIR" ]; then

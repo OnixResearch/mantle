@@ -63,31 +63,31 @@ let crunch_src = crunch.fetchTarball {
 
       # Find from-source tools.
       GCC=""
-      for d in /nix/store/*-gcc; do
+      for d in $NIX_STORE/*-gcc; do
         if [ -x "$d/bin/gcc" ]; then GCC="$d"; break; fi
       done
       BINUTILS=""
-      for d in /nix/store/*-binutils; do
+      for d in $NIX_STORE/*-binutils; do
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -d "$d/include" ]; then MUSL="$d"; break; fi
       done
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d"; break; fi
       done
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d"; break; fi
       done
       RUST=""
-      for d in /nix/store/*-rust; do
+      for d in $NIX_STORE/*-rust; do
         if [ -x "$d/bin/rustc" ]; then RUST="$d"; break; fi
       done
       CRUNCH_SRC=""
-      for d in /nix/store/*-crunch-src; do
+      for d in $NIX_STORE/*-crunch-src; do
         if [ -f "$d/Cargo.toml" ]; then CRUNCH_SRC="$d"; break; fi
       done
 
@@ -106,7 +106,7 @@ let crunch_src = crunch.fetchTarball {
       # Rust binaries need libgcc_s.so.1 for unwinding.
       # The fetched musl-gcc toolchain provides it.
       MUSL_GCC=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -f "$d/lib/libgcc_s.so.1" ]; then MUSL_GCC="$d"; break; fi
       done
       if [ -n "$MUSL_GCC" ]; then

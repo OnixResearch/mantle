@@ -39,15 +39,15 @@ let dash = (import "dash.ncl") in
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
       done
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d/bin/dash"; break; fi
       done
       for tool in TOOLCHAIN MAKE DASH; do

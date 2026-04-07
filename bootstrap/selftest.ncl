@@ -37,23 +37,23 @@ let gcc = (import "gcc.ncl") in
 
       # Find from-source tools (NOT the fetched musl-gcc).
       GCC=""
-      for d in /nix/store/*-gcc; do
+      for d in $NIX_STORE/*-gcc; do
         if [ -x "$d/bin/gcc" ]; then GCC="$d"; break; fi
       done
       BINUTILS=""
-      for d in /nix/store/*-binutils; do
+      for d in $NIX_STORE/*-binutils; do
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -d "$d/include" ]; then MUSL="$d"; break; fi
       done
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d"; break; fi
       done
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
       done
 

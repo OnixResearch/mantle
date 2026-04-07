@@ -815,7 +815,10 @@ fn cmd_self_build(
 
     // 2. Generate .ncl and build.
     eprintln!("\n[2/3] Building...");
-    let ncl_content = self_build::generate_self_build_ncl(&store_name);
+    let ncl_content = self_build::generate_self_build_ncl(
+        &store_name,
+        nix_compat::store_path::STORE_DIR,
+    );
 
     let tmp_dir = tempfile::tempdir()
         .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;

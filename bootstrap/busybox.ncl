@@ -52,7 +52,7 @@ let busybox_src = crunch.fetchTarball {
 
       # Find GCC.
       GCC=""
-      for d in /nix/store/*-gcc; do
+      for d in $NIX_STORE/*-gcc; do
         if [ -x "$d/bin/gcc" ]; then GCC="$d"; break; fi
       done
       if [ -z "$GCC" ]; then
@@ -60,7 +60,7 @@ let busybox_src = crunch.fetchTarball {
       fi
       # Find binutils (as, ld, ar, etc.).
       BINUTILS=""
-      for d in /nix/store/*-binutils; do
+      for d in $NIX_STORE/*-binutils; do
         if [ -d "$d/bin" ]; then BINUTILS="$d"; break; fi
       done
 
@@ -79,7 +79,7 @@ let busybox_src = crunch.fetchTarball {
 
       # Find GNU Make.
       MAKE=""
-      for d in /nix/store/*-gnumake; do
+      for d in $NIX_STORE/*-gnumake; do
         if [ -x "$d/bin/make" ]; then MAKE="$d/bin/make"; break; fi
       done
       if [ -z "$MAKE" ]; then
@@ -88,13 +88,13 @@ let busybox_src = crunch.fetchTarball {
 
       # Find dash for /bin/sh replacement.
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d/bin/dash"; break; fi
       done
 
       # Find busybox source.
       SRCDIR=""
-      for d in /nix/store/*-busybox-src; do
+      for d in $NIX_STORE/*-busybox-src; do
         if [ -d "$d" ]; then SRCDIR="$d"; break; fi
       done
       if [ -z "$SRCDIR" ]; then
@@ -115,12 +115,12 @@ let busybox_src = crunch.fetchTarball {
       # The bootstrap GCC produces musl-linked binaries. Host tools
       # (fixdep etc.) run during the build and need the dynamic linker.
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
       done
       if [ -z "$MUSL" ]; then
         # Fall back to the seed musl-gcc toolchain.
-        for d in /nix/store/*-musl-gcc; do
+        for d in $NIX_STORE/*-musl-gcc; do
           if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
         done
       fi
@@ -150,7 +150,7 @@ let busybox_src = crunch.fetchTarball {
       # Add seed musl-gcc include path for kernel headers the bootstrap
       # GCC is missing (linux/kd.h, linux/vt.h, etc.).
       SEED=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -d "$d/include/linux" ]; then SEED="$d"; break; fi
       done
       SEED_INC=""

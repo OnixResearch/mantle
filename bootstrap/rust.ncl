@@ -48,15 +48,15 @@ let rust_src = crunch.fetchTarball {
 
       # Find inputs.
       MUSL=""
-      for d in /nix/store/*-musl; do
+      for d in $NIX_STORE/*-musl; do
         if [ -d "$d/include" ]; then MUSL="$d"; break; fi
       done
       RUST_SRC=""
-      for d in /nix/store/*-rust-standalone; do
+      for d in $NIX_STORE/*-rust-standalone; do
         if [ -d "$d/rustc" ]; then RUST_SRC="$d"; break; fi
       done
       DASH=""
-      for d in /nix/store/*-dash; do
+      for d in $NIX_STORE/*-dash; do
         if [ -x "$d/bin/dash" ]; then DASH="$d"; break; fi
       done
 
@@ -74,7 +74,7 @@ let rust_src = crunch.fetchTarball {
 
       # Also need libgcc_s.so.1 for unwinding.
       MUSL_GCC=""
-      for d in /nix/store/*-musl-gcc; do
+      for d in $NIX_STORE/*-musl-gcc; do
         if [ -f "$d/lib/libgcc_s.so.1" ]; then MUSL_GCC="$d"; break; fi
       done
       if [ -n "$MUSL_GCC" ]; then
