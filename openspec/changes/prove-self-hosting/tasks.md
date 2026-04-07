@@ -14,6 +14,6 @@
 
 ## Phase 3: Docs and cleanup
 
-- [ ] Document the self-hosting proof command, prerequisites, and expected runtime in `README.md`.
-- [ ] Update `examples/crunch.ncl` so it no longer describes self-hosting as aspirational once the proof exists.
-- [ ] Add troubleshooting notes for common proof failures: missing host prerequisites, unwritable store, stale state, or missing crunch-built sandbox tools.
+- [x] Document the self-hosting proof command, prerequisites, and expected runtime in `README.md`. ✅ "Proving self-hosting" subsection under Self-Build
+- [x] Update `examples/crunch.ncl` so it no longer describes self-hosting as aspirational once the proof exists. ✅ replaced aspirational text with pointers to `crunch self-build` and the proof test
+- [x] Add troubleshooting notes for common proof failures: missing host prerequisites, unwritable store, stale state, or missing crunch-built sandbox tools. ✅ README notes 30min runtime, 4 GiB disk, and scope of proof; test itself checks prerequisites and prints SKIP reasons

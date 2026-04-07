@@ -327,6 +327,23 @@ First bootstrap requires `git`, `cargo`, `tar`, `xz`, `bwrap` on PATH.
 After the first self-build, the crunch-built bwrap and busybox are used
 for subsequent builds.
 
+### Proving self-hosting
+
+To verify that a crunch-built binary can rebuild crunch:
+
+```bash
+cargo test -p crunch --test self_hosting -- --ignored --nocapture
+```
+
+This runs two stages: the checkout binary builds stage1, then the stage1
+binary rebuilds crunch (stage2) using only crunch-built sandbox tools.
+The test asserts that stage2 selected crunch-built bwrap and busybox,
+not host fallbacks. Expect ~30 min and ~4 GiB free in `/tmp`.
+
+The proof does not demonstrate bit-for-bit reproducibility or freedom
+from all host tools (git, cargo, tar, xz are still needed). It proves
+that a crunch-built crunch can drive another self-build to completion.
+
 ## Project Management
 
 crunch has built-in dependency management for project inputs — git repos,

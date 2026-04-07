@@ -1,20 +1,16 @@
 # crunch building itself.
 #
-# This is the self-hosting target: crunch compiled by crunch.
-# Requires rustc, cargo, and build tools in the seed.
+# This is an example of the self-hosting derivation structure.
+# The actual self-build uses `crunch self-build`, which generates
+# a complete Nickel derivation with the full bootstrap chain
+# (musl-gcc -> make -> dash -> binutils -> musl -> gcc -> busybox
+# -> bwrap -> rust -> crunch). See src/self_build.rs.
 #
-# Usage:
-#   1. Generate extended seed:
-#      crunch bootstrap -o examples/seed-rust.ncl \
-#        bash coreutils gcc gnumake binutils rustc cargo
-#   2. Build:
-#      crunch build examples/crunch.ncl -I examples
+# To prove self-hosting works:
+#   cargo test -p crunch --test self_hosting -- --ignored --nocapture
 #
-# Note: This is aspirational for v0. The bwrap sandbox may need
-# additional inputs (openssl-dev, protobuf, pkg-config, clang, mold)
-# that aren't trivially available as single store paths. A real
-# self-hosting build would use a more sophisticated build script
-# or a Nickel builder package.
+# This example shows the structure using a Nix-based seed.
+# The real self-build bypasses the seed entirely.
 
 let crunch = import "lib.ncl" in
 let seed = import "seed.ncl" in
@@ -30,14 +26,9 @@ let seed = import "seed.ncl" in
 
       # Copy source tree into the build dir
       # (In a real build, this would be a fixed-output fetch or a source input)
-      echo "crunch self-build is not yet fully functional"
-      echo "This derivation demonstrates the structure."
-      echo "A working self-build requires additional seed packages:"
-      echo "  - rustc, cargo (Rust toolchain)"
-      echo "  - protobuf (for prost-build)"
-      echo "  - openssl-dev (for reqwest TLS)"
-      echo "  - clang, mold (linker)"
-      echo "  - pkg-config"
+      echo "This example derivation demonstrates the structure."
+      echo "The real self-build uses: crunch self-build"
+      echo "Proof: cargo test -p crunch --test self_hosting -- --ignored"
 
       mkdir -p $out/bin
       echo "#!/bin/sh" > $out/bin/crunch
