@@ -317,3 +317,13 @@
 - MockPathInfoService in tests needs `#[tonic::async_trait]` (not `async_trait::async_trait`). tonic added as dev-dep to crunch-store.
 - `StoreHandle::remote_pathinfo()` returns `Option<Arc<dyn PathInfoService>>`. To get `Option<&dyn PathInfoService>` for the closure walker, use `remote_ref.as_deref()`.
 - Test count: crunch-store 15->24 (9 closure tests). crunch-build 218. Total: 242.
+
+## Eval/Build Streaming Overlap (2026-04-07)
+- Convert loop now runs on `tokio::task::spawn_blocking`. Each root's `convert()` + `cache.drain_pending()` sends entries over `mpsc::channel` to the Worker. Worker calls `accept_eval_message` which inserts entries into `DerivationRegistry` before `want()`.
+- `ConversionCache::drain_pending()` returns entries added since last drain. Uses a `pending: Vec<...>` field populated in `insert_ca()`. `MAX_PENDING = 16_384`.
+- `EvalMessage.new_entries: Vec<(StorePath<String>, [u8; 32], Derivation, bool)>` carries registry tuples. Existing tests pass `new_entries: vec![]` since they pre-populate the registry.
+- `accept_eval_message` takes `&mut DerivationRegistry` (was `&DerivationRegistry`). `drain_eval_messages` also changed to `&mut`.
+- `tx.blocking_send()` from `spawn_blocking` context (can't use `.await`). Channel capacity 16 provides backpressure.
+- Convert thread returns `Ok::<_, RunError>(drv_paths)`. Main task awaits the `JoinHandle` after Worker completes to get `drv_paths` for output display. Convert errors take priority over Worker results.
+- `Derivation`, `StorePath<String>`, `ConversionCache`, `CrunchDerivation` are all `Send` — no issues crossing thread boundary.
+- Test count: crunch-glue 65->68 (3 drain_pending tests). crunch-build 222->224 (2 entries-in-message tests). Total workspace: 385.
