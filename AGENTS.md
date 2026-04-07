@@ -268,6 +268,16 @@ Building derivations (not just compiling crunch) requires:
   Directory digests use postcard encoding (not protobuf canonical form).
   Existing redb databases are incompatible after this change.
 
+## crunch-project Crate (2026-04-07)
+- `crates/crunch-project/` owns manifest, lock, refresh, stale detection, upgrade, drift, mirrors, and generated inputs.
+- No Nickel dep — the binary crate uses `crunch-eval::evaluate_and_deserialize()` to load `crunch-project.ncl` into `ProjectManifest`.
+- `RefreshResolver` trait: callers implement network-dependent resolution (git ls-remote, content hashing). The crate itself is pure logic.
+- Generated `.crunch/inputs.ncl` is a plain Nickel record (no stdlib import). Package code imports it and passes data to fetch helpers.
+- `crunch.lock` is JSON with explicit `SchemaVersion`. Upgrade path: 0.9.0 -> 1.0.0 (structural noop, exercises the migration machinery).
+- CLI commands: `init`, `check`, `show`, `refresh`, `list-stale`, `upgrade` — all in `src/project_cmd.rs`, delegating to `crunch-project`.
+- `StubResolver` used until build pipeline exposes `hash_url_content` and `resolve_git_rev` as standalone helpers.
+- Test count: 70 (65 unit + 5 integration using crunch-eval for Nickel validation).
+
 ## Coding Style: Tiger Style
 
 Follow Tiger Style. The single most important principle is **Functional Core, Imperative Shell (FCIS)**:
