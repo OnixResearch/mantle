@@ -11,9 +11,12 @@
 //! the I/O lives in the caller.
 
 use crate::error::Error;
-use crate::lock::{LockEntry, LockedHash, LockedKind, Lockfile};
+use crate::lock::{
+    LockEntry, LockedHash, LockedKind, LockedPatch, LockedPatchSource, Lockfile,
+};
 use crate::manifest::{
-    GitReference, HashAlgo, InputKind, ManifestInput, ProjectManifest,
+    GitReference, HashAlgo, InputKind, ManifestInput, PatchDef, PatchSource,
+    ProjectManifest,
 };
 
 /// Maximum number of inputs to refresh in a single call.
@@ -78,6 +81,20 @@ pub trait RefreshResolver {
         url: &str,
         algo: &HashAlgo,
     ) -> Result<Option<String>, Error>;
+
+    /// Compute the hash of a local file's content.
+    ///
+    /// Used for local patches. Returns `Ok(Some(sri_hash))` if the file
+    /// was hashed, `Ok(None)` if unavailable.
+    fn hash_local_file(
+        &self,
+        path: &str,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, Error> {
+        // Default: not available. Callers override for real I/O.
+        let _ = (path, algo);
+        Ok(None)
+    }
 }
 
 /// Refresh selected inputs in a manifest.
@@ -229,8 +246,15 @@ fn resolve_input(
 
 /// Apply refresh outcomes to a lockfile, producing a new lockfile.
 ///
-/// Only `Updated` outcomes modify the lock. Other outcomes are ignored.
-pub fn apply_outcomes(lock: &Lockfile, outcomes: &[RefreshOutcome]) -> Lockfile {
+/// Updates input entries AND resolves manifest patches into
+/// `Lockfile.patches`. Patch definitions referenced by any input
+/// are resolved from the manifest and locked.
+pub fn apply_outcomes(
+    manifest: &ProjectManifest,
+    lock: &Lockfile,
+    outcomes: &[RefreshOutcome],
+    resolver: &dyn RefreshResolver,
+) -> Lockfile {
     let mut new_lock = lock.clone();
     for outcome in outcomes {
         if let RefreshOutcome::Updated(resolved) = outcome {
@@ -239,7 +263,92 @@ pub fn apply_outcomes(lock: &Lockfile, outcomes: &[RefreshOutcome]) -> Lockfile 
                 .insert(resolved.name.clone(), resolved.entry.clone());
         }
     }
+
+    // Resolve all patches referenced by any input entry.
+    resolve_patches_into_lock(manifest, &mut new_lock, resolver);
+
     new_lock
+}
+
+/// Resolve manifest patch definitions into locked patches.
+///
+/// For each patch name referenced by any lock entry, find the
+/// manifest's `PatchDef` and lock it (compute hash, record source).
+fn resolve_patches_into_lock(
+    manifest: &ProjectManifest,
+    lock: &mut Lockfile,
+    resolver: &dyn RefreshResolver,
+) {
+    // Collect all patch names referenced by any lock entry.
+    let mut needed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for entry in lock.inputs.values() {
+        for p in &entry.patches {
+            needed.insert(p.clone());
+        }
+    }
+
+    // Build index of manifest patch definitions.
+    let defs: std::collections::HashMap<&str, &PatchDef> = manifest
+        .patches
+        .iter()
+        .map(|d| (d.name.as_str(), d))
+        .collect();
+
+    for name in &needed {
+        if lock.patches.contains_key(name) {
+            continue; // already locked
+        }
+        if let Some(def) = defs.get(name.as_str()) {
+            if let Some(locked) = resolve_patch(def, resolver) {
+                lock.patches.insert(name.clone(), locked);
+            }
+        }
+    }
+
+    // Remove orphaned locked patches (no longer referenced).
+    lock.patches.retain(|name, _| needed.contains(name));
+}
+
+/// Resolve a single manifest patch definition to a locked patch.
+fn resolve_patch(
+    def: &PatchDef,
+    resolver: &dyn RefreshResolver,
+) -> Option<LockedPatch> {
+    match &def.source {
+        PatchSource::Local { path } => {
+            let hash_value = resolver
+                .hash_local_file(path, &HashAlgo::Sha256)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            Some(LockedPatch {
+                source: LockedPatchSource::Local {
+                    path: path.clone(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: hash_value,
+                },
+            })
+        }
+        PatchSource::Remote { url, hash } => {
+            let hash_value = resolver
+                .hash_url_content(url, &hash.algo)
+                .ok()
+                .flatten()
+                .or_else(|| hash.expected.clone())
+                .unwrap_or_default();
+            Some(LockedPatch {
+                source: LockedPatchSource::Remote {
+                    url: url.clone(),
+                },
+                hash: LockedHash {
+                    algo: hash.algo.clone(),
+                    value: hash_value,
+                },
+            })
+        }
+    }
 }
 
 /// List inputs that are stale (would change on refresh) without
@@ -451,7 +560,12 @@ mod tests {
 
     #[test]
     fn apply_outcomes_updates_lock() {
+        let m = manifest_with(vec![]);
         let lock = empty_lock();
+        let resolver = MockResolver {
+            git_rev: None,
+            url_hash: None,
+        };
         let outcomes = vec![RefreshOutcome::Updated(ResolvedInput {
             name: "new".into(),
             entry: LockEntry {
@@ -467,9 +581,77 @@ mod tests {
             },
         })];
 
-        let new_lock = apply_outcomes(&lock, &outcomes);
+        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
         assert!(new_lock.inputs.contains_key("new"));
         assert_eq!(new_lock.inputs["new"].hash.value, "sha256-new=");
+    }
+
+    #[test]
+    fn apply_outcomes_resolves_patches() {
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["fix1".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "fix1".into(),
+                source: PatchSource::Local {
+                    path: "patches/fix1.patch".into(),
+                },
+            }],
+        };
+        let resolver = MockResolver {
+            git_rev: None,
+            url_hash: Some("sha256-pkghash=".into()),
+        };
+        let lock = empty_lock();
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // The lock entry should reference the patch
+        assert_eq!(new_lock.inputs["pkg"].patches, vec!["fix1"]);
+        // The locked patches map should have the patch resolved
+        assert!(new_lock.patches.contains_key("fix1"));
+        let locked_patch = &new_lock.patches["fix1"];
+        assert!(matches!(
+            &locked_patch.source,
+            LockedPatchSource::Local { path } if path == "patches/fix1.patch"
+        ));
+    }
+
+    #[test]
+    fn apply_outcomes_removes_orphaned_patches() {
+        let m = manifest_with(vec![file_input("pkg", "https://example.com/pkg")]);
+        let resolver = MockResolver {
+            git_rev: None,
+            url_hash: Some("sha256-h=".into()),
+        };
+        // Lock starts with a stale patch that no input references
+        let mut lock = empty_lock();
+        lock.patches.insert(
+            "old-patch".into(),
+            LockedPatch {
+                source: LockedPatchSource::Local {
+                    path: "old.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-old=".into(),
+                },
+            },
+        );
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Orphaned patch should be removed
+        assert!(!new_lock.patches.contains_key("old-patch"));
     }
 
     #[test]

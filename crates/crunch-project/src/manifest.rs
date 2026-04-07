@@ -4,6 +4,7 @@
 //! module defines the Rust-side representation after Nickel evaluation
 //! and deserialization. The types here are pure data — no I/O, no eval.
 
+use crate::version::{SchemaVersion, parse_version};
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of inputs in a single manifest.
@@ -18,7 +19,7 @@ pub const MAX_PATCHES_PER_INPUT: u32 = 256;
 /// A project manifest deserialized from `crunch-project.ncl`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectManifest {
-    /// Schema version of the manifest format.
+    /// Schema version of the manifest format (as string for Nickel compat).
     pub version: String,
 
     /// Named project inputs.
@@ -33,8 +34,34 @@ impl ProjectManifest {
     /// Validate internal consistency.
     ///
     /// Returns a list of problems. Empty vec = valid.
+    /// Parse and return the schema version, or None if malformed.
+    pub fn schema_version(&self) -> Option<SchemaVersion> {
+        parse_version(&self.version)
+    }
+
+    /// Validate internal consistency.
+    ///
+    /// Returns a list of problems. Empty vec = valid.
     pub fn validate(&self) -> Vec<String> {
         let mut problems = Vec::new();
+
+        // Validate version string
+        match parse_version(&self.version) {
+            None => {
+                problems.push(format!(
+                    "invalid manifest version: '{}'",
+                    self.version
+                ));
+            }
+            Some(v) if !v.is_compatible_with(&SchemaVersion::CURRENT) => {
+                problems.push(format!(
+                    "manifest version {} is not compatible with current version {}",
+                    v,
+                    SchemaVersion::CURRENT
+                ));
+            }
+            _ => {}
+        }
 
         if self.inputs.len() as u64 > MAX_INPUTS as u64 {
             problems.push(format!(
@@ -337,5 +364,48 @@ mod tests {
     fn git_reference_default_is_main() {
         let r = GitReference::default();
         assert_eq!(r, GitReference::Branch("main".into()));
+    }
+
+    #[test]
+    fn manifest_rejects_bad_version() {
+        let m = ProjectManifest {
+            version: "garbage".into(),
+            inputs: vec![],
+            patches: vec![],
+        };
+        let problems = m.validate();
+        assert!(!problems.is_empty());
+        assert!(problems[0].contains("invalid manifest version"));
+    }
+
+    #[test]
+    fn manifest_rejects_incompatible_version() {
+        let m = ProjectManifest {
+            version: "99.0.0".into(),
+            inputs: vec![],
+            patches: vec![],
+        };
+        let problems = m.validate();
+        assert!(!problems.is_empty());
+        assert!(problems[0].contains("not compatible"));
+    }
+
+    #[test]
+    fn manifest_accepts_compatible_version() {
+        let m = ProjectManifest {
+            version: "1.1.0".into(),
+            inputs: vec![],
+            patches: vec![],
+        };
+        let problems = m.validate();
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn schema_version_accessor() {
+        let m = sample_manifest();
+        let v = m.schema_version().unwrap();
+        assert_eq!(v.major, 1);
+        assert_eq!(v.minor, 0);
     }
 }

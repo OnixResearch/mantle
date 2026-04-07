@@ -6,7 +6,7 @@
 //!
 //! Pure string generation. No I/O, no Nickel eval.
 
-use crate::lock::{LockEntry, LockedKind, Lockfile};
+use crate::lock::{LockEntry, LockedKind, LockedPatchSource, Lockfile};
 
 /// Maximum number of inputs to generate (guard against runaway locks).
 const MAX_GENERATED_INPUTS: u32 = 4096;
@@ -34,6 +34,43 @@ pub fn generate_inputs_ncl(lock: &Lockfile) -> String {
             out.push('\n');
         }
         generate_entry(&mut out, name, entry);
+    }
+
+    // Emit locked patches with source and hash data.
+    if !lock.patches.is_empty() {
+        out.push('\n');
+        out.push_str("  _patches = {\n");
+        for (name, patch) in &lock.patches {
+            let field_name = if needs_quoting(name) {
+                format!("\"{name}\"")
+            } else {
+                name.to_string()
+            };
+            out.push_str(&format!("    {field_name} = {{\n"));
+            match &patch.source {
+                LockedPatchSource::Local { path } => {
+                    out.push_str("      type = \"local\",\n");
+                    out.push_str(&format!(
+                        "      path = \"{}\",\n",
+                        escape_nickel(path)
+                    ));
+                }
+                LockedPatchSource::Remote { url } => {
+                    out.push_str("      type = \"remote\",\n");
+                    out.push_str(&format!(
+                        "      url = \"{}\",\n",
+                        escape_nickel(url)
+                    ));
+                }
+            }
+            out.push_str(&format!(
+                "      hash = \"{}\",\n",
+                escape_nickel(&patch.hash.value)
+            ));
+            out.push_str(&format!("      algo = \"{}\",\n", patch.hash.algo));
+            out.push_str("    },\n");
+        }
+        out.push_str("  },\n");
     }
 
     out.push_str("}\n");
@@ -271,5 +308,76 @@ mod tests {
         let a = content_fingerprint("hello");
         let b = content_fingerprint("world");
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn generate_includes_patch_metadata() {
+        let mut inputs = BTreeMap::new();
+        inputs.insert(
+            "pkg".to_string(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".to_string(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-abc=".to_string(),
+                },
+                patches: vec!["fix1".into()],
+                mirrors: vec![],
+            },
+        );
+        let mut patches = BTreeMap::new();
+        patches.insert(
+            "fix1".into(),
+            LockedPatch {
+                source: LockedPatchSource::Local {
+                    path: "patches/fix1.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-patchhash=".into(),
+                },
+            },
+        );
+        let lock = Lockfile {
+            version: SchemaVersion::CURRENT,
+            inputs,
+            patches,
+        };
+
+        let ncl = generate_inputs_ncl(&lock);
+        assert!(ncl.contains("_patches = {"));
+        assert!(ncl.contains("fix1 = {"));
+        assert!(ncl.contains("type = \"local\""));
+        assert!(ncl.contains("path = \"patches/fix1.patch\""));
+        assert!(ncl.contains("hash = \"sha256-patchhash=\""));
+    }
+
+    #[test]
+    fn generate_remote_patch_metadata() {
+        let mut patches = BTreeMap::new();
+        patches.insert(
+            "remote_fix".into(),
+            LockedPatch {
+                source: LockedPatchSource::Remote {
+                    url: "https://example.com/fix.patch".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-remotehash=".into(),
+                },
+            },
+        );
+        let lock = Lockfile {
+            version: SchemaVersion::CURRENT,
+            inputs: BTreeMap::new(),
+            patches,
+        };
+
+        let ncl = generate_inputs_ncl(&lock);
+        assert!(ncl.contains("_patches = {"));
+        assert!(ncl.contains("type = \"remote\""));
+        assert!(ncl.contains("url = \"https://example.com/fix.patch\""));
     }
 }

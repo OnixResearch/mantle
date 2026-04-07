@@ -1028,6 +1028,7 @@ dependencies = [
  "crunch-eval",
  "crunch-glue",
  "crunch-pipeline",
+ "crunch-project",
  "crunch-store",
  "data-encoding",
  "flate2",
@@ -1126,6 +1127,18 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "crunch-project"
+version = "0.1.0"
+dependencies = [
+ "crunch-eval",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

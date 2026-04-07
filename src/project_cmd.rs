@@ -205,7 +205,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     }
 
     if updated_count > 0 {
-        let new_lock = apply_outcomes(&lock, &outcomes);
+        let new_lock = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
         write_lockfile(dir, &new_lock)?;
         write_inputs_ncl(dir, &new_lock)?;
         eprintln!("{updated_count} input(s) updated");
