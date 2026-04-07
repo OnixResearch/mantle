@@ -9,6 +9,10 @@
   export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
   ```
 
+## Tooling Gotchas
+- The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.
+- `openspec validate <change>` expects change spec files to contain delta headers like `## ADDED Requirements` / `## MODIFIED Requirements`. A title-and-purpose-only spec file fails validation even if the requirements below are well-formed.
+
 ## Nickel Gotchas
 - **Recursive record scoping kills inline contracts in returned records.** If `fetch.ncl` defines `let Hash = ...` and a function returns a record like `{ hash = the_hash, ... }` where `the_hash` was bound via `params.hash | Hash`, the record's recursive scoping creates infinite recursion: the record field `hash` resolves to itself. Fix: extract ALL values into `let` bindings BEFORE the record literal — `let the_hash = params.hash in let the_fixed_output = { hash = the_hash, ... } in { ... fixed_output = the_fixed_output ... }`. Also: `args` is a common field name in Derivation records, so a function parameter named `args` conflicts. Use `params` instead.
 - **`optional` is a record contract annotation, not valid in function destructuring patterns.** Use `? default_value` for optional fields: `fun { x, y ? null } => ...`

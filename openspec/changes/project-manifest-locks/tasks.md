@@ -1,0 +1,38 @@
+## Phase 1: Project crate scaffold
+
+- [x] Add `crates/crunch-project` to the workspace with manifest, lock, and upgrade modules ✅ 1h 5m (started: 2026-04-07T09:46Z -> completed: 2026-04-07T09:51Z)
+- [x] Add pure types for project inputs, lock entries, patches, mirrors, and schema versions ✅ (done with crate scaffold)
+- [x] Add serialization tests for `crunch.lock` ✅ 11 tests in lock.rs
+- [x] Add merge/validation tests for manifest + lock ✅ 11 tests in merge.rs
+
+## Phase 2: Nickel manifest and generated inputs
+
+- [ ] Define the `crunch-project.ncl` schema and validation rules
+- [ ] Implement manifest loading through Nickel evaluation
+- [ ] Implement `.crunch/inputs.ncl` generation from the resolved lock
+- [ ] Add tests that generated inputs import cleanly from package Nickel code
+- [ ] Add drift detection: `crunch check` fails when the generated inputs file does not match the current lock
+
+## Phase 3: Refresh and stale detection
+
+- [ ] Implement `refresh` for selected or all inputs
+- [ ] Implement `list-stale` without mutating files
+- [ ] Implement `frozen` input handling
+- [ ] Implement kind-specific refresh helpers for URL, tarball, and git inputs
+- [ ] Add integration tests covering unchanged, updated, and frozen inputs
+
+## Phase 4: CLI integration
+
+- [ ] Add `crunch init` to scaffold a project manifest, lockfile, and `.crunch/` ignore rules
+- [ ] Add `crunch check` to validate manifest, lock, and generated inputs
+- [ ] Add `crunch show` to render the resolved input state
+- [ ] Add `crunch refresh`, `crunch list-stale`, and `crunch upgrade`
+- [ ] Keep the binary crate limited to argument parsing, output formatting, and delegation into `crunch-project`
+
+## Phase 5: Mirrors, patches, and upgrades
+
+- [ ] Add mirrors to the manifest and lock models
+- [ ] Add patch definitions and per-input patch lists to the manifest and lock models
+- [ ] Connect locked mirrors and patches to the existing fetch/build pipeline
+- [ ] Implement manifest and lock schema migrations in `crunch-project`
+- [ ] Add end-to-end tests covering upgrades from at least one older schema version

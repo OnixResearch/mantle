@@ -6,6 +6,7 @@ members = [
   "crates/crunch-store",
   "crates/crunch-build",
   "crates/crunch-pipeline",
+  "crates/crunch-project",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
