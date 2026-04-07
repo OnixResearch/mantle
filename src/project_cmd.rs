@@ -185,12 +185,10 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     let resolver = StubResolver;
     let outcomes = refresh_inputs(&manifest, &lock, selected, &resolver);
 
-    let mut updated_count: u32 = 0;
     for outcome in &outcomes {
         match outcome {
             RefreshOutcome::Updated(r) => {
                 eprintln!("updated: {}", r.name);
-                updated_count = updated_count.saturating_add(1);
             }
             RefreshOutcome::Unchanged { name } => {
                 eprintln!("unchanged: {name}");
@@ -204,11 +202,19 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
         }
     }
 
-    if updated_count > 0 {
-        let new_lock = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
-        write_lockfile(dir, &new_lock)?;
-        write_inputs_ncl(dir, &new_lock)?;
-        eprintln!("{updated_count} input(s) updated");
+    // Always apply outcomes — this also resolves/repairs patch lock data
+    // even when no inputs changed.
+    let result = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
+
+    if result.has_changes() {
+        write_lockfile(dir, &result.lock)?;
+        write_inputs_ncl(dir, &result.lock)?;
+        if result.inputs_changed > 0 {
+            eprintln!("{} input(s) updated", result.inputs_changed);
+        }
+        if result.patches_changed {
+            eprintln!("patch lock data updated");
+        }
     } else {
         eprintln!("all inputs up to date");
     }

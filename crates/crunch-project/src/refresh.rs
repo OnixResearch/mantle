@@ -244,6 +244,23 @@ fn resolve_input(
     })
 }
 
+/// Result of applying refresh outcomes.
+pub struct ApplyResult {
+    /// The updated lockfile.
+    pub lock: Lockfile,
+    /// Number of input entries that were updated.
+    pub inputs_changed: u32,
+    /// Whether patch lock data was added, changed, or removed.
+    pub patches_changed: bool,
+}
+
+impl ApplyResult {
+    /// Whether anything changed (inputs or patches).
+    pub fn has_changes(&self) -> bool {
+        self.inputs_changed > 0 || self.patches_changed
+    }
+}
+
 /// Apply refresh outcomes to a lockfile, producing a new lockfile.
 ///
 /// Updates input entries AND resolves manifest patches into
@@ -254,31 +271,41 @@ pub fn apply_outcomes(
     lock: &Lockfile,
     outcomes: &[RefreshOutcome],
     resolver: &dyn RefreshResolver,
-) -> Lockfile {
+) -> ApplyResult {
     let mut new_lock = lock.clone();
+    let mut inputs_changed: u32 = 0;
     for outcome in outcomes {
         if let RefreshOutcome::Updated(resolved) = outcome {
             new_lock
                 .inputs
                 .insert(resolved.name.clone(), resolved.entry.clone());
+            inputs_changed = inputs_changed.saturating_add(1);
         }
     }
 
     // Resolve all patches referenced by any input entry.
-    resolve_patches_into_lock(manifest, &mut new_lock, resolver);
+    let patches_changed = resolve_patches_into_lock(manifest, &mut new_lock, resolver);
 
-    new_lock
+    ApplyResult {
+        lock: new_lock,
+        inputs_changed,
+        patches_changed,
+    }
 }
 
 /// Resolve manifest patch definitions into locked patches.
 ///
 /// For each patch name referenced by any lock entry, find the
 /// manifest's `PatchDef` and lock it (compute hash, record source).
-fn resolve_patches_into_lock(
+/// Re-resolves patches whose manifest definition changed (different
+/// source path/url). Returns true if any patch was added or changed.
+pub fn resolve_patches_into_lock(
     manifest: &ProjectManifest,
     lock: &mut Lockfile,
     resolver: &dyn RefreshResolver,
-) {
+) -> bool {
+    let mut changed = false;
+
     // Collect all patch names referenced by any lock entry.
     let mut needed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for entry in lock.inputs.values() {
@@ -295,21 +322,55 @@ fn resolve_patches_into_lock(
         .collect();
 
     for name in &needed {
-        if lock.patches.contains_key(name) {
-            continue; // already locked
-        }
-        if let Some(def) = defs.get(name.as_str()) {
+        let def = match defs.get(name.as_str()) {
+            Some(d) => d,
+            None => continue, // manifest doesn't define this patch
+        };
+
+        // Check if existing locked patch matches the manifest definition.
+        let needs_resolve = match lock.patches.get(name) {
+            None => true, // not locked yet
+            Some(existing) => !patch_matches_def(existing, def),
+        };
+
+        if needs_resolve {
             if let Some(locked) = resolve_patch(def, resolver) {
                 lock.patches.insert(name.clone(), locked);
+                changed = true;
             }
         }
     }
 
     // Remove orphaned locked patches (no longer referenced).
+    let before_len = lock.patches.len() as u32;
     lock.patches.retain(|name, _| needed.contains(name));
+    if lock.patches.len() as u32 != before_len {
+        changed = true;
+    }
+
+    changed
+}
+
+/// Check if a locked patch still matches its manifest definition.
+fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
+    match (&locked.source, &def.source) {
+        (
+            LockedPatchSource::Local { path: locked_path },
+            PatchSource::Local { path: def_path },
+        ) => locked_path == def_path,
+        (
+            LockedPatchSource::Remote { url: locked_url },
+            PatchSource::Remote { url: def_url, .. },
+        ) => locked_url == def_url,
+        _ => false, // type changed (local <-> remote)
+    }
 }
 
 /// Resolve a single manifest patch definition to a locked patch.
+///
+/// Returns `None` if the hash cannot be resolved (resolver returns
+/// None and no expected hash is available). Never produces a
+/// `LockedPatch` with an empty hash value.
 fn resolve_patch(
     def: &PatchDef,
     resolver: &dyn RefreshResolver,
@@ -319,8 +380,8 @@ fn resolve_patch(
             let hash_value = resolver
                 .hash_local_file(path, &HashAlgo::Sha256)
                 .ok()
-                .flatten()
-                .unwrap_or_default();
+                .flatten()?;
+            assert!(!hash_value.is_empty(), "resolver returned empty hash");
             Some(LockedPatch {
                 source: LockedPatchSource::Local {
                     path: path.clone(),
@@ -336,8 +397,8 @@ fn resolve_patch(
                 .hash_url_content(url, &hash.algo)
                 .ok()
                 .flatten()
-                .or_else(|| hash.expected.clone())
-                .unwrap_or_default();
+                .or_else(|| hash.expected.clone())?;
+            assert!(!hash_value.is_empty(), "resolver returned empty hash");
             Some(LockedPatch {
                 source: LockedPatchSource::Remote {
                     url: url.clone(),
@@ -581,9 +642,41 @@ mod tests {
             },
         })];
 
-        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
-        assert!(new_lock.inputs.contains_key("new"));
-        assert_eq!(new_lock.inputs["new"].hash.value, "sha256-new=");
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+        assert!(result.lock.inputs.contains_key("new"));
+        assert_eq!(result.lock.inputs["new"].hash.value, "sha256-new=");
+        assert_eq!(result.inputs_changed, 1);
+        assert!(result.has_changes());
+    }
+
+    /// A resolver that also hashes local files (for patch tests).
+    struct PatchResolver {
+        url_hash: Option<String>,
+        local_hash: Option<String>,
+    }
+
+    impl RefreshResolver for PatchResolver {
+        fn resolve_git_rev(
+            &self,
+            _: &str,
+            _: &GitReference,
+        ) -> Result<Option<String>, Error> {
+            Ok(None)
+        }
+        fn hash_url_content(
+            &self,
+            _: &str,
+            _: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.url_hash.clone())
+        }
+        fn hash_local_file(
+            &self,
+            _: &str,
+            _: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.local_hash.clone())
+        }
     }
 
     #[test]
@@ -607,23 +700,29 @@ mod tests {
                 },
             }],
         };
-        let resolver = MockResolver {
-            git_rev: None,
+        let resolver = PatchResolver {
             url_hash: Some("sha256-pkghash=".into()),
+            local_hash: Some("sha256-patchhash=".into()),
         };
         let lock = empty_lock();
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
-        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
 
         // The lock entry should reference the patch
-        assert_eq!(new_lock.inputs["pkg"].patches, vec!["fix1"]);
+        assert_eq!(result.lock.inputs["pkg"].patches, vec!["fix1"]);
         // The locked patches map should have the patch resolved
-        assert!(new_lock.patches.contains_key("fix1"));
-        let locked_patch = &new_lock.patches["fix1"];
+        assert!(result.lock.patches.contains_key("fix1"));
+        let locked_patch = &result.lock.patches["fix1"];
         assert!(matches!(
             &locked_patch.source,
             LockedPatchSource::Local { path } if path == "patches/fix1.patch"
         ));
+        // Hash must be non-empty
+        assert!(!locked_patch.hash.value.is_empty());
+        assert_eq!(locked_patch.hash.value, "sha256-patchhash=");
+        // Lockfile must be valid
+        assert!(result.lock.validate().is_empty(), "lockfile invalid: {:?}", result.lock.validate());
+        assert!(result.patches_changed);
     }
 
     #[test]
@@ -648,10 +747,172 @@ mod tests {
             },
         );
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
-        let new_lock = apply_outcomes(&m, &lock, &outcomes, &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
 
         // Orphaned patch should be removed
-        assert!(!new_lock.patches.contains_key("old-patch"));
+        assert!(!result.lock.patches.contains_key("old-patch"));
+        assert!(result.patches_changed);
+    }
+
+    #[test]
+    fn resolve_patch_returns_none_when_hash_unavailable() {
+        // MockResolver doesn't implement hash_local_file (default returns None)
+        // So local patches cannot be resolved -> resolve_patch returns None
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["nohash".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "nohash".into(),
+                source: PatchSource::Local {
+                    path: "patches/nohash.patch".into(),
+                },
+            }],
+        };
+        let resolver = MockResolver {
+            git_rev: None,
+            url_hash: Some("sha256-pkghash=".into()),
+        };
+        let lock = empty_lock();
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Patch should NOT be in the lock (hash unavailable)
+        assert!(!result.lock.patches.contains_key("nohash"));
+    }
+
+    #[test]
+    fn patch_definition_change_triggers_relock() {
+        let resolver = PatchResolver {
+            url_hash: Some("sha256-pkghash=".into()),
+            local_hash: Some("sha256-newhash=".into()),
+        };
+
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["fix1".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "fix1".into(),
+                source: PatchSource::Local {
+                    path: "patches/fix1-v2.patch".into(), // changed path
+                },
+            }],
+        };
+
+        // Lock has the patch at the old path
+        let mut lock = empty_lock();
+        lock.inputs.insert(
+            "pkg".into(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-pkghash=".into(),
+                },
+                patches: vec!["fix1".into()],
+                mirrors: vec![],
+            },
+        );
+        lock.patches.insert(
+            "fix1".into(),
+            LockedPatch {
+                source: LockedPatchSource::Local {
+                    path: "patches/fix1.patch".into(), // old path
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-oldhash=".into(),
+                },
+            },
+        );
+
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+
+        // Patch should be re-resolved with the new path and hash
+        let locked = &result.lock.patches["fix1"];
+        assert!(matches!(
+            &locked.source,
+            LockedPatchSource::Local { path } if path == "patches/fix1-v2.patch"
+        ));
+        assert_eq!(locked.hash.value, "sha256-newhash=");
+        assert!(result.patches_changed);
+    }
+
+    #[test]
+    fn patch_only_change_has_changes_true() {
+        // Inputs are unchanged, but a new patch definition is added.
+        let resolver = PatchResolver {
+            url_hash: Some("sha256-h=".into()),
+            local_hash: Some("sha256-ph=".into()),
+        };
+
+        let m = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "pkg".into(),
+                kind: InputKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec!["newpatch".into()],
+            }],
+            patches: vec![PatchDef {
+                name: "newpatch".into(),
+                source: PatchSource::Local {
+                    path: "patches/new.patch".into(),
+                },
+            }],
+        };
+
+        // Lock has the input already, but no patches locked
+        let mut lock = empty_lock();
+        lock.inputs.insert(
+            "pkg".into(),
+            LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".into(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-h=".into(),
+                },
+                patches: vec!["newpatch".into()],
+                mirrors: vec![],
+            },
+        );
+
+        let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
+        // Input itself is unchanged
+        assert!(matches!(&outcomes[0], RefreshOutcome::Unchanged { .. }));
+
+        let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
+        // But patches changed
+        assert!(result.patches_changed);
+        assert_eq!(result.inputs_changed, 0);
+        assert!(result.has_changes()); // critical: this must be true
+        assert!(result.lock.patches.contains_key("newpatch"));
     }
 
     #[test]
