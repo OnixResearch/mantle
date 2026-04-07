@@ -30,10 +30,10 @@
 ## Phase 4: Wire into self-build
 
 - [x] Update `self_build.rs` to use crunch-built busybox path instead of external `SNIX_BUILD_SANDBOX_SHELL` ✅
-- [x] Update `self_build.rs` to use crunch-built bwrap instead of PATH-provided bwrap ✅
+- [x] Update `self_build.rs` to use crunch-built bwrap instead of PATH-provided bwrap ✅ (resolve_host_bwrap scans output_dir for *-bwrap/bin/bwrap, prepends to PATH if found)
 - [x] Update bootstrap chain ordering: busybox + bwrap after gcc+musl, before rust ✅ (inputs list order)
 - [x] Self-build .ncl references crunch-built tools as inputs ✅
-- [x] First-time detection: if no crunch-built bwrap exists, fall back to PATH bwrap with a warning ✅ (host-side: check_host_bwrap() warns when using external bwrap, errors when missing; sandbox-side: NCL prints warning when bwrap input not found among store paths)
+- [x] First-time detection: if no crunch-built bwrap exists, fall back to PATH bwrap with a warning ✅ (resolve_host_bwrap returns Ok(None) with warning when no *-bwrap in output_dir; returns Err when bwrap missing from PATH too)
 - [x] End-to-end test: `crunch self-build --store /tmp/crunch-store --nix-compat` ✅ 15.5 min, 32 MiB static-pie ELF, `crunch --help` runs
 
 ## Phase 5: Cleanup

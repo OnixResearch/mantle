@@ -420,45 +420,84 @@ fn dir_size(dir: &Path) -> u64 {
     total
 }
 
-/// Check whether bwrap is available on the host PATH.
+/// Locate the best bwrap binary for the self-build pipeline.
 ///
-/// The bootstrap chain builds a crunch-owned bwrap from source, but the
-/// very first `crunch self-build` on a bare machine needs an external
-/// bwrap to run the sandbox. This function warns when falling back to
-/// the host PATH and errors if bwrap is missing entirely.
-fn check_host_bwrap() -> Result<(), RunError> {
-    match find_on_path("bwrap") {
+/// Preference order:
+/// 1. Crunch-built bwrap in `output_dir` (from a prior self-build)
+/// 2. Any bwrap on the host PATH (first bootstrap)
+///
+/// Returns `Some(dir)` when a crunch-built bwrap was found — the caller
+/// must prepend it to PATH so `Command::new("bwrap")` picks it up.
+/// Returns `Ok(None)` when falling back to an external bwrap on PATH.
+/// Returns `Err` when no bwrap exists anywhere.
+fn resolve_host_bwrap(output_dir: &Path) -> Result<Option<PathBuf>, RunError> {
+    // 1. Prefer crunch-built bwrap from the output store.
+    if let Some(bwrap_dir) = find_crunch_bwrap(output_dir) {
+        eprintln!("  bwrap: {} (crunch-built)", bwrap_dir.display());
+        return Ok(Some(bwrap_dir));
+    }
+
+    // 2. Fall back to host PATH.
+    match find_executable_on_path("bwrap") {
         Some(path) => {
-            let path_str = path.display().to_string();
-            if path_str.contains("crunch") {
-                eprintln!("  bwrap: {} (crunch-built)", path_str);
-            } else {
-                eprintln!(
-                    "  WARNING: using external bwrap at {} (first bootstrap only; \
-                     subsequent self-builds use the crunch-built bwrap)",
-                    path_str,
-                );
-            }
-            Ok(())
+            eprintln!(
+                "  WARNING: no crunch-built bwrap in {}; using external bwrap at {}",
+                output_dir.display(),
+                path.display(),
+            );
+            Ok(None)
         }
         None => Err(RunError::Build(
-            "bwrap (bubblewrap) not found on PATH. The first self-build requires an \
-             external bwrap. Install it from https://github.com/containers/bubblewrap"
+            "bwrap (bubblewrap) not found. The first self-build requires bwrap on PATH. \
+             Install it from https://github.com/containers/bubblewrap"
                 .to_string(),
         )),
     }
 }
 
-/// Search PATH for a named binary, returning the first match.
-fn find_on_path(name: &str) -> Option<PathBuf> {
+/// Scan the output store for a crunch-built bwrap.
+///
+/// Looks for `<output_dir>/*-bwrap/bin/bwrap` — the naming convention
+/// used by `bootstrap/bwrap.ncl` (derivation name = "bwrap").
+fn find_crunch_bwrap(output_dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(output_dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-bwrap") {
+            let bin = entry.path().join("bin").join("bwrap");
+            if bin.is_file() && is_executable(&bin) {
+                return Some(entry.path().join("bin"));
+            }
+        }
+    }
+    None
+}
+
+/// Search PATH for a named executable, returning the first match.
+fn find_executable_on_path(name: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(name);
-        if candidate.is_file() {
+        if candidate.is_file() && is_executable(&candidate) {
             return Some(candidate);
         }
     }
     None
+}
+
+/// Check if a file has executable permission.
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(_path: &Path) -> bool {
+    true
 }
 
 pub fn cmd_self_build(
@@ -472,9 +511,17 @@ pub fn cmd_self_build(
 ) -> Result<(), RunError> {
     eprintln!("=== crunch self-build ===");
 
-    // The sandbox needs bwrap on the host. Warn early if it's missing
-    // or if we're falling back to an external (non-crunch-built) binary.
-    check_host_bwrap()?;
+    // Resolve bwrap: prefer crunch-built from output_dir, fall back to
+    // host PATH. If crunch-built, prepend its directory to PATH so
+    // BubblewrapBuildService's Command::new("bwrap") finds it.
+    if let Some(bwrap_dir) = resolve_host_bwrap(output_dir)? {
+        let current_path = std::env::var_os("PATH").unwrap_or_default();
+        let mut new_path = std::ffi::OsString::from(&bwrap_dir);
+        new_path.push(":");
+        new_path.push(&current_path);
+        // SAFETY: single-threaded at this point (before tokio runtime).
+        unsafe { std::env::set_var("PATH", &new_path) };
+    }
 
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
@@ -695,27 +742,23 @@ mod tests {
         assert_eq!(s, 7);
     }
 
+    // ── NCL bwrap branch tests ──────────────────────────────────
+
     #[test]
     fn generate_ncl_has_bwrap_warning_branch() {
-        // The generated script must handle the case where BWRAP_BIN
-        // is empty (defensive guard — shouldn't happen since bwrap
-        // is a declared input).
         let ncl = generate_self_build_ncl("x", "/nix/store");
         assert!(
             ncl.contains("crunch-built bwrap not found"),
-            "NCL must have a warning for missing bwrap: not found in output",
+            "NCL must have a warning for missing bwrap",
         );
         assert!(
             ncl.contains("Using crunch-built bwrap"),
-            "NCL must have a success message for found bwrap: not found in output",
+            "NCL must have a success message for found bwrap",
         );
     }
 
     #[test]
     fn generate_ncl_discovers_bwrap_before_path_export() {
-        // Regression: BWRAP_BIN must be discovered BEFORE the PATH
-        // export that references it. Verify the discovery loop appears
-        // before the PATH export in the script.
         let ncl = generate_self_build_ncl("x", "/nix/store");
         let discover_pos = ncl.find("$NIX_STORE/*-bwrap")
             .expect("bwrap discovery loop missing");
@@ -723,39 +766,154 @@ mod tests {
             .expect("BWRAP_PATH in PATH export missing");
         assert!(
             discover_pos < path_export_pos,
-            "bwrap discovery (pos {discover_pos}) must come before PATH export (pos {path_export_pos})",
+            "bwrap discovery (pos {discover_pos}) must come before \
+             PATH export (pos {path_export_pos})",
+        );
+    }
+
+    // ── Host-side bwrap resolution tests ───────────────────────
+    //
+    // These tests use temp dirs to avoid mutating global PATH.
+
+    #[test]
+    fn find_crunch_bwrap_finds_executable_in_store() {
+        let store = tempfile::tempdir().unwrap();
+        let bwrap_dir = store.path().join("abc123-bwrap").join("bin");
+        std::fs::create_dir_all(&bwrap_dir).unwrap();
+        let bwrap_bin = bwrap_dir.join("bwrap");
+        std::fs::write(&bwrap_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let result = find_crunch_bwrap(store.path());
+        assert!(result.is_some(), "should find bwrap in store");
+        assert_eq!(result.unwrap(), bwrap_dir);
+    }
+
+    #[test]
+    fn find_crunch_bwrap_ignores_non_executable() {
+        let store = tempfile::tempdir().unwrap();
+        let bwrap_dir = store.path().join("abc123-bwrap").join("bin");
+        std::fs::create_dir_all(&bwrap_dir).unwrap();
+        let bwrap_bin = bwrap_dir.join("bwrap");
+        std::fs::write(&bwrap_bin, "not executable").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin,
+                std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let result = find_crunch_bwrap(store.path());
+        assert!(result.is_none(), "should skip non-executable bwrap");
+    }
+
+    #[test]
+    fn find_crunch_bwrap_returns_none_for_empty_store() {
+        let store = tempfile::tempdir().unwrap();
+        assert!(find_crunch_bwrap(store.path()).is_none());
+    }
+
+    #[test]
+    fn find_crunch_bwrap_ignores_wrong_name_suffix() {
+        let store = tempfile::tempdir().unwrap();
+        // Name doesn't end with "-bwrap"
+        let dir = store.path().join("abc123-notbwrap").join("bin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("bwrap");
+        std::fs::write(&bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        assert!(find_crunch_bwrap(store.path()).is_none());
+    }
+
+    #[test]
+    fn resolve_host_bwrap_prefers_crunch_built() {
+        // Create a fake crunch-built bwrap in a temp store.
+        let store = tempfile::tempdir().unwrap();
+        let bwrap_dir = store.path().join("abc123-bwrap").join("bin");
+        std::fs::create_dir_all(&bwrap_dir).unwrap();
+        let bwrap_bin = bwrap_dir.join("bwrap");
+        std::fs::write(&bwrap_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let result = resolve_host_bwrap(store.path()).unwrap();
+        assert!(
+            result.is_some(),
+            "should return Some(dir) for crunch-built bwrap",
+        );
+        assert_eq!(result.unwrap(), bwrap_dir);
+    }
+
+    #[test]
+    fn resolve_host_bwrap_falls_back_to_path() {
+        // Empty store dir — no crunch-built bwrap.
+        let store = tempfile::tempdir().unwrap();
+        // If host has bwrap on PATH, should return Ok(None).
+        // If host lacks bwrap, should return Err.
+        let result = resolve_host_bwrap(store.path());
+        match find_executable_on_path("bwrap") {
+            Some(_) => {
+                assert!(
+                    result.as_ref().unwrap().is_none(),
+                    "should fall back to PATH bwrap (Ok(None))",
+                );
+            }
+            None => {
+                assert!(
+                    result.is_err(),
+                    "should error when no bwrap anywhere",
+                );
+                let msg = result.unwrap_err().message().to_string();
+                assert!(msg.contains("not found"), "error: {msg}");
+            }
+        }
+    }
+
+    #[test]
+    fn find_executable_on_path_returns_none_for_nonexistent() {
+        assert!(
+            find_executable_on_path("this-binary-does-not-exist-crunch-test").is_none()
         );
     }
 
     #[test]
-    fn check_host_bwrap_finds_bwrap_on_path() {
-        // bwrap should be on PATH in this test environment.
-        // If not, the test is inconclusive (not a failure).
-        if find_on_path("bwrap").is_none() {
-            eprintln!("skipping: bwrap not on PATH");
-            return;
+    fn is_executable_true_for_real_binary() {
+        // /bin/sh should be executable on any Unix host.
+        #[cfg(unix)]
+        {
+            let sh = Path::new("/bin/sh");
+            if sh.exists() {
+                assert!(is_executable(sh), "/bin/sh should be executable");
+            }
         }
-        check_host_bwrap().expect("bwrap should be found");
     }
 
     #[test]
-    fn check_host_bwrap_fails_with_empty_path() {
-        // Temporarily set PATH to empty to simulate missing bwrap.
-        let original = std::env::var_os("PATH");
-        unsafe { std::env::set_var("PATH", "") };
-        let result = check_host_bwrap();
-        // Restore PATH before asserting.
-        match original {
-            Some(p) => unsafe { std::env::set_var("PATH", p) },
-            None => unsafe { std::env::remove_var("PATH") },
+    fn is_executable_false_for_plain_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("plain.txt");
+        std::fs::write(&f, "hello").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&f,
+                std::fs::Permissions::from_mode(0o644)).unwrap();
         }
-        assert!(result.is_err(), "should fail when bwrap is not on PATH");
-        let msg = result.unwrap_err().message().to_string();
-        assert!(msg.contains("not found on PATH"), "error should say not found: {msg}");
-    }
-
-    #[test]
-    fn find_on_path_returns_none_for_nonexistent() {
-        assert!(find_on_path("this-binary-does-not-exist-crunch-test").is_none());
+        assert!(!is_executable(&f), "plain file should not be executable");
     }
 }
