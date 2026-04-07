@@ -1,58 +1,54 @@
-# CLI Specification
+## ADDED Requirements
 
-## Purpose
+### Requirement: Project-management commands
 
-Defines the crunch command-line interface.
+The CLI MUST provide project-management commands in addition to the existing
+engine-oriented commands.
 
-## Requirements
+Required commands:
+- `crunch init`
+- `crunch check`
+- `crunch show`
+- `crunch refresh`
+- `crunch list-stale`
+- `crunch upgrade`
 
-### Requirement: Build command
+These commands operate on the project manifest, lockfile, and generated input
+files. They MUST delegate to the project-management layer rather than embed
+that logic directly in `src/main.rs`.
 
-The CLI MUST provide a `crunch build <file.ncl>` command that:
+#### Scenario: Init scaffolds project files
 
-1. Evaluates the Nickel file
-2. Constructs derivation(s)
-3. Builds them in a sandbox
-4. Persists outputs to the store
-5. Prints the output store path(s) to stdout
+- GIVEN a directory without crunch project files
+- WHEN `crunch init` runs
+- THEN it creates `crunch-project.ncl`
+- AND it creates `crunch.lock`
+- AND it creates or documents the generated `.crunch/` directory layout
 
-#### Scenario: Build a single derivation
+#### Scenario: Check validates project state
 
-- GIVEN `hello.ncl` describing a valid derivation
-- WHEN `crunch build hello.ncl` is run
-- THEN the build executes and the output path is printed
+- GIVEN a project with `crunch-project.ncl`, `crunch.lock`, and `.crunch/inputs.ncl`
+- WHEN `crunch check` runs
+- THEN it validates the manifest and lockfile
+- AND it reports drift or schema errors with a non-zero exit code
 
-#### Scenario: Build failure
+#### Scenario: Refresh updates selected inputs
 
-- GIVEN a derivation whose build script exits non-zero
-- WHEN `crunch build` is run
-- THEN the error is reported with the build log and crunch exits non-zero
+- GIVEN a project with multiple named inputs
+- WHEN `crunch refresh foo bar` runs
+- THEN only those named inputs are refreshed
+- AND `crunch.lock` and `.crunch/inputs.ncl` are rewritten if their resolved
+  state changes
 
-### Requirement: Eval command
+#### Scenario: Show renders resolved input state
 
-The CLI SHOULD provide `crunch eval <file.ncl>` that evaluates and prints
-the derivation JSON without building. Useful for debugging.
+- GIVEN a valid project manifest and lockfile
+- WHEN `crunch show` runs
+- THEN it prints a human-readable view of the resolved inputs, including
+  frozen state, mirrors, patches, and locked revisions or hashes
 
-#### Scenario: Eval only
+#### Scenario: Upgrade migrates project files
 
-- GIVEN `hello.ncl`
-- WHEN `crunch eval hello.ncl` is run
-- THEN the evaluated derivation record is printed as JSON
-
-### Requirement: Store configuration
-
-The CLI MUST support configuring the store location. Default SHOULD be
-`/nix/store` for compatibility, but a `--store` flag MAY allow an
-alternative path.
-
-### Requirement: Verbosity
-
-The CLI MUST support `-v` / `--verbose` for debug logging and SHOULD
-support `--log-level` for fine-grained control via tracing.
-
-### Requirement: Exit codes
-
-- `0` — success
-- `1` — build failure
-- `2` — evaluation error (Nickel parse/type/contract error)
-- `3` — internal error
+- GIVEN a project using an older supported schema version
+- WHEN `crunch upgrade` runs
+- THEN the project manifest and lockfile are migrated to the current version

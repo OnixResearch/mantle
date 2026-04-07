@@ -1,46 +1,23 @@
-## MODIFIED Requirements
-
-### Requirement: Phase system
-
-Each phase MUST have a default implementation:
-
-| Phase | Default |
-|-------|---------|
-| `unpackPhase` | If `$src` is a directory, `cp -r`. If a file, `tar xf` and enter single subdirectory. |
-| `configurePhase` | `./configure --prefix=$out` if `./configure` exists, else no-op. |
-| `buildPhase` | `make -j$NIX_BUILD_CORES` |
-| `installPhase` | `make install` |
-
-Setting a phase to the empty string `""` MUST skip that phase.
-Omitting a phase entirely MUST use the default.
-
-### Requirement: src field wiring
-
-When `src` is set in mkDerivation, the system MUST:
-- Add it to `inputs` for sandbox mounting
-- Set `$src` as an environment variable pointing to the source path
-
 ## ADDED Requirements
 
-### Requirement: mkShell function
+### Requirement: Locked project inputs are importable from generated state
 
-The stdlib MUST provide `crunch.mkShell` for development environments.
+Package Nickel code MUST be able to import locked project inputs from the
+project layer's generated file, `.crunch/inputs.ncl`, instead of hand-writing
+source records or seed files for every pinned external input.
 
-`mkShell` MUST:
-- Accept `build_inputs` (array of store paths or derivation records)
-- Accept `env` (extra environment variables)
-- Produce a `Derivation` record that passes contract validation
-- Fail deliberately if actually built
+#### Scenario: Package imports generated locked inputs
 
-#### Scenario: mkShell produces valid derivation
+- GIVEN a project with a current `crunch.lock`
+- AND `.crunch/inputs.ncl` generated from that lock
+- WHEN a package Nickel file imports `.crunch/inputs.ncl`
+- THEN the package can reference locked inputs from that file
+- AND those inputs correspond to the current lock state
 
-- GIVEN `crunch.mkShell { bash = seed.bash, buildInputs = [seed.gcc] }`
-- WHEN evaluated
-- THEN the result satisfies `crunch.Derivation`
-- AND `inputs` includes the gcc store path
+#### Scenario: Generated locked inputs replace hand-maintained source records
 
-#### Scenario: mkShell build fails
-
-- GIVEN a mkShell derivation is submitted to `crunch build`
-- WHEN the sandbox executes the builder
-- THEN it exits nonzero with a message indicating the derivation is not buildable
+- GIVEN a package that previously repeated pinned source metadata in local
+  Nickel code
+- WHEN the package is updated to import `.crunch/inputs.ncl`
+- THEN the package no longer needs duplicate hand-maintained source records for
+  those locked project inputs
