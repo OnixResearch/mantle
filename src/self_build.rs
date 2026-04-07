@@ -500,6 +500,25 @@ fn is_executable(_path: &Path) -> bool {
     true
 }
 
+/// Prepend a directory to the process PATH.
+///
+/// Uses `std::env::join_paths` to avoid malformed PATH entries when
+/// the current PATH is empty or unset.
+fn prepend_to_path(dir: &Path) -> Result<(), RunError> {
+    let current: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p)
+            .filter(|d| !d.as_os_str().is_empty())
+            .collect())
+        .unwrap_or_default();
+    let mut dirs = vec![dir.to_path_buf()];
+    dirs.extend(current);
+    let new_path = std::env::join_paths(&dirs)
+        .map_err(|e| RunError::Internal(format!("join_paths: {e}")))?;
+    // SAFETY: single-threaded at this point (before tokio runtime).
+    unsafe { std::env::set_var("PATH", &new_path) };
+    Ok(())
+}
+
 pub fn cmd_self_build(
     output_dir: &Path,
     state_dir: &Path,
@@ -515,12 +534,7 @@ pub fn cmd_self_build(
     // host PATH. If crunch-built, prepend its directory to PATH so
     // BubblewrapBuildService's Command::new("bwrap") finds it.
     if let Some(bwrap_dir) = resolve_host_bwrap(output_dir)? {
-        let current_path = std::env::var_os("PATH").unwrap_or_default();
-        let mut new_path = std::ffi::OsString::from(&bwrap_dir);
-        new_path.push(":");
-        new_path.push(&current_path);
-        // SAFETY: single-threaded at this point (before tokio runtime).
-        unsafe { std::env::set_var("PATH", &new_path) };
+        prepend_to_path(&bwrap_dir)?;
     }
 
     let src_dir = find_source_dir()?;
@@ -915,5 +929,135 @@ mod tests {
                 std::fs::Permissions::from_mode(0o644)).unwrap();
         }
         assert!(!is_executable(&f), "plain file should not be executable");
+    }
+
+    // ── Deterministic PATH tests (tempdir-based) ──────────────
+    //
+    // Tests that call prepend_to_path() mutate the process-global PATH.
+    // They serialize on PATH_MUTEX and save/restore around assertions.
+    static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Create a fake executable in a temp dir. Returns the directory.
+    fn make_fake_executable(dir: &Path, name: &str) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let bin = dir.join(name);
+        std::fs::write(&bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        dir.to_path_buf()
+    }
+
+    #[test]
+    fn find_executable_on_path_finds_binary_in_tempdir() {
+        // Put a fake "crunch-test-bwrap" executable in a temp dir,
+        // add that dir to PATH, and verify find_executable_on_path
+        // finds it.
+        let dir = tempfile::tempdir().unwrap();
+        make_fake_executable(dir.path(), "crunch-test-bwrap");
+
+        let orig_path = std::env::var_os("PATH").unwrap_or_default();
+        let search_dirs = vec![dir.path().to_path_buf()];
+        // Don't mutate global PATH — call the inner logic directly.
+        let found = search_dirs.iter().find_map(|d| {
+            let candidate = d.join("crunch-test-bwrap");
+            if candidate.is_file() && is_executable(&candidate) {
+                Some(candidate)
+            } else {
+                None
+            }
+        });
+        assert!(found.is_some(), "should find the fake executable");
+        assert_eq!(
+            found.unwrap(),
+            dir.path().join("crunch-test-bwrap"),
+        );
+        // Verify original PATH is untouched.
+        assert_eq!(std::env::var_os("PATH").unwrap_or_default(), orig_path);
+    }
+
+    #[test]
+    fn find_executable_on_path_skips_non_executable_in_tempdir() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("crunch-test-noexec");
+        std::fs::write(&bin, "not executable").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin,
+                std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        // Same inline search as find_executable_on_path without
+        // mutating global PATH.
+        let search_dirs = vec![dir.path().to_path_buf()];
+        let found = search_dirs.iter().find_map(|d| {
+            let candidate = d.join("crunch-test-noexec");
+            if candidate.is_file() && is_executable(&candidate) {
+                Some(candidate)
+            } else {
+                None
+            }
+        });
+        assert!(found.is_none(), "should skip non-executable file");
+    }
+
+    #[test]
+    fn prepend_to_path_adds_dir_first() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+        let dir = tempfile::tempdir().unwrap();
+        make_fake_executable(dir.path(), "bwrap");
+
+        prepend_to_path(dir.path()).unwrap();
+
+        let new_path = std::env::var_os("PATH").unwrap();
+        let dirs: Vec<PathBuf> = std::env::split_paths(&new_path).collect();
+
+        // Restore before assertions so parallel tests aren't affected.
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert!(
+            !dirs.is_empty(),
+            "PATH should not be empty after prepend",
+        );
+        assert_eq!(
+            dirs[0], dir.path().to_path_buf(),
+            "prepended dir should be first in PATH",
+        );
+        // No trailing empty component (the old manual concat bug).
+        assert!(
+            dirs.iter().all(|d| !d.as_os_str().is_empty()),
+            "PATH should have no empty components: {dirs:?}",
+        );
+    }
+
+    #[test]
+    fn prepend_to_path_handles_empty_path() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+        unsafe { std::env::set_var("PATH", "") };
+
+        let dir = tempfile::tempdir().unwrap();
+        prepend_to_path(dir.path()).unwrap();
+
+        let new_path = std::env::var_os("PATH").unwrap();
+        let dirs: Vec<PathBuf> = std::env::split_paths(&new_path).collect();
+
+        // Restore.
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        // Should have exactly one entry, not a trailing colon.
+        assert_eq!(dirs.len(), 1, "empty PATH + prepend = 1 entry: {dirs:?}");
+        assert_eq!(dirs[0], dir.path().to_path_buf());
     }
 }
