@@ -224,7 +224,12 @@ let bwrap = (import "bwrap.ncl") in
 
       # Add bwrap to PATH if available.
       BWRAP_PATH=""
-      if [ -n "$BWRAP_BIN" ]; then BWRAP_PATH="$BWRAP_BIN:"; fi
+      if [ -n "$BWRAP_BIN" ]; then
+        echo "Using crunch-built bwrap: $BWRAP_BIN"
+        BWRAP_PATH="$BWRAP_BIN:"
+      else
+        echo "WARNING: crunch-built bwrap not found in inputs, falling back to PATH bwrap" >&2
+      fi
       export PATH="/tmp/tools:${{BWRAP_PATH}}$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
 
       echo "=== Tool versions ==="

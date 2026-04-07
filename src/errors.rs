@@ -154,7 +154,10 @@ fn build_suggestions(msg: &str) -> String {
             "  - Re-run `crunch bootstrap` to regenerate seed.ncl with current store paths"
         );
         suggestions.push(
-            "  - Pin paths as GC roots: nix-store --add-root /nix/var/nix/gcroots/crunch-seed -r <path>"
+            "  - If using Nix seeds, pin paths as GC roots to prevent collection"
+        );
+        suggestions.push(
+            "  - Or use `crunch bootstrap --fetch` to avoid Nix store dependencies entirely"
         );
     }
 
@@ -210,10 +213,7 @@ fn internal_suggestions(msg: &str) -> String {
 
     if lower.contains("failed to run nix") || lower.contains("failed to resolve") {
         suggestions.push(
-            "  - Make sure nix or nix-build is on your PATH"
-        );
-        suggestions.push(
-            "  - Install Nix: https://nixos.org/download"
+            "  - Make sure nix or nix-build is on your PATH, or use `crunch bootstrap --fetch` instead"
         );
     }
 
@@ -363,7 +363,7 @@ mod tests {
     fn internal_nix_missing_suggests_install() {
         let e = RunError::Internal("failed to run nix: No such file".into());
         let s = e.format_human();
-        assert!(s.contains("nixos.org"), "should suggest nix install: {s}");
+        assert!(s.contains("bootstrap --fetch"), "should suggest fetch bootstrap: {s}");
     }
 
     #[test]

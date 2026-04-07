@@ -33,14 +33,14 @@
 - [x] Update `self_build.rs` to use crunch-built bwrap instead of PATH-provided bwrap ✅
 - [x] Update bootstrap chain ordering: busybox + bwrap after gcc+musl, before rust ✅ (inputs list order)
 - [x] Self-build .ncl references crunch-built tools as inputs ✅
-- [x] First-time detection: if no crunch-built bwrap exists, fall back to PATH bwrap with a warning ✅ (busybox falls back to /bin/sh, bwrap fallback is implicit via PATH)
+- [x] First-time detection: if no crunch-built bwrap exists, fall back to PATH bwrap with a warning ✅ (self-build NCL prints WARNING to stderr when bwrap input not found; busybox falls back to /bin/sh)
 - [x] End-to-end test: `crunch self-build --store /tmp/crunch-store --nix-compat` ✅ 15.5 min, 32 MiB static-pie ELF, `crunch --help` runs
 
 ## Phase 5: Cleanup
 
 - [x] Update AGENTS.md build env to document crunch-built busybox/bwrap as post-self-build default ✅ (SNIX_BUILD_SANDBOX_SHELL still documented for dev builds, which is correct)
 - [x] Remove hardcoded Nix store paths from AGENTS.md (bwrap, busybox nix store paths) ✅ (removed from Nix store paths list)
-- [x] Update error messages in errors.rs to not reference `nix-env`, `nix-store`, `nixpkgs` ✅ (replaced nix-env install suggestion with upstream URL + self-build hint)
+- [x] Update error messages in errors.rs to not reference `nix-env`, `nix-store`, `nixpkgs` ✅ (replaced nix-env suggestion, nix-store --add-root hint, and nixos.org link with crunch-native alternatives; verified clean via `rg 'nix-env|nix-store|nixpkgs|nixos\.org' src/errors.rs`)
 - [x] Add state migration warning: detect old `/nix/store`-prefixed pathinfo.redb entries, print clear error ✅ (CA mappings prefix check in StoreHandle::open)
 - [ ] Update README / examples to use `/crunch/store` paths (deferred — README is minimal, examples use /nix/store as --nix-compat default)
 - [x] ADR documenting the prefix change and why ✅ adr/0003-configurable-store-prefix.md
