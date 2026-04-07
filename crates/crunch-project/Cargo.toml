@@ -11,3 +11,5 @@ thiserror = "2.0"
 
 [dev-dependencies]
 pretty_assertions = "1.0"
+crunch-eval = { path = "../crunch-eval" }
+tempfile = "3"

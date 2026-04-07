@@ -7,11 +7,11 @@
 
 ## Phase 2: Nickel manifest and generated inputs
 
-- [ ] Define the `crunch-project.ncl` schema and validation rules
-- [ ] Implement manifest loading through Nickel evaluation
-- [ ] Implement `.crunch/inputs.ncl` generation from the resolved lock
-- [ ] Add tests that generated inputs import cleanly from package Nickel code
-- [ ] Add drift detection: `crunch check` fails when the generated inputs file does not match the current lock
+- [x] Define the `crunch-project.ncl` schema and validation rules ✅ lib/project.ncl with contracts
+- [x] Implement manifest loading through Nickel evaluation ✅ evaluate_and_deserialize into ProjectManifest
+- [x] Implement `.crunch/inputs.ncl` generation from the resolved lock ✅ generate.rs
+- [x] Add tests that generated inputs import cleanly from package Nickel code ✅ 5 integration tests
+- [x] Add drift detection: `crunch check` fails when the generated inputs file does not match the current lock ✅ drift.rs + 4 tests
 
 ## Phase 3: Refresh and stale detection
 

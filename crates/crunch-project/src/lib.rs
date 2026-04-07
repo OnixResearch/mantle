@@ -6,14 +6,18 @@
 //! Consumers use this crate for project-level operations; fetch
 //! execution stays in the build pipeline.
 
+mod drift;
 mod error;
+mod generate;
 mod lock;
 mod manifest;
 mod merge;
 mod upgrade;
 mod version;
 
+pub use drift::{DriftStatus, check_drift};
 pub use error::Error;
+pub use generate::{content_fingerprint, generate_inputs_ncl};
 pub use lock::{
     LockEntry, Lockfile, LockedHash, LockedKind, LockedPatch, LockedPatchSource,
 };
