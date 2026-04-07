@@ -266,17 +266,23 @@ pub async fn bootstrap_fetch(
 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
 
-    // Fetchers bypass bwrap entirely, so a dummy workdir is fine.
+    // Fetchers are routed through DispatchBuildService → FetchBuildService,
+    // sandbox builds go through BubblewrapBuildService.
     #[cfg(target_os = "linux")]
     let build_service = {
         use snix_build::buildservice::BubblewrapBuildService;
         let workdir = std::env::temp_dir().join("crunch-bootstrap");
         let _ = std::fs::create_dir_all(&workdir);
-        BubblewrapBuildService::new(
+        let bwrap_service = BubblewrapBuildService::new(
             workdir,
             blob_service.clone(),
             directory_service.clone(),
-        )
+        );
+        let fetch_service = crunch_build::FetchBuildService::new(
+            blob_service.clone(),
+            directory_service.clone(),
+        );
+        crunch_build::DispatchBuildService::new(fetch_service, bwrap_service)
     };
 
     #[cfg(not(target_os = "linux"))]

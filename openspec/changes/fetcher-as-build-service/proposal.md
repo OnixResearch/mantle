@@ -28,16 +28,22 @@ path (which goes through `BuildService::do_build`) and the fetcher path
 Wrap the fetcher in a `BuildService` implementation:
 
 1. **`FetchBuildService`**: implements `BuildService::do_build()`. When
-   called with a BuildRequest whose command is `builtin:fetchurl`, it
-   performs the download, extraction, and hash verification, then returns
-   a `BuildResult` with the output node.
-2. **`DispatchBuildService`**: a composite BuildService that checks the
-   builder string and delegates to either `FetchBuildService` or the
+   called with a fetch request encoded in the existing `BuildRequest`
+   fields (`command_args[0] == "builtin:fetchurl"` plus fetch parameters
+   in `environment_vars`), it performs the download and extraction,
+   ingests the result into castore, and returns a `BuildResult` with the
+   output node.
+2. **`DispatchBuildService`**: a composite BuildService that checks
+   `command_args[0]` and delegates to either `FetchBuildService` or the
    underlying sandbox BuildService. The orchestrator only ever calls
    `dispatch.do_build()`.
 3. **Remove `is_builtin_fetcher` check from `prepare_build()`** — the
    orchestrator treats all derivations the same. The dispatch happens
    inside the BuildService layer.
+4. **Move fetcher hash verification into the shared post-build path** —
+   `finish_build()` verifies flat and recursive fixed-output hashes,
+   persists `PathInfo`, and handles mismatch cleanup for both fetchers
+   and sandbox builds.
 
 ## Capabilities
 
@@ -55,7 +61,8 @@ Wrap the fetcher in a `BuildService` implementation:
 ## Impact
 
 - **Files**: new files in `crates/crunch-build/src/`, modified
-  `orchestrate.rs`, modified `fetcher.rs`
+  `orchestrate.rs`, modified `fetcher.rs`, modified `build_request.rs`
 - **APIs**: BuildService remains the same; new implementations added
 - **Dependencies**: none
-- **Testing**: FetchBuildService testable independently with mock HTTP
+- **Testing**: FetchBuildService and DispatchBuildService testable
+  independently with mock HTTP and mock sandbox services

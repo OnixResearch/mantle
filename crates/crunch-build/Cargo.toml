@@ -31,6 +31,7 @@ tar = "0.4"
 lzma-rs = "0.3"
 bzip2-rs = "0.1"
 ruzstd = "0.8"
+tempfile = "3"
 url = "2"
 
 [dev-dependencies]

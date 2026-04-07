@@ -344,7 +344,7 @@ fn fetch_agent() -> ureq::Agent {
 
 /// Download a URL and write the raw content to a file.
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
-fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
+pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     let reader: Box<dyn Read + Send> = open_url_reader(url)?;
     let mut limited = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(out)?;
@@ -599,7 +599,7 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
 /// Clone a git repository and checkout a specific revision.
 ///
 /// Shells out to the `git` binary. The `.git` directory is stripped.
-fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
+pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
     // Cache check: if output already exists, skip.
     if Path::new(out).exists() {
         info!(out = out, "using cached git fetch");

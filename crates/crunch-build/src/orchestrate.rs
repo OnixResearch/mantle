@@ -1,7 +1,5 @@
 //! Build orchestration: recursively build derivations, check cache,
 //! persist outputs.
-use async_trait::async_trait;
-
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -280,15 +278,7 @@ where
             }));
         }
 
-        // 2. Builtin fetcher bypass (runs inline, not dispatched).
-        if crate::fetcher::is_builtin_fetcher(derivation) {
-            let outcome = self
-                .build_fetcher(drv_path, derivation, known_paths, is_root)
-                .await?;
-            return Ok(PrepareResult::Done(outcome));
-        }
-
-        // 3. Ensure input derivation outputs are in castore.
+        // 2. Ensure input derivation outputs are in castore.
         for (input_drv_path, _output_names) in &derivation.input_derivations {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
@@ -297,15 +287,15 @@ where
             }
         }
 
-        // 4. Resolve source inputs + closures.
+        // 3. Resolve source inputs + closures.
         let all_source_paths = self.resolve_and_ingest_sources(derivation).await?;
 
-        // 5. Collect sandbox inputs.
+        // 4. Collect sandbox inputs.
         let sandbox_inputs = self
             .collect_sandbox_inputs(derivation, known_paths, &all_source_paths)
             .await?;
 
-        // 6. Create build request.
+        // 5. Create build request.
         let build_request = derivation_to_build_request(
             derivation, &sandbox_inputs, self.store.store_dir(),
         )?;
@@ -994,151 +984,6 @@ where
         ).await.map_err(|e| Error::Store(format!("{e}")))
     }
 
-    /// Execute a builtin fetcher derivation (e.g., `builtin:fetchurl`).
-    ///
-    /// Bypasses the sandbox entirely: parses the derivation environment
-    /// into a `Fetch`, downloads the resource, verifies the hash, then
-    /// runs the standard post-build pipeline (ingest, NAR hash, PathInfo).
-    async fn build_fetcher(
-        &mut self,
-        drv_path: &StorePath<String>,
-        derivation: &Derivation,
-        _known_paths: &mut DerivationRegistry,
-        is_root: bool,
-    ) -> Result<BuildOutcome, Error> {
-        let drv_name = drv_path.name().to_string();
-
-        let fetch = crate::fetcher::parse_fetch(derivation).map_err(|e| {
-            Error::BuildFailed {
-                name: drv_name.clone(),
-                exit_code: "parse".to_string(),
-                log: e.to_string(),
-            }
-        })?;
-
-        let out_output = derivation.outputs.get("out").ok_or_else(|| {
-            Error::OutputMissing {
-                output: "out".to_string(),
-            }
-        })?;
-        let out_path = out_output.path.as_ref().ok_or_else(|| Error::OutputNoPath {
-            output: "out".to_string(),
-            drv_name: drv_name.clone(),
-        })?;
-        // Fetcher outputs land on disk at the physical output dir.
-        let out_abs = out_path.to_absolute_path_with_prefix(&self.store.output_dir_str());
-
-        // Skip download if the output already exists on disk (e.g.,
-        // from a prior `crunch bootstrap --fetch` run). The castore
-        // content may be missing (in-memory only), so we still need
-        // to re-ingest below.
-        if PathBuf::from(&out_abs).exists() {
-            info!(drv = %drv_name, path = %out_abs, "fetcher output exists on disk, skipping download");
-        } else {
-            info!(drv = %drv_name, "fetching");
-            let fetch_clone = fetch.clone();
-            let out_abs_clone = out_abs.clone();
-            tokio::task::spawn_blocking(move || {
-                crate::fetcher::fetch_to_store(&fetch_clone, &out_abs_clone)
-            })
-            .await
-            .map_err(|e| Error::Sandbox(std::io::Error::other(format!("spawn_blocking: {e}"))))?
-            .map_err(|e| Error::BuildFailed {
-                name: drv_name.clone(),
-                exit_code: "fetch".to_string(),
-                log: e.to_string(),
-            })?;
-
-            if !PathBuf::from(&out_abs).exists() {
-                return Err(Error::BuildFailed {
-                    name: drv_name.clone(),
-                    exit_code: "fetch".to_string(),
-                    log: format!("fetcher did not produce output at {out_abs}"),
-                });
-            }
-        }
-
-        // Verify flat hash for URL fetches (before ingest).
-        if let crate::fetcher::Fetch::Url { exp_hash: Some(ref expected), .. } = fetch {
-            crate::fetcher::verify_flat_hash(&out_abs, expected, &drv_name).map_err(
-                |e| match e {
-                    crate::fetcher::FetchError::HashMismatch {
-                        name,
-                        expected,
-                        actual,
-                    } => Error::FodHashMismatch {
-                        name,
-                        expected_sri: expected,
-                        actual_sri: actual,
-                    },
-                    other => Error::BuildFailed {
-                        name: drv_name.clone(),
-                        exit_code: "verify".to_string(),
-                        log: other.to_string(),
-                    },
-                },
-            )?;
-        }
-
-        // Ingest output into castore.
-        let node = ingest_path::<_, _, _, &[u8]>(
-            self.store.blob_service(),
-            self.store.directory_service(),
-            PathBuf::from(&out_abs).as_path(),
-            None,
-        )
-        .await
-        .map_err(|e| {
-            Error::Sandbox(std::io::Error::other(format!(
-                "failed to ingest fetcher output {out_abs}: {e}"
-            )))
-        })?;
-
-        // Compute NAR hash.
-        let nar_renderer = SimpleRenderer::new(
-            self.store.blob_service(),
-            self.store.directory_service(),
-        );
-        let (nar_size, nar_sha256) = nar_renderer
-            .calculate_nar(&node)
-            .await
-            .map_err(|e| Error::NarCalculation(e.to_string()))?;
-
-        // Verify FOD hash (NAR-based, for tarballs/git/NAR fetches).
-        if let Some(ca_hash) = &out_output.ca_hash {
-            verify_fod_hash(
-                &drv_name, "out", ca_hash, nar_size, &nar_sha256,
-                &node, &self.store.blob_service(), &self.store.directory_service(),
-            ).await?;
-        }
-
-        // Persist via the shared helper (no duplication).
-        let path_info = self
-            .persist_and_export_output(
-                drv_path,
-                out_path,
-                node,
-                vec![],  // fetcher outputs have no references
-                nar_size,
-                nar_sha256,
-                out_output.ca_hash.clone(),
-                is_root,
-            )
-            .await?;
-
-        let mut output_infos = HashMap::new();
-        output_infos.insert("out".to_string(), path_info);
-
-        info!(drv = %drv_name, path = %out_abs, "fetch succeeded");
-
-        Ok(BuildOutcome {
-            drv_path: drv_path.clone(),
-            outputs: output_infos,
-            cached: false,
-            log: None,
-        })
-    }
-
     /// Check cache: every output must have PathInfo AND exist on disk.
     /// For CA derivations, uses ca_mappings to find the resolved path.
     /// Delegates to `self.store.check_cache()`.
@@ -1198,6 +1043,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::sync::{Arc, Mutex};
 
+    use async_trait::async_trait;
     use nix_compat::derivation::Output;
     use nix_compat::store_path::StorePath;
     use snix_build::buildservice::{BuildRequest, BuildResult, BuildOutput};

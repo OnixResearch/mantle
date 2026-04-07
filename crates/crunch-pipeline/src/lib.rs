@@ -5,8 +5,10 @@ use std::path::PathBuf;
 use crunch_build::BuildOutcome;
 use crunch_build::Builder;
 use crunch_build::DerivationRegistry;
+use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
+use crunch_build::FetchBuildService;
 use crunch_build::Worker;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
@@ -140,7 +142,9 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
         let workdir = std::env::temp_dir().join("crunch-builds");
         std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
 
-        let build_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+        let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+        let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone());
+        let build_service = DispatchBuildService::new(fetch_service, bwrap_service);
 
         let mut builder = Builder::with_state_dir(
             blob_service,
