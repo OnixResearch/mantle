@@ -1,5 +1,12 @@
 # Napkin
 
+## Done-Review Lessons (2026-04-07)
+- `apply_outcomes()` must take the manifest and resolver, not just the lock and outcomes. Patch names in lock entries are useless without the corresponding LockedPatch in `Lockfile.patches` -- lock validation catches this, but it's easy to miss in tests that don't call `validate()` on the result.
+- Generated files must include ALL relevant lockfile data. If `Lockfile.patches` exists but `generate_inputs_ncl()` doesn't emit it, consumers lose patch source/hash info.
+- `ProjectManifest.version` as a bare `String` without validation is a bug. Always parse and validate version fields during `validate()`, not just at usage time.
+- CLI commands need assert_cmd tests. `cargo check -p crunch` proves compilation, not behavior.
+- Commit `Cargo.lock` changes in the same commit as the code that changed it.
+
 ## Build Environment
 - cargo/rustc are at `$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin` and `$HOME/.cargo/bin` — NOT on default PATH. Must prepend to PATH in pueue_run commands.
 - Full build env command prefix:
