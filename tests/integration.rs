@@ -338,7 +338,160 @@ mod build_tests {
             .assert()
             .code(1);
     }
+
+    #[test]
+    fn build_persists_signed_pathinfo() {
+        use futures::StreamExt;
+        use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
+
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let key_file = dir.path().join("cache.key");
+        std::fs::write(
+            &key_file,
+            "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n",
+        )
+        .unwrap();
+
+        std::fs::write(
+            dir.path().join("signed.ncl"),
+            r#"let crunch = import "lib.ncl" in
+{
+  name = "signed-cli-build",
+  builder = "/bin/sh",
+  args = ["-c", "echo signed > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        )
+        .unwrap();
+
+        crunch_cmd()
+            .env("CRUNCH_STATE_DIR", state.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("build")
+            .arg("--signing-key")
+            .arg(&key_file)
+            .arg("-I")
+            .arg(dir.path())
+            .arg(dir.path().join("signed.ncl"))
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("signed-cli-build"));
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let svc = RedbPathInfoService::new(
+                "verify".to_string(),
+                RedbPathInfoServiceConfig {
+                    path: Some(state.path().join("pathinfo.redb")),
+                    read_only: true,
+                    cache_size: None,
+                },
+            )
+            .await
+            .unwrap();
+
+            let mut stream = svc.list();
+            let pi = stream.next().await.unwrap().unwrap();
+            assert_eq!(pi.signatures.len(), 1, "built PathInfo should be signed");
+
+            let keypair = crunch_build::load_keypair(
+                "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+            )
+            .unwrap();
+            let verify = crunch_build::verify_pathinfo_signatures(&pi, &[keypair.verifying_key]);
+            assert!(verify.is_trusted(), "persisted build signature should verify");
+        });
+    }
 }
+
+#[test]
+fn store_sign_all_signs_existing_unsigned_entries() {
+    use futures::StreamExt;
+    use nix_compat::store_path::StorePath;
+    use snix_castore::{Node, SymlinkTarget};
+    use snix_store::path_info::PathInfo;
+    use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
+
+    let state = tempfile::tempdir().unwrap();
+    let key_file = state.path().join("cache.key");
+    std::fs::write(
+        &key_file,
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n",
+    )
+    .unwrap();
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let svc = RedbPathInfoService::new(
+            "seed".to_string(),
+            RedbPathInfoServiceConfig {
+                path: Some(state.path().join("pathinfo.redb")),
+                read_only: false,
+                cache_size: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        for (name, digest_byte) in [("unsigned-a", 1u8), ("unsigned-b", 2u8)] {
+            let pi = PathInfo {
+                store_path: StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap(),
+                node: Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                references: vec![],
+                nar_size: 5,
+                nar_sha256: [digest_byte; 32],
+                signatures: vec![],
+                deriver: None,
+                ca: None,
+            };
+            svc.put(pi).await.unwrap();
+        }
+    });
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("store")
+        .arg("sign")
+        .arg("--all")
+        .arg("--signing-key")
+        .arg(&key_file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("SIGNED"));
+
+    rt.block_on(async {
+        let svc = RedbPathInfoService::new(
+            "verify".to_string(),
+            RedbPathInfoServiceConfig {
+                path: Some(state.path().join("pathinfo.redb")),
+                read_only: true,
+                cache_size: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let mut count = 0u32;
+        let mut stream = svc.list();
+        while let Some(result) = stream.next().await {
+            let pi = result.unwrap();
+            assert_eq!(pi.signatures.len(), 1, "all existing PathInfos should be signed");
+            count = count.saturating_add(1);
+        }
+        assert_eq!(count, 2);
+    });
+}
+
 
 // ── Phase 5: Error and edge cases ───────────────────────────────
 

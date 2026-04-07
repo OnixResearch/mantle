@@ -1032,6 +1032,7 @@ dependencies = [
  "crunch-store",
  "data-encoding",
  "flate2",
+ "futures",
  "nix-compat",
  "predicates",
  "pretty_assertions",

@@ -1159,6 +1159,24 @@ mod tests {
         crate::signing::build_trusted_keys(&test_keypair(), None)
     }
 
+    fn sign_with_test_key(path_info: &mut PathInfo) {
+        let keypair = test_keypair();
+        crate::signing::sign_pathinfo(path_info, &keypair.signing_key);
+    }
+
+    fn corrupt_signature_bytes(path_info: &mut PathInfo) {
+        use nix_compat::narinfo::Signature;
+
+        assert!(!path_info.signatures.is_empty(), "signature must exist before corruption");
+        let bad_bytes = [0u8; 64];
+        let bad_sig_str = format!(
+            "{}:{}",
+            path_info.signatures[0].name(),
+            data_encoding::BASE64.encode(&bad_bytes),
+        );
+        path_info.signatures[0] = Signature::<String>::parse(&bad_sig_str).unwrap();
+    }
+
     /// A mock BuildService that records requests and returns a synthetic
     /// output node for each requested output.
     struct MockBuildService {
@@ -1369,6 +1387,94 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "should NOT call do_build for cached output");
+    }
+
+    #[tokio::test]
+    async fn build_persists_signed_pathinfo_that_verifies_on_reread() {
+        use snix_store::pathinfoservice::PathInfoService;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let pis = Arc::new(test_pis());
+
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("signed-roundtrip", &[], &mut kp);
+        let out_path = drv.outputs["out"].path.as_ref().unwrap().clone();
+        let digest = *out_path.digest();
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached);
+        let signed_output = outcome.outputs.get("out").unwrap();
+        assert_eq!(signed_output.signatures.len(), 1);
+
+        let reread = pis.get(digest).await.unwrap().unwrap();
+        assert_eq!(reread.signatures.len(), 1);
+
+        let verify = crate::signing::verify_pathinfo_signatures(&reread, &test_trusted_keys());
+        assert!(verify.is_trusted(), "persisted signature should verify on reread");
+        assert_eq!(verify.trusted_count, 1);
+    }
+
+    #[tokio::test]
+    async fn corrupted_local_signature_triggers_rebuild() {
+        use snix_store::pathinfoservice::PathInfoService;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("corrupt-sig", &[], &mut kp);
+
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"cached content").await;
+        let mut path_info = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [9u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        sign_with_test_key(&mut path_info);
+        corrupt_signature_bytes(&mut path_info);
+        pis.put(path_info).await.unwrap();
+
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached, "corrupted local signature must be treated as cache miss");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "builder should rebuild after signature verification fails");
     }
 
     #[tokio::test]
@@ -2091,6 +2197,112 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "should NOT call do_build");
+    }
+
+    #[tokio::test]
+    async fn remote_signed_cache_hit_verifies_and_skips_build() {
+        use snix_store::pathinfoservice::PathInfoService as _;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+        let remote_pis = test_pis();
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("remote-signed-hit", &[], &mut kp);
+
+        let remote_keypair = crate::signing::generate_keypair().0;
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"remote signed content").await;
+        let mut path_info = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 21,
+            nar_sha256: [4u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo(&mut path_info, &remote_keypair.signing_key);
+        remote_pis.put(path_info).await.unwrap();
+
+        let trusted_keys = crate::signing::build_trusted_keys(
+            &test_keypair(),
+            Some(std::slice::from_ref(&remote_keypair.verifying_key)),
+        );
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> = Arc::new(remote_pis);
+        let mut builder = Builder::with_state_dir(
+            Arc::new(bs) as Arc<dyn BlobService>,
+            Arc::new(ds) as Arc<dyn DirectoryService>,
+            mock,
+            Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+            PathBuf::from("/nix/store"),
+            None,
+            Some(remote),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            trusted_keys,
+            false,
+            false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(outcome.cached, "signed remote substitution should verify and skip build");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "should NOT call do_build when remote signature is trusted");
+    }
+
+    #[tokio::test]
+    async fn unsigned_remote_path_rejected_without_trust_unsigned() {
+        use snix_store::pathinfoservice::PathInfoService as _;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let local_pis = test_pis();
+        let remote_pis = test_pis();
+
+        let mut kp = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("remote-unsigned", &[], &mut kp);
+
+        let out_path = drv.outputs["out"].path.as_ref().unwrap();
+        let node = put_blob(&bs, b"remote unsigned content").await;
+        let path_info = PathInfo {
+            store_path: out_path.clone(),
+            node,
+            references: vec![],
+            nar_size: 23,
+            nar_sha256: [5u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        remote_pis.put(path_info).await.unwrap();
+
+        let remote: Arc<dyn snix_store::pathinfoservice::PathInfoService> = Arc::new(remote_pis);
+        let mut builder = Builder::with_state_dir(
+            Arc::new(bs) as Arc<dyn BlobService>,
+            Arc::new(ds) as Arc<dyn DirectoryService>,
+            mock,
+            Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+            PathBuf::from("/nix/store"),
+            None,
+            Some(remote),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
+        assert!(!outcome.cached, "unsigned remote path must be rejected when trust_unsigned is false");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "builder should fall through to local build");
     }
 
     #[tokio::test]
