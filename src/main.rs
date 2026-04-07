@@ -4,6 +4,7 @@ mod errors;
 mod fix;
 mod log_cmd;
 mod project_cmd;
+mod project_resolve;
 mod self_build;
 mod store_cmd;
 

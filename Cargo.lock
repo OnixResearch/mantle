@@ -1031,6 +1031,7 @@ dependencies = [
  "crunch-project",
  "crunch-store",
  "data-encoding",
+ "digest",
  "flate2",
  "futures",
  "nix-compat",
@@ -1047,6 +1048,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]

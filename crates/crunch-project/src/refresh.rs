@@ -31,6 +31,31 @@ pub struct ResolvedInput {
     pub entry: LockEntry,
 }
 
+/// How content should be hashed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HashResolutionMode {
+    /// Hash raw bytes exactly as downloaded or read from disk.
+    Flat,
+    /// Hash the NAR serialization of the unpacked or checked-out tree.
+    Recursive,
+}
+
+/// A refresh or stale-check failure tied to a named item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefreshFailure {
+    pub name: String,
+    pub reason: String,
+}
+
+/// Result of a stale check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleReport {
+    /// Input names whose resolved state differs from the current lock.
+    pub stale: Vec<String>,
+    /// Inputs that could not be checked.
+    pub failed: Vec<RefreshFailure>,
+}
+
 /// Outcome of refreshing a single input.
 #[derive(Debug, Clone)]
 pub enum RefreshOutcome {
@@ -64,23 +89,33 @@ pub trait RefreshResolver {
     /// Resolve a git reference to a concrete revision hash.
     ///
     /// Returns `Ok(Some(rev))` if resolved, `Ok(None)` if the reference
-    /// couldn't be resolved (repo unreachable, ref doesn't exist), or
-    /// `Err` on hard failures.
+    /// couldn't be resolved, or `Err` on hard failures.
     fn resolve_git_rev(
         &self,
         repository: &str,
         reference: &GitReference,
     ) -> Result<Option<String>, Error>;
 
-    /// Compute the hash of a URL's content.
+    /// Compute the hash of downloaded URL content.
     ///
-    /// Returns `Ok(Some(sri_hash))` if the content was fetched and
-    /// hashed, `Ok(None)` if unavailable, or `Err` on hard failures.
+    /// `mode` distinguishes flat file hashing from recursive tree hashing.
     fn hash_url_content(
         &self,
         url: &str,
         algo: &HashAlgo,
+        mode: HashResolutionMode,
     ) -> Result<Option<String>, Error>;
+
+    /// Compute the recursive hash of a git checkout at a concrete revision.
+    fn hash_git_checkout(
+        &self,
+        repository: &str,
+        rev: &str,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, Error> {
+        let _ = (repository, rev, algo);
+        Ok(None)
+    }
 
     /// Compute the hash of a local file's content.
     ///
@@ -91,7 +126,6 @@ pub trait RefreshResolver {
         path: &str,
         algo: &HashAlgo,
     ) -> Result<Option<String>, Error> {
-        // Default: not available. Callers override for real I/O.
         let _ = (path, algo);
         Ok(None)
     }
@@ -175,6 +209,17 @@ fn refresh_one(
     }
 }
 
+fn require_resolution(
+    value: Option<String>,
+    what: &str,
+) -> Result<String, Error> {
+    let resolved = value.ok_or_else(|| Error::Manifest(format!("unable to resolve {what}")))?;
+    if resolved.is_empty() {
+        return Err(Error::Manifest(format!("resolver returned empty {what}")));
+    }
+    Ok(resolved)
+}
+
 /// Resolve a manifest input to a lock entry.
 fn resolve_input(
     input: &ManifestInput,
@@ -182,10 +227,10 @@ fn resolve_input(
 ) -> Result<LockEntry, Error> {
     let (kind, hash) = match &input.kind {
         InputKind::File { url } => {
-            let hash_value = resolver
-                .hash_url_content(url, &input.hash.algo)?
-                .or_else(|| input.hash.expected.clone())
-                .unwrap_or_default();
+            let hash_value = require_resolution(
+                resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
+                &format!("flat hash for {}", input.name),
+            )?;
             (
                 LockedKind::File { url: url.clone() },
                 LockedHash {
@@ -195,10 +240,10 @@ fn resolve_input(
             )
         }
         InputKind::Tarball { url } => {
-            let hash_value = resolver
-                .hash_url_content(url, &input.hash.algo)?
-                .or_else(|| input.hash.expected.clone())
-                .unwrap_or_default();
+            let hash_value = require_resolution(
+                resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Recursive)?,
+                &format!("tarball tree hash for {}", input.name),
+            )?;
             (
                 LockedKind::Tarball { url: url.clone() },
                 LockedHash {
@@ -211,17 +256,19 @@ fn resolve_input(
             repository,
             reference,
         } => {
-            let rev = resolver
-                .resolve_git_rev(repository, reference)?
-                .unwrap_or_default();
+            let rev = require_resolution(
+                resolver.resolve_git_rev(repository, reference)?,
+                &format!("git revision for {}", input.name),
+            )?;
             let ref_name = match reference {
                 GitReference::Branch(b) => Some(b.clone()),
                 GitReference::Tag(t) => Some(t.clone()),
                 GitReference::Rev(_) => None,
             };
-            // For git, hash comes from the expected value or stays empty
-            // until the build pipeline fetches and hashes the content.
-            let hash_value = input.hash.expected.clone().unwrap_or_default();
+            let hash_value = require_resolution(
+                resolver.hash_git_checkout(repository, &rev, &input.hash.algo)?,
+                &format!("git tree hash for {}", input.name),
+            )?;
             (
                 LockedKind::Git {
                     repository: repository.clone(),
@@ -252,6 +299,8 @@ pub struct ApplyResult {
     pub inputs_changed: u32,
     /// Whether patch lock data was added, changed, or removed.
     pub patches_changed: bool,
+    /// Patch-level failures encountered while resolving lock data.
+    pub failures: Vec<RefreshFailure>,
 }
 
 impl ApplyResult {
@@ -259,6 +308,11 @@ impl ApplyResult {
     pub fn has_changes(&self) -> bool {
         self.inputs_changed > 0 || self.patches_changed
     }
+}
+
+pub(crate) struct PatchResolutionResult {
+    changed: bool,
+    failures: Vec<RefreshFailure>,
 }
 
 /// Apply refresh outcomes to a lockfile, producing a new lockfile.
@@ -283,13 +337,16 @@ pub fn apply_outcomes(
         }
     }
 
-    // Resolve all patches referenced by any input entry.
-    let patches_changed = resolve_patches_into_lock(manifest, &mut new_lock, resolver);
+    let patch_result = resolve_patches_into_lock(manifest, &mut new_lock, resolver);
+    let reverted = revert_failed_patch_inputs(lock, &mut new_lock, &patch_result.failures);
+    inputs_changed = inputs_changed.saturating_sub(reverted);
+    let orphan_changed = remove_orphaned_patches(&mut new_lock);
 
     ApplyResult {
         lock: new_lock,
         inputs_changed,
-        patches_changed,
+        patches_changed: patch_result.changed || orphan_changed,
+        failures: patch_result.failures,
     }
 }
 
@@ -298,23 +355,16 @@ pub fn apply_outcomes(
 /// For each patch name referenced by any lock entry, find the
 /// manifest's `PatchDef` and lock it (compute hash, record source).
 /// Re-resolves patches whose manifest definition changed (different
-/// source path/url). Returns true if any patch was added or changed.
-pub fn resolve_patches_into_lock(
+/// source path/url).
+pub(crate) fn resolve_patches_into_lock(
     manifest: &ProjectManifest,
     lock: &mut Lockfile,
     resolver: &dyn RefreshResolver,
-) -> bool {
+) -> PatchResolutionResult {
     let mut changed = false;
+    let mut failures = Vec::new();
+    let needed = collect_needed_patches(lock);
 
-    // Collect all patch names referenced by any lock entry.
-    let mut needed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for entry in lock.inputs.values() {
-        for p in &entry.patches {
-            needed.insert(p.clone());
-        }
-    }
-
-    // Build index of manifest patch definitions.
     let defs: std::collections::HashMap<&str, &PatchDef> = manifest
         .patches
         .iter()
@@ -324,31 +374,89 @@ pub fn resolve_patches_into_lock(
     for name in &needed {
         let def = match defs.get(name.as_str()) {
             Some(d) => d,
-            None => continue, // manifest doesn't define this patch
+            None => continue,
         };
-
-        // Check if existing locked patch matches the manifest definition.
         let needs_resolve = match lock.patches.get(name) {
-            None => true, // not locked yet
+            None => true,
             Some(existing) => !patch_matches_def(existing, def),
         };
-
-        if needs_resolve {
-            if let Some(locked) = resolve_patch(def, resolver) {
+        if !needs_resolve {
+            continue;
+        }
+        match resolve_patch(def, resolver) {
+            Ok(locked) => {
                 lock.patches.insert(name.clone(), locked);
                 changed = true;
             }
+            Err(err) => failures.push(RefreshFailure {
+                name: name.clone(),
+                reason: err.to_string(),
+            }),
         }
     }
 
-    // Remove orphaned locked patches (no longer referenced).
+    let orphan_changed = remove_orphaned_patches(lock);
+    PatchResolutionResult {
+        changed: changed || orphan_changed,
+        failures,
+    }
+}
+
+fn collect_needed_patches(
+    lock: &Lockfile,
+) -> std::collections::BTreeSet<String> {
+    let mut needed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for entry in lock.inputs.values() {
+        for patch_name in &entry.patches {
+            needed.insert(patch_name.clone());
+        }
+    }
+    needed
+}
+
+fn remove_orphaned_patches(lock: &mut Lockfile) -> bool {
+    let needed = collect_needed_patches(lock);
     let before_len = lock.patches.len() as u32;
     lock.patches.retain(|name, _| needed.contains(name));
-    if lock.patches.len() as u32 != before_len {
-        changed = true;
-    }
+    lock.patches.len() as u32 != before_len
+}
 
-    changed
+fn revert_failed_patch_inputs(
+    old_lock: &Lockfile,
+    new_lock: &mut Lockfile,
+    failures: &[RefreshFailure],
+) -> u32 {
+    if failures.is_empty() {
+        return 0;
+    }
+    let failed_names: std::collections::HashSet<&str> =
+        failures.iter().map(|failure| failure.name.as_str()).collect();
+    let impacted_inputs: Vec<String> = new_lock
+        .inputs
+        .iter()
+        .filter(|(_, entry)| {
+            entry.patches.iter().any(|patch_name| failed_names.contains(patch_name.as_str()))
+        })
+        .map(|(name, _)| name.clone())
+        .collect();
+    let mut reverted: u32 = 0;
+    for name in impacted_inputs {
+        match old_lock.inputs.get(&name) {
+            Some(previous) => {
+                let current = new_lock.inputs.get(&name);
+                if current != Some(previous) {
+                    new_lock.inputs.insert(name, previous.clone());
+                    reverted = reverted.saturating_add(1);
+                }
+            }
+            None => {
+                if new_lock.inputs.remove(&name).is_some() {
+                    reverted = reverted.saturating_add(1);
+                }
+            }
+        }
+    }
+    reverted
 }
 
 /// Check if a locked patch still matches its manifest definition.
@@ -387,22 +495,17 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
 }
 
 /// Resolve a single manifest patch definition to a locked patch.
-///
-/// Returns `None` if the hash cannot be resolved (resolver returns
-/// None and no expected hash is available). Never produces a
-/// `LockedPatch` with an empty hash value.
 fn resolve_patch(
     def: &PatchDef,
     resolver: &dyn RefreshResolver,
-) -> Option<LockedPatch> {
+) -> Result<LockedPatch, Error> {
     match &def.source {
         PatchSource::Local { path } => {
-            let hash_value = resolver
-                .hash_local_file(path, &HashAlgo::Sha256)
-                .ok()
-                .flatten()?;
-            assert!(!hash_value.is_empty(), "resolver returned empty hash");
-            Some(LockedPatch {
+            let hash_value = require_resolution(
+                resolver.hash_local_file(path, &HashAlgo::Sha256)?,
+                &format!("local patch hash for {path}"),
+            )?;
+            Ok(LockedPatch {
                 source: LockedPatchSource::Local {
                     path: path.clone(),
                 },
@@ -413,13 +516,11 @@ fn resolve_patch(
             })
         }
         PatchSource::Remote { url, hash } => {
-            let hash_value = resolver
-                .hash_url_content(url, &hash.algo)
-                .ok()
-                .flatten()
-                .or_else(|| hash.expected.clone())?;
-            assert!(!hash_value.is_empty(), "resolver returned empty hash");
-            Some(LockedPatch {
+            let hash_value = require_resolution(
+                resolver.hash_url_content(url, &hash.algo, HashResolutionMode::Flat)?,
+                &format!("remote patch hash for {url}"),
+            )?;
+            Ok(LockedPatch {
                 source: LockedPatchSource::Remote {
                     url: url.clone(),
                 },
@@ -432,24 +533,36 @@ fn resolve_patch(
     }
 }
 
+fn refresh_failures_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> {
+    outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::Failed { name, reason } => Some(RefreshFailure {
+                name: name.clone(),
+                reason: reason.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 /// List inputs that are stale (would change on refresh) without
 /// mutating anything.
-///
-/// Returns names of inputs whose resolved state differs from their
-/// current lock entry.
 pub fn list_stale(
     manifest: &ProjectManifest,
     lock: &Lockfile,
     resolver: &dyn RefreshResolver,
-) -> Vec<String> {
+) -> StaleReport {
     let outcomes = refresh_inputs(manifest, lock, &[], resolver);
-    outcomes
+    let stale = outcomes
         .iter()
-        .filter_map(|o| match o {
-            RefreshOutcome::Updated(r) => Some(r.name.clone()),
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::Updated(resolved) => Some(resolved.name.clone()),
             _ => None,
         })
-        .collect()
+        .collect();
+    let failed = refresh_failures_from_outcomes(&outcomes);
+    StaleReport { stale, failed }
 }
 
 #[cfg(test)]
@@ -463,6 +576,7 @@ mod tests {
     /// A test resolver that returns fixed values.
     struct MockResolver {
         git_rev: Option<String>,
+        git_hash: Option<String>,
         url_hash: Option<String>,
     }
 
@@ -479,8 +593,18 @@ mod tests {
             &self,
             _url: &str,
             _algo: &HashAlgo,
+            _mode: HashResolutionMode,
         ) -> Result<Option<String>, Error> {
             Ok(self.url_hash.clone())
+        }
+
+        fn hash_git_checkout(
+            &self,
+            _repository: &str,
+            _rev: &str,
+            _algo: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.git_hash.clone())
         }
     }
 
@@ -532,6 +656,7 @@ mod tests {
         let m = manifest_with(vec![file_input("data", "https://example.com/data.bin")]);
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-abc=".into()),
         };
 
@@ -550,7 +675,8 @@ mod tests {
     fn refresh_git_input_resolves_rev() {
         let m = manifest_with(vec![git_input("nixpkgs", "https://github.com/NixOS/nixpkgs.git")]);
         let resolver = MockResolver {
-            git_rev: Some("deadbeef123".into()),
+            git_rev: Some("0123456789abcdef0123456789abcdef01234567".into()),
+            git_hash: Some("sha256-git-tree=".into()),
             url_hash: None,
         };
 
@@ -560,8 +686,9 @@ mod tests {
             RefreshOutcome::Updated(r) => {
                 assert_eq!(r.name, "nixpkgs");
                 if let LockedKind::Git { rev, ref_name, .. } = &r.entry.kind {
-                    assert_eq!(rev, "deadbeef123");
+                    assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
                     assert_eq!(ref_name.as_deref(), Some("main"));
+                    assert_eq!(r.entry.hash.value, "sha256-git-tree=");
                 } else {
                     panic!("expected Git kind");
                 }
@@ -577,6 +704,7 @@ mod tests {
         let m = manifest_with(vec![input]);
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-new=".into()),
         };
 
@@ -589,6 +717,7 @@ mod tests {
     fn refresh_unchanged_input() {
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-same=".into()),
         };
 
@@ -625,6 +754,7 @@ mod tests {
         ]);
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-new=".into()),
         };
 
@@ -645,6 +775,7 @@ mod tests {
         let lock = empty_lock();
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: None,
         };
         let outcomes = vec![RefreshOutcome::Updated(ResolvedInput {
@@ -687,6 +818,7 @@ mod tests {
             &self,
             _: &str,
             _: &HashAlgo,
+            _: HashResolutionMode,
         ) -> Result<Option<String>, Error> {
             Ok(self.url_hash.clone())
         }
@@ -750,6 +882,7 @@ mod tests {
         let m = manifest_with(vec![file_input("pkg", "https://example.com/pkg")]);
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-h=".into()),
         };
         // Lock starts with a stale patch that no input references
@@ -775,7 +908,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_patch_returns_none_when_hash_unavailable() {
+    fn resolve_patch_failure_is_reported_and_input_is_reverted() {
         // MockResolver doesn't implement hash_local_file (default returns None)
         // So local patches cannot be resolved -> resolve_patch returns None
         let m = ProjectManifest {
@@ -799,14 +932,17 @@ mod tests {
         };
         let resolver = MockResolver {
             git_rev: None,
+            git_hash: None,
             url_hash: Some("sha256-pkghash=".into()),
         };
         let lock = empty_lock();
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
 
-        // Patch should NOT be in the lock (hash unavailable)
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].name, "nohash");
         assert!(!result.lock.patches.contains_key("nohash"));
+        assert!(!result.lock.inputs.contains_key("pkg"));
     }
 
     #[test]
@@ -1143,12 +1279,7 @@ mod tests {
     }
 
     #[test]
-    fn list_stale_returns_changed_only() {
-        let m = manifest_with(vec![
-            file_input("fresh", "https://example.com/fresh"),
-            file_input("stale", "https://example.com/stale"),
-        ]);
-
+    fn list_stale_separates_changed_and_failed_inputs() {
         let mut lock = empty_lock();
         lock.inputs.insert(
             "fresh".into(),
@@ -1167,13 +1298,41 @@ mod tests {
 
         // Resolver returns "sha256-current=" for all, so "fresh" is unchanged
         // but "stale" is missing from lock -> updated
-        let resolver = MockResolver {
-            git_rev: None,
-            url_hash: Some("sha256-current=".into()),
-        };
+        struct MixedResolver;
+        impl RefreshResolver for MixedResolver {
+            fn resolve_git_rev(
+                &self,
+                _: &str,
+                _: &GitReference,
+            ) -> Result<Option<String>, Error> {
+                Ok(None)
+            }
 
-        let stale = list_stale(&m, &lock, &resolver);
-        assert_eq!(stale, vec!["stale"]);
+            fn hash_url_content(
+                &self,
+                url: &str,
+                _: &HashAlgo,
+                _: HashResolutionMode,
+            ) -> Result<Option<String>, Error> {
+                if url.ends_with("fresh") || url.ends_with("stale") {
+                    return Ok(Some("sha256-current=".into()));
+                }
+                Err(Error::Manifest("network down".into()))
+            }
+        }
+
+        let broken_input = file_input("broken", "https://example.com/broken");
+        let m = manifest_with(vec![
+            file_input("fresh", "https://example.com/fresh"),
+            file_input("stale", "https://example.com/stale"),
+            broken_input,
+        ]);
+
+        let stale = list_stale(&m, &lock, &MixedResolver);
+        assert_eq!(stale.stale, vec!["stale"]);
+        assert_eq!(stale.failed.len(), 1);
+        assert_eq!(stale.failed[0].name, "broken");
+        assert!(stale.failed[0].reason.contains("network down"));
     }
 
     #[test]
@@ -1191,6 +1350,7 @@ mod tests {
                 &self,
                 _: &str,
                 _: &HashAlgo,
+                _: HashResolutionMode,
             ) -> Result<Option<String>, Error> {
                 Err(Error::Manifest("network down".into()))
             }

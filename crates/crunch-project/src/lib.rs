@@ -32,8 +32,9 @@ pub use merge::{
     inputs_needing_refresh, orphaned_lock_entries,
 };
 pub use refresh::{
-    ApplyResult, RefreshOutcome, RefreshResolver, ResolvedInput,
-    apply_outcomes, list_stale, refresh_inputs, resolve_patches_into_lock,
+    ApplyResult, HashResolutionMode, RefreshFailure, RefreshOutcome,
+    RefreshResolver, ResolvedInput, StaleReport, apply_outcomes, list_stale,
+    refresh_inputs,
 };
 pub use mirrors::{url_with_mirrors, validate_mirrors};
 pub use upgrade::{upgrade_lockfile, OLDEST_SUPPORTED};

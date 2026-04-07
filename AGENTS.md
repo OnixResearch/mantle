@@ -279,7 +279,9 @@ Building derivations (not just compiling crunch) requires:
 - Generated `.crunch/inputs.ncl` is a plain Nickel record (no stdlib import). Package code imports it and passes data to fetch helpers.
 - `crunch.lock` is JSON with explicit `SchemaVersion`. Upgrade path: 0.9.0 -> 1.0.0 (structural noop, exercises the migration machinery).
 - CLI commands: `init`, `check`, `show`, `refresh`, `list-stale`, `upgrade` — all in `src/project_cmd.rs`, delegating to `crunch-project`.
-- `StubResolver` used until build pipeline exposes `hash_url_content` and `resolve_git_rev` as standalone helpers.
+- Live refresh I/O stays in the binary crate (`src/project_resolve.rs`), not in `crunch-project`. `RefreshResolver` now distinguishes flat vs recursive URL hashing and has a separate git-checkout hash hook.
+- `crunch refresh` writes successful lock/input updates even when sibling inputs fail, but exits non-zero on any input or patch resolution failure. `crunch list-stale` prints stale inputs on stdout, failed checks on stderr, and exits non-zero if any check failed.
+- Tarball and git lock hashes must be recursive/NAR hashes of the unpacked tree / checked-out work tree. Plain files and local/remote patches use flat content hashes. There is no fallback to manifest `expected` values during refresh.
 - Test count: 70 (65 unit + 5 integration using crunch-eval for Nickel validation).
 
 ## Coding Style: Tiger Style

@@ -12,11 +12,15 @@
 - `unwrap_or_default()` on hash values produces empty strings, which violate lock validation (`lockfile_detects_empty_hash`). Use `?` to propagate None instead.
 - "Already locked" skip logic (`if lock.patches.contains_key(name) { continue }`) goes stale when the manifest definition changes. Always compare the locked entry against the current definition.
 - Refresh CLI must always run `apply_outcomes` and check `has_changes()`, not gate on `updated_count > 0`. Patch-only changes (no input changes) must still write the lockfile.
+- Live refresh must never fall back to manifest `expected` hashes when upstream resolution fails. File/tarball/git/patch hashing failures must surface as failed items, not empty lock hashes or fake success.
 
 ## OpenSpec Review Lessons (2026-04-07)
 - Generated shell scripts in Rust format strings can have ordering bugs that unit tests miss because the tests check for substring presence, not execution order. The `BWRAP_BIN` variable was used before being set in `generate_self_build_ncl()`.
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
+- An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.
+- For OpenSpec-only turns, validate the new change directory before the final reply and include explicit evidence for any non-OpenSpec file you mention.
+- `openspec archive` validates rebuilt main specs, not just the change. A main spec file with delta-style headers (`## ADDED Requirements`) fails archive until it has the normal `## Purpose` / `## Requirements` structure.
 
 ## Build Environment
 - cargo/rustc are at `$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin` and `$HOME/.cargo/bin` — NOT on default PATH. Must prepend to PATH in pueue_run commands.

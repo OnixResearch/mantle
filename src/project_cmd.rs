@@ -5,10 +5,12 @@
 //! and output formatting — nothing else.
 
 use crate::errors::RunError;
+use crate::project_resolve::LiveResolver;
 use crunch_project::{
-    DriftStatus, Lockfile, ProjectManifest, SchemaVersion, check_drift,
-    check_manifest_lock, generate_inputs_ncl, refresh_inputs, apply_outcomes,
-    list_stale, upgrade_lockfile, RefreshOutcome, Severity,
+    DriftStatus, Lockfile, ProjectManifest, RefreshFailure, RefreshOutcome,
+    SchemaVersion, Severity, apply_outcomes, check_drift,
+    check_manifest_lock, generate_inputs_ncl, list_stale, refresh_inputs,
+    upgrade_lockfile,
 };
 use std::path::Path;
 
@@ -178,39 +180,19 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
-
-    // Use a stub resolver for now. Real network resolution will be
-    // wired when the build pipeline exposes hash_url_content and
-    // resolve_git_rev as standalone helpers.
-    let resolver = StubResolver;
+    let resolver = LiveResolver::new(dir);
     let outcomes = refresh_inputs(&manifest, &lock, selected, &resolver);
+    print_refresh_outcomes(&outcomes);
 
-    for outcome in &outcomes {
-        match outcome {
-            RefreshOutcome::Updated(r) => {
-                eprintln!("updated: {}", r.name);
-            }
-            RefreshOutcome::Unchanged { name } => {
-                eprintln!("unchanged: {name}");
-            }
-            RefreshOutcome::Frozen { name } => {
-                eprintln!("frozen (skipped): {name}");
-            }
-            RefreshOutcome::Failed { name, reason } => {
-                eprintln!("failed: {name}: {reason}");
-            }
-        }
-    }
-
-    // Always apply outcomes — this also resolves/repairs patch lock data
-    // even when no inputs changed.
     let result = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
+    let input_failures = collect_outcome_failures(&outcomes);
+    print_patch_failures(&result.failures);
 
     if result.has_changes() {
         let problems = result.lock.validate();
         if !problems.is_empty() {
-            for p in &problems {
-                eprintln!("lockfile warning: {p}");
+            for problem in &problems {
+                eprintln!("lockfile warning: {problem}");
             }
         }
         write_lockfile(dir, &result.lock)?;
@@ -221,8 +203,15 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
         if result.patches_changed {
             eprintln!("patch lock data updated");
         }
-    } else {
+    } else if input_failures.is_empty() && result.failures.is_empty() {
         eprintln!("all inputs up to date");
+    }
+
+    let failure_count = input_failures.len() + result.failures.len();
+    if failure_count > 0 {
+        return Err(RunError::Internal(format!(
+            "refresh failed for {failure_count} item(s)"
+        )));
     }
 
     Ok(())
@@ -232,16 +221,23 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
 pub fn cmd_list_stale(dir: &Path) -> Result<(), RunError> {
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
+    let resolver = LiveResolver::new(dir);
+    let report = list_stale(&manifest, &lock, &resolver);
 
-    let resolver = StubResolver;
-    let stale = list_stale(&manifest, &lock, &resolver);
-
-    if stale.is_empty() {
+    for name in &report.stale {
+        println!("{name}");
+    }
+    for failure in &report.failed {
+        eprintln!("failed: {}: {}", failure.name, failure.reason);
+    }
+    if report.stale.is_empty() && report.failed.is_empty() {
         println!("all inputs up to date");
-    } else {
-        for name in &stale {
-            println!("{name}");
-        }
+    }
+    if !report.failed.is_empty() {
+        return Err(RunError::Internal(format!(
+            "stale check failed for {} item(s)",
+            report.failed.len()
+        )));
     }
 
     Ok(())
@@ -339,26 +335,32 @@ fn add_gitignore_entry(dir: &Path) {
     }
 }
 
-/// Stub resolver that returns None for all queries.
-///
-/// Real implementations will call `git ls-remote` and fetch+hash
-/// content through the existing build pipeline helpers.
-struct StubResolver;
-
-impl crunch_project::RefreshResolver for StubResolver {
-    fn resolve_git_rev(
-        &self,
-        _repository: &str,
-        _reference: &crunch_project::GitReference,
-    ) -> Result<Option<String>, crunch_project::Error> {
-        Ok(None)
+fn print_refresh_outcomes(outcomes: &[RefreshOutcome]) {
+    for outcome in outcomes {
+        match outcome {
+            RefreshOutcome::Updated(resolved) => eprintln!("updated: {}", resolved.name),
+            RefreshOutcome::Unchanged { name } => eprintln!("unchanged: {name}"),
+            RefreshOutcome::Frozen { name } => eprintln!("frozen (skipped): {name}"),
+            RefreshOutcome::Failed { name, reason } => eprintln!("failed: {name}: {reason}"),
+        }
     }
+}
 
-    fn hash_url_content(
-        &self,
-        _url: &str,
-        _algo: &crunch_project::HashAlgo,
-    ) -> Result<Option<String>, crunch_project::Error> {
-        Ok(None)
+fn collect_outcome_failures(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> {
+    outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::Failed { name, reason } => Some(RefreshFailure {
+                name: name.clone(),
+                reason: reason.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+fn print_patch_failures(failures: &[RefreshFailure]) {
+    for failure in failures {
+        eprintln!("failed: patch {}: {}", failure.name, failure.reason);
     }
 }

@@ -172,49 +172,60 @@ fn check_detects_drift() {
 }
 
 #[test]
-fn refresh_reports_lockfile_warnings_for_unlocked_patches() {
+fn refresh_hashes_local_patch_relative_to_project_root() {
     let dir = TempDir::new().unwrap();
 
-    // Write a manifest that references a patch, but the StubResolver
-    // can't hash local files, so the patch stays unlocked.
-    let manifest = r#"{
+    crunch()
+        .arg("init")
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    std::fs::create_dir_all(dir.path().join("patches")).unwrap();
+    std::fs::write(dir.path().join("patches/fix.patch"), "diff --git a/x b/x\n").unwrap();
+    let source = dir.path().join("pkg.txt");
+    std::fs::write(&source, "hello\n").unwrap();
+    let url = format!("file://{}", source.display());
+
+    let manifest = format!(
+        r#"{{
   version = "1.0.0",
   inputs = [
-    {
+    {{
       name = "pkg",
-      kind = { type = "file", url = "https://example.com/pkg" },
+      kind = {{ type = "file", url = "{}" }},
       patches = ["mypatch"],
-    },
+    }},
   ],
   patches = [
-    {
+    {{
       name = "mypatch",
-      source = { type = "local", path = "patches/fix.patch" },
-    },
+      source = {{ type = "local", path = "patches/fix.patch" }},
+    }},
   ],
-}
-"#;
+}}
+"#,
+        url
+    );
     std::fs::write(dir.path().join("crunch-project.ncl"), manifest).unwrap();
 
-    // Write an empty lock so refresh has something to work with
-    std::fs::write(
-        dir.path().join("crunch.lock"),
-        r#"{"version":"1.0.0","inputs":{},"patches":{}}"#,
-    )
-    .unwrap();
-    std::fs::create_dir_all(dir.path().join(".crunch")).unwrap();
-    std::fs::write(dir.path().join(".crunch/inputs.ncl"), "{}").unwrap();
-
-    // Refresh should succeed but print a lockfile warning about the
-    // unlocked patch.
     crunch()
         .arg("refresh")
         .current_dir(dir.path())
         .assert()
         .success()
-        .stderr(predicate::str::contains("lockfile warning").or(
-            predicate::str::contains("1 input(s) updated"),
-        ));
+        .stderr(predicate::str::contains("patch lock data updated"));
+
+    let lock_text = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
+    let lock = crunch_project::Lockfile::from_json(&lock_text).unwrap();
+    assert_eq!(lock.inputs["pkg"].patches, vec!["mypatch"]);
+    assert_eq!(
+        lock.patches["mypatch"].source,
+        crunch_project::LockedPatchSource::Local {
+            path: "patches/fix.patch".into(),
+        }
+    );
+    assert!(lock.patches["mypatch"].hash.value.starts_with("sha256-"));
 }
 
 #[test]
