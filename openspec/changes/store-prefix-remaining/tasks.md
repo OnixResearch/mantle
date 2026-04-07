@@ -15,9 +15,9 @@
 
 ## Phase 2: Smoke test isolation
 
-- [ ] Add `--state-dir` CLI flag or `CRUNCH_STATE_DIR` env var
-- [ ] Update `build_ncl` helper in `tests/smoke.rs` to use per-test state dir
-- [ ] Verify `smoke_build_cached_on_second_run` passes reliably
+- [x] Add `--state-dir` CLI flag or `CRUNCH_STATE_DIR` env var
+- [x] Update `build_ncl` helper in `tests/smoke.rs` to use per-test state dir
+- [x] Verify `smoke_build_cached_on_second_run` passes reliably
 
 ## Phase 3: Multi-derivation eval
 

@@ -18,23 +18,34 @@ fn can_build() -> bool {
             .is_ok_and(|o| o.status.success())
 }
 
-/// Run `crunch build` with `--store <dir>` and return (stdout, store_dir).
-/// Panics on non-zero exit.
+/// Run `crunch build` with `--store <dir>` and return stdout.
+/// Uses a per-call state dir to isolate pathinfo.redb across tests.
+/// Pass `state_dir` to share state between calls (e.g., for cache tests).
 fn build_ncl(ncl_content: &str, store: &Path) -> String {
+    build_ncl_with_state(ncl_content, store, None)
+}
+
+fn build_ncl_with_state(ncl_content: &str, store: &Path, state_dir: Option<&Path>) -> String {
     let work = tempfile::tempdir().unwrap();
     let ncl_file = work.path().join("test.ncl");
     std::fs::write(&ncl_file, ncl_content).unwrap();
 
-    let output = crunch_cmd()
-        .arg("--store")
-        .arg(store)
-        .arg("build")
+    let mut cmd = crunch_cmd();
+    cmd.arg("--store").arg(store);
+    if let Some(sd) = state_dir {
+        cmd.arg("--state-dir").arg(sd);
+    } else {
+        // Isolate each build in its own state dir.
+        let sd = work.path().join("state");
+        cmd.arg("--state-dir").arg(&sd);
+    }
+    cmd.arg("build")
         .arg("--no-substitute")
         .arg("-I")
         .arg(work.path())
-        .arg(&ncl_file)
-        .output()
-        .expect("should execute");
+        .arg(&ncl_file);
+
+    let output = cmd.output().expect("should execute");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -209,6 +220,7 @@ fn smoke_build_cached_on_second_run() {
     }
 
     let store = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
     let ncl = r#"let crunch = import "lib.ncl" in
 {
   name = "cached-test",
@@ -217,8 +229,8 @@ fn smoke_build_cached_on_second_run() {
   addressing_mode = 'input-addressed,
 } | crunch.Derivation"#;
 
-    // First build
-    let stdout1 = build_ncl(ncl, store.path());
+    // First build — shared state dir so pathinfo.redb persists.
+    let stdout1 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
     let path1 = first_output_path(&stdout1);
     assert!(path1.exists());
     // First build should NOT say "(cached)"
@@ -227,8 +239,8 @@ fn smoke_build_cached_on_second_run() {
         "first build should not be cached: {stdout1}"
     );
 
-    // Second build — same store, same derivation → cache hit
-    let stdout2 = build_ncl(ncl, store.path());
+    // Second build — same store + same state dir → cache hit
+    let stdout2 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
     let path2 = first_output_path(&stdout2);
     assert_eq!(path1, path2, "same derivation should produce same path");
     assert!(

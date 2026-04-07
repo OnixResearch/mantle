@@ -44,6 +44,12 @@ struct Args {
     #[arg(long, global = true)]
     nix_compat: bool,
 
+    /// State directory for pathinfo.redb, blobs, and logs.
+    /// Default: $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or
+    /// ~/.local/state/crunch.
+    #[arg(long, global = true)]
+    state_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -194,6 +200,11 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Args) -> Result<(), RunError> {
+    // Set CRUNCH_STATE_DIR early so state_dir()/log_dir() pick it up.
+    // SAFETY: this runs before spawning threads; no concurrent readers.
+    if let Some(ref sd) = args.state_dir {
+        unsafe { std::env::set_var("CRUNCH_STATE_DIR", sd) };
+    }
     let store_prefix = resolve_store_prefix(&args);
     match args.command {
         Command::Eval { file, import_paths } => {
