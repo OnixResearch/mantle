@@ -21,6 +21,6 @@
 
 ## Phase 3: Multi-derivation eval
 
-- [ ] Decide: support arrays in eval entry point OR update test to use record syntax
-- [ ] Implement the chosen approach
-- [ ] Verify `smoke_build_multi_derivation_file` passes
+- [x] Decide: support arrays in eval entry point OR update test to use record syntax
+- [x] Implement the chosen approach
+- [x] Verify `smoke_build_multi_derivation_file` passes

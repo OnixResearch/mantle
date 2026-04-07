@@ -328,9 +328,20 @@ fn deserialize_derivations_from_json(
     let json_val: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| RunError::Eval(format!("parsing JSON: {e}")))?;
 
+    // Array of derivations: each element is a derivation record.
+    if let Some(arr) = json_val.as_array() {
+        let mut derivations = Vec::new();
+        for (i, elem) in arr.iter().enumerate() {
+            let drv: crunch_glue::CrunchDerivation = serde_json::from_value(elem.clone())
+                .map_err(|e| RunError::Eval(format!("deserializing derivation [{i}]: {e}")))?;
+            derivations.push((drv.name.clone(), drv));
+        }
+        return Ok(derivations);
+    }
+
     let Some(obj) = json_val.as_object() else {
         return Err(RunError::Eval(
-            "expected a Derivation record or a record of Derivations".to_string(),
+            "expected a Derivation record, array of Derivations, or record of Derivations".to_string(),
         ));
     };
 
