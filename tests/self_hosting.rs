@@ -238,18 +238,27 @@ fn self_hosting_stage0_stage1_stage2() {
 
     // ── Verify proof markers ────────────────────────────────────
 
-    // Stage2 was driven by stage1 binary.
+    // Stage2 was driven by stage1 binary, not the checkout binary.
     let s2_invoking = extract_proof_field(&stage2_stderr, "invoking-binary");
     assert!(
         s2_invoking.is_some(),
         "stage2 should emit invoking-binary proof line",
     );
-    // The invoking binary should be the stage1 binary path.
     let s2_invoking_path = PathBuf::from(s2_invoking.unwrap());
-    assert!(
-        s2_invoking_path.ends_with("bin/crunch"),
-        "invoking binary should end with bin/crunch, got: {}",
-        s2_invoking_path.display(),
+    // The invoking binary MUST be the stage1 binary we found earlier.
+    // current_exe() may resolve symlinks or return a different
+    // representation, so canonicalize both before comparing.
+    let stage1_canonical = std::fs::canonicalize(&stage1_binary)
+        .unwrap_or_else(|_| stage1_binary.clone());
+    let invoking_canonical = std::fs::canonicalize(&s2_invoking_path)
+        .unwrap_or_else(|_| s2_invoking_path.clone());
+    assert_eq!(
+        invoking_canonical, stage1_canonical,
+        "stage2 invoking binary must be the stage1 binary.\n\
+         invoking: {}\n\
+         stage1:   {}",
+        invoking_canonical.display(),
+        stage1_canonical.display(),
     );
 
     // Stage2 should use crunch-built bwrap.

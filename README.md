@@ -344,6 +344,18 @@ The proof does not demonstrate bit-for-bit reproducibility or freedom
 from all host tools (git, cargo, tar, xz are still needed). It proves
 that a crunch-built crunch can drive another self-build to completion.
 
+**Troubleshooting the proof:**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `SKIP: bwrap not on PATH` | bubblewrap not installed | `nix-shell -p bubblewrap` or install bwrap from your distro |
+| `SKIP: not in crunch source tree` | test run from wrong directory | `cd` into the crunch workspace root (where `Cargo.toml` + `bootstrap/` live) |
+| Stage0 fails with permission errors writing to store | unwritable output directory | The test uses a tempdir; check `/tmp` has space and write permissions |
+| Stage2 reports `bwrap-source=host-fallback:` | stage0 did not produce crunch-built bwrap | Clear the proof store and rerun; the bootstrap chain may have failed silently |
+| Stage2 reports `busybox-path=none` | no crunch-built busybox in the proof store | Same as above — the bootstrap chain did not complete |
+| Stale pathinfo.redb causes false cache hits | prior run left state in `~/.local/state/crunch/` | The proof uses per-stage state dirs to avoid this; if running manually, pass `--state-dir` to a fresh directory |
+| `No space left on device` | insufficient `/tmp` space | Free ~4 GiB in `/tmp`; the proof stores two full bootstrap chains |
+
 ## Project Management
 
 crunch has built-in dependency management for project inputs — git repos,
