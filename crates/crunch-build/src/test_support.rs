@@ -19,6 +19,8 @@ use snix_store::pathinfoservice::LruPathInfoService;
 use tokio::io::AsyncWriteExt;
 
 use crate::registry::DerivationRegistry;
+use crate::signing;
+use nix_compat::narinfo::VerifyingKey;
 
 /// Create a temporary in-memory directory service.
 pub fn tmp_ds() -> RedbDirectoryService {
@@ -27,6 +29,18 @@ pub fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryServiceConfig::default(),
     )
     .unwrap()
+}
+
+/// A test keypair (same as nix-compat's DUMMY_KEYPAIR).
+pub fn test_keypair() -> signing::KeyPair {
+    signing::load_keypair(
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+    ).unwrap()
+}
+
+/// Default trusted keys for tests (local + cache.nixos.org-1).
+pub fn test_trusted_keys() -> Vec<VerifyingKey> {
+    signing::build_trusted_keys(&test_keypair(), None)
 }
 
 /// Create an in-memory LRU path info service.

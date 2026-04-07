@@ -292,6 +292,10 @@ pub async fn bootstrap_fetch(
 
     #[cfg(target_os = "linux")]
     {
+        // Generate an ephemeral signing keypair for bootstrap builds.
+        let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
+        let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);
+
         let mut builder = crunch_build::Builder::with_state_dir(
             blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
             std::sync::Arc::new(directory_service) as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
@@ -301,6 +305,9 @@ pub async fn bootstrap_fetch(
             Some(state_dir),
             None, // no remote substitution for bootstrap
             LOGICAL_STORE_DIR,
+            bootstrap_keypair,
+            bootstrap_trusted,
+            false, // trust_unsigned
             verbose,
         );
 

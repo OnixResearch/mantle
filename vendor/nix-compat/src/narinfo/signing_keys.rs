@@ -14,6 +14,15 @@ pub struct SigningKey<S> {
     signing_key: S,
 }
 
+impl<S: Clone> Clone for SigningKey<S> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            signing_key: self.signing_key.clone(),
+        }
+    }
+}
+
 impl<S> SigningKey<S>
 where
     S: ed25519::signature::Signer<ed25519::Signature>,
@@ -24,7 +33,7 @@ where
     }
 
     /// Signs a fingerprint using the internal signing key, returns the [SignatureRef]
-    pub(crate) fn sign<'a>(&'a self, fp: &[u8]) -> SignatureRef<'a> {
+    pub fn sign<'a>(&'a self, fp: &[u8]) -> SignatureRef<'a> {
         SignatureRef::new(&self.name, self.signing_key.sign(fp).to_bytes())
     }
 

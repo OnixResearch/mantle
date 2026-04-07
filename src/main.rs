@@ -83,6 +83,21 @@ enum Command {
         /// Disable remote binary cache substitution
         #[arg(long)]
         no_substitute: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file.
+        /// If omitted, auto-generates one at $CRUNCH_CONFIG_DIR/signing-key.
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+        /// Trusted public keys for signature verification (name:base64).
+        /// Overrides the default set (which includes cache.nixos.org-1).
+        #[arg(long, value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
+
+        /// Accept unsigned/unverified PathInfo on cache hits.
+        /// Escape hatch for migrating from unsigned stores.
+        #[arg(long)]
+        trust_unsigned: bool,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -168,6 +183,18 @@ enum Command {
         /// Skip verification of the output binary
         #[arg(long)]
         no_verify: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+        /// Trusted public keys for signature verification (name:base64)
+        #[arg(long, value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
+
+        /// Accept unsigned/unverified PathInfo on cache hits
+        #[arg(long)]
+        trust_unsigned: bool,
     },
 }
 
@@ -180,10 +207,35 @@ pub enum StoreAction {
         /// Store path (full or fragment to match)
         path: String,
     },
-    /// Verify NAR hash of stored paths against disk
+    /// Verify NAR hash and trusted signatures of stored paths
     Verify {
         /// Optional: verify a specific path (default: all)
         path: Option<String>,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<std::path::PathBuf>,
+
+        /// Trusted public keys for signature verification (name:base64)
+        #[arg(long, value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
+
+        /// Accept unsigned/unverified PathInfo
+        #[arg(long)]
+        trust_unsigned: bool,
+    },
+    /// Sign PathInfo entries with an ed25519 key
+    Sign {
+        /// Store path to sign (omit for --all)
+        path: Option<String>,
+
+        /// Sign all unsigned PathInfo entries
+        #[arg(long)]
+        all: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<std::path::PathBuf>,
     },
 }
 
@@ -245,6 +297,9 @@ fn run(args: Args) -> Result<(), RunError> {
             jobs,
             substituters,
             no_substitute,
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
         } => {
             let import_paths = build_import_paths(&import_paths)?;
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
@@ -253,6 +308,21 @@ fn run(args: Args) -> Result<(), RunError> {
             } else {
                 Some(substituters)
             };
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> =
+                if trusted_public_keys.is_empty() {
+                    None
+                } else {
+                    let mut keys = Vec::new();
+                    for key_str in &trusted_public_keys {
+                        keys.push(
+                            nix_compat::narinfo::VerifyingKey::parse(key_str)
+                                .map_err(|e| RunError::Internal(format!(
+                                    "invalid trusted public key '{key_str}': {e}"
+                                )))?,
+                        );
+                    }
+                    Some(keys)
+                };
             cmd_build(
                 &file,
                 &import_paths,
@@ -263,6 +333,9 @@ fn run(args: Args) -> Result<(), RunError> {
                 fix,
                 max_jobs,
                 sub_url.as_deref(),
+                signing_key.as_deref(),
+                parsed_trusted.as_deref(),
+                trust_unsigned,
             )
         }
         Command::Bootstrap {
@@ -290,8 +363,26 @@ fn run(args: Args) -> Result<(), RunError> {
             jobs,
             no_substitute,
             no_verify,
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
         } => {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> =
+                if trusted_public_keys.is_empty() {
+                    None
+                } else {
+                    let mut keys = Vec::new();
+                    for key_str in &trusted_public_keys {
+                        keys.push(
+                            nix_compat::narinfo::VerifyingKey::parse(key_str)
+                                .map_err(|e| RunError::Internal(format!(
+                                    "invalid trusted public key '{key_str}': {e}"
+                                )))?,
+                        );
+                    }
+                    Some(keys)
+                };
             self_build::cmd_self_build(
                 &args.store,
                 &resolved_state_dir,
@@ -300,6 +391,9 @@ fn run(args: Args) -> Result<(), RunError> {
                 max_jobs,
                 no_substitute,
                 no_verify,
+                signing_key.as_deref(),
+                parsed_trusted.as_deref(),
+                trust_unsigned,
             )
         }
     }

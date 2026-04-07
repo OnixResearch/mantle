@@ -440,6 +440,32 @@ impl StoreHandle {
             ca,
         };
 
+        self.persist_pathinfo_and_export(output_path, path_info, final_node, is_root).await
+    }
+
+    /// Persist a pre-built (possibly pre-signed) PathInfo and export to disk.
+    ///
+    /// This is the shared persistence path used by both the legacy
+    /// `persist_and_export_output` (unsigned, for crunch-store callers)
+    /// and `persist_and_export_signed_output` (signed, from crunch-build).
+    pub async fn persist_and_export_signed_output(
+        &mut self,
+        output_path: &StorePath<String>,
+        path_info: PathInfo,
+        final_node: Node,
+        is_root: bool,
+    ) -> Result<PathInfo, Error> {
+        self.persist_pathinfo_and_export(output_path, path_info, final_node, is_root).await
+    }
+
+    /// Common persistence + export logic.
+    async fn persist_pathinfo_and_export(
+        &mut self,
+        output_path: &StorePath<String>,
+        path_info: PathInfo,
+        final_node: Node,
+        is_root: bool,
+    ) -> Result<PathInfo, Error> {
         self.pathinfo_service
             .put(path_info.clone())
             .await

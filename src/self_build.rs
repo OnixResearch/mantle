@@ -13,7 +13,13 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::build_cmd::{build_import_paths, report_build_result, run_build};
+use crate::build_cmd::{
+    build_import_paths,
+    load_configured_trusted_public_keys,
+    load_or_generate_signing_keypair,
+    report_build_result,
+    run_build,
+};
 use crate::errors::RunError;
 
 /// Maximum source tree size: 2 GiB.
@@ -527,6 +533,9 @@ pub fn cmd_self_build(
     max_jobs: u32,
     no_substitute: bool,
     no_verify: bool,
+    signing_key_path: Option<&Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
 ) -> Result<(), RunError> {
     eprintln!("=== crunch self-build ===");
 
@@ -567,6 +576,12 @@ pub fn cmd_self_build(
         paths
     };
 
+    let self_build_keypair = load_or_generate_signing_keypair(signing_key_path, state_dir)?;
+    let configured_trusted_keys =
+        load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
+    let self_build_trusted =
+        crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
+
     let config = crunch_pipeline::BuildConfig {
         file: ncl_path.clone(),
         import_paths,
@@ -580,6 +595,9 @@ pub fn cmd_self_build(
         } else {
             Some("https://cache.nixos.org".to_string())
         },
+        keypair: self_build_keypair,
+        trusted_keys: self_build_trusted,
+        trust_unsigned,
     };
 
     let result = run_build(&config)?;

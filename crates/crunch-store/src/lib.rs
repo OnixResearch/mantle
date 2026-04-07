@@ -16,4 +16,14 @@ pub use closure::{resolve_closure, MAX_CLOSURE_DEPTH};
 pub use error::Error;
 pub use export::{export_castore_to_disk, MAX_EXPORT_DEPTH};
 pub use handle::{CacheHit, StoreConfig, StoreHandle};
-pub use query::{PathInfoDetail, VerifyResult, store_info, store_list, store_verify};
+pub use query::{
+    PathInfoDetail,
+    SignResult,
+    SignatureVerifyResult,
+    VerifyResult,
+    store_info,
+    store_list,
+    store_sign,
+    store_verify,
+    store_verify_signatures,
+};

@@ -366,3 +366,5 @@
 - Pipeline FOD mismatch integration tests are easiest with two `crunch.fetchurl` roots pointing at local `file://` URLs: one good hash, one bad hash. No network needed, and `PipelineResult.fod_mismatches` gets exercised for real. Still gate the test with `can_build()` because `crunch_pipeline::build()` returns a platform error on non-Linux hosts.
 - Done-review catches uncommitted implementation files after an OpenSpec archive. Always commit the code changes BEFORE (or in the same commit as) the archive step.
 - Test count: crunch-glue 65->68 (3 drain_pending tests). crunch-build 222->224 (2 entries-in-message tests). Total workspace: 385.
+- `PathInfoService::list()` + `put()` on the same service can hang on the in-memory/LRU backend. For `store_sign`-style bulk updates, collect matching PathInfos first, then write them back in a second pass.
+- pueue tasks that pipe `cargo test` through `grep | head` can hang even after the underlying command is done. Prefer direct test runs, `tail` after completion, or kill the pipeline once you have the evidence you need.

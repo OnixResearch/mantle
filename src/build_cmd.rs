@@ -1,11 +1,13 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use crunch_build::signing;
 use crunch_pipeline::{BuildConfig, PipelineResult, drv_key_for, label_for_key, parse_drv_key};
 use nix_compat::store_path::StorePath;
 
 use crate::errors::RunError;
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_build(
     file: &Path,
     import_paths: &[OsString],
@@ -16,7 +18,14 @@ pub fn cmd_build(
     fix: bool,
     max_jobs: u32,
     substituter_url: Option<&str>,
+    signing_key_path: Option<&Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
 ) -> Result<(), RunError> {
+    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir)?;
+    let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
+    let trusted_keys = signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
+
     let config = BuildConfig {
         file: file.to_path_buf(),
         import_paths: import_paths.to_vec(),
@@ -26,6 +35,9 @@ pub fn cmd_build(
         verbose,
         max_jobs,
         substituter_url: substituter_url.map(str::to_owned),
+        keypair,
+        trusted_keys,
+        trust_unsigned,
     };
 
     let result = run_build(&config)?;
@@ -189,6 +201,136 @@ pub fn log_dir() -> PathBuf {
     std::env::var("CRUNCH_LOG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| state_dir().join("logs"))
+}
+
+/// Load a signing keypair from the given path, the default config location,
+/// or generate one automatically.
+pub fn load_or_generate_signing_keypair(
+    explicit_path: Option<&Path>,
+    state_dir: &Path,
+) -> Result<signing::KeyPair, RunError> {
+    // 1. Explicit path from --signing-key.
+    if let Some(path) = explicit_path {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| RunError::Internal(format!(
+                "reading signing key {}: {e}", path.display()
+            )))?;
+        return signing::load_keypair(&contents)
+            .map_err(|e| RunError::Internal(format!(
+                "parsing signing key {}: {e}", path.display()
+            )));
+    }
+
+    // 2. Default location: $CRUNCH_CONFIG_DIR/signing-key or
+    //    $state_dir/signing-key.
+    let config_dir = config_dir_or(state_dir);
+    let default_path = config_dir.join("signing-key");
+    if default_path.exists() {
+        let contents = std::fs::read_to_string(&default_path)
+            .map_err(|e| RunError::Internal(format!(
+                "reading signing key {}: {e}", default_path.display()
+            )))?;
+        return signing::load_keypair(&contents)
+            .map_err(|e| RunError::Internal(format!(
+                "parsing signing key {}: {e}", default_path.display()
+            )));
+    }
+
+    // 3. Auto-generate.
+    let (keypair, line) = signing::generate_keypair();
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| RunError::Internal(format!(
+            "creating config dir {}: {e}", config_dir.display()
+        )))?;
+
+    // Write with 0600 permissions.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&default_path)
+            .and_then(|mut f| {
+                use std::io::Write;
+                f.write_all(line.as_bytes())?;
+                f.write_all(b"\n")?;
+                Ok(())
+            })
+            .map_err(|e| RunError::Internal(format!(
+                "writing signing key {}: {e}", default_path.display()
+            )))?;
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&default_path, format!("{line}\n"))
+            .map_err(|e| RunError::Internal(format!(
+                "writing signing key {}: {e}", default_path.display()
+            )))?;
+    }
+
+    eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
+    Ok(keypair)
+}
+
+pub fn load_configured_trusted_public_keys(
+    explicit_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    state_dir: &Path,
+) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
+    if let Some(keys) = explicit_keys {
+        return Ok(Some(keys.to_vec()));
+    }
+
+    let config_dir = config_dir_or(state_dir);
+    let default_path = config_dir.join("trusted-public-keys");
+    if !default_path.exists() {
+        return Ok(None);
+    }
+
+    let contents = std::fs::read_to_string(&default_path)
+        .map_err(|e| RunError::Internal(format!(
+            "reading trusted public keys {}: {e}",
+            default_path.display()
+        )))?;
+
+    let mut parsed = Vec::new();
+    for raw_line in contents.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('#') {
+            continue;
+        }
+        for key_str in line.split(',') {
+            let trimmed = key_str.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            parsed.push(
+                nix_compat::narinfo::VerifyingKey::parse(trimmed).map_err(|e| {
+                    RunError::Internal(format!(
+                        "invalid trusted public key '{}' in {}: {e}",
+                        trimmed,
+                        default_path.display()
+                    ))
+                })?,
+            );
+        }
+    }
+
+    if parsed.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(parsed))
+}
+
+fn config_dir_or(state_dir: &Path) -> PathBuf {
+    std::env::var("CRUNCH_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| state_dir.to_path_buf())
 }
 
 pub fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {

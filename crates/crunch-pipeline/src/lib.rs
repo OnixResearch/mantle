@@ -9,14 +9,15 @@ use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
+use crunch_build::KeyPair;
 use crunch_build::Worker;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
+use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
 use tracing::info;
 
-#[derive(Debug, Clone)]
 pub struct BuildConfig {
     pub file: PathBuf,
     pub import_paths: Vec<OsString>,
@@ -26,6 +27,12 @@ pub struct BuildConfig {
     pub verbose: bool,
     pub max_jobs: u32,
     pub substituter_url: Option<String>,
+    /// Signing keypair — every build output gets signed.
+    pub keypair: KeyPair,
+    /// Trusted public keys for signature verification on cache hits.
+    pub trusted_keys: Vec<VerifyingKey>,
+    /// When true, skip signature verification on cache hits.
+    pub trust_unsigned: bool,
 }
 
 #[derive(Debug)]
@@ -155,6 +162,9 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
             Some(store.state_dir().to_path_buf()),
             remote_pathinfo,
             &config.store_dir,
+            config.keypair.clone(),
+            config.trusted_keys.clone(),
+            config.trust_unsigned,
             config.verbose,
         );
 

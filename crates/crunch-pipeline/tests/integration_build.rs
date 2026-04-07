@@ -33,6 +33,10 @@ fn import_paths() -> Vec<OsString> {
 }
 
 fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConfig {
+    let keypair = crunch_build::load_keypair(
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+    ).unwrap();
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, None);
     BuildConfig {
         file,
         import_paths: import_paths(),
@@ -42,6 +46,9 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         verbose: false,
         max_jobs: 2,
         substituter_url: None,
+        keypair,
+        trusted_keys,
+        trust_unsigned: false,
     }
 }
 

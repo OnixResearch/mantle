@@ -11,6 +11,16 @@ use std::path::PathBuf;
 use crunch_glue::{CrunchDerivation, ConversionCache, Input};
 use crunch_build::{DerivationRegistry, populate_registry};
 
+fn test_keypair() -> crunch_build::KeyPair {
+    crunch_build::load_keypair(
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+    ).unwrap()
+}
+
+fn test_trusted_keys() -> Vec<nix_compat::narinfo::VerifyingKey> {
+    crunch_build::build_trusted_keys(&test_keypair(), None)
+}
+
 fn stdlib_import_path() -> Vec<OsString> {
     let lib_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
     vec![lib_dir.into()]
@@ -91,7 +101,7 @@ fn cache_hit_skips_build() {
             directory_service,
             DummyBuildService::default(),
             pis,
-            PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
+            PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
             false,
         );
 
@@ -247,7 +257,7 @@ fn end_to_end_trivial_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
+                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
                 true,
             );
 
@@ -364,7 +374,7 @@ fn end_to_end_ca_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
+                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
                 true,
             );
 
@@ -580,7 +590,7 @@ fn fetchurl_downloads_and_verifies_hash() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
+            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
             true,
         );
 
@@ -700,7 +710,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
+            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
             true,
         );
 

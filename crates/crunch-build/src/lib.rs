@@ -20,6 +20,7 @@ mod orchestrate;
 mod references;
 pub mod registry;
 pub mod rewrite;
+pub mod signing;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod worker;
@@ -33,4 +34,5 @@ pub use fetcher::{Fetch, FetchError};
 pub use goal::{Goal, GoalRegistry, GoalState};
 pub use orchestrate::{BuildOutcome, Builder};
 pub use registry::{DerivationRegistry, RegistryEntry, populate_registry};
+pub use signing::{KeyPair, VerifyResult, build_trusted_keys, generate_keypair, load_keypair, sign_pathinfo, verify_pathinfo_signatures};
 pub use worker::{EvalMessage, FailedGoal, Worker, WorkerResult};
