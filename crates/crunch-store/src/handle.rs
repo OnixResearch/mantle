@@ -408,46 +408,11 @@ impl StoreHandle {
 
     // -- Persistence + realization --
 
-    /// Create PathInfo, persist to PathInfoService, and export to disk.
+    /// Persist a signed PathInfo and export it to disk when needed.
     ///
-    /// Only root outputs (user-requested) are exported to the filesystem.
-    /// Intermediate deps stay in castore.
-    pub async fn persist_and_export_output(
-        &mut self,
-        drv_path: &StorePath<String>,
-        output_path: &StorePath<String>,
-        final_node: Node,
-        references: Vec<StorePath<String>>,
-        nar_size: u64,
-        nar_sha256: [u8; 32],
-        ca: Option<nix_compat::nixhash::CAHash>,
-        is_root: bool,
-    ) -> Result<PathInfo, Error> {
-        debug_assert!(
-            nar_sha256 != [0u8; 32],
-            "NAR sha256 must not be all zeros for {}",
-            output_path.name()
-        );
-
-        let path_info = PathInfo {
-            store_path: output_path.clone(),
-            node: final_node.clone(),
-            references,
-            nar_size,
-            nar_sha256,
-            signatures: vec![],
-            deriver: Some(drv_path.clone()),
-            ca,
-        };
-
-        self.persist_pathinfo_and_export(output_path, path_info, final_node, is_root).await
-    }
-
-    /// Persist a pre-built (possibly pre-signed) PathInfo and export to disk.
-    ///
-    /// This is the shared persistence path used by both the legacy
-    /// `persist_and_export_output` (unsigned, for crunch-store callers)
-    /// and `persist_and_export_signed_output` (signed, from crunch-build).
+    /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
+    /// "always sign before persist" invariant at the storage boundary,
+    /// even if a caller constructs the PathInfo itself.
     pub async fn persist_and_export_signed_output(
         &mut self,
         output_path: &StorePath<String>,
@@ -466,6 +431,20 @@ impl StoreHandle {
         final_node: Node,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
+        if path_info.store_path != *output_path {
+            return Err(Error::Store(format!(
+                "PathInfo store path mismatch: expected {}, got {}",
+                output_path,
+                path_info.store_path,
+            )));
+        }
+
+        if path_info.signatures.is_empty() {
+            return Err(Error::Store(format!(
+                "refusing to persist unsigned PathInfo for {output_path}"
+            )));
+        }
+
         self.pathinfo_service
             .put(path_info.clone())
             .await
@@ -596,4 +575,123 @@ fn build_remote_pathinfo(
     )))?;
 
     Ok(Arc::new(svc))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::num::NonZeroUsize;
+
+    use nix_compat::narinfo::SigningKey;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::SymlinkTarget;
+    use snix_store::pathinfoservice::LruPathInfoService;
+
+    fn test_handle(state_dir: &Path) -> StoreHandle {
+        let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        let directory_service = Arc::new(
+            RedbDirectoryService::new_temporary(
+                "handle-test".to_string(),
+                RedbDirectoryServiceConfig::default(),
+            )
+            .unwrap(),
+        ) as Arc<dyn DirectoryService>;
+        let pathinfo_service = Arc::new(LruPathInfoService::with_capacity(
+            "handle-test".to_string(),
+            NonZeroUsize::new(32).unwrap(),
+        )) as Arc<dyn PathInfoService>;
+
+        StoreHandle::from_services_with_store_dir(
+            blob_service,
+            directory_service,
+            pathinfo_service,
+            None,
+            state_dir.to_path_buf(),
+            state_dir.display().to_string(),
+            "/nix/store".to_string(),
+        )
+    }
+
+    fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
+        StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
+    }
+
+    fn test_signature() -> nix_compat::narinfo::Signature<String> {
+        let signing_key = SigningKey::new(
+            "store-test-1".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[3u8; 32]),
+        );
+        signing_key.sign(b"signed").to_owned()
+    }
+
+    fn signed_pathinfo(store_path: StorePath<String>) -> PathInfo {
+        PathInfo {
+            store_path,
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [9u8; 32],
+            signatures: vec![test_signature()],
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn persist_signed_output_rejects_unsigned_pathinfo() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("unsigned-path", 7);
+        let path_info = PathInfo {
+            store_path: output_path.clone(),
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [1u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+
+        let err = handle
+            .persist_and_export_signed_output(
+                &output_path,
+                path_info,
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                false,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, Error::Store(msg) if msg.contains("unsigned PathInfo")));
+    }
+
+    #[tokio::test]
+    async fn persist_signed_output_rejects_store_path_mismatch() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let expected = test_output("expected-path", 8);
+        let actual = test_output("actual-path", 9);
+        let path_info = signed_pathinfo(actual);
+
+        let err = handle
+            .persist_and_export_signed_output(
+                &expected,
+                path_info,
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                false,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, Error::Store(msg) if msg.contains("store path mismatch")));
+    }
 }

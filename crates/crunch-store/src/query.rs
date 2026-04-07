@@ -212,16 +212,20 @@ pub async fn store_verify_signatures(
 #[derive(Debug)]
 pub struct SignResult {
     pub store_path: String,
-    /// True if the PathInfo was unsigned and is now signed.
+    /// True if the PathInfo had no signatures before this call.
     pub newly_signed: bool,
+    /// True if the PathInfo already had signatures, and this call appended
+    /// a signature from a different key.
+    pub appended: bool,
     /// True if a signature from the same key was replaced.
     pub replaced: bool,
 }
 
-/// Sign PathInfo entries matching `path_filter` (or all, if `sign_all`).
+/// Sign PathInfo entries matching `path_filter`.
 ///
-/// If a PathInfo already has a signature from the same key name, it is
-/// replaced (no duplicates). Returns per-path results.
+/// When `sign_all` is true, only unsigned PathInfos are updated. If a
+/// PathInfo already has a signature from the same key name, it is replaced
+/// instead of duplicated. Returns one result per updated path.
 pub async fn store_sign(
     svc: &dyn PathInfoService,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
@@ -238,14 +242,16 @@ pub async fn store_sign(
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
 
-        if !sign_all {
-            if let Some(filter) = path_filter {
-                if !sp_str.contains(filter) {
-                    continue;
-                }
-            } else {
+        if sign_all {
+            if !pi.signatures.is_empty() {
                 continue;
             }
+        } else if let Some(filter) = path_filter {
+            if !sp_str.contains(filter) {
+                continue;
+            }
+        } else {
+            continue;
         }
 
         to_update.push((sp_str, pi));
@@ -261,6 +267,7 @@ pub async fn store_sign(
         let sig_owned: Signature<String> = sig_ref.to_owned();
         let key_name = signing_key.name();
 
+        let had_any_signature = !pi.signatures.is_empty();
         let had_sig_from_same_key = pi
             .signatures
             .iter()
@@ -281,7 +288,8 @@ pub async fn store_sign(
 
         results.push(SignResult {
             store_path: sp_str,
-            newly_signed: !had_sig_from_same_key,
+            newly_signed: !had_any_signature,
+            appended: had_any_signature && !had_sig_from_same_key,
             replaced: had_sig_from_same_key,
         });
     }
@@ -311,6 +319,13 @@ mod tests {
         .unwrap()
     }
 
+    fn other_signing_key() -> SigningKey<ed25519_dalek::SigningKey> {
+        SigningKey::new(
+            "backup-cache-1".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[2u8; 32]),
+        )
+    }
+
     fn other_verifying_key() -> VerifyingKey {
         nix_compat::narinfo::VerifyingKey::parse(
             "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
@@ -319,7 +334,10 @@ mod tests {
     }
 
     fn dummy_pathinfo(name: &str) -> PathInfo {
-        let store_path = StorePath::from_name_and_digest_fixed(name, [7u8; 20]).unwrap();
+        let digest = *blake3::hash(name.as_bytes()).as_bytes();
+        let mut store_digest = [0u8; 20];
+        store_digest.copy_from_slice(&digest[..20]);
+        let store_path = StorePath::from_name_and_digest_fixed(name, store_digest).unwrap();
         PathInfo {
             store_path,
             node: Node::Symlink {
@@ -347,6 +365,7 @@ mod tests {
             .unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].newly_signed);
+        assert!(!results[0].appended);
         assert!(!results[0].replaced);
 
         let stored = svc.get(digest).await.unwrap().unwrap();
@@ -377,10 +396,75 @@ mod tests {
             .unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].newly_signed);
+        assert!(!results[0].appended);
         assert!(results[0].replaced);
 
         let stored = svc.get(digest).await.unwrap().unwrap();
         assert_eq!(stored.signatures.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn store_sign_appends_different_key_signature() {
+        let svc = test_pathinfo_service();
+        let (signing_key, _verifying_key) = test_keypair();
+        let other_key = other_signing_key();
+        let mut pi = dummy_pathinfo("append-path");
+
+        let refs: Vec<_> = pi.references.iter().map(|r| r.as_ref()).collect();
+        let fp = nix_compat::narinfo::fingerprint(
+            &pi.store_path.as_ref(),
+            &pi.nar_sha256,
+            pi.nar_size,
+            refs.iter(),
+        );
+        pi.signatures.push(other_key.sign(fp.as_bytes()).to_owned());
+
+        let digest = *pi.store_path.digest();
+        svc.put(pi).await.unwrap();
+
+        let results = store_sign(&svc, &signing_key, Some("append-path"), false)
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].newly_signed);
+        assert!(results[0].appended);
+        assert!(!results[0].replaced);
+
+        let stored = svc.get(digest).await.unwrap().unwrap();
+        assert_eq!(stored.signatures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn store_sign_all_skips_already_signed_entries() {
+        let svc = test_pathinfo_service();
+        let (signing_key, _verifying_key) = test_keypair();
+        let other_key = other_signing_key();
+
+        let unsigned = dummy_pathinfo("unsigned-path");
+        svc.put(unsigned).await.unwrap();
+
+        let mut signed = dummy_pathinfo("already-signed-path");
+        let refs: Vec<_> = signed.references.iter().map(|r| r.as_ref()).collect();
+        let fp = nix_compat::narinfo::fingerprint(
+            &signed.store_path.as_ref(),
+            &signed.nar_sha256,
+            signed.nar_size,
+            refs.iter(),
+        );
+        signed.signatures.push(other_key.sign(fp.as_bytes()).to_owned());
+        let signed_digest = *signed.store_path.digest();
+        svc.put(signed).await.unwrap();
+
+        let results = store_sign(&svc, &signing_key, None, true).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].store_path.ends_with("-unsigned-path"));
+        assert!(results[0].newly_signed);
+        assert!(!results[0].appended);
+        assert!(!results[0].replaced);
+
+        let stored = svc.get(signed_digest).await.unwrap().unwrap();
+        assert_eq!(stored.signatures.len(), 1);
+        assert_eq!(stored.signatures[0].name().as_str(), "backup-cache-1");
     }
 
     #[tokio::test]

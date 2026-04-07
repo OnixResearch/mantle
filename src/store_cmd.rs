@@ -234,20 +234,31 @@ async fn cmd_store_sign(
     .map_err(|e| RunError::Internal(format!("{e}")))?;
 
     let mut signed: u32 = 0;
+    let mut appended: u32 = 0;
     let mut replaced: u32 = 0;
     for result in &results {
         if result.newly_signed {
             println!("SIGNED  {}", result.store_path);
             signed = signed.saturating_add(1);
-        } else if result.replaced {
+            continue;
+        }
+
+        if result.appended {
+            println!("APPEND  {}", result.store_path);
+            appended = appended.saturating_add(1);
+            continue;
+        }
+
+        if result.replaced {
             println!("REPLACE {}", result.store_path);
             replaced = replaced.saturating_add(1);
         }
     }
 
     eprintln!(
-        "{} signed, {} replaced, {} total",
+        "{} signed, {} appended, {} replaced, {} total",
         signed,
+        appended,
         replaced,
         results.len()
     );

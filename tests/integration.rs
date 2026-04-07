@@ -456,6 +456,22 @@ fn store_sign_all_signs_existing_unsigned_entries() {
             };
             svc.put(pi).await.unwrap();
         }
+
+        let (other_keypair, _line) = crunch_build::generate_keypair();
+        let mut signed_pi = PathInfo {
+            store_path: StorePath::from_name_and_digest_fixed("already-signed", [3u8; 20]).unwrap(),
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 5,
+            nar_sha256: [3u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        crunch_build::sign_pathinfo(&mut signed_pi, &other_keypair.signing_key);
+        svc.put(signed_pi).await.unwrap();
     });
 
     crunch_cmd()
@@ -467,7 +483,8 @@ fn store_sign_all_signs_existing_unsigned_entries() {
         .arg(&key_file)
         .assert()
         .success()
-        .stdout(predicate::str::contains("SIGNED"));
+        .stdout(predicate::str::contains("SIGNED"))
+        .stderr(predicate::str::contains("2 signed, 0 appended, 0 replaced, 2 total"));
 
     rt.block_on(async {
         let svc = RedbPathInfoService::new(
@@ -481,14 +498,22 @@ fn store_sign_all_signs_existing_unsigned_entries() {
         .await
         .unwrap();
 
-        let mut count = 0u32;
+        let mut unsigned_count = 0u32;
+        let mut already_signed_count = 0u32;
         let mut stream = svc.list();
         while let Some(result) = stream.next().await {
             let pi = result.unwrap();
-            assert_eq!(pi.signatures.len(), 1, "all existing PathInfos should be signed");
-            count = count.saturating_add(1);
+            if pi.store_path.name() == "already-signed" {
+                assert_eq!(pi.signatures.len(), 1, "--all should skip entries that are already signed");
+                already_signed_count = already_signed_count.saturating_add(1);
+                continue;
+            }
+
+            assert_eq!(pi.signatures.len(), 1, "unsigned entries should gain one signature");
+            unsigned_count = unsigned_count.saturating_add(1);
         }
-        assert_eq!(count, 2);
+        assert_eq!(unsigned_count, 2);
+        assert_eq!(already_signed_count, 1);
     });
 }
 
