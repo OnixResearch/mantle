@@ -263,7 +263,8 @@ crunch build --nix-compat hello.ncl
 crunch signs PathInfo entries with ed25519 keys. If no `--signing-key` is
 provided, an auto-generated key is created at
 `$CRUNCH_CONFIG_DIR/signing-key` (or `$state_dir/signing-key` when
-`CRUNCH_CONFIG_DIR` is unset — same directory as `pathinfo.redb`).
+`CRUNCH_CONFIG_DIR` is unset; default state dir is
+`~/.local/state/crunch`).
 
 ```bash
 # Build with an explicit signing key
@@ -318,10 +319,9 @@ crunch can build itself from source with zero Nix runtime dependency:
 crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
 ```
 
-This builds the full bootstrap chain (musl-gcc → make → dash → binutils →
-musl → gcc → busybox → bwrap → rust), then compiles crunch from source
-inside a bwrap sandbox. Output is a ~31 MiB static-pie musl-linked
-binary.
+This builds the full bootstrap chain (musl-gcc → make → dash →
+binutils/musl → gcc → busybox/bwrap/rust → crunch) inside a bwrap
+sandbox. Output is a statically-linked musl binary.
 
 First bootstrap requires `git`, `cargo`, `tar`, `xz`, `bwrap` on PATH.
 After the first self-build, the crunch-built bwrap and busybox are used
