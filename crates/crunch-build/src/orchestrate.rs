@@ -90,6 +90,7 @@ where
         build_service: BServ,
         pathinfo_service: PIS,
         output_dir: PathBuf,
+        store_dir: &str,
         verbose: bool,
     ) -> Self
     where
@@ -97,16 +98,16 @@ where
         DS: DirectoryService + 'static,
         PIS: PathInfoService + 'static,
     {
-        let store_dir = nix_compat::store_path::STORE_DIR;
         let output_dir_str = output_dir.to_str()
             .unwrap_or(store_dir).to_string();
-        let store = crunch_store::StoreHandle::from_services(
+        let store = crunch_store::StoreHandle::from_services_with_store_dir(
             Arc::new(blob_service) as Arc<dyn BlobService>,
             Arc::new(directory_service) as Arc<dyn DirectoryService>,
             Arc::new(pathinfo_service) as Arc<dyn PathInfoService>,
             None,
             PathBuf::from("/tmp/crunch-test"),
             output_dir_str,
+            store_dir.to_string(),
         );
         Self {
             store,
@@ -127,19 +128,20 @@ where
         output_dir: PathBuf,
         state_dir: Option<PathBuf>,
         remote_pathinfo: Option<Arc<dyn PathInfoService>>,
+        store_dir: &str,
         verbose: bool,
     ) -> Self {
-        let store_dir = nix_compat::store_path::STORE_DIR;
         let output_dir_str = output_dir.to_str()
             .unwrap_or(store_dir).to_string();
         let sd = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
-        let store = crunch_store::StoreHandle::from_services(
+        let store = crunch_store::StoreHandle::from_services_with_store_dir(
             blob_service,
             directory_service,
             pathinfo_service,
             remote_pathinfo,
             sd,
             output_dir_str,
+            store_dir.to_string(),
         );
         Self {
             store,
@@ -1331,7 +1333,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1352,7 +1354,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1381,7 +1383,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1435,7 +1437,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1476,7 +1478,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1499,7 +1501,7 @@ mod tests {
         let (drv_path, _drv) = build_and_register("untracked", &[], &mut kp);
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1560,7 +1562,7 @@ mod tests {
         let (mock, _calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1582,7 +1584,7 @@ mod tests {
         let ds = tmp_ds();
         let (mock1, _) = MockBuildService::new(bs.clone());
         let mut builder1 = Builder::new(
-            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
+            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
         let mut kp1 = DerivationRegistry::default();
         let (drv_path1, _) = build_and_register_ca("ca-a", &mut kp1);
@@ -1590,7 +1592,7 @@ mod tests {
 
         let (mock2, _) = MockBuildService::new(bs.clone());
         let mut builder2 = Builder::new(
-            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
+            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
         let mut kp2 = DerivationRegistry::default();
         let (drv_path2, _) = build_and_register_ca("ca-b", &mut kp2);
@@ -1611,7 +1613,7 @@ mod tests {
 
         let (mock1, _) = MockBuildService::new(bs.clone());
         let mut builder1 = Builder::new(
-            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), false,
+            bs.clone(), ds.clone(), mock1, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
         let mut kp1 = DerivationRegistry::default();
         let (drv_path1, _) = build_and_register_ca("ca-same", &mut kp1);
@@ -1619,7 +1621,7 @@ mod tests {
 
         let (mock2, _) = MockBuildService::new(bs.clone());
         let mut builder2 = Builder::new(
-            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), false,
+            bs.clone(), ds.clone(), mock2, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
         let mut kp2 = DerivationRegistry::default();
         let (drv_path2, _) = build_and_register_ca("ca-same", &mut kp2);
@@ -1645,7 +1647,7 @@ mod tests {
 
         let mut builder = Builder::new(
             bs, ds, mock, test_pis(),
-            output_tmp.path().to_path_buf(), false,
+            output_tmp.path().to_path_buf(), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1710,7 +1712,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, output_tmp.path().to_path_buf(), false,
+            bs, ds, mock, pis, output_tmp.path().to_path_buf(), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -1734,7 +1736,7 @@ mod tests {
 
         let mut builder = Builder::new(
             bs, ds, mock, test_pis(),
-            output_tmp.path().to_path_buf(), false,
+            output_tmp.path().to_path_buf(), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1777,7 +1779,7 @@ mod tests {
         let fake_dir = PathBuf::from("/nonexistent/read-only-store");
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), fake_dir, false,
+            bs, ds, mock, test_pis(), fake_dir, nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1799,7 +1801,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1842,7 +1844,7 @@ mod tests {
         let (mock, _calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1859,7 +1861,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1894,7 +1896,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1933,7 +1935,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -2022,7 +2024,7 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), false,
+            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -2111,7 +2113,7 @@ mod tests {
         pis.put(path_info).await.unwrap();
 
         let mut builder = Builder::new(
-            bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+            bs, ds, mock, pis, PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -2157,7 +2159,7 @@ mod tests {
         let mut builder = Builder::with_state_dir(
             Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
-            None, Some(remote), false,
+            None, Some(remote), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -2184,7 +2186,7 @@ mod tests {
         let mut builder = Builder::with_state_dir(
             Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
-            None, Some(remote), false,
+            None, Some(remote), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
@@ -2230,7 +2232,7 @@ mod tests {
         let mut builder = Builder::with_state_dir(
             Arc::new(bs.clone()) as Arc<dyn BlobService>, Arc::new(ds.clone()) as Arc<dyn DirectoryService>, mock1, Arc::new(local_pis.clone()) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
-            None, Some(remote), false,
+            None, Some(remote), nix_compat::store_path::STORE_DIR, false,
         );
 
         // First build: remote hit.
@@ -2241,7 +2243,7 @@ mod tests {
         let (mock2, calls2) = MockBuildService::new(bs.clone());
         let mut builder2 = Builder::new(
             bs, ds, mock2, local_pis,
-            PathBuf::from("/nix/store"), false,
+            PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
         );
 
         let outcome2 = builder2.build(&drv_path, &mut kp).await.unwrap();
@@ -2316,7 +2318,7 @@ mod tests {
         let mut builder = Builder::with_state_dir(
             Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
-            None, Some(remote), false,
+            None, Some(remote), nix_compat::store_path::STORE_DIR, false,
         );
 
         // FOD should bypass remote and attempt a local build.
@@ -2373,7 +2375,7 @@ mod tests {
         let mut builder = Builder::with_state_dir(
             Arc::new(bs) as Arc<dyn BlobService>, Arc::new(ds) as Arc<dyn DirectoryService>, mock, Arc::new(local_pis) as Arc<dyn snix_store::pathinfoservice::PathInfoService>,
             PathBuf::from("/nix/store"),
-            None, Some(remote), false,
+            None, Some(remote), nix_compat::store_path::STORE_DIR, false,
         );
 
         // Remote error should be swallowed — build proceeds.
@@ -2468,7 +2470,7 @@ mod tests {
             .unwrap();
 
             let mut builder = Builder::new(
-                bs, ds, mock, pis, PathBuf::from("/nix/store"), false,
+                bs, ds, mock, pis, PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, false,
             );
 
             let mut kp2 = DerivationRegistry::default();

@@ -236,6 +236,7 @@ mod build_tests {
         // Store-path builders (e.g., seed.bash) require the full closure
         // in inputs, which bootstrap doesn't resolve yet.
         let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("hello.ncl"),
             r#"let crunch = import "lib.ncl" in
@@ -249,13 +250,15 @@ mod build_tests {
         .unwrap();
 
         crunch_cmd()
+            .arg("--store")
+            .arg(store.path())
             .arg("build")
             .arg("-I")
             .arg(dir.path())
             .arg(dir.path().join("hello.ncl"))
             .assert()
             .success()
-            .stdout(predicate::str::contains("/nix/store/"));
+            .stdout(predicate::str::contains("hello-e2e"));
     }
 
     #[test]
@@ -266,6 +269,7 @@ mod build_tests {
         }
 
         let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
         let log_dir = tempfile::tempdir().unwrap();
 
         std::fs::write(
@@ -282,6 +286,8 @@ mod build_tests {
 
         crunch_cmd()
             .env("CRUNCH_LOG_DIR", log_dir.path())
+            .arg("--store")
+            .arg(store.path())
             .arg("build")
             .arg("-I")
             .arg(dir.path())

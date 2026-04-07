@@ -390,6 +390,7 @@ async fn execute_builds(
             output_dir.to_path_buf(),
             Some(store.state_dir().to_path_buf()),
             None, // no remote substitution in legacy path
+            store_prefix,
             verbose,
         );
 
@@ -532,6 +533,7 @@ async fn execute_builds_streaming(
             output_dir.to_path_buf(),
             Some(store.state_dir().to_path_buf()),
             remote_pathinfo,
+            store_prefix,
             verbose,
         );
 

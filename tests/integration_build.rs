@@ -91,7 +91,7 @@ fn cache_hit_skips_build() {
             directory_service,
             DummyBuildService::default(),
             pis,
-            PathBuf::from("/nix/store"),
+            PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
             false,
         );
 
@@ -247,7 +247,7 @@ fn end_to_end_trivial_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"),
+                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
                 true,
             );
 
@@ -364,7 +364,7 @@ fn end_to_end_ca_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"),
+                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR,
                 true,
             );
 
@@ -580,6 +580,7 @@ fn fetchurl_downloads_and_verifies_hash() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
             true,
         );
 
@@ -699,6 +700,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
             true,
         );
 

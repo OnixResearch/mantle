@@ -294,6 +294,7 @@ pub async fn bootstrap_fetch(
             store_dir.to_path_buf(),
             Some(state_dir),
             None, // no remote substitution for bootstrap
+            LOGICAL_STORE_DIR,
             verbose,
         );
 

@@ -117,7 +117,7 @@ pub fn derivation_to_build_request(
             .outputs
             .iter()
             .map(|(output_name, o)| {
-                let path_str = o.path_str();
+                let path_str = o.path_str_with_prefix(store_dir);
                 if path_str.is_empty() {
                     // CA derivation: use the placeholder path (from env)
                     // as the sandbox output location.
