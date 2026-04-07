@@ -395,7 +395,7 @@ fn run(args: Args) -> Result<(), RunError> {
                 signing_key.as_deref(),
                 parsed_trusted.as_deref(),
                 trust_unsigned,
-            )
+            ).map(|_report| ())
         }
     }
 }

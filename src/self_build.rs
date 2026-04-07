@@ -10,6 +10,7 @@
 //! The output is a statically-linked crunch binary compiled inside a
 //! bwrap sandbox using only the bootstrap toolchain.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -24,6 +25,140 @@ use crate::errors::RunError;
 
 /// Maximum source tree size: 2 GiB.
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Maximum number of `*-crunch` output directories to scan before giving up.
+const MAX_CRUNCH_OUTPUTS: u32 = 4096;
+
+/// Stable line prefix used by the proof runner to identify structured
+/// self-build evidence lines.
+const PROOF_PREFIX: &str = "self-build-proof:";
+
+// ── Proof report types ────────────────────────────────────────────────
+
+/// How the bwrap binary was resolved for a self-build stage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BwrapSource {
+    /// Crunch-built bwrap found in the output store.
+    CrunchBuilt(PathBuf),
+    /// Host-provided bwrap found on PATH.
+    HostFallback(PathBuf),
+}
+
+impl fmt::Display for BwrapSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BwrapSource::CrunchBuilt(p) => write!(f, "crunch-built:{}", p.display()),
+            BwrapSource::HostFallback(p) => write!(f, "host-fallback:{}", p.display()),
+        }
+    }
+}
+
+impl BwrapSource {
+    /// Parse from the stable string format produced by `Display`.
+    pub fn parse(s: &str) -> Option<Self> {
+        if let Some(rest) = s.strip_prefix("crunch-built:") {
+            Some(BwrapSource::CrunchBuilt(PathBuf::from(rest)))
+        } else if let Some(rest) = s.strip_prefix("host-fallback:") {
+            Some(BwrapSource::HostFallback(PathBuf::from(rest)))
+        } else {
+            None
+        }
+    }
+
+    /// True when this stage used a crunch-built bwrap.
+    pub fn is_crunch_built(&self) -> bool {
+        matches!(self, BwrapSource::CrunchBuilt(_))
+    }
+}
+
+/// Structured report from a self-build run.
+///
+/// Captures the facts a proof runner needs to verify that self-hosting
+/// works: which binary drove the build, which sandbox tools were
+/// selected, and where the output landed.
+#[derive(Debug, Clone)]
+pub struct SelfBuildReport {
+    /// Path to the crunch binary that drove this self-build.
+    pub invoking_binary: PathBuf,
+    /// How bwrap was resolved (crunch-built vs host fallback).
+    pub bwrap_source: BwrapSource,
+    /// Path to the busybox binary that the NCL script will use for
+    /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no crunch-built busybox
+    /// was found in the output store (falls back to `/bin/sh`).
+    pub busybox_path: Option<PathBuf>,
+    /// Path to the produced output binary.
+    pub output_binary: PathBuf,
+}
+
+impl SelfBuildReport {
+    /// Format the report as stable `self-build-proof:` lines.
+    ///
+    /// Each line is `self-build-proof: key=value`. A proof runner can
+    /// filter stderr for this prefix and parse the key-value pairs.
+    pub fn format_proof_lines(&self) -> String {
+        let mut out = String::with_capacity(512);
+        out.push_str(&format!(
+            "{PROOF_PREFIX} invoking-binary={}\n",
+            self.invoking_binary.display(),
+        ));
+        out.push_str(&format!(
+            "{PROOF_PREFIX} bwrap-source={}\n",
+            self.bwrap_source,
+        ));
+        match &self.busybox_path {
+            Some(p) => out.push_str(&format!(
+                "{PROOF_PREFIX} busybox-path={}\n",
+                p.display(),
+            )),
+            None => out.push_str(&format!(
+                "{PROOF_PREFIX} busybox-path=none\n",
+            )),
+        }
+        out.push_str(&format!(
+            "{PROOF_PREFIX} output-binary={}\n",
+            self.output_binary.display(),
+        ));
+        out
+    }
+
+    /// Parse a report from lines previously produced by
+    /// `format_proof_lines`. Returns `None` when any required field
+    /// is missing.
+    pub fn parse_proof_lines(text: &str) -> Option<Self> {
+        let mut invoking_binary: Option<PathBuf> = None;
+        let mut bwrap_source: Option<BwrapSource> = None;
+        let mut busybox_path: Option<Option<PathBuf>> = None;
+        let mut output_binary: Option<PathBuf> = None;
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            let rest = match trimmed.strip_prefix(PROOF_PREFIX) {
+                Some(r) => r.trim(),
+                None => continue,
+            };
+            if let Some(val) = rest.strip_prefix("invoking-binary=") {
+                invoking_binary = Some(PathBuf::from(val));
+            } else if let Some(val) = rest.strip_prefix("bwrap-source=") {
+                bwrap_source = BwrapSource::parse(val);
+            } else if let Some(val) = rest.strip_prefix("busybox-path=") {
+                if val == "none" {
+                    busybox_path = Some(None);
+                } else {
+                    busybox_path = Some(Some(PathBuf::from(val)));
+                }
+            } else if let Some(val) = rest.strip_prefix("output-binary=") {
+                output_binary = Some(PathBuf::from(val));
+            }
+        }
+
+        Some(SelfBuildReport {
+            invoking_binary: invoking_binary?,
+            bwrap_source: bwrap_source?,
+            busybox_path: busybox_path?,
+            output_binary: output_binary?,
+        })
+    }
+}
 
 /// Stage the crunch source tree into the output store.
 ///
@@ -436,11 +571,17 @@ fn dir_size(dir: &Path) -> u64 {
 /// must prepend it to PATH so `Command::new("bwrap")` picks it up.
 /// Returns `Ok(None)` when falling back to an external bwrap on PATH.
 /// Returns `Err` when no bwrap exists anywhere.
-fn resolve_host_bwrap(output_dir: &Path) -> Result<Option<PathBuf>, RunError> {
+/// Resolve bwrap and return a typed source indicator.
+///
+/// Returns `CrunchBuilt(dir)` when a crunch-built bwrap was found in
+/// the output store. The caller should prepend `dir` to PATH.
+/// Returns `HostFallback(path)` when falling back to an external bwrap.
+/// Returns `Err` when no bwrap exists anywhere.
+fn resolve_bwrap_source(output_dir: &Path) -> Result<BwrapSource, RunError> {
     // 1. Prefer crunch-built bwrap from the output store.
     if let Some(bwrap_dir) = find_crunch_bwrap(output_dir) {
         eprintln!("  bwrap: {} (crunch-built)", bwrap_dir.display());
-        return Ok(Some(bwrap_dir));
+        return Ok(BwrapSource::CrunchBuilt(bwrap_dir));
     }
 
     // 2. Fall back to host PATH.
@@ -451,7 +592,7 @@ fn resolve_host_bwrap(output_dir: &Path) -> Result<Option<PathBuf>, RunError> {
                 output_dir.display(),
                 path.display(),
             );
-            Ok(None)
+            Ok(BwrapSource::HostFallback(path))
         }
         None => Err(RunError::Build(
             "bwrap (bubblewrap) not found. The first self-build requires bwrap on PATH. \
@@ -478,6 +619,85 @@ fn find_crunch_bwrap(output_dir: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Scan the output store for a crunch-built busybox.
+///
+/// Looks for `<output_dir>/*-busybox/bin/busybox` — the naming convention
+/// used by `bootstrap/busybox.ncl`.
+pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(output_dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-busybox") {
+            let bin = entry.path().join("bin").join("busybox");
+            if bin.is_file() && is_executable(&bin) {
+                return Some(bin);
+            }
+        }
+    }
+    None
+}
+
+/// Find all `*-crunch` output directories in the store.
+///
+/// Returns a list of `(dir_name, binary_path)` pairs where the binary
+/// exists at `<dir>/bin/crunch`.
+pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
+    let entries = match std::fs::read_dir(output_dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    let mut scanned: u32 = 0;
+    for entry in entries.flatten() {
+        scanned = scanned.saturating_add(1);
+        if scanned > MAX_CRUNCH_OUTPUTS {
+            break;
+        }
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-crunch") {
+            let binary = entry.path().join("bin").join("crunch");
+            if binary.exists() {
+                found.push((name_str.into_owned(), binary));
+            }
+        }
+    }
+    found
+}
+
+/// Remove all `*-crunch` output directories from the store.
+///
+/// Returns the number of directories removed. Errors from individual
+/// removals are collected but do not abort the loop.
+pub fn invalidate_crunch_outputs(
+    output_dir: &Path,
+) -> Result<u32, RunError> {
+    let outputs = find_crunch_outputs(output_dir);
+    let mut removed: u32 = 0;
+    let mut errors: Vec<String> = Vec::new();
+    for (name, _binary) in &outputs {
+        let dir = output_dir.join(name);
+        match std::fs::remove_dir_all(&dir) {
+            Ok(()) => {
+                removed = removed.saturating_add(1);
+            }
+            Err(e) => {
+                errors.push(format!("{}: {e}", dir.display()));
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return Err(RunError::Internal(format!(
+            "failed to remove {} of {} crunch outputs:\n{}",
+            errors.len(),
+            outputs.len(),
+            errors.join("\n"),
+        )));
+    }
+    Ok(removed)
 }
 
 /// Search PATH for a named executable, returning the first match.
@@ -536,15 +756,25 @@ pub fn cmd_self_build(
     signing_key_path: Option<&Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
-) -> Result<(), RunError> {
+) -> Result<SelfBuildReport, RunError> {
     eprintln!("=== crunch self-build ===");
+
+    let invoking_binary = std::env::current_exe()
+        .unwrap_or_else(|_| PathBuf::from("crunch"));
+    eprintln!("  invoking binary: {}", invoking_binary.display());
 
     // Resolve bwrap: prefer crunch-built from output_dir, fall back to
     // host PATH. If crunch-built, prepend its directory to PATH so
     // BubblewrapBuildService's Command::new("bwrap") finds it.
-    if let Some(bwrap_dir) = resolve_host_bwrap(output_dir)? {
-        prepend_to_path(&bwrap_dir)?;
+    let bwrap_source = resolve_bwrap_source(output_dir)?;
+    if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
+        prepend_to_path(dir)?;
     }
+
+    // Check for crunch-built busybox (the NCL script will discover it
+    // independently inside the sandbox, but we record it here for the
+    // proof report).
+    let busybox_path = find_crunch_busybox(output_dir);
 
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
@@ -603,16 +833,28 @@ pub fn cmd_self_build(
     let result = run_build(&config)?;
     report_build_result(&config, &result, false)?;
 
-    if !no_verify {
+    let output_binary = if !no_verify {
         eprintln!("\n[3/3] Verifying output...");
         let crunch_bin = find_self_built_binary(output_dir)?;
         verify_binary(&crunch_bin)?;
+        crunch_bin
     } else {
         eprintln!("\n[3/3] Verification skipped (--no-verify).");
-    }
+        find_self_built_binary(output_dir)?
+    };
+
+    let report = SelfBuildReport {
+        invoking_binary,
+        bwrap_source,
+        busybox_path,
+        output_binary,
+    };
+
+    // Emit stable proof markers.
+    eprint!("{}", report.format_proof_lines());
 
     eprintln!("\n=== self-build complete ===");
-    Ok(())
+    Ok(report)
 }
 
 fn find_source_dir() -> Result<PathBuf, RunError> {
@@ -869,8 +1111,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_host_bwrap_prefers_crunch_built() {
-        // Create a fake crunch-built bwrap in a temp store.
+    fn resolve_bwrap_source_prefers_crunch_built() {
         let store = tempfile::tempdir().unwrap();
         let bwrap_dir = store.path().join("abc123-bwrap").join("bin");
         std::fs::create_dir_all(&bwrap_dir).unwrap();
@@ -883,33 +1124,32 @@ mod tests {
                 std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let result = resolve_host_bwrap(store.path()).unwrap();
+        let result = resolve_bwrap_source(store.path()).unwrap();
         assert!(
-            result.is_some(),
-            "should return Some(dir) for crunch-built bwrap",
+            result.is_crunch_built(),
+            "should prefer crunch-built bwrap",
         );
-        assert_eq!(result.unwrap(), bwrap_dir);
+        match result {
+            BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, bwrap_dir),
+            _ => panic!("expected CrunchBuilt"),
+        }
     }
 
     #[test]
-    fn resolve_host_bwrap_falls_back_to_path() {
-        // Empty store dir — no crunch-built bwrap.
+    fn resolve_bwrap_source_falls_back_to_path() {
         let store = tempfile::tempdir().unwrap();
-        // If host has bwrap on PATH, should return Ok(None).
-        // If host lacks bwrap, should return Err.
-        let result = resolve_host_bwrap(store.path());
+        let result = resolve_bwrap_source(store.path());
         match find_executable_on_path("bwrap") {
-            Some(_) => {
-                assert!(
-                    result.as_ref().unwrap().is_none(),
-                    "should fall back to PATH bwrap (Ok(None))",
-                );
+            Some(host_path) => {
+                let src = result.unwrap();
+                assert!(!src.is_crunch_built(), "should be host fallback");
+                match src {
+                    BwrapSource::HostFallback(p) => assert_eq!(p, host_path),
+                    _ => panic!("expected HostFallback"),
+                }
             }
             None => {
-                assert!(
-                    result.is_err(),
-                    "should error when no bwrap anywhere",
-                );
+                assert!(result.is_err(), "should error when no bwrap");
                 let msg = result.unwrap_err().message().to_string();
                 assert!(msg.contains("not found"), "error: {msg}");
             }
@@ -1074,5 +1314,203 @@ mod tests {
         // Should have exactly one entry, not a trailing colon.
         assert_eq!(dirs.len(), 1, "empty PATH + prepend = 1 entry: {dirs:?}");
         assert_eq!(dirs[0], dir.path().to_path_buf());
+    }
+
+    // ── BwrapSource tests ─────────────────────────────────────────
+
+    #[test]
+    fn bwrap_source_display_roundtrip_crunch_built() {
+        let src = BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin"));
+        let s = src.to_string();
+        assert!(s.starts_with("crunch-built:"));
+        let parsed = BwrapSource::parse(&s).unwrap();
+        assert_eq!(parsed, src);
+    }
+
+    #[test]
+    fn bwrap_source_display_roundtrip_host_fallback() {
+        let src = BwrapSource::HostFallback(PathBuf::from("/usr/bin/bwrap"));
+        let s = src.to_string();
+        assert!(s.starts_with("host-fallback:"));
+        let parsed = BwrapSource::parse(&s).unwrap();
+        assert_eq!(parsed, src);
+    }
+
+    #[test]
+    fn bwrap_source_parse_rejects_garbage() {
+        assert!(BwrapSource::parse("").is_none());
+        assert!(BwrapSource::parse("something-else:/bin/bwrap").is_none());
+    }
+
+    #[test]
+    fn bwrap_source_is_crunch_built_predicate() {
+        assert!(BwrapSource::CrunchBuilt(PathBuf::from("/x")).is_crunch_built());
+        assert!(!BwrapSource::HostFallback(PathBuf::from("/x")).is_crunch_built());
+    }
+
+    // ── SelfBuildReport tests ────────────────────────────────────
+
+    #[test]
+    fn report_format_roundtrip_with_busybox() {
+        let report = SelfBuildReport {
+            invoking_binary: PathBuf::from("/tmp/checkout/target/debug/crunch"),
+            bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin")),
+            busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
+            output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
+        };
+        let lines = report.format_proof_lines();
+
+        // Each line starts with the prefix.
+        for line in lines.lines() {
+            assert!(line.starts_with(PROOF_PREFIX), "bad line: {line}");
+        }
+
+        let parsed = SelfBuildReport::parse_proof_lines(&lines)
+            .expect("should parse back");
+        assert_eq!(parsed.invoking_binary, report.invoking_binary);
+        assert_eq!(parsed.bwrap_source, report.bwrap_source);
+        assert_eq!(parsed.busybox_path, report.busybox_path);
+        assert_eq!(parsed.output_binary, report.output_binary);
+    }
+
+    #[test]
+    fn report_format_roundtrip_without_busybox() {
+        let report = SelfBuildReport {
+            invoking_binary: PathBuf::from("/usr/bin/crunch"),
+            bwrap_source: BwrapSource::HostFallback(PathBuf::from("/usr/bin/bwrap")),
+            busybox_path: None,
+            output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
+        };
+        let lines = report.format_proof_lines();
+        assert!(lines.contains("busybox-path=none"));
+
+        let parsed = SelfBuildReport::parse_proof_lines(&lines)
+            .expect("should parse back");
+        assert!(parsed.busybox_path.is_none());
+        assert!(!parsed.bwrap_source.is_crunch_built());
+    }
+
+    #[test]
+    fn report_parse_returns_none_for_empty_input() {
+        assert!(SelfBuildReport::parse_proof_lines("").is_none());
+    }
+
+    #[test]
+    fn report_parse_returns_none_for_partial_input() {
+        let partial = format!(
+            "{PROOF_PREFIX} invoking-binary=/bin/crunch\n\
+             {PROOF_PREFIX} bwrap-source=host-fallback:/usr/bin/bwrap\n"
+        );
+        // Missing busybox-path and output-binary.
+        assert!(SelfBuildReport::parse_proof_lines(&partial).is_none());
+    }
+
+    #[test]
+    fn report_parse_ignores_non_proof_lines() {
+        let mixed = format!(
+            "some random log line\n\
+             {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
+             another log line\n\
+             {PROOF_PREFIX} bwrap-source=crunch-built:/store/x-bwrap/bin\n\
+             {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
+             {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n"
+        );
+        let parsed = SelfBuildReport::parse_proof_lines(&mixed)
+            .expect("should parse despite noise");
+        assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
+        assert!(parsed.bwrap_source.is_crunch_built());
+    }
+
+    // ── find_crunch_busybox tests ───────────────────────────────
+
+    #[test]
+    fn find_crunch_busybox_finds_executable() {
+        let store = tempfile::tempdir().unwrap();
+        let bb_dir = store.path().join("abc-busybox").join("bin");
+        std::fs::create_dir_all(&bb_dir).unwrap();
+        let bb = bb_dir.join("busybox");
+        std::fs::write(&bb, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bb,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let result = find_crunch_busybox(store.path());
+        assert_eq!(result, Some(bb));
+    }
+
+    #[test]
+    fn find_crunch_busybox_returns_none_for_empty_store() {
+        let store = tempfile::tempdir().unwrap();
+        assert!(find_crunch_busybox(store.path()).is_none());
+    }
+
+    #[test]
+    fn find_crunch_busybox_ignores_wrong_suffix() {
+        let store = tempfile::tempdir().unwrap();
+        let dir = store.path().join("abc-notbusybox").join("bin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let bb = dir.join("busybox");
+        std::fs::write(&bb, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bb,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert!(find_crunch_busybox(store.path()).is_none());
+    }
+
+    // ── find_crunch_outputs / invalidate tests ────────────────
+
+    #[test]
+    fn find_crunch_outputs_finds_matching_dirs() {
+        let store = tempfile::tempdir().unwrap();
+        // Create two *-crunch entries and one non-matching entry.
+        for name in ["aaa-crunch", "bbb-crunch", "ccc-notcrunch"] {
+            let bin_dir = store.path().join(name).join("bin");
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            std::fs::write(bin_dir.join("crunch"), "fake").unwrap();
+        }
+        let found = find_crunch_outputs(store.path());
+        assert_eq!(found.len(), 2, "should find exactly 2 *-crunch dirs");
+        let names: Vec<&str> = found.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"aaa-crunch"));
+        assert!(names.contains(&"bbb-crunch"));
+    }
+
+    #[test]
+    fn find_crunch_outputs_empty_store() {
+        let store = tempfile::tempdir().unwrap();
+        assert!(find_crunch_outputs(store.path()).is_empty());
+    }
+
+    #[test]
+    fn find_crunch_outputs_skips_without_binary() {
+        let store = tempfile::tempdir().unwrap();
+        // Directory named *-crunch but no bin/crunch file.
+        std::fs::create_dir_all(store.path().join("aaa-crunch")).unwrap();
+        assert!(find_crunch_outputs(store.path()).is_empty());
+    }
+
+    #[test]
+    fn invalidate_crunch_outputs_removes_dirs() {
+        let store = tempfile::tempdir().unwrap();
+        let dir = store.path().join("abc-crunch");
+        let bin_dir = dir.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("crunch"), "fake").unwrap();
+
+        let removed = invalidate_crunch_outputs(store.path()).unwrap();
+        assert_eq!(removed, 1);
+        assert!(!dir.exists(), "directory should be removed");
+    }
+
+    #[test]
+    fn invalidate_crunch_outputs_noop_on_empty_store() {
+        let store = tempfile::tempdir().unwrap();
+        let removed = invalidate_crunch_outputs(store.path()).unwrap();
+        assert_eq!(removed, 0);
     }
 }
