@@ -953,55 +953,52 @@ mod tests {
 
     #[test]
     fn find_executable_on_path_finds_binary_in_tempdir() {
-        // Put a fake "crunch-test-bwrap" executable in a temp dir,
-        // add that dir to PATH, and verify find_executable_on_path
-        // finds it.
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+
         let dir = tempfile::tempdir().unwrap();
         make_fake_executable(dir.path(), "crunch-test-bwrap");
 
-        let orig_path = std::env::var_os("PATH").unwrap_or_default();
-        let search_dirs = vec![dir.path().to_path_buf()];
-        // Don't mutate global PATH — call the inner logic directly.
-        let found = search_dirs.iter().find_map(|d| {
-            let candidate = d.join("crunch-test-bwrap");
-            if candidate.is_file() && is_executable(&candidate) {
-                Some(candidate)
-            } else {
-                None
-            }
-        });
+        // Set PATH to only our temp dir so the real function's
+        // var_os + split_paths + ordering logic is exercised.
+        unsafe { std::env::set_var("PATH", dir.path()) };
+
+        let found = find_executable_on_path("crunch-test-bwrap");
+
+        // Restore before asserting.
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
         assert!(found.is_some(), "should find the fake executable");
-        assert_eq!(
-            found.unwrap(),
-            dir.path().join("crunch-test-bwrap"),
-        );
-        // Verify original PATH is untouched.
-        assert_eq!(std::env::var_os("PATH").unwrap_or_default(), orig_path);
+        assert_eq!(found.unwrap(), dir.path().join("crunch-test-bwrap"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn find_executable_on_path_skips_non_executable_in_tempdir() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+
         let dir = tempfile::tempdir().unwrap();
         let bin = dir.path().join("crunch-test-noexec");
         std::fs::write(&bin, "not executable").unwrap();
-        #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&bin,
                 std::fs::Permissions::from_mode(0o644)).unwrap();
         }
 
-        // Same inline search as find_executable_on_path without
-        // mutating global PATH.
-        let search_dirs = vec![dir.path().to_path_buf()];
-        let found = search_dirs.iter().find_map(|d| {
-            let candidate = d.join("crunch-test-noexec");
-            if candidate.is_file() && is_executable(&candidate) {
-                Some(candidate)
-            } else {
-                None
-            }
-        });
+        unsafe { std::env::set_var("PATH", dir.path()) };
+
+        let found = find_executable_on_path("crunch-test-noexec");
+
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
         assert!(found.is_none(), "should skip non-executable file");
     }
 

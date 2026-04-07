@@ -272,6 +272,8 @@ Building derivations (not just compiling crunch) requires:
 - `crates/crunch-project/` owns manifest, lock, refresh, stale detection, upgrade, drift, mirrors, and generated inputs.
 - No Nickel dep — the binary crate uses `crunch-eval::evaluate_and_deserialize()` to load `crunch-project.ncl` into `ProjectManifest`.
 - `RefreshResolver` trait: callers implement network-dependent resolution (git ls-remote, content hashing). The crate itself is pure logic.
+- Tarball input hashes in `crunch.lock` / `.crunch/inputs.ncl` must match `crunch.fetchTarball`: recursive/NAR hash of the unpacked tree, not a flat hash of the downloaded archive bytes.
+- Local patch locking also depends on the resolver: `apply_outcomes()` calls `RefreshResolver::hash_local_file()` for `PatchSource::Local`, so a "live" resolver that only implements git + URL hashing still leaves patch locks unresolved.
 - Generated `.crunch/inputs.ncl` is a plain Nickel record (no stdlib import). Package code imports it and passes data to fetch helpers.
 - `crunch.lock` is JSON with explicit `SchemaVersion`. Upgrade path: 0.9.0 -> 1.0.0 (structural noop, exercises the migration machinery).
 - CLI commands: `init`, `check`, `show`, `refresh`, `list-stale`, `upgrade` — all in `src/project_cmd.rs`, delegating to `crunch-project`.
