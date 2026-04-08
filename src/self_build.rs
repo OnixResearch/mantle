@@ -1722,14 +1722,22 @@ mod tests {
     }
 
     /// verify_tools_on_disk must error when the store is empty and no
-    /// bwrap is on PATH.  Controls PATH to make the test deterministic.
+    /// bwrap is on PATH. Controls PATH with an empty temp dir so the
+    /// test does not depend on host search semantics.
     #[test]
     fn verify_tools_on_disk_errors_on_empty_store() {
         let _lock = PATH_MUTEX.lock().unwrap();
         let orig = std::env::var_os("PATH");
+        let empty_path = tempfile::tempdir().unwrap();
 
-        // Empty PATH so resolve_bwrap_source finds nothing.
-        unsafe { std::env::set_var("PATH", "") };
+        unsafe { std::env::set_var("PATH", empty_path.path()) };
+
+        let empty_entries = std::fs::read_dir(empty_path.path()).unwrap().count();
+        assert_eq!(empty_entries, 0, "temp PATH dir must start empty");
+        assert!(
+            find_executable_on_path("bwrap").is_none(),
+            "empty temp PATH must not expose bwrap",
+        );
 
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
