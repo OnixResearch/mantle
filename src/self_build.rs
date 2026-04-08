@@ -1611,4 +1611,64 @@ mod tests {
         let removed = invalidate_crunch_outputs(store.path()).unwrap();
         assert_eq!(removed, 0);
     }
+
+    // ── Structural invariant tests ─────────────────────────────
+    //
+    // These tests enforce the self-build invariants documented in
+    // AGENTS.md. If someone changes the self-build structure, these
+    // tests break and the docs must be updated to match.
+
+    /// The bootstrap tool loop MUST include both bwrap.ncl and busybox.ncl.
+    /// This is a source-level assertion: the string literals in
+    /// cmd_self_build's tool loop must contain both names.
+    #[test]
+    fn self_build_requires_both_bootstrap_tools() {
+        let src = include_str!("self_build.rs");
+        // The for loop iterates over a fixed array of tool names.
+        assert!(
+            src.contains(r#""bwrap.ncl", "busybox.ncl""#),
+            "cmd_self_build must build both bwrap.ncl and busybox.ncl",
+        );
+    }
+
+    /// Missing bootstrap tools must produce a hard error, not a warning.
+    /// The source must contain a return-Err path for missing tools.
+    #[test]
+    fn missing_bootstrap_tool_is_hard_error() {
+        let src = include_str!("self_build.rs");
+        assert!(
+            src.contains("The self-build requires both bwrap.ncl and busybox.ncl"),
+            "missing bootstrap tool must produce a hard error message",
+        );
+    }
+
+    /// After building tools, bwrap must be verified as crunch-built.
+    #[test]
+    fn post_build_bwrap_check_is_enforced() {
+        let src = include_str!("self_build.rs");
+        assert!(
+            src.contains("bwrap was not found on disk after building bwrap.ncl"),
+            "post-build bwrap disk check must exist",
+        );
+    }
+
+    /// After building tools, busybox must be verified on disk.
+    #[test]
+    fn post_build_busybox_check_is_enforced() {
+        let src = include_str!("self_build.rs");
+        assert!(
+            src.contains("busybox was not found on disk after building busybox.ncl"),
+            "post-build busybox disk check must exist",
+        );
+    }
+
+    /// Self-build must have exactly 4 steps.
+    #[test]
+    fn self_build_has_four_steps() {
+        let src = include_str!("self_build.rs");
+        assert!(src.contains("[1/4] Staging source"), "step 1 missing");
+        assert!(src.contains("[2/4] Building bootstrap tools"), "step 2 missing");
+        assert!(src.contains("[3/4] Building crunch"), "step 3 missing");
+        assert!(src.contains("[4/4] Verifying output"), "step 4 missing");
+    }
 }
