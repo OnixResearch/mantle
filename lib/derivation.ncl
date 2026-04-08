@@ -45,6 +45,6 @@ let { FixedOutput } = import "fixed_output.ncl" in
     | default = 'content-addressed,
 
   sandbox | Sandbox
-    | doc "Sandbox backend. 'native = bwrap (Linux), 'oci = OCI container, 'wasm = WASI (single-process)."
+    | doc "Sandbox preference. Build execution ships only for 'native today; 'oci and 'wasm stay reserved for future backends."
     | default = 'native,
 }

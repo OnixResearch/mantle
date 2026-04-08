@@ -101,12 +101,26 @@ The system MUST handle store initialization:
 - THEN the store directory is created (or an error explains what
   permissions are needed)
 
-### Requirement: Parallel builds (future)
+### Requirement: Parallel builds
 
-v0 MAY build derivations sequentially. The system SHOULD be designed
-so that independent derivations in the dependency graph can be built
-in parallel in a future version.
+The build pipeline MUST dispatch independent ready derivations concurrently.
+The maximum number of in-flight builds MUST be bounded by the configured
+`max_jobs` value.
 
-The dependency graph (DAG) naturally exposes parallelism: derivations
-with no unbuilt dependencies can start simultaneously. The `BuildService`
-trait is async and supports concurrent calls.
+The scheduler MUST deduplicate goals by derivation path so the same derivation
+is not built twice while concurrency is enabled.
+
+#### Scenario: Independent derivations build concurrently
+
+- GIVEN two derivations whose dependencies are already satisfied
+- AND `max_jobs` is at least 2
+- WHEN the pipeline runs
+- THEN the worker may dispatch both builds without waiting for the first one to finish
+
+#### Scenario: Jobs cap serializes dispatch
+
+- GIVEN two derivations whose dependencies are already satisfied
+- AND `max_jobs` is 1
+- WHEN the pipeline runs
+- THEN the worker dispatches at most one build at a time
+- AND the second build waits until the first one reaches a terminal state

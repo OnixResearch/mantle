@@ -211,7 +211,7 @@ let crunch = import "lib.ncl" in
   addressing_mode              # | default = 'content-addressed
     = 'content-addressed,      #   content-addressed | input-addressed
   sandbox                      # | default = 'native
-    = 'native,                 #   native | oci | wasm
+    = 'native,                 #   'native today; 'oci and 'wasm are reserved for future backends
 } | crunch.Derivation
 ```
 
@@ -329,11 +329,35 @@ for subsequent builds.
 
 ### Proving self-hosting
 
-To verify that a crunch-built binary can rebuild crunch:
+To verify that a crunch-built binary can rebuild crunch, run the checked-in
+helper from the repo root:
+
+```bash
+./scripts/prove-self-hosting.sh
+```
+
+The helper sets the nightly Rust toolchain, `CC`, linker/tool lookup,
+`pkg-config` / openssl lookup, and `SNIX_BUILD_SANDBOX_SHELL` before it
+invokes the canonical ignored proof test:
 
 ```bash
 cargo test -p crunch --test self_hosting -- --ignored --nocapture
 ```
+
+Use `./scripts/prove-self-hosting.sh --check` to validate prerequisites,
+including temporary-disk headroom, and print the proof command without
+starting the full build.
+
+Host prerequisites:
+- Linux
+- `rustup` with the repo's `nightly` toolchain installed
+- `clang`, `mold`, `pkg-config`, and OpenSSL development files visible to `pkg-config`
+- `bwrap`, `git`, `cargo`, `tar`, `xz`, and `cp`
+- ~4 GiB free in `${TMPDIR:-/tmp}`
+
+If `pkg-config --exists openssl` does not work in your current shell, export
+`CRUNCH_PROOF_OPENSSL_PKGCONFIG=/path/to/openssl/lib/pkgconfig` before running
+the helper.
 
 This runs two stages: the checkout binary builds stage1, then the stage1
 binary rebuilds crunch (stage2) using only crunch-built sandbox tools.
@@ -341,16 +365,21 @@ The test asserts that stage2 selected crunch-built bwrap and busybox,
 not host fallbacks. Expect ~30 min and ~4 GiB free in `/tmp`.
 
 The proof does not demonstrate bit-for-bit reproducibility or freedom
-from all host tools (git, cargo, tar, xz are still needed). It proves
-that a crunch-built crunch can drive another self-build to completion.
+from all host tools. It proves that a crunch-built crunch can drive
+another self-build to completion.
 
 **Troubleshooting the proof:**
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `SKIP: bwrap not on PATH` | bubblewrap not installed | `nix-shell -p bubblewrap` or install bwrap from your distro |
-| `SKIP: not in crunch source tree` | test run from wrong directory | `cd` into the crunch workspace root (where `Cargo.toml` + `bootstrap/` live) |
-| Stage0 fails with permission errors writing to store | unwritable output directory | The test uses a tempdir; check `/tmp` has space and write permissions |
+| `error: nightly toolchain 'nightly' is not installed under ~/.rustup/toolchains` | nightly toolchain missing | install the repo's nightly toolchain under `~/.rustup/toolchains` |
+| `error: pkg-config cannot find openssl` | OpenSSL `.pc` files are outside the default search path | export `CRUNCH_PROOF_OPENSSL_PKGCONFIG=/path/to/openssl/lib/pkgconfig` and rerun |
+| `error: required tool 'mold' not found` | linker tools missing from the shell | enter the repo dev shell or add the tool directory to `PATH` before running the helper |
+| `error: required tool 'bwrap' not found` | bubblewrap not installed | `nix-shell -p bubblewrap` or install bwrap from your distro |
+| `error: only <n> MiB free in <tmpdir>; need at least 4096 MiB for the proof` | insufficient temporary disk space | free space in `${TMPDIR:-/tmp}` or point `TMPDIR` at a larger filesystem |
+| `error: temporary directory does not exist:` | `TMPDIR` points at a missing location | unset `TMPDIR` or point it at a real directory before running the helper |
+| `error: temporary directory is not writable:` | proof tempdir is not usable | pick a writable `TMPDIR` or fix permissions before running the helper |
+| Stage0 fails with permission errors writing to store | unwritable output directory | The proof uses a tempdir under `${TMPDIR:-/tmp}`; check that filesystem has space and write permissions |
 | Stage2 reports `bwrap-source=host-fallback:` | stage0 did not produce crunch-built bwrap | Clear the proof store and rerun; the bootstrap chain may have failed silently |
 | Stage2 reports `busybox-path=none` | no crunch-built busybox in the proof store | Same as above — the bootstrap chain did not complete |
 | Stale pathinfo.redb causes false cache hits | prior run left state in `~/.local/state/crunch/` | The proof uses per-stage state dirs to avoid this; if running manually, pass `--state-dir` to a fresh directory |

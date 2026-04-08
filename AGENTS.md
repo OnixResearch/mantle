@@ -302,6 +302,8 @@ When claiming test results in commit messages or completion summaries:
 
 ## Self-Build and Self-Hosting Proof
 
+- `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.
+- The helper does not require a rich login shell PATH: it falls back to `~/.rustup/toolchains/` for nightly cargo/rustc and scans common NixOS locations (`/run/wrappers/bin`, `/run/current-system/sw/bin`, `/nix/store/*-clang-wrapper-*`, `/nix/store/*-mold-*`, `/nix/store/*-pkg-config-wrapper-*`, `/nix/store/*-openssl-*-dev/lib/pkgconfig`).
 - `cmd_self_build` has 4 steps: [1/4] stage source, [2/4] build
   bootstrap tools (bwrap.ncl + busybox.ncl as separate roots),
   [3/4] build crunch, [4/4] verify.

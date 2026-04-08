@@ -16,6 +16,8 @@
 
 ## OpenSpec Review Lessons (2026-04-07)
 - Generated shell scripts in Rust format strings can have ordering bugs that unit tests miss because the tests check for substring presence, not execution order. The `BWRAP_BIN` variable was used before being set in `generate_self_build_ncl()`.
+- If you manually edit main specs while an OpenSpec change is still active, keep the modified requirement set exactly aligned with the delta file. Reverting unrelated main-spec edits is safer than widening the delta late.
+- Do not claim OpenSpec verification from an earlier tool call. Re-run `openspec validate ...` and any proof/check commands in the same turn you summarize.
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.
@@ -24,6 +26,7 @@
 
 ## Build Environment
 - cargo/rustc are at `$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin` and `$HOME/.cargo/bin` — NOT on default PATH. Must prepend to PATH in pueue_run commands.
+- `cargo test -- --list` is not a metadata-only probe here: it still compiles C-backed deps like `liblzma-sys`, so it needs the full clang/pkg-config/openssl PATH setup too. A bare `cargo test -p crunch --test self_hosting -- --list` fails with `failed to find tool "cc"`.
 - Full build env command prefix:
   ```
   export PATH="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:$HOME/.cargo/bin:/nix/store/6jafhh81cf85d0vqwrnhl5yfc4wibxvq-protobuf-29.6/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH"
@@ -33,6 +36,8 @@
 
 ## Tooling Gotchas
 - The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.
+- Do not assume `rustup` exists in `~/.cargo/bin` just because nightly toolchains exist under `~/.rustup/toolchains/`. The self-hosting proof helper needs a direct fallback scan of `~/.rustup/toolchains/` and common Nix store tool wrappers (`clang`, `mold`, `pkg-config`, OpenSSL pkgconfig dirs) when the login shell PATH is sparse.
+- OpenSpec `validate` rejects a delta requirement whose body doesn't contain an RFC-2119 strength word. Even if the second sentence has `MUST`, make the first sentence explicit (`The X MUST ...`) to avoid parser complaints.
 - `openspec validate <change>` expects change spec files to contain delta headers like `## ADDED Requirements` / `## MODIFIED Requirements`. A title-and-purpose-only spec file fails validation even if the requirements below are well-formed.
 - `openspec new change <name>` only scaffolds `.openspec.yaml` in this repo/tool version. Proposal, design, tasks, and delta spec files still need to be written by hand.
 - `openspec status` does not take a positional change name. Use `openspec status --change <name>` if you want artifact status for one change.

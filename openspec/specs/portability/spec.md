@@ -11,39 +11,37 @@ without modifying the core.
 
 ### Requirement: Layered platform abstraction
 
-The system MUST be structured in three layers:
+The system MUST stay structured in three layers:
 
 1. **Core (OS-agnostic):** Nickel evaluation, derivation construction,
-   KnownPaths, store path computation, BuildRequest generation. No
-   `#[cfg(target_os)]` in this code.
+   project-manifest logic, store path computation, and other pure data/model
+   code. This layer MUST avoid platform-specific execution logic.
+2. **Platform traits:** abstract interfaces for build execution, filesystem
+   access, and store backends. These interfaces describe capabilities, not OS
+   primitives.
+3. **Platform implementations:** concrete implementations behind those traits.
+   These are the only layers allowed to depend on platform-specific behavior.
 
-2. **Platform traits:** Abstract interfaces for sandbox execution, filesystem
-   operations, and store backend. Defined in terms of capabilities, not
-   OS primitives.
-
-3. **Platform implementations:** Concrete implementations of the traits for
-   each supported platform. Behind `#[cfg(target_os)]` or cargo features.
+For the current implementation, build execution is only shipped on Linux.
+Evaluation, manifest handling, and other pure logic remain portable Rust code.
 
 ```
-crunch-eval          (OS-agnostic — Nickel is pure Rust, cross-platform)
-crunch-glue          (OS-agnostic — serde + nix-compat data structures)
-nix-compat           (OS-agnostic — pure computation, no I/O)
+crunch-eval          (OS-agnostic — Nickel evaluation)
+crunch-glue          (OS-agnostic — derivation conversion)
+crunch-project       (OS-agnostic — manifest + lockfile logic)
+nix-compat           (OS-agnostic — store path computation)
 snix-castore         (mostly OS-agnostic — blob/dir storage)
-snix-store           (mostly OS-agnostic — pathinfo, NAR)
-snix-build           (platform-specific sandbox behind BuildService trait)
-  ├── wasm           (DEFAULT: wasmtime + WASI — runs everywhere)
-  ├── bwrap          (Linux: bubblewrap + namespaces + seccomp)
-  ├── oci            (Linux: OCI container runtime)
-  ├── grpc           (OS-agnostic: delegate to remote builder)
-  └── (future)       (darwin, pledge, capsicum — as needed)
+snix-store           (mostly OS-agnostic — pathinfo + NAR)
+snix-build           (platform-specific build execution behind BuildService)
+  └── bwrap          (shipped on Linux today)
 ```
 
-#### Scenario: Build on OpenBSD
+#### Scenario: Non-Linux host keeps portable core but not build execution
 
-- GIVEN crunch compiled on OpenBSD
-- WHEN `crunch build hello.ncl` runs with the WASM sandbox (default)
-- THEN evaluation, derivation construction, and store operations work
-  identically to Linux; the build executes in wasmtime with WASI
+- GIVEN crunch compiled on a non-Linux host
+- WHEN a user evaluates Nickel or runs project-management commands
+- THEN the pure core behavior still works
+- AND a build attempt is handled by the platform-specific build boundary
 
 ### Requirement: Configurable store prefix
 
@@ -95,69 +93,36 @@ the spec to OS-specific mounts.
 - THEN the sandbox implementation translates `SandboxSpec` to Redox
   schemes; the core is unaware of the difference
 
-### Requirement: Native sandbox as default, WASM as future goal
+### Requirement: Native sandbox as default, Linux-only build support in v0
 
-v0 MUST use native platform sandboxes as the default:
+v0 build execution MUST use the native Linux bubblewrap path.
 
-- Linux: bwrap (bubblewrap) with namespaces + seccomp
-- Other platforms: gRPC to a remote builder, or unsandboxed with warning
+On non-Linux hosts, `crunch build` and other build-entry commands MUST fail with
+an explicit error that building is only supported on Linux and requires bwrap.
 
-The reason WASM cannot be the default today: **standard WASI has no
-process spawning** (no `fork`, `exec`, `spawn`). A bash build script
-that calls `gcc`, then `cp`, then `mkdir` cannot run in WASI. Build
-scripts need to orchestrate multiple tools as subprocesses — this is
-fundamental to how builds work.
+#### Scenario: Non-Linux build fails clearly
 
-WASIX (Wasmer's extension) adds `proc_fork`/`proc_exec`/`proc_spawn`,
-but it is not standardized, Wasmer-only, and the ecosystem of tools
-compiled to WASIX is thin.
+- GIVEN a non-Linux host
+- WHEN `crunch build hello.ncl` is attempted
+- THEN crunch returns a clear error explaining that building is only supported on Linux and requires bwrap
 
-Once WASI gains subprocess support (it is on the standards roadmap),
-WASM becomes the right default. The architecture MUST support this
-transition.
+### Requirement: Future backends stay labeled as future work
 
-A Nickel derivation MAY declare its sandbox preference:
+WASM, OCI, and remote builders MUST stay labeled as future work in the main
+spec and repo docs until code for them ships in the runtime path.
 
-```nickel
-{
-  name = "my-tool",
-  sandbox | default = 'native,  # or 'wasm, 'oci
-  ...
-}
-```
+#### Scenario: Docs do not advertise unimplemented builders as available
 
-### Requirement: WASM sandbox for single-process builds
-
-Even without subprocess support, WASM is viable for builds that are a
-single tool invocation (no shell script orchestration). crunch SHOULD
-support a `WasmBuildService` for these cases:
-
-- A Rust program compiled to `wasm32-wasip1` that reads inputs and
-  writes outputs
-- A custom build tool that doesn't shell out
-- Fetch operations (download + hash)
-
-This is opt-in via `sandbox = 'wasm` in the derivation.
-
-#### Scenario: Single-process WASM build
-
-- GIVEN a derivation whose builder is a WASM module that reads input
-  files and writes output files without spawning subprocesses
-- WHEN `crunch build` runs with `sandbox = 'wasm`
-- THEN wasmtime loads the module, pre-opens directories via WASI,
-  executes, collects outputs. Works on any OS.
-
-#### Scenario: Shell script cannot use WASM sandbox
-
-- GIVEN a derivation whose builder is bash with a script that calls gcc
-- WHEN `sandbox = 'wasm` is set
-- THEN crunch rejects the build with an error explaining that WASM
-  sandbox does not support subprocess spawning. User must use 'native.
+- GIVEN the repo documentation and main specs
+- WHEN they describe supported build backends
+- THEN bubblewrap on Linux is listed as the shipped implementation
+- AND WASM, OCI, and remote builders are labeled as future work
 
 ### Requirement: BuildService trait as the portability boundary
 
-The `BuildService` trait from snix-build is the portability boundary for
-build execution. All sandbox code MUST live behind this trait.
+The `BuildService` trait MUST remain the abstraction boundary for future
+portability work, and the implementation list in the main spec MUST match what
+this tree actually ships.
 
 ```rust
 #[async_trait]
@@ -166,24 +131,19 @@ pub trait BuildService: Send + Sync {
 }
 ```
 
-Implementations:
+Current runtime status:
 
-| Implementation | Platform | When to use |
+| Implementation | Status | Notes |
 |---|---|---|
-| `WasmBuildService` | Any (wasmtime) | Default. Portable, deterministic. |
-| `BubblewrapBuildService` | Linux | Native builds needing Linux specifics. |
-| `OCIBuildService` | Linux | Container-based builds. |
-| `GRPCBuildService` | Any | Delegate to remote builder. |
+| `BubblewrapBuildService` | shipped | Current Linux build path |
+| other backends behind `BuildService` | future work | Do not describe them as available until crunch wires and ships them |
 
-Adding a new sandbox means implementing this trait. The rest of crunch
-is unchanged.
+#### Scenario: Current implementation table is honest
 
-#### Scenario: Cross-platform via remote builder
-
-- GIVEN crunch running on a platform with no native sandbox
-- WHEN `crunch build --sandbox grpc://linux-builder:8080 hello.ncl`
-- THEN evaluation and derivation construction run locally; the build is
-  sent to the remote builder via gRPC
+- GIVEN the main portability spec
+- WHEN it lists concrete build-service implementations
+- THEN it marks bubblewrap as the current shipped build path
+- AND it does not present unimplemented services as current runtime options
 
 ### Requirement: Filesystem abstraction for store operations
 
