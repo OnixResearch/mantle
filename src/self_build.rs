@@ -745,6 +745,50 @@ fn prepend_to_path(dir: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+/// Build a single bootstrap tool (.ncl file) as a root derivation.
+///
+/// This exports the tool's output to the `--store` directory on disk,
+/// making it available for subsequent self-build stages to discover
+/// via `find_crunch_bwrap` / `find_crunch_busybox`.
+fn build_bootstrap_tool(
+    tool_ncl: &Path,
+    import_paths: &[std::ffi::OsString],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    keypair: &crunch_build::KeyPair,
+    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+    trust_unsigned: bool,
+) -> Result<(), RunError> {
+    assert!(tool_ncl.exists(), "tool NCL must exist: {}", tool_ncl.display());
+    assert!(!import_paths.is_empty(), "import_paths must not be empty");
+
+    let config = crunch_pipeline::BuildConfig {
+        file: tool_ncl.to_path_buf(),
+        import_paths: import_paths.to_vec(),
+        output_dir: output_dir.to_path_buf(),
+        state_dir: state_dir.to_path_buf(),
+        store_dir: store_dir.to_string(),
+        verbose,
+        max_jobs,
+        substituter_url: if no_substitute {
+            None
+        } else {
+            Some("https://cache.nixos.org".to_string())
+        },
+        keypair: keypair.clone(),
+        trusted_keys: trusted_keys.to_vec(),
+        trust_unsigned,
+    };
+
+    let result = run_build(&config)?;
+    report_build_result(&config, &result, false)?;
+    Ok(())
+}
+
 pub fn cmd_self_build(
     output_dir: &Path,
     state_dir: &Path,
@@ -763,18 +807,11 @@ pub fn cmd_self_build(
         .unwrap_or_else(|_| PathBuf::from("crunch"));
     eprintln!("  invoking binary: {}", invoking_binary.display());
 
-    // Resolve bwrap: prefer crunch-built from output_dir, fall back to
-    // host PATH. If crunch-built, prepend its directory to PATH so
-    // BubblewrapBuildService's Command::new("bwrap") finds it.
-    let bwrap_source = resolve_bwrap_source(output_dir)?;
-    if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
+    // Initial bwrap resolve — may use host fallback on first-ever build.
+    let initial_bwrap = resolve_bwrap_source(output_dir)?;
+    if let BwrapSource::CrunchBuilt(ref dir) = initial_bwrap {
         prepend_to_path(dir)?;
     }
-
-    // Check for crunch-built busybox (the NCL script will discover it
-    // independently inside the sandbox, but we record it here for the
-    // proof report).
-    let busybox_path = find_crunch_busybox(output_dir);
 
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
@@ -787,22 +824,14 @@ pub fn cmd_self_build(
         )));
     }
 
-    eprintln!("\n[1/3] Staging source...");
+    eprintln!("\n[1/4] Staging source...");
     let store_name = stage_source(&src_dir, output_dir)?;
 
-    eprintln!("\n[2/3] Building...");
-    let ncl_content = generate_self_build_ncl(&store_name, store_dir);
-
-    let tmp_dir = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
-    let ncl_path = tmp_dir.path().join("self-build.ncl");
-    std::fs::write(&ncl_path, &ncl_content)
-        .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
-
+    // Set up import paths and signing keys (shared by all builds).
     let lib_dir = src_dir.join("lib");
     let import_paths: Vec<std::ffi::OsString> = {
         let mut paths = build_import_paths(&[lib_dir])?;
-        paths.push(bootstrap_dir.into());
+        paths.push(bootstrap_dir.clone().into());
         paths
     };
 
@@ -811,6 +840,55 @@ pub fn cmd_self_build(
         load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
     let self_build_trusted =
         crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
+
+    // ── Step 2: Build bootstrap tools as separate roots ──────────
+    //
+    // bwrap and busybox are built as their own root derivations so
+    // their outputs get exported to the --store directory on disk.
+    // Without this, they only exist in castore/PathInfo (intermediates
+    // are not exported). Exporting them lets the next self-build stage
+    // find crunch-built tools via find_crunch_bwrap/find_crunch_busybox.
+
+    eprintln!("\n[2/4] Building bootstrap tools...");
+    for tool_name in ["bwrap.ncl", "busybox.ncl"] {
+        let tool_path = bootstrap_dir.join(tool_name);
+        if !tool_path.exists() {
+            eprintln!("  WARNING: {tool_name} not found, skipping");
+            continue;
+        }
+        eprintln!("  building {tool_name}...");
+        build_bootstrap_tool(
+            &tool_path,
+            &import_paths,
+            output_dir,
+            state_dir,
+            store_dir,
+            verbose,
+            max_jobs,
+            no_substitute,
+            &self_build_keypair,
+            &self_build_trusted,
+            trust_unsigned,
+        )?;
+    }
+
+    // Re-resolve bwrap and busybox now that they are on disk.
+    let bwrap_source = resolve_bwrap_source(output_dir)?;
+    if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
+        prepend_to_path(dir)?;
+    }
+    let busybox_path = find_crunch_busybox(output_dir);
+
+    // ── Step 3: Build crunch ────────────────────────────────────
+
+    eprintln!("\n[3/4] Building crunch...");
+    let ncl_content = generate_self_build_ncl(&store_name, store_dir);
+
+    let tmp_dir = tempfile::tempdir()
+        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+    let ncl_path = tmp_dir.path().join("self-build.ncl");
+    std::fs::write(&ncl_path, &ncl_content)
+        .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
 
     let config = crunch_pipeline::BuildConfig {
         file: ncl_path.clone(),
@@ -833,13 +911,15 @@ pub fn cmd_self_build(
     let result = run_build(&config)?;
     report_build_result(&config, &result, false)?;
 
+    // ── Step 4: Verify ──────────────────────────────────────────
+
     let output_binary = if !no_verify {
-        eprintln!("\n[3/3] Verifying output...");
+        eprintln!("\n[4/4] Verifying output...");
         let crunch_bin = find_self_built_binary(output_dir)?;
         verify_binary(&crunch_bin)?;
         crunch_bin
     } else {
-        eprintln!("\n[3/3] Verification skipped (--no-verify).");
+        eprintln!("\n[4/4] Verification skipped (--no-verify).");
         find_self_built_binary(output_dir)?
     };
 

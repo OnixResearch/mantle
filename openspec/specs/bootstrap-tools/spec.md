@@ -69,25 +69,38 @@ instead of externally-provided binaries, after the initial bootstrap.
 - THEN an external bwrap MUST be on PATH (chicken-and-egg)
 - THEN after completion, subsequent self-builds use the crunch-built bwrap
 
-#### Scenario: Proof records tool selection
+#### Scenario: Proof records crunch-built tool selection
 
-- GIVEN a self-build stage completes
-- WHEN the proof markers are emitted
-- THEN the proof output records the bwrap source (crunch-built or
-  host-fallback) and the selected busybox path
+- GIVEN a proof store that already contains crunch-built `*-bwrap` and
+  `*-busybox` outputs (from a prior self-build's bootstrap-tool step)
+- WHEN the stage1 binary runs the second self-build stage
+- THEN the proof output records that bwrap source was `crunch-built`
+- AND it records the selected busybox path used for
+  `SNIX_BUILD_SANDBOX_SHELL`
 
 #### Scenario: First-stage host fallback stays visible
 
-- GIVEN no crunch-built `bwrap` exists on disk in the output store
+- GIVEN no crunch-built `bwrap` exists on disk yet
 - WHEN the first self-build stage runs
 - THEN the output records that host fallback was used
-- AND the proof workflow treats that fallback as acceptable for the first
-  stage
+- AND the proof workflow treats that fallback as acceptable only for
+  the initial bwrap resolve before bootstrap tools are built
 
-Note: intermediate bootstrap outputs (bwrap, busybox) exist in the castore
-and PathInfo database but are NOT exported to the `--store` directory on disk.
-Only root outputs are exported. The proof markers report what the host-side
-resolution found in the output directory, not what the sandbox used internally.
+### Requirement: Bootstrap tools exported to disk
+
+The self-build pipeline MUST build bwrap and busybox as separate root
+derivations so their outputs are exported to the `--store` directory
+on disk. Without this step, they would only exist in castore/PathInfo
+(intermediate deps are not exported) and subsequent self-build stages
+could not find crunch-built tools.
+
+#### Scenario: bwrap and busybox on disk after self-build
+
+- GIVEN `crunch self-build` completes
+- WHEN the output store is scanned
+- THEN `*-bwrap/bin/bwrap` exists on disk
+- AND `*-busybox/bin/busybox` exists on disk
+- AND both are executable
 
 ### Requirement: SNIX_BUILD_SANDBOX_SHELL accepts crunch-built path
 

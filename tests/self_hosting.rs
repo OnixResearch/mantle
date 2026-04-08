@@ -254,28 +254,31 @@ fn self_hosting_stage0_stage1_stage2() {
         stage1_canonical.display(),
     );
 
-    // Stage2 should emit bwrap-source proof marker.
-    // Note: intermediate bootstrap outputs (bwrap, busybox) exist in
-    // castore/PathInfo but are NOT exported to the --store directory
-    // (only root outputs are). So find_crunch_bwrap() and
-    // find_crunch_busybox() won't find them on disk. The proof
-    // markers report what the stage resolved from the output dir
-    // scan — which may be host-fallback when no prior self-build
-    // left disk-exported bwrap/busybox.
+    // Stage2 MUST use crunch-built bwrap. The self-build pipeline
+    // now exports bwrap and busybox as separate root builds (step 2/4)
+    // so they land on disk in the --store directory.
     let s2_bwrap = extract_proof_field(&stage2_stderr, "bwrap-source");
     assert!(
         s2_bwrap.is_some(),
         "stage2 should emit bwrap-source proof line",
     );
     let bwrap_val = s2_bwrap.unwrap();
-    eprintln!("stage2 bwrap: {bwrap_val}");
+    assert!(
+        bwrap_val.starts_with("crunch-built:"),
+        "stage2 bwrap must be crunch-built, got: {bwrap_val}",
+    );
 
+    // Stage2 MUST find crunch-built busybox on disk.
     let s2_busybox = extract_proof_field(&stage2_stderr, "busybox-path");
     assert!(
         s2_busybox.is_some(),
         "stage2 should emit busybox-path proof line",
     );
-    eprintln!("stage2 busybox: {}", s2_busybox.unwrap());
+    assert_ne!(
+        s2_busybox.unwrap(),
+        "none",
+        "stage2 must have a crunch-built busybox, not none",
+    );
 
     // Output binary recorded.
     let s2_output = extract_proof_field(&stage2_stderr, "output-binary");
