@@ -1721,32 +1721,59 @@ mod tests {
         );
     }
 
-    /// verify_tools_on_disk must error when the store is empty.
+    /// verify_tools_on_disk must error when the store is empty and no
+    /// bwrap is on PATH.  Controls PATH to make the test deterministic.
     #[test]
     fn verify_tools_on_disk_errors_on_empty_store() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+
+        // Empty PATH so resolve_bwrap_source finds nothing.
+        unsafe { std::env::set_var("PATH", "") };
+
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
+
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
         assert!(result.is_err(), "must error when no tools on disk");
+        assert_eq!(
+            result.unwrap_err().message(),
+            "bwrap (bubblewrap) not found. The first self-build requires bwrap \
+             on PATH. Install it from https://github.com/containers/bubblewrap",
+        );
     }
 
     /// When host bwrap exists but store has no crunch-built bwrap,
-    /// verify_tools_on_disk must mention bwrap.ncl in the error.
+    /// verify_tools_on_disk must produce the exact bwrap.ncl error.
+    /// Uses a fake bwrap on PATH so the test is deterministic.
     #[test]
     fn verify_tools_on_disk_error_names_bwrap_ncl() {
-        // This test only runs when the host has bwrap on PATH.
-        // Without host bwrap, resolve_bwrap_source errors before
-        // reaching the "after building" check.
-        if find_executable_on_path("bwrap").is_none() {
-            eprintln!("SKIP: no host bwrap on PATH");
-            return;
-        }
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+
+        // Put a fake bwrap on PATH so resolve_bwrap_source returns
+        // HostFallback instead of erroring with "not found".
+        let fake_dir = tempfile::tempdir().unwrap();
+        make_fake_executable(fake_dir.path(), "bwrap");
+        unsafe { std::env::set_var("PATH", fake_dir.path()) };
+
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
+
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
         assert!(result.is_err());
-        let msg = result.unwrap_err().message().to_string();
-        assert!(
-            msg.contains("after building bwrap.ncl"),
-            "error must name bwrap.ncl: {msg}",
+        assert_eq!(
+            result.unwrap_err().message(),
+            "bwrap was not found on disk after building bwrap.ncl. \
+             The bootstrap tool build may have failed silently.",
         );
     }
 
@@ -1796,10 +1823,10 @@ mod tests {
         }
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_err(), "must error when busybox is missing");
-        let msg = result.unwrap_err().message().to_string();
-        assert!(
-            msg.contains("busybox was not found on disk after building busybox.ncl"),
-            "error must name busybox.ncl: {msg}",
+        assert_eq!(
+            result.unwrap_err().message(),
+            "busybox was not found on disk after building busybox.ncl. \
+             The bootstrap tool build may have failed silently.",
         );
     }
 }

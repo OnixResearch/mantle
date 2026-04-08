@@ -376,3 +376,4 @@
 - Test count: crunch-glue 65->68 (3 drain_pending tests). crunch-build 222->224 (2 entries-in-message tests). Total workspace: 385.
 - `PathInfoService::list()` + `put()` on the same service can hang on the in-memory/LRU backend. For `store_sign`-style bulk updates, collect matching PathInfos first, then write them back in a second pass.
 - pueue tasks that pipe `cargo test` through `grep | head` can hang even after the underlying command is done. Prefer direct test runs, `tail` after completion, or kill the pipeline once you have the evidence you need.
+- `src/self_build.rs` tests that inspect missing-tool errors must control the process-global PATH with `PATH_MUTEX`, use tempdir fake executables for host fallback cases, and compare the full error string with `assert_eq!`. Host-dependent `contains()` checks made `verify_tools_on_disk_*` flaky.
