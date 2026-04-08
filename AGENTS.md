@@ -312,6 +312,10 @@ When claiming test results in commit messages or completion summaries:
   are not exported). Missing bwrap.ncl or busybox.ncl is a hard error.
 - After step [2/4], `resolve_bwrap_source` and `find_crunch_busybox`
   re-check the store. Both must succeed or self-build errors out.
+- `stage_source()` must package the current tracked worktree, not
+  `git archive HEAD`. Otherwise the self-hosting proof builds stage1
+  from stale committed sources and stage2 can regress to already-fixed
+  behavior even though the checkout binary passed stage0.
 - The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
   uses a fresh tempdir store per run. Pre-assertions verify the store
   is empty before stage0.
@@ -320,6 +324,16 @@ When claiming test results in commit messages or completion summaries:
   `SNIX_BUILD_SANDBOX_SHELL`; `/run/wrappers/bin` before
   `/run/current-system/sw/bin` for suid fusermount3; `TMPDIR` pointing
   to a filesystem with ~4 GiB free (not tmpfs if it's full).
+- PATH ordering alone is not enough on this host. `BubblewrapBuildService`
+  now falls back to materializing castore inputs on disk only for the
+  specific `FuseDaemon::new()` failure path that reports
+  `Unexpected exit code when running fusermount`, so self-build can
+  continue when FUSE mounts are unavailable without masking unrelated
+  sandbox setup errors.
+- Vendored `snix-build` treats `SNIX_BUILD_SANDBOX_SHELL=/bin/sh`
+  (or a compile-time default of `/bin/sh`) as a placeholder, not a real
+  sandbox shell. It auto-discovers a `busybox-static` binary under
+  `/nix/store/*busybox-static*/bin/busybox` before falling back to `/bin/sh`.
 
 ## Coding Style: Tiger Style
 

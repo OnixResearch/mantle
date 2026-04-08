@@ -33,9 +33,14 @@
   export PKG_CONFIG_PATH="/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
   export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
   ```
+- `SNIX_BUILD_SANDBOX_SHELL=/bin/sh` is only a placeholder on this host. Vendored `snix-build` now treats `/bin/sh` (env or compile-time default) as a signal to auto-discover `busybox-static` under `/nix/store/*busybox-static*/bin/busybox`.
+- The self-hosting proof's old `fusermount3: Operation not permitted` failure was NOT caused by picking `/run/current-system/sw/bin/fusermount3`. `strace` showed `/run/wrappers/bin/fusermount3` was already in use. The real fix was a fallback in `vendor/snix-build` that materializes castore inputs on disk only for the specific `FuseDaemon::new()` error message `Unexpected exit code when running fusermount`, so unrelated sandbox errors still surface normally.
+- `/tmp` is effectively full on this machine. For self-build smoke/proof work, set `TMPDIR=/var/tmp` or another disk-backed directory before running long builds.
+- `stage_source()` must export tracked files from the current worktree, not `git archive HEAD`. Otherwise `tests/self_hosting.rs` stage0 builds a stale stage1 binary that silently drops local fixes, and stage2 reintroduces already-fixed failures.
 
 ## Tooling Gotchas
 - The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.
+- The `rg` tool wrapper also lets the shell see a leading `#`, so patterns like `#\[ignore\]` get treated as comments. Quote those searches in `bash` instead of calling the `rg` tool directly.
 - Do not assume `rustup` exists in `~/.cargo/bin` just because nightly toolchains exist under `~/.rustup/toolchains/`. The self-hosting proof helper needs a direct fallback scan of `~/.rustup/toolchains/` and common Nix store tool wrappers (`clang`, `mold`, `pkg-config`, OpenSSL pkgconfig dirs) when the login shell PATH is sparse.
 - OpenSpec `validate` rejects a delta requirement whose body doesn't contain an RFC-2119 strength word. Even if the second sentence has `MUST`, make the first sentence explicit (`The X MUST ...`) to avoid parser complaints.
 - `openspec validate <change>` expects change spec files to contain delta headers like `## ADDED Requirements` / `## MODIFIED Requirements`. A title-and-purpose-only spec file fails validation even if the requirements below are well-formed.

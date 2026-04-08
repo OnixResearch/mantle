@@ -11,16 +11,15 @@
 //! bwrap sandbox using only the bootstrap toolchain.
 
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
-use crate::build_cmd::{
-    build_import_paths,
-    load_configured_trusted_public_keys,
-    load_or_generate_signing_keypair,
-    report_build_result,
-    run_build,
-};
+use crate::build_cmd::build_import_paths;
+use crate::build_cmd::load_configured_trusted_public_keys;
+use crate::build_cmd::load_or_generate_signing_keypair;
+use crate::build_cmd::report_build_result;
+use crate::build_cmd::run_build;
 use crate::errors::RunError;
 
 /// Maximum source tree size: 2 GiB.
@@ -78,6 +77,24 @@ impl BwrapSource {
     pub fn is_crunch_built(&self) -> bool {
         matches!(self, BwrapSource::CrunchBuilt(_))
     }
+
+    /// Directory that must lead PATH for this bwrap choice.
+    fn bin_dir(&self) -> Result<PathBuf, RunError> {
+        match self {
+            BwrapSource::CrunchBuilt(dir) => {
+                assert!(!dir.as_os_str().is_empty(), "crunch-built bwrap dir must not be empty",);
+                Ok(dir.clone())
+            }
+            BwrapSource::HostFallback(path) => {
+                assert!(!path.as_os_str().is_empty(), "host fallback bwrap path must not be empty",);
+                let parent = path.parent().ok_or_else(|| {
+                    RunError::Internal(format!("host fallback bwrap has no parent directory: {}", path.display(),))
+                })?;
+                assert!(!parent.as_os_str().is_empty(), "host fallback bwrap parent dir must not be empty",);
+                Ok(parent.to_path_buf())
+            }
+        }
+    }
 }
 
 /// Structured report from a self-build run.
@@ -106,27 +123,13 @@ impl SelfBuildReport {
     /// filter stderr for this prefix and parse the key-value pairs.
     pub fn format_proof_lines(&self) -> String {
         let mut out = String::with_capacity(512);
-        out.push_str(&format!(
-            "{PROOF_PREFIX} invoking-binary={}\n",
-            self.invoking_binary.display(),
-        ));
-        out.push_str(&format!(
-            "{PROOF_PREFIX} bwrap-source={}\n",
-            self.bwrap_source,
-        ));
+        out.push_str(&format!("{PROOF_PREFIX} invoking-binary={}\n", self.invoking_binary.display(),));
+        out.push_str(&format!("{PROOF_PREFIX} bwrap-source={}\n", self.bwrap_source,));
         match &self.busybox_path {
-            Some(p) => out.push_str(&format!(
-                "{PROOF_PREFIX} busybox-path={}\n",
-                p.display(),
-            )),
-            None => out.push_str(&format!(
-                "{PROOF_PREFIX} busybox-path=none\n",
-            )),
+            Some(p) => out.push_str(&format!("{PROOF_PREFIX} busybox-path={}\n", p.display(),)),
+            None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
         }
-        out.push_str(&format!(
-            "{PROOF_PREFIX} output-binary={}\n",
-            self.output_binary.display(),
-        ));
+        out.push_str(&format!("{PROOF_PREFIX} output-binary={}\n", self.output_binary.display(),));
         out
     }
 
@@ -172,55 +175,36 @@ impl SelfBuildReport {
 /// Stage the crunch source tree into the output store.
 ///
 /// 1. `cargo vendor --locked vendor-deps`
-/// 2. `git archive HEAD | tar -x` into staging
+/// 2. Export tracked worktree files into staging
 /// 3. Copy vendor-deps/ into staging
 /// 4. Move staging into `$store_dir/$hash-crunch-src/`
 ///
 /// Returns the store path name (e.g., "abcdef...-crunch-src").
-pub fn stage_source(
-    src_dir: &Path,
-    store_dir: &Path,
-) -> Result<String, RunError> {
-    let staging = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError> {
+    let staging = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
     let stage_root = staging.path().join("crunch-src");
-    std::fs::create_dir_all(&stage_root)
-        .map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
+    std::fs::create_dir_all(&stage_root).map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
 
     // 1. Vendor dependencies.
     eprintln!("  vendoring cargo dependencies...");
     run_cmd(
-        Command::new("cargo")
-            .args(["vendor", "--locked", "vendor-deps"])
-            .current_dir(src_dir),
+        Command::new("cargo").args(["vendor", "--locked", "vendor-deps"]).current_dir(src_dir),
         "cargo vendor",
     )?;
 
-    // 2. Git-tracked files → staging.
-    eprintln!("  exporting git-tracked files...");
-    run_cmd(
-        Command::new("sh")
-            .args(["-c", &format!(
-                "cd '{}' && git archive HEAD | tar -x -C '{}'",
-                src_dir.display(),
-                stage_root.display(),
-            )]),
-        "git archive | tar extract",
-    )?;
+    // 2. Tracked worktree files → staging.
+    eprintln!("  exporting tracked worktree files...");
+    export_tracked_worktree(src_dir, &stage_root)?;
 
     // 3. Copy vendor-deps.
     eprintln!("  copying vendored deps...");
-    assert!(
-        src_dir.join("vendor-deps").exists(),
-        "vendor-deps/ must exist after cargo vendor"
-    );
+    assert!(src_dir.join("vendor-deps").exists(), "vendor-deps/ must exist after cargo vendor");
     run_cmd(
-        Command::new("cp")
-            .args(["-a"])
-            .arg(src_dir.join("vendor-deps"))
-            .arg(stage_root.join("vendor-deps")),
+        Command::new("cp").args(["-a"]).arg(src_dir.join("vendor-deps")).arg(stage_root.join("vendor-deps")),
         "cp vendor-deps",
     )?;
+    assert!(stage_root.join("Cargo.toml").exists(), "staged source must contain Cargo.toml");
+    assert!(!stage_root.join(".git").exists(), "staged source must not contain .git");
 
     // Size check.
     let size = dir_size(&stage_root);
@@ -238,8 +222,7 @@ pub fn stage_source(
     // Hash the file listing (paths + sizes) with blake3, then encode
     // the first 20 bytes as nix-base32 (the store path digest format).
     let fingerprint = tree_fingerprint(&stage_root);
-    let digest_bytes = data_encoding::HEXLOWER.decode(fingerprint.as_bytes())
-        .unwrap_or_else(|_| vec![0u8; 32]);
+    let digest_bytes = data_encoding::HEXLOWER.decode(fingerprint.as_bytes()).unwrap_or_else(|_| vec![0u8; 32]);
     let store_hash = nix_compat::nixbase32::encode(&digest_bytes[..20]);
     let store_name = format!("{store_hash}-crunch-src");
     let dest = store_dir.join(&store_name);
@@ -251,13 +234,7 @@ pub fn stage_source(
 
     // Move staging into store. Use cp + rm since rename() doesn't
     // work across filesystems (tmpfs → disk).
-    run_cmd(
-        Command::new("cp")
-            .args(["-a"])
-            .arg(&stage_root)
-            .arg(&dest),
-        "cp to store",
-    )?;
+    run_cmd(Command::new("cp").args(["-a"]).arg(&stage_root).arg(&dest), "cp to store")?;
 
     eprintln!("  staged: {}", dest.display());
     Ok(store_name)
@@ -266,10 +243,7 @@ pub fn stage_source(
 /// Generate the Nickel derivation for building crunch.
 ///
 /// The source tree is referenced as a plain input path (not a FOD).
-pub fn generate_self_build_ncl(
-    src_store_path: &str,
-    store_prefix: &str,
-) -> String {
+pub fn generate_self_build_ncl(src_store_path: &str, store_prefix: &str) -> String {
     format!(
         r#"# Auto-generated by `crunch self-build`.
 let crunch = import "lib.ncl" in
@@ -477,9 +451,7 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
     let out = Command::new(binary_path)
         .arg("--help")
         .output()
-        .map_err(|e| RunError::Internal(format!(
-            "failed to run self-built binary: {e}"
-        )))?;
+        .map_err(|e| RunError::Internal(format!("failed to run self-built binary: {e}")))?;
 
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -490,10 +462,7 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
     }
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("crunch"),
-        "self-built binary --help doesn't mention 'crunch'"
-    );
+    assert!(stdout.contains("crunch"), "self-built binary --help doesn't mention 'crunch'");
 
     eprintln!("  binary OK");
     Ok(())
@@ -503,9 +472,7 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
 
 /// Run a command, returning an error with stderr on failure.
 fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
-    let out = cmd.output().map_err(|e| {
-        RunError::Internal(format!("failed to run `{label}`: {e}"))
-    })?;
+    let out = cmd.output().map_err(|e| RunError::Internal(format!("failed to run `{label}`: {e}")))?;
 
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -515,6 +482,21 @@ fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
         )));
     }
 
+    Ok(())
+}
+
+fn export_tracked_worktree(src_dir: &Path, stage_root: &Path) -> Result<(), RunError> {
+    assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
+    assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
+    let export_script = "set -eu\ncd \"$SRC_DIR\"\ngit ls-files -z | tar --null --files-from=- --create --file - | tar --extract --file - --directory \"$DST_DIR\"\n";
+    run_cmd(
+        Command::new("sh")
+            .arg("-c")
+            .arg(export_script)
+            .env("SRC_DIR", src_dir)
+            .env("DST_DIR", stage_root),
+        "git ls-files | tar extract",
+    )?;
     Ok(())
 }
 
@@ -593,8 +575,9 @@ fn resolve_bwrap_source(output_dir: &Path) -> Result<BwrapSource, RunError> {
         return Ok(BwrapSource::CrunchBuilt(bwrap_dir));
     }
 
-    // 2. Fall back to host PATH.
-    match find_executable_on_path("bwrap") {
+    // 2. Fall back to a host bwrap. On NixOS, prefer the wrapper dir
+    // so fusermount3 is also resolved from /run/wrappers/bin.
+    match find_host_bwrap() {
         Some(path) => {
             eprintln!(
                 "  WARNING: no crunch-built bwrap in {}; using external bwrap at {}",
@@ -609,6 +592,60 @@ fn resolve_bwrap_source(output_dir: &Path) -> Result<BwrapSource, RunError> {
                 .to_string(),
         )),
     }
+}
+
+fn choose_host_bwrap_path(wrapper_bwrap_path: Option<PathBuf>, path_bwrap_path: Option<PathBuf>) -> Option<PathBuf> {
+    if let Some(wrapper_path) = wrapper_bwrap_path {
+        return Some(wrapper_path);
+    }
+    path_bwrap_path
+}
+
+fn find_nixos_wrapper_bwrap() -> Option<PathBuf> {
+    let wrapper_path = Path::new("/run/wrappers/bin/bwrap");
+    if wrapper_path.is_file() && is_executable(wrapper_path) {
+        return Some(wrapper_path.to_path_buf());
+    }
+    None
+}
+
+fn find_nixos_wrapper_dir() -> Option<PathBuf> {
+    let wrapper_dir = Path::new("/run/wrappers/bin");
+    let fusermount_path = wrapper_dir.join("fusermount3");
+    if fusermount_path.is_file() && is_executable(&fusermount_path) {
+        return Some(wrapper_dir.to_path_buf());
+    }
+    None
+}
+
+fn find_host_bwrap() -> Option<PathBuf> {
+    let wrapper_bwrap_path = find_nixos_wrapper_bwrap();
+    let path_bwrap_path = find_executable_on_path("bwrap");
+    choose_host_bwrap_path(wrapper_bwrap_path, path_bwrap_path)
+}
+
+fn build_bwrap_path_entries(wrapper_dir: Option<PathBuf>, bwrap_bin_dir: PathBuf) -> Vec<PathBuf> {
+    assert!(!bwrap_bin_dir.as_os_str().is_empty(), "bwrap bin dir must not be empty",);
+    let mut path_entries = Vec::with_capacity(2);
+    path_entries.push(bwrap_bin_dir.clone());
+    if let Some(wrapper_dir) = wrapper_dir {
+        if wrapper_dir != bwrap_bin_dir {
+            path_entries.push(wrapper_dir);
+        }
+    }
+    assert!(!path_entries.is_empty(), "bwrap PATH entries must not be empty",);
+    assert!(path_entries.len() <= 2, "bwrap PATH entries exceeded 2");
+    path_entries
+}
+
+fn activate_bwrap_source(source: &BwrapSource) -> Result<(), RunError> {
+    let bin_dir = source.bin_dir()?;
+    let wrapper_dir = find_nixos_wrapper_dir();
+    let path_entries = build_bwrap_path_entries(wrapper_dir, bin_dir);
+    for dir in path_entries.iter().rev() {
+        prepend_to_path(dir)?;
+    }
+    Ok(())
 }
 
 /// Scan the output store for a crunch-built bwrap.
@@ -681,9 +718,7 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
 ///
 /// Returns the number of directories removed. Errors from individual
 /// removals are collected but do not abort the loop.
-pub fn invalidate_crunch_outputs(
-    output_dir: &Path,
-) -> Result<u32, RunError> {
+pub fn invalidate_crunch_outputs(output_dir: &Path) -> Result<u32, RunError> {
     let outputs = find_crunch_outputs(output_dir);
     let mut removed: u32 = 0;
     let mut errors: Vec<String> = Vec::new();
@@ -725,9 +760,7 @@ fn find_executable_on_path(name: &str) -> Option<PathBuf> {
 #[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    path.metadata()
-        .map(|m| m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
+    path.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
 }
 
 #[cfg(not(unix))]
@@ -741,14 +774,11 @@ fn is_executable(_path: &Path) -> bool {
 /// the current PATH is empty or unset.
 fn prepend_to_path(dir: &Path) -> Result<(), RunError> {
     let current: Vec<PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p)
-            .filter(|d| !d.as_os_str().is_empty())
-            .collect())
+        .map(|p| std::env::split_paths(&p).filter(|d| !d.as_os_str().is_empty()).collect())
         .unwrap_or_default();
     let mut dirs = vec![dir.to_path_buf()];
     dirs.extend(current);
-    let new_path = std::env::join_paths(&dirs)
-        .map_err(|e| RunError::Internal(format!("join_paths: {e}")))?;
+    let new_path = std::env::join_paths(&dirs).map_err(|e| RunError::Internal(format!("join_paths: {e}")))?;
     // SAFETY: single-threaded at this point (before tokio runtime).
     unsafe { std::env::set_var("PATH", &new_path) };
     Ok(())
@@ -784,12 +814,13 @@ fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), Run
                 .to_string(),
         ));
     }
-    let busybox_path = find_crunch_busybox(output_dir)
-        .ok_or_else(|| RunError::Internal(
+    let busybox_path = find_crunch_busybox(output_dir).ok_or_else(|| {
+        RunError::Internal(
             "busybox was not found on disk after building busybox.ncl. \
              The bootstrap tool build may have failed silently."
                 .to_string(),
-        ))?;
+        )
+    })?;
     Ok((bwrap_source, busybox_path))
 }
 
@@ -851,25 +882,19 @@ pub fn cmd_self_build(
 ) -> Result<SelfBuildReport, RunError> {
     eprintln!("=== crunch self-build ===");
 
-    let invoking_binary = std::env::current_exe()
-        .unwrap_or_else(|_| PathBuf::from("crunch"));
+    let invoking_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("crunch"));
     eprintln!("  invoking binary: {}", invoking_binary.display());
 
     // Initial bwrap resolve — may use host fallback on first-ever build.
     let initial_bwrap = resolve_bwrap_source(output_dir)?;
-    if let BwrapSource::CrunchBuilt(ref dir) = initial_bwrap {
-        prepend_to_path(dir)?;
-    }
+    activate_bwrap_source(&initial_bwrap)?;
 
     let src_dir = find_source_dir()?;
     eprintln!("source: {}", src_dir.display());
 
     let bootstrap_dir = src_dir.join("bootstrap");
     if !bootstrap_dir.exists() {
-        return Err(RunError::Internal(format!(
-            "bootstrap/ directory not found at {}",
-            bootstrap_dir.display(),
-        )));
+        return Err(RunError::Internal(format!("bootstrap/ directory not found at {}", bootstrap_dir.display(),)));
     }
 
     eprintln!("\n[1/{SELF_BUILD_STEP_COUNT}] Staging source...");
@@ -884,10 +909,8 @@ pub fn cmd_self_build(
     };
 
     let self_build_keypair = load_or_generate_signing_keypair(signing_key_path, state_dir)?;
-    let configured_trusted_keys =
-        load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
-    let self_build_trusted =
-        crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
+    let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
+    let self_build_trusted = crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
 
     // ── Step 2: Build bootstrap tools as separate roots ──────────
     //
@@ -919,9 +942,7 @@ pub fn cmd_self_build(
 
     // Re-resolve bwrap and busybox now that they are on disk.
     let (bwrap_source, busybox_path) = verify_tools_on_disk(output_dir)?;
-    if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
-        prepend_to_path(dir)?;
-    }
+    activate_bwrap_source(&bwrap_source)?;
     let busybox_path = Some(busybox_path);
 
     // ── Step 3: Build crunch ────────────────────────────────────
@@ -929,11 +950,9 @@ pub fn cmd_self_build(
     eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
     let ncl_content = generate_self_build_ncl(&store_name, store_dir);
 
-    let tmp_dir = tempfile::tempdir()
-        .map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+    let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
     let ncl_path = tmp_dir.path().join("self-build.ncl");
-    std::fs::write(&ncl_path, &ncl_content)
-        .map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
+    std::fs::write(&ncl_path, &ncl_content).map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
 
     let config = crunch_pipeline::BuildConfig {
         file: ncl_path.clone(),
@@ -983,8 +1002,7 @@ pub fn cmd_self_build(
 }
 
 fn find_source_dir() -> Result<PathBuf, RunError> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| RunError::Internal(format!("cwd: {e}")))?;
+    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("cwd: {e}")))?;
 
     if cwd.join("Cargo.toml").exists() && cwd.join("bootstrap").exists() {
         return Ok(cwd);
@@ -1002,18 +1020,13 @@ fn find_source_dir() -> Result<PathBuf, RunError> {
     }
 
     Err(RunError::Internal(
-        "could not locate crunch source directory.\nRun `crunch self-build` from the crunch repo root."
-            .to_string(),
+        "could not locate crunch source directory.\nRun `crunch self-build` from the crunch repo root.".to_string(),
     ))
 }
 
 fn find_self_built_binary(output_dir: &Path) -> Result<PathBuf, RunError> {
-    let entries = std::fs::read_dir(output_dir).map_err(|e| {
-        RunError::Internal(format!(
-            "reading output dir {}: {e}",
-            output_dir.display(),
-        ))
-    })?;
+    let entries = std::fs::read_dir(output_dir)
+        .map_err(|e| RunError::Internal(format!("reading output dir {}: {e}", output_dir.display(),)))?;
 
     for entry in entries {
         let entry = match entry {
@@ -1030,10 +1043,7 @@ fn find_self_built_binary(output_dir: &Path) -> Result<PathBuf, RunError> {
         }
     }
 
-    Err(RunError::Internal(format!(
-        "could not find self-built crunch binary in {}",
-        output_dir.display(),
-    )))
+    Err(RunError::Internal(format!("could not find self-built crunch binary in {}", output_dir.display(),)))
 }
 
 #[cfg(test)]
@@ -1125,11 +1135,49 @@ mod tests {
 
     #[test]
     fn run_cmd_reports_failure() {
-        let err = run_cmd(
-            Command::new("false").arg(""),
-            "test-false",
-        ).unwrap_err();
+        let err = run_cmd(Command::new("false").arg(""), "test-false").unwrap_err();
         assert!(err.message().contains("test-false"));
+    }
+
+    #[test]
+    fn export_tracked_worktree_uses_worktree_and_skips_untracked() {
+        let repo = tempfile::tempdir().unwrap();
+        run_cmd(Command::new("git").arg("init").arg("-q").current_dir(repo.path()), "git init").unwrap();
+        run_cmd(
+            Command::new("git")
+                .args(["config", "user.email", "pi@example.test"])
+                .current_dir(repo.path()),
+            "git config email",
+        )
+        .unwrap();
+        run_cmd(
+            Command::new("git")
+                .args(["config", "user.name", "Pi Test"])
+                .current_dir(repo.path()),
+            "git config name",
+        )
+        .unwrap();
+        std::fs::write(repo.path().join("tracked.txt"), "committed\n").unwrap();
+        run_cmd(
+            Command::new("git").args(["add", "tracked.txt"]).current_dir(repo.path()),
+            "git add tracked",
+        )
+        .unwrap();
+        run_cmd(
+            Command::new("git").args(["commit", "-qm", "init"]).current_dir(repo.path()),
+            "git commit",
+        )
+        .unwrap();
+
+        std::fs::write(repo.path().join("tracked.txt"), "worktree\n").unwrap();
+        std::fs::write(repo.path().join("untracked.txt"), "skip me\n").unwrap();
+
+        let stage = tempfile::tempdir().unwrap();
+        export_tracked_worktree(repo.path(), stage.path()).unwrap();
+
+        let tracked = std::fs::read_to_string(stage.path().join("tracked.txt")).unwrap();
+        assert_eq!(tracked, "worktree\n");
+        assert!(!stage.path().join("untracked.txt").exists());
     }
 
     #[test]
@@ -1146,23 +1194,15 @@ mod tests {
     #[test]
     fn generate_ncl_has_bwrap_warning_branch() {
         let ncl = generate_self_build_ncl("x", "/nix/store");
-        assert!(
-            ncl.contains("crunch-built bwrap not found"),
-            "NCL must have a warning for missing bwrap",
-        );
-        assert!(
-            ncl.contains("Using crunch-built bwrap"),
-            "NCL must have a success message for found bwrap",
-        );
+        assert!(ncl.contains("crunch-built bwrap not found"), "NCL must have a warning for missing bwrap",);
+        assert!(ncl.contains("Using crunch-built bwrap"), "NCL must have a success message for found bwrap",);
     }
 
     #[test]
     fn generate_ncl_discovers_bwrap_before_path_export() {
         let ncl = generate_self_build_ncl("x", "/nix/store");
-        let discover_pos = ncl.find("$NIX_STORE/*-bwrap")
-            .expect("bwrap discovery loop missing");
-        let path_export_pos = ncl.find("${BWRAP_PATH}")
-            .expect("BWRAP_PATH in PATH export missing");
+        let discover_pos = ncl.find("$NIX_STORE/*-bwrap").expect("bwrap discovery loop missing");
+        let path_export_pos = ncl.find("${BWRAP_PATH}").expect("BWRAP_PATH in PATH export missing");
         assert!(
             discover_pos < path_export_pos,
             "bwrap discovery (pos {discover_pos}) must come before \
@@ -1184,8 +1224,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bwrap_bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
         let result = find_crunch_bwrap(store.path());
@@ -1203,8 +1242,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bwrap_bin,
-                std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o644)).unwrap();
         }
 
         let result = find_crunch_bwrap(store.path());
@@ -1228,8 +1266,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
         assert!(find_crunch_bwrap(store.path()).is_none());
@@ -1245,15 +1282,11 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bwrap_bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
         let result = resolve_bwrap_source(store.path()).unwrap();
-        assert!(
-            result.is_crunch_built(),
-            "should prefer crunch-built bwrap",
-        );
+        assert!(result.is_crunch_built(), "should prefer crunch-built bwrap",);
         match result {
             BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, bwrap_dir),
             _ => panic!("expected CrunchBuilt"),
@@ -1264,7 +1297,7 @@ mod tests {
     fn resolve_bwrap_source_falls_back_to_path() {
         let store = tempfile::tempdir().unwrap();
         let result = resolve_bwrap_source(store.path());
-        match find_executable_on_path("bwrap") {
+        match find_host_bwrap() {
             Some(host_path) => {
                 let src = result.unwrap();
                 assert!(!src.is_crunch_built(), "should be host fallback");
@@ -1282,10 +1315,24 @@ mod tests {
     }
 
     #[test]
+    fn choose_host_bwrap_path_prefers_wrapper() {
+        let wrapper = PathBuf::from("/run/wrappers/bin/bwrap");
+        let path = PathBuf::from("/nix/store/abc-bubblewrap/bin/bwrap");
+        let chosen = choose_host_bwrap_path(Some(wrapper.clone()), Some(path));
+        assert_eq!(chosen, Some(wrapper));
+    }
+
+    #[test]
+    fn choose_host_bwrap_path_falls_back_to_path() {
+        let path = PathBuf::from("/usr/bin/bwrap");
+        let chosen = choose_host_bwrap_path(None, Some(path.clone()));
+        assert_eq!(chosen, Some(path));
+        assert!(choose_host_bwrap_path(None, None).is_none());
+    }
+
+    #[test]
     fn find_executable_on_path_returns_none_for_nonexistent() {
-        assert!(
-            find_executable_on_path("this-binary-does-not-exist-crunch-test").is_none()
-        );
+        assert!(find_executable_on_path("this-binary-does-not-exist-crunch-test").is_none());
     }
 
     #[test]
@@ -1308,8 +1355,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&f,
-                std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
         }
         assert!(!is_executable(&f), "plain file should not be executable");
     }
@@ -1328,8 +1374,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         dir.to_path_buf()
     }
@@ -1369,8 +1414,7 @@ mod tests {
         std::fs::write(&bin, "not executable").unwrap();
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bin,
-                std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o644)).unwrap();
         }
 
         unsafe { std::env::set_var("PATH", dir.path()) };
@@ -1403,19 +1447,10 @@ mod tests {
             None => unsafe { std::env::remove_var("PATH") },
         }
 
-        assert!(
-            !dirs.is_empty(),
-            "PATH should not be empty after prepend",
-        );
-        assert_eq!(
-            dirs[0], dir.path().to_path_buf(),
-            "prepended dir should be first in PATH",
-        );
+        assert!(!dirs.is_empty(), "PATH should not be empty after prepend",);
+        assert_eq!(dirs[0], dir.path().to_path_buf(), "prepended dir should be first in PATH",);
         // No trailing empty component (the old manual concat bug).
-        assert!(
-            dirs.iter().all(|d| !d.as_os_str().is_empty()),
-            "PATH should have no empty components: {dirs:?}",
-        );
+        assert!(dirs.iter().all(|d| !d.as_os_str().is_empty()), "PATH should have no empty components: {dirs:?}",);
     }
 
     #[test]
@@ -1439,6 +1474,53 @@ mod tests {
         // Should have exactly one entry, not a trailing colon.
         assert_eq!(dirs.len(), 1, "empty PATH + prepend = 1 entry: {dirs:?}");
         assert_eq!(dirs[0], dir.path().to_path_buf());
+    }
+
+    #[test]
+    fn activate_bwrap_source_prepends_host_parent_dir() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+        unsafe { std::env::set_var("PATH", "") };
+
+        let dir = tempfile::tempdir().unwrap();
+        make_fake_executable(dir.path(), "bwrap");
+        let source = BwrapSource::HostFallback(dir.path().join("bwrap"));
+
+        activate_bwrap_source(&source).unwrap();
+
+        let new_path = std::env::var_os("PATH").unwrap();
+        let dirs: Vec<PathBuf> = std::env::split_paths(&new_path).collect();
+
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert!(!dirs.is_empty(), "host fallback activation should prepend at least one dir",);
+        assert_eq!(dirs[0], dir.path().to_path_buf());
+        if let Some(wrapper_dir) = find_nixos_wrapper_dir() {
+            if wrapper_dir != dir.path() {
+                assert!(dirs.len() >= 2, "wrapper dir should be present after source dir");
+                assert_eq!(dirs[1], wrapper_dir);
+            }
+        }
+    }
+
+    #[test]
+    fn build_bwrap_path_entries_adds_wrapper_after_source() {
+        let source_dir = PathBuf::from("/nix/store/abc-bubblewrap/bin");
+        let wrapper_dir = PathBuf::from("/run/wrappers/bin");
+        let dirs = build_bwrap_path_entries(Some(wrapper_dir.clone()), source_dir.clone());
+        assert_eq!(dirs, vec![source_dir, wrapper_dir]);
+    }
+
+    #[test]
+    fn build_bwrap_path_entries_deduplicates_wrapper() {
+        let source_dir = PathBuf::from("/run/wrappers/bin");
+        let dirs = build_bwrap_path_entries(Some(source_dir.clone()), source_dir.clone());
+        assert_eq!(dirs, vec![source_dir]);
+        let dirs = build_bwrap_path_entries(None, PathBuf::from("/usr/bin"));
+        assert_eq!(dirs, vec![PathBuf::from("/usr/bin")]);
     }
 
     // ── BwrapSource tests ─────────────────────────────────────────
@@ -1473,6 +1555,13 @@ mod tests {
         assert!(!BwrapSource::HostFallback(PathBuf::from("/x")).is_crunch_built());
     }
 
+    #[test]
+    fn bwrap_source_bin_dir_uses_parent_for_host_fallback() {
+        let source = BwrapSource::HostFallback(PathBuf::from("/run/wrappers/bin/bwrap"));
+        let dir = source.bin_dir().unwrap();
+        assert_eq!(dir, PathBuf::from("/run/wrappers/bin"));
+    }
+
     // ── SelfBuildReport tests ────────────────────────────────────
 
     #[test]
@@ -1490,8 +1579,7 @@ mod tests {
             assert!(line.starts_with(PROOF_PREFIX), "bad line: {line}");
         }
 
-        let parsed = SelfBuildReport::parse_proof_lines(&lines)
-            .expect("should parse back");
+        let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
         assert_eq!(parsed.invoking_binary, report.invoking_binary);
         assert_eq!(parsed.bwrap_source, report.bwrap_source);
         assert_eq!(parsed.busybox_path, report.busybox_path);
@@ -1509,8 +1597,7 @@ mod tests {
         let lines = report.format_proof_lines();
         assert!(lines.contains("busybox-path=none"));
 
-        let parsed = SelfBuildReport::parse_proof_lines(&lines)
-            .expect("should parse back");
+        let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
         assert!(parsed.busybox_path.is_none());
         assert!(!parsed.bwrap_source.is_crunch_built());
     }
@@ -1540,8 +1627,7 @@ mod tests {
              {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
              {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n"
         );
-        let parsed = SelfBuildReport::parse_proof_lines(&mixed)
-            .expect("should parse despite noise");
+        let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite noise");
         assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
         assert!(parsed.bwrap_source.is_crunch_built());
     }
@@ -1558,8 +1644,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bb,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bb, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         let result = find_crunch_busybox(store.path());
         assert_eq!(result, Some(bb));
@@ -1581,8 +1666,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bb,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bb, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         assert!(find_crunch_busybox(store.path()).is_none());
     }
@@ -1648,10 +1732,7 @@ mod tests {
     /// REQUIRED_BOOTSTRAP_TOOLS must include both bwrap and busybox.
     #[test]
     fn required_tools_includes_bwrap_and_busybox() {
-        assert!(
-            REQUIRED_BOOTSTRAP_TOOLS.contains(&"bwrap.ncl"),
-            "REQUIRED_BOOTSTRAP_TOOLS must include bwrap.ncl",
-        );
+        assert!(REQUIRED_BOOTSTRAP_TOOLS.contains(&"bwrap.ncl"), "REQUIRED_BOOTSTRAP_TOOLS must include bwrap.ncl",);
         assert!(
             REQUIRED_BOOTSTRAP_TOOLS.contains(&"busybox.ncl"),
             "REQUIRED_BOOTSTRAP_TOOLS must include busybox.ncl",
@@ -1673,11 +1754,7 @@ mod tests {
     /// Self-build step count must be exactly 4.
     #[test]
     fn self_build_step_count_is_four() {
-        assert_eq!(
-            SELF_BUILD_STEP_COUNT,
-            4,
-            "SELF_BUILD_STEP_COUNT changed; update this test and AGENTS.md",
-        );
+        assert_eq!(SELF_BUILD_STEP_COUNT, 4, "SELF_BUILD_STEP_COUNT changed; update this test and AGENTS.md",);
     }
 
     /// validate_bootstrap_tools must error when a required file is missing.
@@ -1688,10 +1765,7 @@ mod tests {
         let result = validate_bootstrap_tools(dir.path());
         assert!(result.is_err(), "must error when bootstrap tools are missing");
         let msg = result.unwrap_err().message().to_string();
-        assert!(
-            msg.contains("not found"),
-            "error must mention missing file: {msg}",
-        );
+        assert!(msg.contains("not found"), "error must mention missing file: {msg}",);
     }
 
     /// validate_bootstrap_tools must pass when all required files exist.
@@ -1710,15 +1784,9 @@ mod tests {
     fn validate_bootstrap_tools_errors_on_partial() {
         let dir = tempfile::tempdir().unwrap();
         // Only create the first tool.
-        std::fs::write(
-            dir.path().join(REQUIRED_BOOTSTRAP_TOOLS[0]),
-            "# placeholder",
-        ).unwrap();
+        std::fs::write(dir.path().join(REQUIRED_BOOTSTRAP_TOOLS[0]), "# placeholder").unwrap();
         let result = validate_bootstrap_tools(dir.path());
-        assert!(
-            result.is_err(),
-            "must error when only one bootstrap tool exists",
-        );
+        assert!(result.is_err(), "must error when only one bootstrap tool exists",);
     }
 
     /// verify_tools_on_disk must error when the store is empty and no
@@ -1734,10 +1802,7 @@ mod tests {
 
         let empty_entries = std::fs::read_dir(empty_path.path()).unwrap().count();
         assert_eq!(empty_entries, 0, "temp PATH dir must start empty");
-        assert!(
-            find_executable_on_path("bwrap").is_none(),
-            "empty temp PATH must not expose bwrap",
-        );
+        assert!(find_executable_on_path("bwrap").is_none(), "empty temp PATH must not expose bwrap",);
 
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
@@ -1802,10 +1867,8 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bwrap_bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
-            std::fs::set_permissions(&bb_bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bb_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_ok(), "must succeed with both tools: {:?}", result.err());
@@ -1826,8 +1889,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&bwrap_bin,
-                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_err(), "must error when busybox is missing");
