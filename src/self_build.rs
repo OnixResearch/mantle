@@ -1721,12 +1721,33 @@ mod tests {
         );
     }
 
-    /// verify_tools_on_disk must error when the output store is empty.
+    /// verify_tools_on_disk must error when the store is empty.
     #[test]
     fn verify_tools_on_disk_errors_on_empty_store() {
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_err(), "must error when no tools on disk");
+    }
+
+    /// When host bwrap exists but store has no crunch-built bwrap,
+    /// verify_tools_on_disk must mention bwrap.ncl in the error.
+    #[test]
+    fn verify_tools_on_disk_error_names_bwrap_ncl() {
+        // This test only runs when the host has bwrap on PATH.
+        // Without host bwrap, resolve_bwrap_source errors before
+        // reaching the "after building" check.
+        if find_executable_on_path("bwrap").is_none() {
+            eprintln!("SKIP: no host bwrap on PATH");
+            return;
+        }
+        let store = tempfile::tempdir().unwrap();
+        let result = verify_tools_on_disk(store.path());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().message().to_string();
+        assert!(
+            msg.contains("after building bwrap.ncl"),
+            "error must name bwrap.ncl: {msg}",
+        );
     }
 
     /// verify_tools_on_disk succeeds when both tools are on disk.
@@ -1775,5 +1796,10 @@ mod tests {
         }
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_err(), "must error when busybox is missing");
+        let msg = result.unwrap_err().message().to_string();
+        assert!(
+            msg.contains("busybox was not found on disk after building busybox.ncl"),
+            "error must name busybox.ncl: {msg}",
+        );
     }
 }
