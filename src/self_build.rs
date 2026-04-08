@@ -29,6 +29,15 @@ const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Maximum number of `*-crunch` output directories to scan before giving up.
 const MAX_CRUNCH_OUTPUTS: u32 = 4096;
 
+/// Bootstrap tool NCL files that MUST be built as separate roots before
+/// the main crunch derivation. Adding or removing entries here changes
+/// the self-build pipeline.
+const REQUIRED_BOOTSTRAP_TOOLS: &[&str] = &["bwrap.ncl", "busybox.ncl"];
+
+/// Number of steps in `cmd_self_build`. Tests assert against this to
+/// catch step additions/removals.
+const SELF_BUILD_STEP_COUNT: u32 = 4;
+
 /// Stable line prefix used by the proof runner to identify structured
 /// self-build evidence lines.
 const PROOF_PREFIX: &str = "self-build-proof:";
@@ -745,6 +754,45 @@ fn prepend_to_path(dir: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+/// Verify that all required bootstrap tool NCL files exist.
+///
+/// Returns `Err` if any file in `REQUIRED_BOOTSTRAP_TOOLS` is missing.
+fn validate_bootstrap_tools(bootstrap_dir: &Path) -> Result<(), RunError> {
+    for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
+        let tool_path = bootstrap_dir.join(tool_name);
+        if !tool_path.exists() {
+            return Err(RunError::Internal(format!(
+                "{tool_name} not found at {}. \
+                 The self-build requires all bootstrap tools: {:?}",
+                tool_path.display(),
+                REQUIRED_BOOTSTRAP_TOOLS,
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Verify that crunch-built bwrap and busybox are on disk after building.
+///
+/// Returns `Err` if either tool is missing from the output store.
+fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), RunError> {
+    let bwrap_source = resolve_bwrap_source(output_dir)?;
+    if !bwrap_source.is_crunch_built() {
+        return Err(RunError::Internal(
+            "bwrap was not found on disk after building. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        ));
+    }
+    let busybox_path = find_crunch_busybox(output_dir)
+        .ok_or_else(|| RunError::Internal(
+            "busybox was not found on disk after building. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        ))?;
+    Ok((bwrap_source, busybox_path))
+}
+
 /// Build a single bootstrap tool (.ncl file) as a root derivation.
 ///
 /// This exports the tool's output to the `--store` directory on disk,
@@ -824,7 +872,7 @@ pub fn cmd_self_build(
         )));
     }
 
-    eprintln!("\n[1/4] Staging source...");
+    eprintln!("\n[1/{SELF_BUILD_STEP_COUNT}] Staging source...");
     let store_name = stage_source(&src_dir, output_dir)?;
 
     // Set up import paths and signing keys (shared by all builds).
@@ -849,17 +897,10 @@ pub fn cmd_self_build(
     // are not exported). Exporting them lets the next self-build stage
     // find crunch-built tools via find_crunch_bwrap/find_crunch_busybox.
 
-    eprintln!("\n[2/4] Building bootstrap tools...");
-    for tool_name in ["bwrap.ncl", "busybox.ncl"] {
+    eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
+    validate_bootstrap_tools(&bootstrap_dir)?;
+    for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
         let tool_path = bootstrap_dir.join(tool_name);
-        if !tool_path.exists() {
-            return Err(RunError::Internal(format!(
-                "{tool_name} not found at {}. \
-                 The self-build requires both bwrap.ncl and busybox.ncl \
-                 in the bootstrap directory.",
-                tool_path.display(),
-            )));
-        }
         eprintln!("  building {tool_name}...");
         build_bootstrap_tool(
             &tool_path,
@@ -877,29 +918,15 @@ pub fn cmd_self_build(
     }
 
     // Re-resolve bwrap and busybox now that they are on disk.
-    let bwrap_source = resolve_bwrap_source(output_dir)?;
-    if !bwrap_source.is_crunch_built() {
-        return Err(RunError::Internal(
-            "bwrap was not found on disk after building bwrap.ncl. \
-             The bootstrap tool build may have failed silently."
-                .to_string(),
-        ));
-    }
+    let (bwrap_source, busybox_path) = verify_tools_on_disk(output_dir)?;
     if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
         prepend_to_path(dir)?;
     }
-    let busybox_path = find_crunch_busybox(output_dir);
-    if busybox_path.is_none() {
-        return Err(RunError::Internal(
-            "busybox was not found on disk after building busybox.ncl. \
-             The bootstrap tool build may have failed silently."
-                .to_string(),
-        ));
-    }
+    let busybox_path = Some(busybox_path);
 
     // ── Step 3: Build crunch ────────────────────────────────────
 
-    eprintln!("\n[3/4] Building crunch...");
+    eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
     let ncl_content = generate_self_build_ncl(&store_name, store_dir);
 
     let tmp_dir = tempfile::tempdir()
@@ -932,12 +959,12 @@ pub fn cmd_self_build(
     // ── Step 4: Verify ──────────────────────────────────────────
 
     let output_binary = if !no_verify {
-        eprintln!("\n[4/4] Verifying output...");
+        eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verifying output...");
         let crunch_bin = find_self_built_binary(output_dir)?;
         verify_binary(&crunch_bin)?;
         crunch_bin
     } else {
-        eprintln!("\n[4/4] Verification skipped (--no-verify).");
+        eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verification skipped (--no-verify).");
         find_self_built_binary(output_dir)?
     };
 
@@ -1612,63 +1639,112 @@ mod tests {
         assert_eq!(removed, 0);
     }
 
-    // ── Structural invariant tests ─────────────────────────────
+    // ── Behavioral invariant tests ─────────────────────────────
     //
     // These tests enforce the self-build invariants documented in
-    // AGENTS.md. If someone changes the self-build structure, these
-    // tests break and the docs must be updated to match.
+    // AGENTS.md by testing constants and calling real functions,
+    // not scanning source text.
 
-    /// The bootstrap tool loop MUST include both bwrap.ncl and busybox.ncl.
-    /// This is a source-level assertion: the string literals in
-    /// cmd_self_build's tool loop must contain both names.
+    /// REQUIRED_BOOTSTRAP_TOOLS must include both bwrap and busybox.
     #[test]
-    fn self_build_requires_both_bootstrap_tools() {
-        let src = include_str!("self_build.rs");
-        // The for loop iterates over a fixed array of tool names.
+    fn required_tools_includes_bwrap_and_busybox() {
         assert!(
-            src.contains(r#""bwrap.ncl", "busybox.ncl""#),
-            "cmd_self_build must build both bwrap.ncl and busybox.ncl",
+            REQUIRED_BOOTSTRAP_TOOLS.contains(&"bwrap.ncl"),
+            "REQUIRED_BOOTSTRAP_TOOLS must include bwrap.ncl",
+        );
+        assert!(
+            REQUIRED_BOOTSTRAP_TOOLS.contains(&"busybox.ncl"),
+            "REQUIRED_BOOTSTRAP_TOOLS must include busybox.ncl",
         );
     }
 
-    /// Missing bootstrap tools must produce a hard error, not a warning.
-    /// The source must contain a return-Err path for missing tools.
+    /// REQUIRED_BOOTSTRAP_TOOLS must have exactly 2 entries.
+    /// Adding a new tool is fine but requires updating this test
+    /// and the AGENTS.md docs.
     #[test]
-    fn missing_bootstrap_tool_is_hard_error() {
-        let src = include_str!("self_build.rs");
-        assert!(
-            src.contains("The self-build requires both bwrap.ncl and busybox.ncl"),
-            "missing bootstrap tool must produce a hard error message",
+    fn required_tools_count_is_exact() {
+        assert_eq!(
+            REQUIRED_BOOTSTRAP_TOOLS.len(),
+            2,
+            "REQUIRED_BOOTSTRAP_TOOLS changed size; update this test and AGENTS.md",
         );
     }
 
-    /// After building tools, bwrap must be verified as crunch-built.
+    /// Self-build step count must be exactly 4.
     #[test]
-    fn post_build_bwrap_check_is_enforced() {
-        let src = include_str!("self_build.rs");
-        assert!(
-            src.contains("bwrap was not found on disk after building bwrap.ncl"),
-            "post-build bwrap disk check must exist",
+    fn self_build_step_count_is_four() {
+        assert_eq!(
+            SELF_BUILD_STEP_COUNT,
+            4,
+            "SELF_BUILD_STEP_COUNT changed; update this test and AGENTS.md",
         );
     }
 
-    /// After building tools, busybox must be verified on disk.
+    /// validate_bootstrap_tools must error when a required file is missing.
     #[test]
-    fn post_build_busybox_check_is_enforced() {
-        let src = include_str!("self_build.rs");
+    fn validate_bootstrap_tools_errors_on_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // Empty dir — no .ncl files exist.
+        let result = validate_bootstrap_tools(dir.path());
+        assert!(result.is_err(), "must error when bootstrap tools are missing");
+        let msg = result.unwrap_err().message().to_string();
         assert!(
-            src.contains("busybox was not found on disk after building busybox.ncl"),
-            "post-build busybox disk check must exist",
+            msg.contains("not found"),
+            "error must mention missing file: {msg}",
         );
     }
 
-    /// Self-build must have exactly 4 steps.
+    /// validate_bootstrap_tools must pass when all required files exist.
     #[test]
-    fn self_build_has_four_steps() {
-        let src = include_str!("self_build.rs");
-        assert!(src.contains("[1/4] Staging source"), "step 1 missing");
-        assert!(src.contains("[2/4] Building bootstrap tools"), "step 2 missing");
-        assert!(src.contains("[3/4] Building crunch"), "step 3 missing");
-        assert!(src.contains("[4/4] Verifying output"), "step 4 missing");
+    fn validate_bootstrap_tools_passes_when_present() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in REQUIRED_BOOTSTRAP_TOOLS {
+            std::fs::write(dir.path().join(name), "# placeholder").unwrap();
+        }
+        let result = validate_bootstrap_tools(dir.path());
+        assert!(result.is_ok(), "must pass when all tools exist");
+    }
+
+    /// validate_bootstrap_tools must error if only one tool exists.
+    #[test]
+    fn validate_bootstrap_tools_errors_on_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        // Only create the first tool.
+        std::fs::write(
+            dir.path().join(REQUIRED_BOOTSTRAP_TOOLS[0]),
+            "# placeholder",
+        ).unwrap();
+        let result = validate_bootstrap_tools(dir.path());
+        assert!(
+            result.is_err(),
+            "must error when only one bootstrap tool exists",
+        );
+    }
+
+    /// verify_tools_on_disk must error when the output store is empty.
+    #[test]
+    fn verify_tools_on_disk_errors_on_empty_store() {
+        let store = tempfile::tempdir().unwrap();
+        let result = verify_tools_on_disk(store.path());
+        assert!(result.is_err(), "must error when no tools on disk");
+    }
+
+    /// verify_tools_on_disk must error when bwrap exists but busybox doesn't.
+    #[test]
+    fn verify_tools_on_disk_errors_without_busybox() {
+        let store = tempfile::tempdir().unwrap();
+        // Create a fake bwrap.
+        let bwrap_dir = store.path().join("abc-bwrap").join("bin");
+        std::fs::create_dir_all(&bwrap_dir).unwrap();
+        let bwrap_bin = bwrap_dir.join("bwrap");
+        std::fs::write(&bwrap_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let result = verify_tools_on_disk(store.path());
+        assert!(result.is_err(), "must error when busybox is missing");
     }
 }
