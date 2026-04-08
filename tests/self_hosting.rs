@@ -143,6 +143,20 @@ fn self_hosting_stage0_stage1_stage2() {
     let store = proof_dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
 
+    // The store starts empty. Verify no stale outputs exist.
+    assert!(
+        find_bwrap_on_disk(&store).is_none(),
+        "fresh store must not contain bwrap",
+    );
+    assert!(
+        find_busybox_on_disk(&store).is_none(),
+        "fresh store must not contain busybox",
+    );
+    assert!(
+        find_crunch_binary(&store).is_none(),
+        "fresh store must not contain crunch",
+    );
+
     // ── Stage 0: checkout binary builds stage1 ──────────────────
 
     eprintln!("\n=== PROOF: Stage 0 (checkout -> stage1) ===\n");
