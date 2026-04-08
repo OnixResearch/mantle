@@ -779,14 +779,14 @@ fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), Run
     let bwrap_source = resolve_bwrap_source(output_dir)?;
     if !bwrap_source.is_crunch_built() {
         return Err(RunError::Internal(
-            "bwrap was not found on disk after building. \
+            "bwrap was not found on disk after building bwrap.ncl. \
              The bootstrap tool build may have failed silently."
                 .to_string(),
         ));
     }
     let busybox_path = find_crunch_busybox(output_dir)
         .ok_or_else(|| RunError::Internal(
-            "busybox was not found on disk after building. \
+            "busybox was not found on disk after building busybox.ncl. \
              The bootstrap tool build may have failed silently."
                 .to_string(),
         ))?;
@@ -1727,6 +1727,35 @@ mod tests {
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_err(), "must error when no tools on disk");
+    }
+
+    /// verify_tools_on_disk succeeds when both tools are on disk.
+    #[test]
+    fn verify_tools_on_disk_succeeds_with_both() {
+        let store = tempfile::tempdir().unwrap();
+        // Create fake bwrap.
+        let bwrap_dir = store.path().join("abc-bwrap").join("bin");
+        std::fs::create_dir_all(&bwrap_dir).unwrap();
+        let bwrap_bin = bwrap_dir.join("bwrap");
+        std::fs::write(&bwrap_bin, "#!/bin/sh\n").unwrap();
+        // Create fake busybox.
+        let bb_dir = store.path().join("xyz-busybox").join("bin");
+        std::fs::create_dir_all(&bb_dir).unwrap();
+        let bb_bin = bb_dir.join("busybox");
+        std::fs::write(&bb_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&bb_bin,
+                std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let result = verify_tools_on_disk(store.path());
+        assert!(result.is_ok(), "must succeed with both tools: {:?}", result.err());
+        let (bwrap_source, busybox_path) = result.unwrap();
+        assert!(bwrap_source.is_crunch_built());
+        assert!(busybox_path.ends_with("busybox"));
     }
 
     /// verify_tools_on_disk must error when bwrap exists but busybox doesn't.
