@@ -284,6 +284,41 @@ Building derivations (not just compiling crunch) requires:
 - Tarball and git lock hashes must be recursive/NAR hashes of the unpacked tree / checked-out work tree. Plain files and local/remote patches use flat content hashes. There is no fallback to manifest `expected` values during refresh.
 - Test count: 70 (65 unit + 5 integration using crunch-eval for Nickel validation).
 
+## Verification Evidence Rules
+
+When claiming test results in commit messages or completion summaries:
+
+- **Run the command in the same tool call** that produces the summary.
+  Use `Bash` with a timeout for fast tests, `pueue_run` + `pueue_log`
+  for slow ones. The tool output IS the evidence.
+- **Never quote test counts from memory** or from a prior session.
+  Re-run and show the output.
+- **For pueue tasks**, always `pueue_log` the relevant task ID and
+  include the `test result:` line in the commit message or summary.
+  `pueue_wait` alone proves the task finished, not what it printed.
+- **For ignored integration tests** (like `tests/self_hosting.rs`),
+  `cargo test --test X -- --list` proves compilation + discovery.
+  Only `--ignored --nocapture` with captured output proves execution.
+
+## Self-Build and Self-Hosting Proof
+
+- `cmd_self_build` has 4 steps: [1/4] stage source, [2/4] build
+  bootstrap tools (bwrap.ncl + busybox.ncl as separate roots),
+  [3/4] build crunch, [4/4] verify.
+- Step [2/4] exports bwrap and busybox to the `--store` directory on
+  disk. Without this, they only exist in castore/PathInfo (intermediates
+  are not exported). Missing bwrap.ncl or busybox.ncl is a hard error.
+- After step [2/4], `resolve_bwrap_source` and `find_crunch_busybox`
+  re-check the store. Both must succeed or self-build errors out.
+- The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
+  uses a fresh tempdir store per run. Pre-assertions verify the store
+  is empty before stage0.
+- Run with: `cargo test -p crunch --test self_hosting -- --ignored --nocapture`
+- Needs: bwrap, git, cargo, tar on PATH; static busybox as
+  `SNIX_BUILD_SANDBOX_SHELL`; `/run/wrappers/bin` before
+  `/run/current-system/sw/bin` for suid fusermount3; `TMPDIR` pointing
+  to a filesystem with ~4 GiB free (not tmpfs if it's full).
+
 ## Coding Style: Tiger Style
 
 Follow Tiger Style. The single most important principle is **Functional Core, Imperative Shell (FCIS)**:
