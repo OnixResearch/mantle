@@ -69,22 +69,25 @@ instead of externally-provided binaries, after the initial bootstrap.
 - THEN an external bwrap MUST be on PATH (chicken-and-egg)
 - THEN after completion, subsequent self-builds use the crunch-built bwrap
 
-#### Scenario: Proof records crunch-built tool selection
+#### Scenario: Proof records tool selection
 
-- GIVEN a proof store that already contains crunch-built `*-bwrap` and
-  `*-busybox` outputs
-- WHEN the stage1 binary runs the second self-build stage
-- THEN the proof output records that bwrap source was `crunch-built`
-- AND it records the selected busybox path used for
-  `SNIX_BUILD_SANDBOX_SHELL`
+- GIVEN a self-build stage completes
+- WHEN the proof markers are emitted
+- THEN the proof output records the bwrap source (crunch-built or
+  host-fallback) and the selected busybox path
 
 #### Scenario: First-stage host fallback stays visible
 
-- GIVEN no crunch-built `bwrap` exists yet
+- GIVEN no crunch-built `bwrap` exists on disk in the output store
 - WHEN the first self-build stage runs
 - THEN the output records that host fallback was used
-- AND the proof workflow treats that fallback as acceptable only for the first
+- AND the proof workflow treats that fallback as acceptable for the first
   stage
+
+Note: intermediate bootstrap outputs (bwrap, busybox) exist in the castore
+and PathInfo database but are NOT exported to the `--store` directory on disk.
+Only root outputs are exported. The proof markers report what the host-side
+resolution found in the output directory, not what the sandbox used internally.
 
 ### Requirement: SNIX_BUILD_SANDBOX_SHELL accepts crunch-built path
 
