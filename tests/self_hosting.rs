@@ -78,6 +78,47 @@ fn remove_crunch_outputs(store: &Path) -> u32 {
     removed
 }
 
+/// Scan store for `*-bwrap/bin/bwrap` and return the path if found.
+fn find_bwrap_on_disk(store: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(store).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-bwrap") {
+            let bin = entry.path().join("bin").join("bwrap");
+            if bin.exists() {
+                return Some(bin);
+            }
+        }
+    }
+    None
+}
+
+/// Scan store for `*-busybox/bin/busybox` and return the path if found.
+fn find_busybox_on_disk(store: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(store).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-busybox") {
+            let bin = entry.path().join("bin").join("busybox");
+            if bin.exists() {
+                return Some(bin);
+            }
+        }
+    }
+    None
+}
+
+/// Check a file is executable (unix).
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
 /// Parse proof lines from stderr.
 fn extract_proof_field<'a>(stderr: &'a str, key: &str) -> Option<&'a str> {
     let prefix = format!("self-build-proof: {key}=");
@@ -146,6 +187,28 @@ fn self_hosting_stage0_stage1_stage2() {
         stage1_help.status.success(),
         "stage1 --help failed",
     );
+
+    // ── Verify bootstrap tools on disk (spec requirement) ─────
+
+    let bwrap_bin = find_bwrap_on_disk(&store)
+        .expect("*-bwrap/bin/bwrap must exist on disk after stage0");
+    #[cfg(unix)]
+    assert!(
+        is_executable(&bwrap_bin),
+        "bwrap binary must be executable: {}",
+        bwrap_bin.display(),
+    );
+    eprintln!("bwrap on disk: {}", bwrap_bin.display());
+
+    let busybox_bin = find_busybox_on_disk(&store)
+        .expect("*-busybox/bin/busybox must exist on disk after stage0");
+    #[cfg(unix)]
+    assert!(
+        is_executable(&busybox_bin),
+        "busybox binary must be executable: {}",
+        busybox_bin.display(),
+    );
+    eprintln!("busybox on disk: {}", busybox_bin.display());
 
     // ── Prepare for Stage 2 ─────────────────────────────────────
 

@@ -853,8 +853,12 @@ pub fn cmd_self_build(
     for tool_name in ["bwrap.ncl", "busybox.ncl"] {
         let tool_path = bootstrap_dir.join(tool_name);
         if !tool_path.exists() {
-            eprintln!("  WARNING: {tool_name} not found, skipping");
-            continue;
+            return Err(RunError::Internal(format!(
+                "{tool_name} not found at {}. \
+                 The self-build requires both bwrap.ncl and busybox.ncl \
+                 in the bootstrap directory.",
+                tool_path.display(),
+            )));
         }
         eprintln!("  building {tool_name}...");
         build_bootstrap_tool(
@@ -874,10 +878,24 @@ pub fn cmd_self_build(
 
     // Re-resolve bwrap and busybox now that they are on disk.
     let bwrap_source = resolve_bwrap_source(output_dir)?;
+    if !bwrap_source.is_crunch_built() {
+        return Err(RunError::Internal(
+            "bwrap was not found on disk after building bwrap.ncl. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        ));
+    }
     if let BwrapSource::CrunchBuilt(ref dir) = bwrap_source {
         prepend_to_path(dir)?;
     }
     let busybox_path = find_crunch_busybox(output_dir);
+    if busybox_path.is_none() {
+        return Err(RunError::Internal(
+            "busybox was not found on disk after building busybox.ncl. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        ));
+    }
 
     // ── Step 3: Build crunch ────────────────────────────────────
 
