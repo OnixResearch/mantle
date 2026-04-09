@@ -7,7 +7,10 @@
 //!   - Internet access (for initial bootstrap fetch)
 //!
 //! Run with:
-//!   cargo test -p crunch --test self_hosting -- --ignored --nocapture
+//!   ./scripts/prove-self-hosting.sh
+//!
+//! The helper prepares PATH, compiler/linker lookup, pkg-config, openssl,
+//! and sandbox-shell discovery before invoking the ignored proof test.
 //!
 //! The test:
 //! 1. Runs `crunch self-build` (stage0) using the checkout binary
@@ -192,22 +195,22 @@ fn pre_stage_context(stage_name: &str, command: &[String], store_dir: &Path, sta
 }
 
 /// Check prerequisites for the proof.
-fn can_self_build() -> bool {
-    // Need bwrap, git, cargo, tar on PATH.
-    let tools = ["bwrap", "git", "cargo", "tar"];
+fn self_build_prereq_error() -> Option<String> {
+    // Need the helper's core runtime tools on PATH.
+    let tools = ["bwrap", "git", "cargo", "tar", "xz", "cp", "chmod"];
     for tool in tools {
         if std::process::Command::new(tool).arg("--version").output().is_err() {
-            eprintln!("SKIP: {tool} not on PATH");
-            return false;
+            return Some(format!(
+                "{tool} not on PATH. Run ./scripts/prove-self-hosting.sh --check for the full environment probe."
+            ));
         }
     }
     // Need the crunch source tree (Cargo.toml + bootstrap/ in cwd or parents).
     let cwd = std::env::current_dir().unwrap();
     if !cwd.join("Cargo.toml").exists() || !cwd.join("bootstrap").exists() {
-        eprintln!("SKIP: not in crunch source tree");
-        return false;
+        return Some("not in crunch source tree".to_string());
     }
-    true
+    None
 }
 
 /// Find the crunch binary in an output store (`*-crunch/bin/crunch`).
@@ -870,9 +873,8 @@ fn self_hosting_controlled_failure_reports_breadcrumbs() {
 #[test]
 #[ignore]
 fn self_hosting_stage0_stage1_stage2() {
-    if !can_self_build() {
-        eprintln!("SKIP: prerequisites not met");
-        return;
+    if let Some(err) = self_build_prereq_error() {
+        panic!("self-hosting proof prerequisites not met: {err}");
     }
 
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));

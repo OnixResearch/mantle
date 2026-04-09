@@ -11,6 +11,8 @@
 //! bwrap sandbox using only the bootstrap toolchain.
 
 use std::fmt;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -184,7 +186,7 @@ impl SelfBuildReport {
 ///
 /// 1. `cargo vendor --locked vendor-deps`
 /// 2. Export tracked worktree files into staging
-/// 3. Copy vendor-deps/ into staging
+/// 3. Copy vendor-deps/ and the generated vendor config into staging
 /// 4. Move staging into `$store_dir/$hash-crunch-src/`
 ///
 /// Returns the store path name (e.g., "abcdef...-crunch-src").
@@ -195,22 +197,20 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
 
     // 1. Vendor dependencies.
     eprintln!("  vendoring cargo dependencies...");
-    run_cmd(
-        Command::new("cargo").args(["vendor", "--locked", "vendor-deps"]).current_dir(src_dir),
-        "cargo vendor",
-    )?;
+    let vendor_config = cargo_vendor_config(src_dir)?;
 
     // 2. Tracked worktree files → staging.
     eprintln!("  exporting tracked worktree files...");
     export_tracked_worktree(src_dir, &stage_root)?;
 
-    // 3. Copy vendor-deps.
+    // 3. Copy vendor-deps and the generated cargo config.
     eprintln!("  copying vendored deps...");
     assert!(src_dir.join("vendor-deps").exists(), "vendor-deps/ must exist after cargo vendor");
     run_cmd(
         Command::new("cp").args(["-a"]).arg(src_dir.join("vendor-deps")).arg(stage_root.join("vendor-deps")),
         "cp vendor-deps",
     )?;
+    write_vendor_config(&stage_root, &vendor_config)?;
     assert!(stage_root.join("Cargo.toml").exists(), "staged source must contain Cargo.toml");
     assert!(!stage_root.join(".git").exists(), "staged source must not contain .git");
 
@@ -226,10 +226,9 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
 
     // 4. Compute a content fingerprint for the store path name.
     //
-    // Not a NAR hash — just a quick fingerprint for a unique name.
-    // Hash the file listing (paths + sizes) with blake3, then encode
-    // the first 20 bytes as nix-base32 (the store path digest format).
-    let fingerprint = tree_fingerprint(&stage_root);
+    // Not a NAR hash — just a deterministic tree fingerprint so same-content
+    // source trees reuse the staged path while same-size edits do not.
+    let fingerprint = tree_fingerprint(&stage_root)?;
     let digest_bytes = data_encoding::HEXLOWER.decode(fingerprint.as_bytes()).unwrap_or_else(|_| vec![0u8; 32]);
     let store_hash = nix_compat::nixbase32::encode(&digest_bytes[..20]);
     let store_name = format!("{store_hash}-crunch-src");
@@ -386,16 +385,9 @@ let bwrap = (import "bwrap.ncl") in
       fi
 
       $BB mkdir -p .cargo
-      cat > .cargo/config.toml << CARGOEOF
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor-deps"
+      cp "$CRUNCH_SRC/.cargo/vendor-config.toml" .cargo/config.toml
+      chmod u+w .cargo/config.toml
+      cat >> .cargo/config.toml << CARGOEOF
 
 [build]
 target = "x86_64-unknown-linux-musl"
@@ -504,32 +496,109 @@ fn export_tracked_worktree(src_dir: &Path, stage_root: &Path) -> Result<(), RunE
     Ok(())
 }
 
-/// Quick blake3 fingerprint of a directory tree (paths + sizes).
+/// Quick blake3 fingerprint of a directory tree.
 ///
-/// Not a NAR hash — just enough to get a unique store path name.
-/// We created this tree ourselves, so integrity verification against
-/// a known hash is pointless.
-fn tree_fingerprint(dir: &Path) -> String {
-    use std::io::Write;
-
+/// This is not a NAR hash, but it does include file contents so same-size edits
+/// do not silently reuse a stale staged source tree.
+fn tree_fingerprint(dir: &Path) -> Result<String, RunError> {
     let mut hasher = blake3::Hasher::new();
     let mut entries: Vec<PathBuf> = Vec::new();
 
-    collect_paths(dir, dir, &mut entries);
+    collect_paths(dir, &mut entries);
     entries.sort();
 
     for entry in &entries {
-        let meta = std::fs::symlink_metadata(entry).ok();
-        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-        let rel = entry.strip_prefix(dir).unwrap_or(entry);
-        let _ = write!(hasher, "{}:{}\n", rel.display(), size);
+        hash_tree_entry(dir, entry, &mut hasher)?;
     }
 
     let hash = hasher.finalize();
-    hash.to_hex().to_string()
+    Ok(hash.to_hex().to_string())
 }
 
-fn collect_paths(base: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
+fn hash_tree_entry(dir: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Result<(), RunError> {
+    assert!(dir.is_dir(), "fingerprint root must be a directory: {}", dir.display());
+
+    let rel = entry.strip_prefix(dir).unwrap_or(entry);
+    let metadata = std::fs::symlink_metadata(entry)
+        .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", entry.display())))?;
+    let rel_bytes = rel.as_os_str().as_encoded_bytes();
+    hasher.update(&(rel_bytes.len() as u64).to_le_bytes());
+    hasher.update(rel_bytes);
+
+    if metadata.file_type().is_symlink() {
+        let target = std::fs::read_link(entry)
+            .map_err(|e| RunError::Internal(format!("read_link {}: {e}", entry.display())))?;
+        hasher.update(b"symlink\0");
+        let target_bytes = target.as_os_str().as_encoded_bytes();
+        hasher.update(&(target_bytes.len() as u64).to_le_bytes());
+        hasher.update(target_bytes);
+        return Ok(());
+    }
+
+    if metadata.is_dir() {
+        hasher.update(b"dir\0");
+        return Ok(());
+    }
+
+    if metadata.is_file() {
+        hasher.update(b"file\0");
+        hasher.update(&metadata.len().to_le_bytes());
+        let mut file = File::open(entry)
+            .map_err(|e| RunError::Internal(format!("open {}: {e}", entry.display())))?;
+        let mut buffer = [0_u8; 8192];
+        loop {
+            let bytes_read = file
+                .read(&mut buffer)
+                .map_err(|e| RunError::Internal(format!("read {}: {e}", entry.display())))?;
+            if bytes_read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..bytes_read]);
+        }
+        return Ok(());
+    }
+
+    Err(RunError::Internal(format!(
+        "unsupported source entry type while fingerprinting {}",
+        entry.display(),
+    )))
+}
+
+fn cargo_vendor_config(src_dir: &Path) -> Result<String, RunError> {
+    let out = Command::new("cargo")
+        .args(["vendor", "--locked", "vendor-deps"])
+        .current_dir(src_dir)
+        .output()
+        .map_err(|e| RunError::Internal(format!("failed to run `cargo vendor`: {e}")))?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(RunError::Internal(format!(
+            "cargo vendor failed (exit {}):\n{stderr}",
+            out.status.code().unwrap_or(-1),
+        )));
+    }
+
+    let stdout = String::from_utf8(out.stdout)
+        .map_err(|e| RunError::Internal(format!("cargo vendor stdout was not UTF-8: {e}")))?;
+    assert!(!stdout.trim().is_empty(), "cargo vendor must print a config snippet");
+    Ok(stdout)
+}
+
+fn write_vendor_config(stage_root: &Path, vendor_config: &str) -> Result<(), RunError> {
+    assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
+    assert!(!vendor_config.trim().is_empty(), "vendor config must not be empty");
+
+    let cargo_dir = stage_root.join(".cargo");
+    std::fs::create_dir_all(&cargo_dir)
+        .map_err(|e| RunError::Internal(format!("mkdir {}: {e}", cargo_dir.display())))?;
+    let config_path = cargo_dir.join("vendor-config.toml");
+    std::fs::write(&config_path, vendor_config)
+        .map_err(|e| RunError::Internal(format!("write {}: {e}", config_path.display())))?;
+    Ok(())
+}
+
+fn collect_paths(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -538,7 +607,7 @@ fn collect_paths(base: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
         let path = entry.path();
         out.push(path.clone());
         if path.is_dir() && !path.is_symlink() {
-            collect_paths(base, &path, out);
+            collect_paths(&path, out);
         }
     }
 }
@@ -547,7 +616,7 @@ fn collect_paths(base: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
 fn dir_size(dir: &Path) -> u64 {
     let mut total: u64 = 0;
     let mut paths: Vec<PathBuf> = Vec::new();
-    collect_paths(dir, dir, &mut paths);
+    collect_paths(dir, &mut paths);
     for p in &paths {
         if let Ok(meta) = std::fs::symlink_metadata(p) {
             total = total.saturating_add(meta.len());
@@ -845,7 +914,7 @@ fn build_bootstrap_tool(
     keypair: &crunch_build::KeyPair,
     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
     trust_unsigned: bool,
-) -> Result<(), RunError> {
+) -> Result<PathBuf, RunError> {
     assert!(tool_ncl.exists(), "tool NCL must exist: {}", tool_ncl.display());
     assert!(!import_paths.is_empty(), "import_paths must not be empty");
 
@@ -869,6 +938,62 @@ fn build_bootstrap_tool(
 
     let result = run_build(&config)?;
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
+    let tool_label = tool_ncl
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .ok_or_else(|| RunError::Internal(format!("tool NCL has no valid stem: {}", tool_ncl.display())))?;
+    resolve_single_root_output_dir(&result, &config.store_dir, output_dir, tool_label)
+}
+
+fn resolve_single_root_output_dir(
+    result: &crunch_pipeline::PipelineResult,
+    store_dir: &str,
+    output_dir: &Path,
+    expected_label: &str,
+) -> Result<PathBuf, RunError> {
+    assert!(!expected_label.is_empty(), "expected_label must not be empty");
+
+    let mut matched_output_dirs: Vec<PathBuf> = Vec::new();
+    let output_dir_str = output_dir.to_str().unwrap_or(store_dir);
+    for outcome in &result.outcomes {
+        let drv_key = crunch_pipeline::drv_key_for(store_dir, &outcome.drv_path);
+        let Some(label) = crunch_pipeline::label_for_key(result, &drv_key) else {
+            continue;
+        };
+        if label != expected_label {
+            continue;
+        }
+        let path_info = outcome.outputs.get("out").ok_or_else(|| {
+            RunError::Internal(format!("root '{expected_label}' did not produce an 'out' output"))
+        })?;
+        let output_path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
+        matched_output_dirs.push(PathBuf::from(output_path));
+    }
+
+    if matched_output_dirs.is_empty() {
+        return Err(RunError::Internal(format!(
+            "could not find root output directory for '{expected_label}'",
+        )));
+    }
+    matched_output_dirs.sort();
+    matched_output_dirs.dedup();
+    if matched_output_dirs.len() != 1 {
+        return Err(RunError::Internal(format!(
+            "expected exactly 1 root output directory for '{expected_label}', found {}",
+            matched_output_dirs.len(),
+        )));
+    }
+    Ok(matched_output_dirs.pop().expect("checked len == 1"))
+}
+
+fn ensure_executable_file(path: &Path, label: &str) -> Result<(), RunError> {
+    assert!(!label.is_empty(), "label must not be empty");
+    if !path.is_file() {
+        return Err(RunError::Internal(format!("{label} is not on disk at {}", path.display())));
+    }
+    if !is_executable(path) {
+        return Err(RunError::Internal(format!("{label} is not executable at {}", path.display())));
+    }
     Ok(())
 }
 
@@ -926,11 +1051,13 @@ pub fn cmd_self_build(
 
     eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
     validate_bootstrap_tools(&bootstrap_dir)?;
+    let mut built_bwrap_dir: Option<PathBuf> = None;
+    let mut built_busybox_path: Option<PathBuf> = None;
     for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
         let tool_path = bootstrap_dir.join(tool_name);
         emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
         eprintln!("  building {tool_name}...");
-        build_bootstrap_tool(
+        let tool_output_dir = build_bootstrap_tool(
             &tool_path,
             &import_paths,
             output_dir,
@@ -943,11 +1070,29 @@ pub fn cmd_self_build(
             &self_build_trusted,
             trust_unsigned,
         )?;
+        if *tool_name == "bwrap.ncl" {
+            let bwrap_path = tool_output_dir.join("bin").join("bwrap");
+            ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+            let bwrap_dir = bwrap_path.parent().ok_or_else(|| {
+                RunError::Internal(format!("bwrap binary has no parent directory: {}", bwrap_path.display()))
+            })?;
+            built_bwrap_dir = Some(bwrap_dir.to_path_buf());
+        }
+        if *tool_name == "busybox.ncl" {
+            let busybox_path = tool_output_dir.join("bin").join("busybox");
+            ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+            built_busybox_path = Some(busybox_path);
+        }
         emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
     }
 
-    // Re-resolve bwrap and busybox now that they are on disk.
-    let (bwrap_source, busybox_path) = verify_tools_on_disk(output_dir)?;
+    let bwrap_dir = built_bwrap_dir.ok_or_else(|| {
+        RunError::Internal("bwrap was not found on disk after building bwrap.ncl. The bootstrap tool build may have failed silently.".to_string())
+    })?;
+    let busybox_path = built_busybox_path.ok_or_else(|| {
+        RunError::Internal("busybox was not found on disk after building busybox.ncl. The bootstrap tool build may have failed silently.".to_string())
+    })?;
+    let bwrap_source = BwrapSource::CrunchBuilt(bwrap_dir);
     activate_bwrap_source(&bwrap_source)?;
     let busybox_path = Some(busybox_path);
 
@@ -983,17 +1128,18 @@ pub fn cmd_self_build(
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
     emit_progress_marker("crunch-build-done");
 
+    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, output_dir, "crunch")?;
+    let output_binary = output_root_dir.join("bin").join("crunch");
+    ensure_executable_file(&output_binary, "self-built crunch binary")?;
+
     // ── Step 4: Verify ──────────────────────────────────────────
 
-    let output_binary = if !no_verify {
+    if !no_verify {
         eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verifying output...");
-        let crunch_bin = find_self_built_binary(output_dir)?;
-        verify_binary(&crunch_bin)?;
-        crunch_bin
+        verify_binary(&output_binary)?;
     } else {
         eprintln!("\n[4/{SELF_BUILD_STEP_COUNT}] Verification skipped (--no-verify).");
-        find_self_built_binary(output_dir)?
-    };
+    }
 
     let report = SelfBuildReport {
         invoking_binary,
@@ -1032,31 +1178,10 @@ fn find_source_dir() -> Result<PathBuf, RunError> {
     ))
 }
 
-fn find_self_built_binary(output_dir: &Path) -> Result<PathBuf, RunError> {
-    let entries = std::fs::read_dir(output_dir)
-        .map_err(|e| RunError::Internal(format!("reading output dir {}: {e}", output_dir.display(),)))?;
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") {
-            let binary = entry.path().join("bin").join("crunch");
-            if binary.exists() {
-                return Ok(binary);
-            }
-        }
-    }
-
-    Err(RunError::Internal(format!("could not find self-built crunch binary in {}", output_dir.display(),)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix_compat::store_path::StorePath;
 
     #[test]
     fn generate_ncl_has_source_path() {
@@ -1097,6 +1222,13 @@ mod tests {
     }
 
     #[test]
+    fn generate_ncl_uses_staged_vendor_config() {
+        let ncl = generate_self_build_ncl("x", "/nix/store");
+        assert!(ncl.contains(".cargo/vendor-config.toml"));
+        assert!(!ncl.contains("git+https://github.com/tvlfyi/wu-manber.git"));
+    }
+
+    #[test]
     fn generate_ncl_uses_nix_store_env_var() {
         let ncl = generate_self_build_ncl("x", "/nix/store");
         // Shell globs must use $NIX_STORE, not hardcoded /nix/store.
@@ -1123,8 +1255,8 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("sub")).unwrap();
         std::fs::write(dir.path().join("sub/b.txt"), "world").unwrap();
 
-        let h1 = tree_fingerprint(dir.path());
-        let h2 = tree_fingerprint(dir.path());
+        let h1 = tree_fingerprint(dir.path()).unwrap();
+        let h2 = tree_fingerprint(dir.path()).unwrap();
         assert_eq!(h1, h2);
         assert_eq!(h1.len(), 64); // blake3 hex
     }
@@ -1133,12 +1265,101 @@ mod tests {
     fn tree_fingerprint_changes_with_content() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
-        let h1 = tree_fingerprint(dir.path());
+        let h1 = tree_fingerprint(dir.path()).unwrap();
 
-        // Different file content → different size → different hash.
         std::fs::write(dir.path().join("a.txt"), "hello world").unwrap();
-        let h2 = tree_fingerprint(dir.path());
+        let h2 = tree_fingerprint(dir.path()).unwrap();
         assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn tree_fingerprint_changes_with_same_size_content() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let h1 = tree_fingerprint(dir.path()).unwrap();
+
+        std::fs::write(dir.path().join("a.txt"), "jello").unwrap();
+        let h2 = tree_fingerprint(dir.path()).unwrap();
+        assert_ne!(h1, h2);
+    }
+
+    fn test_store_path(name: &str) -> StorePath<String> {
+        let digest = *blake3::hash(name.as_bytes()).as_bytes();
+        let mut store_digest = [0u8; 20];
+        store_digest.copy_from_slice(&digest[..20]);
+        StorePath::from_name_and_digest_fixed(name, store_digest).unwrap()
+    }
+
+    fn test_path_info(name: &str) -> snix_store::path_info::PathInfo {
+        snix_store::path_info::PathInfo {
+            store_path: test_store_path(name),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [7u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    #[test]
+    fn resolve_single_root_output_dir_uses_root_labels() {
+        let drv_path = test_store_path("busybox.drv");
+        let output = test_path_info("busybox");
+        let expected = PathBuf::from(output.store_path.to_absolute_path_with_prefix("/tmp/test-store"));
+        let result = crunch_pipeline::PipelineResult {
+            outcomes: vec![crunch_build::BuildOutcome {
+                drv_path: drv_path.clone(),
+                outputs: std::collections::HashMap::from([("out".to_string(), output)]),
+                cached: false,
+                log: None,
+            }],
+            failed: vec![],
+            fod_mismatches: vec![],
+            root_labels: std::collections::HashMap::from([(
+                crunch_pipeline::drv_key_for("/nix/store", &drv_path),
+                "busybox".to_string(),
+            )]),
+        };
+
+        let actual = resolve_single_root_output_dir(&result, "/nix/store", Path::new("/tmp/test-store"), "busybox").unwrap();
+        assert_eq!(actual, expected);
+        assert!(actual.file_name().unwrap().to_string_lossy().ends_with("busybox"));
+    }
+
+    #[test]
+    fn resolve_single_root_output_dir_rejects_multiple_matches() {
+        let drv_a = test_store_path("crunch-a.drv");
+        let drv_b = test_store_path("crunch-b.drv");
+        let result = crunch_pipeline::PipelineResult {
+            outcomes: vec![
+                crunch_build::BuildOutcome {
+                    drv_path: drv_a.clone(),
+                    outputs: std::collections::HashMap::from([("out".to_string(), test_path_info("crunch-a"))]),
+                    cached: false,
+                    log: None,
+                },
+                crunch_build::BuildOutcome {
+                    drv_path: drv_b.clone(),
+                    outputs: std::collections::HashMap::from([("out".to_string(), test_path_info("crunch-b"))]),
+                    cached: false,
+                    log: None,
+                },
+            ],
+            failed: vec![],
+            fod_mismatches: vec![],
+            root_labels: std::collections::HashMap::from([
+                (crunch_pipeline::drv_key_for("/nix/store", &drv_a), "crunch".to_string()),
+                (crunch_pipeline::drv_key_for("/nix/store", &drv_b), "crunch".to_string()),
+            ]),
+        };
+
+        let err =
+            resolve_single_root_output_dir(&result, "/nix/store", Path::new("/tmp/test-store"), "crunch").unwrap_err();
+        assert!(err.message().contains("expected exactly 1 root output directory"));
     }
 
     #[test]

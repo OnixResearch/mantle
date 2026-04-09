@@ -321,12 +321,16 @@ When claiming test results in commit messages or completion summaries:
 - Step [2/4] exports bwrap and busybox to the `--store` directory on
   disk. Without this, they only exist in castore/PathInfo (intermediates
   are not exported). Missing bwrap.ncl or busybox.ncl is a hard error.
-- After step [2/4], `resolve_bwrap_source` and `find_crunch_busybox`
-  re-check the store. Both must succeed or self-build errors out.
+- After step [2/4], self-build must use the exact bwrap/busybox output
+  paths returned by the bootstrap-tool root builds, not a fresh `read_dir`
+  scan of the output store. Scanning can pick a stale `*-bwrap` /
+  `*-busybox` when the output dir already contains older runs.
 - `stage_source()` must package the current tracked worktree, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed
-  behavior even though the checkout binary passed stage0.
+  behavior even though the checkout binary passed stage0. Its staged
+  source fingerprint must include file contents, not just `path:size`
+  pairs, or same-size edits silently reuse a stale `*-crunch-src` tree.
 - A stage1 binary can inherit a compile-time `SNIX_BUILD_SANDBOX_SHELL`
   pointing at a busybox in the stage0 temp store. `vendor/snix-build`
   must treat a non-placeholder compile default as usable only when that
@@ -334,7 +338,11 @@ When claiming test results in commit messages or completion summaries:
   static busybox (or `/bin/sh` as a last resort).
 - The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
   uses a fresh tempdir store per run. Pre-assertions verify the store
-  is empty before stage0.
+  is empty before stage0. Do not claim a stage1==stage2 fixed point
+  from the current proof: an attempted byte-for-byte comparison showed
+  bootstrap-environment drift (notably different busybox outputs across
+  stages), so the current proof remains “stage1 binary can rebuild a
+  working crunch” rather than “stage1 and stage2 are identical”.
 - `tests/self_hosting.rs` now writes a stage audit bundle and a
   `<stage>-diagnostics.txt` file immediately after each stage command,
   before any success assertions. If stage0/stage2 fails or expected
@@ -363,7 +371,9 @@ When claiming test results in commit messages or completion summaries:
   not turn a proof run into hundreds of MiB of stderr. If the ignored proof
   looks stalled, use the printed `proof dir:` / `stageN stdout:` /
   `stageN stderr:` paths to inspect the live capture files instead of waiting
-  for the stage to end.
+  for the stage to end. The ignored proof must fail loudly when prerequisites
+  are missing; a bare `return` turns an explicitly requested proof run into a
+  false green test.
 - `src/self_build.rs` emits stable proof progress markers on stderr:
   `self-build-proof: progress=bootstrap-tool-start:<tool>`,
   `...bootstrap-tool-done:<tool>`, `...crunch-build-start`, and
