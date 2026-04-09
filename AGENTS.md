@@ -314,6 +314,7 @@ When claiming test results in commit messages or completion summaries:
 
 - `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.
 - The helper does not require a rich login shell PATH: it falls back to `~/.rustup/toolchains/` for nightly cargo/rustc and scans common NixOS locations (`/run/wrappers/bin`, `/run/current-system/sw/bin`, `/nix/store/*-clang-wrapper-*`, `/nix/store/*-mold-*`, `/nix/store/*-pkg-config-wrapper-*`, `/nix/store/*-openssl-*-dev/lib/pkgconfig`).
+- `df -Pk "$TMPDIR"` can hang on this host even in `--check` mode. `scripts/prove-self-hosting.sh` now uses `stat -f -c '%a %S'` for the free-space probe instead.
 - `cmd_self_build` has 4 steps: [1/4] stage source, [2/4] build
   bootstrap tools (bwrap.ncl + busybox.ncl as separate roots),
   [3/4] build crunch, [4/4] verify.
@@ -334,6 +335,21 @@ When claiming test results in commit messages or completion summaries:
 - The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
   uses a fresh tempdir store per run. Pre-assertions verify the store
   is empty before stage0.
+- `tests/self_hosting.rs` now writes a stage audit bundle and a
+  `<stage>-diagnostics.txt` file immediately after each stage command,
+  before any success assertions. If stage0/stage2 fails or expected
+  proof markers are missing, the panic message includes the audit bundle
+  path and the saved diagnostics snapshot from disk, not a recomputed
+  view of the current filesystem.
+- Stage-specific launch/help/copy failures in `tests/self_hosting.rs`
+  should use `pre_stage_context(...)` or `stage_context(...)`, not raw
+  `expect(...)`, so the ignored proof keeps the same breadcrumbs even
+  when a subprocess fails before the next assertion.
+- Fast breadcrumb check: `cargo test -p crunch --test self_hosting
+  self_hosting_controlled_failure_reports_breadcrumbs -- --nocapture`
+  should PASS. It spawns the test binary in a controlled-failure mode and
+  asserts that the child output contains the audit bundle path,
+  diagnostics path, and saved diagnostics snapshot.
 - Run with: `cargo test -p crunch --test self_hosting -- --ignored --nocapture`
 - Needs: bwrap, git, cargo, tar on PATH; static busybox as
   `SNIX_BUILD_SANDBOX_SHELL`; `/run/wrappers/bin` before

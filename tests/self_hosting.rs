@@ -21,10 +21,39 @@ mod audit_support;
 
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Output;
 
 use assert_cmd::Command;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
+
+const MAX_DIAGNOSTIC_LINES: u32 = 60;
+const MAX_DIAGNOSTIC_ENTRIES: u32 = 64;
+const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
+
+struct StageEvidence {
+    stage_name: String,
+    output: Output,
+    stderr: String,
+    audit_dir: PathBuf,
+    diagnostics_file: PathBuf,
+}
+
+fn pre_stage_context(stage_name: &str, command: &[String], store_dir: &Path, state_dir: &Path) -> String {
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+    assert!(!command.is_empty(), "stage command must not be empty");
+
+    let logs_dir = state_dir.join("logs");
+    let mut out = String::with_capacity(4096);
+    out.push_str(&format!("stage: {stage_name}\n"));
+    out.push_str(&format!("command: {}\n", command.join(" ")));
+    out.push_str(&format!("store_dir: {}\n", store_dir.display()));
+    out.push_str(&format!("state_dir: {}\n", state_dir.display()));
+    out.push_str(&format!("logs_dir: {}\n", logs_dir.display()));
+    append_section(&mut out, "store entries", &list_dir_entries(store_dir, MAX_DIAGNOSTIC_ENTRIES));
+    append_section(&mut out, "log entries", &list_dir_entries(&logs_dir, MAX_DIAGNOSTIC_ENTRIES));
+    out
+}
 
 /// Check prerequisites for the proof.
 fn can_self_build() -> bool {
@@ -131,6 +160,367 @@ fn extract_proof_field<'a>(stderr: &'a str, key: &str) -> Option<&'a str> {
     None
 }
 
+fn append_section(out: &mut String, title: &str, lines: &[String]) {
+    assert!(!title.is_empty(), "section title must not be empty");
+    assert!(!lines.is_empty(), "section {title} must have at least one line");
+
+    out.push_str(title);
+    out.push_str(":\n");
+    for line in lines {
+        out.push_str("  ");
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
+fn tail_lines(text: &str, max_lines: u32) -> Vec<String> {
+    assert!(max_lines > 0, "max_lines must be positive");
+
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return vec!["<none>".to_string()];
+    }
+
+    let line_count = u32::try_from(lines.len()).unwrap_or(u32::MAX);
+    let start = line_count.saturating_sub(max_lines);
+    let mut tail = Vec::new();
+    if start > 0 {
+        tail.push(format!("... {start} earlier lines omitted ..."));
+    }
+    let start_index = usize::try_from(start).unwrap_or(usize::MAX);
+    for line in lines.into_iter().skip(start_index) {
+        tail.push(line.to_string());
+    }
+    tail
+}
+
+fn list_dir_entries(dir: &Path, max_entries: u32) -> Vec<String> {
+    assert!(max_entries > 0, "max_entries must be positive");
+
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => return vec![format!("<unavailable: {err}>")],
+    };
+
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    if names.is_empty() {
+        return vec!["<empty>".to_string()];
+    }
+
+    let name_count = u32::try_from(names.len()).unwrap_or(u32::MAX);
+    if name_count > max_entries {
+        let keep = usize::try_from(max_entries).unwrap_or(usize::MAX);
+        let omitted = name_count.saturating_sub(max_entries);
+        names.truncate(keep);
+        names.push(format!("... {omitted} more entries omitted ..."));
+    }
+    names
+}
+
+fn proof_lines(stderr: &str, max_lines: u32) -> Vec<String> {
+    assert!(max_lines > 0, "max_lines must be positive");
+
+    let mut lines: Vec<String> = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("self-build-proof:"))
+        .map(str::to_string)
+        .collect();
+    if lines.is_empty() {
+        return vec!["<none>".to_string()];
+    }
+
+    let line_count = u32::try_from(lines.len()).unwrap_or(u32::MAX);
+    if line_count > max_lines {
+        let keep = usize::try_from(max_lines).unwrap_or(usize::MAX);
+        let omitted = line_count.saturating_sub(max_lines);
+        lines.truncate(keep);
+        lines.push(format!("... {omitted} more proof lines omitted ..."));
+    }
+    lines
+}
+
+fn render_stage_diagnostics(
+    stage_name: &str,
+    command: &[String],
+    output: &Output,
+    store_dir: &Path,
+    state_dir: &Path,
+) -> String {
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+    assert!(!command.is_empty(), "stage command must not be empty");
+
+    let logs_dir = state_dir.join("logs");
+    let exit_code = output.status.code().map(|code| code.to_string()).unwrap_or_else(|| "signal".to_string());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut out = String::with_capacity(8192);
+    out.push_str(&format!("stage: {stage_name}\n"));
+    out.push_str(&format!("exit_code: {exit_code}\n"));
+    out.push_str(&format!("command: {}\n", command.join(" ")));
+    out.push_str(&format!("store_dir: {}\n", store_dir.display()));
+    out.push_str(&format!("state_dir: {}\n", state_dir.display()));
+    out.push_str(&format!("logs_dir: {}\n", logs_dir.display()));
+    append_section(&mut out, "proof lines", &proof_lines(&stderr, MAX_DIAGNOSTIC_LINES));
+    append_section(&mut out, "store entries", &list_dir_entries(store_dir, MAX_DIAGNOSTIC_ENTRIES));
+    append_section(&mut out, "log entries", &list_dir_entries(&logs_dir, MAX_DIAGNOSTIC_ENTRIES));
+    append_section(&mut out, "stderr tail", &tail_lines(&stderr, MAX_DIAGNOSTIC_LINES));
+    append_section(&mut out, "stdout tail", &tail_lines(&stdout, MAX_DIAGNOSTIC_LINES / 2));
+    out
+}
+
+fn write_stage_diagnostics_file(proof_dir: &Path, stage_name: &str, diagnostics: &str) -> PathBuf {
+    assert!(proof_dir.exists(), "proof dir must exist");
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+
+    let path = proof_dir.join(format!("{stage_name}-diagnostics.txt"));
+    std::fs::write(&path, diagnostics).expect("stage diagnostics should be writable");
+    path
+}
+
+fn record_stage_evidence(
+    proof_dir: &Path,
+    stage_name: &str,
+    command: Vec<String>,
+    output: Output,
+    store_dir: &Path,
+    state_dir: &Path,
+) -> StageEvidence {
+    assert!(proof_dir.exists(), "proof dir must exist");
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+    assert!(!command.is_empty(), "stage command must not be empty");
+
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let diagnostics = render_stage_diagnostics(stage_name, &command, &output, store_dir, state_dir);
+    let diagnostics_file = write_stage_diagnostics_file(proof_dir, stage_name, &diagnostics);
+    let logs_dir = state_dir.join("logs");
+    let audit_dir = write_command_audit(
+        "self-hosting",
+        stage_name,
+        &std::env::current_dir().expect("cwd should be readable"),
+        &command,
+        &output,
+        &[
+            AuditArtifact {
+                label: "store-dir",
+                path: store_dir,
+            },
+            AuditArtifact {
+                label: "state-dir",
+                path: state_dir,
+            },
+            AuditArtifact {
+                label: "logs-dir",
+                path: &logs_dir,
+            },
+            AuditArtifact {
+                label: "diagnostics",
+                path: &diagnostics_file,
+            },
+        ],
+        &[
+            ("CRUNCH_STATE_DIR", state_dir.display().to_string()),
+            ("CRUNCH_STORE_DIR", store_dir.display().to_string()),
+        ],
+    )
+    .expect("stage audit bundle should be writable");
+
+    StageEvidence {
+        stage_name: stage_name.to_string(),
+        output,
+        stderr,
+        audit_dir,
+        diagnostics_file,
+    }
+}
+
+fn stage_context(stage: &StageEvidence) -> String {
+    let mut out = String::with_capacity(10240);
+    out.push_str(&format!("audit bundle: {}\n", stage.audit_dir.display()));
+    out.push_str(&format!("diagnostics: {}\n", stage.diagnostics_file.display()));
+    match std::fs::read_to_string(&stage.diagnostics_file) {
+        Ok(snapshot) => {
+            out.push_str("saved diagnostics snapshot:\n");
+            out.push_str(&snapshot);
+            if !snapshot.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+        Err(err) => {
+            out.push_str("saved diagnostics snapshot:\n");
+            out.push_str(&format!("<unavailable: {err}>\n"));
+        }
+    }
+    out
+}
+
+fn assert_stage_success(stage: &StageEvidence) {
+    let exit_code = stage.output.status.code().unwrap_or(-1);
+    assert!(
+        stage.output.status.success(),
+        "{} failed (exit {}).\n{}",
+        stage.stage_name,
+        exit_code,
+        stage_context(stage),
+    );
+}
+
+#[test]
+fn render_stage_diagnostics_includes_proof_lines_and_paths() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join("store");
+    let state = tmp.path().join("state");
+    let logs = state.join("logs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&logs).unwrap();
+    std::fs::write(logs.join("stage.log"), "boom").unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'stdout-line\n'; printf 'self-build-proof: key=value\nstderr-line\n' >&2; exit 7")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7));
+
+    let text =
+        render_stage_diagnostics("stage-x", &["crunch".to_string(), "self-build".to_string()], &output, &store, &state);
+
+    assert!(text.contains("stage: stage-x"));
+    assert!(text.contains("command: crunch self-build"));
+    assert!(text.contains("self-build-proof: key=value"));
+    assert!(text.contains("store entries:"));
+    assert!(text.contains("log entries:"));
+    assert!(text.contains("stderr tail:"));
+}
+
+#[test]
+fn record_stage_evidence_writes_audit_and_diagnostics_paths() {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let store = proof_dir.path().join("store");
+    let state = proof_dir.path().join("state");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'self-build-proof: output-binary=/tmp/out\n' >&2")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let evidence = record_stage_evidence(
+        proof_dir.path(),
+        "stage-y",
+        vec!["crunch".to_string(), "self-build".to_string()],
+        output,
+        &store,
+        &state,
+    );
+    let context = stage_context(&evidence);
+
+    assert!(evidence.audit_dir.exists(), "audit dir should exist on disk");
+    assert!(evidence.diagnostics_file.exists(), "diagnostics file should exist on disk");
+    assert!(context.contains(&evidence.audit_dir.display().to_string()));
+    assert!(context.contains(&evidence.diagnostics_file.display().to_string()));
+    assert!(context.contains("saved diagnostics snapshot:"));
+}
+
+#[test]
+fn stage_context_reads_saved_snapshot_from_disk() {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let store = proof_dir.path().join("store");
+    let state = proof_dir.path().join("state");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'self-build-proof: output-binary=/tmp/out\n' >&2")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let evidence = record_stage_evidence(
+        proof_dir.path(),
+        "stage-z",
+        vec!["crunch".to_string(), "self-build".to_string()],
+        output,
+        &store,
+        &state,
+    );
+    std::fs::write(&evidence.diagnostics_file, "saved snapshot marker\n").unwrap();
+
+    let context = stage_context(&evidence);
+    assert!(context.contains("saved snapshot marker"));
+    assert!(
+        !context.contains("stage: stage-z"),
+        "context should come from saved file, not recompute diagnostics"
+    );
+}
+
+fn panic_with_controlled_breadcrumbs() -> ! {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let store = proof_dir.path().join("store");
+    let state = proof_dir.path().join("state");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'self-build-proof: output-binary=/tmp/fake-out\ncontrolled stderr\n' >&2")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let evidence = record_stage_evidence(
+        proof_dir.path(),
+        "controlled-failure",
+        vec!["crunch".to_string(), "self-build".to_string()],
+        output,
+        &store,
+        &state,
+    );
+
+    panic!("controlled failure for breadcrumb verification\n{}", stage_context(&evidence));
+}
+
+#[test]
+fn self_hosting_controlled_failure_reports_breadcrumbs_trigger() {
+    if std::env::var_os(CONTROLLED_FAILURE_ENV).is_none() {
+        return;
+    }
+
+    panic_with_controlled_breadcrumbs();
+}
+
+#[test]
+fn self_hosting_controlled_failure_reports_breadcrumbs() {
+    let current_exe = std::env::current_exe().unwrap();
+    let output = std::process::Command::new(&current_exe)
+        .env(CONTROLLED_FAILURE_ENV, "1")
+        .arg("self_hosting_controlled_failure_reports_breadcrumbs_trigger")
+        .arg("--exact")
+        .arg("--nocapture")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}");
+
+    assert!(!output.status.success(), "controlled child run should fail to expose breadcrumbs");
+    assert!(combined.contains("controlled failure for breadcrumb verification"));
+    assert!(combined.contains("audit bundle:"));
+    assert!(combined.contains("diagnostics:"));
+    assert!(combined.contains("saved diagnostics snapshot:"));
+    assert!(combined.contains("self-build-proof: output-binary=/tmp/fake-out"));
+}
+
 #[test]
 #[ignore]
 fn self_hosting_stage0_stage1_stage2() {
@@ -139,7 +529,7 @@ fn self_hosting_stage0_stage1_stage2() {
         return;
     }
 
-    let proof_dir = tempfile::tempdir().expect("tempdir for proof");
+    let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
     let store = proof_dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
 
@@ -155,50 +545,6 @@ fn self_hosting_stage0_stage1_stage2() {
     let stage0_state = proof_dir.path().join("state0");
     std::fs::create_dir_all(&stage0_state).unwrap();
 
-    let stage0 = Command::cargo_bin("crunch")
-        .expect("crunch binary built")
-        .arg("--store")
-        .arg(&store)
-        .arg("--state-dir")
-        .arg(&stage0_state)
-        .arg("--nix-compat")
-        .arg("self-build")
-        .arg("--no-substitute")
-        .arg("-j")
-        .arg("4")
-        .output()
-        .expect("stage0 should execute");
-
-    let stage0_stderr = String::from_utf8_lossy(&stage0.stderr);
-    eprintln!("{stage0_stderr}");
-
-    assert!(
-        stage0.status.success(),
-        "stage0 failed (exit {}):\n{stage0_stderr}",
-        stage0.status.code().unwrap_or(-1),
-    );
-
-    // Find the stage1 binary.
-    let stage1_binary = find_crunch_binary(&store).expect("stage0 should produce *-crunch/bin/crunch");
-    eprintln!("stage1 binary: {}", stage1_binary.display());
-
-    // Verify stage1 runs.
-    let stage1_help =
-        std::process::Command::new(&stage1_binary).arg("--help").output().expect("stage1 binary should run");
-    assert!(stage1_help.status.success(), "stage1 --help failed",);
-
-    // ── Verify bootstrap tools on disk (spec requirement) ─────
-
-    let bwrap_bin = find_bwrap_on_disk(&store).expect("*-bwrap/bin/bwrap must exist on disk after stage0");
-    #[cfg(unix)]
-    assert!(is_executable(&bwrap_bin), "bwrap binary must be executable: {}", bwrap_bin.display(),);
-    eprintln!("bwrap on disk: {}", bwrap_bin.display());
-
-    let busybox_bin = find_busybox_on_disk(&store).expect("*-busybox/bin/busybox must exist on disk after stage0");
-    #[cfg(unix)]
-    assert!(is_executable(&busybox_bin), "busybox binary must be executable: {}", busybox_bin.display(),);
-    eprintln!("busybox on disk: {}", busybox_bin.display());
-
     let stage0_command = vec![
         "crunch".to_string(),
         "--store".to_string(),
@@ -211,32 +557,80 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    let _stage0_audit = write_command_audit(
-        "self-hosting",
-        "stage0",
-        &std::env::current_dir().unwrap(),
-        &stage0_command,
-        &stage0,
-        &[
-            AuditArtifact {
-                label: "stage1-binary",
-                path: &stage1_binary,
-            },
-            AuditArtifact {
-                label: "bwrap",
-                path: &bwrap_bin,
-            },
-            AuditArtifact {
-                label: "busybox",
-                path: &busybox_bin,
-            },
-        ],
-        &[
-            ("CRUNCH_STATE_DIR", stage0_state.display().to_string()),
-            ("CRUNCH_STORE_DIR", store.display().to_string()),
-        ],
-    )
-    .unwrap();
+    let stage0 = Command::cargo_bin("crunch")
+        .unwrap_or_else(|err| panic!("crunch binary built: {err}"))
+        .args(&stage0_command[1..])
+        .output()
+        .unwrap_or_else(|err| {
+            panic!(
+                "stage0 should execute: {err}\n{}",
+                pre_stage_context("stage0", &stage0_command, &store, &stage0_state),
+            )
+        });
+    let stage0_evidence =
+        record_stage_evidence(proof_dir.path(), "stage0", stage0_command, stage0, &store, &stage0_state);
+
+    eprintln!("{}", stage0_evidence.stderr);
+    eprintln!("stage0 audit: {}", stage0_evidence.audit_dir.display());
+    eprintln!("stage0 diagnostics: {}", stage0_evidence.diagnostics_file.display());
+    assert_stage_success(&stage0_evidence);
+
+    // Find the stage1 binary.
+    let stage1_binary = find_crunch_binary(&store);
+    assert!(
+        stage1_binary.is_some(),
+        "stage0 should produce *-crunch/bin/crunch.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    let stage1_binary = stage1_binary.unwrap();
+    eprintln!("stage1 binary: {}", stage1_binary.display());
+
+    // Verify stage1 runs.
+    let stage1_help = std::process::Command::new(&stage1_binary)
+        .arg("--help")
+        .output()
+        .unwrap_or_else(|err| panic!("stage1 binary should run: {err}\n{}", stage_context(&stage0_evidence)));
+    let stage1_help_stderr = String::from_utf8_lossy(&stage1_help.stderr);
+    assert!(
+        stage1_help.status.success(),
+        "stage1 --help failed.\n{}\nhelp stderr:\n{}",
+        stage_context(&stage0_evidence),
+        stage1_help_stderr,
+    );
+
+    // ── Verify bootstrap tools on disk (spec requirement) ─────
+
+    let bwrap_bin = find_bwrap_on_disk(&store);
+    assert!(
+        bwrap_bin.is_some(),
+        "*-bwrap/bin/bwrap must exist on disk after stage0.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    let bwrap_bin = bwrap_bin.unwrap();
+    #[cfg(unix)]
+    assert!(
+        is_executable(&bwrap_bin),
+        "bwrap binary must be executable: {}\n{}",
+        bwrap_bin.display(),
+        stage_context(&stage0_evidence),
+    );
+    eprintln!("bwrap on disk: {}", bwrap_bin.display());
+
+    let busybox_bin = find_busybox_on_disk(&store);
+    assert!(
+        busybox_bin.is_some(),
+        "*-busybox/bin/busybox must exist on disk after stage0.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    let busybox_bin = busybox_bin.unwrap();
+    #[cfg(unix)]
+    assert!(
+        is_executable(&busybox_bin),
+        "busybox binary must be executable: {}\n{}",
+        busybox_bin.display(),
+        stage_context(&stage0_evidence),
+    );
+    eprintln!("busybox on disk: {}", busybox_bin.display());
 
     // ── Prepare for Stage 2 ─────────────────────────────────────
 
@@ -249,7 +643,8 @@ fn self_hosting_stage0_stage1_stage2() {
     // inside the *-crunch directory we're about to remove.
 
     let stage1_copy = proof_dir.path().join("stage1-crunch");
-    std::fs::copy(&stage1_binary, &stage1_copy).expect("copy stage1 binary out of store");
+    std::fs::copy(&stage1_binary, &stage1_copy)
+        .unwrap_or_else(|err| panic!("copy stage1 binary out of store: {err}\n{}", stage_context(&stage0_evidence)));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -272,82 +667,6 @@ fn self_hosting_stage0_stage1_stage2() {
 
     eprintln!("\n=== PROOF: Stage 2 (stage1 -> stage2) ===\n");
 
-    let stage2 = std::process::Command::new(&stage1_binary)
-        .arg("--store")
-        .arg(&store)
-        .arg("--state-dir")
-        .arg(&stage2_state)
-        .arg("--nix-compat")
-        .arg("self-build")
-        .arg("--no-substitute")
-        .arg("-j")
-        .arg("4")
-        .output()
-        .expect("stage2 should execute");
-
-    let stage2_stderr = String::from_utf8_lossy(&stage2.stderr);
-    eprintln!("{stage2_stderr}");
-
-    assert!(
-        stage2.status.success(),
-        "stage2 failed (exit {}):\n{stage2_stderr}",
-        stage2.status.code().unwrap_or(-1),
-    );
-
-    // ── Verify stage2 output ────────────────────────────────────
-
-    let stage2_binary = find_crunch_binary(&store).expect("stage2 should produce *-crunch/bin/crunch");
-    eprintln!("stage2 binary: {}", stage2_binary.display());
-
-    // Stage2 binary should run.
-    let stage2_help =
-        std::process::Command::new(&stage2_binary).arg("--help").output().expect("stage2 binary should run");
-    assert!(stage2_help.status.success(), "stage2 --help failed",);
-    let stage2_stdout = String::from_utf8_lossy(&stage2_help.stdout);
-    assert!(stage2_stdout.contains("crunch"), "stage2 --help should mention crunch",);
-
-    // ── Verify proof markers ────────────────────────────────────
-
-    // Stage2 was driven by stage1 binary, not the checkout binary.
-    let s2_invoking = extract_proof_field(&stage2_stderr, "invoking-binary");
-    assert!(s2_invoking.is_some(), "stage2 should emit invoking-binary proof line",);
-    let s2_invoking_path = PathBuf::from(s2_invoking.unwrap());
-    // The invoking binary MUST be the stage1 binary we found earlier.
-    // current_exe() may resolve symlinks or return a different
-    // representation, so canonicalize both before comparing.
-    let stage1_canonical = std::fs::canonicalize(&stage1_binary).unwrap_or_else(|_| stage1_binary.clone());
-    let invoking_canonical = std::fs::canonicalize(&s2_invoking_path).unwrap_or_else(|_| s2_invoking_path.clone());
-    assert_eq!(
-        invoking_canonical,
-        stage1_canonical,
-        "stage2 invoking binary must be the stage1 binary.\n\
-         invoking: {}\n\
-         stage1:   {}",
-        invoking_canonical.display(),
-        stage1_canonical.display(),
-    );
-
-    // Stage2 MUST use crunch-built bwrap. The self-build pipeline
-    // now exports bwrap and busybox as separate root builds (step 2/4)
-    // so they land on disk in the --store directory.
-    let s2_bwrap = extract_proof_field(&stage2_stderr, "bwrap-source");
-    assert!(s2_bwrap.is_some(), "stage2 should emit bwrap-source proof line",);
-    let bwrap_val = s2_bwrap.unwrap();
-    assert!(bwrap_val.starts_with("crunch-built:"), "stage2 bwrap must be crunch-built, got: {bwrap_val}",);
-
-    // Stage2 MUST find crunch-built busybox on disk.
-    let s2_busybox = extract_proof_field(&stage2_stderr, "busybox-path");
-    assert!(s2_busybox.is_some(), "stage2 should emit busybox-path proof line",);
-    assert_ne!(s2_busybox.unwrap(), "none", "stage2 must have a crunch-built busybox, not none",);
-
-    // Output binary recorded.
-    let s2_output = extract_proof_field(&stage2_stderr, "output-binary");
-    assert!(s2_output.is_some(), "stage2 should emit output-binary proof line",);
-
-    eprintln!("\n=== PROOF PASSED ===");
-    eprintln!("stage1: {}", stage1_binary.display());
-    eprintln!("stage2: {}", stage2_binary.display());
-    eprintln!("bwrap:  {bwrap_val}");
     let stage2_command = vec![
         stage1_binary.display().to_string(),
         "--store".to_string(),
@@ -360,36 +679,120 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    let _stage2_audit = write_command_audit(
-        "self-hosting",
-        "stage2",
-        &std::env::current_dir().unwrap(),
-        &stage2_command,
-        &stage2,
-        &[
-            AuditArtifact {
-                label: "stage1-driver",
-                path: &stage1_binary,
-            },
-            AuditArtifact {
-                label: "stage2-binary",
-                path: &stage2_binary,
-            },
-            AuditArtifact {
-                label: "store-bwrap",
-                path: &bwrap_bin,
-            },
-            AuditArtifact {
-                label: "store-busybox",
-                path: &busybox_bin,
-            },
-        ],
-        &[
-            ("CRUNCH_STATE_DIR", stage2_state.display().to_string()),
-            ("CRUNCH_STORE_DIR", store.display().to_string()),
-        ],
-    )
-    .unwrap();
+    let stage2 = std::process::Command::new(&stage1_binary)
+        .args(&stage2_command[1..])
+        .output()
+        .unwrap_or_else(|err| {
+            panic!(
+                "stage2 should execute: {err}\n{}",
+                pre_stage_context("stage2", &stage2_command, &store, &stage2_state),
+            )
+        });
+    let stage2_evidence =
+        record_stage_evidence(proof_dir.path(), "stage2", stage2_command, stage2, &store, &stage2_state);
 
+    eprintln!("{}", stage2_evidence.stderr);
+    eprintln!("stage2 audit: {}", stage2_evidence.audit_dir.display());
+    eprintln!("stage2 diagnostics: {}", stage2_evidence.diagnostics_file.display());
+    assert_stage_success(&stage2_evidence);
+
+    // ── Verify stage2 output ────────────────────────────────────
+
+    let stage2_binary = find_crunch_binary(&store);
+    assert!(
+        stage2_binary.is_some(),
+        "stage2 should produce *-crunch/bin/crunch.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    let stage2_binary = stage2_binary.unwrap();
+    eprintln!("stage2 binary: {}", stage2_binary.display());
+
+    // Stage2 binary should run.
+    let stage2_help = std::process::Command::new(&stage2_binary)
+        .arg("--help")
+        .output()
+        .unwrap_or_else(|err| panic!("stage2 binary should run: {err}\n{}", stage_context(&stage2_evidence)));
+    let stage2_help_stderr = String::from_utf8_lossy(&stage2_help.stderr);
+    assert!(
+        stage2_help.status.success(),
+        "stage2 --help failed.\n{}\nhelp stderr:\n{}",
+        stage_context(&stage2_evidence),
+        stage2_help_stderr,
+    );
+    let stage2_stdout = String::from_utf8_lossy(&stage2_help.stdout);
+    assert!(
+        stage2_stdout.contains("crunch"),
+        "stage2 --help should mention crunch.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
+    // ── Verify proof markers ────────────────────────────────────
+
+    // Stage2 was driven by stage1 binary, not the checkout binary.
+    let s2_invoking = extract_proof_field(&stage2_evidence.stderr, "invoking-binary");
+    assert!(
+        s2_invoking.is_some(),
+        "stage2 should emit invoking-binary proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    let s2_invoking_path = PathBuf::from(s2_invoking.unwrap());
+    // The invoking binary MUST be the stage1 binary we found earlier.
+    // current_exe() may resolve symlinks or return a different
+    // representation, so canonicalize both before comparing.
+    let stage1_canonical = std::fs::canonicalize(&stage1_binary).unwrap_or_else(|_| stage1_binary.clone());
+    let invoking_canonical = std::fs::canonicalize(&s2_invoking_path).unwrap_or_else(|_| s2_invoking_path.clone());
+    assert_eq!(
+        invoking_canonical,
+        stage1_canonical,
+        "stage2 invoking binary must be the stage1 binary.\n\
+         invoking: {}\n\
+         stage1:   {}\n{}",
+        invoking_canonical.display(),
+        stage1_canonical.display(),
+        stage_context(&stage2_evidence),
+    );
+
+    // Stage2 MUST use crunch-built bwrap. The self-build pipeline
+    // now exports bwrap and busybox as separate root builds (step 2/4)
+    // so they land on disk in the --store directory.
+    let s2_bwrap = extract_proof_field(&stage2_evidence.stderr, "bwrap-source");
+    assert!(
+        s2_bwrap.is_some(),
+        "stage2 should emit bwrap-source proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    let bwrap_val = s2_bwrap.unwrap();
+    assert!(
+        bwrap_val.starts_with("crunch-built:"),
+        "stage2 bwrap must be crunch-built, got: {bwrap_val}.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
+    // Stage2 MUST find crunch-built busybox on disk.
+    let s2_busybox = extract_proof_field(&stage2_evidence.stderr, "busybox-path");
+    assert!(
+        s2_busybox.is_some(),
+        "stage2 should emit busybox-path proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    assert_ne!(
+        s2_busybox.unwrap(),
+        "none",
+        "stage2 must have a crunch-built busybox, not none.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
+    // Output binary recorded.
+    let s2_output = extract_proof_field(&stage2_evidence.stderr, "output-binary");
+    assert!(
+        s2_output.is_some(),
+        "stage2 should emit output-binary proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
+    eprintln!("\n=== PROOF PASSED ===");
+    eprintln!("stage1: {}", stage1_binary.display());
+    eprintln!("stage2: {}", stage2_binary.display());
+    eprintln!("bwrap:  {bwrap_val}");
     eprintln!("busybox: {}", s2_busybox.unwrap());
 }

@@ -186,6 +186,7 @@ configure_path() {
   prepend_tool_dir tar
   prepend_tool_dir xz
   prepend_tool_dir cp
+  prepend_tool_dir stat
   prepend_tool_dir bwrap
 
   export PATH="$path_prefix${PATH:+:$PATH}"
@@ -276,10 +277,31 @@ require_nightly_rustc() {
   esac
 }
 
-require_tmp_space() {
-  local -a df_lines
-  local df_line
+read_free_space_kib() {
+  local dir="${1:?directory is required}"
+  local stat_output
+  local free_blocks
+  local block_size
+  local free_bytes
 
+  stat_output="$(stat -f -c '%a %S' "$dir" 2>/dev/null || true)"
+  if [[ -z "$stat_output" ]]; then
+    die "failed to read free space for temporary directory: $dir"
+  fi
+
+  read -r free_blocks block_size <<< "$stat_output"
+  if [[ ! "$free_blocks" =~ ^[0-9]+$ ]]; then
+    die "failed to parse free blocks for temporary directory: $dir"
+  fi
+  if [[ ! "$block_size" =~ ^[0-9]+$ ]]; then
+    die "failed to parse filesystem block size for temporary directory: $dir"
+  fi
+
+  free_bytes=$(( free_blocks * block_size ))
+  printf '%s\n' "$(( free_bytes / 1024 ))"
+}
+
+require_tmp_space() {
   tmp_dir="${TMPDIR:-/tmp}"
   if [[ ! -d "$tmp_dir" ]]; then
     die "temporary directory does not exist: $tmp_dir"
@@ -288,16 +310,7 @@ require_tmp_space() {
     die "temporary directory is not writable: $tmp_dir"
   fi
 
-  mapfile -t df_lines < <(df -Pk "$tmp_dir")
-  if [[ "${#df_lines[@]}" -lt 2 ]]; then
-    die "failed to read free space for temporary directory: $tmp_dir"
-  fi
-
-  df_line="${df_lines[1]}"
-  read -r _ _ _ tmp_free_kib _ <<< "$df_line"
-  if [[ -z "$tmp_free_kib" ]]; then
-    die "failed to parse free space for temporary directory: $tmp_dir"
-  fi
+  tmp_free_kib="$(read_free_space_kib "$tmp_dir")"
   if (( tmp_free_kib < MIN_TMP_FREE_KIB )); then
     die "only $(( tmp_free_kib / 1024 )) MiB free in $tmp_dir; need at least ${MIN_TMP_FREE_MIB} MiB for the proof"
   fi
