@@ -340,7 +340,12 @@ When claiming test results in commit messages or completion summaries:
   before any success assertions. If stage0/stage2 fails or expected
   proof markers are missing, the panic message includes the audit bundle
   path and the saved diagnostics snapshot from disk, not a recomputed
-  view of the current filesystem.
+  view of the current filesystem. Do not hash the whole proof `store/`
+  or `state/` trees into that bundle: a real stage0 self-build can exceed
+  `tests/audit_support.rs`'s `MAX_AUDIT_ENTRIES` and panic after a successful
+  self-build, before stage2 even starts. Audit selected artifacts instead
+  (`logs-dir`, `pathinfo.redb`, diagnostics, captured streams, proof-reported
+  output binaries).
 - Stage-specific launch/help/copy failures in `tests/self_hosting.rs`
   should use `pre_stage_context(...)` or `stage_context(...)`, not raw
   `expect(...)`, so the ignored proof keeps the same breadcrumbs even
@@ -350,6 +355,20 @@ When claiming test results in commit messages or completion summaries:
   should PASS. It spawns the test binary in a controlled-failure mode and
   asserts that the child output contains the audit bundle path,
   diagnostics path, and saved diagnostics snapshot.
+- `tests/self_hosting.rs` now runs stage0/stage2 with live teeing: child
+  stdout/stderr stream to the parent test output and to `<proof_dir>/stage0-*.txt`
+  / `<proof_dir>/stage2-*.txt` while the command runs. The proof stages now
+  pass `--verbose --log-level info`: keep `verbose` so finished derivation logs
+  are echoed inline, but clamp tracing noise so `snix_castore` DEBUG spam does
+  not turn a proof run into hundreds of MiB of stderr. If the ignored proof
+  looks stalled, use the printed `proof dir:` / `stageN stdout:` /
+  `stageN stderr:` paths to inspect the live capture files instead of waiting
+  for the stage to end.
+- `src/self_build.rs` emits stable proof progress markers on stderr:
+  `self-build-proof: progress=bootstrap-tool-start:<tool>`,
+  `...bootstrap-tool-done:<tool>`, `...crunch-build-start`, and
+  `...crunch-build-done`. `SelfBuildReport::parse_proof_lines()` ignores these
+  extra proof lines, so parsers that only need the final report stay compatible.
 - Run with: `cargo test -p crunch --test self_hosting -- --ignored --nocapture`
 - Needs: bwrap, git, cargo, tar on PATH; static busybox as
   `SNIX_BUILD_SANDBOX_SHELL`; `/run/wrappers/bin` before

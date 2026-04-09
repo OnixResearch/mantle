@@ -1,5 +1,6 @@
 // crunch: BLAKE3 replaces SHA-256 for derivation-level hashing
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::io;
 
 use bstr::BString;

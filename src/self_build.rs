@@ -41,6 +41,9 @@ const SELF_BUILD_STEP_COUNT: u32 = 4;
 /// self-build evidence lines.
 const PROOF_PREFIX: &str = "self-build-proof:";
 
+/// Stable progress key carried inside proof lines.
+const PROGRESS_KEY: &str = "progress=";
+
 // ── Proof report types ────────────────────────────────────────────────
 
 /// How the bwrap binary was resolved for a self-build stage.
@@ -114,6 +117,11 @@ pub struct SelfBuildReport {
     pub busybox_path: Option<PathBuf>,
     /// Path to the produced output binary.
     pub output_binary: PathBuf,
+}
+
+fn emit_progress_marker(marker: &str) {
+    assert!(!marker.is_empty(), "progress marker must not be empty");
+    eprintln!("{PROOF_PREFIX} {PROGRESS_KEY}{marker}");
 }
 
 impl SelfBuildReport {
@@ -920,6 +928,7 @@ pub fn cmd_self_build(
     validate_bootstrap_tools(&bootstrap_dir)?;
     for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
         let tool_path = bootstrap_dir.join(tool_name);
+        emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
         eprintln!("  building {tool_name}...");
         build_bootstrap_tool(
             &tool_path,
@@ -934,6 +943,7 @@ pub fn cmd_self_build(
             &self_build_trusted,
             trust_unsigned,
         )?;
+        emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
     }
 
     // Re-resolve bwrap and busybox now that they are on disk.
@@ -944,6 +954,7 @@ pub fn cmd_self_build(
     // ── Step 3: Build crunch ────────────────────────────────────
 
     eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
+    emit_progress_marker("crunch-build-start");
     let ncl_content = generate_self_build_ncl(&store_name, store_dir);
 
     let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
@@ -970,6 +981,7 @@ pub fn cmd_self_build(
 
     let result = run_build(&config)?;
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
+    emit_progress_marker("crunch-build-done");
 
     // ── Step 4: Verify ──────────────────────────────────────────
 
@@ -1602,16 +1614,19 @@ mod tests {
     }
 
     #[test]
-    fn report_parse_ignores_non_proof_lines() {
+    fn report_parse_ignores_non_report_proof_lines() {
         let mixed = format!(
             "some random log line\n\
+             {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-start:bwrap.ncl\n\
              {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
              another log line\n\
+             {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-done:bwrap.ncl\n\
              {PROOF_PREFIX} bwrap-source=crunch-built:/store/x-bwrap/bin\n\
              {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
-             {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n"
+             {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n\
+             {PROOF_PREFIX} {PROGRESS_KEY}crunch-build-done\n"
         );
-        let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite noise");
+        let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite progress markers");
         assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
         assert!(parsed.bwrap_source.is_crunch_built());
     }

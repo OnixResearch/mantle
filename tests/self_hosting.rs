@@ -19,11 +19,18 @@
 
 mod audit_support;
 
+use std::fs::File;
+use std::io;
+use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
+use std::process::Stdio;
+use std::thread;
+use std::thread::JoinHandle;
 
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
 
@@ -37,6 +44,135 @@ struct StageEvidence {
     stderr: String,
     audit_dir: PathBuf,
     diagnostics_file: PathBuf,
+    stdout_file: PathBuf,
+    stderr_file: PathBuf,
+}
+
+struct CapturedStageOutput {
+    output: Output,
+    stdout_file: PathBuf,
+    stderr_file: PathBuf,
+}
+
+fn stage_stream_file(proof_dir: &Path, stage_name: &str, stream_name: &str) -> PathBuf {
+    assert!(proof_dir.exists(), "proof dir must exist");
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+    assert!(matches!(stream_name, "stdout" | "stderr"), "unexpected stream name: {stream_name}");
+
+    proof_dir.join(format!("{stage_name}-{stream_name}.txt"))
+}
+
+fn write_stage_stream_files(proof_dir: &Path, stage_name: &str, output: &Output) -> (PathBuf, PathBuf) {
+    let stdout_file = stage_stream_file(proof_dir, stage_name, "stdout");
+    let stderr_file = stage_stream_file(proof_dir, stage_name, "stderr");
+    std::fs::write(&stdout_file, &output.stdout).unwrap_or_else(|err| {
+        panic!(
+            "{stage_name} stdout file write failed: {err}\n\
+             path: {}\nproof_dir: {}",
+            stdout_file.display(),
+            proof_dir.display(),
+        )
+    });
+    std::fs::write(&stderr_file, &output.stderr).unwrap_or_else(|err| {
+        panic!(
+            "{stage_name} stderr file write failed: {err}\n\
+             path: {}\nproof_dir: {}",
+            stderr_file.display(),
+            proof_dir.display(),
+        )
+    });
+    (stdout_file, stderr_file)
+}
+
+fn copy_stream_to_parent_and_file<R: Read>(mut reader: R, mut file: File, is_stderr: bool) -> io::Result<Vec<u8>> {
+    let mut captured = Vec::new();
+    let mut buffer = [0_u8; 4096];
+
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        let chunk = &buffer[..bytes_read];
+        file.write_all(chunk)?;
+        if is_stderr {
+            let mut sink = io::stderr();
+            sink.write_all(chunk)?;
+            sink.flush()?;
+        } else {
+            let mut sink = io::stdout();
+            sink.write_all(chunk)?;
+            sink.flush()?;
+        }
+        captured.extend_from_slice(chunk);
+    }
+
+    file.flush()?;
+    Ok(captured)
+}
+
+fn spawn_stream_capture<R: Read + Send + 'static>(
+    reader: R,
+    file: File,
+    is_stderr: bool,
+) -> JoinHandle<io::Result<Vec<u8>>> {
+    thread::spawn(move || copy_stream_to_parent_and_file(reader, file, is_stderr))
+}
+
+fn join_stream_capture(
+    handle: JoinHandle<io::Result<Vec<u8>>>,
+    stage_name: &str,
+    stream_name: &str,
+    proof_dir: &Path,
+) -> Vec<u8> {
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+    assert!(matches!(stream_name, "stdout" | "stderr"), "unexpected stream name: {stream_name}");
+
+    match handle.join() {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(err)) => panic!(
+            "{stage_name} {stream_name} capture failed: {err}\n\
+             proof_dir: {}\n\
+             Check {stage_name}-{stream_name}.txt in proof_dir for partial output.",
+            proof_dir.display(),
+        ),
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
+fn run_command_live(
+    proof_dir: &Path,
+    stage_name: &str,
+    command: &mut std::process::Command,
+) -> io::Result<CapturedStageOutput> {
+    assert!(proof_dir.exists(), "proof dir must exist");
+    assert!(!stage_name.is_empty(), "stage name must not be empty");
+
+    let stdout_file = stage_stream_file(proof_dir, stage_name, "stdout");
+    let stderr_file = stage_stream_file(proof_dir, stage_name, "stderr");
+    let stdout_writer = File::create(&stdout_file)?;
+    let stderr_writer = File::create(&stderr_file)?;
+
+    eprintln!("{stage_name} stdout: {}", stdout_file.display());
+    eprintln!("{stage_name} stderr: {}", stderr_file.display());
+
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn()?;
+    let stdout_reader = child.stdout.take().ok_or_else(|| io::Error::other("child stdout must be piped"))?;
+    let stderr_reader = child.stderr.take().ok_or_else(|| io::Error::other("child stderr must be piped"))?;
+
+    let stdout_handle = spawn_stream_capture(stdout_reader, stdout_writer, false);
+    let stderr_handle = spawn_stream_capture(stderr_reader, stderr_writer, true);
+    let status = child.wait()?;
+
+    let stdout = join_stream_capture(stdout_handle, stage_name, "stdout", proof_dir);
+    let stderr = join_stream_capture(stderr_handle, stage_name, "stderr", proof_dir);
+    Ok(CapturedStageOutput {
+        output: Output { status, stdout, stderr },
+        stdout_file,
+        stderr_file,
+    })
 }
 
 fn pre_stage_context(stage_name: &str, command: &[String], store_dir: &Path, state_dir: &Path) -> String {
@@ -160,6 +296,26 @@ fn extract_proof_field<'a>(stderr: &'a str, key: &str) -> Option<&'a str> {
     None
 }
 
+fn extract_optional_path_field(stderr: &str, key: &str) -> Option<PathBuf> {
+    let value = extract_proof_field(stderr, key)?;
+    if value.is_empty() {
+        return None;
+    }
+    if value == "none" {
+        return None;
+    }
+    Some(PathBuf::from(value))
+}
+
+fn extract_bwrap_binary_path(stderr: &str) -> Option<PathBuf> {
+    let value = extract_proof_field(stderr, "bwrap-source")?;
+    let (_, path) = value.split_once(':')?;
+    if path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(path))
+}
+
 fn append_section(out: &mut String, title: &str, lines: &[String]) {
     assert!(!title.is_empty(), "section title must not be empty");
     assert!(!lines.is_empty(), "section {title} must have at least one line");
@@ -279,7 +435,14 @@ fn write_stage_diagnostics_file(proof_dir: &Path, stage_name: &str, diagnostics:
     assert!(!stage_name.is_empty(), "stage name must not be empty");
 
     let path = proof_dir.join(format!("{stage_name}-diagnostics.txt"));
-    std::fs::write(&path, diagnostics).expect("stage diagnostics should be writable");
+    std::fs::write(&path, diagnostics).unwrap_or_else(|err| {
+        panic!(
+            "{stage_name} diagnostics write failed: {err}\n\
+             path: {}\nproof_dir: {}",
+            path.display(),
+            proof_dir.display(),
+        )
+    });
     path
 }
 
@@ -296,39 +459,82 @@ fn record_stage_evidence(
     assert!(!command.is_empty(), "stage command must not be empty");
 
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let (stdout_file, stderr_file) = write_stage_stream_files(proof_dir, stage_name, &output);
     let diagnostics = render_stage_diagnostics(stage_name, &command, &output, store_dir, state_dir);
     let diagnostics_file = write_stage_diagnostics_file(proof_dir, stage_name, &diagnostics);
     let logs_dir = state_dir.join("logs");
+    let pathinfo_db = state_dir.join("pathinfo.redb");
+    let output_binary = extract_optional_path_field(&stderr, "output-binary");
+    let busybox_binary = extract_optional_path_field(&stderr, "busybox-path");
+    let bwrap_binary = extract_bwrap_binary_path(&stderr);
+
+    let mut audit_artifacts = vec![
+        AuditArtifact {
+            label: "logs-dir",
+            path: &logs_dir,
+        },
+        AuditArtifact {
+            label: "pathinfo-db",
+            path: &pathinfo_db,
+        },
+        AuditArtifact {
+            label: "diagnostics",
+            path: &diagnostics_file,
+        },
+        AuditArtifact {
+            label: "stdout-capture",
+            path: &stdout_file,
+        },
+        AuditArtifact {
+            label: "stderr-capture",
+            path: &stderr_file,
+        },
+    ];
+    if let Some(path) = output_binary.as_ref() {
+        audit_artifacts.push(AuditArtifact {
+            label: "output-binary",
+            path,
+        });
+    }
+    if let Some(path) = busybox_binary.as_ref() {
+        audit_artifacts.push(AuditArtifact {
+            label: "busybox-binary",
+            path,
+        });
+    }
+    if let Some(path) = bwrap_binary.as_ref() {
+        audit_artifacts.push(AuditArtifact {
+            label: "bwrap-binary",
+            path,
+        });
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_else(|err| {
+        panic!(
+            "{stage_name} cwd lookup failed: {err}\n{}",
+            pre_stage_context(stage_name, &command, store_dir, state_dir),
+        )
+    });
     let audit_dir = write_command_audit(
         "self-hosting",
         stage_name,
-        &std::env::current_dir().expect("cwd should be readable"),
+        &cwd,
         &command,
         &output,
-        &[
-            AuditArtifact {
-                label: "store-dir",
-                path: store_dir,
-            },
-            AuditArtifact {
-                label: "state-dir",
-                path: state_dir,
-            },
-            AuditArtifact {
-                label: "logs-dir",
-                path: &logs_dir,
-            },
-            AuditArtifact {
-                label: "diagnostics",
-                path: &diagnostics_file,
-            },
-        ],
+        &audit_artifacts,
         &[
             ("CRUNCH_STATE_DIR", state_dir.display().to_string()),
             ("CRUNCH_STORE_DIR", store_dir.display().to_string()),
         ],
     )
-    .expect("stage audit bundle should be writable");
+    .unwrap_or_else(|err| {
+        panic!(
+            "{stage_name} audit bundle write failed: {err}\n\
+             diagnostics: {}\n{}",
+            diagnostics_file.display(),
+            pre_stage_context(stage_name, &command, store_dir, state_dir),
+        )
+    });
 
     StageEvidence {
         stage_name: stage_name.to_string(),
@@ -336,6 +542,8 @@ fn record_stage_evidence(
         stderr,
         audit_dir,
         diagnostics_file,
+        stdout_file,
+        stderr_file,
     }
 }
 
@@ -343,6 +551,8 @@ fn stage_context(stage: &StageEvidence) -> String {
     let mut out = String::with_capacity(10240);
     out.push_str(&format!("audit bundle: {}\n", stage.audit_dir.display()));
     out.push_str(&format!("diagnostics: {}\n", stage.diagnostics_file.display()));
+    out.push_str(&format!("stdout: {}\n", stage.stdout_file.display()));
+    out.push_str(&format!("stderr: {}\n", stage.stderr_file.display()));
     match std::fs::read_to_string(&stage.diagnostics_file) {
         Ok(snapshot) => {
             out.push_str("saved diagnostics snapshot:\n");
@@ -399,16 +609,37 @@ fn render_stage_diagnostics_includes_proof_lines_and_paths() {
 }
 
 #[test]
+fn run_command_live_writes_stage_stream_files() {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new("/bin/sh");
+    command
+        .arg("-c")
+        .arg("printf 'stdout-1\n'; printf 'stderr-1\n' >&2; sleep 0.05; printf 'stdout-2\n'; printf 'stderr-2\n' >&2");
+
+    let captured = run_command_live(proof_dir.path(), "live-stage", &mut command).unwrap();
+    let stdout = String::from_utf8_lossy(&captured.output.stdout);
+    let stderr = String::from_utf8_lossy(&captured.output.stderr);
+
+    assert!(captured.output.status.success(), "live command should succeed");
+    assert_eq!(stdout, "stdout-1\nstdout-2\n");
+    assert_eq!(stderr, "stderr-1\nstderr-2\n");
+    assert_eq!(std::fs::read(&captured.stdout_file).unwrap(), captured.output.stdout);
+    assert_eq!(std::fs::read(&captured.stderr_file).unwrap(), captured.output.stderr);
+}
+
+#[test]
 fn record_stage_evidence_writes_audit_and_diagnostics_paths() {
     let proof_dir = tempfile::tempdir().unwrap();
     let store = proof_dir.path().join("store");
     let state = proof_dir.path().join("state");
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(&state).unwrap();
+    let output_binary = proof_dir.path().join("out");
+    std::fs::write(&output_binary, b"binary").unwrap();
 
     let output = std::process::Command::new("/bin/sh")
         .arg("-c")
-        .arg("printf 'self-build-proof: output-binary=/tmp/out\n' >&2")
+        .arg(format!("printf 'self-build-proof: output-binary={}\\n' >&2", output_binary.display()))
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -422,12 +653,127 @@ fn record_stage_evidence_writes_audit_and_diagnostics_paths() {
         &state,
     );
     let context = stage_context(&evidence);
+    let meta_json = std::fs::read_to_string(evidence.audit_dir.join("meta.json")).unwrap();
 
     assert!(evidence.audit_dir.exists(), "audit dir should exist on disk");
     assert!(evidence.diagnostics_file.exists(), "diagnostics file should exist on disk");
+    assert!(evidence.stdout_file.exists(), "stdout file should exist on disk");
+    assert!(evidence.stderr_file.exists(), "stderr file should exist on disk");
     assert!(context.contains(&evidence.audit_dir.display().to_string()));
     assert!(context.contains(&evidence.diagnostics_file.display().to_string()));
+    assert!(context.contains(&evidence.stdout_file.display().to_string()));
+    assert!(context.contains(&evidence.stderr_file.display().to_string()));
     assert!(context.contains("saved diagnostics snapshot:"));
+    assert!(meta_json.contains("\"output-binary\""));
+    assert!(meta_json.contains("\"stdout-capture\""));
+    assert!(meta_json.contains("\"stderr-capture\""));
+    assert!(!meta_json.contains("\"store-dir\""));
+    assert!(!meta_json.contains("\"state-dir\""));
+}
+
+/// Regression: a populated store directory must NOT be hashed as an
+/// audit artifact. The prior bug hashed the entire store/ tree,
+/// which exceeded `MAX_AUDIT_ENTRIES` (100,000) on real self-build
+/// stores and panicked between stage0 and stage2.
+///
+/// This test creates a store with enough structure to be representative
+/// and verifies that `record_stage_evidence` succeeds without including
+/// store-dir or state-dir as audit artifacts.
+#[test]
+fn record_stage_evidence_with_populated_store_avoids_audit_limit() {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let store = proof_dir.path().join("store");
+    let state = proof_dir.path().join("state");
+    let logs = state.join("logs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&logs).unwrap();
+
+    // Simulate a self-build store: 200 hash-prefixed directories, each
+    // with a bin/ subdir and a fake binary. Total entries: 200 * 3 = 600
+    // (dir + bin/ + bin/file). A real store has 10k+ entries.
+    let entry_count: u32 = 200;
+    for i in 0..entry_count {
+        let name = format!("abcdef1234567890-bootstrap-tool-{i}");
+        let bin_dir = store.join(&name).join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("tool"), format!("fake-{i}")).unwrap();
+    }
+    // Also populate logs.
+    for i in 0..50_u32 {
+        std::fs::write(logs.join(format!("build-{i}.log")), format!("log-{i}")).unwrap();
+    }
+    // Write a pathinfo.redb stand-in.
+    std::fs::write(state.join("pathinfo.redb"), b"fake-redb").unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("printf 'self-build-proof: output-binary=/tmp/fake\n' >&2")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // This must NOT panic. If store/ were an audit artifact, the
+    // recursive hash would process 600+ entries (and on a real store,
+    // 100k+, triggering the MAX_AUDIT_ENTRIES assert).
+    let evidence = record_stage_evidence(
+        proof_dir.path(),
+        "populated-store",
+        vec!["crunch".to_string(), "self-build".to_string()],
+        output,
+        &store,
+        &state,
+    );
+
+    let meta_json = std::fs::read_to_string(evidence.audit_dir.join("meta.json")).unwrap();
+    // Store and state dirs must NOT appear as artifact labels.
+    // (The store path may appear in the env section — that's fine.)
+    assert!(!meta_json.contains("\"store-dir\""));
+    assert!(!meta_json.contains("\"state-dir\""));
+    // But selected artifacts (logs-dir, pathinfo-db, diagnostics, captures) must appear.
+    assert!(meta_json.contains("\"logs-dir\""));
+    assert!(meta_json.contains("\"pathinfo-db\""));
+    assert!(meta_json.contains("\"diagnostics\""));
+    assert!(meta_json.contains("\"stdout-capture\""));
+    assert!(meta_json.contains("\"stderr-capture\""));
+}
+
+/// Regression: audit bundle hashing enforces MAX_AUDIT_DEPTH (64).
+/// A directory tree deeper than the limit must trigger a panic, not
+/// silently skip or corrupt the hash.
+#[test]
+fn audit_hashing_rejects_excessively_deep_trees() {
+    let tmp = tempfile::tempdir().unwrap();
+    // Build a path 70 levels deep (exceeds MAX_AUDIT_DEPTH of 64).
+    let depth: u32 = 70;
+    let mut deep_path = tmp.path().to_path_buf();
+    for i in 0..depth {
+        deep_path = deep_path.join(format!("d{i}"));
+    }
+    std::fs::create_dir_all(&deep_path).unwrap();
+    std::fs::write(deep_path.join("leaf.txt"), b"deep").unwrap();
+
+    let dummy_output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("true")
+        .output()
+        .unwrap();
+
+    let result = std::panic::catch_unwind(|| {
+        write_command_audit(
+            "depth-limit",
+            "deep",
+            tmp.path(),
+            &["test".to_string()],
+            &dummy_output,
+            &[AuditArtifact {
+                label: "deep-tree",
+                path: tmp.path(),
+            }],
+            &[],
+        )
+    });
+
+    assert!(result.is_err(), "audit hashing must panic on trees deeper than MAX_AUDIT_DEPTH");
 }
 
 #[test]
@@ -530,6 +876,7 @@ fn self_hosting_stage0_stage1_stage2() {
     }
 
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
+    eprintln!("proof dir: {}", proof_dir.path().display());
     let store = proof_dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
 
@@ -547,6 +894,9 @@ fn self_hosting_stage0_stage1_stage2() {
 
     let stage0_command = vec![
         "crunch".to_string(),
+        "--verbose".to_string(),
+        "--log-level".to_string(),
+        "info".to_string(),
         "--store".to_string(),
         store.display().to_string(),
         "--state-dir".to_string(),
@@ -557,22 +907,26 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    let stage0 = Command::cargo_bin("crunch")
-        .unwrap_or_else(|err| panic!("crunch binary built: {err}"))
-        .args(&stage0_command[1..])
-        .output()
-        .unwrap_or_else(|err| {
-            panic!(
-                "stage0 should execute: {err}\n{}",
-                pre_stage_context("stage0", &stage0_command, &store, &stage0_state),
-            )
-        });
+    eprintln!("stage0 store: {}", store.display());
+    eprintln!("stage0 state: {}", stage0_state.display());
+    let crunch_bin = cargo_bin("crunch");
+    let mut stage0_process = std::process::Command::new(&crunch_bin);
+    stage0_process.args(&stage0_command[1..]);
+    let stage0 = run_command_live(proof_dir.path(), "stage0", &mut stage0_process).unwrap_or_else(|err| {
+        panic!(
+            "stage0 should execute: {err}\n{}",
+            pre_stage_context("stage0", &stage0_command, &store, &stage0_state),
+        )
+    });
+    assert_eq!(stage0.stdout_file, stage_stream_file(proof_dir.path(), "stage0", "stdout"));
+    assert_eq!(stage0.stderr_file, stage_stream_file(proof_dir.path(), "stage0", "stderr"));
     let stage0_evidence =
-        record_stage_evidence(proof_dir.path(), "stage0", stage0_command, stage0, &store, &stage0_state);
+        record_stage_evidence(proof_dir.path(), "stage0", stage0_command, stage0.output, &store, &stage0_state);
 
-    eprintln!("{}", stage0_evidence.stderr);
     eprintln!("stage0 audit: {}", stage0_evidence.audit_dir.display());
     eprintln!("stage0 diagnostics: {}", stage0_evidence.diagnostics_file.display());
+    eprintln!("stage0 stdout: {}", stage0_evidence.stdout_file.display());
+    eprintln!("stage0 stderr: {}", stage0_evidence.stderr_file.display());
     assert_stage_success(&stage0_evidence);
 
     // Find the stage1 binary.
@@ -669,6 +1023,9 @@ fn self_hosting_stage0_stage1_stage2() {
 
     let stage2_command = vec![
         stage1_binary.display().to_string(),
+        "--verbose".to_string(),
+        "--log-level".to_string(),
+        "info".to_string(),
         "--store".to_string(),
         store.display().to_string(),
         "--state-dir".to_string(),
@@ -679,21 +1036,25 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    let stage2 = std::process::Command::new(&stage1_binary)
-        .args(&stage2_command[1..])
-        .output()
-        .unwrap_or_else(|err| {
-            panic!(
-                "stage2 should execute: {err}\n{}",
-                pre_stage_context("stage2", &stage2_command, &store, &stage2_state),
-            )
-        });
+    eprintln!("stage2 store: {}", store.display());
+    eprintln!("stage2 state: {}", stage2_state.display());
+    let mut stage2_process = std::process::Command::new(&stage1_binary);
+    stage2_process.args(&stage2_command[1..]);
+    let stage2 = run_command_live(proof_dir.path(), "stage2", &mut stage2_process).unwrap_or_else(|err| {
+        panic!(
+            "stage2 should execute: {err}\n{}",
+            pre_stage_context("stage2", &stage2_command, &store, &stage2_state),
+        )
+    });
+    assert_eq!(stage2.stdout_file, stage_stream_file(proof_dir.path(), "stage2", "stdout"));
+    assert_eq!(stage2.stderr_file, stage_stream_file(proof_dir.path(), "stage2", "stderr"));
     let stage2_evidence =
-        record_stage_evidence(proof_dir.path(), "stage2", stage2_command, stage2, &store, &stage2_state);
+        record_stage_evidence(proof_dir.path(), "stage2", stage2_command, stage2.output, &store, &stage2_state);
 
-    eprintln!("{}", stage2_evidence.stderr);
     eprintln!("stage2 audit: {}", stage2_evidence.audit_dir.display());
     eprintln!("stage2 diagnostics: {}", stage2_evidence.diagnostics_file.display());
+    eprintln!("stage2 stdout: {}", stage2_evidence.stdout_file.display());
+    eprintln!("stage2 stderr: {}", stage2_evidence.stderr_file.display());
     assert_stage_success(&stage2_evidence);
 
     // ── Verify stage2 output ────────────────────────────────────
