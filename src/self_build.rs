@@ -490,11 +490,7 @@ fn export_tracked_worktree(src_dir: &Path, stage_root: &Path) -> Result<(), RunE
     assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
     let export_script = "set -eu\ncd \"$SRC_DIR\"\ngit ls-files -z | tar --null --files-from=- --create --file - | tar --extract --file - --directory \"$DST_DIR\"\n";
     run_cmd(
-        Command::new("sh")
-            .arg("-c")
-            .arg(export_script)
-            .env("SRC_DIR", src_dir)
-            .env("DST_DIR", stage_root),
+        Command::new("sh").arg("-c").arg(export_script).env("SRC_DIR", src_dir).env("DST_DIR", stage_root),
         "git ls-files | tar extract",
     )?;
     Ok(())
@@ -864,7 +860,7 @@ fn build_bootstrap_tool(
     };
 
     let result = run_build(&config)?;
-    report_build_result(&config, &result, false)?;
+    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
     Ok(())
 }
 
@@ -908,7 +904,7 @@ pub fn cmd_self_build(
         paths
     };
 
-    let self_build_keypair = load_or_generate_signing_keypair(signing_key_path, state_dir)?;
+    let self_build_keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
     let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
     let self_build_trusted = crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
 
@@ -973,7 +969,7 @@ pub fn cmd_self_build(
     };
 
     let result = run_build(&config)?;
-    report_build_result(&config, &result, false)?;
+    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
 
     // ── Step 4: Verify ──────────────────────────────────────────
 
@@ -1144,30 +1140,18 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         run_cmd(Command::new("git").arg("init").arg("-q").current_dir(repo.path()), "git init").unwrap();
         run_cmd(
-            Command::new("git")
-                .args(["config", "user.email", "pi@example.test"])
-                .current_dir(repo.path()),
+            Command::new("git").args(["config", "user.email", "pi@example.test"]).current_dir(repo.path()),
             "git config email",
         )
         .unwrap();
         run_cmd(
-            Command::new("git")
-                .args(["config", "user.name", "Pi Test"])
-                .current_dir(repo.path()),
+            Command::new("git").args(["config", "user.name", "Pi Test"]).current_dir(repo.path()),
             "git config name",
         )
         .unwrap();
         std::fs::write(repo.path().join("tracked.txt"), "committed\n").unwrap();
-        run_cmd(
-            Command::new("git").args(["add", "tracked.txt"]).current_dir(repo.path()),
-            "git add tracked",
-        )
-        .unwrap();
-        run_cmd(
-            Command::new("git").args(["commit", "-qm", "init"]).current_dir(repo.path()),
-            "git commit",
-        )
-        .unwrap();
+        run_cmd(Command::new("git").args(["add", "tracked.txt"]).current_dir(repo.path()), "git add tracked").unwrap();
+        run_cmd(Command::new("git").args(["commit", "-qm", "init"]).current_dir(repo.path()), "git commit").unwrap();
 
         std::fs::write(repo.path().join("tracked.txt"), "worktree\n").unwrap();
         std::fs::write(repo.path().join("untracked.txt"), "skip me\n").unwrap();

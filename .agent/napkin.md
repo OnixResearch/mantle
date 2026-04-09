@@ -267,8 +267,10 @@
 ## Smoke Tests (2026-04-06)
 - `tests/smoke.rs`: 10 end-to-end tests that build derivations and verify outputs on disk.
 - All use `--store <tempdir>` — no writable `/nix/store` needed.
-- `build_ncl()` helper: writes .ncl to tempdir, runs `crunch build --store --no-substitute`, returns stdout.
-- `first_output_path()` / `all_output_paths()` extract paths from stdout (strips " (cached)" suffixes).
+- `build_ncl()` helper now runs `crunch --json build --store --no-substitute`, parses the `crunch-build-report-v1` report, and writes audit bundles via `tests/audit_support.rs`.
+- `first_output_path()` / `all_output_paths()` now read paths from the JSON report instead of scraping human stdout.
+- JSON `log_file` fields must only be emitted when the log file actually exists on disk. `build_report` now checks the shared path helpers instead of assuming `write_log` succeeded or inventing fallback paths for unparsable `drv_key`s.
+- `./scripts/prove-self-hosting.sh --check` hung for >5 minutes with no stdout/stderr on this host when run under the full Rust/clang/pkg-config env. Treat the self-hosting proof path as not quickly verifiable here unless you have time to debug the helper.
 - Tests cover: flat file, directory structure, executable scripts (built + executed), failures, cache hits, CA, fetchurl (local HTTP server + sha256 SRI), multi-root .ncl, symlinks, deterministic paths.
 - Fetchurl test uses `sha2` + `base64` (dev-deps) to compute expected SRI hash of known content.
 - Stale `ca_resolve_output_updates_known_paths` test removed from crunch-glue (methods moved to DerivationRegistry in crunch-build). Equivalent test already at `registry.rs:267`.

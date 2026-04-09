@@ -17,10 +17,14 @@
 //! 5. Verifies stage2 produced a working binary
 //! 6. Checks that stage2 used crunch-built bwrap (not host fallback)
 
+mod audit_support;
+
 use std::path::Path;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use audit_support::AuditArtifact;
+use audit_support::write_command_audit;
 
 /// Check prerequisites for the proof.
 fn can_self_build() -> bool {
@@ -195,6 +199,45 @@ fn self_hosting_stage0_stage1_stage2() {
     assert!(is_executable(&busybox_bin), "busybox binary must be executable: {}", busybox_bin.display(),);
     eprintln!("busybox on disk: {}", busybox_bin.display());
 
+    let stage0_command = vec![
+        "crunch".to_string(),
+        "--store".to_string(),
+        store.display().to_string(),
+        "--state-dir".to_string(),
+        stage0_state.display().to_string(),
+        "--nix-compat".to_string(),
+        "self-build".to_string(),
+        "--no-substitute".to_string(),
+        "-j".to_string(),
+        "4".to_string(),
+    ];
+    let _stage0_audit = write_command_audit(
+        "self-hosting",
+        "stage0",
+        &std::env::current_dir().unwrap(),
+        &stage0_command,
+        &stage0,
+        &[
+            AuditArtifact {
+                label: "stage1-binary",
+                path: &stage1_binary,
+            },
+            AuditArtifact {
+                label: "bwrap",
+                path: &bwrap_bin,
+            },
+            AuditArtifact {
+                label: "busybox",
+                path: &busybox_bin,
+            },
+        ],
+        &[
+            ("CRUNCH_STATE_DIR", stage0_state.display().to_string()),
+            ("CRUNCH_STORE_DIR", store.display().to_string()),
+        ],
+    )
+    .unwrap();
+
     // ── Prepare for Stage 2 ─────────────────────────────────────
 
     // The store has the root output (*-crunch) on disk.
@@ -305,5 +348,48 @@ fn self_hosting_stage0_stage1_stage2() {
     eprintln!("stage1: {}", stage1_binary.display());
     eprintln!("stage2: {}", stage2_binary.display());
     eprintln!("bwrap:  {bwrap_val}");
+    let stage2_command = vec![
+        stage1_binary.display().to_string(),
+        "--store".to_string(),
+        store.display().to_string(),
+        "--state-dir".to_string(),
+        stage2_state.display().to_string(),
+        "--nix-compat".to_string(),
+        "self-build".to_string(),
+        "--no-substitute".to_string(),
+        "-j".to_string(),
+        "4".to_string(),
+    ];
+    let _stage2_audit = write_command_audit(
+        "self-hosting",
+        "stage2",
+        &std::env::current_dir().unwrap(),
+        &stage2_command,
+        &stage2,
+        &[
+            AuditArtifact {
+                label: "stage1-driver",
+                path: &stage1_binary,
+            },
+            AuditArtifact {
+                label: "stage2-binary",
+                path: &stage2_binary,
+            },
+            AuditArtifact {
+                label: "store-bwrap",
+                path: &bwrap_bin,
+            },
+            AuditArtifact {
+                label: "store-busybox",
+                path: &busybox_bin,
+            },
+        ],
+        &[
+            ("CRUNCH_STATE_DIR", stage2_state.display().to_string()),
+            ("CRUNCH_STORE_DIR", store.display().to_string()),
+        ],
+    )
+    .unwrap();
+
     eprintln!("busybox: {}", s2_busybox.unwrap());
 }

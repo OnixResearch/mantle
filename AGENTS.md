@@ -299,6 +299,16 @@ When claiming test results in commit messages or completion summaries:
 - **For ignored integration tests** (like `tests/self_hosting.rs`),
   `cargo test --test X -- --list` proves compilation + discovery.
   Only `--ignored --nocapture` with captured output proves execution.
+- `crunch --json build ...` now emits a stable `crunch-build-report-v1`
+  JSON object on stdout. It includes counts, per-root outcomes,
+  failure records, and output paths. `tests/smoke.rs` and the new
+  build JSON CLI tests use it instead of scraping human stdout.
+  `log_file` fields are optional and must only appear when the log file
+  actually exists on disk.
+- Audit-grade integration tests now write bundles under
+  `target/test-audit/<suite>/.../` with `meta.json`, `stdout.txt`,
+  `stderr.txt`, and BLAKE3 digests for produced artifacts. Smoke tests
+  and `tests/self_hosting.rs` both use `tests/audit_support.rs`.
 
 ## Self-Build and Self-Hosting Proof
 

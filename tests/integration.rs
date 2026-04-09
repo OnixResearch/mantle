@@ -278,6 +278,109 @@ mod build_tests {
     }
 
     #[test]
+    fn build_json_success_emits_machine_readable_report() {
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("json-success.ncl"),
+            r#"let crunch = import "lib.ncl" in
+{
+  name = "json-success",
+  builder = "/bin/sh",
+  args = ["-c", "echo ok > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        )
+        .unwrap();
+
+        let output = crunch_cmd()
+            .arg("--json")
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("-I")
+            .arg(dir.path())
+            .arg(dir.path().join("json-success.ncl"))
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "build should succeed: {}", String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let report: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be valid JSON report");
+        assert_eq!(report["schema"], "crunch-build-report-v1");
+        assert_eq!(report["counts"]["succeeded_total"], 1);
+        assert_eq!(report["counts"]["failed_total"], 0);
+        assert_eq!(report["outcomes"][0]["label"], "json-success");
+        assert_eq!(report["outcomes"][0]["outputs"][0]["name"], "out");
+        assert!(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap().contains("json-success"));
+        assert!(
+            String::from_utf8_lossy(&output.stderr).trim().is_empty(),
+            "stderr should stay empty on JSON success"
+        );
+    }
+
+    #[test]
+    fn build_json_failure_keeps_report_and_json_error_separate() {
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("json-fail.ncl"),
+            r#"let crunch = import "lib.ncl" in
+{
+  name = "json-fail",
+  builder = "/bin/sh",
+  args = ["-c", "echo boom >&2; exit 7"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        )
+        .unwrap();
+
+        let output = crunch_cmd()
+            .arg("--json")
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("-I")
+            .arg(dir.path())
+            .arg(dir.path().join("json-fail.ncl"))
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let report: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be valid JSON report");
+        assert_eq!(report["schema"], "crunch-build-report-v1");
+        assert_eq!(report["counts"]["failed_total"], 1);
+        assert_eq!(report["failed"][0]["label"], "json-fail");
+        assert!(report["failed"][0]["error"].as_str().unwrap().contains("exit code 7"));
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let error: serde_json::Value =
+            serde_json::from_str(stderr.trim()).expect("stderr should be a JSON error object");
+        assert_eq!(error["kind"], "build");
+        assert_eq!(error["code"], 1);
+        assert!(error["error"].as_str().unwrap().contains("root build(s) failed"));
+    }
+
+    #[test]
     fn build_failing_builder_exits_1() {
         if !can_build() {
             eprintln!("skipping build test: bwrap or /nix/store not available");

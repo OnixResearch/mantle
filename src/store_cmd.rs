@@ -118,7 +118,7 @@ async fn cmd_store_verify(
             Some(keys)
         };
 
-    let keypair = load_or_generate_signing_keypair(signing_key_path, &state_dir())?;
+    let keypair = load_or_generate_signing_keypair(signing_key_path, &state_dir(), true)?;
     let configured_trusted_keys = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), &state_dir())?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
 
@@ -195,7 +195,7 @@ async fn cmd_store_sign(
         return Err(RunError::Internal("provide a store path or use --all to sign all entries".to_string()));
     }
 
-    let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, &state_dir())?;
+    let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, &state_dir(), true)?;
 
     let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, sign_all)
         .await

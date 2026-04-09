@@ -30,7 +30,16 @@ crunch eval hello.ncl
 
 # Build (requires Linux + bwrap)
 crunch build hello.ncl
+
+# Machine-readable build summary for audit tooling
+crunch --json build hello.ncl
 ```
+
+`crunch --json build` writes a stable `crunch-build-report-v1` JSON
+object to stdout. It includes per-root outcomes, cache hits, failure
+records, and output paths so tests can assert on structured data instead
+of scraping human text. The optional `log_file` fields are only present
+when the corresponding log was actually written to disk.
 
 Output lands in `/nix/store/<hash>-hello` by default (the `--store`
 default). Derivation hashes are computed under the `/crunch/store`

@@ -1,5 +1,7 @@
 mod bootstrap;
 mod build_cmd;
+mod build_log;
+mod build_report;
 mod errors;
 mod fix;
 mod log_cmd;
@@ -11,6 +13,7 @@ mod store_cmd;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use build_cmd::BuildOutputMode;
 use build_cmd::build_import_paths;
 use build_cmd::cmd_build;
 use build_cmd::state_dir;
@@ -315,6 +318,11 @@ fn run(args: Args) -> Result<(), RunError> {
                 }
                 Some(keys)
             };
+            let output_mode = if args.json {
+                BuildOutputMode::Json
+            } else {
+                BuildOutputMode::Human
+            };
             cmd_build(
                 &file,
                 &import_paths,
@@ -328,6 +336,7 @@ fn run(args: Args) -> Result<(), RunError> {
                 signing_key.as_deref(),
                 parsed_trusted.as_deref(),
                 trust_unsigned,
+                output_mode,
             )
         }
         Command::Bootstrap {

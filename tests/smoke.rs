@@ -3,10 +3,15 @@
 //! Each test uses `--store <tempdir>` so outputs land in a writable
 //! directory without needing a writable /nix/store. Requires bwrap.
 
+mod audit_support;
+
 use std::path::Path;
 use std::path::PathBuf;
 
 use assert_cmd::Command;
+use audit_support::AuditArtifact;
+use audit_support::write_command_audit;
+use serde::Deserialize;
 
 fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
@@ -17,51 +22,135 @@ fn can_build() -> bool {
         && std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
-/// Run `crunch build` with `--store <dir>` and return stdout.
-/// Uses a per-call state dir to isolate pathinfo.redb across tests.
-/// Pass `state_dir` to share state between calls (e.g., for cache tests).
-fn build_ncl(ncl_content: &str, store: &Path) -> String {
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct BuildJsonReport {
+    schema: String,
+    counts: BuildJsonCounts,
+    outcomes: Vec<BuildJsonOutcome>,
+    failed: Vec<BuildJsonFailure>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct BuildJsonCounts {
+    succeeded_total: u32,
+    built_total: u32,
+    cached_total: u32,
+    failed_total: u32,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct BuildJsonOutcome {
+    label: String,
+    cached: bool,
+    outputs: Vec<BuildJsonOutput>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct BuildJsonOutput {
+    name: String,
+    path: PathBuf,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct BuildJsonFailure {
+    label: String,
+    error: String,
+}
+
+struct BuildRun {
+    report: BuildJsonReport,
+}
+
+/// Run `crunch --json build` with `--store <dir>` and return the parsed
+/// report. Uses a per-call state dir to isolate pathinfo.redb across tests.
+/// Pass `state_dir` to share state between calls (e.g. for cache tests).
+fn build_ncl(ncl_content: &str, store: &Path) -> BuildRun {
     build_ncl_with_state(ncl_content, store, None)
 }
 
-fn build_ncl_with_state(ncl_content: &str, store: &Path, state_dir: Option<&Path>) -> String {
+fn build_ncl_with_state(ncl_content: &str, store: &Path, state_dir: Option<&Path>) -> BuildRun {
     let work = tempfile::tempdir().unwrap();
     let ncl_file = work.path().join("test.ncl");
     std::fs::write(&ncl_file, ncl_content).unwrap();
+    let resolved_state_dir = state_dir.map(PathBuf::from).unwrap_or_else(|| work.path().join("state"));
 
     let mut cmd = crunch_cmd();
+    cmd.arg("--json");
     cmd.arg("--store").arg(store);
-    if let Some(sd) = state_dir {
-        cmd.arg("--state-dir").arg(sd);
-    } else {
-        // Isolate each build in its own state dir.
-        let sd = work.path().join("state");
-        cmd.arg("--state-dir").arg(&sd);
-    }
+    cmd.arg("--state-dir").arg(&resolved_state_dir);
     cmd.arg("build").arg("--no-substitute").arg("-I").arg(work.path()).arg(&ncl_file);
 
+    let command = vec![
+        "crunch".to_string(),
+        "--json".to_string(),
+        "--store".to_string(),
+        store.display().to_string(),
+        "--state-dir".to_string(),
+        resolved_state_dir.display().to_string(),
+        "build".to_string(),
+        "--no-substitute".to_string(),
+        "-I".to_string(),
+        work.path().display().to_string(),
+        ncl_file.display().to_string(),
+    ];
+
     let output = cmd.output().expect("should execute");
+    let stdout = String::from_utf8(output.stdout.clone()).unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let report: BuildJsonReport = serde_json::from_str(&stdout).unwrap_or_else(|err| {
+        panic!("build stdout should be valid JSON report: {err}\nstdout:\n{stdout}\nstderr:\n{stderr}")
+    });
+    assert_eq!(report.schema, "crunch-build-report-v1");
+    assert_eq!(report.counts.succeeded_total as usize, report.outcomes.len());
+    assert_eq!(report.counts.failed_total as usize, report.failed.len());
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let artifacts: Vec<AuditArtifact<'_>> = report
+        .outcomes
+        .iter()
+        .flat_map(|outcome| outcome.outputs.iter())
+        .map(|output| AuditArtifact {
+            label: output.name.as_str(),
+            path: output.path.as_path(),
+        })
+        .collect();
+    let _audit_dir = write_command_audit("smoke", "build", work.path(), &command, &output, &artifacts, &[
+        ("CRUNCH_STATE_DIR", resolved_state_dir.display().to_string()),
+        ("CRUNCH_STORE_DIR", store.display().to_string()),
+    ])
+    .unwrap();
+
     assert!(output.status.success(), "build failed (exit {}):\n{stderr}", output.status.code().unwrap_or(-1),);
-    String::from_utf8(output.stdout).unwrap()
+    assert!(
+        report.failed.is_empty(),
+        "build report had failures: {:?}",
+        report
+            .failed
+            .iter()
+            .map(|failure| format!("{}: {}", failure.label, failure.error))
+            .collect::<Vec<_>>()
+    );
+    BuildRun { report }
 }
 
-/// Extract the first output path from crunch build stdout.
-/// Stdout lines are like: `/tmp/store/HASH-name` or `/tmp/store/HASH-name (cached)`
-fn first_output_path(stdout: &str) -> PathBuf {
-    let line = stdout.lines().next().expect("build should print at least one line");
-    // Strip any suffix like " (cached)" or " (dev)"
-    let path_str = line.split_whitespace().next().unwrap();
-    PathBuf::from(path_str)
+fn first_output_path(run: &BuildRun) -> PathBuf {
+    run.report
+        .outcomes
+        .first()
+        .and_then(|outcome| outcome.outputs.first())
+        .map(|output| output.path.clone())
+        .expect("build should produce at least one output path")
 }
 
-/// Extract all output paths from stdout.
-fn all_output_paths(stdout: &str) -> Vec<PathBuf> {
-    stdout
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(|l| PathBuf::from(l.split_whitespace().next().unwrap()))
+fn all_output_paths(run: &BuildRun) -> Vec<PathBuf> {
+    run.report
+        .outcomes
+        .iter()
+        .flat_map(|outcome| outcome.outputs.iter().map(|output| output.path.clone()))
         .collect()
 }
 
@@ -75,7 +164,7 @@ fn smoke_build_flat_file_and_read_content() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let stdout = build_ncl(
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 {
   name = "flat-file",
@@ -86,7 +175,7 @@ fn smoke_build_flat_file_and_read_content() {
         store.path(),
     );
 
-    let out = first_output_path(&stdout);
+    let out = first_output_path(&run);
     assert!(out.exists(), "output should exist on disk: {}", out.display());
     let content = std::fs::read_to_string(&out).unwrap();
     assert_eq!(content.trim(), "crunch works");
@@ -100,7 +189,7 @@ fn smoke_build_directory_output_with_structure() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let stdout = build_ncl(
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 {
   name = "dir-output",
@@ -111,7 +200,7 @@ fn smoke_build_directory_output_with_structure() {
         store.path(),
     );
 
-    let out = first_output_path(&stdout);
+    let out = first_output_path(&run);
     assert!(out.join("bin/run").exists(), "bin/run should exist");
     assert!(out.join("lib/foo.txt").exists(), "lib/foo.txt should exist");
 
@@ -138,7 +227,7 @@ fn smoke_build_and_run_shell_script() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let stdout = build_ncl(
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 {
   name = "runnable",
@@ -149,7 +238,7 @@ fn smoke_build_and_run_shell_script() {
         store.path(),
     );
 
-    let out = first_output_path(&stdout);
+    let out = first_output_path(&run);
     let greet = out.join("bin/greet");
     assert!(greet.exists(), "greet script should exist");
 
@@ -182,9 +271,13 @@ fn smoke_build_failure_reports_error() {
     )
     .unwrap();
 
+    let state_dir = work.path().join("state");
     let output = crunch_cmd()
+        .arg("--json")
         .arg("--store")
         .arg(store.path())
+        .arg("--state-dir")
+        .arg(&state_dir)
         .arg("build")
         .arg("--no-substitute")
         .arg("-I")
@@ -193,12 +286,41 @@ fn smoke_build_failure_reports_error() {
         .output()
         .unwrap();
 
+    let stdout = String::from_utf8(output.stdout.clone()).unwrap();
+    let report: BuildJsonReport = serde_json::from_str(&stdout).expect("failure path should still emit a JSON report");
+    let _audit_dir = write_command_audit(
+        "smoke",
+        "build-failure",
+        work.path(),
+        &[
+            "crunch".to_string(),
+            "--json".to_string(),
+            "--store".to_string(),
+            store.path().display().to_string(),
+            "--state-dir".to_string(),
+            state_dir.display().to_string(),
+            "build".to_string(),
+            "--no-substitute".to_string(),
+            "-I".to_string(),
+            work.path().display().to_string(),
+            ncl_file.display().to_string(),
+        ],
+        &output,
+        &[],
+        &[
+            ("CRUNCH_STATE_DIR", state_dir.display().to_string()),
+            ("CRUNCH_STORE_DIR", store.path().display().to_string()),
+        ],
+    )
+    .unwrap();
+
     assert!(!output.status.success(), "build should fail");
+    assert_eq!(report.counts.failed_total, 1, "report should record one failed root");
+    assert_eq!(report.failed[0].label, "will-fail");
+    assert!(report.failed[0].error.contains("42") || report.failed[0].error.contains("will-fail"));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("will-fail") || stderr.contains("build failed"),
-        "stderr should mention the derivation name or failure: {stderr}"
-    );
+    let error_json: serde_json::Value = serde_json::from_str(stderr.trim()).expect("stderr should be JSON");
+    assert_eq!(error_json["kind"], "build");
 }
 
 #[test]
@@ -219,17 +341,19 @@ fn smoke_build_cached_on_second_run() {
 } | crunch.Derivation"#;
 
     // First build — shared state dir so pathinfo.redb persists.
-    let stdout1 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
-    let path1 = first_output_path(&stdout1);
+    let run1 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
+    let path1 = first_output_path(&run1);
     assert!(path1.exists());
-    // First build should NOT say "(cached)"
-    assert!(!stdout1.contains("(cached)"), "first build should not be cached: {stdout1}");
+    assert_eq!(run1.report.counts.cached_total, 0, "first build should not be cached");
+    assert_eq!(run1.report.counts.built_total, 1, "first build should report one local build");
+    assert!(!run1.report.outcomes[0].cached, "first build should not be cached");
 
     // Second build — same store + same state dir → cache hit
-    let stdout2 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
-    let path2 = first_output_path(&stdout2);
+    let run2 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
+    let path2 = first_output_path(&run2);
     assert_eq!(path1, path2, "same derivation should produce same path");
-    assert!(stdout2.contains("(cached)"), "second build should be cached: {stdout2}");
+    assert_eq!(run2.report.counts.cached_total, 1, "second build should report one cache hit");
+    assert!(run2.report.outcomes[0].cached, "second build should be cached");
 }
 
 #[test]
@@ -240,7 +364,7 @@ fn smoke_build_ca_derivation() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let stdout = build_ncl(
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 {
   name = "ca-smoke",
@@ -250,7 +374,7 @@ fn smoke_build_ca_derivation() {
         store.path(),
     );
 
-    let out = first_output_path(&stdout);
+    let out = first_output_path(&run);
     assert!(out.exists(), "CA output should exist: {}", out.display());
     let content = std::fs::read_to_string(&out).unwrap();
     assert_eq!(content.trim(), "content-addressed");
@@ -288,38 +412,20 @@ fn smoke_fetchurl_downloads_and_stores() {
     let sri = format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(hash));
 
     let store = tempfile::tempdir().unwrap();
-    let work = tempfile::tempdir().unwrap();
-    let ncl_file = work.path().join("fetch.ncl");
-    std::fs::write(
-        &ncl_file,
-        format!(
+    let run = build_ncl(
+        &format!(
             r#"let crunch = import "lib.ncl" in
 crunch.fetchurl {{
   url = "http://{addr}/data.txt",
   hash = "{sri}",
 }}"#
         ),
-    )
-    .unwrap();
-
-    let output = crunch_cmd()
-        .arg("--store")
-        .arg(store.path())
-        .arg("build")
-        .arg("--no-substitute")
-        .arg("-I")
-        .arg(work.path())
-        .arg(&ncl_file)
-        .output()
-        .unwrap();
+        store.path(),
+    );
 
     server.join().unwrap();
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "fetchurl build should succeed: {stderr}");
-
-    let stdout_str = String::from_utf8(output.stdout).unwrap();
-    let out = first_output_path(&stdout_str);
+    let out = first_output_path(&run);
     assert!(out.exists(), "fetched output should exist: {}", out.display());
     let content = std::fs::read_to_string(&out).unwrap();
     assert_eq!(content, "fetched-by-crunch\n");
@@ -333,10 +439,7 @@ fn smoke_build_multi_derivation_file() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let work = tempfile::tempdir().unwrap();
-    let ncl_file = work.path().join("multi.ncl");
-    std::fs::write(
-        &ncl_file,
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 [
   {
@@ -352,26 +455,11 @@ fn smoke_build_multi_derivation_file() {
     addressing_mode = 'input-addressed,
   } | crunch.Derivation,
 ]"#,
-    )
-    .unwrap();
+        store.path(),
+    );
 
-    let output = crunch_cmd()
-        .arg("--store")
-        .arg(store.path())
-        .arg("build")
-        .arg("--no-substitute")
-        .arg("-I")
-        .arg(work.path())
-        .arg(&ncl_file)
-        .output()
-        .unwrap();
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "multi build failed: {stderr}");
-
-    let stdout_str = String::from_utf8(output.stdout).unwrap();
-    let paths = all_output_paths(&stdout_str);
-    assert_eq!(paths.len(), 2, "should have 2 outputs: {stdout_str}");
+    let paths = all_output_paths(&run);
+    assert_eq!(paths.len(), 2, "should have 2 outputs: {:?}", paths);
 
     // Both outputs should exist and have distinct content
     let mut contents: Vec<String> = paths
@@ -393,7 +481,7 @@ fn smoke_build_symlink_in_output() {
     }
 
     let store = tempfile::tempdir().unwrap();
-    let stdout = build_ncl(
+    let run = build_ncl(
         r#"let crunch = import "lib.ncl" in
 {
   name = "with-symlink",
@@ -404,7 +492,7 @@ fn smoke_build_symlink_in_output() {
         store.path(),
     );
 
-    let out = first_output_path(&stdout);
+    let out = first_output_path(&run);
     let alias = out.join("bin/alias");
     assert!(alias.exists(), "symlink should exist");
 
@@ -436,11 +524,11 @@ fn smoke_deterministic_output_path() {
     let store1 = tempfile::tempdir().unwrap();
     let store2 = tempfile::tempdir().unwrap();
 
-    let stdout1 = build_ncl(ncl, store1.path());
-    let stdout2 = build_ncl(ncl, store2.path());
+    let run1 = build_ncl(ncl, store1.path());
+    let run2 = build_ncl(ncl, store2.path());
 
-    let path1 = first_output_path(&stdout1);
-    let path2 = first_output_path(&stdout2);
+    let path1 = first_output_path(&run1);
+    let path2 = first_output_path(&run2);
 
     // The filename (hash-name) should be identical even though store dirs differ
     let name1 = path1.file_name().unwrap();

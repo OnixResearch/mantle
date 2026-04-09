@@ -10,7 +10,25 @@ use crunch_pipeline::label_for_key;
 use crunch_pipeline::parse_drv_key;
 use nix_compat::store_path::StorePath;
 
+use crate::build_log::write_log_file;
+use crate::build_report::render_build_json_report;
 use crate::errors::RunError;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuildOutputMode {
+    Human,
+    Json,
+}
+
+impl BuildOutputMode {
+    fn is_human(self) -> bool {
+        matches!(self, Self::Human)
+    }
+
+    fn is_json(self) -> bool {
+        matches!(self, Self::Json)
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn cmd_build(
@@ -26,8 +44,9 @@ pub fn cmd_build(
     signing_key_path: Option<&Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
-    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir)?;
+    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
     let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
     let trusted_keys = signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
 
@@ -46,7 +65,7 @@ pub fn cmd_build(
     };
 
     let result = run_build(&config)?;
-    report_build_result(&config, &result, fix)
+    report_build_result(&config, &result, fix, output_mode)
 }
 
 pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
@@ -54,22 +73,41 @@ pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
     rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
 }
 
-pub fn report_build_result(config: &BuildConfig, result: &PipelineResult, fix: bool) -> Result<(), RunError> {
+pub fn report_build_result(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    fix: bool,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
     let logs_dir = log_dir();
-    let _ = std::fs::create_dir_all(&logs_dir);
+    if std::fs::create_dir_all(&logs_dir).is_err() {
+        debug_assert!(!logs_dir.exists(), "failed create_dir_all should not leave a missing dir invariant broken");
+    }
 
-    write_success_logs_and_outputs(config, result, &logs_dir);
+    write_success_logs(config, result, &logs_dir, output_mode);
+    if output_mode.is_human() {
+        print_success_outputs(config, result);
+    }
 
     if result.failed.is_empty() {
+        if output_mode.is_json() {
+            print_json_report(config, result, &logs_dir)?;
+        }
         return Ok(());
     }
 
-    if let Some(single_mismatch) = maybe_single_fod_mismatch(config, result, &logs_dir, fix) {
+    write_failure_logs(config, result, &logs_dir);
+    if output_mode.is_json() {
+        print_json_report(config, result, &logs_dir)?;
+    }
+
+    if let Some(single_mismatch) = maybe_single_fod_mismatch(config, result, fix, output_mode) {
         return single_mismatch;
     }
 
-    write_failure_logs(config, result, &logs_dir);
-    print_failed_builds(result);
+    if output_mode.is_human() {
+        print_failed_builds(result);
+    }
 
     Err(RunError::Build(format!("{} root build(s) failed", result.failed.len(),)))
 }
@@ -77,8 +115,8 @@ pub fn report_build_result(config: &BuildConfig, result: &PipelineResult, fix: b
 fn maybe_single_fod_mismatch(
     config: &BuildConfig,
     result: &PipelineResult,
-    logs_dir: &Path,
     fix: bool,
+    output_mode: BuildOutputMode,
 ) -> Option<Result<(), RunError>> {
     if result.failed.len() != 1 {
         return None;
@@ -92,29 +130,42 @@ fn maybe_single_fod_mismatch(
     let drv_path = parse_drv_key(&config.store_dir, &failed.drv_key)?;
     let label = label_for_key(result, &failed.drv_key).unwrap_or(drv_path.name());
 
-    Some(crate::fix::handle_fod_mismatch(mismatch, &drv_path, label, logs_dir, &config.file, fix))
+    Some(crate::fix::handle_fod_mismatch(
+        mismatch,
+        &drv_path,
+        label,
+        &config.file,
+        fix,
+        output_mode.is_human(),
+    ))
 }
 
-fn write_success_logs_and_outputs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
-    let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir);
-
+fn write_success_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path, output_mode: BuildOutputMode) {
     for outcome in &result.outcomes {
         let drv_key = drv_key_for(&config.store_dir, &outcome.drv_path);
         let label = label_for_key(result, &drv_key).unwrap_or(outcome.drv_path.name());
 
         if let Some(log) = &outcome.log {
-            write_log(logs_dir, &outcome.drv_path, label, true, log);
-            if config.verbose {
+            let _ = write_log(logs_dir, &outcome.drv_path, label, true, log);
+            if config.verbose && output_mode.is_human() {
                 eprintln!("--- build log: {label} ---");
                 eprintln!("{log}");
                 eprintln!("--- end log ---");
             }
         } else if !outcome.cached {
-            write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)");
+            let _ = write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)");
         }
+    }
+}
 
+fn print_success_outputs(config: &BuildConfig, result: &PipelineResult) {
+    let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir);
+
+    for outcome in &result.outcomes {
         let multi = outcome.outputs.len() > 1;
-        for (output_name, path_info) in &outcome.outputs {
+        let mut outputs: Vec<_> = outcome.outputs.iter().collect();
+        outputs.sort_by(|left, right| left.0.cmp(right.0));
+        for (output_name, path_info) in outputs {
             let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
             let suffix = match (outcome.cached, multi && output_name != "out") {
                 (true, true) => format!(" ({output_name}, cached)"),
@@ -127,13 +178,20 @@ fn write_success_logs_and_outputs(config: &BuildConfig, result: &PipelineResult,
     }
 }
 
+fn print_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> Result<(), RunError> {
+    let report = render_build_json_report(config, result, logs_dir)
+        .map_err(|e| RunError::Internal(format!("serializing build report: {e}")))?;
+    println!("{report}");
+    Ok(())
+}
+
 fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
     for failed in &result.failed {
         let Some(drv_path) = parse_drv_key(&config.store_dir, &failed.drv_key) else {
             continue;
         };
         let label = label_for_key(result, &failed.drv_key).unwrap_or(drv_path.name());
-        write_log(logs_dir, &drv_path, label, false, &failed.error);
+        let _ = write_log(logs_dir, &drv_path, label, false, &failed.error);
     }
 }
 
@@ -144,15 +202,14 @@ fn print_failed_builds(result: &PipelineResult) {
     }
 }
 
-pub fn write_log(log_dir: &Path, drv_path: &StorePath<String>, label: &str, success: bool, body: &str) {
-    let log_file = log_dir.join(format!("{}.log", drv_path));
-    let status = if success { "success" } else { "failure" };
-    let timestamp =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let content = format!(
-        "# crunch build log\n# derivation: {label}\n# drv_path: {drv_path}\n# status: {status}\n# timestamp: {timestamp}\n\n{body}\n"
-    );
-    let _ = std::fs::write(&log_file, &content);
+pub fn write_log(
+    log_dir: &Path,
+    drv_path: &StorePath<String>,
+    label: &str,
+    success: bool,
+    body: &str,
+) -> Option<PathBuf> {
+    write_log_file(log_dir, drv_path, label, success, body)
 }
 
 pub fn state_dir() -> PathBuf {
@@ -174,6 +231,7 @@ pub fn log_dir() -> PathBuf {
 pub fn load_or_generate_signing_keypair(
     explicit_path: Option<&Path>,
     state_dir: &Path,
+    emit_human: bool,
 ) -> Result<signing::KeyPair, RunError> {
     // 1. Explicit path from --signing-key.
     if let Some(path) = explicit_path {
@@ -221,7 +279,9 @@ pub fn load_or_generate_signing_keypair(
             .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
     }
 
-    eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
+    if emit_human {
+        eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
+    }
     Ok(keypair)
 }
 

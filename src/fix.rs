@@ -3,16 +3,15 @@ use std::path::Path;
 use crunch_pipeline::FodMismatch;
 use nix_compat::store_path::StorePath;
 
-use crate::build_cmd::write_log;
 use crate::errors::RunError;
 
 pub fn handle_fod_mismatch(
     mismatch: &FodMismatch,
-    drv_path: &StorePath<String>,
-    label: &str,
-    log_dir: &Path,
+    _drv_path: &StorePath<String>,
+    _label: &str,
     source_file: &Path,
     fix: bool,
+    emit_human: bool,
 ) -> Result<(), RunError> {
     let msg = format!(
         "hash mismatch for '{}':\n expected: {}\n got:      {}",
@@ -22,22 +21,26 @@ pub fn handle_fod_mismatch(
     if fix {
         match auto_fix_hash(source_file, &mismatch.expected_sri, &mismatch.actual_sri) {
             Ok(()) => {
-                eprintln!("{msg}");
-                eprintln!("  fixed: updated {} with correct hash", source_file.display());
-                write_log(log_dir, drv_path, label, false, &msg);
+                if emit_human {
+                    eprintln!("{msg}");
+                    eprintln!("  fixed: updated {} with correct hash", source_file.display());
+                }
                 return Err(RunError::Build(format!("{msg}\n  fixed: re-run to build with the corrected hash")));
             }
             Err(fix_err) => {
-                eprintln!("{msg}");
-                eprintln!("  --fix failed: {fix_err}");
+                if emit_human {
+                    eprintln!("{msg}");
+                    eprintln!("  --fix failed: {fix_err}");
+                }
+                return Err(RunError::Build(format!("{msg}\n  --fix failed: {fix_err}")));
             }
         }
-    } else {
+    }
+
+    if emit_human {
         eprintln!("{msg}");
         eprintln!("  update {}: hash = \"{}\"", source_file.display(), mismatch.actual_sri,);
     }
-
-    write_log(log_dir, drv_path, label, false, &msg);
     Err(RunError::Build(msg))
 }
 
