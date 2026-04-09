@@ -37,6 +37,7 @@
 - The self-hosting proof's old `fusermount3: Operation not permitted` failure was NOT caused by picking `/run/current-system/sw/bin/fusermount3`. `strace` showed `/run/wrappers/bin/fusermount3` was already in use. The real fix was a fallback in `vendor/snix-build` that materializes castore inputs on disk only for the specific `FuseDaemon::new()` error message `Unexpected exit code when running fusermount`, so unrelated sandbox errors still surface normally.
 - `/tmp` is effectively full on this machine. For self-build smoke/proof work, set `TMPDIR=/var/tmp` or another disk-backed directory before running long builds.
 - `stage_source()` must export tracked files from the current worktree, not `git archive HEAD`. Otherwise `tests/self_hosting.rs` stage0 builds a stale stage1 binary that silently drops local fixes, and stage2 reintroduces already-fixed failures.
+- Stage1 can embed a compile-time `SNIX_BUILD_SANDBOX_SHELL` path that only exists in the stage0 temp store. `vendor/snix-build::choose_sandbox_shell()` must ignore a non-placeholder compile default if the file is missing, then fall back to a discovered static busybox or `/bin/sh`.
 
 ## Tooling Gotchas
 - The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.

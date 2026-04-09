@@ -57,12 +57,22 @@ fn choose_sandbox_shell(env_shell: Option<&str>, compile_default: &str, discover
         }
     }
     if compile_default != "/bin/sh" {
-        return compile_default.to_string();
+        if compile_default_shell_exists(compile_default) {
+            return compile_default.to_string();
+        }
     }
     if let Some(shell_path) = discovered_static {
         return shell_path.display().to_string();
     }
     "/bin/sh".to_string()
+}
+
+fn compile_default_shell_exists(compile_default: &str) -> bool {
+    if compile_default.is_empty() {
+        return false;
+    }
+    let path = Path::new(compile_default);
+    path.is_file()
 }
 
 fn find_static_sandbox_shell() -> Option<PathBuf> {
@@ -433,6 +443,25 @@ mod tests {
             Some(Path::new("/nix/store/def-busybox-static/bin/busybox")),
         );
         assert_eq!(chosen, "/nix/store/def-busybox-static/bin/busybox");
+    }
+
+    #[test]
+    fn choose_sandbox_shell_ignores_missing_compile_default() {
+        let chosen = choose_sandbox_shell(
+            Some("/bin/sh"),
+            "/nix/store/missing-busybox/bin/busybox",
+            Some(Path::new("/nix/store/def-busybox-static/bin/busybox")),
+        );
+        assert_eq!(chosen, "/nix/store/def-busybox-static/bin/busybox");
+    }
+
+    #[test]
+    fn choose_sandbox_shell_keeps_existing_compile_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell_path = dir.path().join("busybox");
+        std::fs::write(&shell_path, "#!/bin/sh\n").unwrap();
+        let chosen = choose_sandbox_shell(Some("/bin/sh"), shell_path.to_str().unwrap(), None);
+        assert_eq!(chosen, shell_path.display().to_string());
     }
 
     #[test]

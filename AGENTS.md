@@ -316,6 +316,11 @@ When claiming test results in commit messages or completion summaries:
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed
   behavior even though the checkout binary passed stage0.
+- A stage1 binary can inherit a compile-time `SNIX_BUILD_SANDBOX_SHELL`
+  pointing at a busybox in the stage0 temp store. `vendor/snix-build`
+  must treat a non-placeholder compile default as usable only when that
+  file still exists; otherwise it should fall back to a discovered
+  static busybox (or `/bin/sh` as a last resort).
 - The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
   uses a fresh tempdir store per run. Pre-assertions verify the store
   is empty before stage0.
