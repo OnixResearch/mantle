@@ -12,38 +12,66 @@
 //! with heavy modification/enhancements from Alibaba Cloud OS team.
 
 use std::any::Any;
-use std::collections::{btree_map, BTreeMap};
-use std::ffi::{CStr, CString, OsString};
+use std::collections::btree_map;
+use std::collections::BTreeMap;
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::os::fd::{AsFd, BorrowedFd};
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::os::fd::AsFd;
+use std::os::fd::BorrowedFd;
 use std::os::unix::ffi::OsStringExt;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::RawFd;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::RwLock;
+use std::sync::RwLockWriteGuard;
 use std::time::Duration;
 
-use vm_memory::{bitmap::BitmapSlice, ByteValued};
+use vm_memory::bitmap::BitmapSlice;
+use vm_memory::ByteValued;
 
-pub use self::config::{CachePolicy, Config};
-use self::file_handle::{FileHandle, OpenableFileHandle};
-use self::inode_store::{InodeId, InodeStore};
+pub use self::config::CachePolicy;
+pub use self::config::Config;
+use self::file_handle::FileHandle;
+use self::file_handle::OpenableFileHandle;
+use self::inode_store::InodeId;
+use self::inode_store::InodeStore;
 use self::mount_fd::MountFds;
-use self::statx::{statx, StatExt};
-use self::util::{
-    ebadf, einval, enosys, eperm, is_dir, is_safe_inode, openat, reopen_fd_through_proc, stat_fd,
-    UniqueInodeGenerator,
-};
+use self::statx::statx;
+use self::statx::StatExt;
+use self::util::ebadf;
+use self::util::einval;
+use self::util::enosys;
+use self::util::eperm;
+use self::util::is_dir;
+use self::util::is_safe_inode;
+use self::util::openat;
+use self::util::reopen_fd_through_proc;
+use self::util::stat_fd;
+use self::util::UniqueInodeGenerator;
 use crate::abi::fuse_abi as fuse;
 use crate::abi::fuse_abi::Opcode;
 use crate::api::filesystem::Entry;
-use crate::api::{
-    validate_path_component, BackendFileSystem, CURRENT_DIR_CSTR, EMPTY_CSTR, PARENT_DIR_CSTR,
-    PROC_SELF_FD_CSTR, SLASH_ASCII, VFS_MAX_INO,
-};
+use crate::api::validate_path_component;
+use crate::api::BackendFileSystem;
+use crate::api::CURRENT_DIR_CSTR;
+use crate::api::EMPTY_CSTR;
+use crate::api::PARENT_DIR_CSTR;
+use crate::api::PROC_SELF_FD_CSTR;
+use crate::api::SLASH_ASCII;
+use crate::api::VFS_MAX_INO;
 
 #[cfg(feature = "async-io")]
 mod async_io;
@@ -66,9 +94,9 @@ const MAX_HOST_INO: u64 = 0x7fff_ffff_ffff;
 /**
  * Represents the file associated with an inode (`InodeData`).
  *
- * When obtaining such a file, it may either be a new file (the `Owned` variant), in which case the
- * object's lifetime is static, or it may reference `InodeData.file` (the `Ref` variant), in which
- * case the object's lifetime is that of the respective `InodeData` object.
+ * When obtaining such a file, it may either be a new file (the `Owned` variant), in which case
+ * the object's lifetime is static, or it may reference `InodeData.file` (the `Ref` variant), in
+ * which case the object's lifetime is that of the respective `InodeData` object.
  */
 #[derive(Debug)]
 enum InodeFile<'a> {
@@ -189,19 +217,10 @@ impl InodeMap {
 
     fn get(&self, inode: Inode) -> io::Result<Arc<InodeData>> {
         // Do not expect poisoned lock here, so safe to unwrap().
-        self.inodes
-            .read()
-            .unwrap()
-            .get(&inode)
-            .map(Arc::clone)
-            .ok_or_else(ebadf)
+        self.inodes.read().unwrap().get(&inode).map(Arc::clone).ok_or_else(ebadf)
     }
 
-    fn get_inode_locked(
-        inodes: &InodeStore,
-        id: &InodeId,
-        handle: Option<&FileHandle>,
-    ) -> Option<Inode> {
+    fn get_inode_locked(inodes: &InodeStore, id: &InodeId, handle: Option<&FileHandle>) -> Option<Inode> {
         match handle {
             Some(h) => inodes.inode_by_handle(h).copied(),
             None => inodes.inode_by_id(id).copied(),
@@ -215,11 +234,7 @@ impl InodeMap {
         Self::get_alt_locked(inodes.deref(), id, handle)
     }
 
-    fn get_alt_locked(
-        inodes: &InodeStore,
-        id: &InodeId,
-        handle: Option<&FileHandle>,
-    ) -> Option<Arc<InodeData>> {
+    fn get_alt_locked(inodes: &InodeStore, id: &InodeId, handle: Option<&FileHandle>) -> Option<Arc<InodeData>> {
         handle
             .and_then(|h| inodes.get_by_handle(h))
             .or_else(|| {
@@ -411,28 +426,21 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
             cfg.no_open = false;
         }
         if cfg.writeback && cfg.cache_policy == CachePolicy::Never {
-            warn!(
-                "passthroughfs: writeback cache conflicts with cache=none, reset to no_writeback"
-            );
+            warn!("passthroughfs: writeback cache conflicts with cache=none, reset to no_writeback");
             cfg.writeback = false;
         }
 
         // Safe because this is a constant value and a valid C string.
         let proc_self_fd_cstr = unsafe { CStr::from_bytes_with_nul_unchecked(PROC_SELF_FD_CSTR) };
-        let proc_self_fd = Self::open_file(
-            &libc::AT_FDCWD,
-            proc_self_fd_cstr,
-            libc::O_PATH | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-            0,
-        )?;
+        let proc_self_fd =
+            Self::open_file(&libc::AT_FDCWD, proc_self_fd_cstr, libc::O_PATH | libc::O_NOFOLLOW | libc::O_CLOEXEC, 0)?;
 
-        let (dir_entry_timeout, dir_attr_timeout) =
-            match (cfg.dir_entry_timeout, cfg.dir_attr_timeout) {
-                (Some(e), Some(a)) => (e, a),
-                (Some(e), None) => (e, cfg.attr_timeout),
-                (None, Some(a)) => (cfg.entry_timeout, a),
-                (None, None) => (cfg.entry_timeout, cfg.attr_timeout),
-            };
+        let (dir_entry_timeout, dir_attr_timeout) = match (cfg.dir_entry_timeout, cfg.dir_attr_timeout) {
+            (Some(e), Some(a)) => (e, a),
+            (Some(e), None) => (e, cfg.attr_timeout),
+            (None, Some(a)) => (cfg.entry_timeout, a),
+            (None, None) => (cfg.entry_timeout, cfg.attr_timeout),
+        };
 
         let mount_fds = MountFds::new(None)?;
 
@@ -466,11 +474,10 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
     pub fn import(&self) -> io::Result<()> {
         let root = CString::new(self.cfg.root_dir.as_str()).expect("CString::new failed");
 
-        let (path_fd, handle_opt, st) = Self::open_file_and_handle(self, &libc::AT_FDCWD, &root)
-            .map_err(|e| {
-                error!("fuse: import: failed to get file or handle: {:?}", e);
-                e
-            })?;
+        let (path_fd, handle_opt, st) = Self::open_file_and_handle(self, &libc::AT_FDCWD, &root).map_err(|e| {
+            error!("fuse: import: failed to get file or handle: {:?}", e);
+            e
+        })?;
         let id = InodeId::from_stat(&st);
         let handle = if let Some(h) = handle_opt {
             InodeHandle::Handle(self.to_openable_handle(h)?)
@@ -484,13 +491,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         unsafe { libc::umask(0o000) };
 
         // Not sure why the root inode gets a refcount of 2 but that's what libfuse does.
-        self.inode_map.insert(Arc::new(InodeData::new(
-            fuse::ROOT_ID,
-            handle,
-            2,
-            id,
-            st.st.st_mode,
-        )));
+        self.inode_map.insert(Arc::new(InodeData::new(fuse::ROOT_ID, handle, 2, id, st.st.st_mode)));
 
         Ok(())
     }
@@ -504,14 +505,8 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         let mut buf = Vec::with_capacity(libc::PATH_MAX as usize);
 
         // Safe because the kernel will only write data to buf and we check the return value
-        let buf_read = unsafe {
-            libc::readlinkat(
-                dfd,
-                pathname.as_ptr(),
-                buf.as_mut_ptr() as *mut libc::c_char,
-                buf.capacity(),
-            )
-        };
+        let buf_read =
+            unsafe { libc::readlinkat(dfd, pathname.as_ptr(), buf.as_mut_ptr() as *mut libc::c_char, buf.capacity()) };
         if buf_read < 0 {
             error!("fuse: readlinkat error");
             return Err(io::Error::last_os_error());
@@ -532,18 +527,13 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
     pub fn readlinkat_proc_file(&self, inode: Inode) -> io::Result<PathBuf> {
         let data = self.inode_map.get(inode)?;
         let file = data.get_file()?;
-        let pathname = CString::new(format!("{}", file.as_raw_fd()))
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let pathname =
+            CString::new(format!("{}", file.as_raw_fd())).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         Self::readlinkat(self.proc_self_fd.as_raw_fd(), &pathname)
     }
 
-    fn create_file_excl(
-        dir: &impl AsRawFd,
-        pathname: &CStr,
-        flags: i32,
-        mode: u32,
-    ) -> io::Result<Option<File>> {
+    fn create_file_excl(dir: &impl AsRawFd, pathname: &CStr, flags: i32, mode: u32) -> io::Result<Option<File>> {
         match openat(dir, pathname, flags | libc::O_CREAT | libc::O_EXCL, mode) {
             Ok(file) => Ok(Some(file)),
             Err(err) => {
@@ -563,13 +553,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         openat(dfd, pathname, flags, mode)
     }
 
-    fn open_file_restricted(
-        &self,
-        dir: &impl AsRawFd,
-        pathname: &CStr,
-        flags: i32,
-        mode: u32,
-    ) -> io::Result<File> {
+    fn open_file_restricted(&self, dir: &impl AsRawFd, pathname: &CStr, flags: i32, mode: u32) -> io::Result<File> {
         let flags = libc::O_NOFOLLOW | libc::O_CLOEXEC | flags;
 
         // TODO
@@ -581,11 +565,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
     }
 
     /// Create a File or File Handle for `name` under directory `dir_fd` to support `lookup()`.
-    fn open_file_and_handle(
-        &self,
-        dir: &impl AsRawFd,
-        name: &CStr,
-    ) -> io::Result<(File, Option<FileHandle>, StatExt)> {
+    fn open_file_and_handle(&self, dir: &impl AsRawFd, name: &CStr) -> io::Result<(File, Option<FileHandle>, StatExt)> {
         let path_file = self.open_file_restricted(dir, name, libc::O_PATH, 0)?;
         let st = statx(&path_file, None)?;
         let handle = if self.cfg.inode_file_handles {
@@ -598,24 +578,17 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
     }
 
     fn to_openable_handle(&self, fh: FileHandle) -> io::Result<Arc<OpenableFileHandle>> {
-        fh.into_openable(&self.mount_fds, |fd, flags, _mode| {
-            reopen_fd_through_proc(&fd, flags, &self.proc_self_fd)
-        })
-        .map(Arc::new)
-        .map_err(|e| {
-            if !e.silent() {
-                error!("{}", e);
-            }
-            e.into_inner()
-        })
+        fh.into_openable(&self.mount_fds, |fd, flags, _mode| reopen_fd_through_proc(&fd, flags, &self.proc_self_fd))
+            .map(Arc::new)
+            .map_err(|e| {
+                if !e.silent() {
+                    error!("{}", e);
+                }
+                e.into_inner()
+            })
     }
 
-    fn allocate_inode(
-        &self,
-        inodes: &InodeStore,
-        id: &InodeId,
-        handle_opt: Option<&FileHandle>,
-    ) -> io::Result<Inode> {
+    fn allocate_inode(&self, inodes: &InodeStore, id: &InodeId, handle_opt: Option<&FileHandle>) -> io::Result<Inode> {
         if !self.cfg.use_host_ino {
             // If the inode has already been assigned before, the new inode is not reassigned,
             // ensuring that the same file is always the same inode
@@ -637,13 +610,12 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
     }
 
     fn do_lookup(&self, parent: Inode, name: &CStr) -> io::Result<Entry> {
-        let name =
-            if parent == fuse::ROOT_ID && name.to_bytes_with_nul().starts_with(PARENT_DIR_CSTR) {
-                // Safe as this is a constant value and a valid C string.
-                CStr::from_bytes_with_nul(CURRENT_DIR_CSTR).unwrap()
-            } else {
-                name
-            };
+        let name = if parent == fuse::ROOT_ID && name.to_bytes_with_nul().starts_with(PARENT_DIR_CSTR) {
+            // Safe as this is a constant value and a valid C string.
+            CStr::from_bytes_with_nul(CURRENT_DIR_CSTR).unwrap()
+        } else {
+            name
+        };
 
         let dir = self.inode_map.get(parent)?;
         let dir_file = dir.get_file()?;
@@ -666,11 +638,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
                     let new = curr.saturating_add(1);
 
                     // Synchronizes with the forgot_one()
-                    if data
-                        .refcount
-                        .compare_exchange(curr, new, Ordering::AcqRel, Ordering::Acquire)
-                        .is_ok()
-                    {
+                    if data.refcount.compare_exchange(curr, new, Ordering::AcqRel, Ordering::Acquire).is_ok() {
                         found = Some(data.inode);
                         break;
                     }
@@ -731,9 +699,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         let mut attr_flags: u32 = 0;
         if let Some(dax_file_size) = self.cfg.dax_file_size {
             // st.stat.st_size is i64
-            if self.perfile_dax.load(Ordering::Relaxed)
-                && st.st.st_size >= 0x0
-                && st.st.st_size as u64 >= dax_file_size
+            if self.perfile_dax.load(Ordering::Relaxed) && st.st.st_size >= 0x0 && st.st.st_size as u64 >= dax_file_size
             {
                 attr_flags |= fuse::FUSE_ATTR_DAX;
             }
@@ -768,11 +734,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
                 let new = curr.saturating_sub(count);
 
                 // Synchronizes with the acquire load in `do_lookup`.
-                if data
-                    .refcount
-                    .compare_exchange(curr, new, Ordering::AcqRel, Ordering::Acquire)
-                    .is_ok()
-                {
+                if data.refcount.compare_exchange(curr, new, Ordering::AcqRel, Ordering::Acquire).is_ok() {
                     if new == 0 {
                         // We just removed the last refcount for this inode.
                         // The allocated inode number should be kept in the map when use_host_ino
@@ -802,19 +764,9 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
 
     // When seal_size is set, we don't allow operations that could change file size nor allocate
     // space beyond EOF
-    fn seal_size_check(
-        &self,
-        opcode: Opcode,
-        file_size: u64,
-        offset: u64,
-        size: u64,
-        mode: i32,
-    ) -> io::Result<()> {
+    fn seal_size_check(&self, opcode: Opcode, file_size: u64, offset: u64, size: u64, mode: i32) -> io::Result<()> {
         if offset.checked_add(size).is_none() {
-            error!(
-                "fuse: {:?}: invalid `offset` + `size` ({}+{}) overflows u64::MAX",
-                opcode, offset, size
-            );
+            error!("fuse: {:?}: invalid `offset` + `size` ({}+{}) overflows u64::MAX", opcode, offset, size);
             return Err(einval());
         }
 
@@ -930,10 +882,7 @@ macro_rules! scoped_cred {
             fn drop(&mut self) {
                 let res = unsafe { libc::syscall($syscall_nr, -1, 0, -1) };
                 if res < 0 {
-                    error!(
-                        "fuse: failed to change credentials back to root: {}",
-                        io::Error::last_os_error(),
-                    );
+                    error!("fuse: failed to change credentials back to root: {}", io::Error::last_os_error(),);
                 }
             }
         }
@@ -942,10 +891,7 @@ macro_rules! scoped_cred {
 scoped_cred!(ScopedUid, libc::uid_t, libc::SYS_setresuid);
 scoped_cred!(ScopedGid, libc::gid_t, libc::SYS_setresgid);
 
-fn set_creds(
-    uid: libc::uid_t,
-    gid: libc::gid_t,
-) -> io::Result<(Option<ScopedUid>, Option<ScopedGid>)> {
+fn set_creds(uid: libc::uid_t, gid: libc::gid_t) -> io::Result<(Option<ScopedUid>, Option<ScopedGid>)> {
     // We have to change the gid before we change the uid because if we change the uid first then we
     // lose the capability to change the gid.  However changing back can happen in any order.
     ScopedGid::new(gid).and_then(|gid| Ok((ScopedUid::new(uid)?, gid)))
@@ -967,45 +913,43 @@ fn drop_cap_fsetid() -> io::Result<Option<CapFsetid>> {
     {
         return Ok(None);
     }
-    caps::drop(None, caps::CapSet::Effective, caps::Capability::CAP_FSETID).map_err(|_e| {
-        io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "failed to drop CAP_FSETID capability",
-        )
-    })?;
+    caps::drop(None, caps::CapSet::Effective, caps::Capability::CAP_FSETID)
+        .map_err(|_e| io::Error::new(io::ErrorKind::PermissionDenied, "failed to drop CAP_FSETID capability"))?;
     Ok(Some(CapFsetid {}))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
+    use std::io::Seek;
+    use std::io::SeekFrom;
+    use std::io::Write;
+    use std::ops::Deref;
+    use std::os::unix::prelude::MetadataExt;
+
+    use caps::CapSet;
+    use caps::Capability;
+    use log;
+    use vmm_sys_util::tempdir::TempDir;
+    use vmm_sys_util::tempfile::TempFile;
+
     use super::*;
     use crate::abi::fuse_abi::CreateIn;
     use crate::api::filesystem::*;
-    use crate::api::{Vfs, VfsOptions};
-    use caps::{CapSet, Capability};
-    use log;
-    use std::io::{Read, Seek, SeekFrom, Write};
-    use std::ops::Deref;
-    use std::os::unix::prelude::MetadataExt;
-    use vmm_sys_util::{tempdir::TempDir, tempfile::TempFile};
+    use crate::api::Vfs;
+    use crate::api::VfsOptions;
 
     fn prepare_passthroughfs() -> PassthroughFs {
         let source = TempDir::new().expect("Cannot create temporary directory.");
-        let parent_path =
-            TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
-        let _child_path =
-            TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
+        let parent_path = TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
+        let _child_path = TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
 
         let fs_cfg = Config {
             writeback: true,
             do_import: true,
             no_open: true,
             inode_file_handles: false,
-            root_dir: source
-                .as_path()
-                .to_str()
-                .expect("source path to string")
-                .to_string(),
+            root_dir: source.as_path().to_str().expect("source path to string").to_string(),
             ..Default::default()
         };
         let fs = PassthroughFs::<()>::new(fs_cfg).unwrap();
@@ -1062,21 +1006,15 @@ mod tests {
         }
 
         let source = TempDir::new().expect("Cannot create temporary directory.");
-        let parent_path =
-            TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
-        let child_path =
-            TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
+        let parent_path = TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
+        let child_path = TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
 
         let fs_cfg = Config {
             writeback: true,
             do_import: true,
             no_open: true,
             inode_file_handles: true,
-            root_dir: source
-                .as_path()
-                .to_str()
-                .expect("source path to string")
-                .to_string(),
+            root_dir: source.as_path().to_str().expect("source path to string").to_string(),
             ..Default::default()
         };
         let fs = PassthroughFs::<()>::new(fs_cfg).unwrap();
@@ -1085,27 +1023,12 @@ mod tests {
         let ctx = Context::default();
 
         // read a few files to inode map.
-        let parent = CString::new(
-            parent_path
-                .as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .expect("path to string"),
-        )
-        .unwrap();
+        let parent =
+            CString::new(parent_path.as_path().file_name().unwrap().to_str().expect("path to string")).unwrap();
         let p_entry = fs.lookup(&ctx, ROOT_ID, &parent).unwrap();
         let p_inode = p_entry.inode;
 
-        let child = CString::new(
-            child_path
-                .as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .expect("path to string"),
-        )
-        .unwrap();
+        let child = CString::new(child_path.as_path().file_name().unwrap().to_str().expect("path to string")).unwrap();
         let c_entry = fs.lookup(&ctx, p_inode, &child).unwrap();
 
         // Following test depends on host fs, it's not reliable.
@@ -1176,22 +1099,13 @@ mod tests {
         assert_eq!(fs.get_writeback_open_flags(flags), libc::O_WRONLY);
 
         let flags = libc::O_RDWR | libc::O_APPEND;
-        assert_eq!(
-            fs.get_writeback_open_flags(flags),
-            libc::O_RDWR | libc::O_APPEND
-        );
+        assert_eq!(fs.get_writeback_open_flags(flags), libc::O_RDWR | libc::O_APPEND);
 
         let flags = libc::O_RDONLY | libc::O_APPEND;
-        assert_eq!(
-            fs.get_writeback_open_flags(flags),
-            libc::O_RDONLY | libc::O_APPEND
-        );
+        assert_eq!(fs.get_writeback_open_flags(flags), libc::O_RDONLY | libc::O_APPEND);
 
         let flags = libc::O_WRONLY | libc::O_APPEND;
-        assert_eq!(
-            fs.get_writeback_open_flags(flags),
-            libc::O_WRONLY | libc::O_APPEND
-        );
+        assert_eq!(fs.get_writeback_open_flags(flags), libc::O_WRONLY | libc::O_APPEND);
     }
 
     #[test]
@@ -1209,11 +1123,7 @@ mod tests {
             do_import: true,
             no_open: false,
             inode_file_handles: false,
-            root_dir: source
-                .as_path()
-                .to_str()
-                .expect("source path to string")
-                .to_string(),
+            root_dir: source.as_path().to_str().expect("source path to string").to_string(),
             ..Default::default()
         };
         let mut fs = PassthroughFs::<()>::new(fs_cfg).unwrap();
@@ -1245,9 +1155,7 @@ mod tests {
         // Then Open an existing file with O_WRONLY, we should be able to read it as well.
         let fname = CString::new("existfile").unwrap();
         let entry = fs.lookup(&ctx, ROOT_ID, &fname).unwrap();
-        let (handle, _, _) = fs
-            .open(&ctx, entry.inode, libc::O_WRONLY as u32, 0)
-            .unwrap();
+        let (handle, _, _) = fs.open(&ctx, entry.inode, libc::O_WRONLY as u32, 0).unwrap();
         let handle_data = fs.handle_map.get(handle.unwrap(), entry.inode).unwrap();
         let (_guard, mut f) = handle_data.get_file_mut();
         let mut buf = [0; 4];
@@ -1260,21 +1168,15 @@ mod tests {
         log::set_max_level(log::LevelFilter::Trace);
 
         let source = TempDir::new().expect("Cannot create temporary directory.");
-        let parent_path =
-            TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
-        let child_path =
-            TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
+        let parent_path = TempDir::new_in(source.as_path()).expect("Cannot create temporary directory.");
+        let child_path = TempFile::new_in(parent_path.as_path()).expect("Cannot create temporary file.");
 
         // passthroughfs with cache=none, but non-zero dir entry/attr timeout.
         let fs_cfg = Config {
             writeback: false,
             do_import: true,
             no_open: false,
-            root_dir: source
-                .as_path()
-                .to_str()
-                .expect("source path to string")
-                .to_string(),
+            root_dir: source.as_path().to_str().expect("source path to string").to_string(),
             cache_policy: CachePolicy::Never,
             entry_timeout: Duration::from_secs(0),
             attr_timeout: Duration::from_secs(0),
@@ -1288,29 +1190,14 @@ mod tests {
         let ctx = Context::default();
 
         // parent entry should have non-zero timeouts
-        let parent = CString::new(
-            parent_path
-                .as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .expect("path to string"),
-        )
-        .unwrap();
+        let parent =
+            CString::new(parent_path.as_path().file_name().unwrap().to_str().expect("path to string")).unwrap();
         let p_entry = fs.lookup(&ctx, ROOT_ID, &parent).unwrap();
         assert_eq!(p_entry.entry_timeout, Duration::from_secs(1));
         assert_eq!(p_entry.attr_timeout, Duration::from_secs(2));
 
         // regular file has zero timeout value
-        let child = CString::new(
-            child_path
-                .as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .expect("path to string"),
-        )
-        .unwrap();
+        let child = CString::new(child_path.as_path().file_name().unwrap().to_str().expect("path to string")).unwrap();
         let c_entry = fs.lookup(&ctx, p_entry.inode, &child).unwrap();
         assert_eq!(c_entry.entry_timeout, Duration::from_secs(0));
         assert_eq!(c_entry.attr_timeout, Duration::from_secs(0));
@@ -1323,15 +1210,7 @@ mod tests {
         use std::os::unix::fs::MetadataExt;
         let source = TempDir::new().expect("Cannot create temporary directory.");
         let child_path = TempFile::new_in(source.as_path()).expect("Cannot create temporary file.");
-        let child = CString::new(
-            child_path
-                .as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .expect("path to string"),
-        )
-        .unwrap();
+        let child = CString::new(child_path.as_path().file_name().unwrap().to_str().expect("path to string")).unwrap();
         let meta = child_path.as_file().metadata().unwrap();
         let ctx = Context::default();
         {
@@ -1340,11 +1219,7 @@ mod tests {
                 do_import: true,
                 no_open: true,
                 inode_file_handles: false,
-                root_dir: source
-                    .as_path()
-                    .to_str()
-                    .expect("source path to string")
-                    .to_string(),
+                root_dir: source.as_path().to_str().expect("source path to string").to_string(),
                 ..Default::default()
             };
             let fs = PassthroughFs::<()>::new(fs_cfg).unwrap();
@@ -1361,11 +1236,7 @@ mod tests {
                 do_import: true,
                 no_open: true,
                 inode_file_handles: false,
-                root_dir: source
-                    .as_path()
-                    .to_str()
-                    .expect("source path to string")
-                    .to_string(),
+                root_dir: source.as_path().to_str().expect("source path to string").to_string(),
                 use_host_ino: true,
                 ..Default::default()
             };
@@ -1423,8 +1294,7 @@ mod tests {
             assert_eq!(inode & MAX_HOST_INO, 2);
             let file = TempFile::new().expect("Cannot create temporary file.");
             let mode = file.as_file().metadata().unwrap().mode();
-            let inode_data =
-                InodeData::new(inode, InodeHandle::File(file.into_file()), 1, id, mode);
+            let inode_data = InodeData::new(inode, InodeHandle::File(file.into_file()), 1, id, mode);
             m.insert(Arc::new(inode_data));
             let inode = fs.allocate_inode(&m, &id, None).unwrap();
             assert_eq!(inode & MAX_HOST_INO, 2);
@@ -1506,9 +1376,7 @@ mod tests {
         };
         let file_name = CString::new("test_file").unwrap();
 
-        let (entry, _, _, _) = fs
-            .create(&ctx, ROOT_ID, file_name.as_c_str(), createin)
-            .unwrap();
+        let (entry, _, _, _) = fs.create(&ctx, ROOT_ID, file_name.as_c_str(), createin).unwrap();
         let ino = entry.inode;
         assert_ne!(ino, 0);
         assert_ne!(ino, ROOT_ID);
@@ -1529,37 +1397,13 @@ mod tests {
 
         // Call fs.write to write content to the file
         buffer_file.seek(SeekFrom::Start(0)).unwrap();
-        let write_sz = fs
-            .write(
-                &ctx,
-                ino,
-                0,
-                &mut buffer_file,
-                data.len() as u32,
-                0,
-                None,
-                false,
-                0,
-                0,
-            )
-            .unwrap();
+        let write_sz = fs.write(&ctx, ino, 0, &mut buffer_file, data.len() as u32, 0, None, false, 0, 0).unwrap();
         assert_eq!(write_sz, data.len());
 
         // Create a new temp file as read buffer.
         let read_buffer_file = TempFile::new().expect("Cannot create temporary file.");
         let mut read_buffer_file = read_buffer_file.into_file();
-        let read_sz = fs
-            .read(
-                &ctx,
-                ino,
-                0,
-                &mut read_buffer_file,
-                data.len() as u32,
-                0,
-                None,
-                0,
-            )
-            .unwrap();
+        let read_sz = fs.read(&ctx, ino, 0, &mut read_buffer_file, data.len() as u32, 0, None, 0).unwrap();
         assert_eq!(read_sz, data.len());
 
         read_buffer_file.seek(SeekFrom::Start(0)).unwrap();

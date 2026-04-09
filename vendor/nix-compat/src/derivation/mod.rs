@@ -1,13 +1,19 @@
-use crate::store_path::{
-    self, StorePath, StorePathRef, build_ca_path_with_store_dir,
-    build_output_path_with_store_dir, build_text_path_with_store_dir,
-};
-use bstr::BString;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 // crunch: BLAKE3 replaces SHA-256 for derivation-level hashing
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
+
+use bstr::BString;
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
+use crate::store_path::StorePath;
+use crate::store_path::StorePathRef;
+use crate::store_path::build_ca_path_with_store_dir;
+use crate::store_path::build_output_path_with_store_dir;
+use crate::store_path::build_text_path_with_store_dir;
+use crate::store_path::{self};
 
 mod errors;
 mod output;
@@ -20,13 +26,15 @@ mod write;
 mod tests;
 
 // Public API of the crate.
-pub use crate::nixhash::{CAHash, NixHash};
-pub use errors::{DerivationError, OutputError};
+pub use errors::DerivationError;
+pub use errors::OutputError;
 pub use output::Output;
 pub use parser::Error as ParserError;
 pub use validate::validate_output_name;
 
 use self::write::AtermWriteable;
+pub use crate::nixhash::CAHash;
+pub use crate::nixhash::NixHash;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -106,8 +114,7 @@ impl Derivation {
     pub fn to_aterm_bytes_with_store_dir(&self, store_dir: &str) -> Vec<u8> {
         let store_dir_with_slash = format!("{store_dir}/");
         let mut buffer: Vec<u8> = Vec::new();
-        self.serialize_with_store_dir(&mut buffer, store_dir, &store_dir_with_slash)
-            .unwrap();
+        self.serialize_with_store_dir(&mut buffer, store_dir, &store_dir_with_slash).unwrap();
         buffer
     }
 
@@ -123,8 +130,7 @@ impl Derivation {
         // invoke serialize and write to the buffer.
         // Note we only propagate errors writing to the writer in serialize,
         // which won't panic for the string we write to.
-        self.serialize_with_replacements(&mut buffer, input_derivations)
-            .unwrap();
+        self.serialize_with_replacements(&mut buffer, input_derivations).unwrap();
 
         buffer
     }
@@ -220,10 +226,7 @@ impl Derivation {
     /// the `name` with a `.drv` suffix as name, all [Derivation::input_sources] and
     /// keys of [Derivation::input_derivations] as references, and the ATerm string of
     /// the [Derivation] as content.
-    pub fn calculate_derivation_path(
-        &self,
-        name: &str,
-    ) -> Result<StorePath<String>, DerivationError> {
+    pub fn calculate_derivation_path(&self, name: &str) -> Result<StorePath<String>, DerivationError> {
         self.calculate_derivation_path_with_store_dir(name, crate::store_path::STORE_DIR)
     }
 
@@ -246,13 +249,8 @@ impl Derivation {
             .collect();
 
         // ATerm bytes must also use the custom store dir for correct hashing
-        build_text_path_with_store_dir(
-            &name,
-            self.to_aterm_bytes_with_store_dir(store_dir),
-            references,
-            store_dir,
-        )
-        .map_err(|_e| DerivationError::InvalidOutputName(name))
+        build_text_path_with_store_dir(&name, self.to_aterm_bytes_with_store_dir(store_dir), references, store_dir)
+            .map_err(|_e| DerivationError::InvalidOutputName(name))
     }
 
     /// Returns the FOD digest, if the derivation is fixed-output, or None if
@@ -277,11 +275,7 @@ impl Derivation {
             "fixed:out:{}{}:{}",
             ca_kind_prefix(ca_hash),
             ca_hash.hash().to_nix_lowerhex_string(),
-            out_output
-                .path
-                .as_ref()
-                .map(|sp| sp.to_absolute_path_with_prefix(store_dir))
-                .unwrap_or_default(),
+            out_output.path.as_ref().map(|sp| sp.to_absolute_path_with_prefix(store_dir)).unwrap_or_default(),
         ))
     }
 
@@ -291,11 +285,10 @@ impl Derivation {
     ///
     /// It returns the sha256 digest of the derivation ATerm representation,
     /// except that:
-    ///  -  any input derivation paths have beed replaced "by the result of a
-    ///     recursive call to this function" and that
-    ///  - for fixed-output derivations the special
-    ///    `fixed:out:${algo}:${digest}:${fodPath}` string is hashed instead of
-    ///    the A-Term.
+    ///  - any input derivation paths have beed replaced "by the result of a recursive call to this
+    ///    function" and that
+    ///  - for fixed-output derivations the special `fixed:out:${algo}:${digest}:${fodPath}` string
+    ///    is hashed instead of the A-Term.
     ///
     /// It's up to the caller of this function to provide a (infallible) lookup
     /// function to query the [Derivation::hash_derivation_modulo] of direct
@@ -303,13 +296,8 @@ impl Derivation {
     /// It will only be called in case the derivation is not a fixed-output
     /// derivation.
     pub fn hash_derivation_modulo<F>(&self, fn_lookup_hash_derivation_modulo: F) -> [u8; 32]
-    where
-        F: Fn(&StorePathRef) -> [u8; 32],
-    {
-        self.hash_derivation_modulo_with_store_dir(
-            fn_lookup_hash_derivation_modulo,
-            crate::store_path::STORE_DIR,
-        )
+    where F: Fn(&StorePathRef) -> [u8; 32] {
+        self.hash_derivation_modulo_with_store_dir(fn_lookup_hash_derivation_modulo, crate::store_path::STORE_DIR)
     }
 
     /// Like [Derivation::hash_derivation_modulo] but with a custom store dir.
@@ -334,23 +322,14 @@ impl Derivation {
             let store_dir_with_slash = format!("{store_dir}/");
             // For each input_derivation, look up the hash derivation modulo,
             // and replace the derivation path in the aterm with its HEXLOWER digest.
-            let replacements = BTreeMap::from_iter(
-                self.input_derivations
-                    .iter()
-                    .map(|(drv_path, output_names)| {
-                        let hash = fn_lookup_hash_derivation_modulo(&drv_path.as_ref());
-                        (hash, output_names.to_owned())
-                    }),
-            );
+            let replacements = BTreeMap::from_iter(self.input_derivations.iter().map(|(drv_path, output_names)| {
+                let hash = fn_lookup_hash_derivation_modulo(&drv_path.as_ref());
+                (hash, output_names.to_owned())
+            }));
 
             let mut buffer: Vec<u8> = Vec::new();
-            self.serialize_hdm_with_store_dir(
-                &mut buffer,
-                &replacements,
-                store_dir,
-                &store_dir_with_slash,
-            )
-            .unwrap();
+            self.serialize_hdm_with_store_dir(&mut buffer, &replacements, store_dir, &store_dir_with_slash)
+                .unwrap();
 
             // write the ATerm of that to the hash function and return its digest.
             // crunch: BLAKE3 instead of SHA-256
@@ -381,11 +360,7 @@ impl Derivation {
         name: &str,
         hash_derivation_modulo: &[u8; 32],
     ) -> Result<(), DerivationError> {
-        self.calculate_output_paths_with_store_dir(
-            name,
-            hash_derivation_modulo,
-            crate::store_path::STORE_DIR,
-        )
+        self.calculate_output_paths_with_store_dir(name, hash_derivation_modulo, crate::store_path::STORE_DIR)
     }
 
     /// Like [Derivation::calculate_output_paths] but with a custom store dir.
@@ -407,26 +382,21 @@ impl Derivation {
             // For fixed output derivation we use [build_ca_path], otherwise we
             // use [build_output_path] with [hash_derivation_modulo].
             let store_path = if let Some(ref hwm) = output.ca_hash {
-                build_ca_path_with_store_dir(
-                    &path_name, hwm, Vec::<&str>::new(), false, store_dir,
-                ).map_err(|e| {
-                    DerivationError::InvalidOutputDerivationPath(output_name.to_string(), e)
-                })?
+                build_ca_path_with_store_dir(&path_name, hwm, Vec::<&str>::new(), false, store_dir)
+                    .map_err(|e| DerivationError::InvalidOutputDerivationPath(output_name.to_string(), e))?
             } else {
-                build_output_path_with_store_dir(
-                    hash_derivation_modulo, output_name, &path_name, store_dir,
-                ).map_err(|e| {
-                    DerivationError::InvalidOutputDerivationPath(
-                        output_name.to_string(),
-                        store_path::BuildStorePathError::InvalidStorePath(e),
-                    )
-                })?
+                build_output_path_with_store_dir(hash_derivation_modulo, output_name, &path_name, store_dir).map_err(
+                    |e| {
+                        DerivationError::InvalidOutputDerivationPath(
+                            output_name.to_string(),
+                            store_path::BuildStorePathError::InvalidStorePath(e),
+                        )
+                    },
+                )?
             };
 
-            self.environment.insert(
-                output_name.to_string(),
-                store_path.to_absolute_path_with_prefix(store_dir).into(),
-            );
+            self.environment
+                .insert(output_name.to_string(), store_path.to_absolute_path_with_prefix(store_dir).into());
             output.path = Some(store_path);
         }
 
@@ -441,18 +411,13 @@ trait DerivationAsyncExt {
     /// our set of validations, from a asynchronous buffered reader.
     /// This is a streaming variant of [Derivation::from_aterm_bytes].
     async fn from_streaming_aterm_bytes<R>(reader: R) -> Result<Derivation, parser::Error<Vec<u8>>>
-    where
-        R: tokio::io::AsyncBufRead + Unpin + Send;
+    where R: tokio::io::AsyncBufRead + Unpin + Send;
 }
 
 #[cfg(feature = "async")]
 impl DerivationAsyncExt for Derivation {
-    async fn from_streaming_aterm_bytes<R>(
-        mut reader: R,
-    ) -> Result<Derivation, parser::Error<Vec<u8>>>
-    where
-        R: tokio::io::AsyncBufRead + Unpin + Send,
-    {
+    async fn from_streaming_aterm_bytes<R>(mut reader: R) -> Result<Derivation, parser::Error<Vec<u8>>>
+    where R: tokio::io::AsyncBufRead + Unpin + Send {
         use tokio::io::AsyncBufReadExt;
         let mut buffer = Vec::new();
         loop {

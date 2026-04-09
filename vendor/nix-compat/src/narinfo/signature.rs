@@ -1,11 +1,12 @@
-use std::{
-    fmt::{self, Display},
-    ops::Deref,
-};
+use std::fmt::Display;
+use std::fmt::{self};
+use std::ops::Deref;
 
 use data_encoding::BASE64;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
 
 const SIGNATURE_LENGTH: usize = std::mem::size_of::<ed25519::SignatureBytes>();
 
@@ -24,8 +25,7 @@ pub type SignatureRef<'a> = Signature<&'a str>;
 /// It is generic over the string type that's used for the name, and there's
 /// [SignatureRef] as a type alias for one containing &str.
 impl<S> Signature<S>
-where
-    S: Deref<Target = str>,
+where S: Deref<Target = str>
 {
     /// Constructs a new [Signature] from a name and public key.
     pub fn new(name: S, bytes: ed25519::SignatureBytes) -> Self {
@@ -37,16 +37,10 @@ where
     /// These strings are commonly seen in the `Signature:` field of a NARInfo
     /// file.
     pub fn parse<'a>(input: &'a str) -> Result<Self, Error>
-    where
-        S: From<&'a str>,
-    {
+    where S: From<&'a str> {
         let (name, bytes64) = input.split_once(':').ok_or(Error::MissingSeparator)?;
 
-        if name.is_empty()
-            || !name
-                .chars()
-                .all(|c| char::is_alphanumeric(c) || c == '-' || c == '.')
-        {
+        if name.is_empty() || !name.chars().all(|c| char::is_alphanumeric(c) || c == '-' || c == '.') {
             return Err(Error::InvalidName(name.to_string()));
         }
 
@@ -108,25 +102,18 @@ where
     'de: 'a,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         let str: &'de str = Deserialize::deserialize(deserializer)?;
-        Self::parse(str).map_err(|_| {
-            serde::de::Error::invalid_value(serde::de::Unexpected::Str(str), &"Signature")
-        })
+        Self::parse(str).map_err(|_| serde::de::Error::invalid_value(serde::de::Unexpected::Str(str), &"Signature"))
     }
 }
 
 #[cfg(feature = "serde")]
 impl<S: Display> Serialize for Signature<S>
-where
-    S: Deref<Target = str>,
+where S: Deref<Target = str>
 {
     fn serialize<SR>(&self, serializer: SR) -> Result<SR::Ok, SR::Error>
-    where
-        SR: serde::Serializer,
-    {
+    where SR: serde::Serializer {
         let string: String = self.to_string();
 
         string.serialize(serializer)
@@ -134,8 +121,7 @@ where
 }
 
 impl<S> Display for Signature<S>
-where
-    S: Display,
+where S: Display
 {
     fn fmt(&self, w: &mut fmt::Formatter) -> fmt::Result {
         write!(w, "{}:{}", self.name, BASE64.encode(&self.bytes))
@@ -143,8 +129,7 @@ where
 }
 
 impl<S> std::hash::Hash for Signature<S>
-where
-    S: AsRef<str>,
+where S: AsRef<str>
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(self.name.as_ref().as_bytes());
@@ -166,25 +151,22 @@ pub enum Error {
 
 #[cfg(test)]
 mod test {
+    use std::sync::LazyLock;
+
     use data_encoding::BASE64;
     use ed25519_dalek::VerifyingKey;
     #[cfg(feature = "serde")]
     use hex_literal::hex;
-    use std::sync::LazyLock;
+    use rstest::rstest;
 
     use super::Signature;
-    use rstest::rstest;
 
     const FINGERPRINT: &str = "1;/nix/store/syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin;sha256:1b4sb93wp679q4zx9k1ignby1yna3z7c4c2ri3wphylbc2dwsys0;196040;/nix/store/0jqd0rlxzra1rs38rdxl43yh6rxchgc6-curl-7.82.0,/nix/store/6w8g7njm4mck5dmjxws0z1xnrxvl81xa-glibc-2.34-115,/nix/store/j5jxw3iy7bbz4a57fh9g2xm2gxmyal8h-zlib-1.2.12,/nix/store/yxvjs9drzsphm9pcf42a4byzj1kb9m7k-openssl-1.1.1n";
 
     /// The signing key labelled as `cache.nixos.org-1`,
     static PUB_CACHE_NIXOS_ORG_1: LazyLock<VerifyingKey> = LazyLock::new(|| {
         ed25519_dalek::VerifyingKey::from_bytes(
-            BASE64
-                .decode(b"6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=")
-                .unwrap()[..]
-                .try_into()
-                .unwrap(),
+            BASE64.decode(b"6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=").unwrap()[..].try_into().unwrap(),
         )
         .expect("embedded public key is valid")
     });
@@ -215,12 +197,8 @@ mod test {
     #[case::wrong_name_space(
         "test :u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw=="
     )]
-    #[case::empty_name(
-        ":u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw=="
-    )]
-    #[case::b64_only(
-        "u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw=="
-    )]
+    #[case::empty_name(":u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw==")]
+    #[case::b64_only("u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw==")]
     fn parse_fail(#[case] input: &'static str) {
         Signature::<&str>::parse(input).expect_err("must fail");
     }
@@ -242,8 +220,7 @@ mod test {
         let serialized = serde_json::to_string(&signature_actual).expect("must serialize");
         assert_eq!(signature_str_json, &serialized);
 
-        let deserialized: Signature<&str> =
-            serde_json::from_str(signature_str_json).expect("must deserialize");
+        let deserialized: Signature<&str> = serde_json::from_str(signature_str_json).expect("must deserialize");
         assert_eq!(&signature_actual, &deserialized);
     }
 
@@ -254,17 +231,8 @@ mod test {
         let signature2 = Signature::<smol_str::SmolStr>::parse("cache.nixos.org-1:TsTTb3WGTZKphvYdBHXwo6weVILmTytUjLB+vcX89fOjjRicCHmKA4RCPMVLkj6TMJ4GMX3HPVWRdD1hkeKZBQ==").expect("must parse");
         let signature3 = Signature::<&str>::parse("cache.nixos.org-1:TsTTb3WGTZKphvYdBHXwo6weVILmTytUjLB+vcX89fOjjRicCHmKA4RCPMVLkj6TMJ4GMX3HPVWRdD1hkeKZBQ==").expect("must parse");
 
-        assert!(
-            signature1.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1),
-            "must verify"
-        );
-        assert!(
-            signature2.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1),
-            "must verify"
-        );
-        assert!(
-            signature3.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1),
-            "must verify"
-        );
+        assert!(signature1.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1), "must verify");
+        assert!(signature2.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1), "must verify");
+        assert!(signature3.verify(FINGERPRINT.as_bytes(), &PUB_CACHE_NIXOS_ORG_1), "must verify");
     }
 }

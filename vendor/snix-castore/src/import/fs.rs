@@ -1,26 +1,29 @@
 //! Import from a real filesystem.
 
-use futures::StreamExt;
-use futures::stream::BoxStream;
 use std::fs::FileType;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
+
+use futures::StreamExt;
+use futures::stream::BoxStream;
 use tokio::io::BufReader;
 use tokio_util::io::InspectReader;
-use tracing::{info_span, instrument};
+use tracing::info_span;
+use tracing::instrument;
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
-use crate::blobservice::BlobService;
-use crate::directoryservice::DirectoryService;
-use crate::refscan::{ReferenceReader, ReferenceScanner};
-use crate::{B3Digest, Node};
-
 use super::IngestionEntry;
 use super::IngestionError;
 use super::ingest_entries;
+use crate::B3Digest;
+use crate::Node;
+use crate::blobservice::BlobService;
+use crate::directoryservice::DirectoryService;
+use crate::refscan::ReferenceReader;
+use crate::refscan::ReferenceScanner;
 
 /// Ingests the contents at a given path into the snix store, interacting with a [BlobService] and
 /// [DirectoryService]. It returns the root node or an error.
@@ -29,11 +32,7 @@ use super::ingest_entries;
 ///
 /// This function will walk the filesystem using `walkdir` and will consume
 /// `O(#number of entries)` space.
-#[instrument(
-    skip(blob_service, directory_service, reference_scanner),
-    fields(path),
-    err
-)]
+#[instrument(skip(blob_service, directory_service, reference_scanner), fields(path), err)]
 pub async fn ingest_path<BS, DS, P, P2>(
     blob_service: BS,
     directory_service: DS,
@@ -86,18 +85,11 @@ where
                 async move {
                     match x {
                         Ok(dir_entry) => {
-                            dir_entry_to_ingestion_entry(
-                                blob_service,
-                                &dir_entry,
-                                prefix,
-                                reference_scanner,
-                            )
-                            .await
+                            dir_entry_to_ingestion_entry(blob_service, &dir_entry, prefix, reference_scanner).await
                         }
-                        Err(e) => Err(Error::Stat(
-                            prefix.to_path_buf(),
-                            e.into_io_error().expect("walkdir err must be some"),
-                        )),
+                        Err(e) => {
+                            Err(Error::Stat(prefix.to_path_buf(), e.into_io_error().expect("walkdir err must be some")))
+                        }
                     }
                 }
             })
@@ -122,10 +114,7 @@ where
 {
     let file_type = walkdir_direntry.file_type();
 
-    let fs_path = walkdir_direntry
-        .path()
-        .strip_prefix(prefix)
-        .expect("Snix bug: failed to strip root path prefix");
+    let fs_path = walkdir_direntry.path().strip_prefix(prefix).expect("Snix bug: failed to strip root path prefix");
 
     // convert to castore PathBuf
     let path = crate::path::PathBuf::from_host_path(fs_path, false)
@@ -184,10 +173,7 @@ where
         .await
         .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?;
 
-    let metadata = file
-        .metadata()
-        .await
-        .map_err(|e| Error::Stat(path.as_ref().to_path_buf(), e))?;
+    let metadata = file.metadata().await.map_err(|e| Error::Stat(path.as_ref().to_path_buf(), e))?;
 
     progress_span.pb_set_length(metadata.len());
     let reader = InspectReader::new(file, |d| {
@@ -206,10 +192,7 @@ where
             .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?;
     }
 
-    let digest = writer
-        .close()
-        .await
-        .map_err(|e| Error::BlobFinalize(path.as_ref().to_path_buf(), e))?;
+    let digest = writer.close().await.map_err(|e| Error::BlobFinalize(path.as_ref().to_path_buf(), e))?;
 
     Ok(digest)
 }

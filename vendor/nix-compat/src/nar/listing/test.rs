@@ -1,4 +1,6 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::nar;
 
@@ -13,11 +15,9 @@ fn weird_paths() {
 
     // Gated on Windows as C:\\ is parsed as `Component::Normal(_)` on Linux.
     #[cfg(target_os = "windows")]
-    root.locate("C:\\\\Windows\\System32")
-        .expect_err("Failed to reject Windows-style prefixes");
+    root.locate("C:\\\\Windows\\System32").expect_err("Failed to reject Windows-style prefixes");
 
-    root.locate("/etc/passwd")
-        .expect_err("Failed to reject absolute UNIX paths");
+    root.locate("/etc/passwd").expect_err("Failed to reject absolute UNIX paths");
 }
 
 #[test]
@@ -33,27 +33,18 @@ fn nixos_release() {
         .expect("Failed to locate a known file in a directory")
         .expect("File was unexpectedly not found in the listing");
 
-    assert!(matches!(
-        build_products,
-        nar::listing::ListingEntry::Regular { .. }
-    ));
+    assert!(matches!(build_products, nar::listing::ListingEntry::Regular { .. }));
 
     let nonexisting_file = root
         .locate(PathBuf::from_str("nix-support/does-not-exist").unwrap())
         .expect("Failed to locate an unknown file in a directory");
 
-    assert!(
-        nonexisting_file.is_none(),
-        "Non-existing file was unexpectedly found in the listing"
-    );
+    assert!(nonexisting_file.is_none(), "Non-existing file was unexpectedly found in the listing");
 
     let existing_dir = root
         .locate(PathBuf::from_str("nix-support").unwrap())
         .expect("Failed to locate a known directory in a directory")
         .expect("Directory was expectedly found in the listing");
 
-    assert!(matches!(
-        existing_dir,
-        nar::listing::ListingEntry::Directory { .. }
-    ));
+    assert!(matches!(existing_dir, nar::listing::ListingEntry::Directory { .. }));
 }

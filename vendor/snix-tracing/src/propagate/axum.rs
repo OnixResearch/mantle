@@ -1,5 +1,7 @@
 #[cfg(feature = "otlp")]
-use opentelemetry::{global, propagation::Extractor};
+use opentelemetry::global;
+#[cfg(feature = "otlp")]
+use opentelemetry::propagation::Extractor;
 #[cfg(feature = "otlp")]
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -15,9 +17,8 @@ pub fn accept_trace<B>(request: axum::http::Request<B>) -> axum::http::Request<B
     #[cfg(feature = "otlp")]
     {
         // Current context, if no or invalid data is received.
-        let parent_context = global::get_text_map_propagator(|propagator| {
-            propagator.extract(&HeaderExtractor(request.headers()))
-        });
+        let parent_context =
+            global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(request.headers())));
         tracing::Span::current().set_parent(parent_context);
     }
     request

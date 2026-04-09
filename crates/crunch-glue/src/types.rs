@@ -4,6 +4,7 @@
 //! `NickelString` deserialization to accept both strings and tags.
 
 use serde::Deserialize;
+
 use crate::nickel_string::NickelString;
 
 /// Deserialize a field that may be a Nickel enum tag or a plain string.

@@ -1,12 +1,14 @@
-use std::{
-    io::Result,
-    pin::Pin,
-    task::{Poll, ready},
-};
+use std::io::Result;
+use std::pin::Pin;
+use std::task::Poll;
+use std::task::ready;
 
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
+use bytes::BytesMut;
 use pin_project_lite::pin_project;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
+use tokio::io::ReadBuf;
 
 use crate::worker_protocol::STDERR_READ;
 
@@ -133,15 +135,13 @@ impl<R: AsyncRead, W: AsyncWrite> AsyncRead for StderrReadFramedReader<R, W> {
             let mut this = self.as_mut().project();
             match this.state {
                 StderrReaderState::RequestingNextFrame { write_state } => {
-                    write_state.written +=
-                        ready!(this.writer.poll_write(cx, write_state.remaining()))?;
+                    write_state.written += ready!(this.writer.poll_write(cx, write_state.remaining()))?;
                     if write_state.written == 8 {
                         *this.state = StderrReaderState::read_written(read_buf.remaining() as u64);
                     }
                 }
                 StderrReaderState::RequestingFrameLen { write_state } => {
-                    write_state.written +=
-                        ready!(this.writer.poll_write(cx, write_state.remaining()))?;
+                    write_state.written += ready!(this.writer.poll_write(cx, write_state.remaining()))?;
                     if write_state.written == 8 {
                         *this.state = StderrReaderState::FrameLenRequested;
                     }
@@ -248,7 +248,8 @@ impl<R: AsyncRead, W: AsyncWrite> AsyncRead for StderrReadFramedReader<R, W> {
                             continue;
                         }
                     }
-                    // now it's finally time to hand out the read data to the caller and reset to the RequestingNextFrame state.
+                    // now it's finally time to hand out the read data to the caller and reset to the
+                    // RequestingNextFrame state.
                     read_buf.put_slice(tmp_buf);
                     tmp_buf.clear();
                     *this.state = StderrReaderState::request_next_frame();
@@ -264,10 +265,13 @@ mod tests {
     use std::time::Duration;
 
     use hex_literal::hex;
-    use tokio::io::{AsyncReadExt, BufReader, split};
+    use tokio::io::AsyncReadExt;
+    use tokio::io::BufReader;
+    use tokio::io::split;
     use tokio_test::io::Builder;
 
-    use crate::{nix_daemon::framing::StderrReadFramedReader, worker_protocol::STDERR_READ};
+    use crate::nix_daemon::framing::StderrReadFramedReader;
+    use crate::worker_protocol::STDERR_READ;
 
     #[tokio::test(start_paused = true)]
     async fn test_single_two_byte_read_with_desired_size_ten() {

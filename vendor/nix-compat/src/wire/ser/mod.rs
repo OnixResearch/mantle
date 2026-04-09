@@ -1,6 +1,7 @@
 use std::error::Error as StdError;
+use std::fmt;
 use std::future::Future;
-use std::{fmt, io};
+use std::io;
 
 use super::ProtocolVersion;
 
@@ -13,7 +14,8 @@ mod int;
 pub mod mock;
 mod writer;
 
-pub use writer::{NixWriter, NixWriterBuilder};
+pub use writer::NixWriter;
+pub use writer::NixWriterBuilder;
 
 pub trait Error: Sized + StdError {
     fn custom<T: fmt::Display>(msg: T) -> Self;
@@ -119,16 +121,13 @@ impl<T: NixWrite> NixWrite for &mut T {
 pub trait NixSerialize {
     /// Write a value to the writer.
     fn serialize<W>(&self, writer: &mut W) -> impl Future<Output = Result<(), W::Error>> + Send
-    where
-        W: NixWrite;
+    where W: NixWrite;
 }
 
 // Noop
 impl NixSerialize for () {
     async fn serialize<W>(&self, _writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         Ok(())
     }
 }

@@ -303,7 +303,8 @@ fn select_produces_correct_structure() {
            let pkg = { name = "libfoo", builder = "/bin/sh", outputs = ["out", "dev"] } | crunch.Derivation in
            crunch.select pkg "dev""#,
         &stdlib_import_path(),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(oref.output, "dev");
     assert_eq!(oref.drv.name, "libfoo");
@@ -334,7 +335,8 @@ fn mixed_inputs_array_validates() {
 fn select_round_trip_through_glue() {
     // Nickel select → serde → crunch-glue convert: the selected output
     // appears in input_derivations with only that output name.
-    use crunch_glue::{CrunchDerivation, Input};
+    use crunch_glue::CrunchDerivation;
+    use crunch_glue::Input;
 
     let drv: CrunchDerivation = crunch_eval::evaluate_str_and_deserialize(
         r#"let crunch = import "lib.ncl" in
@@ -352,7 +354,8 @@ fn select_round_trip_through_glue() {
     assert_eq!(drv.inputs.len(), 1);
     assert!(
         matches!(&drv.inputs[0], Input::OutputSelection(oref) if oref.output == "dev"),
-        "expected OutputSelection, got: {:?}", drv.inputs[0]
+        "expected OutputSelection, got: {:?}",
+        drv.inputs[0]
     );
 
     // Convert through glue and check input_derivations.

@@ -9,15 +9,16 @@
 //! The main functionalities of the Fuse API server is:
 //! * Support different types of transport layers, fusedev, virtio-fs or vhost-user-fs.
 //! * Hide different transport layers details from file system drivers.
-//! * Parse transport messages according to the Fuse ABI to avoid duplicated message decoding
-//!   in every file system driver.
+//! * Parse transport messages according to the Fuse ABI to avoid duplicated message decoding in
+//!   every file system driver.
 //! * Invoke file system driver handler to serve each request and send the reply.
 //!
 //! The Fuse API server is performance critical, so it's designed to support multi-threading by
 //! adopting interior-mutability. And the arcswap crate is used to implement interior-mutability.
 
 use std::ffi::CStr;
-use std::io::{self, Read};
+use std::io::Read;
+use std::io::{self};
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -25,10 +26,17 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 
 use crate::abi::fuse_abi::*;
-use crate::api::filesystem::{Context, FileSystem, ZeroCopyReader, ZeroCopyWriter};
+use crate::api::filesystem::Context;
+use crate::api::filesystem::FileSystem;
+use crate::api::filesystem::ZeroCopyReader;
+use crate::api::filesystem::ZeroCopyWriter;
+use crate::bytes_to_cstr;
 use crate::file_traits::FileReadWriteVolatile;
-use crate::transport::{Reader, Writer};
-use crate::{bytes_to_cstr, BitmapSlice, Error, Result};
+use crate::transport::Reader;
+use crate::transport::Writer;
+use crate::BitmapSlice;
+use crate::Error;
+use crate::Result;
 
 #[cfg(feature = "async-io")]
 mod async_io;
@@ -69,12 +77,7 @@ impl<F: FileSystem + Sync> Server<F> {
 struct ZcReader<'a, S: BitmapSlice = ()>(Reader<'a, S>);
 
 impl<'a, S: BitmapSlice> ZeroCopyReader for ZcReader<'a, S> {
-    fn read_to(
-        &mut self,
-        f: &mut dyn FileReadWriteVolatile,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    fn read_to(&mut self, f: &mut dyn FileReadWriteVolatile, count: usize, off: u64) -> io::Result<usize> {
         self.0.read_to_at(f, count, off)
     }
 }
@@ -88,12 +91,7 @@ impl<'a, S: BitmapSlice> io::Read for ZcReader<'a, S> {
 struct ZcWriter<'a, S: BitmapSlice = ()>(Writer<'a, S>);
 
 impl<'a, S: BitmapSlice> ZeroCopyWriter for ZcWriter<'a, S> {
-    fn write_from(
-        &mut self,
-        f: &mut dyn FileReadWriteVolatile,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    fn write_from(&mut self, f: &mut dyn FileReadWriteVolatile, count: usize, off: u64) -> io::Result<usize> {
         self.0.write_from_at(f, count, off)
     }
 
@@ -152,9 +150,7 @@ impl ServerUtil {
             }
         }
 
-        Err(Error::DecodeMessage(std::io::Error::from_raw_os_error(
-            libc::EINVAL,
-        )))
+        Err(Error::DecodeMessage(std::io::Error::from_raw_os_error(libc::EINVAL)))
     }
 }
 
@@ -239,10 +235,7 @@ mod tests {
         );
         assert_eq!(
             ServerUtil::extract_two_cstrs(&[0x1u8, 0x2u8, 0x0, 0x0, 0x4]).unwrap(),
-            (
-                CStr::from_bytes_with_nul(&[0x1u8, 0x2u8, 0x0]).unwrap(),
-                CStr::from_bytes_with_nul(&[0x0]).unwrap(),
-            )
+            (CStr::from_bytes_with_nul(&[0x1u8, 0x2u8, 0x0]).unwrap(), CStr::from_bytes_with_nul(&[0x0]).unwrap(),)
         );
 
         ServerUtil::extract_two_cstrs(&[0x1u8, 0x2u8, 0x0, 0x3]).unwrap_err();

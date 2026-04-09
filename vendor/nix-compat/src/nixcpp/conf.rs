@@ -1,4 +1,5 @@
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
+use std::str::FromStr;
 
 /// Represents configuration as stored in /etc/nix/nix.conf.
 /// This list is not exhaustive, feel free to add more.
@@ -43,9 +44,7 @@ impl<'a> NixConfig<'a> {
                 continue;
             }
 
-            let (tag, val) = line
-                .split_once('=')
-                .ok_or_else(|| Error::InvalidLine(line.to_string()))?;
+            let (tag, val) = line.split_once('=').ok_or_else(|| Error::InvalidLine(line.to_string()))?;
 
             // trim whitespace
             let tag = tag.trim();
@@ -72,9 +71,7 @@ impl<'a> NixConfig<'a> {
                     "sandbox" => this.sandbox = Some(val.parse().ok()?),
                     "sandbox-fallback" => this.sandbox_fallback = Some(val.parse().ok()?),
                     "substituters" => this.substituters = Some(val.split_whitespace().collect()),
-                    "system-features" => {
-                        this.system_features = Some(val.split_whitespace().collect())
-                    }
+                    "system-features" => this.system_features = Some(val.split_whitespace().collect()),
                     "trusted-public-keys" => {
                         this.trusted_public_keys = Some(
                             val.split_whitespace()
@@ -83,29 +80,18 @@ impl<'a> NixConfig<'a> {
                                 .ok()?,
                         )
                     }
-                    "trusted-substituters" => {
-                        this.trusted_substituters = Some(val.split_whitespace().collect())
-                    }
+                    "trusted-substituters" => this.trusted_substituters = Some(val.split_whitespace().collect()),
                     "trusted-users" => this.trusted_users = Some(val.split_whitespace().collect()),
-                    "extra-platforms" => {
-                        this.extra_platforms = Some(val.split_whitespace().collect())
-                    }
-                    "extra-sandbox-paths" => {
-                        this.extra_sandbox_paths = Some(val.split_whitespace().collect())
-                    }
-                    "experimental-features" => {
-                        this.experimental_features = Some(val.split_whitespace().collect())
-                    }
-                    "builders-use-substitutes" => {
-                        this.builders_use_substitutes = Some(val.parse().ok()?)
-                    }
+                    "extra-platforms" => this.extra_platforms = Some(val.split_whitespace().collect()),
+                    "extra-sandbox-paths" => this.extra_sandbox_paths = Some(val.split_whitespace().collect()),
+                    "experimental-features" => this.experimental_features = Some(val.split_whitespace().collect()),
+                    "builders-use-substitutes" => this.builders_use_substitutes = Some(val.parse().ok()?),
                     _ => return None,
                 }
                 Some(())
             }
 
-            parse_val(&mut out, tag, val)
-                .ok_or_else(|| Error::InvalidValue(tag.to_string(), val.to_string()))?
+            parse_val(&mut out, tag, val).ok_or_else(|| Error::InvalidValue(tag.to_string(), val.to_string()))?
         }
 
         Ok(out)
@@ -155,9 +141,9 @@ impl FromStr for SandboxSetting {
 
 #[cfg(test)]
 mod tests {
-    use crate::{narinfo::VerifyingKey, nixcpp::conf::SandboxSetting};
-
     use super::NixConfig;
+    use crate::narinfo::VerifyingKey;
+    use crate::nixcpp::conf::SandboxSetting;
 
     #[test]
     pub fn test_parse() {
@@ -172,20 +158,13 @@ mod tests {
                 require_sigs: Some(true),
                 sandbox: Some(SandboxSetting::True),
                 sandbox_fallback: Some(false),
-                substituters: Some(vec![
-                    "https://nix-community.cachix.org",
-                    "https://cache.nixos.org/"
-                ]),
+                substituters: Some(vec!["https://nix-community.cachix.org", "https://cache.nixos.org/"]),
                 system_features: Some(vec!["nixos-test", "benchmark", "big-parallel", "kvm"]),
                 trusted_public_keys: Some(vec![
-                    VerifyingKey::parse(
-                        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-                    )
-                    .expect("failed to parse pubkey"),
-                    VerifyingKey::parse(
-                        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-                    )
-                    .expect("failed to parse pubkey")
+                    VerifyingKey::parse("cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=")
+                        .expect("failed to parse pubkey"),
+                    VerifyingKey::parse("nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=")
+                        .expect("failed to parse pubkey")
                 ]),
                 trusted_substituters: Some(vec![]),
                 trusted_users: Some(vec!["flokli"]),
@@ -202,8 +181,8 @@ mod tests {
 
         // parse a config file using some non-space whitespaces, as well as comments right after the lines.
         // ensure it contains the same data as initially parsed.
-        let other_config = NixConfig::parse(include_str!("../../testdata/other_nix.conf"))
-            .expect("other config must parse");
+        let other_config =
+            NixConfig::parse(include_str!("../../testdata/other_nix.conf")).expect("other config must parse");
 
         assert_eq!(config, other_config);
     }

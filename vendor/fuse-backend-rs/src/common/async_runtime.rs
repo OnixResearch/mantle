@@ -31,7 +31,9 @@ impl RuntimeType {
 
     #[cfg(target_os = "linux")]
     fn probe_io_uring() -> bool {
-        use io_uring::{opcode, IoUring, Probe};
+        use io_uring::opcode;
+        use io_uring::IoUring;
+        use io_uring::Probe;
 
         let io_uring = match IoUring::new(1) {
             Ok(io_uring) => io_uring,
@@ -119,10 +121,7 @@ impl Runtime {
     /// This function must be called from the context of a `tokio-uring` runtime.
     ///
     /// [`JoinHandle`]: tokio::task::JoinHandle
-    pub fn spawn<T: std::future::Future + 'static>(
-        &self,
-        task: T,
-    ) -> tokio::task::JoinHandle<T::Output> {
+    pub fn spawn<T: std::future::Future + 'static>(&self, task: T) -> tokio::task::JoinHandle<T::Output> {
         match self {
             Runtime::Tokio(_) => tokio::task::spawn_local(task),
             #[cfg(target_os = "linux")]
@@ -144,9 +143,7 @@ impl Default for Runtime {
 
 /// Run a callback with the default `Runtime` object.
 pub fn with_runtime<F, R>(f: F) -> R
-where
-    F: FnOnce(&Runtime) -> R,
-{
+where F: FnOnce(&Runtime) -> R {
     let rt = Runtime::new();
     f(&rt)
 }

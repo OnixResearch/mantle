@@ -1,15 +1,18 @@
 //! Module to create an OCI runtime bundle for a given [BuildRequest].
-use std::{
-    ffi::OsStr,
-    fs,
-    io::Write,
-    path::{Component, Path, PathBuf},
-};
+use std::ffi::OsStr;
+use std::fs;
+use std::io::Write;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
+
+use anyhow::Context;
+use anyhow::bail;
+use tracing::debug;
+use tracing::instrument;
 
 use super::scratch_name;
 use crate::buildservice::BuildRequest;
-use anyhow::{Context, bail};
-use tracing::{debug, instrument};
 
 /// Produce an OCI bundle in a given path.
 /// Check [super::spec::make_spec] for a description about the paths produced.
@@ -43,18 +46,17 @@ pub(crate) fn make_bundle(
         debug!(scratch_path=?scratch_path, path=?p, "about to create scratch dir");
         fs::create_dir_all(scratch_path.clone()).context("Unable to create scratch dir")?;
 
-        // TODO(#152): this is a hack, in the general case we may not have the "build" directory and additional files
-        // may not have /build prefix. But in practice today snix_build.rs is the only user of the builder and
-        // it always sets up a /build scratch and populates all additional_files with the /build prefix.
-        // For now this unblocks builds, but worth improving in the future.
+        // TODO(#152): this is a hack, in the general case we may not have the "build" directory and
+        // additional files may not have /build prefix. But in practice today snix_build.rs is the
+        // only user of the builder and it always sets up a /build scratch and populates all
+        // additional_files with the /build prefix. For now this unblocks builds, but worth
+        // improving in the future.
         if p == Path::new("build") {
             for file in request.additional_files.iter() {
                 if file.path.components().count() < 2
                     || file.path.components().next() != Some(Component::Normal(OsStr::new("build")))
                 {
-                    Err(std::io::Error::other(
-                        "Additional files must start with build/",
-                    ))?
+                    Err(std::io::Error::other("Additional files must start with build/"))?
                 }
 
                 // remove build/ prefix
@@ -78,10 +80,7 @@ pub(crate) fn make_bundle(
 /// This lookup needs to take scratch paths into consideration, as the build
 /// root is not writable on its own.
 /// If a path can't be determined, an error is returned.
-pub(crate) fn get_host_output_paths(
-    request: &BuildRequest,
-    bundle_path: &Path,
-) -> anyhow::Result<Vec<PathBuf>> {
+pub(crate) fn get_host_output_paths(request: &BuildRequest, bundle_path: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let scratch_root = bundle_path.join("scratch");
 
     let mut host_output_paths: Vec<PathBuf> = Vec::with_capacity(request.outputs.len());
@@ -103,10 +102,7 @@ pub(crate) fn get_host_output_paths(
 /// relative path from there to the search_path.
 /// mountpoints must be sorted, so we can iterate over the list from the back
 /// and match on the prefix.
-fn find_path_in_scratchs<'a, 'b, I>(
-    search_path: &'a Path,
-    mountpoints: I,
-) -> Option<(&'b Path, &'a Path)>
+fn find_path_in_scratchs<'a, 'b, I>(search_path: &'a Path, mountpoints: I) -> Option<(&'b Path, &'a Path)>
 where
     I: IntoIterator<Item = &'b PathBuf>,
     I::IntoIter: DoubleEndedIterator,
@@ -119,13 +115,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
+    use std::path::PathBuf;
 
     use rstest::rstest;
 
-    use crate::{buildservice::BuildRequest, oci::scratch_name};
-
-    use super::{find_path_in_scratchs, get_host_output_paths};
+    use super::find_path_in_scratchs;
+    use super::get_host_output_paths;
+    use crate::buildservice::BuildRequest;
+    use crate::oci::scratch_name;
 
     #[rstest]
     #[case::simple("nix/store/aaaa", &["nix/store".into()], Some(("nix/store", "aaaa")))]
@@ -140,11 +138,7 @@ mod tests {
         assert_eq!(
             find_path_in_scratchs(
                 Path::new(search_path),
-                mountpoints
-                    .iter()
-                    .map(PathBuf::from)
-                    .collect::<Vec<_>>()
-                    .as_slice()
+                mountpoints.iter().map(PathBuf::from).collect::<Vec<_>>().as_slice()
             ),
             expected
         );
@@ -158,8 +152,7 @@ mod tests {
             ..Default::default()
         };
 
-        let paths =
-            get_host_output_paths(&request, Path::new("bundle-root")).expect("must succeed");
+        let paths = get_host_output_paths(&request, Path::new("bundle-root")).expect("must succeed");
 
         let mut expected_path = PathBuf::new();
         expected_path.push("bundle-root");

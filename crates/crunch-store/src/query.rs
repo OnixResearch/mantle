@@ -4,11 +4,14 @@
 //! engine. Callable from the CLI or as a library.
 
 use futures::StreamExt;
-use nix_compat::narinfo::{SigningKey, VerifyingKey};
+use nix_compat::narinfo::SigningKey;
+use nix_compat::narinfo::VerifyingKey;
 use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_castore::import::fs::ingest_path;
-use snix_store::nar::{NarCalculationService, SimpleRenderer};
+use snix_store::nar::NarCalculationService;
+use snix_store::nar::SimpleRenderer;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
@@ -56,28 +59,19 @@ impl SignatureVerifyResult {
 /// List all store paths from a PathInfoService.
 ///
 /// Returns (store_path, deriver_name, nar_size) tuples.
-pub async fn store_list(
-    svc: &dyn PathInfoService,
-) -> Result<Vec<(String, String, u64)>, Error> {
+pub async fn store_list(svc: &dyn PathInfoService) -> Result<Vec<(String, String, u64)>, Error> {
     let mut stream = svc.list();
     let mut results = Vec::new();
     while let Some(result) = stream.next().await {
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
-        let deriver_name = pi
-            .deriver
-            .as_ref()
-            .map(|d| d.name().to_string())
-            .unwrap_or_else(|| "-".to_string());
+        let deriver_name = pi.deriver.as_ref().map(|d| d.name().to_string()).unwrap_or_else(|| "-".to_string());
         results.push((pi.store_path.to_string(), deriver_name, pi.nar_size));
     }
     Ok(results)
 }
 
 /// Get detailed PathInfo for paths matching a substring filter.
-pub async fn store_info(
-    svc: &dyn PathInfoService,
-    path_filter: &str,
-) -> Result<Vec<PathInfoDetail>, Error> {
+pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<Vec<PathInfoDetail>, Error> {
     let mut stream = svc.list();
     let mut results = Vec::new();
     while let Some(result) = stream.next().await {
@@ -104,16 +98,10 @@ pub async fn store_info(
 ///
 /// Optionally filters to paths matching `path_filter`. Returns per-path
 /// results (Ok, Missing, or Mismatch).
-pub async fn store_verify(
-    svc: &dyn PathInfoService,
-    path_filter: Option<&str>,
-) -> Result<Vec<VerifyResult>, Error> {
+pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) -> Result<Vec<VerifyResult>, Error> {
     let bs = MemoryBlobService::default();
-    let ds = RedbDirectoryService::new_temporary(
-        "verify".to_string(),
-        RedbDirectoryServiceConfig::default(),
-    )
-    .map_err(|e| Error::DirectoryService(format!("{e}")))?;
+    let ds = RedbDirectoryService::new_temporary("verify".to_string(), RedbDirectoryServiceConfig::default())
+        .map_err(|e| Error::DirectoryService(format!("{e}")))?;
 
     let mut stream = svc.list();
     let mut results = Vec::new();
@@ -139,10 +127,8 @@ pub async fn store_verify(
             .map_err(|e| Error::Store(format!("ingest {sp_str}: {e}")))?;
 
         let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
-        let (_nar_size, nar_sha256) = renderer
-            .calculate_nar(&node)
-            .await
-            .map_err(|e| Error::Store(format!("NAR calc: {e}")))?;
+        let (_nar_size, nar_sha256) =
+            renderer.calculate_nar(&node).await.map_err(|e| Error::Store(format!("NAR calc: {e}")))?;
 
         if nar_sha256 == pi.nar_sha256 {
             results.push(VerifyResult::Ok(sp_str));
@@ -232,7 +218,8 @@ pub async fn store_sign(
     path_filter: Option<&str>,
     sign_all: bool,
 ) -> Result<Vec<SignResult>, Error> {
-    use nix_compat::narinfo::{fingerprint, Signature};
+    use nix_compat::narinfo::Signature;
+    use nix_compat::narinfo::fingerprint;
     use nix_compat::store_path::StorePathRef;
 
     let mut stream = svc.list();
@@ -268,23 +255,15 @@ pub async fn store_sign(
         let key_name = signing_key.name();
 
         let had_any_signature = !pi.signatures.is_empty();
-        let had_sig_from_same_key = pi
-            .signatures
-            .iter()
-            .any(|s| s.name().as_str() == key_name);
+        let had_sig_from_same_key = pi.signatures.iter().any(|s| s.name().as_str() == key_name);
 
-        if let Some(pos) = pi
-            .signatures
-            .iter()
-            .position(|s| s.name().as_str() == key_name)
-        {
+        if let Some(pos) = pi.signatures.iter().position(|s| s.name().as_str() == key_name) {
             pi.signatures[pos] = sig_owned;
         } else {
             pi.signatures.push(sig_owned);
         }
 
-        svc.put(pi).await
-            .map_err(|e| Error::PathInfoService(format!("persisting signed PathInfo: {e}")))?;
+        svc.put(pi).await.map_err(|e| Error::PathInfoService(format!("persisting signed PathInfo: {e}")))?;
 
         results.push(SignResult {
             store_path: sp_str,
@@ -299,17 +278,17 @@ pub async fn store_sign(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nix_compat::store_path::StorePath;
-    use snix_castore::{Node, SymlinkTarget};
+    use snix_castore::Node;
+    use snix_castore::SymlinkTarget;
     use snix_store::path_info::PathInfo;
-    use snix_store::pathinfoservice::{LruPathInfoService, PathInfoService};
+    use snix_store::pathinfoservice::LruPathInfoService;
+    use snix_store::pathinfoservice::PathInfoService;
+
+    use super::*;
 
     fn test_pathinfo_service() -> LruPathInfoService {
-        LruPathInfoService::with_capacity(
-            "query-test".to_string(),
-            std::num::NonZeroUsize::new(64).unwrap(),
-        )
+        LruPathInfoService::with_capacity("query-test".to_string(), std::num::NonZeroUsize::new(64).unwrap())
     }
 
     fn test_keypair() -> (SigningKey<ed25519_dalek::SigningKey>, VerifyingKey) {
@@ -320,17 +299,12 @@ mod tests {
     }
 
     fn other_signing_key() -> SigningKey<ed25519_dalek::SigningKey> {
-        SigningKey::new(
-            "backup-cache-1".to_string(),
-            ed25519_dalek::SigningKey::from_bytes(&[2u8; 32]),
-        )
+        SigningKey::new("backup-cache-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[2u8; 32]))
     }
 
     fn other_verifying_key() -> VerifyingKey {
-        nix_compat::narinfo::VerifyingKey::parse(
-            "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
-        )
-        .unwrap()
+        nix_compat::narinfo::VerifyingKey::parse("cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=")
+            .unwrap()
     }
 
     fn dummy_pathinfo(name: &str) -> PathInfo {
@@ -360,9 +334,7 @@ mod tests {
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("signed-path"), false)
-            .await
-            .unwrap();
+        let results = store_sign(&svc, &signing_key, Some("signed-path"), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].newly_signed);
         assert!(!results[0].appended);
@@ -380,20 +352,13 @@ mod tests {
         let mut pi = dummy_pathinfo("replace-path");
 
         let refs: Vec<_> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = nix_compat::narinfo::fingerprint(
-            &pi.store_path.as_ref(),
-            &pi.nar_sha256,
-            pi.nar_size,
-            refs.iter(),
-        );
+        let fp = nix_compat::narinfo::fingerprint(&pi.store_path.as_ref(), &pi.nar_sha256, pi.nar_size, refs.iter());
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
 
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("replace-path"), false)
-            .await
-            .unwrap();
+        let results = store_sign(&svc, &signing_key, Some("replace-path"), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].newly_signed);
         assert!(!results[0].appended);
@@ -411,20 +376,13 @@ mod tests {
         let mut pi = dummy_pathinfo("append-path");
 
         let refs: Vec<_> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = nix_compat::narinfo::fingerprint(
-            &pi.store_path.as_ref(),
-            &pi.nar_sha256,
-            pi.nar_size,
-            refs.iter(),
-        );
+        let fp = nix_compat::narinfo::fingerprint(&pi.store_path.as_ref(), &pi.nar_sha256, pi.nar_size, refs.iter());
         pi.signatures.push(other_key.sign(fp.as_bytes()).to_owned());
 
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("append-path"), false)
-            .await
-            .unwrap();
+        let results = store_sign(&svc, &signing_key, Some("append-path"), false).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].newly_signed);
         assert!(results[0].appended);
@@ -474,18 +432,11 @@ mod tests {
         let mut pi = dummy_pathinfo("trusted-path");
 
         let refs: Vec<_> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = nix_compat::narinfo::fingerprint(
-            &pi.store_path.as_ref(),
-            &pi.nar_sha256,
-            pi.nar_size,
-            refs.iter(),
-        );
+        let fp = nix_compat::narinfo::fingerprint(&pi.store_path.as_ref(), &pi.nar_sha256, pi.nar_size, refs.iter());
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key])
-            .await
-            .unwrap();
+        let results = store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key]).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 1);
@@ -499,18 +450,11 @@ mod tests {
         let mut pi = dummy_pathinfo("untrusted-path");
 
         let refs: Vec<_> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = nix_compat::narinfo::fingerprint(
-            &pi.store_path.as_ref(),
-            &pi.nar_sha256,
-            pi.nar_size,
-            refs.iter(),
-        );
+        let fp = nix_compat::narinfo::fingerprint(&pi.store_path.as_ref(), &pi.nar_sha256, pi.nar_size, refs.iter());
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()])
-            .await
-            .unwrap();
+        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()]).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 0);
@@ -518,4 +462,3 @@ mod tests {
         assert_eq!(results[0].untrusted_names, vec!["cache.example.com-1".to_string()]);
     }
 }
-

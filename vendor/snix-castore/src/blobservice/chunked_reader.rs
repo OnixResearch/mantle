@@ -1,14 +1,21 @@
-use futures::{TryStreamExt, ready};
+use std::cmp::Ordering;
+use std::pin::Pin;
+
+use futures::TryStreamExt;
+use futures::ready;
 use pin_project_lite::pin_project;
-use tokio::io::{AsyncRead, AsyncSeekExt};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncSeekExt;
 use tokio_stream::StreamExt;
-use tokio_util::io::{ReaderStream, StreamReader};
-use tracing::{instrument, trace, warn};
+use tokio_util::io::ReaderStream;
+use tokio_util::io::StreamReader;
+use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 
+use super::BlobReader;
+use super::BlobService;
 use crate::B3Digest;
-use std::{cmp::Ordering, pin::Pin};
-
-use super::{BlobReader, BlobService};
 
 pin_project! {
     /// ChunkedReader provides a chunk-aware [BlobReader], so allows reading and
@@ -26,8 +33,7 @@ pin_project! {
 }
 
 impl<BS> ChunkedReader<BS>
-where
-    BS: AsRef<dyn BlobService> + Clone + 'static + Send,
+where BS: AsRef<dyn BlobService> + Clone + 'static + Send
 {
     /// Construct a new [ChunkedReader], by retrieving a list of chunks (their
     /// blake3 digests and chunk sizes)
@@ -47,8 +53,7 @@ where
 impl<BS> BlobReader for ChunkedReader<BS> where BS: Send + Clone + 'static + AsRef<dyn BlobService> {}
 
 impl<BS> tokio::io::AsyncRead for ChunkedReader<BS>
-where
-    BS: AsRef<dyn BlobService> + Clone + 'static,
+where BS: AsRef<dyn BlobService> + Clone + 'static
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -70,8 +75,7 @@ where
 }
 
 impl<BS> tokio::io::AsyncSeek for ChunkedReader<BS>
-where
-    BS: AsRef<dyn BlobService> + Clone + Send + 'static,
+where BS: AsRef<dyn BlobService> + Clone + Send + 'static
 {
     #[instrument(skip(self), err(Debug))]
     fn start_seek(self: Pin<&mut Self>, position: std::io::SeekFrom) -> std::io::Result<()> {
@@ -83,22 +87,14 @@ where
             std::io::SeekFrom::End(from_end) => {
                 // note from_end is i64, not u64, so this is usually negative.
                 total_len.checked_add_signed(from_end).ok_or_else(|| {
-                    std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "over/underflow while seeking",
-                    )
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "over/underflow while seeking")
                 })?
             }
             std::io::SeekFrom::Current(from_current) => {
                 // note from_end is i64, not u64, so this can be positive or negative.
-                (*this.pos)
-                    .checked_add_signed(from_current)
-                    .ok_or_else(|| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::InvalidInput,
-                            "over/underflow while seeking",
-                        )
-                    })?
+                (*this.pos).checked_add_signed(from_current).ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "over/underflow while seeking")
+                })?
             }
         };
 
@@ -106,10 +102,7 @@ where
         if absolute_offset != *this.pos {
             // ensure the new position still is inside the file.
             if absolute_offset > total_len {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "seeked beyond EOF",
-                ))?
+                Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "seeked beyond EOF"))?
             }
 
             // Update the position and the internal reader.
@@ -123,10 +116,7 @@ where
         Ok(())
     }
 
-    fn poll_complete(
-        self: Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::io::Result<u64>> {
+    fn poll_complete(self: Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<u64>> {
         std::task::Poll::Ready(Ok(self.pos))
     }
 }
@@ -141,8 +131,7 @@ struct ChunkedBlob<BS> {
 }
 
 impl<BS> ChunkedBlob<BS>
-where
-    BS: AsRef<dyn BlobService> + Clone + 'static + Send,
+where BS: AsRef<dyn BlobService> + Clone + 'static + Send
 {
     /// Constructs [Self] from a list of blake3 digests of chunks and their
     /// sizes, and a reference to a blob service.
@@ -156,23 +145,14 @@ where
             offset += chunk_size;
         }
 
-        assert!(
-            !chunks.is_empty(),
-            "Chunks must be provided, don't use this for blobs without chunks"
-        );
+        assert!(!chunks.is_empty(), "Chunks must be provided, don't use this for blobs without chunks");
 
-        Self {
-            blob_service,
-            chunks,
-        }
+        Self { blob_service, chunks }
     }
 
     /// Returns the length of the blob.
     fn blob_length(&self) -> u64 {
-        self.chunks
-            .last()
-            .map(|(chunk_offset, chunk_size, _)| chunk_offset + chunk_size)
-            .unwrap_or(0)
+        self.chunks.last().map(|(chunk_offset, chunk_size, _)| chunk_offset + chunk_size).unwrap_or(0)
     }
 
     /// For a given position pos, return the chunk containing the data.
@@ -205,10 +185,9 @@ where
             return Box::new(std::io::Cursor::new(vec![]));
         }
         // construct a stream of all chunks starting with the given offset
-        let start_chunk_idx = self
-            .get_chunk_idx_for_position(offset)
-            .expect("outside of blob");
-        // It's ok to panic here, we can only reach this by seeking, and seeking should already reject out-of-file seeking.
+        let start_chunk_idx = self.get_chunk_idx_for_position(offset).expect("outside of blob");
+        // It's ok to panic here, we can only reach this by seeking, and seeking should already reject
+        // out-of-file seeking.
 
         let skip_first_chunk_bytes = (offset - self.chunks[start_chunk_idx].0) as usize;
 
@@ -220,20 +199,15 @@ where
                 let blob_service = blob_service.clone();
                 async move {
                     trace!(chunk_size=%chunk_size, chunk_digest=%chunk_digest, "open_read on chunk in stream");
-                    let mut blob_reader = blob_service
-                        .as_ref()
-                        .open_read(&chunk_digest.to_owned())
-                        .await?
-                        .ok_or_else(|| {
+                    let mut blob_reader =
+                        blob_service.as_ref().open_read(&chunk_digest.to_owned()).await?.ok_or_else(|| {
                             warn!(chunk.digest = %chunk_digest, "chunk not found");
                             std::io::Error::new(std::io::ErrorKind::NotFound, "chunk not found")
                         })?;
 
                     // iff this is the first chunk in the stream, skip by skip_first_chunk_bytes
                     if nth_chunk == 0 && skip_first_chunk_bytes > 0 {
-                        blob_reader
-                            .seek(std::io::SeekFrom::Start(skip_first_chunk_bytes as u64))
-                            .await?;
+                        blob_reader.seek(std::io::SeekFrom::Start(skip_first_chunk_bytes as u64)).await?;
                     }
                     Ok::<_, std::io::Error>(blob_reader)
                 }
@@ -253,17 +227,18 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{
-        io::SeekFrom,
-        sync::{Arc, LazyLock},
-    };
+    use std::io::SeekFrom;
+    use std::sync::Arc;
+    use std::sync::LazyLock;
 
-    use crate::{
-        B3Digest,
-        blobservice::{BlobService, MemoryBlobService, chunked_reader::ChunkedReader},
-    };
     use hex_literal::hex;
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncSeekExt;
+
+    use crate::B3Digest;
+    use crate::blobservice::BlobService;
+    use crate::blobservice::MemoryBlobService;
+    use crate::blobservice::chunked_reader::ChunkedReader;
 
     const CHUNK_1: [u8; 2] = hex!("0001");
     const CHUNK_2: [u8; 4] = hex!("02030405");
@@ -272,16 +247,11 @@ mod test {
     const CHUNK_5: [u8; 7] = hex!("090a0b0c0d0e0f");
 
     // `[ 0 1 ] [ 2 3 4 5 ] [ 6 ] [ 7 8 ] [ 9 10 11 12 13 14 15 ]`
-    pub static CHUNK_1_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&CHUNK_1).as_bytes().into());
-    pub static CHUNK_2_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&CHUNK_2).as_bytes().into());
-    pub static CHUNK_3_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&CHUNK_3).as_bytes().into());
-    pub static CHUNK_4_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&CHUNK_4).as_bytes().into());
-    pub static CHUNK_5_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&CHUNK_5).as_bytes().into());
+    pub static CHUNK_1_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&CHUNK_1).as_bytes().into());
+    pub static CHUNK_2_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&CHUNK_2).as_bytes().into());
+    pub static CHUNK_3_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&CHUNK_3).as_bytes().into());
+    pub static CHUNK_4_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&CHUNK_4).as_bytes().into());
+    pub static CHUNK_5_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&CHUNK_5).as_bytes().into());
     pub static BLOB_1_LIST: LazyLock<[(B3Digest, u64); 5]> = LazyLock::new(|| {
         [
             (*CHUNK_1_DIGEST, 2),
@@ -318,10 +288,7 @@ mod test {
     #[test]
     #[should_panic]
     fn from_iter_empty() {
-        ChunkedBlob::from_iter(
-            [].into_iter(),
-            Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>,
-        );
+        ChunkedBlob::from_iter([].into_iter(), Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>);
     }
 
     /// ensure the right chunk is selected
@@ -334,32 +301,12 @@ mod test {
 
         assert_eq!(Some(0), cb.get_chunk_idx_for_position(0), "start of blob");
 
-        assert_eq!(
-            Some(0),
-            cb.get_chunk_idx_for_position(1),
-            "middle of first chunk"
-        );
-        assert_eq!(
-            Some(1),
-            cb.get_chunk_idx_for_position(2),
-            "beginning of second chunk"
-        );
+        assert_eq!(Some(0), cb.get_chunk_idx_for_position(1), "middle of first chunk");
+        assert_eq!(Some(1), cb.get_chunk_idx_for_position(2), "beginning of second chunk");
 
-        assert_eq!(
-            Some(4),
-            cb.get_chunk_idx_for_position(15),
-            "right before the end of the blob"
-        );
-        assert_eq!(
-            None,
-            cb.get_chunk_idx_for_position(16),
-            "right outside the blob"
-        );
-        assert_eq!(
-            None,
-            cb.get_chunk_idx_for_position(100),
-            "way outside the blob"
-        );
+        assert_eq!(Some(4), cb.get_chunk_idx_for_position(15), "right before the end of the blob");
+        assert_eq!(None, cb.get_chunk_idx_for_position(16), "right outside the blob");
+        assert_eq!(None, cb.get_chunk_idx_for_position(100), "way outside the blob");
     }
 
     /// returns a blobservice with all chunks in BLOB_1 present.
@@ -375,9 +322,7 @@ mod test {
             CHUNK_5.to_vec(),
         ] {
             let mut bw = blob_service.open_write().await;
-            tokio::io::copy(&mut std::io::Cursor::new(blob_contents), &mut bw)
-                .await
-                .expect("writing blob");
+            tokio::io::copy(&mut std::io::Cursor::new(blob_contents), &mut bw).await.expect("writing blob");
             bw.close().await.expect("close blobwriter");
         }
 
@@ -387,41 +332,27 @@ mod test {
     #[tokio::test]
     async fn test_read() {
         let blob_service = gen_blobservice_blob1().await;
-        let mut chunked_reader =
-            ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
+        let mut chunked_reader = ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
 
         // read all data
         let mut buf = Vec::new();
-        tokio::io::copy(&mut chunked_reader, &mut buf)
-            .await
-            .expect("copy");
+        tokio::io::copy(&mut chunked_reader, &mut buf).await.expect("copy");
 
-        assert_eq!(
-            hex!("000102030405060708090a0b0c0d0e0f").to_vec(),
-            buf,
-            "read data must match"
-        );
+        assert_eq!(hex!("000102030405060708090a0b0c0d0e0f").to_vec(), buf, "read data must match");
     }
 
     #[tokio::test]
     async fn test_seek() {
         let blob_service = gen_blobservice_blob1().await;
-        let mut chunked_reader =
-            ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
+        let mut chunked_reader = ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
 
         // seek to the end
         // expect to read 0 bytes
         {
-            chunked_reader
-                .seek(SeekFrom::End(0))
-                .await
-                .expect("seek to end");
+            chunked_reader.seek(SeekFrom::End(0)).await.expect("seek to end");
 
             let mut buf = Vec::new();
-            chunked_reader
-                .read_to_end(&mut buf)
-                .await
-                .expect("read to end");
+            chunked_reader.read_to_end(&mut buf).await.expect("read to end");
 
             assert_eq!(hex!("").to_vec(), buf);
         }
@@ -431,10 +362,7 @@ mod test {
             chunked_reader.seek(SeekFrom::End(-1)).await.expect("seek");
 
             let mut buf = Vec::new();
-            chunked_reader
-                .read_to_end(&mut buf)
-                .await
-                .expect("read to end");
+            chunked_reader.read_to_end(&mut buf).await.expect("read to end");
 
             assert_eq!(hex!("0f").to_vec(), buf);
         }
@@ -442,16 +370,10 @@ mod test {
         // seek back three bytes, but using relative positioning
         // read two bytes
         {
-            chunked_reader
-                .seek(SeekFrom::Current(-3))
-                .await
-                .expect("seek");
+            chunked_reader.seek(SeekFrom::Current(-3)).await.expect("seek");
 
             let mut buf = [0b0; 2];
-            chunked_reader
-                .read_exact(&mut buf)
-                .await
-                .expect("read exact");
+            chunked_reader.read_exact(&mut buf).await.expect("read exact");
 
             assert_eq!(hex!("0d0e"), buf);
         }
@@ -466,36 +388,24 @@ mod test {
 
         for blob_contents in [CHUNK_1.to_vec(), CHUNK_2.to_vec()] {
             let mut bw = blob_service.open_write().await;
-            tokio::io::copy(&mut std::io::Cursor::new(blob_contents), &mut bw)
-                .await
-                .expect("writing blob");
+            tokio::io::copy(&mut std::io::Cursor::new(blob_contents), &mut bw).await.expect("writing blob");
 
             bw.close().await.expect("close blobwriter");
         }
 
-        let mut chunked_reader =
-            ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
+        let mut chunked_reader = ChunkedReader::from_chunks((*BLOB_1_LIST).into_iter(), blob_service);
 
         // read a bit from the front (5 bytes out of 6 available)
         let mut buf = [0b0; 5];
-        chunked_reader
-            .read_exact(&mut buf)
-            .await
-            .expect("read exact");
+        chunked_reader.read_exact(&mut buf).await.expect("read exact");
 
         assert_eq!(hex!("0001020304"), buf);
 
         // seek 2 bytes forward, into an area where we don't have chunks
-        chunked_reader
-            .seek(SeekFrom::Current(2))
-            .await
-            .expect("seek");
+        chunked_reader.seek(SeekFrom::Current(2)).await.expect("seek");
 
         let mut buf = Vec::new();
-        chunked_reader
-            .read_to_end(&mut buf)
-            .await
-            .expect_err("must fail");
+        chunked_reader.read_to_end(&mut buf).await.expect_err("must fail");
 
         // FUTUREWORK: check semantics on errorkinds. Should this be InvalidData
         // or NotFound?

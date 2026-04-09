@@ -5,9 +5,11 @@
 //! is generic, allowing other signers.
 
 use data_encoding::BASE64;
-use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
+use ed25519_dalek::PUBLIC_KEY_LENGTH;
+use ed25519_dalek::SECRET_KEY_LENGTH;
 
-use super::{SignatureRef, VerifyingKey};
+use super::SignatureRef;
+use super::VerifyingKey;
 
 pub struct SigningKey<S> {
     name: String,
@@ -24,8 +26,7 @@ impl<S: Clone> Clone for SigningKey<S> {
 }
 
 impl<S> SigningKey<S>
-where
-    S: ed25519::signature::Signer<ed25519::Signature>,
+where S: ed25519::signature::Signer<ed25519::Signature>
 {
     /// Constructs a signing key, using a name and a signing key.
     pub fn new(name: String, signing_key: S) -> Self {
@@ -43,16 +44,10 @@ where
 }
 
 /// Parses a SigningKey / VerifyingKey from a byte slice in the format that Nix uses.
-pub fn parse_keypair(
-    input: &str,
-) -> Result<(SigningKey<ed25519_dalek::SigningKey>, VerifyingKey), Error> {
+pub fn parse_keypair(input: &str) -> Result<(SigningKey<ed25519_dalek::SigningKey>, VerifyingKey), Error> {
     let (name, bytes64) = input.split_once(':').ok_or(Error::MissingSeparator)?;
 
-    if name.is_empty()
-        || !name
-            .chars()
-            .all(|c| char::is_alphanumeric(c) || c == '-' || c == '.')
-    {
+    if name.is_empty() || !name.chars().all(|c| char::is_alphanumeric(c) || c == '-' || c == '.') {
         return Err(Error::InvalidName(name.to_string()));
     }
 
@@ -83,15 +78,11 @@ pub fn parse_keypair(
         b
     };
 
-    let signing_key = SigningKey::new(
-        name.to_string(),
-        ed25519_dalek::SigningKey::from_bytes(&bytes_signing_key),
-    );
+    let signing_key = SigningKey::new(name.to_string(), ed25519_dalek::SigningKey::from_bytes(&bytes_signing_key));
 
     let verifying_key = VerifyingKey::new(
         name.to_string(),
-        ed25519_dalek::VerifyingKey::from_bytes(&bytes_verifying_key)
-            .map_err(Error::InvalidVerifyingKey)?,
+        ed25519_dalek::VerifyingKey::from_bytes(&bytes_verifying_key).map_err(Error::InvalidVerifyingKey)?,
     );
 
     Ok((signing_key, verifying_key))
@@ -116,8 +107,7 @@ mod test {
     use crate::narinfo::DUMMY_KEYPAIR;
     #[test]
     fn parse() {
-        let (_signing_key, _verifying_key) =
-            super::parse_keypair(DUMMY_KEYPAIR).expect("must succeed");
+        let (_signing_key, _verifying_key) = super::parse_keypair(DUMMY_KEYPAIR).expect("must succeed");
     }
 
     #[test]

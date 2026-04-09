@@ -1,12 +1,14 @@
+use std::io::Error;
+use std::io::ErrorKind;
 #[cfg(feature = "async")]
 use std::mem::MaybeUninit;
-use std::{
-    io::{Error, ErrorKind},
-    ops::RangeInclusive,
-};
+use std::ops::RangeInclusive;
+
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 #[cfg(feature = "async")]
 use tokio::io::ReadBuf;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{self};
 
 pub(crate) mod reader;
 pub use reader::BytesReader;
@@ -37,21 +39,14 @@ const LEN_SIZE: usize = 8;
 /// This buffers the entire payload into memory,
 /// a streaming version is available at [crate::wire::bytes::BytesReader].
 pub async fn read_bytes<R>(r: &mut R, allowed_size: RangeInclusive<usize>) -> io::Result<Vec<u8>>
-where
-    R: AsyncReadExt + Unpin + ?Sized,
-{
+where R: AsyncReadExt + Unpin + ?Sized {
     // read the length field
     let len = r.read_u64_le().await?;
     let len: usize = len
         .try_into()
         .ok()
         .filter(|len| allowed_size.contains(len))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "signalled package size not in allowed range",
-            )
-        })?;
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "signalled package size not in allowed range"))?;
 
     // calculate the total length, including padding.
     // byte packets are padded to 8 byte blocks each.
@@ -71,10 +66,7 @@ where
 
     // ensure the padding is all zeroes.
     if padding.iter().any(|&b| b != 0) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "padding is not all zeroes",
-        ));
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "padding is not all zeroes"));
     }
 
     // return the data without the padding
@@ -99,12 +91,7 @@ where
         .try_into()
         .ok()
         .filter(|len| allowed_size.contains(len))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "signalled package size not in allowed range",
-            )
-        })?;
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "signalled package size not in allowed range"))?;
 
     let buf_len = (len + 7) & !7;
     let buf = {
@@ -126,10 +113,7 @@ where
     };
 
     if buf[len..buf_len].iter().any(|&b| b != 0) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "padding is not all zeroes",
-        ));
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "padding is not all zeroes"));
     }
 
     Ok(&buf[..len])
@@ -145,9 +129,7 @@ unsafe fn assume_init_bytes(slice: &[MaybeUninit<u8>]) -> &[u8] {
 /// Internally uses [read_bytes].
 /// Rejects reading more than `allowed_size` bytes of payload.
 pub async fn read_string<R>(r: &mut R, allowed_size: RangeInclusive<usize>) -> io::Result<String>
-where
-    R: AsyncReadExt + Unpin,
-{
+where R: AsyncReadExt + Unpin {
     let bytes = read_bytes(r, allowed_size).await?;
     String::from_utf8(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))
 }
@@ -161,10 +143,7 @@ where
 /// Note: if performance matters to you, make sure your
 /// [AsyncWriteExt] handle is buffered. This function is quite
 /// write-intesive.
-pub async fn write_bytes<W: AsyncWriteExt + Unpin, B: AsRef<[u8]>>(
-    w: &mut W,
-    b: B,
-) -> io::Result<()> {
+pub async fn write_bytes<W: AsyncWriteExt + Unpin, B: AsRef<[u8]>>(w: &mut W, b: B) -> io::Result<()> {
     // write the size packet.
     w.write_u64_le(b.as_ref().len() as u64).await?;
 
@@ -188,10 +167,11 @@ pub(crate) fn padding_len(len: u64) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use tokio_test::{assert_ok, io::Builder};
+    use hex_literal::hex;
+    use tokio_test::assert_ok;
+    use tokio_test::io::Builder;
 
     use super::*;
-    use hex_literal::hex;
 
     /// The maximum length of bytes packets we're willing to accept in the test
     /// cases.
@@ -199,28 +179,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_8_bytes() {
-        let mut mock = Builder::new()
-            .read(&8u64.to_le_bytes())
-            .read(&12345678u64.to_le_bytes())
-            .build();
+        let mut mock = Builder::new().read(&8u64.to_le_bytes()).read(&12345678u64.to_le_bytes()).build();
 
-        assert_eq!(
-            &12345678u64.to_le_bytes(),
-            read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice()
-        );
+        assert_eq!(&12345678u64.to_le_bytes(), read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice());
     }
 
     #[tokio::test]
     async fn test_read_9_bytes() {
-        let mut mock = Builder::new()
-            .read(&9u64.to_le_bytes())
-            .read(&hex!("01020304050607080900000000000000"))
-            .build();
+        let mut mock = Builder::new().read(&9u64.to_le_bytes()).read(&hex!("01020304050607080900000000000000")).build();
 
-        assert_eq!(
-            hex!("010203040506070809"),
-            read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice()
-        );
+        assert_eq!(hex!("010203040506070809"), read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice());
     }
 
     #[tokio::test]
@@ -229,10 +197,7 @@ mod tests {
         // No data is read, and there's zero padding.
         let mut mock = Builder::new().read(&0u64.to_le_bytes()).build();
 
-        assert_eq!(
-            hex!(""),
-            read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice()
-        );
+        assert_eq!(hex!(""), read_bytes(&mut mock, 0..=MAX_LEN).await.unwrap().as_slice());
     }
 
     #[tokio::test]
@@ -241,29 +206,21 @@ mod tests {
     async fn test_read_reject_too_large() {
         let mut mock = Builder::new().read(&100u64.to_le_bytes()).build();
 
-        read_bytes(&mut mock, 10..=10)
-            .await
-            .expect_err("expect this to fail");
+        read_bytes(&mut mock, 10..=10).await.expect_err("expect this to fail");
     }
 
     #[tokio::test]
     async fn test_write_bytes_no_padding() {
         let input = hex!("6478696f34657661");
         let len = input.len() as u64;
-        let mut mock = Builder::new()
-            .write(&len.to_le_bytes())
-            .write(&input)
-            .build();
+        let mut mock = Builder::new().write(&len.to_le_bytes()).write(&input).build();
         assert_ok!(write_bytes(&mut mock, &input).await)
     }
     #[tokio::test]
     async fn test_write_bytes_with_padding() {
         let input = hex!("322e332e3137");
         let len = input.len() as u64;
-        let mut mock = Builder::new()
-            .write(&len.to_le_bytes())
-            .write(&hex!("322e332e31370000"))
-            .build();
+        let mut mock = Builder::new().write(&len.to_le_bytes()).write(&hex!("322e332e31370000")).build();
         assert_ok!(write_bytes(&mut mock, &input).await)
     }
 
@@ -271,10 +228,8 @@ mod tests {
     async fn test_write_string() {
         let input = "Hello, World!";
         let len = input.len() as u64;
-        let mut mock = Builder::new()
-            .write(&len.to_le_bytes())
-            .write(&hex!("48656c6c6f2c20576f726c6421000000"))
-            .build();
+        let mut mock =
+            Builder::new().write(&len.to_le_bytes()).write(&hex!("48656c6c6f2c20576f726c6421000000")).build();
         assert_ok!(write_bytes(&mut mock, &input).await)
     }
 

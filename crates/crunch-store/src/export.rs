@@ -3,9 +3,9 @@
 //! Reconstructs files, directories, and symlinks on disk from the
 //! content-addressed store. This is the inverse of `ingest_path`.
 
+use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::Node;
 use tokio::io::AsyncReadExt;
 
 /// Maximum directory tree depth when exporting to disk.
@@ -46,18 +46,16 @@ async fn export_castore_inner(
                 .ok_or_else(|| format!("blob {digest} not found in castore"))?;
 
             if let Some(parent) = std::path::Path::new(dest).parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("creating parent dir: {e}"))?;
+                std::fs::create_dir_all(parent).map_err(|e| format!("creating parent dir: {e}"))?;
             }
-            let mut file = std::fs::File::create(dest)
-                .map_err(|e| format!("creating {dest}: {e}"))?;
+            let mut file = std::fs::File::create(dest).map_err(|e| format!("creating {dest}: {e}"))?;
             let mut buf = vec![0u8; 64 * 1024];
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| format!("reading blob: {e}"))?;
-                if n == 0 { break; }
-                std::io::Write::write_all(&mut file, &buf[..n])
-                    .map_err(|e| format!("writing {dest}: {e}"))?;
+                let n = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
+                if n == 0 {
+                    break;
+                }
+                std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {dest}: {e}"))?;
             }
             #[cfg(unix)]
             if *executable {
@@ -68,20 +66,17 @@ async fn export_castore_inner(
         }
         Node::Symlink { target, .. } => {
             if let Some(parent) = std::path::Path::new(dest).parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("creating parent dir: {e}"))?;
+                std::fs::create_dir_all(parent).map_err(|e| format!("creating parent dir: {e}"))?;
             }
             #[cfg(unix)]
             {
                 use std::os::unix::ffi::OsStrExt;
                 let target_os = std::ffi::OsStr::from_bytes(target.as_ref());
-                std::os::unix::fs::symlink(target_os, dest)
-                    .map_err(|e| format!("creating symlink {dest}: {e}"))?;
+                std::os::unix::fs::symlink(target_os, dest).map_err(|e| format!("creating symlink {dest}: {e}"))?;
             }
         }
         Node::Directory { digest, .. } => {
-            std::fs::create_dir_all(dest)
-                .map_err(|e| format!("creating dir {dest}: {e}"))?;
+            std::fs::create_dir_all(dest).map_err(|e| format!("creating dir {dest}: {e}"))?;
 
             let dir = directory_service
                 .get(digest)
@@ -90,8 +85,8 @@ async fn export_castore_inner(
                 .ok_or_else(|| format!("directory {digest} not found in castore"))?;
 
             for (name, child_node) in dir.nodes() {
-                let name_str = std::str::from_utf8(name.as_ref())
-                    .map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
+                let name_str =
+                    std::str::from_utf8(name.as_ref()).map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
                 let child_dest = format!("{dest}/{name_str}");
                 Box::pin(export_castore_inner(
                     child_node,
@@ -109,26 +104,20 @@ async fn export_castore_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use snix_castore::blobservice::MemoryBlobService;
-    use snix_castore::directoryservice::{
-        DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig,
-    };
     use snix_castore::Directory;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::DirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use tokio::io::AsyncWriteExt;
 
+    use super::*;
+
     fn tmp_ds() -> RedbDirectoryService {
-        RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .unwrap()
+        RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
     }
 
-    async fn insert_blob(
-        bs: &MemoryBlobService,
-        data: &[u8],
-    ) -> (snix_castore::B3Digest, Node) {
+    async fn insert_blob(bs: &MemoryBlobService, data: &[u8]) -> (snix_castore::B3Digest, Node) {
         let mut writer = bs.open_write().await;
         writer.write_all(data).await.unwrap();
         let digest = writer.close().await.unwrap();
@@ -152,9 +141,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/out", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         let written = std::fs::read(&dest).unwrap();
         assert_eq!(written, data);
@@ -177,9 +164,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/script", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(&dest).unwrap().permissions().mode();
@@ -195,9 +180,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/empty", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         let written = std::fs::read(&dest).unwrap();
         assert!(written.is_empty());
@@ -212,9 +195,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/a/b/c/file", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         assert_eq!(std::fs::read(&dest).unwrap(), b"nested");
     }
@@ -232,9 +213,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/link", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         let target = std::fs::read_link(&dest).unwrap();
         assert_eq!(target.to_str().unwrap(), "/some/target");
@@ -251,23 +230,17 @@ mod tests {
         let (digest_b, _) = insert_blob(&bs, b"content-b").await;
 
         let mut dir = Directory::new();
-        dir.add(
-            "a.txt".try_into().unwrap(),
-            Node::File {
-                digest: digest_a,
-                size: 9,
-                executable: false,
-            },
-        )
+        dir.add("a.txt".try_into().unwrap(), Node::File {
+            digest: digest_a,
+            size: 9,
+            executable: false,
+        })
         .unwrap();
-        dir.add(
-            "b.txt".try_into().unwrap(),
-            Node::File {
-                digest: digest_b,
-                size: 9,
-                executable: false,
-            },
-        )
+        dir.add("b.txt".try_into().unwrap(), Node::File {
+            digest: digest_b,
+            size: 9,
+            executable: false,
+        })
         .unwrap();
 
         let dir_digest = dir.digest();
@@ -282,9 +255,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/mydir", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         assert_eq!(std::fs::read(format!("{dest}/a.txt")).unwrap(), b"content-a");
         assert_eq!(std::fs::read(format!("{dest}/b.txt")).unwrap(), b"content-b");
@@ -299,14 +270,11 @@ mod tests {
 
         let mut inner = Directory::new();
         inner
-            .add(
-                "leaf.txt".try_into().unwrap(),
-                Node::File {
-                    digest: file_digest,
-                    size: 4,
-                    executable: false,
-                },
-            )
+            .add("leaf.txt".try_into().unwrap(), Node::File {
+                digest: file_digest,
+                size: 4,
+                executable: false,
+            })
             .unwrap();
         let inner_digest = inner.digest();
         let inner_size = inner.size();
@@ -314,13 +282,10 @@ mod tests {
 
         let mut outer = Directory::new();
         outer
-            .add(
-                "sub".try_into().unwrap(),
-                Node::Directory {
-                    digest: inner_digest,
-                    size: inner_size,
-                },
-            )
+            .add("sub".try_into().unwrap(), Node::Directory {
+                digest: inner_digest,
+                size: inner_size,
+            })
             .unwrap();
         let outer_digest = outer.digest();
         let outer_size = outer.size();
@@ -334,14 +299,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/root", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
-        assert_eq!(
-            std::fs::read(format!("{dest}/sub/leaf.txt")).unwrap(),
-            b"leaf"
-        );
+        assert_eq!(std::fs::read(format!("{dest}/sub/leaf.txt")).unwrap(), b"leaf");
     }
 
     #[tokio::test]
@@ -352,21 +312,15 @@ mod tests {
         let (file_digest, _) = insert_blob(&bs, b"real").await;
 
         let mut dir = Directory::new();
-        dir.add(
-            "real.txt".try_into().unwrap(),
-            Node::File {
-                digest: file_digest,
-                size: 4,
-                executable: false,
-            },
-        )
+        dir.add("real.txt".try_into().unwrap(), Node::File {
+            digest: file_digest,
+            size: 4,
+            executable: false,
+        })
         .unwrap();
-        dir.add(
-            "link.txt".try_into().unwrap(),
-            Node::Symlink {
-                target: snix_castore::SymlinkTarget::try_from("real.txt").unwrap(),
-            },
-        )
+        dir.add("link.txt".try_into().unwrap(), Node::Symlink {
+            target: snix_castore::SymlinkTarget::try_from("real.txt").unwrap(),
+        })
         .unwrap();
 
         let dir_digest = dir.digest();
@@ -381,9 +335,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/mixed", tmp.path().display());
 
-        export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap();
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         assert_eq!(std::fs::read(format!("{dest}/real.txt")).unwrap(), b"real");
         let link_target = std::fs::read_link(format!("{dest}/link.txt")).unwrap();
@@ -406,13 +358,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/missing", tmp.path().display());
 
-        let err = export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap_err();
-        assert!(
-            err.contains("not found"),
-            "error should mention missing blob: {err}"
-        );
+        let err = export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap_err();
+        assert!(err.contains("not found"), "error should mention missing blob: {err}");
     }
 
     #[tokio::test]
@@ -428,13 +375,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/missing_dir", tmp.path().display());
 
-        let err = export_castore_to_disk(&node, &dest, &bs, &ds)
-            .await
-            .unwrap_err();
-        assert!(
-            err.contains("not found"),
-            "error should mention missing directory: {err}"
-        );
+        let err = export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap_err();
+        assert!(err.contains("not found"), "error should mention missing directory: {err}");
     }
 
     // -- Depth limit --
@@ -448,13 +390,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/deep", tmp.path().display());
 
-        let err = export_castore_inner(&node, &dest, &bs, &ds, MAX_EXPORT_DEPTH)
-            .await
-            .unwrap_err();
-        assert!(
-            err.contains("depth limit"),
-            "error should mention depth limit: {err}"
-        );
+        let err = export_castore_inner(&node, &dest, &bs, &ds, MAX_EXPORT_DEPTH).await.unwrap_err();
+        assert!(err.contains("depth limit"), "error should mention depth limit: {err}");
     }
 
     #[tokio::test]
@@ -466,9 +403,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dest = format!("{}/almost", tmp.path().display());
 
-        export_castore_inner(&node, &dest, &bs, &ds, MAX_EXPORT_DEPTH - 1)
-            .await
-            .unwrap();
+        export_castore_inner(&node, &dest, &bs, &ds, MAX_EXPORT_DEPTH - 1).await.unwrap();
 
         assert_eq!(std::fs::read(&dest).unwrap(), b"almost deep");
     }

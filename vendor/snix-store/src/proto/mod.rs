@@ -2,11 +2,12 @@
 use bstr::ByteSlice;
 use bytes::Bytes;
 use data_encoding::BASE64;
-use nix_compat::{
-    narinfo::{Signature, SignatureError},
-    nixhash::{CAHash, NixHash},
-    store_path::{self, StorePathRef},
-};
+use nix_compat::narinfo::Signature;
+use nix_compat::narinfo::SignatureError;
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
+use nix_compat::store_path::StorePathRef;
+use nix_compat::store_path::{self};
 use snix_castore::DirectoryError;
 use thiserror::Error;
 
@@ -53,11 +54,7 @@ pub enum ValidatePathInfoError {
     /// The digest in the parsed `.narinfo.reference_names[i]` does not match
     /// the one in `.references[i]`.`
     #[error("digest in reference_name at position {} does not match digest in PathInfo, expected {}, got {}", .0, BASE64.encode(.1), BASE64.encode(.2))]
-    InconsistentNarinfoReferenceNameDigest(
-        usize,
-        [u8; store_path::DIGEST_SIZE],
-        [u8; store_path::DIGEST_SIZE],
-    ),
+    InconsistentNarinfoReferenceNameDigest(usize, [u8; store_path::DIGEST_SIZE], [u8; store_path::DIGEST_SIZE]),
 
     /// The deriver field is invalid.
     #[error("deriver field is invalid: {0}")]
@@ -93,61 +90,61 @@ impl TryFrom<&nar_info::Ca> for nix_compat::nixhash::CAHash {
 
     fn try_from(value: &nar_info::Ca) -> Result<Self, Self::Error> {
         Ok(match value.r#type {
-            typ if typ == nar_info::ca::Hash::NarSha256 as i32 => {
-                Self::Nar(NixHash::Sha256(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha256"),
-                )?))
-            }
-            typ if typ == nar_info::ca::Hash::NarSha1 as i32 => {
-                Self::Nar(NixHash::Sha1(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha1"),
-                )?))
-            }
-            typ if typ == nar_info::ca::Hash::NarSha512 as i32 => Self::Nar(NixHash::Sha512(
-                Box::new(value.digest[..].try_into().map_err(|_| {
-                    ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha512")
-                })?),
+            typ if typ == nar_info::ca::Hash::NarSha256 as i32 => Self::Nar(NixHash::Sha256(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha256"))?,
             )),
-            typ if typ == nar_info::ca::Hash::NarMd5 as i32 => {
-                Self::Nar(NixHash::Md5(value.digest[..].try_into().map_err(|_| {
-                    ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarMd5")
-                })?))
-            }
-            typ if typ == nar_info::ca::Hash::TextSha256 as i32 => {
-                Self::Text(value.digest[..].try_into().map_err(|_| {
-                    ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "TextSha256")
-                })?)
-            }
-            typ if typ == nar_info::ca::Hash::FlatSha1 as i32 => {
-                Self::Flat(NixHash::Sha1(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha1"),
-                )?))
-            }
-            typ if typ == nar_info::ca::Hash::FlatMd5 as i32 => {
-                Self::Flat(NixHash::Md5(value.digest[..].try_into().map_err(|_| {
-                    ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatMd5")
-                })?))
-            }
-            typ if typ == nar_info::ca::Hash::FlatSha256 as i32 => {
-                Self::Flat(NixHash::Sha256(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha256"),
-                )?))
-            }
-            typ if typ == nar_info::ca::Hash::FlatSha512 as i32 => Self::Flat(NixHash::Sha512(
-                Box::new(value.digest[..].try_into().map_err(|_| {
-                    ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha512")
-                })?),
+            typ if typ == nar_info::ca::Hash::NarSha1 as i32 => Self::Nar(NixHash::Sha1(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha1"))?,
             )),
-            typ if typ == nar_info::ca::Hash::NarBlake3 as i32 => {
-                Self::Nar(NixHash::Blake3(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarBlake3"),
-                )?))
-            }
-            typ if typ == nar_info::ca::Hash::FlatBlake3 as i32 => {
-                Self::Flat(NixHash::Blake3(value.digest[..].try_into().map_err(
-                    |_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatBlake3"),
-                )?))
-            }
+            typ if typ == nar_info::ca::Hash::NarSha512 as i32 => Self::Nar(NixHash::Sha512(Box::new(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarSha512"))?,
+            ))),
+            typ if typ == nar_info::ca::Hash::NarMd5 as i32 => Self::Nar(NixHash::Md5(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarMd5"))?,
+            )),
+            typ if typ == nar_info::ca::Hash::TextSha256 as i32 => Self::Text(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "TextSha256"))?,
+            ),
+            typ if typ == nar_info::ca::Hash::FlatSha1 as i32 => Self::Flat(NixHash::Sha1(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha1"))?,
+            )),
+            typ if typ == nar_info::ca::Hash::FlatMd5 as i32 => Self::Flat(NixHash::Md5(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatMd5"))?,
+            )),
+            typ if typ == nar_info::ca::Hash::FlatSha256 as i32 => Self::Flat(NixHash::Sha256(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha256"))?,
+            )),
+            typ if typ == nar_info::ca::Hash::FlatSha512 as i32 => Self::Flat(NixHash::Sha512(Box::new(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatSha512"))?,
+            ))),
+            typ if typ == nar_info::ca::Hash::NarBlake3 as i32 => Self::Nar(NixHash::Blake3(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "NarBlake3"))?,
+            )),
+            typ if typ == nar_info::ca::Hash::FlatBlake3 as i32 => Self::Flat(NixHash::Blake3(
+                value.digest[..]
+                    .try_into()
+                    .map_err(|_| ConvertCAError::InvalidReferenceDigestLen(value.digest.len(), "FlatBlake3"))?,
+            )),
             typ => return Err(ConvertCAError::UnknownHashType(typ)),
         })
     }
@@ -187,11 +184,7 @@ impl From<crate::pathinfoservice::PathInfo> for PathInfo {
                 value.store_path.to_string().into_bytes().into(),
                 value.node,
             )),
-            references: value
-                .references
-                .iter()
-                .map(|reference| Bytes::copy_from_slice(reference.digest()))
-                .collect(),
+            references: value.references.iter().map(|reference| Bytes::copy_from_slice(reference.digest())).collect(),
             narinfo: Some(NarInfo {
                 nar_size: value.nar_size,
                 nar_sha256: Bytes::copy_from_slice(&value.nar_sha256),
@@ -217,17 +210,12 @@ impl From<crate::pathinfoservice::PathInfo> for PathInfo {
 impl TryFrom<PathInfo> for crate::pathinfoservice::PathInfo {
     type Error = ValidatePathInfoError;
     fn try_from(value: PathInfo) -> Result<Self, Self::Error> {
-        let narinfo = value
-            .narinfo
-            .ok_or_else(|| ValidatePathInfoError::NarInfoFieldMissing)?;
+        let narinfo = value.narinfo.ok_or_else(|| ValidatePathInfoError::NarInfoFieldMissing)?;
 
         // ensure the references have the right number of bytes.
         for (i, reference) in value.references.iter().enumerate() {
             if reference.len() != store_path::DIGEST_SIZE {
-                return Err(ValidatePathInfoError::InvalidReferenceDigestLen(
-                    i,
-                    reference.len(),
-                ));
+                return Err(ValidatePathInfoError::InvalidReferenceDigestLen(i, reference.len()));
             }
         }
 
@@ -243,13 +231,8 @@ impl TryFrom<PathInfo> for crate::pathinfoservice::PathInfo {
         let mut references = vec![];
         for (i, reference_name_str) in narinfo.reference_names.iter().enumerate() {
             // ensure thy parse as (non-absolute) store path
-            let reference_names_store_path =
-                StorePathRef::from_bytes(reference_name_str.as_bytes()).map_err(|_| {
-                    ValidatePathInfoError::InvalidNarinfoReferenceName(
-                        i,
-                        reference_name_str.to_owned(),
-                    )
-                })?;
+            let reference_names_store_path = StorePathRef::from_bytes(reference_name_str.as_bytes())
+                .map_err(|_| ValidatePathInfoError::InvalidNarinfoReferenceName(i, reference_name_str.to_owned()))?;
 
             // ensure their digest matches the one at self.references[i].
             {
@@ -257,13 +240,11 @@ impl TryFrom<PathInfo> for crate::pathinfoservice::PathInfo {
                 let reference_digest = value.references[i].to_vec().try_into().unwrap();
 
                 if reference_names_store_path.digest() != &reference_digest {
-                    return Err(
-                        ValidatePathInfoError::InconsistentNarinfoReferenceNameDigest(
-                            i,
-                            reference_digest,
-                            *reference_names_store_path.digest(),
-                        ),
-                    );
+                    return Err(ValidatePathInfoError::InconsistentNarinfoReferenceNameDigest(
+                        i,
+                        reference_digest,
+                        *reference_names_store_path.digest(),
+                    ));
                 } else {
                     references.push(reference_names_store_path.to_owned());
                 }
@@ -282,9 +263,8 @@ impl TryFrom<PathInfo> for crate::pathinfoservice::PathInfo {
         Ok(Self {
             // value.node has a valid name according to the castore model but might not parse to a
             // [StorePath]
-            store_path: nix_compat::store_path::StorePath::from_bytes(name.as_ref()).map_err(
-                |err| ValidatePathInfoError::InvalidNodeName(name.as_ref().to_vec(), err),
-            )?,
+            store_path: nix_compat::store_path::StorePath::from_bytes(name.as_ref())
+                .map_err(|err| ValidatePathInfoError::InvalidNodeName(name.as_ref().to_vec(), err))?,
             node,
             references,
             nar_size: narinfo.nar_size,
@@ -299,11 +279,8 @@ impl TryFrom<PathInfo> for crate::pathinfoservice::PathInfo {
             deriver: narinfo
                 .deriver
                 .map(|deriver| {
-                    nix_compat::store_path::StorePath::from_name_and_digest(
-                        &deriver.name,
-                        &deriver.digest,
-                    )
-                    .map_err(ValidatePathInfoError::InvalidDeriverField)
+                    nix_compat::store_path::StorePath::from_name_and_digest(&deriver.name, &deriver.digest)
+                        .map_err(ValidatePathInfoError::InvalidDeriverField)
                 })
                 .transpose()?,
             signatures: narinfo

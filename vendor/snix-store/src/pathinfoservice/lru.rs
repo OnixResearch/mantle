@@ -1,19 +1,19 @@
-use async_trait::async_trait;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+
 use async_stream::try_stream;
+use async_trait::async_trait;
 use futures::stream::BoxStream;
 use lru::LruCache;
 use nix_compat::nixbase32;
-use std::num::NonZeroUsize;
-use std::sync::Arc;
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::ServiceBuilder;
 use tokio::sync::RwLock;
-
 use tracing::instrument;
 
-use snix_castore::composition::{CompositionContext, ServiceBuilder};
-
+use super::PathInfo;
+use super::PathInfoService;
 use crate::pathinfoservice;
-
-use super::{PathInfo, PathInfoService};
 
 pub struct LruPathInfoService {
     instance_name: String,
@@ -29,7 +29,6 @@ impl LruPathInfoService {
     }
 }
 
-
 #[async_trait]
 impl PathInfoService for LruPathInfoService {
     #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
@@ -39,10 +38,7 @@ impl PathInfoService for LruPathInfoService {
 
     #[instrument(level = "trace", skip_all, fields(path_info.root_node = ?path_info.node, instance_name = %self.instance_name))]
     async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
-        self.lru
-            .write()
-            .await
-            .put(*path_info.store_path.digest(), path_info.clone());
+        self.lru.write().await.put(*path_info.store_path.digest(), path_info.clone());
 
         Ok(path_info)
     }
@@ -79,7 +75,6 @@ impl TryFrom<url::Url> for LruPathInfoServiceConfig {
     }
 }
 
-
 #[async_trait]
 impl ServiceBuilder for LruPathInfoServiceConfig {
     type Output = dyn PathInfoService;
@@ -88,69 +83,49 @@ impl ServiceBuilder for LruPathInfoServiceConfig {
         instance_name: &str,
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Arc::new(LruPathInfoService::with_capacity(
-            instance_name.to_string(),
-            self.capacity,
-        )))
+        Ok(Arc::new(LruPathInfoService::with_capacity(instance_name.to_string(), self.capacity)))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use nix_compat::store_path::StorePath;
-    use std::{num::NonZeroUsize, sync::LazyLock};
+    use std::num::NonZeroUsize;
+    use std::sync::LazyLock;
 
-    use crate::{
-        fixtures::PATH_INFO,
-        pathinfoservice::{LruPathInfoService, PathInfo, PathInfoService},
-    };
+    use nix_compat::store_path::StorePath;
+
+    use crate::fixtures::PATH_INFO;
+    use crate::pathinfoservice::LruPathInfoService;
+    use crate::pathinfoservice::PathInfo;
+    use crate::pathinfoservice::PathInfoService;
     static PATHINFO_2: LazyLock<PathInfo> = LazyLock::new(|| {
         let mut p = PATH_INFO.clone();
         p.store_path = StorePath::from_name_and_digest_fixed("dummy", [1; 20]).unwrap();
         p
     });
 
-    static PATHINFO_2_DIGEST: LazyLock<[u8; 20]> =
-        LazyLock::new(|| *PATHINFO_2.store_path.digest());
+    static PATHINFO_2_DIGEST: LazyLock<[u8; 20]> = LazyLock::new(|| *PATHINFO_2.store_path.digest());
 
     #[tokio::test]
     async fn evict() {
         let svc = LruPathInfoService::with_capacity("test".into(), NonZeroUsize::new(1).unwrap());
 
         // pathinfo_1 should not be there
-        assert!(
-            svc.get(*PATH_INFO.store_path.digest())
-                .await
-                .expect("no error")
-                .is_none()
-        );
+        assert!(svc.get(*PATH_INFO.store_path.digest()).await.expect("no error").is_none());
 
         // insert it
         svc.put(PATH_INFO.clone()).await.expect("no error");
 
         // now it should be there.
-        assert_eq!(
-            Some(PATH_INFO.clone()),
-            svc.get(*PATH_INFO.store_path.digest())
-                .await
-                .expect("no error")
-        );
+        assert_eq!(Some(PATH_INFO.clone()), svc.get(*PATH_INFO.store_path.digest()).await.expect("no error"));
 
         // insert pathinfo_2. This will evict pathinfo 1
         svc.put(PATHINFO_2.clone()).await.expect("no error");
 
         // now pathinfo 2 should be there.
-        assert_eq!(
-            Some(PATHINFO_2.clone()),
-            svc.get(*PATHINFO_2_DIGEST).await.expect("no error")
-        );
+        assert_eq!(Some(PATHINFO_2.clone()), svc.get(*PATHINFO_2_DIGEST).await.expect("no error"));
 
         // … but pathinfo 1 not anymore.
-        assert!(
-            svc.get(*PATH_INFO.store_path.digest())
-                .await
-                .expect("no error")
-                .is_none()
-        );
+        assert!(svc.get(*PATH_INFO.store_path.digest()).await.expect("no error").is_none());
     }
 }

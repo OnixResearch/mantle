@@ -11,26 +11,31 @@ mod tests;
 
 use auto_impl::auto_impl;
 use futures::stream::BoxStream;
-use snix_castore::composition::{Registry, ServiceBuilder};
+use snix_castore::composition::Registry;
+use snix_castore::composition::ServiceBuilder;
 
-
-use crate::nar::NarCalculationService;
-pub use crate::path_info::PathInfo;
-
-pub use self::cache::{Cache as CachePathInfoService, CacheConfig as CachePathInfoServiceConfig};
+pub use self::cache::Cache as CachePathInfoService;
+pub use self::cache::CacheConfig as CachePathInfoServiceConfig;
 pub use self::from_addr::from_addr;
-pub use self::lru::{LruPathInfoService, LruPathInfoServiceConfig};
-pub use self::nix_http::{NixHTTPPathInfoService, NixHTTPPathInfoServiceConfig};
-pub use self::redb::{RedbPathInfoService, RedbPathInfoServiceConfig};
-pub use self::signing_wrapper::{KeyFileSigningPathInfoServiceConfig, SigningPathInfoService};
-
+pub use self::lru::LruPathInfoService;
+pub use self::lru::LruPathInfoServiceConfig;
+pub use self::nix_http::NixHTTPPathInfoService;
+pub use self::nix_http::NixHTTPPathInfoServiceConfig;
+pub use self::redb::RedbPathInfoService;
+pub use self::redb::RedbPathInfoServiceConfig;
+pub use self::signing_wrapper::KeyFileSigningPathInfoServiceConfig;
+pub use self::signing_wrapper::SigningPathInfoService;
 #[cfg(test)]
 pub(crate) use self::signing_wrapper::test_signing_service;
+use crate::nar::NarCalculationService;
+pub use crate::path_info::PathInfo;
 
 #[cfg(feature = "cloud")]
 mod bigtable;
 #[cfg(feature = "cloud")]
-pub use self::bigtable::{BigtableParameters, BigtablePathInfoService};
+pub use self::bigtable::BigtableParameters;
+#[cfg(feature = "cloud")]
+pub use self::bigtable::BigtablePathInfoService;
 
 #[cfg(any(feature = "fuse", feature = "virtiofs"))]
 mod fs;
@@ -82,14 +87,14 @@ pub trait PathInfoService: Send + Sync {
 /// Registers the builtin PathInfoService implementations with the registry
 pub(crate) fn register_pathinfo_services(reg: &mut Registry) {
     reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, CachePathInfoServiceConfig>("cache");
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, KeyFileSigningPathInfoServiceConfig>("keyfile-signing");
+    reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, KeyFileSigningPathInfoServiceConfig>(
+        "keyfile-signing",
+    );
     reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, LruPathInfoServiceConfig>("lru");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, NixHTTPPathInfoServiceConfig>("nix");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, RedbPathInfoServiceConfig>("redb");
     #[cfg(feature = "cloud")]
     {
-        reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, BigtableParameters>(
-            "bigtable",
-        );
+        reg.register::<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>, BigtableParameters>("bigtable");
     }
 }

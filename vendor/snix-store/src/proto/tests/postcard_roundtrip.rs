@@ -1,18 +1,17 @@
-use super::super::*;
 use bytes::Bytes;
+
+use super::super::*;
 
 #[test]
 fn pathinfo_roundtrip() {
     let pi = PathInfo {
         entry: Some(snix_castore::proto::Entry {
-            entry: Some(snix_castore::proto::entry::Entry::File(
-                snix_castore::proto::FileEntry {
-                    name: Bytes::from_static(b"test-path"),
-                    digest: Bytes::from_static(&[0xaa; 32]),
-                    size: 256,
-                    executable: true,
-                },
-            )),
+            entry: Some(snix_castore::proto::entry::Entry::File(snix_castore::proto::FileEntry {
+                name: Bytes::from_static(b"test-path"),
+                digest: Bytes::from_static(&[0xaa; 32]),
+                size: 256,
+                executable: true,
+            })),
         }),
         references: vec![Bytes::from_static(&[0xbb; 20])],
         narinfo: Some(NarInfo {

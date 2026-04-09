@@ -1,19 +1,22 @@
 //! This module provides a [PathInfoService] implementation that signs narinfos
-use async_trait::async_trait;
-
-use super::{PathInfo, PathInfoService};
-use crate::pathinfoservice;
-use futures::stream::BoxStream;
-use futures::{StreamExt, TryStreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-
-use snix_castore::composition::{CompositionContext, ServiceBuilder};
-
-use nix_compat::narinfo::{Signature, SigningKey, parse_keypair};
+use async_trait::async_trait;
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use nix_compat::narinfo::Signature;
+use nix_compat::narinfo::SigningKey;
+use nix_compat::narinfo::parse_keypair;
 use nix_compat::nixbase32;
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::ServiceBuilder;
 use tracing::instrument;
+
+use super::PathInfo;
+use super::PathInfoService;
+use crate::pathinfoservice;
 
 /// PathInfoService that wraps around an inner [PathInfoService] and when put is called it extracts
 /// the underlying narinfo and signs it using a [SigningKey]. For the moment only the
@@ -42,7 +45,6 @@ impl<T, S> SigningPathInfoService<T, S> {
     }
 }
 
-
 #[async_trait]
 impl<T, S> PathInfoService for SigningPathInfoService<T, S>
 where
@@ -60,14 +62,8 @@ where
             nar_info.signatures.clear();
             nar_info.add_signature(&self.signing_key);
 
-            let s = nar_info
-                .signatures
-                .pop()
-                .expect("Snix bug: no signature after signing op");
-            debug_assert!(
-                nar_info.signatures.is_empty(),
-                "Snix bug: more than one signature appeared"
-            );
+            let s = nar_info.signatures.pop().expect("Snix bug: no signature after signing op");
+            debug_assert!(nar_info.signatures.is_empty(), "Snix bug: more than one signature appeared");
 
             Signature::new(s.name().to_string(), *s.bytes())
         });
@@ -109,7 +105,6 @@ impl TryFrom<url::Url> for KeyFileSigningPathInfoServiceConfig {
     }
 }
 
-
 #[async_trait]
 impl ServiceBuilder for KeyFileSigningPathInfoServiceConfig {
     type Output = dyn PathInfoService;
@@ -138,67 +133,50 @@ pub(crate) fn test_signing_service() -> Arc<dyn PathInfoService> {
     Arc::new(SigningPathInfoService::new(
         "test".into(),
         gen_test_pathinfo_service(),
-        parse_keypair(DUMMY_KEYPAIR)
-            .expect("DUMMY_KEYPAIR to be valid")
-            .0,
+        parse_keypair(DUMMY_KEYPAIR).expect("DUMMY_KEYPAIR to be valid").0,
     ))
 }
 
 #[cfg(test)]
-pub const DUMMY_KEYPAIR: &str = "do.not.use:sGPzxuK5WvWPraytx+6sjtaff866sYlfvErE6x0hFEhy5eqe7OVZ8ZMqZ/ME/HaRdKGNGvJkyGKXYTaeA6lR3A==";
+pub const DUMMY_KEYPAIR: &str =
+    "do.not.use:sGPzxuK5WvWPraytx+6sjtaff866sYlfvErE6x0hFEhy5eqe7OVZ8ZMqZ/ME/HaRdKGNGvJkyGKXYTaeA6lR3A==";
 #[cfg(test)]
 pub const DUMMY_VERIFYING_KEY: &str = "do.not.use:cuXqnuzlWfGTKmfzBPx2kXShjRryZMhil2E2ngOpUdw=";
 
 #[cfg(test)]
 mod test {
-    use crate::{fixtures::PATH_INFO, pathinfoservice::PathInfoService};
     use nix_compat::narinfo::VerifyingKey;
+
+    use crate::fixtures::PATH_INFO;
+    use crate::pathinfoservice::PathInfoService;
 
     #[tokio::test]
     async fn put_and_verify_signature() {
         let svc = super::test_signing_service();
 
         // Pick a PATH_INFO with 0 signatures…
-        assert!(
-            PATH_INFO.signatures.is_empty(),
-            "PathInfo from fixtures should have no signatures"
-        );
+        assert!(PATH_INFO.signatures.is_empty(), "PathInfo from fixtures should have no signatures");
 
         // Asking PathInfoService, it should not be there ...
-        assert!(
-            svc.get(*PATH_INFO.store_path.digest())
-                .await
-                .expect("no error")
-                .is_none()
-        );
+        assert!(svc.get(*PATH_INFO.store_path.digest()).await.expect("no error").is_none());
 
         // insert it
         svc.put(PATH_INFO.clone()).await.expect("no error");
 
         // now it should be there ...
-        let path_info = svc
-            .get(*PATH_INFO.store_path.digest())
-            .await
-            .expect("no error")
-            .unwrap();
+        let path_info = svc.get(*PATH_INFO.store_path.digest()).await.expect("no error").unwrap();
 
         // Ensure there's a signature now
-        let new_sig = path_info
-            .signatures
-            .last()
-            .expect("The retrieved narinfo to be signed")
-            .as_ref();
+        let new_sig = path_info.signatures.last().expect("The retrieved narinfo to be signed").as_ref();
 
         // load our keypair from the fixtures
-        let (signing_key, _verifying_key) =
-            super::parse_keypair(super::DUMMY_KEYPAIR).expect("must succeed");
+        let (signing_key, _verifying_key) = super::parse_keypair(super::DUMMY_KEYPAIR).expect("must succeed");
 
         // ensure that the new signature is using this key name
         assert_eq!(signing_key.name(), *new_sig.name());
 
         // verify the new signature against the verifying key
-        let verifying_key =
-            VerifyingKey::parse(super::DUMMY_VERIFYING_KEY).expect("parsing dummy verifying key");
+        let verifying_key = VerifyingKey::parse(super::DUMMY_VERIFYING_KEY).expect("parsing dummy verifying key");
 
         assert!(
             verifying_key.verify(&path_info.to_narinfo().fingerprint(), &new_sig),

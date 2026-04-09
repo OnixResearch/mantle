@@ -68,24 +68,20 @@ pub fn parse_narinfo_str(s: &str) -> Option<[u8; 20]> {
 
 #[cfg(test)]
 mod test {
-    use super::{parse_nar_str, parse_narinfo_str};
     use hex_literal::hex;
+
+    use super::parse_nar_str;
+    use super::parse_narinfo_str;
 
     #[test]
     fn parse_nar_str_success() {
         assert_eq!(
-            (
-                hex!("13a8cf7ca57f68a9f1752acee36a72a55187d3a954443c112818926f26109d91"),
-                ""
-            ),
+            (hex!("13a8cf7ca57f68a9f1752acee36a72a55187d3a954443c112818926f26109d91"), ""),
             parse_nar_str("14cx20k6z4hq508kqi2lm79qfld5f9mf7kiafpqsjs3zlmycza0k.nar").unwrap()
         );
 
         assert_eq!(
-            (
-                hex!("13a8cf7ca57f68a9f1752acee36a72a55187d3a954443c112818926f26109d91"),
-                ".xz"
-            ),
+            (hex!("13a8cf7ca57f68a9f1752acee36a72a55187d3a954443c112818926f26109d91"), ".xz"),
             parse_nar_str("14cx20k6z4hq508kqi2lm79qfld5f9mf7kiafpqsjs3zlmycza0k.nar.xz").unwrap()
         )
     }
@@ -93,9 +89,7 @@ mod test {
     #[test]
     fn parse_nar_str_failure() {
         assert!(parse_nar_str("14cx20k6z4hq508kqi2lm79qfld5f9mf7kiafpqsjs3zlmycza0").is_none());
-        assert!(
-            parse_nar_str("14cx20k6z4hq508kqi2lm79qfld5f9mf7kiafpqsjs3zlmycza0🦊.nar").is_none()
-        )
+        assert!(parse_nar_str("14cx20k6z4hq508kqi2lm79qfld5f9mf7kiafpqsjs3zlmycza0🦊.nar").is_none())
     }
     #[test]
     fn parse_narinfo_str_success() {

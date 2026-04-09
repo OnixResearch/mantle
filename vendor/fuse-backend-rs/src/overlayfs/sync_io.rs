@@ -1,22 +1,32 @@
 // Copyright (C) 2023 Ant Group. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
 use std::ffi::CStr;
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Result;
-
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::abi::fuse_abi::{stat64, statvfs64, CreateIn};
-use crate::api::filesystem::{
-    Context, DirEntry, Entry, FileSystem, FsOptions, GetxattrReply, ListxattrReply, OpenOptions,
-    SetattrValid, ZeroCopyReader, ZeroCopyWriter,
-};
-
 use libc;
-use std::io::{Error, ErrorKind};
+
+use super::*;
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::statvfs64;
+use crate::abi::fuse_abi::CreateIn;
+use crate::api::filesystem::Context;
+use crate::api::filesystem::DirEntry;
+use crate::api::filesystem::Entry;
+use crate::api::filesystem::FileSystem;
+use crate::api::filesystem::FsOptions;
+use crate::api::filesystem::GetxattrReply;
+use crate::api::filesystem::ListxattrReply;
+use crate::api::filesystem::OpenOptions;
+use crate::api::filesystem::SetattrValid;
+use crate::api::filesystem::ZeroCopyReader;
+use crate::api::filesystem::ZeroCopyWriter;
 
 impl FileSystem for OverlayFs {
     type Inode = Inode;
@@ -31,31 +41,23 @@ impl FileSystem for OverlayFs {
             self.import()?;
         }
 
-        if (!self.config.do_import || self.config.writeback)
-            && capable.contains(FsOptions::WRITEBACK_CACHE)
-        {
+        if (!self.config.do_import || self.config.writeback) && capable.contains(FsOptions::WRITEBACK_CACHE) {
             opts |= FsOptions::WRITEBACK_CACHE;
             self.writeback.store(true, Ordering::Relaxed);
         }
 
-        if (!self.config.do_import || self.config.no_open)
-            && capable.contains(FsOptions::ZERO_MESSAGE_OPEN)
-        {
+        if (!self.config.do_import || self.config.no_open) && capable.contains(FsOptions::ZERO_MESSAGE_OPEN) {
             opts |= FsOptions::ZERO_MESSAGE_OPEN;
             opts.remove(FsOptions::ATOMIC_O_TRUNC);
             self.no_open.store(true, Ordering::Relaxed);
         }
 
-        if (!self.config.do_import || self.config.no_opendir)
-            && capable.contains(FsOptions::ZERO_MESSAGE_OPENDIR)
-        {
+        if (!self.config.do_import || self.config.no_opendir) && capable.contains(FsOptions::ZERO_MESSAGE_OPENDIR) {
             opts |= FsOptions::ZERO_MESSAGE_OPENDIR;
             self.no_opendir.store(true, Ordering::Relaxed);
         }
 
-        if (!self.config.do_import || self.config.killpriv_v2)
-            && capable.contains(FsOptions::HANDLE_KILLPRIV_V2)
-        {
+        if (!self.config.do_import || self.config.killpriv_v2) && capable.contains(FsOptions::HANDLE_KILLPRIV_V2) {
             opts |= FsOptions::HANDLE_KILLPRIV_V2;
             self.killpriv_v2.store(true, Ordering::Relaxed);
         }
@@ -99,12 +101,7 @@ impl FileSystem for OverlayFs {
         }
     }
 
-    fn opendir(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        _flags: u32,
-    ) -> Result<(Option<Handle>, OpenOptions)> {
+    fn opendir(&self, ctx: &Context, inode: Inode, _flags: u32) -> Result<(Option<Handle>, OpenOptions)> {
         trace!("OPENDIR: inode: {}\n", inode);
         if self.no_opendir.load(Ordering::Relaxed) {
             info!("fuse: opendir is not supported.");
@@ -156,16 +153,10 @@ impl FileSystem for OverlayFs {
 
     // for mkdir or create file
     // 1. lookup name, if exists and not whiteout, return EEXIST
-    // 2. not exists and no whiteout, copy up parent node, ususally  a mkdir on upper layer would do the work
+    // 2. not exists and no whiteout, copy up parent node, ususally  a mkdir on upper layer would do the
+    //    work
     // 3. find whiteout, if whiteout in upper layer, should set opaque. if in lower layer, just mkdir?
-    fn mkdir(
-        &self,
-        ctx: &Context,
-        parent: Inode,
-        name: &CStr,
-        mode: u32,
-        umask: u32,
-    ) -> Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: Inode, name: &CStr, mode: u32, umask: u32) -> Result<Entry> {
         let sname = name.to_string_lossy().to_string();
 
         trace!("MKDIR: parent: {}, name: {}\n", parent, sname);
@@ -182,11 +173,7 @@ impl FileSystem for OverlayFs {
     }
 
     fn rmdir(&self, ctx: &Context, parent: Inode, name: &CStr) -> Result<()> {
-        trace!(
-            "RMDIR: parent: {}, name: {}\n",
-            parent,
-            name.to_string_lossy()
-        );
+        trace!("RMDIR: parent: {}, name: {}\n", parent, name.to_string_lossy());
         self.do_rm(ctx, parent, name, true)
     }
 
@@ -204,11 +191,7 @@ impl FileSystem for OverlayFs {
             info!("fuse: readdir is not supported.");
             return Ok(());
         }
-        self.do_readdir(ctx, inode, handle, size, offset, false, &mut |dir_entry,
-                                                                       _|
-         -> Result<
-            usize,
-        > {
+        self.do_readdir(ctx, inode, handle, size, offset, false, &mut |dir_entry, _| -> Result<usize> {
             add_entry(dir_entry)
         })
     }
@@ -227,11 +210,7 @@ impl FileSystem for OverlayFs {
             info!("fuse: readdirplus is not supported.");
             return Ok(());
         }
-        self.do_readdir(ctx, inode, handle, size, offset, true, &mut |dir_entry,
-                                                                      entry|
-         -> Result<
-            usize,
-        > {
+        self.do_readdir(ctx, inode, handle, size, offset, true, &mut |dir_entry, entry| -> Result<usize> {
             match entry {
                 Some(e) => add_entry(dir_entry, e),
                 None => Err(Error::from_raw_os_error(libc::ENOENT)),
@@ -253,10 +232,8 @@ impl FileSystem for OverlayFs {
             return Err(Error::from_raw_os_error(libc::ENOSYS));
         }
 
-        let readonly: bool = flags
-            & (libc::O_APPEND | libc::O_CREAT | libc::O_TRUNC | libc::O_RDWR | libc::O_WRONLY)
-                as u32
-            == 0;
+        let readonly: bool =
+            flags & (libc::O_APPEND | libc::O_CREAT | libc::O_TRUNC | libc::O_RDWR | libc::O_WRONLY) as u32 == 0;
         // toggle flags
         let mut flags: i32 = flags as i32;
 
@@ -302,10 +279,7 @@ impl FileSystem for OverlayFs {
                     }),
                 };
 
-                self.handles
-                    .lock()
-                    .unwrap()
-                    .insert(hd, Arc::new(handle_data));
+                self.handles.lock().unwrap().insert(hd, Arc::new(handle_data));
 
                 let mut opts = OpenOptions::empty();
                 match self.config.cache_policy {
@@ -354,15 +328,7 @@ impl FileSystem for OverlayFs {
             };
             let real_handle = rh.handle.load(Ordering::Relaxed);
             let real_inode = rh.inode;
-            rh.layer.release(
-                ctx,
-                real_inode,
-                flags,
-                real_handle,
-                flush,
-                flock_release,
-                lock_owner,
-            )?;
+            rh.layer.release(ctx, real_inode, flags, real_handle, flush, flock_release, lock_owner)?;
         }
 
         self.handles.lock().unwrap().remove(&handle);
@@ -416,11 +382,7 @@ impl FileSystem for OverlayFs {
     }
 
     fn unlink(&self, ctx: &Context, parent: Inode, name: &CStr) -> Result<()> {
-        trace!(
-            "UNLINK: parent: {}, name: {}\n",
-            parent,
-            name.to_string_lossy()
-        );
+        trace!("UNLINK: parent: {}, name: {}\n", parent, name.to_string_lossy());
         self.do_rm(ctx, parent, name, false)
     }
 
@@ -449,16 +411,9 @@ impl FileSystem for OverlayFs {
 
         match data.real_handle {
             None => Err(Error::from_raw_os_error(libc::ENOENT)),
-            Some(ref hd) => hd.layer.read(
-                ctx,
-                hd.inode,
-                hd.handle.load(Ordering::Relaxed),
-                w,
-                size,
-                offset,
-                lock_owner,
-                flags,
-            ),
+            Some(ref hd) => {
+                hd.layer.read(ctx, hd.inode, hd.handle.load(Ordering::Relaxed), w, size, offset, lock_owner, flags)
+            }
         }
     }
 
@@ -506,27 +461,14 @@ impl FileSystem for OverlayFs {
         }
     }
 
-    fn getattr(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        handle: Option<Handle>,
-    ) -> Result<(stat64, Duration)> {
-        trace!(
-            "GETATTR: inode: {}, handle: {}\n",
-            inode,
-            handle.unwrap_or_default()
-        );
+    fn getattr(&self, ctx: &Context, inode: Inode, handle: Option<Handle>) -> Result<(stat64, Duration)> {
+        trace!("GETATTR: inode: {}, handle: {}\n", inode, handle.unwrap_or_default());
 
         if !self.no_open.load(Ordering::Relaxed) {
             if let Some(h) = handle {
                 if let Some(hd) = self.handles.lock().unwrap().get(&h) {
                     if let Some(ref rh) = hd.real_handle {
-                        let (st, _d) = rh.layer.getattr(
-                            ctx,
-                            rh.inode,
-                            Some(rh.handle.load(Ordering::Relaxed)),
-                        )?;
+                        let (st, _d) = rh.layer.getattr(ctx, rh.inode, Some(rh.handle.load(Ordering::Relaxed)))?;
                         return Ok((st, self.config.attr_timeout));
                     }
                 }
@@ -550,10 +492,7 @@ impl FileSystem for OverlayFs {
         trace!("SETATTR: inode: {}\n", inode);
 
         // Check if upper layer exists.
-        self.upper_layer
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| Error::from_raw_os_error(libc::EROFS))?;
+        self.upper_layer.as_ref().cloned().ok_or_else(|| Error::from_raw_os_error(libc::EROFS))?;
 
         // deal with handle first
         if !self.no_open.load(Ordering::Relaxed) {
@@ -609,15 +548,7 @@ impl FileSystem for OverlayFs {
         Err(Error::from_raw_os_error(libc::EXDEV))
     }
 
-    fn mknod(
-        &self,
-        ctx: &Context,
-        parent: Inode,
-        name: &CStr,
-        mode: u32,
-        rdev: u32,
-        umask: u32,
-    ) -> Result<Entry> {
+    fn mknod(&self, ctx: &Context, parent: Inode, name: &CStr, mode: u32, rdev: u32, umask: u32) -> Result<Entry> {
         let sname = name.to_string_lossy().to_string();
         trace!("MKNOD: parent: {}, name: {}\n", parent, sname);
 
@@ -634,12 +565,7 @@ impl FileSystem for OverlayFs {
 
     fn link(&self, ctx: &Context, inode: Inode, newparent: Inode, name: &CStr) -> Result<Entry> {
         let sname = name.to_string_lossy().to_string();
-        trace!(
-            "LINK: inode: {}, newparent: {}, name: {}\n",
-            inode,
-            newparent,
-            sname.as_str()
-        );
+        trace!("LINK: inode: {}, newparent: {}, name: {}\n", inode, newparent, sname.as_str());
 
         let node = self.lookup_node(ctx, inode, "")?;
         if node.whiteout.load(Ordering::Relaxed) {
@@ -660,12 +586,7 @@ impl FileSystem for OverlayFs {
         // soft link
         let sname = name.to_string_lossy().into_owned().to_owned();
         let slinkname = linkname.to_string_lossy().into_owned().to_owned();
-        trace!(
-            "SYMLINK: linkname: {}, parent: {}, name: {}\n",
-            linkname.to_string_lossy(),
-            parent,
-            sname.as_str()
-        );
+        trace!("SYMLINK: linkname: {}, parent: {}, name: {}\n", linkname.to_string_lossy(), parent, sname.as_str());
 
         let pnode = self.lookup_node(ctx, parent, "")?;
         self.do_symlink(ctx, slinkname.as_str(), &pnode, sname.as_str())?;
@@ -688,12 +609,7 @@ impl FileSystem for OverlayFs {
     }
 
     fn flush(&self, ctx: &Context, inode: Inode, handle: Handle, lock_owner: u64) -> Result<()> {
-        trace!(
-            "FLUSH: inode: {}, handle: {}, lock_owner: {}\n",
-            inode,
-            handle,
-            lock_owner
-        );
+        trace!("FLUSH: inode: {}, handle: {}, lock_owner: {}\n", inode, handle, lock_owner);
 
         if self.no_open.load(Ordering::Relaxed) {
             return Err(Error::from_raw_os_error(libc::ENOSYS));
@@ -713,23 +629,13 @@ impl FileSystem for OverlayFs {
     }
 
     fn fsync(&self, ctx: &Context, inode: Inode, datasync: bool, handle: Handle) -> Result<()> {
-        trace!(
-            "FSYNC: inode: {}, datasync: {}, handle: {}\n",
-            inode,
-            datasync,
-            handle
-        );
+        trace!("FSYNC: inode: {}, datasync: {}, handle: {}\n", inode, datasync, handle);
 
         self.do_fsync(ctx, inode, datasync, handle, false)
     }
 
     fn fsyncdir(&self, ctx: &Context, inode: Inode, datasync: bool, handle: Handle) -> Result<()> {
-        trace!(
-            "FSYNCDIR: inode: {}, datasync: {}, handle: {}\n",
-            inode,
-            datasync,
-            handle
-        );
+        trace!("FSYNCDIR: inode: {}, datasync: {}, handle: {}\n", inode, datasync, handle);
 
         self.do_fsync(ctx, inode, datasync, handle, true)
     }
@@ -746,14 +652,7 @@ impl FileSystem for OverlayFs {
         layer.access(ctx, real_inode, mask)
     }
 
-    fn setxattr(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> Result<()> {
+    fn setxattr(&self, ctx: &Context, inode: Inode, name: &CStr, value: &[u8], flags: u32) -> Result<()> {
         trace!(
             "SETXATTR: inode: {}, name: {}, value: {:?}, flags: {}\n",
             inode,
@@ -779,19 +678,8 @@ impl FileSystem for OverlayFs {
         // TODO: recreate node since setxattr may made dir opaque. @weizhang555.zw
     }
 
-    fn getxattr(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        name: &CStr,
-        size: u32,
-    ) -> Result<GetxattrReply> {
-        trace!(
-            "GETXATTR: inode: {}, name: {}, size: {}\n",
-            inode,
-            name.to_string_lossy(),
-            size
-        );
+    fn getxattr(&self, ctx: &Context, inode: Inode, name: &CStr, size: u32) -> Result<GetxattrReply> {
+        trace!("GETXATTR: inode: {}, name: {}, size: {}\n", inode, name.to_string_lossy(), size);
         let node = self.lookup_node(ctx, inode, "")?;
 
         if node.whiteout.load(Ordering::Relaxed) {
@@ -817,11 +705,7 @@ impl FileSystem for OverlayFs {
     }
 
     fn removexattr(&self, ctx: &Context, inode: Inode, name: &CStr) -> Result<()> {
-        trace!(
-            "REMOVEXATTR: inode: {}, name: {}\n",
-            inode,
-            name.to_string_lossy()
-        );
+        trace!("REMOVEXATTR: inode: {}, name: {}\n", inode, name.to_string_lossy());
         let node = self.lookup_node(ctx, inode, "")?;
 
         if node.whiteout.load(Ordering::Relaxed) {
@@ -866,33 +750,13 @@ impl FileSystem for OverlayFs {
                     // TODO: in lower layer, error out or just success?
                     return Err(Error::from_raw_os_error(libc::EROFS));
                 }
-                rhd.layer.fallocate(
-                    ctx,
-                    rhd.inode,
-                    rhd.handle.load(Ordering::Relaxed),
-                    mode,
-                    offset,
-                    length,
-                )
+                rhd.layer.fallocate(ctx, rhd.inode, rhd.handle.load(Ordering::Relaxed), mode, offset, length)
             }
         }
     }
 
-    fn lseek(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        handle: Handle,
-        offset: u64,
-        whence: u32,
-    ) -> Result<u64> {
-        trace!(
-            "LSEEK: inode: {}, handle: {}, offset: {}, whence: {}\n",
-            inode,
-            handle,
-            offset,
-            whence
-        );
+    fn lseek(&self, ctx: &Context, inode: Inode, handle: Handle, offset: u64, whence: u32) -> Result<u64> {
+        trace!("LSEEK: inode: {}, handle: {}, offset: {}, whence: {}\n", inode, handle, offset, whence);
         // can this be on dir? FIXME: assume file for now
         // we need special process if it can be called on dir
         let node = self.lookup_node(ctx, inode, "")?;

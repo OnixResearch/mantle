@@ -370,7 +370,8 @@
 
 use internal::inputs::RemoteInput;
 use proc_macro::TokenStream;
-use syn::{DeriveInput, parse_quote};
+use syn::DeriveInput;
+use syn::parse_quote;
 
 mod de;
 mod internal;

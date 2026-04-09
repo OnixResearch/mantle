@@ -6,10 +6,13 @@
 //!
 //! All types are pure data with serde derives. No I/O.
 
+use std::collections::BTreeMap;
+
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::manifest::HashAlgo;
 use crate::version::SchemaVersion;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Maximum number of entries in a lockfile.
 const MAX_LOCK_ENTRIES: u32 = 4096;
@@ -56,17 +59,11 @@ impl Lockfile {
         let mut problems = Vec::new();
 
         if self.inputs.len() as u64 > MAX_LOCK_ENTRIES as u64 {
-            problems.push(format!(
-                "too many lock entries: {} (max {MAX_LOCK_ENTRIES})",
-                self.inputs.len()
-            ));
+            problems.push(format!("too many lock entries: {} (max {MAX_LOCK_ENTRIES})", self.inputs.len()));
         }
 
         if self.patches.len() as u64 > MAX_LOCKED_PATCHES as u64 {
-            problems.push(format!(
-                "too many locked patches: {} (max {MAX_LOCKED_PATCHES})",
-                self.patches.len()
-            ));
+            problems.push(format!("too many locked patches: {} (max {MAX_LOCKED_PATCHES})", self.patches.len()));
         }
 
         for (name, entry) in &self.inputs {
@@ -79,9 +76,7 @@ impl Lockfile {
             // Patch references should correspond to locked patches
             for patch_name in &entry.patches {
                 if !self.patches.contains_key(patch_name) {
-                    problems.push(format!(
-                        "lock entry '{name}' references unlocked patch '{patch_name}'"
-                    ));
+                    problems.push(format!("lock entry '{name}' references unlocked patch '{patch_name}'"));
                 }
             }
         }
@@ -172,57 +167,47 @@ pub enum LockedPatchSource {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     fn sample_lockfile() -> Lockfile {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "nixpkgs".into(),
-            LockEntry {
-                kind: LockedKind::Git {
-                    repository: "https://github.com/NixOS/nixpkgs.git".into(),
-                    rev: "abc123def456789".into(),
-                    ref_name: Some("nixos-unstable".into()),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
-                },
-                patches: vec![],
-                mirrors: vec![
-                    "https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into(),
-                ],
+        inputs.insert("nixpkgs".into(), LockEntry {
+            kind: LockedKind::Git {
+                repository: "https://github.com/NixOS/nixpkgs.git".into(),
+                rev: "abc123def456789".into(),
+                ref_name: Some("nixos-unstable".into()),
             },
-        );
-        inputs.insert(
-            "hello-src".into(),
-            LockEntry {
-                kind: LockedKind::Tarball {
-                    url: "https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".into(),
-                },
-                patches: vec!["hello-fix".into()],
-                mirrors: vec![],
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
             },
-        );
+            patches: vec![],
+            mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
+        });
+        inputs.insert("hello-src".into(), LockEntry {
+            kind: LockedKind::Tarball {
+                url: "https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz".into(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".into(),
+            },
+            patches: vec!["hello-fix".into()],
+            mirrors: vec![],
+        });
 
         let mut patches = BTreeMap::new();
-        patches.insert(
-            "hello-fix".into(),
-            LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: "patches/hello-fix.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-patchhashvalue123=".into(),
-                },
+        patches.insert("hello-fix".into(), LockedPatch {
+            source: LockedPatchSource::Local {
+                path: "patches/hello-fix.patch".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-patchhashvalue123=".into(),
+            },
+        });
 
         Lockfile {
             version: SchemaVersion::CURRENT,

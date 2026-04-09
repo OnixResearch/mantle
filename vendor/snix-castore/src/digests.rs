@@ -1,6 +1,7 @@
+use std::str::FromStr;
+
 use bytes::Bytes;
 use data_encoding::BASE64;
-use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -56,11 +57,7 @@ impl TryFrom<&[u8]> for B3Digest {
     // constructs a [B3Digest] from a &[u8].
     // Returns an error if the digest has the wrong length.
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(
-            value
-                .try_into()
-                .map_err(|_e| Error::InvalidDigestLen(value.len()))?,
-        ))
+        Ok(Self(value.try_into().map_err(|_e| Error::InvalidDigestLen(value.len()))?))
     }
 }
 
@@ -114,9 +111,7 @@ impl FromStr for B3Digest {
             return Err(Error::InvalidHashType);
         }
         let encoded = &s[7..];
-        let decoded = BASE64
-            .decode(encoded.as_bytes())
-            .map_err(|_| Error::InvalidDigestLen(s.len()))?;
+        let decoded = BASE64.decode(encoded.as_bytes()).map_err(|_| Error::InvalidDigestLen(s.len()))?;
         decoded.as_slice().try_into()
     }
 }

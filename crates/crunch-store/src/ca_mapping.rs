@@ -6,9 +6,11 @@
 //! alone.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Per-output resolved CA path. The key is the output name ("out", "lib", etc).
 pub type OutputMap = HashMap<String, String>;
@@ -56,10 +58,7 @@ impl CaMappings {
 
     /// Look up a resolved CA output from a previous session.
     pub fn get(&self, drv_path_abs: &str, output_name: &str) -> Option<&str> {
-        self.mappings
-            .get(drv_path_abs)?
-            .get(output_name)
-            .map(|s| s.as_str())
+        self.mappings.get(drv_path_abs)?.get(output_name).map(|s| s.as_str())
     }
 
     /// Get all outputs for a derivation.

@@ -17,14 +17,16 @@
 //!    * compression algorithm used for the NAR
 //!    * hash and size of the compressed NAR
 
+use std::fmt::Display;
+use std::fmt::{self};
+use std::mem;
+
 use bitflags::bitflags;
 use data_encoding::HEXLOWER;
-use std::{
-    fmt::{self, Display},
-    mem,
-};
 
-use crate::{nixbase32, nixhash::CAHash, store_path::StorePathRef};
+use crate::nixbase32;
+use crate::nixhash::CAHash;
+use crate::store_path::StorePathRef;
 
 mod fingerprint;
 mod signature;
@@ -32,10 +34,14 @@ mod signing_keys;
 mod verifying_keys;
 
 pub use fingerprint::fingerprint;
-pub use signature::{Error as SignatureError, Signature, SignatureRef};
+pub use signature::Error as SignatureError;
+pub use signature::Signature;
+pub use signature::SignatureRef;
+pub use signing_keys::Error as SigningKeyError;
+pub use signing_keys::SigningKey;
 pub use signing_keys::parse_keypair;
-pub use signing_keys::{Error as SigningKeyError, SigningKey};
-pub use verifying_keys::{Error as VerifyingKeyError, VerifyingKey};
+pub use verifying_keys::Error as VerifyingKeyError;
+pub use verifying_keys::VerifyingKey;
 
 #[derive(Debug)]
 pub struct NarInfo<'a> {
@@ -126,23 +132,16 @@ impl<'a> NarInfo<'a> {
         let mut ca = None;
 
         for line in input.lines() {
-            let (tag, val) = line
-                .split_once(':')
-                .ok_or_else(|| Error::InvalidLine(line.to_string()))?;
+            let (tag, val) = line.split_once(':').ok_or_else(|| Error::InvalidLine(line.to_string()))?;
 
-            let val = val
-                .strip_prefix(' ')
-                .ok_or_else(|| Error::InvalidLine(line.to_string()))?;
+            let val = val.strip_prefix(' ').ok_or_else(|| Error::InvalidLine(line.to_string()))?;
 
             match tag {
                 TAG_STOREPATH => {
                     let val = val
                         .strip_prefix("/nix/store/")
-                        .ok_or(Error::InvalidStorePath(
-                            crate::store_path::Error::MissingStoreDir,
-                        ))?;
-                    let val = StorePathRef::from_bytes(val.as_bytes())
-                        .map_err(Error::InvalidStorePath)?;
+                        .ok_or(Error::InvalidStorePath(crate::store_path::Error::MissingStoreDir))?;
+                    let val = StorePathRef::from_bytes(val.as_bytes()).map_err(Error::InvalidStorePath)?;
 
                     if store_path.replace(val).is_some() {
                         return Err(Error::DuplicateField(TAG_STOREPATH));
@@ -167,29 +166,24 @@ impl<'a> NarInfo<'a> {
                     }
                 }
                 TAG_FILEHASH => {
-                    let val = val
-                        .strip_prefix("sha256:")
-                        .ok_or(Error::MissingPrefixForHash(TAG_FILEHASH))?;
-                    let val = nixbase32::decode_fixed::<32>(val)
-                        .map_err(|e| Error::UnableToDecodeHash(TAG_FILEHASH, e))?;
+                    let val = val.strip_prefix("sha256:").ok_or(Error::MissingPrefixForHash(TAG_FILEHASH))?;
+                    let val =
+                        nixbase32::decode_fixed::<32>(val).map_err(|e| Error::UnableToDecodeHash(TAG_FILEHASH, e))?;
 
                     if file_hash.replace(val).is_some() {
                         return Err(Error::DuplicateField(TAG_FILEHASH));
                     }
                 }
                 TAG_FILESIZE => {
-                    let val = val
-                        .parse::<u64>()
-                        .map_err(|_| Error::UnableToParseSize(TAG_FILESIZE, val.to_string()))?;
+                    let val =
+                        val.parse::<u64>().map_err(|_| Error::UnableToParseSize(TAG_FILESIZE, val.to_string()))?;
 
                     if file_size.replace(val).is_some() {
                         return Err(Error::DuplicateField(TAG_FILESIZE));
                     }
                 }
                 TAG_NARHASH => {
-                    let val = val
-                        .strip_prefix("sha256:")
-                        .ok_or(Error::MissingPrefixForHash(TAG_NARHASH))?;
+                    let val = val.strip_prefix("sha256:").ok_or(Error::MissingPrefixForHash(TAG_NARHASH))?;
 
                     let val = if val.len() != HEXLOWER.encode_len(32) {
                         nixbase32::decode_fixed::<32>(val)
@@ -199,10 +193,7 @@ impl<'a> NarInfo<'a> {
                         let val = val.as_bytes();
                         let mut buf = [0u8; 32];
 
-                        HEXLOWER
-                            .decode_mut(val, &mut buf)
-                            .map_err(|e| e.error)
-                            .map(|_| buf)
+                        HEXLOWER.decode_mut(val, &mut buf).map_err(|e| e.error).map(|_| buf)
                     };
 
                     let val = val.map_err(|e| Error::UnableToDecodeHash(TAG_NARHASH, e))?;
@@ -212,9 +203,7 @@ impl<'a> NarInfo<'a> {
                     }
                 }
                 TAG_NARSIZE => {
-                    let val = val
-                        .parse::<u64>()
-                        .map_err(|_| Error::UnableToParseSize(TAG_NARSIZE, val.to_string()))?;
+                    let val = val.parse::<u64>().map_err(|_| Error::UnableToParseSize(TAG_NARSIZE, val.to_string()))?;
 
                     if nar_size.replace(val).is_some() {
                         return Err(Error::DuplicateField(TAG_NARSIZE));
@@ -231,8 +220,7 @@ impl<'a> NarInfo<'a> {
                                     flags |= Flags::REFERENCES_OUT_OF_ORDER;
                                 }
 
-                                StorePathRef::from_bytes(s.as_bytes())
-                                    .map_err(|err| Error::InvalidReference(i, err))
+                                StorePathRef::from_bytes(s.as_bytes()).map_err(|err| Error::InvalidReference(i, err))
                             })
                             .collect::<Result<_, _>>()?
                     } else {
@@ -255,8 +243,8 @@ impl<'a> NarInfo<'a> {
                 TAG_DERIVER => {
                     match val.strip_suffix(".drv") {
                         Some(val) => {
-                            let val = StorePathRef::from_bytes(val.as_bytes())
-                                .map_err(Error::InvalidDeriverStorePath)?;
+                            let val =
+                                StorePathRef::from_bytes(val.as_bytes()).map_err(Error::InvalidDeriverStorePath)?;
 
                             if deriver.replace(val).is_some() {
                                 return Err(Error::DuplicateField(TAG_DERIVER));
@@ -272,14 +260,13 @@ impl<'a> NarInfo<'a> {
                     };
                 }
                 TAG_SIG => {
-                    let val = SignatureRef::parse(val)
-                        .map_err(|e| Error::UnableToParseSignature(signatures.len(), e))?;
+                    let val =
+                        SignatureRef::parse(val).map_err(|e| Error::UnableToParseSignature(signatures.len(), e))?;
 
                     signatures.push(val);
                 }
                 TAG_CA => {
-                    let val = CAHash::from_nix_hex_str(val)
-                        .ok_or_else(|| Error::UnableToParseCA(val.to_string()))?;
+                    let val = CAHash::from_nix_hex_str(val).ok_or_else(|| Error::UnableToParseCA(val.to_string()))?;
 
                     if ca.replace(val).is_some() {
                         return Err(Error::DuplicateField(TAG_CA));
@@ -324,21 +311,14 @@ impl<'a> NarInfo<'a> {
     /// Computes the fingerprint string for certain fields in this [NarInfo].
     /// This fingerprint is signed in [self.signatures].
     pub fn fingerprint(&self) -> String {
-        fingerprint(
-            &self.store_path,
-            &self.nar_hash,
-            self.nar_size,
-            self.references.iter(),
-        )
+        fingerprint(&self.store_path, &self.nar_hash, self.nar_size, self.references.iter())
     }
 
     /// Adds a signature, using the passed signer to sign.
     /// This is generic over algo implementations / providers,
     /// so users can bring their own signers.
     pub fn add_signature<S>(&mut self, signer: &'a SigningKey<S>)
-    where
-        S: ed25519::signature::Signer<ed25519::Signature>,
-    {
+    where S: ed25519::signature::Signer<ed25519::Signature> {
         // calculate the fingerprint to sign
         let fp = self.fingerprint();
 
@@ -446,36 +426,30 @@ pub enum Error {
 }
 
 #[cfg(test)]
-const DUMMY_KEYPAIR: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+const DUMMY_KEYPAIR: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 #[cfg(test)]
-const DUMMY_VERIFYING_KEY: &str =
-    "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
+const DUMMY_VERIFYING_KEY: &str = "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
 
 #[cfg(test)]
 mod test {
+    use std::io;
+    use std::str;
+    use std::sync::LazyLock;
+
     use hex_literal::hex;
     use pretty_assertions::assert_eq;
-    use std::sync::LazyLock;
-    use std::{io, str};
 
-    use crate::{
-        nixhash::{CAHash, NixHash},
-        store_path::StorePathRef,
-    };
-
-    use super::{Flags, NarInfo};
+    use super::Flags;
+    use super::NarInfo;
+    use crate::nixhash::CAHash;
+    use crate::nixhash::NixHash;
+    use crate::store_path::StorePathRef;
 
     static CASES: LazyLock<&'static [&'static str]> = LazyLock::new(|| {
-        let data = zstd::decode_all(io::Cursor::new(include_bytes!(
-            "../../testdata/narinfo.zst"
-        )))
-        .unwrap();
+        let data = zstd::decode_all(io::Cursor::new(include_bytes!("../../testdata/narinfo.zst"))).unwrap();
         let data = str::from_utf8(Vec::leak(data)).unwrap();
-        Vec::leak(
-            data.split_inclusive("\n\n")
-                .map(|s| s.strip_suffix('\n').unwrap())
-                .collect::<Vec<_>>(),
-        )
+        Vec::leak(data.split_inclusive("\n\n").map(|s| s.strip_suffix('\n').unwrap()).collect::<Vec<_>>())
     });
 
     #[test]
@@ -511,11 +485,7 @@ Sig: cache.nixos.org-1:o1DTsjCz0PofLJ216P2RBuSulI8BAb6zHxWE4N+tzlcELk5Uk/GO2SCxW
                 "nx2zs2qd6snfcpzw4a0jnh26z9m0yihz-gcc-3.4.6",
                 "xi429w4ddvb1r77978hm7jfb2jsn559r-gcc-3.4.6"
             ],
-            parsed
-                .references
-                .iter()
-                .map(StorePathRef::to_string)
-                .collect::<Vec<_>>(),
+            parsed.references.iter().map(StorePathRef::to_string).collect::<Vec<_>>(),
         );
     }
 
@@ -532,14 +502,11 @@ NarSize: 22552
 References: 
 Sig: cache.nixos.org-1:u01BybwQhyI5H1bW1EIWXssMDhDDIvXOG5uh8Qzgdyjz6U1qg6DHhMAvXZOUStIj6X5t4/ufFgR8i3fjf0bMAw==
 CA: fixed:r:sha1:1ak1ymbmsfx7z8kh09jzkr3a4dvkrfjw
-"#).expect("should parse");
+"#,
+        )
+        .expect("should parse");
 
-        assert_eq!(
-            parsed.ca,
-            Some(CAHash::Nar(NixHash::Sha1(hex!(
-                "5cba3c77236ae4f9650270a27fbad375551fa60a"
-            ))))
-        );
+        assert_eq!(parsed.ca, Some(CAHash::Nar(NixHash::Sha1(hex!("5cba3c77236ae4f9650270a27fbad375551fa60a")))));
     }
 
     #[test]
@@ -625,10 +592,7 @@ Sig: cache.nixos.org-1:HhaiY36Uk3XV1JGe9d9xHnzAapqJXprU1YZZzSzxE97jCuO5RR7vlG2kF
 "#).expect("should parse");
 
         assert!(parsed.flags.contains(Flags::NAR_HASH_HEX));
-        assert_eq!(
-            hex!("60adfd293a4d81ad7cd7e47263cbb3fc846309ef91b154a08ba672b558f94ff3"),
-            parsed.nar_hash,
-        );
+        assert_eq!(hex!("60adfd293a4d81ad7cd7e47263cbb3fc846309ef91b154a08ba672b558f94ff3"), parsed.nar_hash,);
     }
 
     #[test]
@@ -674,8 +638,7 @@ CA: fixed:r:sha1:1ak1ymbmsfx7z8kh09jzkr3a4dvkrfjw
         let fp = narinfo.fingerprint();
 
         // load our keypair from the fixtures
-        let (signing_key, _verifying_key) =
-            super::parse_keypair(super::DUMMY_KEYPAIR).expect("must succeed");
+        let (signing_key, _verifying_key) = super::parse_keypair(super::DUMMY_KEYPAIR).expect("must succeed");
 
         // add signature
         narinfo.add_signature(&signing_key);
@@ -685,12 +648,9 @@ CA: fixed:r:sha1:1ak1ymbmsfx7z8kh09jzkr3a4dvkrfjw
         assert_eq!(signing_key.name(), *new_sig.name());
 
         // verify the new signature against the verifying key
-        let verifying_key = super::VerifyingKey::parse(super::DUMMY_VERIFYING_KEY)
-            .expect("parsing dummy verifying key");
+        let verifying_key =
+            super::VerifyingKey::parse(super::DUMMY_VERIFYING_KEY).expect("parsing dummy verifying key");
 
-        assert!(
-            verifying_key.verify(&fp, new_sig),
-            "expect signature to be valid"
-        );
+        assert!(verifying_key.verify(&fp, new_sig), "expect signature to be valid");
     }
 }

@@ -4,11 +4,14 @@
 //! orchestrator bypasses the sandbox and calls into this module.
 //! Adapted from snix-redox's `fetchers.rs`.
 
-use std::io::{self, Read};
+use std::io::Read;
+use std::io::{self};
 use std::path::Path;
 
 use nix_compat::derivation::Derivation;
-use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::HashAlgo;
+use nix_compat::nixhash::NixHash;
 use tracing::info;
 use url::Url;
 
@@ -27,26 +30,14 @@ const MAX_TAR_ENTRIES: u32 = 500_000;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fetch {
     /// Download a single file. Hash is over raw bytes.
-    Url {
-        url: Url,
-        exp_hash: Option<NixHash>,
-    },
+    Url { url: Url, exp_hash: Option<NixHash> },
     /// Download a tarball, decompress, extract, strip top-level dir.
     /// Hash is NAR of the unpacked tree.
-    Tarball {
-        url: Url,
-        exp_nar_sha256: Option<[u8; 32]>,
-    },
+    Tarball { url: Url, exp_nar_sha256: Option<[u8; 32]> },
     /// Download a NAR archive and extract it.
-    Nar {
-        url: Url,
-        hash: NixHash,
-    },
+    Nar { url: Url, hash: NixHash },
     /// Download a file and mark it executable.
-    Executable {
-        url: Url,
-        hash: NixHash,
-    },
+    Executable { url: Url, hash: NixHash },
     /// Clone a git repository at a specific revision.
     Git {
         url: String,
@@ -133,10 +124,7 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
     let executable = env.get("executable").is_some_and(|v| v == "1");
 
     // Determine fetch variant from derivation's ca_hash and flags.
-    let ca_hash = derivation
-        .outputs
-        .get("out")
-        .and_then(|o| o.ca_hash.as_ref());
+    let ca_hash = derivation.outputs.get("out").and_then(|o| o.ca_hash.as_ref());
 
     match ca_hash {
         Some(CAHash::Flat(hash)) if executable => Ok(Fetch::Executable {
@@ -178,32 +166,22 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
                     exp_nar_sha256: None,
                 })
             } else {
-                Ok(Fetch::Url {
-                    url,
-                    exp_hash: None,
-                })
+                Ok(Fetch::Url { url, exp_hash: None })
             }
         }
         Some(CAHash::Text(_)) => Err(FetchError::NotFixedOutput),
     }
 }
 
-fn env_str(
-    env: &std::collections::BTreeMap<String, bstr::BString>,
-    key: &str,
-) -> Option<String> {
+fn env_str(env: &std::collections::BTreeMap<String, bstr::BString>, key: &str) -> Option<String> {
     env.get(key).and_then(|v| String::from_utf8(Vec::from(v.clone())).ok())
 }
 
 fn extract_expected_hash(derivation: &Derivation) -> Option<NixHash> {
-    derivation
-        .outputs
-        .get("out")
-        .and_then(|o| o.ca_hash.as_ref())
-        .and_then(|ca| match ca {
-            CAHash::Flat(h) | CAHash::Nar(h) => Some(h.clone()),
-            CAHash::Text(_) => None,
-        })
+    derivation.outputs.get("out").and_then(|o| o.ca_hash.as_ref()).and_then(|ca| match ca {
+        CAHash::Flat(h) | CAHash::Nar(h) => Some(h.clone()),
+        CAHash::Text(_) => None,
+    })
 }
 
 // ── Fetch execution ────────────────────────────────────────────────────
@@ -258,11 +236,7 @@ pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
 /// `nar_hash_fn` is called for recursive (NAR) hashes — the caller
 /// provides the NAR computation since it requires async castore services.
 /// For flat hashes, this function reads the file directly.
-pub fn verify_flat_hash(
-    out_path: &str,
-    expected: &NixHash,
-    name: &str,
-) -> Result<(), FetchError> {
+pub fn verify_flat_hash(out_path: &str, expected: &NixHash, name: &str) -> Result<(), FetchError> {
     use sha2::Digest;
 
     let content = std::fs::read(out_path)?;
@@ -297,11 +271,7 @@ pub fn verify_flat_hash(
         return Err(FetchError::HashMismatch {
             name: name.to_string(),
             expected: nix_hash_to_sri(expected),
-            actual: format!(
-                "{}-{}",
-                hash_algo_prefix(expected.algo()),
-                data_encoding::BASE64.encode(&actual_bytes),
-            ),
+            actual: format!("{}-{}", hash_algo_prefix(expected.algo()), data_encoding::BASE64.encode(&actual_bytes),),
         });
     }
 
@@ -310,11 +280,7 @@ pub fn verify_flat_hash(
 
 /// Format a NixHash as an SRI string (e.g., "sha256-base64...").
 pub fn nix_hash_to_sri(hash: &NixHash) -> String {
-    format!(
-        "{}-{}",
-        hash_algo_prefix(hash.algo()),
-        data_encoding::BASE64.encode(hash.digest_as_bytes()),
-    )
+    format!("{}-{}", hash_algo_prefix(hash.algo()), data_encoding::BASE64.encode(hash.digest_as_bytes()),)
 }
 
 fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
@@ -370,12 +336,10 @@ fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
         })?;
         Ok(Box::new(io::BufReader::new(file)))
     } else {
-        let resp = fetch_agent().get(url)
-            .call()
-            .map_err(|e| FetchError::HttpError {
-                url: url.to_string(),
-                reason: e.to_string(),
-            })?;
+        let resp = fetch_agent().get(url).call().map_err(|e| FetchError::HttpError {
+            url: url.to_string(),
+            reason: e.to_string(),
+        })?;
         Ok(Box::new(resp.into_body().into_reader()))
     }
 }
@@ -384,17 +348,13 @@ fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
 
 /// Select a decompressor based on URL suffix. Falls back to gzip magic
 /// detection, then raw read.
-pub fn decompress_reader(
-    url: &str,
-    reader: impl Read + Send + 'static,
-) -> Result<Box<dyn Read + Send>, FetchError> {
+pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Result<Box<dyn Read + Send>, FetchError> {
     if url.ends_with(".gz") || url.ends_with(".tgz") {
         Ok(Box::new(flate2::read::GzDecoder::new(reader)))
     } else if url.ends_with(".xz") || url.ends_with(".txz") {
         let mut input = io::BufReader::new(reader);
         let mut output = Vec::new();
-        lzma_rs::xz_decompress(&mut input, &mut output)
-            .map_err(|e| FetchError::DecompressError(format!("xz: {e}")))?;
+        lzma_rs::xz_decompress(&mut input, &mut output).map_err(|e| FetchError::DecompressError(format!("xz: {e}")))?;
         Ok(Box::new(io::Cursor::new(output)))
     } else if url.ends_with(".bz2") || url.ends_with(".tbz2") {
         Ok(Box::new(bzip2_rs::DecoderReader::new(reader)))
@@ -408,12 +368,9 @@ pub fn decompress_reader(
     } else {
         // Unknown suffix — try gzip magic, fall back to raw.
         let mut compressed = Vec::new();
-        io::BufReader::new(reader)
-            .read_to_end(&mut compressed)?;
+        io::BufReader::new(reader).read_to_end(&mut compressed)?;
         if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
-            Ok(Box::new(flate2::read::GzDecoder::new(io::Cursor::new(
-                compressed,
-            ))))
+            Ok(Box::new(flate2::read::GzDecoder::new(io::Cursor::new(compressed))))
         } else {
             Ok(Box::new(io::Cursor::new(compressed)))
         }
@@ -439,15 +396,10 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
         // Tiger Style: fixed limit on tar entries.
         entry_count = entry_count.saturating_add(1);
         if entry_count > MAX_TAR_ENTRIES {
-            return Err(FetchError::TarError(format!(
-                "tar archive exceeds {MAX_TAR_ENTRIES} entries"
-            )));
+            return Err(FetchError::TarError(format!("tar archive exceeds {MAX_TAR_ENTRIES} entries")));
         }
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
-        let entry_path = entry
-            .path()
-            .map_err(|e| FetchError::TarError(e.to_string()))?
-            .into_owned();
+        let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
 
         // Determine prefix from first non-empty entry.
         if prefix_to_strip.is_none() {
@@ -485,10 +437,7 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
         // Belt-and-suspenders: verify dest is inside out_path.
         // canonicalize isn't usable (dest doesn't exist yet), so check
         // the prefix after join. Components() already rejected '..'.
-        debug_assert!(
-            dest.starts_with(out_path),
-            "dest {dest:?} escapes out_path {out_path:?}"
-        );
+        debug_assert!(dest.starts_with(out_path), "dest {dest:?} escapes out_path {out_path:?}");
 
         match entry.header().entry_type() {
             tar::EntryType::Regular | tar::EntryType::GNUSparse => {
@@ -514,10 +463,7 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                     std::fs::create_dir_all(parent)?;
                 }
                 #[cfg(unix)]
-                if let Some(target) = entry
-                    .link_name()
-                    .map_err(|e| FetchError::TarError(e.to_string()))?
-                {
+                if let Some(target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
                     // Validate symlink target doesn't escape the output dir.
                     let target_path = target.as_ref();
                     let effective_target = if target_path.is_absolute() {
@@ -531,15 +477,10 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                                     .strip_prefix("/")
                                     .unwrap_or(target_path)
                                     .strip_prefix(pfx)
-                                    .unwrap_or(
-                                        target_path.strip_prefix("/").unwrap_or(target_path)
-                                    );
+                                    .unwrap_or(target_path.strip_prefix("/").unwrap_or(target_path));
                                 stripped.to_path_buf()
                             }
-                            None => target_path
-                                .strip_prefix("/")
-                                .unwrap_or(target_path)
-                                .to_path_buf(),
+                            None => target_path.strip_prefix("/").unwrap_or(target_path).to_path_buf(),
                         }
                     } else {
                         target_path.to_path_buf()
@@ -568,15 +509,11 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                if let Some(link_target) = entry
-                    .link_name()
-                    .map_err(|e| FetchError::TarError(e.to_string()))?
-                {
+                if let Some(link_target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
                     let stripped_target = match &prefix_to_strip {
-                        Some(pfx) => link_target
-                            .strip_prefix(pfx.as_path())
-                            .unwrap_or(link_target.as_ref())
-                            .to_path_buf(),
+                        Some(pfx) => {
+                            link_target.strip_prefix(pfx.as_path()).unwrap_or(link_target.as_ref()).to_path_buf()
+                        }
                         None => link_target.into_owned(),
                     };
                     let target_path = out_path.join(&stripped_target);
@@ -608,9 +545,7 @@ pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchErro
 
     let git = find_git()?;
 
-    let tmp_parent = Path::new(out)
-        .parent()
-        .unwrap_or(Path::new("/tmp"));
+    let tmp_parent = Path::new(out).parent().unwrap_or(Path::new("/tmp"));
     std::fs::create_dir_all(tmp_parent)?;
     let tmp_bare = format!("{out}.git-bare-tmp");
     let _ = std::fs::remove_dir_all(&tmp_bare);
@@ -626,9 +561,7 @@ pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchErro
     if !clone_out.status.success() {
         let stderr = String::from_utf8_lossy(&clone_out.stderr);
         let _ = std::fs::remove_dir_all(&tmp_bare);
-        return Err(FetchError::GitError(format!(
-            "git clone failed for '{url}':\n{stderr}"
-        )));
+        return Err(FetchError::GitError(format!("git clone failed for '{url}':\n{stderr}")));
     }
 
     // Checkout specific rev into output dir.
@@ -642,9 +575,7 @@ pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchErro
         let stderr = String::from_utf8_lossy(&checkout_out.stderr);
         let _ = std::fs::remove_dir_all(&tmp_bare);
         let _ = std::fs::remove_dir_all(out);
-        return Err(FetchError::GitError(format!(
-            "git checkout failed for rev '{rev}':\n{stderr}"
-        )));
+        return Err(FetchError::GitError(format!("git checkout failed for rev '{rev}':\n{stderr}")));
     }
 
     // Clean up bare clone.
@@ -690,29 +621,21 @@ fn find_git() -> Result<String, FetchError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use nix_compat::derivation::Output;
     use std::collections::BTreeMap;
 
+    use nix_compat::derivation::Output;
+
+    use super::*;
+
     /// Build a minimal derivation with the given env, builder, and ca_hash.
-    fn make_drv(
-        builder: &str,
-        env: Vec<(&str, &str)>,
-        ca_hash: Option<CAHash>,
-    ) -> Derivation {
+    fn make_drv(builder: &str, env: Vec<(&str, &str)>, ca_hash: Option<CAHash>) -> Derivation {
         let mut environment: BTreeMap<String, bstr::BString> = BTreeMap::new();
         for (k, v) in env {
             environment.insert(k.to_string(), bstr::BString::from(v.as_bytes()));
         }
 
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            Output {
-                path: None,
-                ca_hash,
-            },
-        );
+        outputs.insert("out".to_string(), Output { path: None, ca_hash });
 
         Derivation {
             builder: builder.to_string(),
@@ -746,10 +669,7 @@ mod tests {
     fn parse_fetch_tarball_unpack() {
         let drv = make_drv(
             "builtin:fetchurl",
-            vec![
-                ("url", "https://example.com/src.tar.gz"),
-                ("unpack", "1"),
-            ],
+            vec![("url", "https://example.com/src.tar.gz"), ("unpack", "1")],
             Some(CAHash::Nar(NixHash::Sha256([0xBB; 32]))),
         );
         let fetch = parse_fetch(&drv).unwrap();
@@ -763,10 +683,7 @@ mod tests {
     fn parse_fetch_executable() {
         let drv = make_drv(
             "builtin:fetchurl",
-            vec![
-                ("url", "https://example.com/run"),
-                ("executable", "1"),
-            ],
+            vec![("url", "https://example.com/run"), ("executable", "1")],
             Some(CAHash::Flat(NixHash::Sha256([0xCC; 32]))),
         );
         let fetch = parse_fetch(&drv).unwrap();
@@ -805,14 +722,8 @@ mod tests {
 
     #[test]
     fn parse_fetch_git_missing_rev() {
-        let drv = make_drv(
-            "builtin:fetchurl",
-            vec![
-                ("url", "https://github.com/user/repo.git"),
-                ("type", "git"),
-            ],
-            None,
-        );
+        let drv =
+            make_drv("builtin:fetchurl", vec![("url", "https://github.com/user/repo.git"), ("type", "git")], None);
         let err = parse_fetch(&drv).unwrap_err();
         assert!(matches!(err, FetchError::MissingGitRev));
     }
@@ -833,11 +744,7 @@ mod tests {
 
     #[test]
     fn parse_fetch_url_no_hash() {
-        let drv = make_drv(
-            "builtin:fetchurl",
-            vec![("url", "https://example.com/file.txt")],
-            None,
-        );
+        let drv = make_drv("builtin:fetchurl", vec![("url", "https://example.com/file.txt")], None);
         let fetch = parse_fetch(&drv).unwrap();
         assert!(matches!(fetch, Fetch::Url { exp_hash: None, .. }));
     }
@@ -872,10 +779,7 @@ mod tests {
 
         // Top-level "project-v1/" stripped.
         assert!(out.join("hello.txt").exists());
-        assert_eq!(
-            std::fs::read_to_string(out.join("hello.txt")).unwrap(),
-            "hello world"
-        );
+        assert_eq!(std::fs::read_to_string(out.join("hello.txt")).unwrap(), "hello world");
     }
 
     #[test]
@@ -948,17 +852,15 @@ mod tests {
     fn decompress_raw_tar() {
         let data = b"raw content";
         let mut out = Vec::new();
-        decompress_reader("foo.tar", io::Cursor::new(data.to_vec()))
-            .unwrap()
-            .read_to_end(&mut out)
-            .unwrap();
+        decompress_reader("foo.tar", io::Cursor::new(data.to_vec())).unwrap().read_to_end(&mut out).unwrap();
         assert_eq!(out, data);
     }
 
     #[test]
     fn decompress_gzip() {
-        use flate2::write::GzEncoder;
         use std::io::Write;
+
+        use flate2::write::GzEncoder;
 
         let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::fast());
         encoder.write_all(b"gzipped content").unwrap();
@@ -999,8 +901,9 @@ mod tests {
 
     #[test]
     fn decompress_unknown_with_gzip_magic() {
-        use flate2::write::GzEncoder;
         use std::io::Write;
+
+        use flate2::write::GzEncoder;
 
         let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::fast());
         encoder.write_all(b"magic detected").unwrap();

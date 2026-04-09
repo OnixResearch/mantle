@@ -1,9 +1,12 @@
-use pin_project_lite::pin_project;
-use std::task::{Poll, ready};
+use std::task::Poll;
+use std::task::ready;
 
+use pin_project_lite::pin_project;
 use tokio::io::AsyncWrite;
 
-use super::{EMPTY_BYTES, LEN_SIZE, padding_len};
+use super::EMPTY_BYTES;
+use super::LEN_SIZE;
+use super::padding_len;
 
 pin_project! {
     /// Writes a "bytes wire packet" to the underlying writer.
@@ -58,8 +61,7 @@ enum BytesPacketPosition {
 }
 
 impl<W> BytesWriter<W>
-where
-    W: AsyncWrite,
+where W: AsyncWrite
 {
     /// Constructs a new BytesWriter, using the underlying passed writer.
     pub fn new(w: W, payload_len: u64) -> Self {
@@ -75,18 +77,14 @@ where
 #[inline]
 fn ensure_nonzero_bytes_written(bytes_written: usize) -> Result<usize, std::io::Error> {
     if bytes_written == 0 {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::WriteZero,
-            "underlying writer accepted 0 bytes",
-        ))
+        Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "underlying writer accepted 0 bytes"))
     } else {
         Ok(bytes_written)
     }
 }
 
 impl<W> AsyncWrite for BytesWriter<W>
-where
-    W: AsyncWrite,
+where W: AsyncWrite
 {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
@@ -102,9 +100,8 @@ where
                 BytesPacketPosition::Size(pos) => {
                     let size_field = &this.payload_len.to_le_bytes();
 
-                    let bytes_written = ensure_nonzero_bytes_written(ready!(
-                        this.inner.as_mut().poll_write(cx, &size_field[pos..])
-                    )?)?;
+                    let bytes_written =
+                        ensure_nonzero_bytes_written(ready!(this.inner.as_mut().poll_write(cx, &size_field[pos..]))?)?;
 
                     let new_pos = pos + bytes_written;
                     if new_pos == LEN_SIZE {
@@ -143,10 +140,7 @@ where
         }
     }
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Result<(), std::io::Error>> {
+    fn poll_flush(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Result<(), std::io::Error>> {
         let mut this = self.project();
 
         loop {
@@ -155,9 +149,8 @@ where
                 BytesPacketPosition::Size(pos) => {
                     // More bytes to write in the size field
                     let size_field = &this.payload_len.to_le_bytes()[..];
-                    let bytes_written = ensure_nonzero_bytes_written(ready!(
-                        this.inner.as_mut().poll_write(cx, &size_field[pos..])
-                    )?)?;
+                    let bytes_written =
+                        ensure_nonzero_bytes_written(ready!(this.inner.as_mut().poll_write(cx, &size_field[pos..]))?)?;
                     let new_pos = pos + bytes_written;
                     if new_pos == LEN_SIZE {
                         // Size field written, now ready to receive payload
@@ -183,9 +176,7 @@ where
 
                     if pos != total_padding_len {
                         let bytes_written = ensure_nonzero_bytes_written(ready!(
-                            this.inner
-                                .as_mut()
-                                .poll_write(cx, &EMPTY_BYTES[pos..total_padding_len])
+                            this.inner.as_mut().poll_write(cx, &EMPTY_BYTES[pos..total_padding_len])
                         )?)?;
                         *this.state = BytesPacketPosition::Padding(pos + bytes_written);
                     } else {
@@ -222,10 +213,7 @@ where
         ready!(this.inner.poll_shutdown(cx))?;
 
         // return an error about unclean shutdown
-        Poll::Ready(Err(std::io::Error::new(
-            std::io::ErrorKind::BrokenPipe,
-            "unclean shutdown",
-        )))
+        Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "unclean shutdown")))
     }
 }
 
@@ -234,15 +222,16 @@ mod tests {
     use std::sync::LazyLock;
     use std::time::Duration;
 
-    use crate::wire::bytes::write_bytes;
     use hex_literal::hex;
     use tokio::io::AsyncWriteExt;
-    use tokio_test::{assert_err, assert_ok, io::Builder};
+    use tokio_test::assert_err;
+    use tokio_test::assert_ok;
+    use tokio_test::io::Builder;
 
     use super::*;
+    use crate::wire::bytes::write_bytes;
 
-    pub static LARGE_PAYLOAD: LazyLock<Vec<u8>> =
-        LazyLock::new(|| (0..255).collect::<Vec<u8>>().repeat(4 * 1024));
+    pub static LARGE_PAYLOAD: LazyLock<Vec<u8>> = LazyLock::new(|| (0..255).collect::<Vec<u8>>().repeat(4 * 1024));
 
     /// Helper function, calling the (simpler) write_bytes with the payload.
     /// We use this to create data we want to see on the wire.
@@ -256,9 +245,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn write_empty() {
         let payload = &[];
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, 0);
         assert_ok!(w.write_all(&[]).await, "write all data");
@@ -269,9 +256,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn write_empty_only_flush() {
         let payload = &[];
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, 0);
         assert_ok!(w.flush().await, "flush");
@@ -281,9 +266,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn write_empty_only_shutdown() {
         let payload = &[];
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, 0);
         assert_ok!(w.shutdown().await, "shutdown");
@@ -294,9 +277,7 @@ mod tests {
     async fn write_1b() {
         let payload = &[0xff];
 
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, payload.len() as u64);
         assert_ok!(w.write_all(payload).await);
@@ -308,9 +289,7 @@ mod tests {
     async fn write_8b() {
         let payload = &hex!("0001020304050607");
 
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, payload.len() as u64);
         assert_ok!(w.write_all(payload).await);
@@ -322,9 +301,7 @@ mod tests {
     async fn write_9b() {
         let payload = &hex!("000102030405060708");
 
-        let mut mock = Builder::new()
-            .write(&produce_exp_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().write(&produce_exp_bytes(payload).await).build();
 
         let mut w = BytesWriter::new(&mut mock, payload.len() as u64);
         assert_ok!(w.write_all(payload).await);
@@ -475,10 +452,7 @@ mod tests {
     async fn inner_writer_fail_during_size_firstwrite() {
         let payload = &[0xf0];
 
-        let mut mock = Builder::new()
-            .write(&1u32.to_le_bytes())
-            .write_error(std::io::Error::other("🍿"))
-            .build();
+        let mut mock = Builder::new().write(&1u32.to_le_bytes()).write_error(std::io::Error::other("🍿")).build();
         let mut w = BytesWriter::new(&mut mock, payload.len() as u64);
 
         assert_err!(w.write_all(payload).await);
@@ -490,10 +464,7 @@ mod tests {
     async fn inner_writer_fail_during_size_initial_flush() {
         let payload = &[0xf0];
 
-        let mut mock = Builder::new()
-            .write(&1u32.to_le_bytes())
-            .write_error(std::io::Error::other("🍿"))
-            .build();
+        let mut mock = Builder::new().write(&1u32.to_le_bytes()).write_error(std::io::Error::other("🍿")).build();
         let mut w = BytesWriter::new(&mut mock, payload.len() as u64);
 
         assert_err!(w.flush().await);

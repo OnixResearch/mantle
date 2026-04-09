@@ -1,13 +1,15 @@
-use std::{
-    fmt::Debug,
-    future::Future,
-    marker::PhantomData,
-    ops::Deref,
-    pin::Pin,
-    task::{self, Poll, ready},
-};
+use std::fmt::Debug;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::ops::Deref;
+use std::pin::Pin;
+use std::task::Poll;
+use std::task::ready;
+use std::task::{self};
 
-use tokio::io::{self, AsyncRead, ReadBuf};
+use tokio::io::AsyncRead;
+use tokio::io::ReadBuf;
+use tokio::io::{self};
 
 /// Trailer represents up to 8 bytes of data read as part of the trailer block(s)
 #[derive(Debug)]
@@ -63,10 +65,7 @@ pub(crate) struct ReadTrailer<R, T: Tag> {
 }
 
 /// read_trailer returns a [Future] that reads a trailer with a given [Tag] from `reader`
-pub(crate) fn read_trailer<R: AsyncRead + Unpin, T: Tag>(
-    reader: R,
-    data_len: u8,
-) -> ReadTrailer<R, T> {
+pub(crate) fn read_trailer<R: AsyncRead + Unpin, T: Tag>(reader: R, data_len: u8) -> ReadTrailer<R, T> {
     assert!(data_len <= 8, "payload in trailer must be <= 8 bytes");
 
     let buf = T::make_buf();
@@ -99,11 +98,7 @@ impl<R: AsyncRead + Unpin, T: Tag> Future for ReadTrailer<R, T> {
                 let check_range = || this.data_len as usize..this.filled as usize;
 
                 if this.buf.as_ref()[check_range()] != T::PATTERN[check_range()] {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "invalid trailer",
-                    ))
-                    .into();
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid trailer")).into();
                 }
             }
 
@@ -144,16 +139,9 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn unexpected_eof() {
-        let reader = tokio_test::io::Builder::new()
-            .read(&[0xed])
-            .wait(Duration::ZERO)
-            .read(&[0xef, 0x00])
-            .build();
+        let reader = tokio_test::io::Builder::new().read(&[0xed]).wait(Duration::ZERO).read(&[0xef, 0x00]).build();
 
-        assert_eq!(
-            read_trailer::<_, Pad>(reader, 2).await.unwrap_err().kind(),
-            io::ErrorKind::UnexpectedEof
-        );
+        assert_eq!(read_trailer::<_, Pad>(reader, 2).await.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[tokio::test(start_paused = true)]
@@ -165,10 +153,7 @@ mod tests {
             .wait(Duration::ZERO)
             .build();
 
-        assert_eq!(
-            read_trailer::<_, Pad>(reader, 2).await.unwrap_err().kind(),
-            io::ErrorKind::InvalidData
-        );
+        assert_eq!(read_trailer::<_, Pad>(reader, 2).await.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
 
     #[tokio::test(start_paused = true)]
@@ -181,19 +166,11 @@ mod tests {
             .read(&[0x00, 0x00, 0x00, 0x00, 0x00])
             .build();
 
-        assert_eq!(
-            &*read_trailer::<_, Pad>(reader, 2).await.unwrap(),
-            &[0xed, 0xef]
-        );
+        assert_eq!(&*read_trailer::<_, Pad>(reader, 2).await.unwrap(), &[0xed, 0xef]);
     }
 
     #[tokio::test(start_paused = true)]
     async fn no_padding() {
-        assert!(
-            read_trailer::<_, Pad>(io::empty(), 0)
-                .await
-                .unwrap()
-                .is_empty()
-        );
+        assert!(read_trailer::<_, Pad>(io::empty(), 0).await.unwrap().is_empty());
     }
 }

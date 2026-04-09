@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use super::file_handle::FileHandle;
 use super::statx::StatExt;
-use super::{Inode, InodeData, InodeHandle};
+use super::Inode;
+use super::InodeData;
+use super::InodeHandle;
 
 #[derive(Clone, Copy, Default, PartialOrd, Ord, PartialEq, Eq, Debug)]
 /// Identify an inode in `PassthroughFs` by `InodeId`.
@@ -42,13 +44,13 @@ impl InodeStore {
     pub fn insert(&mut self, data: Arc<InodeData>) {
         self.by_id.insert(data.id, data.inode);
         if let InodeHandle::Handle(handle) = &data.handle {
-            self.by_handle
-                .insert(handle.file_handle().clone(), data.inode);
+            self.by_handle.insert(handle.file_handle().clone(), data.inode);
         }
         self.data.insert(data.inode, data);
     }
 
-    /// Remove an inode from the manager, keeping the (key, ino) mapping if `remove_data_only` is true.
+    /// Remove an inode from the manager, keeping the (key, ino) mapping if `remove_data_only` is
+    /// true.
     pub fn remove(&mut self, inode: &Inode, remove_data_only: bool) -> Option<Arc<InodeData>> {
         let data = self.data.remove(inode);
         if remove_data_only {
@@ -98,14 +100,15 @@ impl InodeStore {
 
 #[cfg(test)]
 mod test {
-    use super::super::*;
-    use super::*;
-
     use std::ffi::CStr;
     use std::mem::MaybeUninit;
     use std::os::unix::io::AsRawFd;
     use std::sync::atomic::Ordering;
+
     use vmm_sys_util::tempfile::TempFile;
+
+    use super::super::*;
+    use super::*;
 
     impl PartialEq for InodeData {
         fn eq(&self, other: &Self) -> bool {
@@ -119,9 +122,7 @@ mod test {
 
             match (&self.handle, &other.handle) {
                 (InodeHandle::File(f1), InodeHandle::File(f2)) => f1.as_raw_fd() == f2.as_raw_fd(),
-                (InodeHandle::Handle(h1), InodeHandle::Handle(h2)) => {
-                    h1.file_handle() == h2.file_handle()
-                }
+                (InodeHandle::Handle(h1), InodeHandle::Handle(h2)) => h1.file_handle() == h2.file_handle(),
                 _ => false,
             }
         }

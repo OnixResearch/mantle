@@ -1,12 +1,14 @@
 //! Fixed-output derivation hash verification.
 
-use nix_compat::nixhash::{CAHash, NixHash};
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
+use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::Node;
 
-use crate::hash::{hash_blob, nar_hash};
 use crate::Error;
+use crate::hash::hash_blob;
+use crate::hash::nar_hash;
 
 /// Verify that a fixed-output derivation produced the expected hash.
 ///
@@ -57,13 +59,7 @@ pub(crate) async fn verify_fod_hash(
             }
         }
         CAHash::Nar(expected_hash) => {
-            let actual = nar_hash(
-                node,
-                expected_hash.algo(),
-                blob_service.clone(),
-                directory_service.clone(),
-            )
-            .await?;
+            let actual = nar_hash(node, expected_hash.algo(), blob_service.clone(), directory_service.clone()).await?;
             if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
@@ -89,13 +85,16 @@ pub(crate) async fn verify_fod_hash(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
-    use snix_castore::blobservice::MemoryBlobService;
+    use nix_compat::nixhash::CAHash;
+    use nix_compat::nixhash::HashAlgo;
+    use nix_compat::nixhash::NixHash;
     use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use tokio::io::AsyncWriteExt;
+
+    use super::*;
 
     async fn insert_blob(bs: &MemoryBlobService, data: &[u8]) -> (snix_castore::B3Digest, Node) {
         let mut writer = bs.open_write().await;
@@ -136,10 +135,7 @@ mod tests {
     }
 
     fn tmp_ds() -> RedbDirectoryService {
-        RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        ).unwrap()
+        RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
     }
 
     fn dummy_b3() -> snix_castore::B3Digest {
@@ -170,9 +166,7 @@ mod tests {
         let wrong = NixHash::Sha256([0xab; 32]);
         let ca = CAHash::Flat(wrong);
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodHashMismatch { .. }));
     }
 
@@ -229,9 +223,7 @@ mod tests {
         let hash = NixHash::Sha256([0; 32]);
         let ca = CAHash::Flat(hash);
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodFlatNotFile { .. }));
     }
 
@@ -245,9 +237,7 @@ mod tests {
         let hash = NixHash::Sha256([0; 32]);
         let ca = CAHash::Flat(hash);
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodFlatNotFile { .. }));
     }
 
@@ -279,9 +269,7 @@ mod tests {
             size: 0,
         };
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 100, &actual, &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 100, &actual, &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodHashMismatch { .. }));
     }
 
@@ -339,9 +327,7 @@ mod tests {
         let data = b"nar sha1 test";
         let (_, node) = insert_blob(&bs, data).await;
 
-        let hash = nar_hash(&node, HashAlgo::Sha1, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let hash = nar_hash(&node, HashAlgo::Sha1, bs.clone(), ds.clone()).await.unwrap();
         let ca = CAHash::Nar(hash);
 
         verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
@@ -358,9 +344,7 @@ mod tests {
 
         let ca = CAHash::Nar(NixHash::Sha1([0xaa; 20]));
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodHashMismatch { .. }));
     }
 
@@ -371,9 +355,7 @@ mod tests {
         let data = b"nar md5 test";
         let (_, node) = insert_blob(&bs, data).await;
 
-        let hash = nar_hash(&node, HashAlgo::Md5, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let hash = nar_hash(&node, HashAlgo::Md5, bs.clone(), ds.clone()).await.unwrap();
         let ca = CAHash::Nar(hash);
 
         verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
@@ -390,9 +372,7 @@ mod tests {
 
         let ca = CAHash::Nar(NixHash::Md5([0xbb; 16]));
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodHashMismatch { .. }));
     }
 
@@ -403,9 +383,7 @@ mod tests {
         let data = b"nar sha512 test";
         let (_, node) = insert_blob(&bs, data).await;
 
-        let hash = nar_hash(&node, HashAlgo::Sha512, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let hash = nar_hash(&node, HashAlgo::Sha512, bs.clone(), ds.clone()).await.unwrap();
         let ca = CAHash::Nar(hash);
 
         verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
@@ -422,16 +400,14 @@ mod tests {
 
         let ca = CAHash::Nar(NixHash::Sha512(Box::new([0xcc; 64])));
 
-        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds)
-            .await
-            .unwrap_err();
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
         assert!(matches!(err, Error::FodHashMismatch { .. }));
     }
 
     #[tokio::test]
     async fn nar_sha1_directory_node() {
-        use snix_castore::directoryservice::DirectoryService;
         use snix_castore::Directory;
+        use snix_castore::directoryservice::DirectoryService;
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
@@ -440,23 +416,17 @@ mod tests {
         let (digest_b, _) = insert_blob(&bs, b"file-b-content").await;
 
         let mut dir = Directory::new();
-        dir.add(
-            "a.txt".try_into().unwrap(),
-            Node::File {
-                digest: digest_a,
-                size: 14,
-                executable: false,
-            },
-        )
+        dir.add("a.txt".try_into().unwrap(), Node::File {
+            digest: digest_a,
+            size: 14,
+            executable: false,
+        })
         .unwrap();
-        dir.add(
-            "b.txt".try_into().unwrap(),
-            Node::File {
-                digest: digest_b,
-                size: 14,
-                executable: false,
-            },
-        )
+        dir.add("b.txt".try_into().unwrap(), Node::File {
+            digest: digest_b,
+            size: 14,
+            executable: false,
+        })
         .unwrap();
 
         let dir_digest = dir.digest();
@@ -468,9 +438,7 @@ mod tests {
             size: dir_size,
         };
 
-        let hash = nar_hash(&dir_node, HashAlgo::Sha1, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let hash = nar_hash(&dir_node, HashAlgo::Sha1, bs.clone(), ds.clone()).await.unwrap();
         let ca = CAHash::Nar(hash);
 
         verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &dir_node, &bs, &ds)

@@ -1,15 +1,19 @@
 //! Module to create a OCI runtime spec for a given [BuildRequest].
-use crate::buildservice::{BuildConstraints, BuildRequest};
-use oci_spec::runtime::{
-    Capability, LinuxIdMappingBuilder, LinuxNamespace, LinuxNamespaceBuilder, LinuxNamespaceType,
-};
-use std::{collections::HashSet, path::Path};
+use std::collections::HashSet;
+use std::path::Path;
 
-use super::{
-    scratch_name,
-    subuid::{SubordinateError, SubordinateInfo},
-};
+use oci_spec::runtime::Capability;
+use oci_spec::runtime::LinuxIdMappingBuilder;
+use oci_spec::runtime::LinuxNamespace;
+use oci_spec::runtime::LinuxNamespaceBuilder;
+use oci_spec::runtime::LinuxNamespaceType;
 use thiserror::Error;
+
+use super::scratch_name;
+use super::subuid::SubordinateError;
+use super::subuid::SubordinateInfo;
+use crate::buildservice::BuildConstraints;
+use crate::buildservice::BuildRequest;
 
 #[derive(Debug, Error)]
 pub enum SpecError {
@@ -28,15 +32,13 @@ pub enum SpecError {
 ///
 /// The paths used in the spec are the following (relative to a "bundle root"):
 ///
-/// - `inputs`, a directory where the castore nodes specified the build request
-///   inputs are supposed to be populated.
-/// - `outputs`, a directory where all writes to the store_dir during the build
-///   are directed to.
+/// - `inputs`, a directory where the castore nodes specified the build request inputs are supposed
+///   to be populated.
+/// - `outputs`, a directory where all writes to the store_dir during the build are directed to.
 /// - `root`, a minimal skeleton of files that'll be present at /.
-/// - `scratch`, a directory containing other directories which will be
-///   bind-mounted read-write into the container and used as scratch space
-///   during the build.
-///   No assumptions should be made about what's inside this directory.
+/// - `scratch`, a directory containing other directories which will be bind-mounted read-write into
+///   the container and used as scratch space during the build. No assumptions should be made about
+///   what's inside this directory.
 ///
 /// Generating these paths, and populating contents, like a skeleton root
 /// is up to another function, this function doesn't do filesystem IO.
@@ -45,9 +47,7 @@ pub(crate) fn make_spec(
     rootless: bool,
     sandbox_shell: &str,
 ) -> Result<oci_spec::runtime::Spec, SpecError> {
-    let allow_network = request
-        .constraints
-        .contains(&BuildConstraints::NetworkAccess);
+    let allow_network = request.constraints.contains(&BuildConstraints::NetworkAccess);
 
     // Assemble ro_host_mounts. Start with constraints.available_ro_paths.
     let mut ro_host_mounts: Vec<_> = request
@@ -60,10 +60,7 @@ pub(crate) fn make_spec(
         .collect();
 
     // If provide_bin_sh is set, mount sandbox_shell to /bin/sh
-    if request
-        .constraints
-        .contains(&BuildConstraints::ProvideBinSh)
-    {
+    if request.constraints.contains(&BuildConstraints::ProvideBinSh) {
         ro_host_mounts.push((Path::new(sandbox_shell), Path::new("/bin/sh")))
     }
 
@@ -123,18 +120,9 @@ fn configure_process<'a>(
 ) -> Result<oci_spec::runtime::Process, oci_spec::OciSpecError> {
     let spec_builder = oci_spec::runtime::ProcessBuilder::default()
         .args(command_args)
-        .env(
-            env.into_iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>(),
-        )
+        .env(env.into_iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>())
         .terminal(true)
-        .user(
-            oci_spec::runtime::UserBuilder::default()
-                .uid(1000u32)
-                .gid(100u32)
-                .build()?,
-        )
+        .user(oci_spec::runtime::UserBuilder::default().uid(1000u32).gid(100u32).build()?)
         .cwd(Path::new("/").join(cwd)) // relative to the bundle root, but at least runc wants it to also be absolute.
         .capabilities({
             let caps: HashSet<Capability> = if !rootless {
@@ -178,10 +166,7 @@ fn configure_process<'a>(
 
 /// Return the Linux part of the OCI Runtime spec.
 /// This configures various namespaces, masked and read-only paths.
-fn configure_linux(
-    allow_network: bool,
-    rootless: bool,
-) -> Result<oci_spec::runtime::Linux, SpecError> {
+fn configure_linux(allow_network: bool, rootless: bool) -> Result<oci_spec::runtime::Linux, SpecError> {
     let mut linux = oci_spec::runtime::Linux::default();
 
     // explicitly set namespaces, depending on allow_network.
@@ -239,12 +224,7 @@ fn configure_linux(
     ));
     let info = SubordinateInfo::for_effective_user().map_err(SpecError::SubordinateError)?;
     linux.set_uid_mappings(Some(vec![
-        LinuxIdMappingBuilder::default()
-            .host_id(info.uid)
-            .container_id(0_u32)
-            .size(1_u32)
-            .build()
-            .unwrap(),
+        LinuxIdMappingBuilder::default().host_id(info.uid).container_id(0_u32).size(1_u32).build().unwrap(),
         LinuxIdMappingBuilder::default()
             .host_id(info.subuid)
             .container_id(1000_u32)
@@ -253,12 +233,7 @@ fn configure_linux(
             .unwrap(),
     ]));
     linux.set_gid_mappings(Some(vec![
-        LinuxIdMappingBuilder::default()
-            .host_id(info.gid)
-            .container_id(0_u32)
-            .size(1_u32)
-            .build()
-            .unwrap(),
+        LinuxIdMappingBuilder::default().host_id(info.gid).container_id(0_u32).size(1_u32).build().unwrap(),
         LinuxIdMappingBuilder::default()
             .host_id(info.subgid)
             .container_id(100_u32)
@@ -288,23 +263,13 @@ fn configure_mounts<'a>(
         oci_spec::runtime::get_default_mounts()
     };
 
-    mounts.push(configure_mount(
-        Path::new("tmpfs"),
-        Path::new("/tmp"),
-        "tmpfs",
-        &["nosuid", "noatime", "mode=700"],
-    )?);
+    mounts.push(configure_mount(Path::new("tmpfs"), Path::new("/tmp"), "tmpfs", &["nosuid", "noatime", "mode=700"])?);
 
     // For each scratch path, create a bind mount entry.
     let scratch_root = Path::new("scratch"); // relative path
     for scratch_path in scratch_paths.into_iter() {
         let src = scratch_root.join(scratch_name(scratch_path));
-        mounts.push(configure_mount(
-            &src,
-            &Path::new("/").join(scratch_path),
-            "none",
-            &["rbind", "rw"],
-        )?);
+        mounts.push(configure_mount(&src, &Path::new("/").join(scratch_path), "none", &["rbind", "rw"])?);
     }
 
     // For each input, create a bind mount from inputs/$name into $inputs_dir/$name.

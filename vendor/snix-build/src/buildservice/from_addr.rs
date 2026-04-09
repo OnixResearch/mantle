@@ -1,12 +1,13 @@
-#[cfg(target_os = "linux")]
-use crate::buildservice::bwrap::BubblewrapBuildService;
-
-use super::{BuildService, DummyBuildService};
-use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService};
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
 use url::Url;
 
+use super::BuildService;
+use super::DummyBuildService;
 #[cfg(target_os = "linux")]
 use super::oci::OCIBuildService;
+#[cfg(target_os = "linux")]
+use crate::buildservice::bwrap::BubblewrapBuildService;
 #[cfg(all(not(target_os = "linux"), doc))]
 struct OCIBuildService;
 #[cfg(all(not(target_os = "linux"), doc))]
@@ -32,8 +33,7 @@ where
     BS: BlobService + Send + Sync + Clone + 'static,
     DS: DirectoryService + Send + Sync + Clone + 'static,
 {
-    let url =
-        Url::parse(uri).map_err(|e| std::io::Error::other(format!("unable to parse url: {e}")))?;
+    let url = Url::parse(uri).map_err(|e| std::io::Error::other(format!("unable to parse url: {e}")))?;
 
     Ok(match url.scheme() {
         // dummy doesn't care about parameters.
@@ -47,11 +47,7 @@ where
 
             // TODO: make sandbox shell and rootless_uid_gid
 
-            Box::new(OCIBuildService::new(
-                url.path().into(),
-                blob_service,
-                directory_service,
-            ))
+            Box::new(OCIBuildService::new(url.path().into(), blob_service, directory_service))
         }
         #[cfg(target_os = "linux")]
         "bwrap" => {
@@ -60,31 +56,25 @@ where
                 Err(std::io::Error::other("bwap needs a bundle dir as path"))?
             }
 
-            Box::new(BubblewrapBuildService::new(
-                url.path().into(),
-                blob_service,
-                directory_service,
-            ))
+            Box::new(BubblewrapBuildService::new(url.path().into(), blob_service, directory_service))
         }
-        scheme => {
-            Err(std::io::Error::other(format!(
-                "unknown scheme: {}",
-                scheme
-            )))?
-        }
+        scheme => Err(std::io::Error::other(format!("unknown scheme: {}", scheme)))?,
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::from_addr;
-    use rstest::rstest;
-    use snix_castore::blobservice::{BlobService, MemoryBlobService};
     use std::sync::Arc;
     #[cfg(target_os = "linux")]
     use std::sync::LazyLock;
+
+    use rstest::rstest;
+    use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::MemoryBlobService;
     #[cfg(target_os = "linux")]
     use tempfile::TempDir;
+
+    use super::from_addr;
 
     #[cfg(target_os = "linux")]
     static TMPDIR_OCI_1: LazyLock<TempDir> = LazyLock::new(|| TempDir::new().unwrap());
@@ -104,7 +94,8 @@ mod tests {
     #[case::grpc_unsupported_http("grpc+http://localhost", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
     #[case::grpc_unsupported_https("grpc+https://localhost", false)]
-    /// Correct scheme to connect to localhost over http, but with additional path, which is invalid.
+    /// Correct scheme to connect to localhost over http, but with additional path, which is
+    /// invalid.
     #[case::grpc_invalid_host_and_path("grpc+http://localhost/some-path", false)]
     /// This configures OCI, but doesn't specify the bundle path
     #[cfg_attr(target_os = "linux", case::oci_missing_bundle_dir("oci://", false))]

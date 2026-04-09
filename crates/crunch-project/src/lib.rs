@@ -17,25 +17,45 @@ mod refresh;
 mod upgrade;
 mod version;
 
-pub use drift::{DriftStatus, check_drift};
+pub use drift::DriftStatus;
+pub use drift::check_drift;
 pub use error::Error;
-pub use generate::{content_fingerprint, generate_inputs_ncl};
-pub use lock::{
-    LockEntry, Lockfile, LockedHash, LockedKind, LockedPatch, LockedPatchSource,
-};
-pub use manifest::{
-    GitReference, HashAlgo, HashSpec, InputKind, ManifestInput, PatchDef,
-    PatchSource, ProjectManifest,
-};
-pub use merge::{
-    MergeIssue, MergeReport, Severity, check_manifest_lock, filter_inputs,
-    inputs_needing_refresh, orphaned_lock_entries,
-};
-pub use refresh::{
-    ApplyResult, HashResolutionMode, RefreshFailure, RefreshOutcome,
-    RefreshResolver, ResolvedInput, StaleReport, apply_outcomes, list_stale,
-    refresh_inputs,
-};
-pub use mirrors::{url_with_mirrors, validate_mirrors};
-pub use upgrade::{upgrade_lockfile, OLDEST_SUPPORTED};
-pub use version::{SchemaVersion, parse_version};
+pub use generate::content_fingerprint;
+pub use generate::generate_inputs_ncl;
+pub use lock::LockEntry;
+pub use lock::LockedHash;
+pub use lock::LockedKind;
+pub use lock::LockedPatch;
+pub use lock::LockedPatchSource;
+pub use lock::Lockfile;
+pub use manifest::GitReference;
+pub use manifest::HashAlgo;
+pub use manifest::HashSpec;
+pub use manifest::InputKind;
+pub use manifest::ManifestInput;
+pub use manifest::PatchDef;
+pub use manifest::PatchSource;
+pub use manifest::ProjectManifest;
+pub use merge::MergeIssue;
+pub use merge::MergeReport;
+pub use merge::Severity;
+pub use merge::check_manifest_lock;
+pub use merge::filter_inputs;
+pub use merge::inputs_needing_refresh;
+pub use merge::orphaned_lock_entries;
+pub use mirrors::url_with_mirrors;
+pub use mirrors::validate_mirrors;
+pub use refresh::ApplyResult;
+pub use refresh::HashResolutionMode;
+pub use refresh::RefreshFailure;
+pub use refresh::RefreshOutcome;
+pub use refresh::RefreshResolver;
+pub use refresh::ResolvedInput;
+pub use refresh::StaleReport;
+pub use refresh::apply_outcomes;
+pub use refresh::list_stale;
+pub use refresh::refresh_inputs;
+pub use upgrade::OLDEST_SUPPORTED;
+pub use upgrade::upgrade_lockfile;
+pub use version::SchemaVersion;
+pub use version::parse_version;

@@ -9,8 +9,13 @@
 //! `NickelString` accepts both: actual strings pass through normally,
 //! enum tags are converted to their label string.
 
-use serde::de::{self, Deserializer, EnumAccess, Visitor, VariantAccess};
 use std::fmt;
+
+use serde::de::Deserializer;
+use serde::de::EnumAccess;
+use serde::de::VariantAccess;
+use serde::de::Visitor;
+use serde::de::{self};
 
 /// A String that also accepts Nickel enum tags during deserialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,9 +35,7 @@ impl AsRef<str> for NickelString {
 
 impl<'de> serde::Deserialize<'de> for NickelString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         deserializer.deserialize_any(NickelStringVisitor)
     }
 }
@@ -55,9 +58,7 @@ impl<'de> Visitor<'de> for NickelStringVisitor {
     }
 
     fn visit_enum<A>(self, data: A) -> Result<NickelString, A::Error>
-    where
-        A: EnumAccess<'de>,
-    {
+    where A: EnumAccess<'de> {
         let (tag, variant): (String, _) = data.variant()?;
         // Consume the variant value (unit variant — no data for bare tags)
         let _ = variant.unit_variant();

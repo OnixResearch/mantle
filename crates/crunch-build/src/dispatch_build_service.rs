@@ -11,7 +11,9 @@
 use std::io;
 
 use async_trait::async_trait;
-use snix_build::buildservice::{BuildRequest, BuildResult, BuildService};
+use snix_build::buildservice::BuildRequest;
+use snix_build::buildservice::BuildResult;
+use snix_build::buildservice::BuildService;
 use tracing::debug;
 
 use crate::fetch_build_service::is_fetch_request;
@@ -58,15 +60,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bytes::Bytes;
-    use snix_build::buildservice::{BuildOutput, EnvVar};
-    use snix_castore::Node;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::AtomicU32;
+    use std::sync::atomic::Ordering;
 
+    use bytes::Bytes;
+    use snix_build::buildservice::BuildOutput;
+    use snix_build::buildservice::EnvVar;
+    use snix_castore::Node;
+
+    use super::*;
     use crate::fetch_build_service::FETCH_BUILDER;
 
     /// Counting mock that records how many times `do_build` is called.
@@ -78,7 +83,13 @@ mod tests {
     impl CountingService {
         fn new(name: &'static str) -> (Self, Arc<AtomicU32>) {
             let count = Arc::new(AtomicU32::new(0));
-            (Self { name, call_count: count.clone() }, count)
+            (
+                Self {
+                    name,
+                    call_count: count.clone(),
+                },
+                count,
+            )
         }
     }
 

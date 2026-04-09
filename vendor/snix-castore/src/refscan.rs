@@ -6,13 +6,19 @@
 //!
 //! The scanner itself is using the Wu-Manber string-matching algorithm, using
 //! our fork of the `wu-manber` crate.
-use pin_project_lite::pin_project;
 use std::collections::BTreeSet;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering, fence};
-use std::task::{Poll, ready};
-use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::fence;
+use std::task::Poll;
+use std::task::ready;
+
+use pin_project_lite::pin_project;
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncRead;
+use tokio::io::ReadBuf;
 use wu_manber::TwoByteWM;
 
 /// A searcher that incapsulates the candidates and the Wu-Manber searcher.
@@ -63,8 +69,7 @@ impl<P: AsRef<[u8]>> ReferencePattern<P> {
 }
 
 impl<P> From<Vec<P>> for ReferencePattern<P>
-where
-    P: AsRef<[u8]>,
+where P: AsRef<[u8]>
 {
     fn from(candidates: Vec<P>) -> Self {
         Self::new(candidates)
@@ -111,10 +116,7 @@ impl<P: AsRef<[u8]>> ReferenceScanner<P> {
 
     pub fn matches(&self) -> Vec<bool> {
         fence(Ordering::Acquire);
-        self.matches
-            .iter()
-            .map(|m| m.load(Ordering::Relaxed))
-            .collect()
+        self.matches.iter().map(|m| m.load(Ordering::Relaxed)).collect()
     }
 
     pub fn candidate_matches(&self) -> impl Iterator<Item = &P> {
@@ -145,8 +147,7 @@ pin_project! {
 }
 
 impl<'a, P, R> ReferenceReader<'a, P, R>
-where
-    P: AsRef<[u8]>,
+where P: AsRef<[u8]>
 {
     pub fn new(scanner: &'a ReferenceScanner<P>, reader: R) -> Self {
         Self::with_capacity(DEFAULT_BUF_SIZE, scanner, reader)
@@ -187,10 +188,7 @@ where
     R: AsyncRead,
     P: AsRef<[u8]>,
 {
-    fn poll_fill_buf(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<std::io::Result<&[u8]>> {
+    fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<std::io::Result<&[u8]>> {
         #[allow(clippy::manual_saturating_arithmetic)] // for clarity
         let overlap = self
             .scanner
@@ -265,9 +263,8 @@ mod tests {
 
     #[test]
     fn test_single_match() {
-        let scanner = ReferenceScanner::new(vec![
-            "/nix/store/4xw8n979xpivdc46a9ndcvyhwgif00hz-bash-5.1-p16".to_string(),
-        ]);
+        let scanner =
+            ReferenceScanner::new(vec!["/nix/store/4xw8n979xpivdc46a9ndcvyhwgif00hz-bash-5.1-p16".to_string()]);
         scanner.scan(HELLO_DRV);
 
         let result = scanner.finalise();

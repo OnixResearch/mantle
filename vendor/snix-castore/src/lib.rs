@@ -18,7 +18,10 @@ mod nodes;
 pub use nodes::*;
 
 mod path;
-pub use path::{Path, PathBuf, PathComponent, PathComponentError};
+pub use path::Path;
+pub use path::PathBuf;
+pub use path::PathComponent;
+pub use path::PathComponentError;
 
 pub mod import;
 pub mod proto;
@@ -28,8 +31,10 @@ pub mod rpc;
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 pub use digests::B3Digest;
-pub use errors::{DirectoryError, ValidateNodeError};
-pub use hashing_reader::{B3HashingReader, HashingReader};
+pub use errors::DirectoryError;
+pub use errors::ValidateNodeError;
+pub use hashing_reader::B3HashingReader;
+pub use hashing_reader::HashingReader;
 
 #[cfg(test)]
 mod tests;

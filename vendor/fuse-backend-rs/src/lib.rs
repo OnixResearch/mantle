@@ -35,16 +35,16 @@
 //!
 //! The fuse-backend-rs crate includes several subsystems:
 //! * [Fuse API](api/index.html). The Fuse API is the connection between transport layers and file
-//!   system drivers. It receives Fuse requests from transport layers, parses the request
-//!   according to Fuse ABI, invokes filesystem drivers to server the requests, and eventually
-//!   send back the result to the transport layer.
+//!   system drivers. It receives Fuse requests from transport layers, parses the request according
+//!   to Fuse ABI, invokes filesystem drivers to server the requests, and eventually send back the
+//!   result to the transport layer.
 //! * [Fuse ABI](abi/index.html). Currently only Linux Fuse ABIs since v7.27 are supported.
-//! * [Transport Layer](transport/index.html). The transport layer receives Fuse requests from
-//!   the clients and sends back replies. Currently there are two transport layers are supported:
-//!   Linux Fuse device(/dev/fuse) and virtiofs.
-//! * Filesystem Drivers. Filesystem drivers implement the concrete Fuse filesystem logic,
-//!   at what ever is suitable. A default ["passthrough"](passthrough/index.html) filesystem
-//!   driver is implemented as a sample.
+//! * [Transport Layer](transport/index.html). The transport layer receives Fuse requests from the
+//!   clients and sends back replies. Currently there are two transport layers are supported: Linux
+//!   Fuse device(/dev/fuse) and virtiofs.
+//! * Filesystem Drivers. Filesystem drivers implement the concrete Fuse filesystem logic, at what
+//!   ever is suitable. A default ["passthrough"](passthrough/index.html) filesystem driver is
+//!   implemented as a sample.
 
 extern crate bitflags;
 extern crate libc;
@@ -52,9 +52,12 @@ extern crate libc;
 extern crate log;
 extern crate vm_memory;
 
-use std::ffi::{CStr, FromBytesWithNulError};
+use std::error;
+use std::ffi::CStr;
+use std::ffi::FromBytesWithNulError;
+use std::fmt;
+use std::io;
 use std::io::ErrorKind;
-use std::{error, fmt, io};
 
 use vm_memory::bitmap::BitmapSlice;
 
@@ -103,10 +106,7 @@ impl fmt::Display for Error {
             InvalidMessage(err) => write!(f, "cannot process fuse message: {err}"),
             FailedToWrite(err) => write!(f, "cannot write to buffer: {err}"),
             FailedToSplitWriter(err) => write!(f, "cannot split a writer: {err}"),
-            FailedToRemapID((uid, gid)) => write!(
-                f,
-                "failed to remap the context of user (uid={uid}, gid={gid})."
-            ),
+            FailedToRemapID((uid, gid)) => write!(f, "failed to remap the context of user (uid={uid}, gid={gid})."),
         }
     }
 }
@@ -189,18 +189,9 @@ mod tests {
             CStr::from_bytes_with_nul(&[0x1u8, 0x2u8, 0x0]).unwrap()
         );
 
-        assert_eq!(
-            bytes_to_cstr(&[0x0u8, 0x2u8, 0x0]).unwrap(),
-            CStr::from_bytes_with_nul(&[0x0u8]).unwrap()
-        );
-        assert_eq!(
-            bytes_to_cstr(&[0x0u8, 0x0]).unwrap(),
-            CStr::from_bytes_with_nul(&[0x0u8]).unwrap()
-        );
-        assert_eq!(
-            bytes_to_cstr(&[0x0u8]).unwrap(),
-            CStr::from_bytes_with_nul(&[0x0u8]).unwrap()
-        );
+        assert_eq!(bytes_to_cstr(&[0x0u8, 0x2u8, 0x0]).unwrap(), CStr::from_bytes_with_nul(&[0x0u8]).unwrap());
+        assert_eq!(bytes_to_cstr(&[0x0u8, 0x0]).unwrap(), CStr::from_bytes_with_nul(&[0x0u8]).unwrap());
+        assert_eq!(bytes_to_cstr(&[0x0u8]).unwrap(), CStr::from_bytes_with_nul(&[0x0u8]).unwrap());
 
         bytes_to_cstr(&[0x1u8]).unwrap_err();
         bytes_to_cstr(&[0x1u8, 0x1]).unwrap_err();
@@ -211,10 +202,7 @@ mod tests {
         assert_eq!(encode_io_error_kind(ErrorKind::NotFound), libc::ENOENT);
         assert_eq!(encode_io_error_kind(ErrorKind::Interrupted), libc::EINTR);
         assert_eq!(encode_io_error_kind(ErrorKind::AlreadyExists), libc::EEXIST);
-        assert_eq!(
-            encode_io_error_kind(ErrorKind::WouldBlock),
-            libc::EWOULDBLOCK
-        );
+        assert_eq!(encode_io_error_kind(ErrorKind::WouldBlock), libc::EWOULDBLOCK);
         assert_eq!(encode_io_error_kind(ErrorKind::TimedOut), libc::EIO);
     }
 }

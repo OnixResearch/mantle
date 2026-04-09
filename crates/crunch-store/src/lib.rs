@@ -11,19 +11,22 @@ mod export;
 mod handle;
 mod query;
 
-pub use ca_mapping::{CaMappings, OutputMap};
-pub use closure::{resolve_closure, MAX_CLOSURE_DEPTH};
+pub use ca_mapping::CaMappings;
+pub use ca_mapping::OutputMap;
+pub use closure::MAX_CLOSURE_DEPTH;
+pub use closure::resolve_closure;
 pub use error::Error;
-pub use export::{export_castore_to_disk, MAX_EXPORT_DEPTH};
-pub use handle::{CacheHit, StoreConfig, StoreHandle};
-pub use query::{
-    PathInfoDetail,
-    SignResult,
-    SignatureVerifyResult,
-    VerifyResult,
-    store_info,
-    store_list,
-    store_sign,
-    store_verify,
-    store_verify_signatures,
-};
+pub use export::MAX_EXPORT_DEPTH;
+pub use export::export_castore_to_disk;
+pub use handle::CacheHit;
+pub use handle::StoreConfig;
+pub use handle::StoreHandle;
+pub use query::PathInfoDetail;
+pub use query::SignResult;
+pub use query::SignatureVerifyResult;
+pub use query::VerifyResult;
+pub use query::store_info;
+pub use query::store_list;
+pub use query::store_sign;
+pub use query::store_verify;
+pub use query::store_verify_signatures;

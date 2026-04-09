@@ -1,7 +1,12 @@
+use std::io;
+use std::str;
 use std::sync::LazyLock;
-use std::{io, str};
 
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::black_box;
+use criterion::criterion_group;
+use criterion::criterion_main;
 use mimalloc::MiMalloc;
 use nix_compat::narinfo::NarInfo;
 
@@ -21,14 +26,9 @@ Sig: cache.nixos.org-1:xcL67rBZPcdVZudDLpLeddkBa0KaFTw5A0udnaa0axysjrQ6Nvd9p3BLZ
 "#;
 
 static CASES: LazyLock<&'static [&'static str]> = LazyLock::new(|| {
-    let data =
-        zstd::decode_all(io::Cursor::new(include_bytes!("../testdata/narinfo.zst"))).unwrap();
+    let data = zstd::decode_all(io::Cursor::new(include_bytes!("../testdata/narinfo.zst"))).unwrap();
     let data = str::from_utf8(Vec::leak(data)).unwrap();
-    Vec::leak(
-        data.split_inclusive("\n\n")
-            .map(|s| s.strip_suffix('\n').unwrap())
-            .collect::<Vec<_>>(),
-    )
+    Vec::leak(data.split_inclusive("\n\n").map(|s| s.strip_suffix('\n').unwrap()).collect::<Vec<_>>())
 });
 
 pub fn parse(c: &mut Criterion) {
@@ -48,18 +48,12 @@ pub fn parse(c: &mut Criterion) {
             NarInfo::parse(case).expect("should parse");
         }
 
-        g.throughput(Throughput::Bytes(
-            CASES.iter().map(|s| s.len() as u64).sum(),
-        ));
+        g.throughput(Throughput::Bytes(CASES.iter().map(|s| s.len() as u64).sum()));
         g.bench_with_input("many", &*CASES, |b, data| {
             let mut vec = vec![];
             b.iter(|| {
                 vec.clear();
-                vec.extend(
-                    black_box(data)
-                        .iter()
-                        .map(|s| NarInfo::parse(s).ok().unwrap()),
-                );
+                vec.extend(black_box(data).iter().map(|s| NarInfo::parse(s).ok().unwrap()));
                 black_box(&vec);
             });
         });

@@ -1,16 +1,26 @@
 use std::future::poll_fn;
-use std::io::{self, Cursor};
+use std::io::Cursor;
+use std::io::{self};
 use std::ops::RangeInclusive;
 use std::pin::Pin;
-use std::task::{Context, Poll, ready};
+use std::task::Context;
+use std::task::Poll;
+use std::task::ready;
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use pin_project_lite::pin_project;
-use tokio::io::{AsyncBufRead, AsyncRead, AsyncReadExt, ReadBuf};
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::ReadBuf;
 
-use crate::wire::{EMPTY_BYTES, ProtocolVersion};
-
-use super::{Error, NixRead};
+use super::Error;
+use super::NixRead;
+use crate::wire::EMPTY_BYTES;
+use crate::wire::ProtocolVersion;
 
 pub struct NixReaderBuilder {
     buf: Option<BytesMut>,
@@ -81,8 +91,7 @@ impl NixReader<Cursor<Vec<u8>>> {
 }
 
 impl<R> NixReader<R>
-where
-    R: AsyncReadExt,
+where R: AsyncReadExt
 {
     pub fn new(reader: R) -> NixReader<R> {
         NixReader::builder().build(reader)
@@ -102,10 +111,7 @@ where
         self.buf.capacity() - self.buf.len()
     }
 
-    fn poll_force_fill_buf(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<io::Result<usize>> {
+    fn poll_force_fill_buf(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
         // Ensure that buffer has space for at least reserved_buf_size bytes
         if self.remaining_mut() < self.reserved_buf_size {
             let me = self.as_mut().project();
@@ -133,8 +139,7 @@ where
 }
 
 impl<R> NixReader<R>
-where
-    R: AsyncReadExt + Unpin,
+where R: AsyncReadExt + Unpin
 {
     async fn force_fill(&mut self) -> io::Result<usize> {
         let mut p = Pin::new(self);
@@ -144,8 +149,7 @@ where
 }
 
 impl<R> NixRead for NixReader<R>
-where
-    R: AsyncReadExt + Send + Unpin,
+where R: AsyncReadExt + Send + Unpin
 {
     type Error = io::Error;
 
@@ -166,15 +170,8 @@ where
         Ok(Some(num))
     }
 
-    async fn try_read_bytes_limited(
-        &mut self,
-        limit: RangeInclusive<usize>,
-    ) -> Result<Option<Bytes>, Self::Error> {
-        assert!(
-            *limit.end() <= self.max_buf_size,
-            "The limit must be smaller than {}",
-            self.max_buf_size
-        );
+    async fn try_read_bytes_limited(&mut self, limit: RangeInclusive<usize>) -> Result<Option<Bytes>, Self::Error> {
+        assert!(*limit.end() <= self.max_buf_size, "The limit must be smaller than {}", self.max_buf_size);
         match self.try_read_number().await? {
             Some(raw_len) => {
                 // Check that length is in range and convert to usize
@@ -198,9 +195,7 @@ where
                 }
                 while self.buf.len() < aligned {
                     if self.force_fill().await? == 0 {
-                        return Err(Self::Error::missing_data(
-                            "unexpected end-of-file reading bytes",
-                        ));
+                        return Err(Self::Error::missing_data("unexpected end-of-file reading bytes"));
                     }
                 }
                 let mut contents = self.buf.split_to(aligned);
@@ -218,25 +213,17 @@ where
         }
     }
 
-    fn try_read_bytes(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
+    fn try_read_bytes(&mut self) -> impl std::future::Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
         self.try_read_bytes_limited(0..=self.max_buf_size)
     }
 
-    fn read_bytes(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<Bytes, Self::Error>> + Send + '_ {
+    fn read_bytes(&mut self) -> impl std::future::Future<Output = Result<Bytes, Self::Error>> + Send + '_ {
         self.read_bytes_limited(0..=self.max_buf_size)
     }
 }
 
 impl<R: AsyncRead> AsyncRead for NixReader<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         let rem = ready!(self.as_mut().poll_fill_buf(cx))?;
         let amt = std::cmp::min(rem.len(), buf.remaining());
         buf.put_slice(&rem[0..amt]);
@@ -286,9 +273,7 @@ mod test {
 
     #[tokio::test(start_paused = true)]
     async fn test_read_u64_rest() {
-        let mock = Builder::new()
-            .read(&hex!("0100 0000 0000 0000 0123 4567 89AB CDEF"))
-            .build();
+        let mock = Builder::new().read(&hex!("0100 0000 0000 0000 0123 4567 89AB CDEF")).build();
         let mut reader = NixReader::new(mock);
 
         assert_eq!(1, reader.read_number().await.unwrap());
@@ -323,10 +308,7 @@ mod test {
         let mock = Builder::new().build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.read_number().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.read_number().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
@@ -342,25 +324,15 @@ mod test {
         let mock = Builder::new().read(&hex!("0100 0000 0000")).build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.try_read_number().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.try_read_number().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
     async fn test_try_read_u64_eof2() {
-        let mock = Builder::new()
-            .read(&hex!("0100"))
-            .wait(Duration::ZERO)
-            .read(&hex!("0000 0000"))
-            .build();
+        let mock = Builder::new().read(&hex!("0100")).wait(Duration::ZERO).read(&hex!("0000 0000")).build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.try_read_number().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.try_read_number().await.unwrap_err().kind());
     }
 
     #[rstest]
@@ -387,10 +359,7 @@ mod test {
         let mock = Builder::new().build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.read_bytes().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.read_bytes().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
@@ -403,32 +372,18 @@ mod test {
 
     #[tokio::test(start_paused = true)]
     async fn test_try_read_bytes_missing_data() {
-        let mock = Builder::new()
-            .read(&hex!("0500"))
-            .wait(Duration::ZERO)
-            .read(&hex!("0000 0000"))
-            .build();
+        let mock = Builder::new().read(&hex!("0500")).wait(Duration::ZERO).read(&hex!("0000 0000")).build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.try_read_bytes().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.try_read_bytes().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
     async fn test_try_read_bytes_missing_padding() {
-        let mock = Builder::new()
-            .read(&hex!("0200 0000 0000 0000"))
-            .wait(Duration::ZERO)
-            .read(&hex!("1234"))
-            .build();
+        let mock = Builder::new().read(&hex!("0200 0000 0000 0000")).wait(Duration::ZERO).read(&hex!("1234")).build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::UnexpectedEof,
-            reader.try_read_bytes().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::UnexpectedEof, reader.try_read_bytes().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
@@ -440,10 +395,7 @@ mod test {
             .build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::InvalidData,
-            reader.read_bytes().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::InvalidData, reader.read_bytes().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
@@ -451,27 +403,15 @@ mod test {
         let mock = Builder::new().read(&hex!("FFFF 0000 0000 0000")).build();
         let mut reader = NixReader::new(mock);
 
-        assert_eq!(
-            io::ErrorKind::InvalidData,
-            reader.read_bytes_limited(0..=50).await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::InvalidData, reader.read_bytes_limited(0..=50).await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
     async fn test_read_bytes_length_overflow() {
         let mock = Builder::new().read(&hex!("F9FF FFFF FFFF FFFF")).build();
-        let mut reader = NixReader::builder()
-            .set_max_buf_size(usize::MAX)
-            .build(mock);
+        let mut reader = NixReader::builder().set_max_buf_size(usize::MAX).build(mock);
 
-        assert_eq!(
-            io::ErrorKind::InvalidData,
-            reader
-                .read_bytes_limited(0..=usize::MAX)
-                .await
-                .unwrap_err()
-                .kind()
-        );
+        assert_eq!(io::ErrorKind::InvalidData, reader.read_bytes_limited(0..=usize::MAX).await.unwrap_err().kind());
     }
 
     // FUTUREWORK: Test this on supported hardware
@@ -481,10 +421,7 @@ mod test {
         let len = (usize::MAX as u64) + 1;
         let mock = Builder::new().read(&len.to_le_bytes()).build();
         let mut reader = NixReader::new(mock);
-        assert_eq!(
-            std::io::ErrorKind::InvalidData,
-            reader.read_value::<usize>().await.unwrap_err().kind()
-        );
+        assert_eq!(std::io::ErrorKind::InvalidData, reader.read_value::<usize>().await.unwrap_err().kind());
     }
 
     // FUTUREWORK: Test this on supported hardware
@@ -494,18 +431,12 @@ mod test {
         let len = (usize::MAX - 6) as u64;
         let mock = Builder::new().read(&len.to_le_bytes()).build();
         let mut reader = NixReader::new(mock);
-        assert_eq!(
-            std::io::ErrorKind::InvalidData,
-            reader.read_value::<usize>().await.unwrap_err().kind()
-        );
+        assert_eq!(std::io::ErrorKind::InvalidData, reader.read_value::<usize>().await.unwrap_err().kind());
     }
 
     #[tokio::test(start_paused = true)]
     async fn test_buffer_resize() {
-        let mock = Builder::new()
-            .read(&hex!("0100"))
-            .read(&hex!("0000 0000 0000"))
-            .build();
+        let mock = Builder::new().read(&hex!("0100")).read(&hex!("0000 0000 0000")).build();
         let mut reader = NixReader::builder().set_reserved_buf_size(8).build(mock);
         // buffer has no capacity initially
         assert_eq!(0, reader.buffer_mut().capacity());

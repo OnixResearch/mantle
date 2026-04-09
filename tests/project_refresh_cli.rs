@@ -1,19 +1,27 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
 use assert_cmd::Command;
-use crunch_project::{HashAlgo, LockEntry, Lockfile, LockedHash, LockedKind, generate_inputs_ncl};
+use crunch_project::HashAlgo;
+use crunch_project::LockEntry;
+use crunch_project::LockedHash;
+use crunch_project::LockedKind;
+use crunch_project::Lockfile;
+use crunch_project::generate_inputs_ncl;
 use digest::Digest;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use nix_compat::nixhash::NixHash;
 use snix_castore::Node;
 use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_castore::import::fs::ingest_path;
 use snix_store::nar::write_nar;
 use snix_store::utils::AsyncIoBridge;
-use tempfile::{TempDir, tempdir};
+use tempfile::TempDir;
+use tempfile::tempdir;
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -40,11 +48,7 @@ fn read_lock(dir: &Path) -> Lockfile {
 }
 
 fn run_git(dir: &Path, args: &[&str]) -> String {
-    let output = ProcessCommand::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
+    let output = ProcessCommand::new("git").args(args).current_dir(dir).output().unwrap();
     assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
@@ -68,12 +72,7 @@ fn checkout_git_tree(repo: &Path, rev: &str) -> TempDir {
     let bare = tmp.path().join("source.git");
     let checkout = tmp.path().join("checkout");
 
-    let clone = ProcessCommand::new("git")
-        .args(["clone", "--bare"])
-        .arg(repo)
-        .arg(&bare)
-        .output()
-        .unwrap();
+    let clone = ProcessCommand::new("git").args(["clone", "--bare"]).arg(repo).arg(&bare).output().unwrap();
     assert!(clone.status.success(), "git clone failed: {}", String::from_utf8_lossy(&clone.stderr));
 
     std::fs::create_dir_all(&checkout).unwrap();
@@ -85,32 +84,26 @@ fn checkout_git_tree(repo: &Path, rev: &str) -> TempDir {
         .args(["checkout", rev, "--", "."])
         .output()
         .unwrap();
-    assert!(checkout_out.status.success(), "git checkout failed: {}", String::from_utf8_lossy(&checkout_out.stderr));
+    assert!(
+        checkout_out.status.success(),
+        "git checkout failed: {}",
+        String::from_utf8_lossy(&checkout_out.stderr)
+    );
 
     tmp
 }
 
 fn compute_recursive_hash(path: &Path, algo: HashAlgo) -> String {
     let root = path.to_path_buf();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     rt.block_on(async move {
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test-refresh".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .unwrap();
-        let node = ingest_path::<_, _, _, &[u8]>(
-            blob_service.clone(),
-            directory_service.clone(),
-            &root,
-            None,
-        )
-        .await
-        .unwrap();
+        let directory_service =
+            RedbDirectoryService::new_temporary("test-refresh".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap();
+        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
+            .await
+            .unwrap();
         nar_hash_to_sri(&node, algo, blob_service, directory_service).await
     })
 }
@@ -124,25 +117,19 @@ async fn nar_hash_to_sri(
     let hash = match algo {
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .unwrap();
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
             let digest: [u8; 32] = hasher.finalize().into();
             NixHash::Sha256(digest)
         }
         HashAlgo::Sha512 => {
             let mut hasher = sha2::Sha512::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .unwrap();
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
             let digest: [u8; 64] = hasher.finalize().into();
             NixHash::Sha512(Box::new(digest))
         }
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .unwrap();
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
             NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes())
         }
     };
@@ -301,18 +288,15 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
     );
 
     let mut lock = Lockfile::new();
-    lock.inputs.insert(
-        "stale".into(),
-        LockEntry {
-            kind: LockedKind::File { url: stale_url.clone() },
-            hash: LockedHash {
-                algo: HashAlgo::Sha256,
-                value: "sha256-old=".into(),
-            },
-            patches: vec![],
-            mirrors: vec![],
+    lock.inputs.insert("stale".into(), LockEntry {
+        kind: LockedKind::File { url: stale_url.clone() },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".into(),
         },
-    );
+        patches: vec![],
+        mirrors: vec![],
+    });
     write_project_files(dir.path(), &manifest, &lock);
 
     let lock_before = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();

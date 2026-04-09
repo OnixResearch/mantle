@@ -1,22 +1,21 @@
-use crate::fixtures::CASTORE_NODE_HELLOWORLD;
-use crate::nar::write_nar;
-use crate::tests::fixtures::*;
+use std::io;
+use std::sync::Arc;
+
 use rstest::*;
 use rstest_reuse::*;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use std::io;
-use std::sync::Arc;
 use tokio::io::sink;
+
+use crate::fixtures::CASTORE_NODE_HELLOWORLD;
+use crate::nar::write_nar;
+use crate::tests::fixtures::*;
 
 /// Make sure the NARRenderer fails if a referred blob doesn't exist.
 #[rstest]
 #[tokio::test]
-async fn single_file_missing_blob(
-    blob_service: Arc<dyn BlobService>,
-    directory_service: Arc<dyn DirectoryService>,
-) {
+async fn single_file_missing_blob(blob_service: Arc<dyn BlobService>, directory_service: Arc<dyn DirectoryService>) {
     let e = write_nar(
         sink(),
         &CASTORE_NODE_HELLOWORLD,

@@ -1,8 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use bytes::Bytes;
-use snix_castore::{Node, PathComponent};
+use snix_castore::Node;
+use snix_castore::PathComponent;
 /// A BuildRequest describes the request of something to be run on the builder.
 /// It is distinct from an actual \[Build\] that has already happened, or might be
 /// currently ongoing.
@@ -19,16 +22,14 @@ use snix_castore::{Node, PathComponent};
 ///
 /// There's also a big difference when it comes to how inputs are modelled:
 ///
-/// * Nix only uses store path (strings) to describe the inputs.
-///   As store paths can be input-addressed, a certain store path can contain
-///   different contents (as not all store paths are binary reproducible).
-///   This requires that for every input-addressed input, the builder has access
-///   to either the input's deriver (and needs to build it) or else a trusted
-///   source for the built input.
-///   to upload input-addressed paths, requiring the trusted users concept.
-/// * snix-build records a list of snix.castore.v1.Node as inputs.
-///   These map from the store path base name to their contents, relieving the
-///   builder from having to "trust" any input-addressed paths, contrary to Nix.
+/// * Nix only uses store path (strings) to describe the inputs. As store paths can be
+///   input-addressed, a certain store path can contain different contents (as not all store paths
+///   are binary reproducible). This requires that for every input-addressed input, the builder has
+///   access to either the input's deriver (and needs to build it) or else a trusted source for the
+///   built input. to upload input-addressed paths, requiring the trusted users concept.
+/// * snix-build records a list of snix.castore.v1.Node as inputs. These map from the store path
+///   base name to their contents, relieving the builder from having to "trust" any input-addressed
+///   paths, contrary to Nix.
 ///
 /// While this approach gives a better hermeticity, it has one downside:
 /// A BuildRequest can only be sent once the contents of all its inputs are known.

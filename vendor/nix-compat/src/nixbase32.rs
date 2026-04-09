@@ -9,7 +9,8 @@
 
 use std::fmt::Write;
 
-use data_encoding::{DecodeError, DecodeKind};
+use data_encoding::DecodeError;
+use data_encoding::DecodeKind;
 
 const ALPHABET: &[u8; 32] = b"0123456789abcdfghijklmnpqrsvwxyz";
 
@@ -193,13 +194,10 @@ mod tests {
             super::decode_fixed("00bgd045z0d4icpbc2yyz4gx48ak44la").unwrap(),
             hex!("8a12321522fd91efbd60ebb2481af88580f61600")
         );
-        assert_eq!(
-            super::decode_fixed::<32>("00").unwrap_err(),
-            super::DecodeError {
-                position: 2,
-                kind: super::DecodeKind::Length
-            }
-        );
+        assert_eq!(super::decode_fixed::<32>("00").unwrap_err(), super::DecodeError {
+            position: 2,
+            kind: super::DecodeKind::Length
+        });
     }
 
     #[test]

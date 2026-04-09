@@ -1,11 +1,10 @@
-use tokio::io::{
-    self, AsyncReadExt,
-    ErrorKind::{InvalidData, UnexpectedEof},
-};
-
-use crate::nar::wire::Tag;
+use tokio::io::AsyncReadExt;
+use tokio::io::ErrorKind::InvalidData;
+use tokio::io::ErrorKind::UnexpectedEof;
+use tokio::io::{self};
 
 use super::Reader;
+use crate::nar::wire::Tag;
 
 /// Consume a known token from the reader.
 pub async fn token<const N: usize>(reader: &mut Reader<'_>, token: &[u8; N]) -> io::Result<()> {

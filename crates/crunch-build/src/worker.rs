@@ -11,23 +11,26 @@
 //! The Worker borrows `&mut Builder` for I/O — it never does I/O itself.
 //! Goal state transitions are validated by the pure `Goal` API.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildService;
-
 use tokio::sync::Semaphore;
-use tokio::task::JoinSet;
-use tracing::{debug, info};
-
-use crate::registry::DerivationRegistry;
-
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
+use tracing::debug;
+use tracing::info;
 
-use crate::goal::{GoalRegistry, GoalState, Goal, MAX_GOALS};
-use crate::orchestrate::{BuildOutcome, Builder};
 use crate::Error;
+use crate::goal::Goal;
+use crate::goal::GoalRegistry;
+use crate::goal::GoalState;
+use crate::goal::MAX_GOALS;
+use crate::orchestrate::BuildOutcome;
+use crate::orchestrate::Builder;
+use crate::registry::DerivationRegistry;
 
 /// A derivation arriving from the eval thread.
 ///
@@ -49,8 +52,6 @@ pub struct EvalMessage {
     /// (insert is idempotent by drv path).
     pub new_entries: Vec<(StorePath<String>, [u8; 32], nix_compat::derivation::Derivation, bool)>,
 }
-
-
 
 /// Maximum concurrent in-flight builds. Clamped by the semaphore but
 /// tracked here for assertions.
@@ -146,24 +147,24 @@ impl Worker {
         while let Some((sp, root)) = queue.pop_front() {
             iterations = iterations.saturating_add(1);
             if iterations > limit {
-                return Err(Error::Store(format!(
-                    "want() BFS exceeded iteration limit ({limit})"
-                )));
+                return Err(Error::Store(format!("want() BFS exceeded iteration limit ({limit})")));
             }
 
             let key = sp.to_absolute_path();
 
             // Already tracked — just upgrade to root if needed.
             if let Some(goal) = self.registry.get_mut(&key) {
-                if root { goal.is_root = true; }
+                if root {
+                    goal.is_root = true;
+                }
                 continue;
             }
 
             // Look up derivation.
             let drv_abs = sp.to_absolute_path_with_prefix(known_paths.store_dir());
-            let entry = known_paths.get_by_drv_path(&drv_abs).ok_or_else(|| {
-                Error::DerivationNotFound { path: sp.clone() }
-            })?;
+            let entry = known_paths
+                .get_by_drv_path(&drv_abs)
+                .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
             let derivation = entry.derivation.clone();
 
             let goal = if root {
@@ -173,11 +174,7 @@ impl Worker {
             };
             self.registry.insert(key.clone(), goal)?;
 
-            let dep_drv_paths: Vec<StorePath<String>> = derivation
-                .input_derivations
-                .keys()
-                .cloned()
-                .collect();
+            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
 
             // Enqueue deps for creation.
             for dep_sp in &dep_drv_paths {
@@ -195,19 +192,11 @@ impl Worker {
 
     /// Wire waiter edges for a goal's deps and inspect (Pending →
     /// Waiting/Ready). All deps must already exist in the registry.
-    fn wire_deps_and_inspect(
-        &mut self,
-        key: &str,
-        dep_drv_paths: &[StorePath<String>],
-    ) -> Result<(), Error> {
+    fn wire_deps_and_inspect(&mut self, key: &str, dep_drv_paths: &[StorePath<String>]) -> Result<(), Error> {
         let unbuilt_dep_keys: Vec<String> = dep_drv_paths
             .iter()
             .map(|sp| sp.to_absolute_path())
-            .filter(|dep_key| {
-                self.registry.get(dep_key)
-                    .map(|g| g.state != GoalState::Done)
-                    .unwrap_or(false)
-            })
+            .filter(|dep_key| self.registry.get(dep_key).map(|g| g.state != GoalState::Done).unwrap_or(false))
             .collect();
 
         for dep_key in &unbuilt_dep_keys {
@@ -216,9 +205,10 @@ impl Worker {
             }
         }
 
-        let goal = self.registry.get_mut(key).ok_or_else(|| {
-            Error::Store(format!("worker: goal not found in registry: {key}"))
-        })?;
+        let goal = self
+            .registry
+            .get_mut(key)
+            .ok_or_else(|| Error::Store(format!("worker: goal not found in registry: {key}")))?;
         let state = goal.inspect(unbuilt_dep_keys)?;
 
         if *state == GoalState::Ready {
@@ -260,32 +250,37 @@ impl Worker {
         loop {
             iterations = iterations.saturating_add(1);
             if iterations > iteration_limit {
-                return Err(Error::Store(format!(
-                    "worker loop exceeded iteration limit ({iteration_limit})"
-                )));
+                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_limit})")));
             }
 
-            let dispatched = self.dispatch_ready(
-                builder, known_paths, &sem, &mut join_set,
-                &mut pending_meta, &mut outcomes, &mut failed,
-            ).await?;
+            let dispatched = self
+                .dispatch_ready(
+                    builder,
+                    known_paths,
+                    &sem,
+                    &mut join_set,
+                    &mut pending_meta,
+                    &mut outcomes,
+                    &mut failed,
+                )
+                .await?;
 
-            if self.registry.all_roots_terminal() { break; }
+            if self.registry.all_roots_terminal() {
+                break;
+            }
 
             if join_set.is_empty() {
                 if dispatched == 0 {
-                    return Err(Error::Store(
-                        "worker deadlock: no ready goals and no in-flight builds".into(),
-                    ));
+                    return Err(Error::Store("worker deadlock: no ready goals and no in-flight builds".into()));
                 }
                 continue;
             }
 
-            let Some(join_result) = join_set.join_next().await else { continue };
-            self.process_join_result(
-                join_result, builder, known_paths,
-                &mut pending_meta, &mut outcomes, &mut failed,
-            ).await?;
+            let Some(join_result) = join_set.join_next().await else {
+                continue;
+            };
+            self.process_join_result(join_result, builder, known_paths, &mut pending_meta, &mut outcomes, &mut failed)
+                .await?;
             completed_count = completed_count.saturating_add(1);
         }
 
@@ -327,9 +322,7 @@ impl Worker {
         loop {
             iterations = iterations.saturating_add(1);
             if iterations > iteration_limit {
-                return Err(Error::Store(format!(
-                    "worker loop exceeded iteration limit ({iteration_limit})"
-                )));
+                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_limit})")));
             }
 
             if !eval_done {
@@ -337,22 +330,41 @@ impl Worker {
             }
 
             self.dispatch_ready(
-                builder, known_paths, &sem, &mut join_set,
-                &mut pending_meta, &mut outcomes, &mut failed,
-            ).await?;
+                builder,
+                known_paths,
+                &sem,
+                &mut join_set,
+                &mut pending_meta,
+                &mut outcomes,
+                &mut failed,
+            )
+            .await?;
 
-            if eval_done && self.registry.all_roots_terminal() { break; }
+            if eval_done && self.registry.all_roots_terminal() {
+                break;
+            }
 
             self.wait_for_event(
-                &mut eval_done, rx, &mut join_set, builder, known_paths,
-                &mut pending_meta, &mut outcomes, &mut failed,
+                &mut eval_done,
+                rx,
+                &mut join_set,
+                builder,
+                known_paths,
+                &mut pending_meta,
+                &mut outcomes,
+                &mut failed,
                 &mut completed_count,
-            ).await?;
+            )
+            .await?;
         }
 
-        info!(completed = completed_count, succeeded = outcomes.len(),
-              failed = failed.len(), roots = self.registry.root_count(),
-              "worker streaming finished");
+        info!(
+            completed = completed_count,
+            succeeded = outcomes.len(),
+            failed = failed.len(),
+            roots = self.registry.root_count(),
+            "worker streaming finished"
+        );
         Ok(WorkerResult { outcomes, failed })
     }
 
@@ -375,7 +387,9 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         if *eval_done {
-            let Some(join_result) = join_set.join_next().await else { return Ok(()); };
+            let Some(join_result) = join_set.join_next().await else {
+                return Ok(());
+            };
             self.process_join_result(join_result, builder, known_paths, pending_meta, outcomes, failed).await?;
             *completed_count = completed_count.saturating_add(1);
         } else if join_set.is_empty() {
@@ -431,11 +445,7 @@ impl Worker {
     /// Entries arrive from the convert thread. Diamond deps that
     /// were already registered by an earlier message are silently
     /// skipped (DerivationRegistry.insert is idempotent by drv path).
-    fn accept_eval_message(
-        &mut self,
-        msg: EvalMessage,
-        known_paths: &mut DerivationRegistry,
-    ) -> Result<(), Error> {
+    fn accept_eval_message(&mut self, msg: EvalMessage, known_paths: &mut DerivationRegistry) -> Result<(), Error> {
         debug!(
             label = %msg.label,
             drv = %msg.drv_path,
@@ -451,7 +461,7 @@ impl Worker {
     }
 
     /// Process a JoinSet result: unwrap the join, then handle success
-    /// or failure. Build errors are caught and routed to 
+    /// or failure. Build errors are caught and routed to
     /// instead of aborting the entire Worker.
     async fn process_join_result<BServ>(
         &mut self,
@@ -468,9 +478,15 @@ impl Worker {
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
                 self.handle_build_completion(
-                    &drv_key, build_result, builder, known_paths,
-                    pending_meta, outcomes, failed,
-                ).await
+                    &drv_key,
+                    build_result,
+                    builder,
+                    known_paths,
+                    pending_meta,
+                    outcomes,
+                    failed,
+                )
+                .await
             }
             Ok((drv_key, Err(build_err))) => {
                 // The sandbox build failed. Route to fail_goal so
@@ -505,14 +521,11 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let prepared = pending_meta.remove(drv_key).ok_or_else(|| {
-            Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}"))
-        })?;
+        let prepared = pending_meta
+            .remove(drv_key)
+            .ok_or_else(|| Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}")))?;
 
-        let outcome = match builder
-            .finish_build(&prepared, build_result, known_paths)
-            .await
-        {
+        let outcome = match builder.finish_build(&prepared, build_result, known_paths).await {
             Ok(outcome) => outcome,
             Err(e) => {
                 let err_msg = format!("{e}");
@@ -523,9 +536,7 @@ impl Worker {
         };
 
         // Check for dynamic derivation outputs (.drv files).
-        self.detect_dynamic_derivations(
-            drv_key, &outcome, builder, known_paths,
-        ).await?;
+        self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths).await?;
 
         self.complete_goal(drv_key, outcome, outcomes, failed)
     }
@@ -554,15 +565,11 @@ impl Worker {
             }
 
             // Read the blob content from castore.
-            let content = builder
-                .read_blob(&path_info.node)
-                .await?;
+            let content = builder.read_blob(&path_info.node).await?;
 
             if let Some(drv) = crate::dynamic::parse_drv_bytes(&content)? {
                 let sd = known_paths.store_dir().to_string();
-                let drv_path = crate::dynamic::register_dynamic_drv(
-                    &drv, known_paths, &sd,
-                )?;
+                let drv_path = crate::dynamic::register_dynamic_drv(&drv, known_paths, &sd)?;
 
                 info!(
                     producer = %outcome.drv_path.name(),
@@ -590,18 +597,15 @@ impl Worker {
             // (Multiple dynamic outputs from one producer is rare;
             // first match is the simplest correct behavior.)
             if let Some(dyn_drv) = discovered.first() {
-                let goal = self.registry.get_mut(awaiting_key)
-                    .ok_or_else(|| Error::Store(format!(
-                        "worker: awaiting goal not found: {awaiting_key}"
-                    )))?;
+                let goal = self
+                    .registry
+                    .get_mut(awaiting_key)
+                    .ok_or_else(|| Error::Store(format!("worker: awaiting goal not found: {awaiting_key}")))?;
                 goal.set_derivation(dyn_drv.derivation.clone())?;
 
                 // Now inspect deps and wire waiters (same as want()).
-                let dep_drv_paths: Vec<StorePath<String>> = dyn_drv.derivation
-                    .input_derivations
-                    .keys()
-                    .cloned()
-                    .collect();
+                let dep_drv_paths: Vec<StorePath<String>> =
+                    dyn_drv.derivation.input_derivations.keys().cloned().collect();
                 // Create sub-goals for deps we haven't seen.
                 for dep_sp in &dep_drv_paths {
                     let dep_key = dep_sp.to_absolute_path();
@@ -609,10 +613,7 @@ impl Worker {
                         // Dep must be in DerivationRegistry (registered above).
                         let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
                         if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
-                            let dep_goal = crate::goal::Goal::new(
-                                dep_sp.clone(),
-                                entry.derivation.clone(),
-                            );
+                            let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
                             self.registry.insert(dep_key.clone(), dep_goal)?;
                         }
                     }
@@ -622,8 +623,7 @@ impl Worker {
             }
         }
 
-        // 3. Create new root goals for discovered dynamic derivations
-        //    that don't have awaiting goals.
+        // 3. Create new root goals for discovered dynamic derivations that don't have awaiting goals.
         for dyn_drv in &discovered {
             let key = dyn_drv.drv_store_path.to_absolute_path();
             if self.registry.contains(&key) {
@@ -658,23 +658,20 @@ impl Worker {
         let mut dispatched: u32 = 0;
 
         while let Some(drv_key) = self.ready_queue.pop_front() {
-            let goal = self.registry.get(&drv_key).ok_or_else(|| {
-                Error::Store(format!("ready goal missing from registry: {drv_key}"))
-            })?;
+            let goal = self
+                .registry
+                .get(&drv_key)
+                .ok_or_else(|| Error::Store(format!("ready goal missing from registry: {drv_key}")))?;
 
             // Tiger Style: assert state precondition.
-            debug_assert_eq!(
-                goal.state, GoalState::Ready,
-                "goal in ready queue but state is {:?}",
-                goal.state
-            );
+            debug_assert_eq!(goal.state, GoalState::Ready, "goal in ready queue but state is {:?}", goal.state);
 
             let drv_path = goal.drv_path.clone();
             let is_root = goal.is_root;
-            let derivation = goal.derivation.as_ref()
-                .ok_or_else(|| Error::Store(format!(
-                    "goal {drv_key} in Ready state but has no derivation"
-                )))?
+            let derivation = goal
+                .derivation
+                .as_ref()
+                .ok_or_else(|| Error::Store(format!("goal {drv_key} in Ready state but has no derivation")))?
                 .clone();
 
             match builder.prepare_build(&drv_path, &derivation, known_paths, is_root).await {
@@ -692,9 +689,10 @@ impl Worker {
                 }
                 Ok(PrepareResult::NeedsBuild(prepared)) => {
                     // Mark Building before spawning.
-                    let goal = self.registry.get_mut(&drv_key).ok_or_else(|| {
-                        Error::Store(format!("worker: goal vanished during dispatch: {drv_key}"))
-                    })?;
+                    let goal = self
+                        .registry
+                        .get_mut(&drv_key)
+                        .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
                     goal.mark_building()?;
 
                     let build_request = prepared.build_request.clone();
@@ -705,11 +703,9 @@ impl Worker {
                     let key = drv_key.clone();
 
                     join_set.spawn(async move {
-                        let _permit = sem.acquire_owned().await
-                            .map_err(|e| Error::Store(format!("semaphore: {e}")));
+                        let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
                         let build_result = match _permit {
-                            Ok(_p) => bs.do_build(build_request).await
-                                .map_err(|e| Error::Store(format!("build: {e}"))),
+                            Ok(_p) => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
                             Err(e) => Err(e),
                         };
                         (key, build_result)
@@ -732,9 +728,10 @@ impl Worker {
         outcomes: &mut Vec<BuildOutcome>,
         _failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
-        let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
-            Error::Store(format!("completing unknown goal: {drv_key}"))
-        })?;
+        let goal = self
+            .registry
+            .get_mut(drv_key)
+            .ok_or_else(|| Error::Store(format!("completing unknown goal: {drv_key}")))?;
 
         // Transition: Ready or Building → Done.
         // Cache hits are still in Ready state. Sandbox builds are in Building.
@@ -748,10 +745,7 @@ impl Worker {
                 goal.mark_done()?;
             }
             _ => {
-                return Err(Error::Store(format!(
-                    "completing goal {drv_key} in {:?} state",
-                    goal.state
-                )));
+                return Err(Error::Store(format!("completing goal {drv_key} in {:?} state", goal.state)));
             }
         }
 
@@ -762,17 +756,14 @@ impl Worker {
             outcomes.push(outcome);
         }
 
-        debug!(
-            drv = drv_key,
-            waiters = waiters.len(),
-            "goal completed"
-        );
+        debug!(drv = drv_key, waiters = waiters.len(), "goal completed");
 
         // Notify waiters.
         for waiter_key in &waiters {
-            let waiter = self.registry.get_mut(waiter_key).ok_or_else(|| {
-                Error::Store(format!("waiter goal missing: {waiter_key}"))
-            })?;
+            let waiter = self
+                .registry
+                .get_mut(waiter_key)
+                .ok_or_else(|| Error::Store(format!("waiter goal missing: {waiter_key}")))?;
 
             let became_ready = waiter.notify_dep_done()?;
             if became_ready {
@@ -787,15 +778,11 @@ impl Worker {
     ///
     /// The error message is stored in the  for root goals
     /// so callers can report per-package errors.
-    fn fail_goal(
-        &mut self,
-        drv_key: &str,
-        error_msg: &str,
-        failed: &mut Vec<FailedGoal>,
-    ) -> Result<(), Error> {
-        let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
-            Error::Store(format!("failing unknown goal: {drv_key}"))
-        })?;
+    fn fail_goal(&mut self, drv_key: &str, error_msg: &str, failed: &mut Vec<FailedGoal>) -> Result<(), Error> {
+        let goal = self
+            .registry
+            .get_mut(drv_key)
+            .ok_or_else(|| Error::Store(format!("failing unknown goal: {drv_key}")))?;
 
         goal.mark_build_failed()?;
 
@@ -832,9 +819,10 @@ impl Worker {
         failed_dep_name: &str,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
-        let goal = self.registry.get_mut(drv_key).ok_or_else(|| {
-            Error::Store(format!("propagating failure to unknown goal: {drv_key}"))
-        })?;
+        let goal = self
+            .registry
+            .get_mut(drv_key)
+            .ok_or_else(|| Error::Store(format!("propagating failure to unknown goal: {drv_key}")))?;
 
         // Only propagate to goals still Waiting or AwaitingDerivation.
         if !matches!(goal.state, GoalState::Waiting { .. } | GoalState::AwaitingDerivation) {
@@ -870,15 +858,19 @@ impl Worker {
 // ── Type alias for PreparedBuild to avoid reaching into orchestrate internals ──
 // The Worker needs PreparedBuild and PrepareResult from orchestrate.rs.
 // For now we re-export them. Phase 4 cleanup will move them to a shared module.
-use crate::orchestrate::PreparedBuild;
 use crate::orchestrate::PrepareResult;
+use crate::orchestrate::PreparedBuild;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
+    use nix_compat::derivation::Derivation;
+    use nix_compat::derivation::Output;
+
     use super::*;
     use crate::goal::GoalState;
-    use nix_compat::derivation::{Derivation, Output};
-    use std::collections::{BTreeMap, BTreeSet};
 
     fn make_drv() -> Derivation {
         let mut outputs = BTreeMap::new();
@@ -1089,10 +1081,7 @@ mod tests {
         let leaf_key = leaf_sp.to_absolute_path();
         let top_key = top_sp.to_absolute_path();
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Ready);
-        assert!(matches!(
-            w.registry.get(&top_key).unwrap().state,
-            GoalState::Waiting { remaining_deps: 1 }
-        ));
+        assert!(matches!(w.registry.get(&top_key).unwrap().state, GoalState::Waiting { remaining_deps: 1 }));
 
         // Simulate completing the leaf.
         let outcome = crate::orchestrate::BuildOutcome {
@@ -1177,10 +1166,7 @@ mod tests {
         assert_eq!(w.registry.get(&right_key).unwrap().state, GoalState::Ready);
         // Top still Waiting (needs left + right).
         let top_key = top_sp.to_absolute_path();
-        assert!(matches!(
-            w.registry.get(&top_key).unwrap().state,
-            GoalState::Waiting { remaining_deps: 2 }
-        ));
+        assert!(matches!(w.registry.get(&top_key).unwrap().state, GoalState::Waiting { remaining_deps: 2 }));
     }
 
     // ── fail_goal / propagate_failure ─────────────────────────
@@ -1251,20 +1237,24 @@ mod tests {
         assert_eq!(w.registry.get(&bad_key).unwrap().state, GoalState::Failed);
         // good is still Waiting on shared, not failed.
         let good_key = good_sp.to_absolute_path();
-        assert!(matches!(
-            w.registry.get(&good_key).unwrap().state,
-            GoalState::Waiting { .. }
-        ));
+        assert!(matches!(w.registry.get(&good_key).unwrap().state, GoalState::Waiting { .. }));
         // bad is a root, so it should be in failed list.
         assert!(failed.iter().any(|f| f.drv_key == bad_key));
     }
 
     // ── run() integration tests ───────────────────────────────
 
-    use crate::orchestrate::Builder;
-    use crate::test_support::{MockBuildService, build_and_register, tmp_ds, test_pis, test_keypair, test_trusted_keys};
-    use snix_castore::blobservice::MemoryBlobService;
     use std::path::PathBuf;
+
+    use snix_castore::blobservice::MemoryBlobService;
+
+    use crate::orchestrate::Builder;
+    use crate::test_support::MockBuildService;
+    use crate::test_support::build_and_register;
+    use crate::test_support::test_keypair;
+    use crate::test_support::test_pis;
+    use crate::test_support::test_trusted_keys;
+    use crate::test_support::tmp_ds;
 
     #[tokio::test]
     async fn run_single_leaf_builds_once() {
@@ -1273,7 +1263,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1298,7 +1297,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1331,7 +1339,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1348,9 +1365,7 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3, "shared + left + right");
-        let shared_builds = recorded.iter()
-            .filter(|a| a.iter().any(|s| s.contains("shared")))
-            .count();
+        let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1, "shared built exactly once");
     }
 
@@ -1361,7 +1376,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1397,7 +1421,16 @@ mod tests {
         let (mock, _) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1416,14 +1449,29 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
         let (sp, _) = build_and_register("solo", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "solo".into(), drv_path: sp.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "solo".into(),
+            drv_path: sp.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
         drop(tx); // Close channel — eval done.
 
         let mut w = Worker::new(1);
@@ -1443,7 +1491,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1453,9 +1510,21 @@ mod tests {
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
 
         // Send first root.
-        tx.send(EvalMessage { label: "pkg-a".into(), drv_path: a.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "pkg-a".into(),
+            drv_path: a.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
         // Send second root.
-        tx.send(EvalMessage { label: "pkg-b".into(), drv_path: b.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "pkg-b".into(),
+            drv_path: b.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);
@@ -1474,7 +1543,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1483,8 +1561,20 @@ mod tests {
         let (top_b, _) = build_and_register("top-b", &[(shared.clone(), "out")], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "top-a".into(), drv_path: top_a.clone(), new_entries: vec![] }).await.unwrap();
-        tx.send(EvalMessage { label: "top-b".into(), drv_path: top_b.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "top-a".into(),
+            drv_path: top_a.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        tx.send(EvalMessage {
+            label: "top-b".into(),
+            drv_path: top_b.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);
@@ -1495,9 +1585,7 @@ mod tests {
         let recorded = calls.lock().unwrap();
         // shared + top-a + top-b = 3 builds (shared built once).
         assert_eq!(recorded.len(), 3);
-        let shared_builds = recorded.iter()
-            .filter(|a| a.iter().any(|s| s.contains("shared")))
-            .count();
+        let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1);
     }
 
@@ -1508,7 +1596,16 @@ mod tests {
         let (mock, _) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1531,7 +1628,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1541,7 +1647,13 @@ mod tests {
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
 
         // Send first root only.
-        tx.send(EvalMessage { label: "first".into(), drv_path: a.clone(), new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "first".into(),
+            drv_path: a.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
 
         // Spawn a task that sends second root after a short delay
         // (simulating slow eval).
@@ -1549,7 +1661,13 @@ mod tests {
         let b2 = b.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            tx2.send(EvalMessage { label: "second".into(), drv_path: b2, new_entries: vec![] }).await.unwrap();
+            tx2.send(EvalMessage {
+                label: "second".into(),
+                drv_path: b2,
+                new_entries: vec![],
+            })
+            .await
+            .unwrap();
             // Drop tx2 but tx is still alive — don't close channel yet.
         });
 
@@ -1581,16 +1699,22 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"),
-            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         // Build the derivation entries outside the registry.
         let mut scratch_kp = DerivationRegistry::default();
         let (sp, drv) = build_and_register("via-msg", &[], &mut scratch_kp);
-        let hdm = scratch_kp
-            .get_hdm_by_drv_path(&sp.to_absolute_path())
-            .unwrap();
+        let hdm = scratch_kp.get_hdm_by_drv_path(&sp.to_absolute_path()).unwrap();
 
         // Empty registry — the Worker has no knowledge of "via-msg" yet.
         let mut kp = DerivationRegistry::default();
@@ -1600,7 +1724,9 @@ mod tests {
             label: "via-msg".into(),
             drv_path: sp.clone(),
             new_entries: vec![(sp.clone(), hdm, drv, false)],
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(1);
@@ -1625,19 +1751,23 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"),
-            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         // Build derivation entries in a scratch registry.
         let mut scratch = DerivationRegistry::default();
         let (shared_sp, shared_drv) = build_and_register("shared", &[], &mut scratch);
-        let (a_sp, a_drv) = build_and_register(
-            "root-a", &[(shared_sp.clone(), "out")], &mut scratch,
-        );
-        let (b_sp, b_drv) = build_and_register(
-            "root-b", &[(shared_sp.clone(), "out")], &mut scratch,
-        );
+        let (a_sp, a_drv) = build_and_register("root-a", &[(shared_sp.clone(), "out")], &mut scratch);
+        let (b_sp, b_drv) = build_and_register("root-b", &[(shared_sp.clone(), "out")], &mut scratch);
 
         let shared_hdm = scratch.get_hdm_by_drv_path(&shared_sp.to_absolute_path()).unwrap();
         let a_hdm = scratch.get_hdm_by_drv_path(&a_sp.to_absolute_path()).unwrap();
@@ -1654,15 +1784,17 @@ mod tests {
                 (shared_sp.clone(), shared_hdm, shared_drv, false),
                 (a_sp.clone(), a_hdm, a_drv, false),
             ],
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         // Second root only brings root-b (shared already known).
         tx.send(EvalMessage {
             label: "root-b".into(),
             drv_path: b_sp.clone(),
-            new_entries: vec![
-                (b_sp.clone(), b_hdm, b_drv, false),
-            ],
-        }).await.unwrap();
+            new_entries: vec![(b_sp.clone(), b_hdm, b_drv, false)],
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);
@@ -1674,16 +1806,15 @@ mod tests {
         // shared + root-a + root-b = 3 builds, shared only once.
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3);
-        let shared_builds = recorded.iter()
-            .filter(|a| a.iter().any(|s| s.contains("shared")))
-            .count();
+        let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1);
     }
 
     // ── Dynamic derivation integration tests ─────────────────
 
-    use crate::test_support::DrvProducingMockBuildService;
     use std::collections::HashMap as StdHashMap;
+
+    use crate::test_support::DrvProducingMockBuildService;
 
     /// Build a derivation that produces `.drv` ATerm output.
     /// The Worker should detect it, parse the inner .drv, register
@@ -1706,7 +1837,16 @@ mod tests {
         let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         // Register the producer derivation. Its output path name must
@@ -1719,18 +1859,17 @@ mod tests {
         let result = w.run(&mut builder, &mut kp).await.unwrap();
 
         // The producer itself is a root, so at least 1 outcome.
-        assert!(
-            !result.outcomes.is_empty(),
-            "should have at least the producer outcome"
-        );
+        assert!(!result.outcomes.is_empty(), "should have at least the producer outcome");
         assert!(result.failed.is_empty(), "no failures expected");
 
         let recorded = calls.lock().unwrap();
         // Should have built the producer + the dynamically discovered inner drv.
         assert_eq!(
-            recorded.len(), 2,
+            recorded.len(),
+            2,
             "expected 2 builds (producer + dynamic inner), got {}: {:?}",
-            recorded.len(), *recorded
+            recorded.len(),
+            *recorded
         );
     }
 
@@ -1751,7 +1890,16 @@ mod tests {
         let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1762,7 +1910,9 @@ mod tests {
             label: "stream-producer.drv".into(),
             drv_path: producer_sp.clone(),
             new_entries: vec![],
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(1);
@@ -1772,10 +1922,7 @@ mod tests {
         assert!(result.failed.is_empty());
 
         let recorded = calls.lock().unwrap();
-        assert_eq!(
-            recorded.len(), 2,
-            "expected producer + dynamic inner: {:?}", *recorded
-        );
+        assert_eq!(recorded.len(), 2, "expected producer + dynamic inner: {:?}", *recorded);
     }
 
     /// Non-.drv output is NOT treated as a dynamic derivation.
@@ -1786,7 +1933,16 @@ mod tests {
         let (mock, calls) = MockBuildService::new(bs.clone());
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1815,13 +1971,19 @@ mod tests {
         let ds = tmp_ds();
 
         // "bad-pkg" will fail, "good-pkg" will succeed.
-        let (mock, calls) = FailingMockBuildService::new(
-            bs.clone(),
-            vec!["bad-pkg".to_string()],
-        );
+        let (mock, calls) = FailingMockBuildService::new(bs.clone(), vec!["bad-pkg".to_string()]);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1835,17 +1997,11 @@ mod tests {
 
         // good-pkg should succeed.
         assert_eq!(result.outcomes.len(), 1, "one root should succeed");
-        assert!(
-            result.outcomes[0].drv_path.name().contains("good-pkg"),
-            "successful outcome should be good-pkg"
-        );
+        assert!(result.outcomes[0].drv_path.name().contains("good-pkg"), "successful outcome should be good-pkg");
 
         // bad-pkg should be in the failed list.
         assert_eq!(result.failed.len(), 1, "one root should fail");
-        assert!(
-            result.failed[0].drv_key.contains("bad-pkg"),
-            "failed goal should be bad-pkg"
-        );
+        assert!(result.failed[0].drv_key.contains("bad-pkg"), "failed goal should be bad-pkg");
         assert!(
             result.failed[0].error.contains("simulated build failure"),
             "error message should describe the failure: {}",
@@ -1865,13 +2021,19 @@ mod tests {
         let ds = tmp_ds();
 
         // "bad-dep" will fail.
-        let (mock, _calls) = FailingMockBuildService::new(
-            bs.clone(),
-            vec!["bad-dep".to_string()],
-        );
+        let (mock, _calls) = FailingMockBuildService::new(bs.clone(), vec!["bad-dep".to_string()]);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1886,10 +2048,7 @@ mod tests {
 
         // good-pkg should succeed.
         assert_eq!(result.outcomes.len(), 1, "one root should succeed");
-        assert!(
-            result.outcomes[0].drv_path.name().contains("good-pkg"),
-            "successful outcome should be good-pkg"
-        );
+        assert!(result.outcomes[0].drv_path.name().contains("good-pkg"), "successful outcome should be good-pkg");
 
         // top-bad should fail because its dep bad-dep failed.
         assert_eq!(result.failed.len(), 1, "one root should fail");
@@ -1911,13 +2070,19 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
 
-        let (mock, _) = FailingMockBuildService::new(
-            bs.clone(),
-            vec!["fail-a".to_string(), "fail-b".to_string()],
-        );
+        let (mock, _) = FailingMockBuildService::new(bs.clone(), vec!["fail-a".to_string(), "fail-b".to_string()]);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1940,13 +2105,19 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
 
-        let (mock, _) = FailingMockBuildService::new(
-            bs.clone(),
-            vec!["stream-bad".to_string()],
-        );
+        let (mock, _) = FailingMockBuildService::new(bs.clone(), vec!["stream-bad".to_string()]);
 
         let mut builder = Builder::new(
-            bs, ds, mock, test_pis(), PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true, false,
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
         );
 
         let mut kp = DerivationRegistry::default();
@@ -1954,8 +2125,20 @@ mod tests {
         let (good_sp, _) = build_and_register("stream-good", &[], &mut kp);
 
         let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        tx.send(EvalMessage { label: "bad".into(), drv_path: bad_sp, new_entries: vec![] }).await.unwrap();
-        tx.send(EvalMessage { label: "good".into(), drv_path: good_sp, new_entries: vec![] }).await.unwrap();
+        tx.send(EvalMessage {
+            label: "bad".into(),
+            drv_path: bad_sp,
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        tx.send(EvalMessage {
+            label: "good".into(),
+            drv_path: good_sp,
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
         drop(tx);
 
         let mut w = Worker::new(2);

@@ -1,9 +1,13 @@
-use crate::nixbase32;
-use crate::nixhash::{CAHash, NixHash};
-use crate::store_path::{Error, STORE_DIR, StorePath};
 use data_encoding::HEXLOWER;
 // crunch: SHA-256 removed from derivation-level hashing (BLAKE3 via sha256! macro)
 use thiserror;
+
+use crate::nixbase32;
+use crate::nixhash::CAHash;
+use crate::nixhash::NixHash;
+use crate::store_path::Error;
+use crate::store_path::STORE_DIR;
+use crate::store_path::StorePath;
 
 /// Errors that can occur when creating a content-addressed store path.
 ///
@@ -116,10 +120,7 @@ where
 
     let (ty, inner_digest) = match &ca_hash {
         CAHash::Text(digest) => (make_references_string("text", references, false), *digest),
-        CAHash::Nar(NixHash::Sha256(digest)) => (
-            make_references_string("source", references, self_reference),
-            *digest,
-        ),
+        CAHash::Nar(NixHash::Sha256(digest)) => (make_references_string("source", references, self_reference), *digest),
 
         // for all other CAHash::Nar, another custom scheme is used.
         CAHash::Nar(hash) => {
@@ -127,10 +128,7 @@ where
                 return Err(BuildStorePathError::InvalidReference());
             }
 
-            (
-                "output:out".to_string(),
-                fixed_out_digest("fixed:out:r", hash),
-            )
+            ("output:out".to_string(), fixed_out_digest("fixed:out:r", hash))
         }
         // CaHash::Flat is using something very similar, except the `r:` prefix.
         CAHash::Flat(hash) => {
@@ -138,10 +136,7 @@ where
                 return Err(BuildStorePathError::InvalidReference());
             }
 
-            (
-                "output:out".to_string(),
-                fixed_out_digest("fixed:out", hash),
-            )
+            ("output:out".to_string(), fixed_out_digest("fixed:out", hash))
         }
     };
 
@@ -217,10 +212,7 @@ pub fn build_store_path_from_fingerprint_parts_with_store_dir<'a, SP>(
 where
     SP: AsRef<str> + std::convert::From<&'a str>,
 {
-    let fingerprint_hash = sha256!(
-        "{ty}:sha256:{}:{store_dir}:{name}",
-        HEXLOWER.encode(inner_digest)
-    );
+    let fingerprint_hash = sha256!("{ty}:sha256:{}:{store_dir}:{name}", HEXLOWER.encode(inner_digest));
     // name validation happens in here.
     StorePath::from_name_and_digest_fixed(name, compress_hash(&fingerprint_hash))
 }
@@ -235,11 +227,7 @@ where
 ///  - the nix_hash_string representation of the sha256 digest of some contents
 ///  - the value of `storeDir`
 ///  - the name
-fn make_references_string<S: AsRef<str>, I: IntoIterator<Item = S>>(
-    ty: &str,
-    references: I,
-    self_ref: bool,
-) -> String {
+fn make_references_string<S: AsRef<str>, I: IntoIterator<Item = S>>(ty: &str, references: I, self_ref: bool) -> String {
     let mut s = String::from(ty);
 
     for reference in references {
@@ -269,56 +257,44 @@ mod test {
     use hex_literal::hex;
 
     use super::*;
-    use crate::{
-        nixhash::{CAHash, NixHash},
-        store_path::StorePathRef,
-    };
+    use crate::nixhash::CAHash;
+    use crate::nixhash::NixHash;
+    use crate::store_path::StorePathRef;
 
     // crunch: expected paths differ from Nix because we use BLAKE3 instead of SHA-256.
     // These values were computed by running the BLAKE3-modified code.
 
     #[test]
     fn build_text_path_with_zero_references() {
-        let store_path: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
-            .expect("build_store_path() should succeed");
+        let store_path: StorePathRef =
+            build_text_path("foo", "bar", Vec::<String>::new()).expect("build_store_path() should succeed");
 
-        assert_eq!(
-            store_path.to_absolute_path().as_str(),
-            "/nix/store/2134hymrrc6z3nm2w3mha41w883yj7pq-foo"
-        );
+        assert_eq!(store_path.to_absolute_path().as_str(), "/nix/store/2134hymrrc6z3nm2w3mha41w883yj7pq-foo");
     }
 
     #[test]
     fn build_text_path_with_non_zero_references() {
-        let inner: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
-            .expect("path_with_references() should succeed");
+        let inner: StorePathRef =
+            build_text_path("foo", "bar", Vec::<String>::new()).expect("path_with_references() should succeed");
         let inner_path = inner.to_absolute_path();
 
         let outer: StorePathRef = build_text_path("baz", &inner_path, vec![inner_path.as_str()])
             .expect("path_with_references() should succeed");
 
-        assert_eq!(
-            outer.to_absolute_path().as_str(),
-            "/nix/store/fw62ahw6h9bnfm2ygmagsc6hm602n9qd-baz"
-        );
+        assert_eq!(outer.to_absolute_path().as_str(), "/nix/store/fw62ahw6h9bnfm2ygmagsc6hm602n9qd-baz");
     }
 
     #[test]
     fn build_sha1_path() {
         let outer: StorePathRef = build_ca_path(
             "bar",
-            &CAHash::Nar(NixHash::Sha1(hex!(
-                "0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"
-            ))),
+            &CAHash::Nar(NixHash::Sha1(hex!("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"))),
             Vec::<String>::new(),
             false,
         )
         .expect("path_with_references() should succeed");
 
-        assert_eq!(
-            outer.to_absolute_path().as_str(),
-            "/nix/store/v20wf8r1xgdfy20jjfhswazf1l76rzhm-bar"
-        );
+        assert_eq!(outer.to_absolute_path().as_str(), "/nix/store/v20wf8r1xgdfy20jjfhswazf1l76rzhm-bar");
     }
 
     #[test]
@@ -336,20 +312,15 @@ mod test {
         )
         .expect("path_with_references() should succeed");
 
-        assert_eq!(
-            outer.to_absolute_path().as_str(),
-            "/nix/store/57rxb32ssn02s9zp6m3n8sph18s2b95m-baz"
-        );
+        assert_eq!(outer.to_absolute_path().as_str(), "/nix/store/57rxb32ssn02s9zp6m3n8sph18s2b95m-baz");
     }
 
     /// Non-default store dir produces different paths.
     #[test]
     fn build_text_path_custom_store_dir() {
-        let default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
-            .expect("should succeed");
+        let default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new()).expect("should succeed");
         let custom: StorePathRef =
-            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/opt/crunch")
-                .expect("should succeed");
+            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/opt/crunch").expect("should succeed");
 
         assert_ne!(default, custom, "different store dir must produce different path");
     }
@@ -357,11 +328,9 @@ mod test {
     /// Default store dir matches existing build_text_path.
     #[test]
     fn build_text_path_default_store_dir_matches() {
-        let via_default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new())
-            .expect("should succeed");
+        let via_default: StorePathRef = build_text_path("foo", "bar", Vec::<String>::new()).expect("should succeed");
         let via_explicit: StorePathRef =
-            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/nix/store")
-                .expect("should succeed");
+            build_text_path_with_store_dir("foo", "bar", Vec::<String>::new(), "/nix/store").expect("should succeed");
 
         assert_eq!(via_default, via_explicit);
     }
@@ -372,8 +341,7 @@ mod test {
         let hash = [0x42u8; 32];
         let default: StorePathRef = build_output_path(&hash, "out", "test").expect("should succeed");
         let custom: StorePathRef =
-            build_output_path_with_store_dir(&hash, "out", "test", "/opt/crunch")
-                .expect("should succeed");
+            build_output_path_with_store_dir(&hash, "out", "test", "/opt/crunch").expect("should succeed");
 
         assert_ne!(default, custom, "different store dir must produce different path");
     }
@@ -382,8 +350,7 @@ mod test {
     #[test]
     fn build_ca_path_custom_store_dir() {
         let ca = CAHash::Nar(NixHash::Sha256([0x42u8; 32]));
-        let default: StorePathRef =
-            build_ca_path("test", &ca, Vec::<String>::new(), false).expect("should succeed");
+        let default: StorePathRef = build_ca_path("test", &ca, Vec::<String>::new(), false).expect("should succeed");
         let custom: StorePathRef =
             build_ca_path_with_store_dir("test", &ca, Vec::<String>::new(), false, "/opt/crunch")
                 .expect("should succeed");
@@ -394,20 +361,16 @@ mod test {
     /// Verify BLAKE3 path computation is deterministic: same inputs → same path.
     #[test]
     fn blake3_determinism() {
-        let path1: StorePathRef = build_text_path("test", "content", Vec::<String>::new())
-            .expect("should succeed");
-        let path2: StorePathRef = build_text_path("test", "content", Vec::<String>::new())
-            .expect("should succeed");
+        let path1: StorePathRef = build_text_path("test", "content", Vec::<String>::new()).expect("should succeed");
+        let path2: StorePathRef = build_text_path("test", "content", Vec::<String>::new()).expect("should succeed");
         assert_eq!(path1, path2);
     }
 
     /// Verify different content produces different paths.
     #[test]
     fn blake3_different_content_different_path() {
-        let path1: StorePathRef = build_text_path("test", "content-a", Vec::<String>::new())
-            .expect("should succeed");
-        let path2: StorePathRef = build_text_path("test", "content-b", Vec::<String>::new())
-            .expect("should succeed");
+        let path1: StorePathRef = build_text_path("test", "content-a", Vec::<String>::new()).expect("should succeed");
+        let path2: StorePathRef = build_text_path("test", "content-b", Vec::<String>::new()).expect("should succeed");
         assert_ne!(path1, path2);
     }
 }

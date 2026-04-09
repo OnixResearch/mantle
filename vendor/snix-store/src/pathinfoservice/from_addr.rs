@@ -1,29 +1,29 @@
-use super::PathInfoService;
-
-use crate::composition::REG;
-use snix_castore::composition::{
-    CompositionContext, DeserializeWithRegistry, ServiceBuilder, with_registry,
-};
 use std::sync::Arc;
+
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::DeserializeWithRegistry;
+use snix_castore::composition::ServiceBuilder;
+use snix_castore::composition::with_registry;
 use url::Url;
+
+use super::PathInfoService;
+use crate::composition::REG;
 
 /// Constructs a new instance of a [PathInfoService] from an URI.
 ///
 /// The following URIs are supported:
-/// - `redb+memory:`
-///   Uses a in-memory implementation.
-/// - `redb:///absolute/path/to/somewhere`
-///   Uses redb, using a path on the disk for persistency. Can be only opened
-///   from one process at the same time.
+/// - `redb+memory:` Uses a in-memory implementation.
+/// - `redb:///absolute/path/to/somewhere` Uses redb, using a path on the disk for persistency. Can
+///   be only opened from one process at the same time.
 /// - `nix+https://cache.nixos.org?trusted_public_keys[0]=cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`
 ///   Exposes the Nix binary cache as a PathInfoService, ingesting NARs into the
-///   {Blob,Directory}Service. You almost certainly want to use this with some cache.
-///   The `trusted_public_keys` URL parameter can be provided, which will then
-///   enable signature verification.
-/// - `grpc+unix:///absolute/path/to/somewhere`
-///   Connects to a local snix-store gRPC service via Unix socket.
-/// - `grpc+http://host:port`, `grpc+https://host:port`
-///   Connects to a (remote) snix-store gRPC service.
+///   {Blob,Directory}Service. You almost certainly want to use this with some cache. The
+///   `trusted_public_keys` URL parameter can be provided, which will then enable signature
+///   verification.
+/// - `grpc+unix:///absolute/path/to/somewhere` Connects to a local snix-store gRPC service via Unix
+///   socket.
+/// - `grpc+http://host:port`, `grpc+https://host:port` Connects to a (remote) snix-store gRPC
+///   service.
 ///
 /// As the [PathInfoService] needs to talk to [snix_castore::blobservice::BlobService] and
 /// [snix_castore::directoryservice::DirectoryService], these also need to be passed in.
@@ -35,16 +35,11 @@ pub async fn from_addr(
     let mut url = Url::parse(uri).map_err(|e| format!("unable to parse url: {e}"))?;
 
     let path_info_service_config = with_registry(&REG, || {
-        <DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>>>::try_from(
-            url,
-        )
+        <DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>>>::try_from(url)
     })?
     .0;
     let path_info_service = path_info_service_config
-        .build(
-            "anonymous",
-            context.unwrap_or(&CompositionContext::blank(&REG)),
-        )
+        .build("anonymous", context.unwrap_or(&CompositionContext::blank(&REG)))
         .await?;
 
     Ok(path_info_service)
@@ -52,14 +47,19 @@ pub async fn from_addr(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
+    use rstest::rstest;
+    use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::MemoryBlobServiceConfig;
+    use snix_castore::composition::Composition;
+    use snix_castore::composition::DeserializeWithRegistry;
+    use snix_castore::composition::ServiceBuilder;
+    use snix_castore::directoryservice::DirectoryService;
+    use tempfile::TempDir;
+
     use super::from_addr;
     use crate::composition::REG;
-    use rstest::rstest;
-    use snix_castore::blobservice::{BlobService, MemoryBlobServiceConfig};
-    use snix_castore::composition::{Composition, DeserializeWithRegistry, ServiceBuilder};
-    use snix_castore::directoryservice::DirectoryService;
-    use std::sync::LazyLock;
-    use tempfile::TempDir;
 
     static TMPDIR_REDB_1: LazyLock<TempDir> = LazyLock::new(|| TempDir::new().unwrap());
     static TMPDIR_REDB_2: LazyLock<TempDir> = LazyLock::new(|| TempDir::new().unwrap());
@@ -127,8 +127,9 @@ mod tests {
         let mut comp = Composition::new(&REG);
         comp.extend(vec![(
             "root".into(),
-            DeserializeWithRegistry(Box::new(MemoryBlobServiceConfig {})
-                as Box<dyn ServiceBuilder<Output = dyn BlobService>>),
+            DeserializeWithRegistry(
+                Box::new(MemoryBlobServiceConfig {}) as Box<dyn ServiceBuilder<Output = dyn BlobService>>
+            ),
         )]);
         comp.extend(vec![(
             "root".into(),

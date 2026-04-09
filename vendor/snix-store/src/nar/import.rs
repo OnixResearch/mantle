@@ -1,23 +1,20 @@
-use nix_compat::{
-    nar::reader::r#async as nar_reader,
-    nixhash::{CAHash, NixHash},
-};
+use nix_compat::nar::reader::r#async as nar_reader;
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
 use sha2::Digest;
-use snix_castore::{
-    Node, PathBuf,
-    blobservice::BlobService,
-    directoryservice::DirectoryService,
-    import::{
-        IngestionEntry, IngestionError,
-        blobs::{self, ConcurrentBlobUploader},
-        ingest_entries,
-    },
-};
-use tokio::{
-    io::{AsyncBufRead, AsyncRead},
-    sync::mpsc,
-    try_join,
-};
+use snix_castore::Node;
+use snix_castore::PathBuf;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::import::IngestionEntry;
+use snix_castore::import::IngestionError;
+use snix_castore::import::blobs::ConcurrentBlobUploader;
+use snix_castore::import::blobs::{self};
+use snix_castore::import::ingest_entries;
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncRead;
+use tokio::sync::mpsc;
+use tokio::try_join;
 
 use super::hashing_reader::HashingReader;
 
@@ -63,8 +60,8 @@ where
 
     match expected_cahash {
         Some(CAHash::Nar(expected_hash)) => {
-            // We technically don't need the Sha256 hasher as we are already computing the nar hash with the reader above,
-            // but it makes the control flow more uniform and easier to understand.
+            // We technically don't need the Sha256 hasher as we are already computing the nar hash with the
+            // reader above, but it makes the control flow more uniform and easier to understand.
             let mut ca_reader = HashingReader::new_with_algo(expected_hash.algo(), &mut r);
             let mut r = tokio::io::BufReader::new(&mut ca_reader);
             let root_node = ingest_nar(blob_service, directory_service, &mut r).await?;
@@ -84,8 +81,7 @@ where
             match &root_node {
                 Node::File { digest, .. } => match blob_service.open_read(digest).await? {
                     Some(blob_reader) => {
-                        let mut ca_reader =
-                            HashingReader::new_with_algo(expected_hash.algo(), blob_reader);
+                        let mut ca_reader = HashingReader::new_with_algo(expected_hash.algo(), blob_reader);
                         tokio::io::copy(&mut ca_reader, &mut tokio::io::empty()).await?;
                         let actual_hash = ca_reader.consume();
 
@@ -97,9 +93,7 @@ where
                         }
                         Ok((root_node, nar_hash.finalize().into(), nar_size))
                     }
-                    None => Err(NarIngestionError::Io(std::io::Error::other(
-                        "Ingested data not found",
-                    ))),
+                    None => Err(NarIngestionError::Io(std::io::Error::other("Ingested data not found"))),
                 },
                 _ => Err(NarIngestionError::TypeMismatch),
             }
@@ -154,9 +148,7 @@ where
                 .map_err(|e| Error::IO(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e)))?;
         }
 
-        tx.send(res)
-            .await
-            .map_err(|e| Error::IO(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e)))?;
+        tx.send(res).await.map_err(|e| Error::IO(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e)))?;
 
         Ok(())
     };
@@ -179,10 +171,7 @@ where
 {
     Ok(match node {
         nar_reader::Node::Symlink { target } => IngestionEntry::Symlink { path, target },
-        nar_reader::Node::File {
-            executable,
-            mut reader,
-        } => {
+        nar_reader::Node::File { executable, mut reader } => {
             let size = reader.len();
             let digest = blob_uploader.upload(&path, size, &mut reader).await?;
 
@@ -198,20 +187,13 @@ where
                 let mut path = path.clone();
 
                 // valid NAR names are valid castore names
-                path.try_push(entry.name)
-                    .expect("Snix bug: failed to join name");
+                path.try_push(entry.name).expect("Snix bug: failed to join name");
 
-                let entry = Box::pin(produce_nar_inner(
-                    blob_uploader,
-                    entry.node,
-                    path,
-                    tx.clone(),
-                ))
-                .await?;
+                let entry = Box::pin(produce_nar_inner(blob_uploader, entry.node, path, tx.clone())).await?;
 
-                tx.send(Ok(entry)).await.map_err(|e| {
-                    Error::IO(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e))
-                })?;
+                tx.send(Ok(entry))
+                    .await
+                    .map_err(|e| Error::IO(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e)))?;
             }
 
             IngestionEntry::Dir { path }
@@ -230,40 +212,39 @@ pub enum Error {
 
 #[cfg(test)]
 mod test {
-    use crate::fixtures::{
-        NAR_CONTENTS_COMPLICATED, NAR_CONTENTS_HELLOWORLD, NAR_CONTENTS_SYMLINK,
-    };
-    use crate::nar::{NarIngestionError, ingest_nar, ingest_nar_and_hash};
     use std::io::Cursor;
     use std::sync::Arc;
 
     use hex_literal::hex;
-    use nix_compat::nixhash::{CAHash, NixHash};
+    use nix_compat::nixhash::CAHash;
+    use nix_compat::nixhash::NixHash;
     use rstest::*;
+    use snix_castore::Directory;
+    use snix_castore::Node;
     use snix_castore::blobservice::BlobService;
     use snix_castore::directoryservice::DirectoryService;
-    use snix_castore::fixtures::{
-        DIRECTORY_COMPLICATED, DIRECTORY_WITH_KEEP, EMPTY_BLOB_DIGEST, HELLOWORLD_BLOB_CONTENTS,
-        HELLOWORLD_BLOB_DIGEST,
-    };
-    use snix_castore::{Directory, Node};
+    use snix_castore::fixtures::DIRECTORY_COMPLICATED;
+    use snix_castore::fixtures::DIRECTORY_WITH_KEEP;
+    use snix_castore::fixtures::EMPTY_BLOB_DIGEST;
+    use snix_castore::fixtures::HELLOWORLD_BLOB_CONTENTS;
+    use snix_castore::fixtures::HELLOWORLD_BLOB_DIGEST;
     use tokio_stream::StreamExt;
 
-    use crate::tests::fixtures::{blob_service, directory_service};
+    use crate::fixtures::NAR_CONTENTS_COMPLICATED;
+    use crate::fixtures::NAR_CONTENTS_HELLOWORLD;
+    use crate::fixtures::NAR_CONTENTS_SYMLINK;
+    use crate::nar::NarIngestionError;
+    use crate::nar::ingest_nar;
+    use crate::nar::ingest_nar_and_hash;
+    use crate::tests::fixtures::blob_service;
+    use crate::tests::fixtures::directory_service;
 
     #[rstest]
     #[tokio::test]
-    async fn single_symlink(
-        blob_service: Arc<dyn BlobService>,
-        directory_service: Arc<dyn DirectoryService>,
-    ) {
-        let root_node = ingest_nar(
-            blob_service,
-            directory_service,
-            &mut Cursor::new(&NAR_CONTENTS_SYMLINK),
-        )
-        .await
-        .expect("must parse");
+    async fn single_symlink(blob_service: Arc<dyn BlobService>, directory_service: Arc<dyn DirectoryService>) {
+        let root_node = ingest_nar(blob_service, directory_service, &mut Cursor::new(&NAR_CONTENTS_SYMLINK))
+            .await
+            .expect("must parse");
 
         assert_eq!(
             Node::Symlink {
@@ -275,17 +256,10 @@ mod test {
 
     #[rstest]
     #[tokio::test]
-    async fn single_file(
-        blob_service: Arc<dyn BlobService>,
-        directory_service: Arc<dyn DirectoryService>,
-    ) {
-        let root_node = ingest_nar(
-            blob_service.clone(),
-            directory_service,
-            &mut Cursor::new(&NAR_CONTENTS_HELLOWORLD),
-        )
-        .await
-        .expect("must parse");
+    async fn single_file(blob_service: Arc<dyn BlobService>, directory_service: Arc<dyn DirectoryService>) {
+        let root_node = ingest_nar(blob_service.clone(), directory_service, &mut Cursor::new(&NAR_CONTENTS_HELLOWORLD))
+            .await
+            .expect("must parse");
 
         assert_eq!(
             Node::File {
@@ -302,17 +276,11 @@ mod test {
 
     #[rstest]
     #[tokio::test]
-    async fn complicated(
-        blob_service: Arc<dyn BlobService>,
-        directory_service: Arc<dyn DirectoryService>,
-    ) {
-        let root_node = ingest_nar(
-            blob_service.clone(),
-            directory_service.clone(),
-            &mut Cursor::new(&NAR_CONTENTS_COMPLICATED),
-        )
-        .await
-        .expect("must parse");
+    async fn complicated(blob_service: Arc<dyn BlobService>, directory_service: Arc<dyn DirectoryService>) {
+        let root_node =
+            ingest_nar(blob_service.clone(), directory_service.clone(), &mut Cursor::new(&NAR_CONTENTS_COMPLICATED))
+                .await
+                .expect("must parse");
 
         assert_eq!(
             Node::Directory {
@@ -326,10 +294,8 @@ mod test {
         assert!(blob_service.has(&EMPTY_BLOB_DIGEST).await.unwrap());
 
         // directoryservice must contain the directories, at least with get_recursive.
-        let resp: Result<Vec<Directory>, _> = directory_service
-            .get_recursive(&DIRECTORY_COMPLICATED.digest())
-            .collect()
-            .await;
+        let resp: Result<Vec<Directory>, _> =
+            directory_service.get_recursive(&DIRECTORY_COMPLICATED.digest()).collect().await;
 
         let directories = resp.unwrap();
 
@@ -358,10 +324,7 @@ mod test {
         )
         .await
         .expect_err("Ingestion should have failed");
-        assert!(
-            matches!(err, NarIngestionError::HashMismatch { .. }),
-            "CAHash should have mismatched"
-        );
+        assert!(matches!(err, NarIngestionError::HashMismatch { .. }), "CAHash should have mismatched");
     }
 
     #[rstest]
@@ -376,14 +339,9 @@ mod test {
         #[case] ca_hash: Option<CAHash>,
         #[case] nar_content: &[u8],
     ) {
-        let _ = ingest_nar_and_hash(
-            blob_service.clone(),
-            directory_service,
-            &mut Cursor::new(nar_content),
-            &ca_hash,
-        )
-        .await
-        .expect("CAHash should have matched");
+        let _ = ingest_nar_and_hash(blob_service.clone(), directory_service, &mut Cursor::new(nar_content), &ca_hash)
+            .await
+            .expect("CAHash should have matched");
     }
 
     #[rstest]
@@ -396,14 +354,9 @@ mod test {
         #[case] ca_hash: Option<CAHash>,
         #[case] nar_content: &[u8],
     ) {
-        let err = ingest_nar_and_hash(
-            blob_service,
-            directory_service,
-            &mut Cursor::new(nar_content),
-            &ca_hash,
-        )
-        .await
-        .expect_err("Ingestion should have failed");
+        let err = ingest_nar_and_hash(blob_service, directory_service, &mut Cursor::new(nar_content), &ca_hash)
+            .await
+            .expect_err("Ingestion should have failed");
 
         assert!(
             matches!(err, NarIngestionError::TypeMismatch),

@@ -1,24 +1,34 @@
-use std::{
-    convert, error, fmt, io,
-    ops::Deref,
-    path::Path,
-    sync::{Arc, MutexGuard, RwLock},
-};
+use std::convert;
+use std::error;
+use std::fmt;
+use std::io;
+use std::ops::Deref;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::MutexGuard;
+use std::sync::RwLock;
 
-use fuse_backend_rs::{
-    api::{filesystem::FileSystem, server::Server},
-    transport::{FsCacheReqHandler, Reader, VirtioFsWriter},
-};
+use fuse_backend_rs::api::filesystem::FileSystem;
+use fuse_backend_rs::api::server::Server;
+use fuse_backend_rs::transport::FsCacheReqHandler;
+use fuse_backend_rs::transport::Reader;
+use fuse_backend_rs::transport::VirtioFsWriter;
 use tracing::error;
-use vhost::vhost_user::{
-    Listener, SlaveFsCacheReq, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
-};
-use vhost_user_backend::{VhostUserBackendMut, VhostUserDaemon, VringMutex, VringState, VringT};
-use virtio_bindings::bindings::virtio_ring::{
-    VIRTIO_RING_F_EVENT_IDX, VIRTIO_RING_F_INDIRECT_DESC,
-};
+use vhost::vhost_user::Listener;
+use vhost::vhost_user::SlaveFsCacheReq;
+use vhost::vhost_user::VhostUserProtocolFeatures;
+use vhost::vhost_user::VhostUserVirtioFeatures;
+use vhost_user_backend::VhostUserBackendMut;
+use vhost_user_backend::VhostUserDaemon;
+use vhost_user_backend::VringMutex;
+use vhost_user_backend::VringState;
+use vhost_user_backend::VringT;
+use virtio_bindings::bindings::virtio_ring::VIRTIO_RING_F_EVENT_IDX;
+use virtio_bindings::bindings::virtio_ring::VIRTIO_RING_F_INDIRECT_DESC;
 use virtio_queue::QueueT;
-use vm_memory::{GuestAddressSpace, GuestMemoryAtomic, GuestMemoryMmap};
+use vm_memory::GuestAddressSpace;
+use vm_memory::GuestMemoryAtomic;
+use vm_memory::GuestMemoryMmap;
 use vmm_sys_util::epoll::EventSet;
 
 const VIRTIO_F_VERSION_1: u32 = 32;
@@ -59,8 +69,7 @@ impl convert::From<Error> for io::Error {
 }
 
 struct VhostUserFsBackend<FS>
-where
-    FS: FileSystem + Send + Sync,
+where FS: FileSystem + Send + Sync
 {
     server: Arc<Server<Arc<FS>>>,
     event_idx: bool,
@@ -69,38 +78,28 @@ where
 }
 
 impl<FS> VhostUserFsBackend<FS>
-where
-    FS: FileSystem + Send + Sync,
+where FS: FileSystem + Send + Sync
 {
     fn process_queue(&mut self, vring: &mut MutexGuard<VringState>) -> std::io::Result<bool> {
         let mut used_descs = false;
 
-        while let Some(desc_chain) = vring
-            .get_queue_mut()
-            .pop_descriptor_chain(self.guest_mem.memory())
-        {
+        while let Some(desc_chain) = vring.get_queue_mut().pop_descriptor_chain(self.guest_mem.memory()) {
             let memory = desc_chain.memory();
-            let reader = Reader::from_descriptor_chain(memory, desc_chain.clone())
-                .map_err(|_| Error::InvalidDescriptorChain)?;
-            let writer = VirtioFsWriter::new(memory, desc_chain.clone())
-                .map_err(|_| Error::InvalidDescriptorChain)?;
+            let reader =
+                Reader::from_descriptor_chain(memory, desc_chain.clone()).map_err(|_| Error::InvalidDescriptorChain)?;
+            let writer = VirtioFsWriter::new(memory, desc_chain.clone()).map_err(|_| Error::InvalidDescriptorChain)?;
 
             self.server
                 .handle_message(
                     reader,
                     writer.into(),
-                    self.cache_req
-                        .as_mut()
-                        .map(|req| req as &mut dyn FsCacheReqHandler),
+                    self.cache_req.as_mut().map(|req| req as &mut dyn FsCacheReqHandler),
                     None,
                 )
                 .map_err(Error::HandleRequests)?;
 
             // TODO: Is len 0 correct?
-            if let Err(error) = vring
-                .get_queue_mut()
-                .add_used(memory, desc_chain.head_index(), 0)
-            {
+            if let Err(error) = vring.get_queue_mut().add_used(memory, desc_chain.head_index(), 0) {
                 error!(?error, "failed to add desc back to ring");
             }
 
@@ -109,10 +108,7 @@ where
         }
 
         let needs_notification = if self.event_idx {
-            match vring
-                .get_queue_mut()
-                .needs_notification(self.guest_mem.memory().deref())
-            {
+            match vring.get_queue_mut().needs_notification(self.guest_mem.memory().deref()) {
                 Ok(needs_notification) => needs_notification,
                 Err(error) => {
                     error!(?error, "failed to check if queue needs notification");
@@ -132,8 +128,7 @@ where
 }
 
 impl<FS> VhostUserBackendMut<VringMutex> for VhostUserFsBackend<FS>
-where
-    FS: FileSystem + Send + Sync,
+where FS: FileSystem + Send + Sync
 {
     fn num_queues(&self) -> usize {
         NUM_QUEUES
@@ -224,12 +219,8 @@ where
 
     let listener = Listener::new(socket, true).unwrap();
 
-    let mut fs_daemon = VhostUserDaemon::new(
-        String::from("vhost-user-fs-snix-castore"),
-        backend,
-        guest_mem,
-    )
-    .map_err(|_| Error::NewDaemon)?;
+    let mut fs_daemon = VhostUserDaemon::new(String::from("vhost-user-fs-snix-castore"), backend, guest_mem)
+        .map_err(|_| Error::NewDaemon)?;
 
     fs_daemon.start(listener).map_err(|_| Error::StartDaemon)?;
 

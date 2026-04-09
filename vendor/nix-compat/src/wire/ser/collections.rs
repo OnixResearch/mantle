@@ -1,17 +1,15 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 
-use super::{NixSerialize, NixWrite};
+use super::NixSerialize;
+use super::NixWrite;
 
 impl<T> NixSerialize for Vec<T>
-where
-    T: NixSerialize + Send + Sync,
+where T: NixSerialize + Send + Sync
 {
     #[allow(clippy::manual_async_fn)]
     fn serialize<W>(&self, writer: &mut W) -> impl Future<Output = Result<(), W::Error>> + Send
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         async move {
             writer.write_value(&self.len()).await?;
             for value in self.iter() {
@@ -29,9 +27,7 @@ where
 {
     #[allow(clippy::manual_async_fn)]
     fn serialize<W>(&self, writer: &mut W) -> impl Future<Output = Result<(), W::Error>> + Send
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         async move {
             writer.write_value(&self.len()).await?;
             for (key, value) in self.iter() {
@@ -53,7 +49,9 @@ mod test {
     use tokio::io::AsyncWriteExt as _;
     use tokio_test::io::Builder;
 
-    use crate::wire::ser::{NixSerialize, NixWrite, NixWriter};
+    use crate::wire::ser::NixSerialize;
+    use crate::wire::ser::NixWrite;
+    use crate::wire::ser::NixWriter;
 
     #[rstest]
     #[case::empty(vec![], &hex!("0000 0000 0000 0000"))]
@@ -83,9 +81,7 @@ mod test {
     #[case::one(map![0x7469usize => 10u64], &hex!("0100 0000 0000 0000 6974 0000 0000 0000 0A00 0000 0000 0000"))]
     #[tokio::test]
     async fn test_write_small_btree_map<E>(#[case] value: E, #[case] data: &[u8])
-    where
-        E: NixSerialize + Send + PartialEq + fmt::Debug,
-    {
+    where E: NixSerialize + Send + PartialEq + fmt::Debug {
         let mock = Builder::new().write(data).build();
         let mut writer = NixWriter::new(mock);
         writer.write_value(&value).await.unwrap();

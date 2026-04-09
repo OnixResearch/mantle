@@ -11,13 +11,19 @@
 //! the I/O lives in the caller.
 
 use crate::error::Error;
-use crate::lock::{
-    LockEntry, LockedHash, LockedKind, LockedPatch, LockedPatchSource, Lockfile,
-};
-use crate::manifest::{
-    GitReference, HashAlgo, InputKind, ManifestInput, PatchDef, PatchSource,
-    ProjectManifest,
-};
+use crate::lock::LockEntry;
+use crate::lock::LockedHash;
+use crate::lock::LockedKind;
+use crate::lock::LockedPatch;
+use crate::lock::LockedPatchSource;
+use crate::lock::Lockfile;
+use crate::manifest::GitReference;
+use crate::manifest::HashAlgo;
+use crate::manifest::InputKind;
+use crate::manifest::ManifestInput;
+use crate::manifest::PatchDef;
+use crate::manifest::PatchSource;
+use crate::manifest::ProjectManifest;
 
 /// Maximum number of inputs to refresh in a single call.
 const MAX_REFRESH_BATCH: u32 = 256;
@@ -90,29 +96,15 @@ pub trait RefreshResolver {
     ///
     /// Returns `Ok(Some(rev))` if resolved, `Ok(None)` if the reference
     /// couldn't be resolved, or `Err` on hard failures.
-    fn resolve_git_rev(
-        &self,
-        repository: &str,
-        reference: &GitReference,
-    ) -> Result<Option<String>, Error>;
+    fn resolve_git_rev(&self, repository: &str, reference: &GitReference) -> Result<Option<String>, Error>;
 
     /// Compute the hash of downloaded URL content.
     ///
     /// `mode` distinguishes flat file hashing from recursive tree hashing.
-    fn hash_url_content(
-        &self,
-        url: &str,
-        algo: &HashAlgo,
-        mode: HashResolutionMode,
-    ) -> Result<Option<String>, Error>;
+    fn hash_url_content(&self, url: &str, algo: &HashAlgo, mode: HashResolutionMode) -> Result<Option<String>, Error>;
 
     /// Compute the recursive hash of a git checkout at a concrete revision.
-    fn hash_git_checkout(
-        &self,
-        repository: &str,
-        rev: &str,
-        algo: &HashAlgo,
-    ) -> Result<Option<String>, Error> {
+    fn hash_git_checkout(&self, repository: &str, rev: &str, algo: &HashAlgo) -> Result<Option<String>, Error> {
         let _ = (repository, rev, algo);
         Ok(None)
     }
@@ -121,11 +113,7 @@ pub trait RefreshResolver {
     ///
     /// Used for local patches. Returns `Ok(Some(sri_hash))` if the file
     /// was hashed, `Ok(None)` if unavailable.
-    fn hash_local_file(
-        &self,
-        path: &str,
-        algo: &HashAlgo,
-    ) -> Result<Option<String>, Error> {
+    fn hash_local_file(&self, path: &str, algo: &HashAlgo) -> Result<Option<String>, Error> {
         let _ = (path, algo);
         Ok(None)
     }
@@ -148,39 +136,21 @@ pub fn refresh_inputs(
         inputs_to_refresh.len()
     );
 
-    inputs_to_refresh
-        .iter()
-        .map(|input| refresh_one(input, lock, resolver))
-        .collect()
+    inputs_to_refresh.iter().map(|input| refresh_one(input, lock, resolver)).collect()
 }
 
 /// Select which inputs to refresh based on the `selected` list.
-fn select_inputs<'a>(
-    manifest: &'a ProjectManifest,
-    selected: &[String],
-) -> Vec<&'a ManifestInput> {
+fn select_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> Vec<&'a ManifestInput> {
     if selected.is_empty() {
-        manifest
-            .inputs
-            .iter()
-            .collect()
+        manifest.inputs.iter().collect()
     } else {
-        let selected_set: std::collections::HashSet<&str> =
-            selected.iter().map(|s| s.as_str()).collect();
-        manifest
-            .inputs
-            .iter()
-            .filter(|i| selected_set.contains(i.name.as_str()))
-            .collect()
+        let selected_set: std::collections::HashSet<&str> = selected.iter().map(|s| s.as_str()).collect();
+        manifest.inputs.iter().filter(|i| selected_set.contains(i.name.as_str())).collect()
     }
 }
 
 /// Refresh a single input.
-fn refresh_one(
-    input: &ManifestInput,
-    lock: &Lockfile,
-    resolver: &dyn RefreshResolver,
-) -> RefreshOutcome {
+fn refresh_one(input: &ManifestInput, lock: &Lockfile, resolver: &dyn RefreshResolver) -> RefreshOutcome {
     if input.frozen {
         return RefreshOutcome::Frozen {
             name: input.name.clone(),
@@ -209,10 +179,7 @@ fn refresh_one(
     }
 }
 
-fn require_resolution(
-    value: Option<String>,
-    what: &str,
-) -> Result<String, Error> {
+fn require_resolution(value: Option<String>, what: &str) -> Result<String, Error> {
     let resolved = value.ok_or_else(|| Error::Manifest(format!("unable to resolve {what}")))?;
     if resolved.is_empty() {
         return Err(Error::Manifest(format!("resolver returned empty {what}")));
@@ -221,41 +188,29 @@ fn require_resolution(
 }
 
 /// Resolve a manifest input to a lock entry.
-fn resolve_input(
-    input: &ManifestInput,
-    resolver: &dyn RefreshResolver,
-) -> Result<LockEntry, Error> {
+fn resolve_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> Result<LockEntry, Error> {
     let (kind, hash) = match &input.kind {
         InputKind::File { url } => {
             let hash_value = require_resolution(
                 resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
                 &format!("flat hash for {}", input.name),
             )?;
-            (
-                LockedKind::File { url: url.clone() },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
+            (LockedKind::File { url: url.clone() }, LockedHash {
+                algo: input.hash.algo.clone(),
+                value: hash_value,
+            })
         }
         InputKind::Tarball { url } => {
             let hash_value = require_resolution(
                 resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Recursive)?,
                 &format!("tarball tree hash for {}", input.name),
             )?;
-            (
-                LockedKind::Tarball { url: url.clone() },
-                LockedHash {
-                    algo: input.hash.algo.clone(),
-                    value: hash_value,
-                },
-            )
+            (LockedKind::Tarball { url: url.clone() }, LockedHash {
+                algo: input.hash.algo.clone(),
+                value: hash_value,
+            })
         }
-        InputKind::Git {
-            repository,
-            reference,
-        } => {
+        InputKind::Git { repository, reference } => {
             let rev = require_resolution(
                 resolver.resolve_git_rev(repository, reference)?,
                 &format!("git revision for {}", input.name),
@@ -330,9 +285,7 @@ pub fn apply_outcomes(
     let mut inputs_changed: u32 = 0;
     for outcome in outcomes {
         if let RefreshOutcome::Updated(resolved) = outcome {
-            new_lock
-                .inputs
-                .insert(resolved.name.clone(), resolved.entry.clone());
+            new_lock.inputs.insert(resolved.name.clone(), resolved.entry.clone());
             inputs_changed = inputs_changed.saturating_add(1);
         }
     }
@@ -365,11 +318,8 @@ pub(crate) fn resolve_patches_into_lock(
     let mut failures = Vec::new();
     let needed = collect_needed_patches(lock);
 
-    let defs: std::collections::HashMap<&str, &PatchDef> = manifest
-        .patches
-        .iter()
-        .map(|d| (d.name.as_str(), d))
-        .collect();
+    let defs: std::collections::HashMap<&str, &PatchDef> =
+        manifest.patches.iter().map(|d| (d.name.as_str(), d)).collect();
 
     for name in &needed {
         let def = match defs.get(name.as_str()) {
@@ -402,9 +352,7 @@ pub(crate) fn resolve_patches_into_lock(
     }
 }
 
-fn collect_needed_patches(
-    lock: &Lockfile,
-) -> std::collections::BTreeSet<String> {
+fn collect_needed_patches(lock: &Lockfile) -> std::collections::BTreeSet<String> {
     let mut needed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for entry in lock.inputs.values() {
         for patch_name in &entry.patches {
@@ -421,22 +369,15 @@ fn remove_orphaned_patches(lock: &mut Lockfile) -> bool {
     lock.patches.len() as u32 != before_len
 }
 
-fn revert_failed_patch_inputs(
-    old_lock: &Lockfile,
-    new_lock: &mut Lockfile,
-    failures: &[RefreshFailure],
-) -> u32 {
+fn revert_failed_patch_inputs(old_lock: &Lockfile, new_lock: &mut Lockfile, failures: &[RefreshFailure]) -> u32 {
     if failures.is_empty() {
         return 0;
     }
-    let failed_names: std::collections::HashSet<&str> =
-        failures.iter().map(|failure| failure.name.as_str()).collect();
+    let failed_names: std::collections::HashSet<&str> = failures.iter().map(|failure| failure.name.as_str()).collect();
     let impacted_inputs: Vec<String> = new_lock
         .inputs
         .iter()
-        .filter(|(_, entry)| {
-            entry.patches.iter().any(|patch_name| failed_names.contains(patch_name.as_str()))
-        })
+        .filter(|(_, entry)| entry.patches.iter().any(|patch_name| failed_names.contains(patch_name.as_str())))
         .map(|(name, _)| name.clone())
         .collect();
     let mut reverted: u32 = 0;
@@ -465,13 +406,15 @@ fn revert_failed_patch_inputs(
 /// patches. Any mismatch means the locked patch is stale.
 fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
     match (&locked.source, &def.source) {
-        (
-            LockedPatchSource::Local { path: locked_path },
-            PatchSource::Local { path: def_path },
-        ) => locked_path == def_path,
+        (LockedPatchSource::Local { path: locked_path }, PatchSource::Local { path: def_path }) => {
+            locked_path == def_path
+        }
         (
             LockedPatchSource::Remote { url: locked_url },
-            PatchSource::Remote { url: def_url, hash: def_hash },
+            PatchSource::Remote {
+                url: def_url,
+                hash: def_hash,
+            },
         ) => {
             if locked_url != def_url {
                 return false;
@@ -495,10 +438,7 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
 }
 
 /// Resolve a single manifest patch definition to a locked patch.
-fn resolve_patch(
-    def: &PatchDef,
-    resolver: &dyn RefreshResolver,
-) -> Result<LockedPatch, Error> {
+fn resolve_patch(def: &PatchDef, resolver: &dyn RefreshResolver) -> Result<LockedPatch, Error> {
     match &def.source {
         PatchSource::Local { path } => {
             let hash_value = require_resolution(
@@ -506,9 +446,7 @@ fn resolve_patch(
                 &format!("local patch hash for {path}"),
             )?;
             Ok(LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: path.clone(),
-                },
+                source: LockedPatchSource::Local { path: path.clone() },
                 hash: LockedHash {
                     algo: HashAlgo::Sha256,
                     value: hash_value,
@@ -521,9 +459,7 @@ fn resolve_patch(
                 &format!("remote patch hash for {url}"),
             )?;
             Ok(LockedPatch {
-                source: LockedPatchSource::Remote {
-                    url: url.clone(),
-                },
+                source: LockedPatchSource::Remote { url: url.clone() },
                 hash: LockedHash {
                     algo: hash.algo.clone(),
                     value: hash_value,
@@ -548,11 +484,7 @@ fn refresh_failures_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFai
 
 /// List inputs that are stale (would change on refresh) without
 /// mutating anything.
-pub fn list_stale(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    resolver: &dyn RefreshResolver,
-) -> StaleReport {
+pub fn list_stale(manifest: &ProjectManifest, lock: &Lockfile, resolver: &dyn RefreshResolver) -> StaleReport {
     let outcomes = refresh_inputs(manifest, lock, &[], resolver);
     let stale = outcomes
         .iter()
@@ -567,11 +499,12 @@ pub fn list_stale(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::lock::*;
     use crate::manifest::*;
     use crate::version::SchemaVersion;
-    use std::collections::BTreeMap;
 
     /// A test resolver that returns fixed values.
     struct MockResolver {
@@ -581,11 +514,7 @@ mod tests {
     }
 
     impl RefreshResolver for MockResolver {
-        fn resolve_git_rev(
-            &self,
-            _repository: &str,
-            _reference: &GitReference,
-        ) -> Result<Option<String>, Error> {
+        fn resolve_git_rev(&self, _repository: &str, _reference: &GitReference) -> Result<Option<String>, Error> {
             Ok(self.git_rev.clone())
         }
 
@@ -598,12 +527,7 @@ mod tests {
             Ok(self.url_hash.clone())
         }
 
-        fn hash_git_checkout(
-            &self,
-            _repository: &str,
-            _rev: &str,
-            _algo: &HashAlgo,
-        ) -> Result<Option<String>, Error> {
+        fn hash_git_checkout(&self, _repository: &str, _rev: &str, _algo: &HashAlgo) -> Result<Option<String>, Error> {
             Ok(self.git_hash.clone())
         }
     }
@@ -611,9 +535,7 @@ mod tests {
     fn file_input(name: &str, url: &str) -> ManifestInput {
         ManifestInput {
             name: name.into(),
-            kind: InputKind::File {
-                url: url.into(),
-            },
+            kind: InputKind::File { url: url.into() },
             hash: HashSpec::default(),
             frozen: false,
             mirrors: vec![],
@@ -725,20 +647,17 @@ mod tests {
 
         // Create a lock that already has the same resolved state
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "data".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/data.bin".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-same=".into(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        lock.inputs.insert("data".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/data.bin".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-same=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         assert_eq!(outcomes.len(), 1);
@@ -758,12 +677,7 @@ mod tests {
             url_hash: Some("sha256-new=".into()),
         };
 
-        let outcomes = refresh_inputs(
-            &m,
-            &empty_lock(),
-            &["a".into(), "c".into()],
-            &resolver,
-        );
+        let outcomes = refresh_inputs(&m, &empty_lock(), &["a".into(), "c".into()], &resolver);
         assert_eq!(outcomes.len(), 2);
         assert_eq!(outcomes[0].name(), "a");
         assert_eq!(outcomes[1].name(), "c");
@@ -807,26 +721,13 @@ mod tests {
     }
 
     impl RefreshResolver for PatchResolver {
-        fn resolve_git_rev(
-            &self,
-            _: &str,
-            _: &GitReference,
-        ) -> Result<Option<String>, Error> {
+        fn resolve_git_rev(&self, _: &str, _: &GitReference) -> Result<Option<String>, Error> {
             Ok(None)
         }
-        fn hash_url_content(
-            &self,
-            _: &str,
-            _: &HashAlgo,
-            _: HashResolutionMode,
-        ) -> Result<Option<String>, Error> {
+        fn hash_url_content(&self, _: &str, _: &HashAlgo, _: HashResolutionMode) -> Result<Option<String>, Error> {
             Ok(self.url_hash.clone())
         }
-        fn hash_local_file(
-            &self,
-            _: &str,
-            _: &HashAlgo,
-        ) -> Result<Option<String>, Error> {
+        fn hash_local_file(&self, _: &str, _: &HashAlgo) -> Result<Option<String>, Error> {
             Ok(self.local_hash.clone())
         }
     }
@@ -887,18 +788,15 @@ mod tests {
         };
         // Lock starts with a stale patch that no input references
         let mut lock = empty_lock();
-        lock.patches.insert(
-            "old-patch".into(),
-            LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: "old.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-old=".into(),
-                },
+        lock.patches.insert("old-patch".into(), LockedPatch {
+            source: LockedPatchSource::Local {
+                path: "old.patch".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-old=".into(),
+            },
+        });
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
 
@@ -974,32 +872,26 @@ mod tests {
 
         // Lock has the patch at the old path
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-pkghash=".into(),
-                },
-                patches: vec!["fix1".into()],
-                mirrors: vec![],
+        lock.inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".into(),
             },
-        );
-        lock.patches.insert(
-            "fix1".into(),
-            LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: "patches/fix1.patch".into(), // old path
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-oldhash=".into(),
-                },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-pkghash=".into(),
             },
-        );
+            patches: vec!["fix1".into()],
+            mirrors: vec![],
+        });
+        lock.patches.insert("fix1".into(), LockedPatch {
+            source: LockedPatchSource::Local {
+                path: "patches/fix1.patch".into(), // old path
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-oldhash=".into(),
+            },
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
@@ -1044,20 +936,17 @@ mod tests {
 
         // Lock has the input already, but no patches locked
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-h=".into(),
-                },
-                patches: vec!["newpatch".into()],
-                mirrors: vec![],
+        lock.inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-h=".into(),
+            },
+            patches: vec!["newpatch".into()],
+            mirrors: vec![],
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         // Input itself is unchanged
@@ -1104,32 +993,26 @@ mod tests {
 
         // Lock has the same URL but sha256 algo
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-pkghash=".into(),
-                },
-                patches: vec!["rpatch".into()],
-                mirrors: vec![],
+        lock.inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".into(),
             },
-        );
-        lock.patches.insert(
-            "rpatch".into(),
-            LockedPatch {
-                source: LockedPatchSource::Remote {
-                    url: "https://example.com/fix.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256, // old algo
-                    value: "sha256-oldhash=".into(),
-                },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-pkghash=".into(),
             },
-        );
+            patches: vec!["rpatch".into()],
+            mirrors: vec![],
+        });
+        lock.patches.insert("rpatch".into(), LockedPatch {
+            source: LockedPatchSource::Remote {
+                url: "https://example.com/fix.patch".into(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256, // old algo
+                value: "sha256-oldhash=".into(),
+            },
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
@@ -1174,32 +1057,26 @@ mod tests {
 
         // Lock has the same URL and algo, but a different hash value
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-pkghash=".into(),
-                },
-                patches: vec!["rpatch".into()],
-                mirrors: vec![],
+        lock.inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".into(),
             },
-        );
-        lock.patches.insert(
-            "rpatch".into(),
-            LockedPatch {
-                source: LockedPatchSource::Remote {
-                    url: "https://example.com/fix.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-oldhash=".into(), // differs from new expected
-                },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-pkghash=".into(),
             },
-        );
+            patches: vec!["rpatch".into()],
+            mirrors: vec![],
+        });
+        lock.patches.insert("rpatch".into(), LockedPatch {
+            source: LockedPatchSource::Remote {
+                url: "https://example.com/fix.patch".into(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-oldhash=".into(), // differs from new expected
+            },
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
@@ -1243,32 +1120,26 @@ mod tests {
 
         // Lock already has the correct entry
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-pkghash=".into(),
-                },
-                patches: vec!["rpatch".into()],
-                mirrors: vec![],
+        lock.inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".into(),
             },
-        );
-        lock.patches.insert(
-            "rpatch".into(),
-            LockedPatch {
-                source: LockedPatchSource::Remote {
-                    url: "https://example.com/fix.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-existing=".into(),
-                },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-pkghash=".into(),
             },
-        );
+            patches: vec!["rpatch".into()],
+            mirrors: vec![],
+        });
+        lock.patches.insert("rpatch".into(), LockedPatch {
+            source: LockedPatchSource::Remote {
+                url: "https://example.com/fix.patch".into(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-existing=".into(),
+            },
+        });
 
         let outcomes = refresh_inputs(&m, &lock, &[], &resolver);
         let result = apply_outcomes(&m, &lock, &outcomes, &resolver);
@@ -1281,30 +1152,23 @@ mod tests {
     #[test]
     fn list_stale_separates_changed_and_failed_inputs() {
         let mut lock = empty_lock();
-        lock.inputs.insert(
-            "fresh".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/fresh".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-current=".into(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        lock.inputs.insert("fresh".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/fresh".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-current=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+        });
 
         // Resolver returns "sha256-current=" for all, so "fresh" is unchanged
         // but "stale" is missing from lock -> updated
         struct MixedResolver;
         impl RefreshResolver for MixedResolver {
-            fn resolve_git_rev(
-                &self,
-                _: &str,
-                _: &GitReference,
-            ) -> Result<Option<String>, Error> {
+            fn resolve_git_rev(&self, _: &str, _: &GitReference) -> Result<Option<String>, Error> {
                 Ok(None)
             }
 
@@ -1339,19 +1203,10 @@ mod tests {
     fn resolver_failure_produces_failed_outcome() {
         struct FailingResolver;
         impl RefreshResolver for FailingResolver {
-            fn resolve_git_rev(
-                &self,
-                _: &str,
-                _: &GitReference,
-            ) -> Result<Option<String>, Error> {
+            fn resolve_git_rev(&self, _: &str, _: &GitReference) -> Result<Option<String>, Error> {
                 Err(Error::Manifest("network down".into()))
             }
-            fn hash_url_content(
-                &self,
-                _: &str,
-                _: &HashAlgo,
-                _: HashResolutionMode,
-            ) -> Result<Option<String>, Error> {
+            fn hash_url_content(&self, _: &str, _: &HashAlgo, _: HashResolutionMode) -> Result<Option<String>, Error> {
                 Err(Error::Manifest("network down".into()))
             }
         }

@@ -1,15 +1,18 @@
 // Copyright (C) 2023 Ant Group. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{Error, ErrorKind, Result};
-use std::{
-    collections::HashMap,
-    sync::{atomic::Ordering, Arc},
-};
-
-use super::{Inode, OverlayInode, VFS_MAX_INO};
+use std::collections::HashMap;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use radix_trie::Trie;
+
+use super::Inode;
+use super::OverlayInode;
+use super::VFS_MAX_INO;
 
 pub struct InodeStore {
     // Active inodes.
@@ -45,10 +48,7 @@ impl InodeStore {
             ino += 1;
         }
         error!("reached maximum inode number: {}", VFS_MAX_INO);
-        Err(Error::new(
-            ErrorKind::Other,
-            format!("maximum inode number {} reached", VFS_MAX_INO),
-        ))
+        Err(Error::new(ErrorKind::Other, format!("maximum inode number {} reached", VFS_MAX_INO)))
     }
 
     pub(crate) fn alloc_inode(&mut self, path: &String) -> Result<Inode> {
@@ -74,11 +74,7 @@ impl InodeStore {
     }
 
     // Return the inode only if it's permanently deleted from both self.inodes and self.deleted_inodes.
-    pub(crate) fn remove_inode(
-        &mut self,
-        inode: Inode,
-        path_removed: Option<String>,
-    ) -> Option<Arc<OverlayInode>> {
+    pub(crate) fn remove_inode(&mut self, inode: Inode, path_removed: Option<String>) -> Option<Arc<OverlayInode>> {
         let removed = match self.inodes.remove(&inode) {
             Some(v) => {
                 // Refcount is not 0, we have to delay the removal.

@@ -1,9 +1,8 @@
 use bstr::ByteSlice;
 
-use crate::{
-    SymlinkTargetError,
-    path::{PathComponent, PathComponentError},
-};
+use crate::SymlinkTargetError;
+use crate::path::PathComponent;
+use crate::path::PathComponentError;
 
 /// Errors that occur during construction of [crate::Node]
 #[derive(Debug, thiserror::Error, PartialEq)]

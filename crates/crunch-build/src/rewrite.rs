@@ -33,11 +33,7 @@ pub fn replace_marker_with_final(data: &[u8], final_path: &str) -> Vec<u8> {
 /// Both paths MUST have the same byte length (store paths are fixed-width
 /// for a given name).
 pub fn replace_input_provisional(data: &[u8], old_path: &str, new_path: &str) -> Vec<u8> {
-    assert_eq!(
-        old_path.len(),
-        new_path.len(),
-        "old_path and new_path must have the same byte length"
-    );
+    assert_eq!(old_path.len(), new_path.len(), "old_path and new_path must have the same byte length");
     let (result, _) = replace_bytes(data, old_path.as_bytes(), new_path.as_bytes());
     result
 }
@@ -70,10 +66,11 @@ fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> (Vec<u8>
     (result, found)
 }
 
+use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::Node;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
 /// Rewrite all file blobs in a castore `Node` tree, replacing `old_bytes`
 /// with `new_bytes` (must be same length). Returns the new root Node and
@@ -92,17 +89,20 @@ pub async fn rewrite_node(
     assert_eq!(old_bytes.len(), new_bytes.len(), "old and new must be same length");
 
     match node {
-        Node::File { digest, size, executable } => {
+        Node::File {
+            digest,
+            size,
+            executable,
+        } => {
             let mut reader = blob_service
                 .open_read(digest)
                 .await
                 .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
-            let reader = reader.as_mut()
-                .ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
+            let reader =
+                reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
 
             let mut data = Vec::with_capacity(*size as usize);
-            reader.read_to_end(&mut data).await
-                .map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
+            reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
 
             let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);
 
@@ -111,37 +111,40 @@ pub async fn rewrite_node(
             }
 
             let mut writer = blob_service.open_write().await;
-            writer.write_all(&rewritten).await
+            writer
+                .write_all(&rewritten)
+                .await
                 .map_err(|e| crate::Error::Store(format!("writing rewritten blob: {e}")))?;
-            let new_digest = writer.close().await
-                .map_err(|e| crate::Error::Store(format!("closing rewritten blob: {e}")))?;
+            let new_digest =
+                writer.close().await.map_err(|e| crate::Error::Store(format!("closing rewritten blob: {e}")))?;
 
-            Ok((Node::File {
-                digest: new_digest,
-                size: *size,
-                executable: *executable,
-            }, true))
+            Ok((
+                Node::File {
+                    digest: new_digest,
+                    size: *size,
+                    executable: *executable,
+                },
+                true,
+            ))
         }
         Node::Directory { digest, size: _ } => {
             let dir = directory_service
                 .get(digest)
                 .await
                 .map_err(|e| crate::Error::Store(format!("directory read for rewrite: {e}")))?;
-            let dir = dir.ok_or_else(|| crate::Error::Store(
-                format!("directory {digest} not found for rewrite")
-            ))?;
+            let dir = dir.ok_or_else(|| crate::Error::Store(format!("directory {digest} not found for rewrite")))?;
 
             let mut any_found = false;
             let mut new_dir = snix_castore::Directory::new();
 
             for (name, child_node) in dir.nodes() {
-                let (new_child, found) = Box::pin(
-                    rewrite_node(child_node, old_bytes, new_bytes, blob_service, directory_service)
-                ).await?;
+                let (new_child, found) =
+                    Box::pin(rewrite_node(child_node, old_bytes, new_bytes, blob_service, directory_service)).await?;
                 if found {
                     any_found = true;
                 }
-                new_dir.add(name.clone(), new_child)
+                new_dir
+                    .add(name.clone(), new_child)
                     .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;
             }
 
@@ -151,13 +154,18 @@ pub async fn rewrite_node(
 
             let new_digest = new_dir.digest();
             let new_size = new_dir.size();
-            directory_service.put(new_dir).await
+            directory_service
+                .put(new_dir)
+                .await
                 .map_err(|e| crate::Error::Store(format!("storing rewritten directory: {e}")))?;
 
-            Ok((Node::Directory {
-                digest: new_digest,
-                size: new_size,
-            }, true))
+            Ok((
+                Node::Directory {
+                    digest: new_digest,
+                    size: new_size,
+                },
+                true,
+            ))
         }
         Node::Symlink { .. } => {
             // Symlinks don't contain store paths in their targets
@@ -206,10 +214,7 @@ mod tests {
         assert!(found);
         // Two occurrences replaced
         let zeros = vec![0u8; prov.len()];
-        let count = result
-            .windows(zeros.len())
-            .filter(|w| *w == zeros.as_slice())
-            .count();
+        let count = result.windows(zeros.len()).filter(|w| *w == zeros.as_slice()).count();
         assert_eq!(count, 2);
     }
 

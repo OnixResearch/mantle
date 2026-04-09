@@ -1,6 +1,5 @@
 #[cfg(all(feature = "cloud", feature = "integration"))]
-pub(crate) async fn make_bigtable_path_info_service()
--> crate::pathinfoservice::BigtablePathInfoService {
+pub(crate) async fn make_bigtable_path_info_service() -> crate::pathinfoservice::BigtablePathInfoService {
     use crate::pathinfoservice::BigtablePathInfoService;
     use crate::pathinfoservice::bigtable::BigtableParameters;
 

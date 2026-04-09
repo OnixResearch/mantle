@@ -2,7 +2,9 @@
 // It defines the `FlakeRef` enum which represents different types of flake sources
 // (such as Git repositories, GitHub repos, local paths, etc.), along with functionality
 // to parse URLs into `FlakeRef` instances and convert them back to URIs.
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use url::Url;
 
 #[derive(Debug)]
@@ -97,10 +99,7 @@ pub struct FlakeRefOutput {
 
 impl FlakeRefOutput {
     pub fn into_kv_tuples(self) -> Vec<(String, String)> {
-        let mut vec = vec![
-            ("outPath".into(), self.out_path),
-            ("narHash".into(), self.nar_hash),
-        ];
+        let mut vec = vec![("outPath".into(), self.out_path), ("narHash".into(), self.nar_hash)];
 
         if let Some(lm) = self.last_modified {
             vec.push(("lastModified".into(), lm.to_string()));
@@ -235,42 +234,36 @@ impl std::str::FromStr for FlakeRef {
                     last_modified: params.last_modified,
                 }
             }
-            FetchType::GitHub => {
-                create_repo_host_args(&url, &query_pairs, |params| FlakeRef::GitHub {
-                    owner: params.owner,
-                    repo: params.repo,
-                    r#ref: params.r#ref,
-                    rev: params.rev,
-                    host: params.host,
-                    keytype: params.keytype,
-                    public_key: params.public_key,
-                    public_keys: params.public_keys,
-                })?
-            }
-            FetchType::GitLab => {
-                create_repo_host_args(&url, &query_pairs, |params| FlakeRef::GitLab {
-                    owner: params.owner,
-                    repo: params.repo,
-                    r#ref: params.r#ref,
-                    rev: params.rev,
-                    host: params.host,
-                    keytype: params.keytype,
-                    public_key: params.public_key,
-                    public_keys: params.public_keys,
-                })?
-            }
-            FetchType::SourceHut => {
-                create_repo_host_args(&url, &query_pairs, |params| FlakeRef::SourceHut {
-                    owner: params.owner,
-                    repo: params.repo,
-                    r#ref: params.r#ref,
-                    rev: params.rev,
-                    host: params.host,
-                    keytype: params.keytype,
-                    public_key: params.public_key,
-                    public_keys: params.public_keys,
-                })?
-            }
+            FetchType::GitHub => create_repo_host_args(&url, &query_pairs, |params| FlakeRef::GitHub {
+                owner: params.owner,
+                repo: params.repo,
+                r#ref: params.r#ref,
+                rev: params.rev,
+                host: params.host,
+                keytype: params.keytype,
+                public_key: params.public_key,
+                public_keys: params.public_keys,
+            })?,
+            FetchType::GitLab => create_repo_host_args(&url, &query_pairs, |params| FlakeRef::GitLab {
+                owner: params.owner,
+                repo: params.repo,
+                r#ref: params.r#ref,
+                rev: params.rev,
+                host: params.host,
+                keytype: params.keytype,
+                public_key: params.public_key,
+                public_keys: params.public_keys,
+            })?,
+            FetchType::SourceHut => create_repo_host_args(&url, &query_pairs, |params| FlakeRef::SourceHut {
+                owner: params.owner,
+                repo: params.repo,
+                r#ref: params.r#ref,
+                rev: params.rev,
+                host: params.host,
+                keytype: params.keytype,
+                public_key: params.public_key,
+                public_keys: params.public_keys,
+            })?,
         })
     }
 }
@@ -324,9 +317,7 @@ enum FetchType {
 
 // Helper functions for query parameters
 fn extract_query_pairs(url: &Url) -> HashMap<String, String> {
-    url.query_pairs()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
+    url.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
 fn get_param(query_pairs: &HashMap<String, String>, key: &str) -> Option<u64> {
@@ -334,10 +325,7 @@ fn get_param(query_pairs: &HashMap<String, String>, key: &str) -> Option<u64> {
 }
 
 fn get_bool_param(query_pairs: &HashMap<String, String>, key: &str) -> bool {
-    query_pairs
-        .get(key)
-        .map(|v| v == "1" || v.to_lowercase() == "true")
-        .unwrap_or(false)
+    query_pairs.get(key).map(|v| v == "1" || v.to_lowercase() == "true").unwrap_or(false)
 }
 
 // Parameter extractors
@@ -356,9 +344,7 @@ fn extract_git_params(query_pairs: &HashMap<String, String>) -> GitParams {
         rev: query_pairs.get("rev").cloned(),
         keytype: query_pairs.get("keytype").cloned(),
         public_key: query_pairs.get("publicKey").cloned(),
-        public_keys: query_pairs
-            .get("publicKeys")
-            .map(|s| s.split(',').map(String::from).collect()),
+        public_keys: query_pairs.get("publicKeys").map(|s| s.split(',').map(String::from).collect()),
         submodules: get_bool_param(query_pairs, "submodules"),
         shallow: get_bool_param(query_pairs, "shallow"),
         export_ignore: get_bool_param(query_pairs, "exportIgnore"),
@@ -367,17 +353,12 @@ fn extract_git_params(query_pairs: &HashMap<String, String>) -> GitParams {
     }
 }
 
-fn extract_repo_params(
-    url: &Url,
-    query_pairs: &HashMap<String, String>,
-) -> Result<RepoHostParams, FlakeRefError> {
+fn extract_repo_params(url: &Url, query_pairs: &HashMap<String, String>) -> Result<RepoHostParams, FlakeRefError> {
     let (owner, repo, path_ref) = parse_path_segments(url)?;
 
     // Check for branch/tag conflicts
     if path_ref.is_some() && query_pairs.contains_key("ref") {
-        return Err(FlakeRefError::UnsupportedType(
-            "URL contains multiple branch/tag names".to_string(),
-        ));
+        return Err(FlakeRefError::UnsupportedType("URL contains multiple branch/tag names".to_string()));
     }
 
     let r#ref = path_ref.or_else(|| query_pairs.get("ref").cloned());
@@ -390,9 +371,7 @@ fn extract_repo_params(
         host: query_pairs.get("host").cloned(),
         keytype: query_pairs.get("keytype").cloned(),
         public_key: query_pairs.get("publicKey").cloned(),
-        public_keys: query_pairs
-            .get("publicKeys")
-            .map(|s| s.split(',').map(String::from).collect()),
+        public_keys: query_pairs.get("publicKeys").map(|s| s.split(',').map(String::from).collect()),
     })
 }
 
@@ -401,9 +380,7 @@ fn parse_path_segments(url: &Url) -> Result<(String, String, Option<String>), Fl
     let path_segments: Vec<&str> = url.path().trim_start_matches('/').splitn(3, '/').collect();
 
     if path_segments.len() < 2 {
-        return Err(FlakeRefError::UnsupportedType(
-            "URLs must contain owner and repo".to_string(),
-        ));
+        return Err(FlakeRefError::UnsupportedType("URLs must contain owner and repo".to_string()));
     }
 
     Ok((
@@ -415,9 +392,7 @@ fn parse_path_segments(url: &Url) -> Result<(String, String, Option<String>), Fl
 
 // Helper function for tarball detection
 fn is_tarball_extension(path: &str) -> bool {
-    const TARBALL_EXTENSIONS: [&str; 7] = [
-        ".zip", ".tar", ".tgz", ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst",
-    ];
+    const TARBALL_EXTENSIONS: [&str; 7] = [".zip", ".tar", ".tgz", ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst"];
 
     TARBALL_EXTENSIONS.iter().any(|ext| path.ends_with(ext))
 }
@@ -455,33 +430,23 @@ fn append_params(url: &mut Url, params: &[(&str, Option<String>)]) {
 
 fn append_public_keys_param(url: &mut Url, public_keys: &Option<Vec<String>>) {
     if let Some(keys) = public_keys {
-        url.query_pairs_mut()
-            .append_pair("publicKeys", &keys.join(","));
+        url.query_pairs_mut().append_pair("publicKeys", &keys.join(","));
     }
 }
 
 fn append_common_file_params(url: &mut Url, params: &FileParams) {
-    append_params(
-        url,
-        &[
-            ("narHash", params.nar_hash.clone()),
-            ("rev", params.rev.clone()),
-        ],
-    );
+    append_params(url, &[("narHash", params.nar_hash.clone()), ("rev", params.rev.clone())]);
     append_param(url, "revCount", &params.rev_count);
     append_param(url, "lastModified", &params.last_modified);
 }
 
 fn append_git_params(url: &mut Url, params: &GitParams) {
-    append_params(
-        url,
-        &[
-            ("ref", params.r#ref.clone()),
-            ("rev", params.rev.clone()),
-            ("keytype", params.keytype.clone()),
-            ("publicKey", params.public_key.clone()),
-        ],
-    );
+    append_params(url, &[
+        ("ref", params.r#ref.clone()),
+        ("rev", params.rev.clone()),
+        ("keytype", params.keytype.clone()),
+        ("publicKey", params.public_key.clone()),
+    ]);
     append_public_keys_param(url, &params.public_keys);
     append_bool_param(url, "shallow", params.shallow);
     append_bool_param(url, "submodules", params.submodules);
@@ -491,15 +456,12 @@ fn append_git_params(url: &mut Url, params: &GitParams) {
 }
 
 fn append_repo_host_params(url: &mut Url, params: &RepoHostParams) {
-    append_params(
-        url,
-        &[
-            ("ref", params.r#ref.clone()),
-            ("rev", params.rev.clone()),
-            ("keytype", params.keytype.clone()),
-            ("publicKey", params.public_key.clone()),
-        ],
-    );
+    append_params(url, &[
+        ("ref", params.r#ref.clone()),
+        ("rev", params.rev.clone()),
+        ("keytype", params.keytype.clone()),
+        ("publicKey", params.public_key.clone()),
+    ]);
     append_public_keys_param(url, &params.public_keys);
 }
 

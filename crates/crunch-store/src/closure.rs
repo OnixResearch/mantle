@@ -1,10 +1,9 @@
 //! Native closure resolution: walk the reference graph in PathInfo
 //! (local redb + optional remote binary cache) instead of shelling
 //! out to `nix-store -qR`.
-use async_trait::async_trait;
-
 use std::collections::BTreeSet;
 
+use async_trait::async_trait;
 use nix_compat::store_path::StorePath;
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::warn;
@@ -112,12 +111,13 @@ pub async fn resolve_closure(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::collections::BTreeMap;
 
     use snix_store::path_info::PathInfo;
-    use snix_store::pathinfoservice::{self, PathInfoService};
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::{self};
+
+    use super::*;
 
     // -- Mock PathInfoService --------------------------------------------------
 
@@ -133,7 +133,6 @@ mod tests {
         }
     }
 
-    
     #[async_trait]
     impl PathInfoService for MockPathInfoService {
         async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
@@ -162,8 +161,7 @@ mod tests {
         for (i, b) in name.as_bytes().iter().enumerate() {
             digest[(i + 1) % 20] = *b;
         }
-        StorePath::from_name_and_digest_fixed(name, digest)
-            .expect("valid store path")
+        StorePath::from_name_and_digest_fixed(name, digest).expect("valid store path")
     }
 
     fn make_pi(sp: &StorePath<String>, refs: Vec<StorePath<String>>) -> PathInfo {

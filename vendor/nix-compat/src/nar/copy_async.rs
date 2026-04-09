@@ -1,6 +1,7 @@
 use std::io;
 
-use tokio::io::{AsyncBufRead, AsyncWrite};
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncWrite;
 
 use super::reader::r#async as reader;
 use super::writer::r#async as writer;
@@ -21,10 +22,7 @@ where
 async fn copy_node(node_r: reader::Node<'_, '_>, node_w: writer::Node<'_, '_>) -> io::Result<()> {
     match node_r {
         reader::Node::Symlink { target } => node_w.symlink(&target).await?,
-        reader::Node::File {
-            executable,
-            mut reader,
-        } => node_w.file(executable, reader.len(), &mut reader).await?,
+        reader::Node::File { executable, mut reader } => node_w.file(executable, reader.len(), &mut reader).await?,
         reader::Node::Directory(mut dir_reader) => {
             let mut directory_w = node_w.directory().await?;
             while let Some(entry) = dir_reader.next().await? {
@@ -41,8 +39,9 @@ async fn copy_node(node_r: reader::Node<'_, '_>, node_w: writer::Node<'_, '_>) -
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
     use std::path::PathBuf;
+
+    use rstest::rstest;
 
     #[rstest]
     #[tokio::test]
@@ -51,11 +50,7 @@ mod tests {
 
         let mut out_buf = Vec::new();
 
-        assert!(
-            super::copy(&mut std::io::Cursor::new(&nar_src), &mut out_buf)
-                .await
-                .is_ok()
-        );
+        assert!(super::copy(&mut std::io::Cursor::new(&nar_src), &mut out_buf).await.is_ok());
         assert_eq!(nar_src, out_buf, "must roundtrip");
     }
 }

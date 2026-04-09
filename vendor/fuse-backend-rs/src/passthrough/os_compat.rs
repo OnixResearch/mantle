@@ -17,9 +17,10 @@ unsafe impl ByteValued for LinuxDirent64 {}
 
 #[cfg(target_env = "gnu")]
 pub use libc::statx as statx_st;
-
 #[cfg(target_env = "gnu")]
-pub use libc::{STATX_BASIC_STATS, STATX_MNT_ID};
+pub use libc::STATX_BASIC_STATS;
+#[cfg(target_env = "gnu")]
+pub use libc::STATX_MNT_ID;
 
 // musl provides the 'struct statx', but without stx_mnt_id.
 // However, the libc crate does not provide libc::statx

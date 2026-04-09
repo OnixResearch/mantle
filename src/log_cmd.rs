@@ -4,10 +4,7 @@ use crate::errors::RunError;
 pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     let dir = log_dir();
     if !dir.exists() {
-        return Err(RunError::Internal(format!(
-            "log directory {} does not exist (no builds yet?)",
-            dir.display()
-        )));
+        return Err(RunError::Internal(format!("log directory {} does not exist (no builds yet?)", dir.display())));
     }
 
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
@@ -55,14 +52,11 @@ pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
 
     match matched {
         Some(entry) => {
-            let content = std::fs::read_to_string(entry.path())
-                .map_err(|e| RunError::Internal(format!("reading log: {e}")))?;
+            let content =
+                std::fs::read_to_string(entry.path()).map_err(|e| RunError::Internal(format!("reading log: {e}")))?;
             print!("{content}");
             Ok(())
         }
-        None => Err(RunError::Internal(format!(
-            "no log matching '{query}' in {}",
-            dir.display(),
-        ))),
+        None => Err(RunError::Internal(format!("no log matching '{query}' in {}", dir.display(),))),
     }
 }

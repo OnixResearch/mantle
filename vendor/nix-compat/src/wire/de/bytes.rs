@@ -1,25 +1,21 @@
 use bytes::Bytes;
 
-use super::{Error, NixDeserialize, NixRead};
+use super::Error;
+use super::NixDeserialize;
+use super::NixRead;
 
 impl NixDeserialize for Bytes {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         reader.try_read_bytes().await
     }
 }
 
 impl NixDeserialize for String {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         if let Some(buf) = reader.try_read_bytes().await? {
-            String::from_utf8(buf.to_vec())
-                .map_err(R::Error::invalid_data)
-                .map(Some)
+            String::from_utf8(buf.to_vec()).map_err(R::Error::invalid_data).map(Some)
         } else {
             Ok(None)
         }
@@ -34,7 +30,8 @@ mod test {
     use rstest::rstest;
     use tokio_test::io::Builder;
 
-    use crate::wire::de::{NixRead, NixReader};
+    use crate::wire::de::NixRead;
+    use crate::wire::de::NixReader;
 
     #[rstest]
     #[case::empty("", &hex!("0000 0000 0000 0000"))]
@@ -58,13 +55,8 @@ mod test {
 
     #[tokio::test]
     async fn test_read_string_invalid() {
-        let mock = Builder::new()
-            .read(&hex!("0300 0000 0000 0000 EDA0 8000 0000 0000"))
-            .build();
+        let mock = Builder::new().read(&hex!("0300 0000 0000 0000 EDA0 8000 0000 0000")).build();
         let mut reader = NixReader::new(mock);
-        assert_eq!(
-            io::ErrorKind::InvalidData,
-            reader.read_value::<String>().await.unwrap_err().kind()
-        );
+        assert_eq!(io::ErrorKind::InvalidData, reader.read_value::<String>().await.unwrap_err().kind());
     }
 }

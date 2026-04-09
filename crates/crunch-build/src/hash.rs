@@ -3,9 +3,9 @@
 
 use digest::Digest;
 use nix_compat::nixhash::NixHash;
+use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::Node;
 use snix_store::nar::write_nar;
 use snix_store::utils::AsyncIoBridge;
 use tokio::io::AsyncReadExt;
@@ -85,9 +85,10 @@ pub(crate) async fn hash_blob(
         HashAlgo::Md5 => {
             let mut hasher = md5::Md5::new();
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 { break; }
+                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
                 hasher.update(&buf[..n]);
             }
             let hash: [u8; 16] = hasher.finalize().into();
@@ -96,9 +97,10 @@ pub(crate) async fn hash_blob(
         HashAlgo::Sha1 => {
             let mut hasher = sha1::Sha1::new();
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 { break; }
+                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
                 hasher.update(&buf[..n]);
             }
             let hash: [u8; 20] = hasher.finalize().into();
@@ -107,9 +109,10 @@ pub(crate) async fn hash_blob(
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 { break; }
+                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
                 hasher.update(&buf[..n]);
             }
             let hash: [u8; 32] = hasher.finalize().into();
@@ -118,9 +121,10 @@ pub(crate) async fn hash_blob(
         HashAlgo::Sha512 => {
             let mut hasher = sha2::Sha512::new();
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 { break; }
+                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
                 hasher.update(&buf[..n]);
             }
             let hash: [u8; 64] = hasher.finalize().into();
@@ -129,9 +133,10 @@ pub(crate) async fn hash_blob(
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
             loop {
-                let n = reader.read(&mut buf).await
-                    .map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 { break; }
+                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+                if n == 0 {
+                    break;
+                }
                 hasher.update(&buf[..n]);
             }
             let hash = blake3::Hasher::finalize(&hasher);
@@ -142,14 +147,16 @@ pub(crate) async fn hash_blob(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nix_compat::nixhash::HashAlgo;
     use snix_castore::blobservice::MemoryBlobService;
-    use snix_castore::directoryservice::{
-        DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig,
-    };
-    use snix_store::nar::{NarCalculationService, SimpleRenderer};
+    use snix_castore::directoryservice::DirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+    use snix_store::nar::NarCalculationService;
+    use snix_store::nar::SimpleRenderer;
     use tokio::io::AsyncWriteExt;
+
+    use super::*;
 
     async fn insert_blob(bs: &MemoryBlobService, data: &[u8]) -> (snix_castore::B3Digest, Node) {
         let mut writer = bs.open_write().await;
@@ -164,11 +171,7 @@ mod tests {
     }
 
     fn tmp_ds() -> RedbDirectoryService {
-        RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .unwrap()
+        RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
     }
 
     // ── nar_hash: cross-check sha256 against SimpleRenderer ─────
@@ -183,15 +186,9 @@ mod tests {
         let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
         let (_size, sha256_from_calc) = renderer.calculate_nar(&node).await.unwrap();
 
-        let hash = nar_hash(&node, HashAlgo::Sha256, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let hash = nar_hash(&node, HashAlgo::Sha256, bs.clone(), ds.clone()).await.unwrap();
 
-        assert_eq!(
-            &sha256_from_calc[..],
-            hash.digest_as_bytes(),
-            "nar_hash(Sha256) should match calculate_nar"
-        );
+        assert_eq!(&sha256_from_calc[..], hash.digest_as_bytes(), "nar_hash(Sha256) should match calculate_nar");
     }
 
     // ── nar_hash: all algorithms on a file node ─────────────────
@@ -248,16 +245,10 @@ mod tests {
         let ds = tmp_ds();
         let (_, node) = insert_blob(&bs, b"determinism check").await;
 
-        let h1 = nar_hash(&node, HashAlgo::Sha256, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let h1 = nar_hash(&node, HashAlgo::Sha256, bs.clone(), ds.clone()).await.unwrap();
         let h2 = nar_hash(&node, HashAlgo::Sha256, bs, ds).await.unwrap();
 
-        assert_eq!(
-            h1.digest_as_bytes(),
-            h2.digest_as_bytes(),
-            "same input must produce same hash"
-        );
+        assert_eq!(h1.digest_as_bytes(), h2.digest_as_bytes(), "same input must produce same hash");
     }
 
     // ── nar_hash: different content produces different hashes ───
@@ -269,16 +260,10 @@ mod tests {
         let (_, node_a) = insert_blob(&bs, b"aaa").await;
         let (_, node_b) = insert_blob(&bs, b"bbb").await;
 
-        let ha = nar_hash(&node_a, HashAlgo::Sha256, bs.clone(), ds.clone())
-            .await
-            .unwrap();
+        let ha = nar_hash(&node_a, HashAlgo::Sha256, bs.clone(), ds.clone()).await.unwrap();
         let hb = nar_hash(&node_b, HashAlgo::Sha256, bs, ds).await.unwrap();
 
-        assert_ne!(
-            ha.digest_as_bytes(),
-            hb.digest_as_bytes(),
-            "different content should hash differently"
-        );
+        assert_ne!(ha.digest_as_bytes(), hb.digest_as_bytes(), "different content should hash differently");
     }
 
     // ── nar_hash: directory node ────────────────────────────────
@@ -291,14 +276,11 @@ mod tests {
         let (file_digest, _) = insert_blob(&bs, b"dir-file").await;
 
         let mut dir = snix_castore::Directory::new();
-        dir.add(
-            "file.txt".try_into().unwrap(),
-            Node::File {
-                digest: file_digest,
-                size: 8,
-                executable: false,
-            },
-        )
+        dir.add("file.txt".try_into().unwrap(), Node::File {
+            digest: file_digest,
+            size: 8,
+            executable: false,
+        })
         .unwrap();
         let dir_digest = dir.digest();
         let dir_size = dir.size();
@@ -446,9 +428,6 @@ mod tests {
         let fake = snix_castore::B3Digest::from(&[0xffu8; 32]);
 
         let err = hash_blob(&bs, &fake, HashAlgo::Sha256).await.unwrap_err();
-        assert!(
-            matches!(err, Error::Store(_)),
-            "missing blob should be Store error: {err}"
-        );
+        assert!(matches!(err, Error::Store(_)), "missing blob should be Store error: {err}");
     }
 }

@@ -1,9 +1,14 @@
-use super::Error;
-use crate::{B3Digest, Directory, Node};
+use std::collections::HashSet;
+use std::collections::VecDeque;
+
 use futures::StreamExt;
-use std::collections::{HashSet, VecDeque};
 use tracing::instrument;
 use tracing::warn;
+
+use super::Error;
+use crate::B3Digest;
+use crate::Directory;
+use crate::Node;
 
 /// Traverses a [Directory] from the root to the children.
 ///
@@ -60,5 +65,6 @@ where
 
             yield current_directory;
         }
-    }.boxed()
+    }
+    .boxed()
 }

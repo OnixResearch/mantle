@@ -2,21 +2,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use libc::time_t;
-use log::{error, info, warn};
 use std::any::Any;
 use std::ffi::CStr;
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use std::time::SystemTime;
 
 use fuse_backend_rs::abi::fuse_abi::Attr;
-
-use fuse_backend_rs::api::filesystem::{Context, DirEntry, Entry, FileSystem, ZeroCopyWriter};
-use fuse_backend_rs::api::{server::Server, BackendFileSystem, Vfs, VfsOptions};
-use fuse_backend_rs::transport::{FuseChannel, FuseSession};
+use fuse_backend_rs::api::filesystem::Context;
+use fuse_backend_rs::api::filesystem::DirEntry;
+use fuse_backend_rs::api::filesystem::Entry;
+use fuse_backend_rs::api::filesystem::FileSystem;
+use fuse_backend_rs::api::filesystem::ZeroCopyWriter;
+use fuse_backend_rs::api::server::Server;
+use fuse_backend_rs::api::BackendFileSystem;
+use fuse_backend_rs::api::Vfs;
+use fuse_backend_rs::api::VfsOptions;
+use fuse_backend_rs::transport::FuseChannel;
+use fuse_backend_rs::transport::FuseSession;
+use libc::time_t;
+use log::error;
+use log::info;
+use log::warn;
 
 pub(crate) struct HelloFileSystem {}
 
@@ -27,10 +37,7 @@ impl FileSystem for HelloFileSystem {
     fn lookup(&self, _: &Context, parent: Self::Inode, name: &CStr) -> Result<Entry> {
         let content = "hello, fuse".as_bytes();
         let now = SystemTime::now();
-        let time = now
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let time = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
         Ok(Entry {
             inode: 2,
             generation: 0,
@@ -144,10 +151,7 @@ impl FileSystem for HelloFileSystem {
     ) -> Result<(libc::stat, Duration)> {
         if inode == 1 {
             let now = SystemTime::now();
-            let time = now
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as time_t;
+            let time = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as time_t;
             return Ok((
                 libc::stat {
                     st_dev: 0,
@@ -184,10 +188,7 @@ impl FileSystem for HelloFileSystem {
         } else {
             let content = "hello, fuse".as_bytes();
             let now = SystemTime::now();
-            let time = now
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as time_t;
+            let time = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as time_t;
             return Ok((
                 libc::stat {
                     st_dev: 0,
@@ -286,8 +287,7 @@ impl Daemon {
     /// Mounts a fusedev daemon to the mountpoint, then start service threads to handle
     /// FUSE requests.
     pub fn mount(&mut self) -> Result<()> {
-        let mut se =
-            FuseSession::new(Path::new(&self.mountpoint), "passthru_example", "", true).unwrap();
+        let mut se = FuseSession::new(Path::new(&self.mountpoint), "passthru_example", "", true).unwrap();
         se.mount().unwrap();
         for _ in 0..self.thread_cnt {
             let mut server = FuseServer {
@@ -334,15 +334,10 @@ impl FuseServer {
         // Given error EBADF, it means kernel has shut down this session.
         let _ebadf = std::io::Error::from_raw_os_error(libc::EBADF);
         loop {
-            if let Some((reader, writer)) = self
-                .ch
-                .get_request()
-                .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?
+            if let Some((reader, writer)) =
+                self.ch.get_request().map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?
             {
-                if let Err(e) = self
-                    .server
-                    .handle_message(reader, writer.into(), None, None)
-                {
+                if let Err(e) = self.server.handle_message(reader, writer.into(), None, None) {
                     match e {
                         fuse_backend_rs::Error::EncodeMessage(_ebadf) => {
                             break;

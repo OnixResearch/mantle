@@ -4,15 +4,21 @@
 //! no structured_attrs, no passAsFile (those are Nix-isms that crunch
 //! doesn't need in v0).
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use bstr::BString;
 use bytes::Bytes;
-use nix_compat::derivation::{Derivation, Output};
+use nix_compat::derivation::Derivation;
+use nix_compat::derivation::Output;
+use nix_compat::nixbase32;
+use nix_compat::store_path::StorePath;
 use nix_compat::store_path::hash_placeholder;
-use nix_compat::{nixbase32, store_path::StorePath};
-use snix_build::buildservice::{BuildConstraints, BuildRequest, EnvVar};
+use snix_build::buildservice::BuildConstraints;
+use snix_build::buildservice::BuildRequest;
+use snix_build::buildservice::EnvVar;
 use snix_castore::Node;
 
 use crate::registry::DerivationRegistry;
@@ -76,10 +82,7 @@ pub fn derivation_to_build_request(
     }
     for (k, v) in &derivation.environment {
         let replaced = replace_placeholders_bstr(v, &derivation.outputs);
-        env.insert(
-            k.clone(),
-            Vec::from(replaced),
-        );
+        env.insert(k.clone(), Vec::from(replaced));
     }
 
     // Constraints
@@ -89,11 +92,7 @@ pub fn derivation_to_build_request(
     ]);
 
     // FODs get network access
-    let is_fod = derivation.outputs.len() == 1
-        && derivation
-            .outputs
-            .get("out")
-            .is_some_and(|o| o.is_fixed());
+    let is_fod = derivation.outputs.len() == 1 && derivation.outputs.get("out").is_some_and(|o| o.is_fixed());
     if is_fod {
         constraints.insert(BuildConstraints::NetworkAccess);
     }
@@ -121,7 +120,8 @@ pub fn derivation_to_build_request(
                 if path_str.is_empty() {
                     // CA derivation: use the placeholder path (from env)
                     // as the sandbox output location.
-                    let placeholder = derivation.environment
+                    let placeholder = derivation
+                        .environment
                         .get(output_name)
                         .map(|v| String::from_utf8_lossy(v).to_string())
                         .unwrap_or_default();
@@ -146,13 +146,11 @@ pub fn derivation_to_build_request(
         inputs: {
             let mut input_map = BTreeMap::new();
             for (path, node) in inputs {
-                let component = path.to_string()
+                let component = path
+                    .to_string()
                     .as_str()
                     .try_into()
-                    .map_err(|e| crate::Error::Store(format!(
-                        "invalid store path component '{}': {e}",
-                        path,
-                    )))?;
+                    .map_err(|e| crate::Error::Store(format!("invalid store path component '{}': {e}", path,)))?;
                 input_map.insert(component, node.clone());
             }
             input_map
@@ -187,17 +185,14 @@ pub fn collect_input_paths(
         let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
         // Verify the derivation is in DerivationRegistry
         if known_paths.get_by_drv_path(&drv_abs).is_none() {
-            return Err(crate::Error::DerivationNotFound {
-                path: drv_path.clone(),
-            });
+            return Err(crate::Error::DerivationNotFound { path: drv_path.clone() });
         }
         for output_name in output_names {
             // Use get_output_path which handles both input-addressed
             // (reads from derivation.outputs[].path) and content-addressed
             // (reads from resolved_outputs).
-            let output_path = known_paths
-                .get_output_path(&drv_abs, output_name)
-                .ok_or_else(|| crate::Error::OutputNoPath {
+            let output_path =
+                known_paths.get_output_path(&drv_abs, output_name).ok_or_else(|| crate::Error::OutputNoPath {
                     output: output_name.clone(),
                     drv_name: drv_path.to_string(),
                 })?;
@@ -227,9 +222,7 @@ fn replace_placeholders_bstr(s: &BString, outputs: &BTreeMap<String, Output>) ->
     for (name, output) in outputs {
         if let Some(path) = output.path.as_ref() {
             let placeholder = hash_placeholder(name.as_str());
-            result = result
-                .replace(placeholder.as_bytes(), path.to_absolute_path().as_bytes())
-                .into();
+            result = result.replace(placeholder.as_bytes(), path.to_absolute_path().as_bytes()).into();
         }
     }
     result
@@ -237,18 +230,20 @@ fn replace_placeholders_bstr(s: &BString, outputs: &BTreeMap<String, Output>) ->
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use nix_compat::derivation::Derivation;
     use std::collections::BTreeMap;
+
+    use nix_compat::derivation::Derivation;
+
+    use super::*;
 
     // ── Helper: build a derivation and register in DerivationRegistry ──
 
     fn make_drv_with_name(name: &str) -> Derivation {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            Output { path: None, ca_hash: None },
-        );
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
         let mut environment = BTreeMap::new();
         environment.insert("name".to_string(), name.into());
         environment.insert("system".to_string(), "x86_64-linux".into());
@@ -286,13 +281,10 @@ mod tests {
     /// Construct a minimal Derivation for testing.
     fn test_derivation() -> Derivation {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            Output {
-                path: None,
-                ca_hash: None,
-            },
-        );
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
 
         let mut environment = BTreeMap::new();
         environment.insert("name".to_string(), "test".into());
@@ -311,9 +303,7 @@ mod tests {
         };
 
         // Compute paths so outputs have real values
-        let hdm = drv.hash_derivation_modulo(|_| {
-            panic!("no parent derivations")
-        });
+        let hdm = drv.hash_derivation_modulo(|_| panic!("no parent derivations"));
         drv.calculate_output_paths("test", &hdm).unwrap();
         let _ = drv.calculate_derivation_path("test").unwrap();
 
@@ -334,11 +324,8 @@ mod tests {
         let drv = test_derivation();
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
-        let env_map: BTreeMap<&str, &[u8]> = req
-            .environment_vars
-            .iter()
-            .map(|e| (e.key.as_str(), e.value.as_ref()))
-            .collect();
+        let env_map: BTreeMap<&str, &[u8]> =
+            req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
 
         assert_eq!(*env_map.get("HOME").unwrap(), &b"/homeless-shelter"[..]);
         assert_eq!(*env_map.get("TMPDIR").unwrap(), &b"/build"[..]);
@@ -349,9 +336,7 @@ mod tests {
         let drv = test_derivation();
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
-        assert!(req
-            .constraints
-            .contains(&BuildConstraints::System("x86_64-linux".to_string())));
+        assert!(req.constraints.contains(&BuildConstraints::System("x86_64-linux".to_string())));
         assert!(req.constraints.contains(&BuildConstraints::ProvideBinSh));
     }
 
@@ -361,14 +346,8 @@ mod tests {
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         for output in &req.outputs {
-            assert!(
-                !output.starts_with("/"),
-                "output path must be relative: {output:?}"
-            );
-            assert!(
-                output.starts_with("nix/store"),
-                "output must be under nix/store: {output:?}"
-            );
+            assert!(!output.starts_with("/"), "output path must be relative: {output:?}");
+            assert!(output.starts_with("nix/store"), "output must be under nix/store: {output:?}");
         }
     }
 
@@ -396,10 +375,7 @@ mod tests {
 
         let result = replace_placeholders(&input, &drv.outputs);
         assert!(!result.contains(&placeholder), "placeholder should be gone");
-        assert!(
-            result.contains(&out_path.to_absolute_path()),
-            "should contain output path: {result}"
-        );
+        assert!(result.contains(&out_path.to_absolute_path()), "should contain output path: {result}");
     }
 
     #[test]
@@ -414,8 +390,14 @@ mod tests {
     fn replace_placeholders_multi_output() {
         // Build a fresh derivation with both outputs before computing paths
         let mut outputs = BTreeMap::new();
-        outputs.insert("out".to_string(), Output { path: None, ca_hash: None });
-        outputs.insert("dev".to_string(), Output { path: None, ca_hash: None });
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
+        outputs.insert("dev".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
         let mut environment = BTreeMap::new();
         environment.insert("name".to_string(), "test".into());
         environment.insert("system".to_string(), "x86_64-linux".into());
@@ -463,9 +445,8 @@ mod tests {
     #[test]
     fn collect_inputs_source_only() {
         let mut drv = test_derivation();
-        let source: StorePath<String> = StorePath::from_absolute_path(
-            "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash-5.2".as_bytes()
-        ).unwrap();
+        let source: StorePath<String> =
+            StorePath::from_absolute_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash-5.2".as_bytes()).unwrap();
         drv.input_sources.insert(source.clone());
 
         let kp = DerivationRegistry::default();
@@ -494,9 +475,8 @@ mod tests {
         let mut kp = DerivationRegistry::default();
         let (dep_drv_path, dep_drv) = register_drv("mixdep", &mut kp);
 
-        let source: StorePath<String> = StorePath::from_absolute_path(
-            "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-src".as_bytes()
-        ).unwrap();
+        let source: StorePath<String> =
+            StorePath::from_absolute_path("/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-src".as_bytes()).unwrap();
 
         let mut parent = test_derivation();
         parent.input_sources.insert(source.clone());
@@ -515,9 +495,9 @@ mod tests {
     fn collect_inputs_missing_drv_returns_error() {
         let kp = DerivationRegistry::default();
         let mut parent = test_derivation();
-        let fake_drv: StorePath<String> = StorePath::from_absolute_path(
-            "/nix/store/cccccccccccccccccccccccccccccccc-missing.drv".as_bytes()
-        ).unwrap();
+        let fake_drv: StorePath<String> =
+            StorePath::from_absolute_path("/nix/store/cccccccccccccccccccccccccccccccc-missing.drv".as_bytes())
+                .unwrap();
         let mut outputs = BTreeSet::new();
         outputs.insert("out".to_string());
         parent.input_derivations.insert(fake_drv, outputs);
@@ -546,9 +526,7 @@ mod tests {
     }
 
     /// Convert via ConversionCache, then bridge to DerivationRegistry.
-    fn convert_and_bridge(
-        drv: &crunch_glue::CrunchDerivation,
-    ) -> (DerivationRegistry, StorePath<String>, Derivation) {
+    fn convert_and_bridge(drv: &crunch_glue::CrunchDerivation) -> (DerivationRegistry, StorePath<String>, Derivation) {
         let mut cc = crunch_glue::ConversionCache::default();
         let (drv_path, nix_drv) = crunch_glue::convert(drv, &mut cc).unwrap();
         let mut reg = DerivationRegistry::default();
@@ -558,7 +536,8 @@ mod tests {
 
     #[test]
     fn output_selection_only_selected_output_in_sandbox_inputs() {
-        use crunch_glue::{Input, OutputRef};
+        use crunch_glue::Input;
+        use crunch_glue::OutputRef;
 
         let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
         let consumer = crunch_glue::CrunchDerivation {
@@ -591,7 +570,8 @@ mod tests {
 
     #[test]
     fn output_selection_coalescing_both_in_sandbox() {
-        use crunch_glue::{Input, OutputRef};
+        use crunch_glue::Input;
+        use crunch_glue::OutputRef;
 
         let dep = ia_drv("libfoo", &["out", "dev", "lib"]);
         let consumer = crunch_glue::CrunchDerivation {
@@ -639,10 +619,10 @@ mod tests {
         use nix_compat::nixhash::CAHash;
 
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            Output { path: None, ca_hash: hash },
-        );
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: hash,
+        });
         let mut environment = BTreeMap::new();
         environment.insert("name".to_string(), "test-fetch".into());
         environment.insert("system".to_string(), "builtin".into());
@@ -680,22 +660,15 @@ mod tests {
         let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
-        let env_map: BTreeMap<&str, &[u8]> = req
-            .environment_vars
-            .iter()
-            .map(|e| (e.key.as_str(), e.value.as_ref()))
-            .collect();
+        let env_map: BTreeMap<&str, &[u8]> =
+            req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
 
         assert_eq!(
             *env_map.get("url").unwrap(),
             b"https://example.com/foo.tar.gz",
             "url env var must be preserved in BuildRequest"
         );
-        assert_eq!(
-            *env_map.get("builder").unwrap(),
-            b"builtin:fetchurl",
-            "builder env var must be preserved"
-        );
+        assert_eq!(*env_map.get("builder").unwrap(), b"builtin:fetchurl", "builder env var must be preserved");
     }
 
     #[test]
@@ -709,18 +682,11 @@ mod tests {
 
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
-        let env_map: BTreeMap<&str, &[u8]> = req
-            .environment_vars
-            .iter()
-            .map(|e| (e.key.as_str(), e.value.as_ref()))
-            .collect();
+        let env_map: BTreeMap<&str, &[u8]> =
+            req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
 
         // url (set by make_fetcher_drv)
-        assert_eq!(
-            *env_map.get("url").unwrap(),
-            b"https://example.com/src.tar.gz",
-            "url must be preserved"
-        );
+        assert_eq!(*env_map.get("url").unwrap(), b"https://example.com/src.tar.gz", "url must be preserved");
         // unpack
         assert_eq!(*env_map.get("unpack").unwrap(), b"1", "unpack must be preserved");
         // type
@@ -755,14 +721,12 @@ mod tests {
 
     #[test]
     fn fetcher_build_request_outputs_contain_fetch_output_path() {
-        use nix_compat::nixhash::{CAHash, NixHash};
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
 
         // Create a fetcher drv with a known flat hash so the output path
         // is deterministic (FOD path computation).
-        let drv = make_fetcher_drv(
-            "https://example.com/foo.txt",
-            Some(CAHash::Flat(NixHash::Sha256([0xBB; 32]))),
-        );
+        let drv = make_fetcher_drv("https://example.com/foo.txt", Some(CAHash::Flat(NixHash::Sha256([0xBB; 32]))));
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
 
         // Must have exactly one output (fetchers produce "out" only).
@@ -771,14 +735,8 @@ mod tests {
         // The output path must be relative (no leading /) and under
         // the store dir, matching the derivation's computed output path.
         let out_path = &req.outputs[0];
-        assert!(
-            !out_path.starts_with("/"),
-            "output path must be relative: {out_path:?}"
-        );
-        assert!(
-            out_path.starts_with("nix/store"),
-            "output must be under nix/store: {out_path:?}"
-        );
+        assert!(!out_path.starts_with("/"), "output path must be relative: {out_path:?}");
+        assert!(out_path.starts_with("nix/store"), "output must be under nix/store: {out_path:?}");
 
         // Verify it matches the derivation's own output path (stripped of /).
         let drv_out = drv.outputs["out"].path.as_ref().unwrap();

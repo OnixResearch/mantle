@@ -1,6 +1,7 @@
-use crate::proto;
 use data_encoding::BASE64URL_NOPAD;
 use tracing::warn;
+
+use crate::proto;
 
 /// From a given root node and nar_size, writes a castore-infused NAR path to the writer.
 pub fn write_infused_nar_path(
@@ -8,16 +9,10 @@ pub fn write_infused_nar_path(
     node: crate::Node,
     nar_size: u64,
 ) -> Result<(), std::fmt::Error> {
-    let proto_node = postcard::to_stdvec(
-        &proto::Entry::from_name_and_node("".into(), node),
-    ).expect("Entry serialization cannot fail");
+    let proto_node = postcard::to_stdvec(&proto::Entry::from_name_and_node("".into(), node))
+        .expect("Entry serialization cannot fail");
 
-    write!(
-        w,
-        "nar/snix-castore/{}?narsize={}",
-        BASE64URL_NOPAD.encode(&proto_node),
-        nar_size,
-    )
+    write!(w, "nar/snix-castore/{}?narsize={}", BASE64URL_NOPAD.encode(&proto_node), nar_size,)
 }
 
 /// Detects and parses a castore-infused NAR path.
@@ -74,10 +69,11 @@ mod test {
     use rstest::rstest;
 
     use crate::Node;
-    use crate::fixtures::{
-        DIRECTORY_COMPLICATED, HELLOWORLD_BLOB_CONTENTS, HELLOWORLD_BLOB_DIGEST,
-    };
-    use crate::proto::{parse_infused_nar_path, write_infused_nar_path};
+    use crate::fixtures::DIRECTORY_COMPLICATED;
+    use crate::fixtures::HELLOWORLD_BLOB_CONTENTS;
+    use crate::fixtures::HELLOWORLD_BLOB_DIGEST;
+    use crate::proto::parse_infused_nar_path;
+    use crate::proto::write_infused_nar_path;
 
     #[rstest]
     #[case::directory_complicated(
@@ -94,10 +90,6 @@ mod test {
             path
         };
 
-        assert_eq!(
-            (node, nar_size),
-            parse_infused_nar_path(&path).expect("to parse"),
-            "expected to roundtrip"
-        );
+        assert_eq!((node, nar_size), parse_infused_nar_path(&path).expect("to parse"), "expected to roundtrip");
     }
 }

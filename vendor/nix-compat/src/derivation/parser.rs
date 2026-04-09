@@ -3,19 +3,37 @@
 //!
 //! [ATerm]: http://program-transformation.org/Tools/ATermFormat.html
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::btree_map;
+
 use nom::Parser;
 use nom::bytes::streaming::tag;
 use nom::character::streaming::char as nomchar;
-use nom::combinator::{all_consuming, consumed, map_res};
-use nom::multi::{separated_list0, separated_list1};
-use nom::sequence::{delimited, preceded, separated_pair, terminated};
-use std::collections::{BTreeMap, BTreeSet, btree_map};
+use nom::combinator::all_consuming;
+use nom::combinator::consumed;
+use nom::combinator::map_res;
+use nom::multi::separated_list0;
+use nom::multi::separated_list1;
+use nom::sequence::delimited;
+use nom::sequence::preceded;
+use nom::sequence::separated_pair;
+use nom::sequence::terminated;
 use thiserror;
 
-use crate::derivation::parse_error::{ErrorKind, NomError, NomResult, into_nomerror};
-use crate::derivation::{CAHash, Derivation, Output, write};
-use crate::store_path::{self, StorePath};
-use crate::{aterm, nixhash, nixhash::NixHash};
+use crate::aterm;
+use crate::derivation::CAHash;
+use crate::derivation::Derivation;
+use crate::derivation::Output;
+use crate::derivation::parse_error::ErrorKind;
+use crate::derivation::parse_error::NomError;
+use crate::derivation::parse_error::NomResult;
+use crate::derivation::parse_error::into_nomerror;
+use crate::derivation::write;
+use crate::nixhash;
+use crate::nixhash::NixHash;
+use crate::store_path::StorePath;
+use crate::store_path::{self};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<I> {
@@ -81,19 +99,10 @@ pub fn parse_streaming(i: &[u8]) -> (Result<Derivation, Error<&[u8]>>, &[u8]) {
 /// prefix, and a digest (bytes), return a [CAHash::Nar] or [CAHash::Flat].
 /// This does not live in CAHash, as its only possible to construct a subset of CAHash kinds,
 /// and only used inside Derivation ATerm.
-fn from_algo_and_mode_and_digest<B: AsRef<[u8]>>(
-    algo_and_mode: &str,
-    digest: B,
-) -> Result<CAHash, nixhash::Error> {
+fn from_algo_and_mode_and_digest<B: AsRef<[u8]>>(algo_and_mode: &str, digest: B) -> Result<CAHash, nixhash::Error> {
     Ok(match algo_and_mode.strip_prefix("r:") {
-        Some(algo) => nixhash::CAHash::Nar(NixHash::from_algo_and_digest(
-            algo.try_into()?,
-            digest.as_ref(),
-        )?),
-        None => nixhash::CAHash::Flat(NixHash::from_algo_and_digest(
-            algo_and_mode.try_into()?,
-            digest.as_ref(),
-        )?),
+        Some(algo) => nixhash::CAHash::Nar(NixHash::from_algo_and_digest(algo.try_into()?, digest.as_ref())?),
+        None => nixhash::CAHash::Flat(NixHash::from_algo_and_digest(algo_and_mode.try_into()?, digest.as_ref())?),
     })
 }
 
@@ -121,9 +130,7 @@ fn parse_output(i: &[u8]) -> NomResult<&[u8], (String, Output)> {
                         None
                     } else {
                         match data_encoding::HEXLOWER.decode(&encoded_digest) {
-                            Ok(digest) => {
-                                Some(from_algo_and_mode_and_digest(&algo_and_mode, digest))
-                            }
+                            Ok(digest) => Some(from_algo_and_mode_and_digest(&algo_and_mode, digest)),
                             Err(e) => Some(Err(nixhash::Error::InvalidBase64Encoding(e))),
                         }
                     }
@@ -131,19 +138,16 @@ fn parse_output(i: &[u8]) -> NomResult<&[u8], (String, Output)> {
                 .transpose();
 
                 match ca_hash_res {
-                    Ok(hash_with_mode) => Ok((
-                        output_name,
-                        Output {
-                            // TODO: Check if allowing empty paths here actually makes sense
-                            //       or we should make this code stricter.
-                            path: if output_path.is_empty() {
-                                None
-                            } else {
-                                Some(string_to_store_path(i, &output_path)?)
-                            },
-                            ca_hash: hash_with_mode,
+                    Ok(hash_with_mode) => Ok((output_name, Output {
+                        // TODO: Check if allowing empty paths here actually makes sense
+                        //       or we should make this code stricter.
+                        path: if output_path.is_empty() {
+                            None
+                        } else {
+                            Some(string_to_store_path(i, &output_path)?)
                         },
-                    )),
+                        ca_hash: hash_with_mode,
+                    })),
                     Err(e) => Err(nom::Err::Failure(NomError {
                         input: i,
                         code: ErrorKind::NixHashError(e),
@@ -162,12 +166,7 @@ fn parse_output(i: &[u8]) -> NomResult<&[u8], (String, Output)> {
 /// We don't use parse_kv here, as it's dealing with 2-tuples, and these are
 /// 4-tuples.
 fn parse_outputs(i: &[u8]) -> NomResult<&[u8], BTreeMap<String, Output>> {
-    let res = delimited(
-        nomchar('['),
-        separated_list1(tag(","), parse_output),
-        nomchar(']'),
-    )
-    .parse(i);
+    let res = delimited(nomchar('['), separated_list1(tag(","), parse_output), nomchar(']')).parse(i);
 
     match res {
         Ok((rst, outputs_lst)) => {
@@ -188,9 +187,7 @@ fn parse_outputs(i: &[u8]) -> NomResult<&[u8], BTreeMap<String, Output>> {
     }
 }
 
-fn parse_input_derivations(
-    i: &[u8],
-) -> NomResult<&[u8], BTreeMap<StorePath<String>, BTreeSet<String>>> {
+fn parse_input_derivations(i: &[u8]) -> NomResult<&[u8], BTreeMap<StorePath<String>, BTreeSet<String>>> {
     let (i, input_derivations_list) = parse_kv(aterm::parse_string_list)(i)?;
 
     // This is a HashMap of drv paths to a list of output names.
@@ -245,13 +242,12 @@ fn string_to_store_path<'a, 'i, S>(
 where
     S: std::clone::Clone + AsRef<str> + std::convert::From<&'a str>,
 {
-    let path =
-        StorePath::from_absolute_path(path_str.as_bytes()).map_err(|e: store_path::Error| {
-            nom::Err::Failure(NomError {
-                input: i,
-                code: e.into(),
-            })
-        })?;
+    let path = StorePath::from_absolute_path(path_str.as_bytes()).map_err(|e: store_path::Error| {
+        nom::Err::Failure(NomError {
+            input: i,
+            code: e.into(),
+        })
+    })?;
 
     #[cfg(debug_assertions)]
     assert_eq!(path_str, path.to_absolute_path());
@@ -276,49 +272,27 @@ pub fn parse_derivation(i: &[u8]) -> NomResult<&[u8], Derivation> {
                 // // parse input sources
                 terminated(parse_input_sources, nomchar(',')),
                 // // parse system
-                |i| {
-                    terminated(aterm::parse_string_field, nomchar(','))
-                        .parse(i)
-                        .map_err(into_nomerror)
-                },
+                |i| terminated(aterm::parse_string_field, nomchar(',')).parse(i).map_err(into_nomerror),
                 // // parse builder
-                |i| {
-                    terminated(aterm::parse_string_field, nomchar(','))
-                        .parse(i)
-                        .map_err(into_nomerror)
-                },
+                |i| terminated(aterm::parse_string_field, nomchar(',')).parse(i).map_err(into_nomerror),
                 // // parse arguments
-                |i| {
-                    terminated(aterm::parse_string_list, nomchar(','))
-                        .parse(i)
-                        .map_err(into_nomerror)
-                },
+                |i| terminated(aterm::parse_string_list, nomchar(',')).parse(i).map_err(into_nomerror),
                 // parse environment
                 parse_kv(aterm::parse_bytes_field),
             ),
             nomchar(')'),
         )
-        .map(
-            |(
-                outputs,
+        .map(|(outputs, input_derivations, input_sources, system, builder, arguments, environment)| {
+            Derivation {
+                arguments,
+                builder,
+                environment,
                 input_derivations,
                 input_sources,
+                outputs,
                 system,
-                builder,
-                arguments,
-                environment,
-            )| {
-                Derivation {
-                    arguments,
-                    builder,
-                    environment,
-                    input_derivations,
-                    input_sources,
-                    outputs,
-                    system,
-                }
-            },
-        ),
+            }
+        }),
     )
     .parse(i)
 }
@@ -331,9 +305,7 @@ pub fn parse_derivation(i: &[u8]) -> NomResult<&[u8], Derivation> {
 pub(crate) fn parse_kv<'a, V, VF>(
     vf: VF,
 ) -> impl FnMut(&'a [u8]) -> NomResult<&'a [u8], BTreeMap<String, V>> + 'static
-where
-    VF: FnMut(&'a [u8]) -> nom::IResult<&'a [u8], V, nom::error::Error<&'a [u8]>> + Clone + 'static,
-{
+where VF: FnMut(&'a [u8]) -> nom::IResult<&'a [u8], V, nom::error::Error<&'a [u8]>> + Clone + 'static {
     move |i|
     // inside brackets
     delimited(
@@ -380,48 +352,36 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::store_path::StorePathRef;
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
     use std::sync::LazyLock;
 
-    use crate::{
-        derivation::{
-            CAHash, NixHash, Output, parse_error::ErrorKind, parser::from_algo_and_mode_and_digest,
-        },
-        store_path::StorePath,
-    };
-    use bstr::{BString, ByteSlice};
+    use bstr::BString;
+    use bstr::ByteSlice;
     use hex_literal::hex;
     use rstest::rstest;
 
-    const DIGEST_SHA256: [u8; 32] =
-        hex!("a5ce9c155ed09397614646c9717fc7cd94b1023d7b76b618d409e4fefd6e9d39");
+    use crate::derivation::CAHash;
+    use crate::derivation::NixHash;
+    use crate::derivation::Output;
+    use crate::derivation::parse_error::ErrorKind;
+    use crate::derivation::parser::from_algo_and_mode_and_digest;
+    use crate::store_path::StorePath;
+    use crate::store_path::StorePathRef;
+
+    const DIGEST_SHA256: [u8; 32] = hex!("a5ce9c155ed09397614646c9717fc7cd94b1023d7b76b618d409e4fefd6e9d39");
 
     static NIXHASH_SHA256: NixHash = NixHash::Sha256(DIGEST_SHA256);
     static EXP_MULTI_OUTPUTS: LazyLock<BTreeMap<String, Output>> = LazyLock::new(|| {
         let mut b = BTreeMap::new();
-        b.insert(
-            "lib".to_string(),
-            Output {
-                path: Some(
-                    StorePath::from_bytes(b"2vixb94v0hy2xc6p7mbnxxcyc095yyia-has-multi-out-lib")
-                        .unwrap(),
-                ),
-                ca_hash: None,
-            },
-        );
-        b.insert(
-            "out".to_string(),
-            Output {
-                path: Some(
-                    StorePath::from_bytes(
-                        b"55lwldka5nyxa08wnvlizyqw02ihy8ic-has-multi-out".as_bytes(),
-                    )
-                    .unwrap(),
-                ),
-                ca_hash: None,
-            },
-        );
+        b.insert("lib".to_string(), Output {
+            path: Some(StorePath::from_bytes(b"2vixb94v0hy2xc6p7mbnxxcyc095yyia-has-multi-out-lib").unwrap()),
+            ca_hash: None,
+        });
+        b.insert("out".to_string(), Output {
+            path: Some(StorePath::from_bytes(b"55lwldka5nyxa08wnvlizyqw02ihy8ic-has-multi-out".as_bytes()).unwrap()),
+            ca_hash: None,
+        });
         b
     });
 
@@ -435,25 +395,17 @@ mod tests {
     static EXP_INPUT_DERIVATIONS_SIMPLE: LazyLock<BTreeMap<StorePath<String>, BTreeSet<String>>> =
         LazyLock::new(|| {
             let mut b = BTreeMap::new();
-            b.insert(
-                StorePath::from_bytes(b"8bjm87p310sb7r2r0sg4xrynlvg86j8k-hello-2.12.1.tar.gz.drv")
-                    .unwrap(),
-                {
-                    let mut output_names = BTreeSet::new();
-                    output_names.insert("out".to_string());
-                    output_names
-                },
-            );
-            b.insert(
-                StorePath::from_bytes(b"p3jc8aw45dza6h52v81j7lk69khckmcj-bash-5.2-p15.drv")
-                    .unwrap(),
-                {
-                    let mut output_names = BTreeSet::new();
-                    output_names.insert("out".to_string());
-                    output_names.insert("lib".to_string());
-                    output_names
-                },
-            );
+            b.insert(StorePath::from_bytes(b"8bjm87p310sb7r2r0sg4xrynlvg86j8k-hello-2.12.1.tar.gz.drv").unwrap(), {
+                let mut output_names = BTreeSet::new();
+                output_names.insert("out".to_string());
+                output_names
+            });
+            b.insert(StorePath::from_bytes(b"p3jc8aw45dza6h52v81j7lk69khckmcj-bash-5.2-p15.drv").unwrap(), {
+                let mut output_names = BTreeSet::new();
+                output_names.insert("out".to_string());
+                output_names.insert("lib".to_string());
+                output_names
+            });
             b
         });
 
@@ -476,13 +428,8 @@ mod tests {
     #[rstest]
     #[case::empty(b"[]", &BTreeMap::new(), b"")]
     #[case::simple(b"[(\"a\",\"1\"),(\"b\",\"2\")]", &EXP_AB_MAP, b"")]
-    fn parse_kv(
-        #[case] input: &'static [u8],
-        #[case] expected: &BTreeMap<String, BString>,
-        #[case] exp_rest: &[u8],
-    ) {
-        let (rest, parsed) =
-            super::parse_kv(crate::aterm::parse_bytes_field)(input).expect("must parse");
+    fn parse_kv(#[case] input: &'static [u8], #[case] expected: &BTreeMap<String, BString>, #[case] exp_rest: &[u8]) {
+        let (rest, parsed) = super::parse_kv(crate::aterm::parse_bytes_field)(input).expect("must parse");
         assert_eq!(exp_rest, rest, "expected remainder");
         assert_eq!(*expected, parsed);
     }
@@ -495,10 +442,7 @@ mod tests {
     #[case::incomplete_complicated_multi_escape(b"[(\"a\",\"")]
     #[case::incomplete_complicated_multi_outer_sep(b"[(\"a\",\"b\"),")]
     fn parse_kv_incomplete(#[case] input: &'static [u8]) {
-        assert!(matches!(
-            super::parse_kv(crate::aterm::parse_bytes_field)(input),
-            Err(nom::Err::Incomplete(_))
-        ));
+        assert!(matches!(super::parse_kv(crate::aterm::parse_bytes_field)(input), Err(nom::Err::Incomplete(_))));
     }
 
     /// Ensures the kv parser complains about duplicate map keys
@@ -562,10 +506,7 @@ mod tests {
 
         assert_eq!(
             expected,
-            &parsed
-                .iter()
-                .map(StorePath::to_absolute_path)
-                .collect::<BTreeSet<_>>(),
+            &parsed.iter().map(StorePath::to_absolute_path).collect::<BTreeSet<_>>(),
             "parsed mismatch"
         );
         assert!(rest.is_empty(), "rest must be empty");
@@ -581,11 +522,9 @@ mod tests {
             nom::Err::Failure(e) => {
                 assert_eq!(
                     ErrorKind::DuplicateInputSource(
-                        StorePathRef::from_absolute_path(
-                            "/nix/store/55lwldka5nyxa08wnvlizyqw02ihy8ic-foo".as_bytes()
-                        )
-                        .unwrap()
-                        .to_owned()
+                        StorePathRef::from_absolute_path("/nix/store/55lwldka5nyxa08wnvlizyqw02ihy8ic-foo".as_bytes())
+                            .unwrap()
+                            .to_owned()
                     ),
                     e.code
                 );
@@ -638,10 +577,7 @@ mod tests {
         #[case] digest: &[u8],
         #[case] expected: CAHash,
     ) {
-        assert_eq!(
-            expected,
-            from_algo_and_mode_and_digest(algo_and_mode, digest).unwrap()
-        );
+        assert_eq!(expected, from_algo_and_mode_and_digest(algo_and_mode, digest).unwrap());
     }
 
     #[test]

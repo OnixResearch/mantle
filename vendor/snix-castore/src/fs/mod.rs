@@ -9,39 +9,49 @@ pub mod fuse;
 #[cfg(feature = "virtiofs")]
 pub mod virtiofs;
 
-pub use self::root_nodes::RootNodes;
-use self::{
-    file_attr::ROOT_FILE_ATTR,
-    inode_tracker::InodeTracker,
-    inodes::{DirectoryInodeData, InodeData},
-};
-use crate::{
-    B3Digest, Node,
-    blobservice::{BlobReader, BlobService},
-    directoryservice::DirectoryService,
-    path::PathComponent,
-};
-use bstr::ByteVec;
-use fuse_backend_rs::api::filesystem::{
-    Context, FileSystem, FsOptions, GetxattrReply, ListxattrReply, ROOT_ID,
-};
-use fuse_backend_rs::{
-    abi::fuse_abi::{Attr, OpenOptions, stat64},
-    api::filesystem::Entry,
-};
-use futures::{StreamExt, stream::BoxStream};
-use parking_lot::RwLock;
+use std::collections::HashMap;
+use std::ffi::CStr;
+use std::io;
+use std::io::Cursor;
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::{
-    collections::HashMap,
-    io,
-    sync::atomic::AtomicU64,
-    sync::{Arc, atomic::Ordering},
-    time::Duration,
-};
-use std::{ffi::CStr, io::Cursor};
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tracing::{Span, debug, error, instrument, warn};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+use bstr::ByteVec;
+use fuse_backend_rs::abi::fuse_abi::Attr;
+use fuse_backend_rs::abi::fuse_abi::OpenOptions;
+use fuse_backend_rs::abi::fuse_abi::stat64;
+use fuse_backend_rs::api::filesystem::Context;
+use fuse_backend_rs::api::filesystem::Entry;
+use fuse_backend_rs::api::filesystem::FileSystem;
+use fuse_backend_rs::api::filesystem::FsOptions;
+use fuse_backend_rs::api::filesystem::GetxattrReply;
+use fuse_backend_rs::api::filesystem::ListxattrReply;
+use fuse_backend_rs::api::filesystem::ROOT_ID;
+use futures::StreamExt;
+use futures::stream::BoxStream;
+use parking_lot::RwLock;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncSeekExt;
+use tracing::Span;
+use tracing::debug;
+use tracing::error;
+use tracing::instrument;
+use tracing::warn;
+
+use self::file_attr::ROOT_FILE_ATTR;
+use self::inode_tracker::InodeTracker;
+use self::inodes::DirectoryInodeData;
+use self::inodes::InodeData;
+pub use self::root_nodes::RootNodes;
+use crate::B3Digest;
+use crate::Node;
+use crate::blobservice::BlobReader;
+use crate::blobservice::BlobService;
+use crate::directoryservice::DirectoryService;
+use crate::path::PathComponent;
 
 /// This implements a read-only [FileSystem] for a snix-castore
 /// with the passed [BlobService], [DirectoryService] and [RootNodes].
@@ -59,8 +69,7 @@ use tracing::{Span, debug, error, instrument, warn};
 ///
 /// There's some places where inodes are allocated / data inserted into
 /// the inode tracker, if not allocated before already:
-///  - Processing a `lookup` request, either in the mount root, or somewhere
-///    deeper.
+///  - Processing a `lookup` request, either in the mount root, or somewhere deeper.
 ///  - Processing a `readdir` request
 ///
 ///  Things pointing to the same contents get the same inodes, irrespective of
@@ -94,15 +103,8 @@ pub struct SnixStoreFs<BS, DS, RN: RootNodes> {
     /// For each handle, we store an enumerated Result<(PathComponent, Node), crate::Error>.
     /// The index is needed as we need to send offset information.
     #[allow(clippy::type_complexity)]
-    dir_handles: RwLock<
-        HashMap<
-            u64,
-            (
-                Span,
-                Arc<Mutex<BoxStream<'static, (usize, Result<(PathComponent, Node), RN::Error>)>>>,
-            ),
-        >,
-    >,
+    dir_handles:
+        RwLock<HashMap<u64, (Span, Arc<Mutex<BoxStream<'static, (usize, Result<(PathComponent, Node), RN::Error>)>>>)>>,
 
     next_dir_handle: AtomicU64,
 
@@ -176,10 +178,7 @@ where
     /// [DirectoryInodeData::Populated].
     #[allow(clippy::type_complexity)]
     #[instrument(skip(self), err)]
-    fn get_directory_children(
-        &self,
-        ino: u64,
-    ) -> io::Result<(B3Digest, Vec<(u64, PathComponent, Node)>)> {
+    fn get_directory_children(&self, ino: u64) -> io::Result<(B3Digest, Vec<(u64, PathComponent, Node)>)> {
         let data = self.inode_tracker.read().get(ino).unwrap();
         match *data {
             // if it's populated already, return children.
@@ -221,10 +220,7 @@ where
                     // replace.
                     inode_tracker.replace(
                         ino,
-                        Arc::new(InodeData::Directory(DirectoryInodeData::Populated(
-                            parent_digest,
-                            children.clone(),
-                        ))),
+                        Arc::new(InodeData::Directory(DirectoryInodeData::Populated(parent_digest, children.clone()))),
                     );
 
                     children
@@ -233,9 +229,7 @@ where
                 Ok((parent_digest, children))
             }
             // if the parent inode was not a directory, this doesn't make sense
-            InodeData::Regular(..) | InodeData::Symlink(_) => {
-                Err(io::Error::from_raw_os_error(libc::ENOTDIR))
-            }
+            InodeData::Regular(..) | InodeData::Symlink(_) => Err(io::Error::from_raw_os_error(libc::ENOTDIR)),
         }
     }
 
@@ -246,29 +240,16 @@ where
     /// or otherwise fetch from [self.root_nodes], and then insert into
     /// [self.inode_tracker].
     /// In the case the name can't be found, a libc::ENOENT is returned.
-    fn name_in_root_to_ino_and_data(
-        &self,
-        name: &PathComponent,
-    ) -> io::Result<(u64, Arc<InodeData>)> {
+    fn name_in_root_to_ino_and_data(&self, name: &PathComponent) -> io::Result<(u64, Arc<InodeData>)> {
         // Look up the inode for that root node.
         // If there's one, [self.inode_tracker] MUST also contain the data,
         // which we can then return.
         if let Some(inode) = self.get_inode_for_root_name(name) {
-            return Ok((
-                inode,
-                self.inode_tracker
-                    .read()
-                    .get(inode)
-                    .expect("must exist")
-                    .to_owned(),
-            ));
+            return Ok((inode, self.inode_tracker.read().get(inode).expect("must exist").to_owned()));
         }
 
         // We don't have it yet, look it up in [self.root_nodes].
-        match self
-            .tokio_handle
-            .block_on(async { self.root_nodes_provider.get_by_basename(name).await })
-        {
+        match self.tokio_handle.block_on(async { self.root_nodes_provider.get_by_basename(name).await }) {
             // if there was an error looking up the root node, propagate up an IO error.
             Err(_e) => Err(io::Error::from_raw_os_error(libc::EIO)),
             // the root node doesn't exist, so the file doesn't exist.
@@ -278,10 +259,7 @@ where
                 // Let's check if someone else beat us to updating the inode tracker and
                 // root_nodes map. This avoids locking inode_tracker for writing.
                 if let Some(ino) = self.root_nodes.read().get(name) {
-                    return Ok((
-                        *ino,
-                        self.inode_tracker.read().get(*ino).expect("must exist"),
-                    ));
+                    return Ok((*ino, self.inode_tracker.read().get(*ino).expect("must exist")));
                 }
 
                 // Only in case it doesn't, lock [self.root_nodes] and
@@ -321,9 +299,7 @@ where
                 InodeData::Regular(_, size, _) => *size,
                 InodeData::Symlink(target) => target.len() as u64,
                 InodeData::Directory(DirectoryInodeData::Sparse(_, size)) => *size,
-                InodeData::Directory(DirectoryInodeData::Populated(_, children)) => {
-                    children.len() as u64
-                }
+                InodeData::Directory(DirectoryInodeData::Populated(_, children)) => children.len() as u64,
             },
             mode,
             mtime: 1, // Everything in /nix/store must have timestamp "1".
@@ -433,12 +409,7 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(rq.parent_inode = parent, rq.name = ?name))]
-    fn lookup(
-        &self,
-        _ctx: &Context,
-        parent: Self::Inode,
-        name: &std::ffi::CStr,
-    ) -> io::Result<Entry> {
+    fn lookup(&self, _ctx: &Context, parent: Self::Inode, name: &std::ffi::CStr) -> io::Result<Entry> {
         debug!("lookup");
 
         // convert the CStr to a PathComponent
@@ -447,22 +418,22 @@ where
 
         // This goes from a parent inode to a node.
         let (ino, inode_data) = if parent == ROOT_ID {
-            // If the parent is [ROOT_ID], we need to check [self.root_nodes] (fetching from a [RootNode] provider if needed)
+            // If the parent is [ROOT_ID], we need to check [self.root_nodes] (fetching from a [RootNode]
+            // provider if needed)
             self.name_in_root_to_ino_and_data(&name)?
         } else {
             // else the parent must be a directory, otherwise we would never come up with this request.
-            // Lookup the parent in [self.inode_tracker] (which must be a [InodeData::Directory]), and find the child with that name.
+            // Lookup the parent in [self.inode_tracker] (which must be a [InodeData::Directory]), and find the
+            // child with that name.
             let (parent_digest, children) = self.get_directory_children(parent)?;
 
             Span::current().record("directory.digest", parent_digest.to_string());
             // Search for that name in the list of children (which we know are sorted)
             // and return the FileAttrs.
-            let idx = children
-                .binary_search_by_key(&&name, |(_, n, _)| n)
-                .map_err(|_| {
-                    // Child not found, return ENOENT.
-                    io::Error::from_raw_os_error(libc::ENOENT)
-                })?;
+            let idx = children.binary_search_by_key(&&name, |(_, n, _)| n).map_err(|_| {
+                // Child not found, return ENOENT.
+                io::Error::from_raw_os_error(libc::ENOENT)
+            })?;
 
             let (child_ino, _, child_node) = &children[idx];
 
@@ -490,17 +461,15 @@ where
         inode: Self::Inode,
         _flags: u32,
     ) -> io::Result<(Option<Self::Handle>, OpenOptions)> {
-        // In case opendir on the root is called, we provide the handle, as re-entering that listing is expensive.
-        // For all other directory inodes we just let readdir take care of it.
+        // In case opendir on the root is called, we provide the handle, as re-entering that listing is
+        // expensive. For all other directory inodes we just let readdir take care of it.
         if inode == ROOT_ID {
             if !self.settings.list_root {
                 return Err(io::Error::from_raw_os_error(libc::EPERM)); // same error code as ipfs/kubo
             }
 
             let root_nodes_provider = self.root_nodes_provider.clone();
-            let stream = self
-                .tokio_handle
-                .block_on(async move { root_nodes_provider.list().enumerate().boxed() });
+            let stream = self.tokio_handle.block_on(async move { root_nodes_provider.list().enumerate().boxed() });
 
             // Put the stream into [self.dir_handles].
             // TODO: this will overflow after 2**64 operations,
@@ -509,9 +478,7 @@ where
             // for the discussion on alternatives.
             let dh = self.next_dir_handle.fetch_add(1, Ordering::SeqCst);
 
-            self.dir_handles
-                .write()
-                .insert(dh, (Span::current(), Arc::new(Mutex::new(stream))));
+            self.dir_handles.write().insert(dh, (Span::current(), Arc::new(Mutex::new(stream))));
 
             return Ok((Some(dh), OpenOptions::NONSEEKABLE));
         }
@@ -551,9 +518,7 @@ where
                 io::Error::from_raw_os_error(libc::EIO)
             })?;
 
-            let mut stream = stream
-                .lock()
-                .map_err(|_| io::Error::other("mutex poisoned"))?;
+            let mut stream = stream.lock().map_err(|_| io::Error::other("mutex poisoned"))?;
 
             while let Some((i, n)) = self.tokio_handle.block_on(async { stream.next().await }) {
                 let (name, node) = n.map_err(|e| {
@@ -588,9 +553,7 @@ where
         let (parent_digest, children) = self.get_directory_children(inode)?;
         Span::current().record("directory.digest", parent_digest.to_string());
 
-        for (i, (ino, child_name, child_node)) in
-            children.into_iter().skip(offset as usize).enumerate()
-        {
+        for (i, (ino, child_name, child_node)) in children.into_iter().skip(offset as usize).enumerate() {
             // the second parameter will become the "offset" parameter on the next call.
             let written = add_entry(fuse_backend_rs::api::filesystem::DirEntry {
                 ino,
@@ -615,10 +578,7 @@ where
         handle: Self::Handle,
         _size: u32,
         offset: u64,
-        add_entry: &mut dyn FnMut(
-            fuse_backend_rs::api::filesystem::DirEntry,
-            Entry,
-        ) -> io::Result<usize>,
+        add_entry: &mut dyn FnMut(fuse_backend_rs::api::filesystem::DirEntry, Entry) -> io::Result<usize>,
     ) -> io::Result<()> {
         debug!("readdirplus");
 
@@ -634,9 +594,7 @@ where
                 io::Error::from_raw_os_error(libc::EIO)
             })?;
 
-            let mut stream = stream
-                .lock()
-                .map_err(|_| io::Error::other("mutex poisoned"))?;
+            let mut stream = stream.lock().map_err(|_| io::Error::other("mutex poisoned"))?;
 
             while let Some((i, n)) = self.tokio_handle.block_on(async { stream.next().await }) {
                 let (name, node) = n.map_err(|e| {
@@ -699,13 +657,7 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(rq.inode = inode, rq.handle = handle), parent = self.dir_handles.read().get(&handle).and_then(|x| x.0.id()))]
-    fn releasedir(
-        &self,
-        _ctx: &Context,
-        inode: Self::Inode,
-        _flags: u32,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn releasedir(&self, _ctx: &Context, inode: Self::Inode, _flags: u32, handle: Self::Handle) -> io::Result<()> {
         if inode == ROOT_ID {
             // drop the stream.
             if let Some(stream) = self.dir_handles.write().remove(&handle) {
@@ -741,10 +693,7 @@ where
             InodeData::Regular(ref blob_digest, _blob_size, _) => {
                 Span::current().record("blob.digest", blob_digest.to_string());
 
-                match self
-                    .tokio_handle
-                    .block_on(async { self.blob_service.open_read(blob_digest).await })
-                {
+                match self.tokio_handle.block_on(async { self.blob_service.open_read(blob_digest).await }) {
                     Ok(None) => {
                         warn!("blob not found");
                         Err(io::Error::from_raw_os_error(libc::EIO))
@@ -761,9 +710,7 @@ where
                         // for the discussion on alternatives.
                         let fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
 
-                        self.file_handles
-                            .write()
-                            .insert(fh, (Span::current(), Arc::new(Mutex::new(blob_reader))));
+                        self.file_handles.write().insert(fh, (Span::current(), Arc::new(Mutex::new(blob_reader))));
 
                         Ok((
                             Some(fh),
@@ -827,19 +774,14 @@ where
             })
             .cloned()?;
 
-        let mut blob_reader = blob_reader
-            .lock()
-            .map_err(|_| io::Error::other("mutex poisoned"))?;
+        let mut blob_reader = blob_reader.lock().map_err(|_| io::Error::other("mutex poisoned"))?;
 
         let buf = self.tokio_handle.block_on(async move {
             // seek to the offset specified, which is relative to the start of the file.
-            let pos = blob_reader
-                .seek(io::SeekFrom::Start(offset))
-                .await
-                .map_err(|e| {
-                    warn!("failed to seek to offset {}: {}", offset, e);
-                    io::Error::from_raw_os_error(libc::EIO)
-                })?;
+            let pos = blob_reader.seek(io::SeekFrom::Start(offset)).await.map_err(|e| {
+                warn!("failed to seek to offset {}: {}", offset, e);
+                io::Error::from_raw_os_error(libc::EIO)
+            })?;
 
             debug_assert_eq!(offset, pos);
 
@@ -874,45 +816,31 @@ where
 
         // lookup the inode
         match *self.inode_tracker.read().get(inode).unwrap() {
-            InodeData::Directory(..) | InodeData::Regular(..) => {
-                Err(io::Error::from_raw_os_error(libc::EINVAL))
-            }
+            InodeData::Directory(..) | InodeData::Regular(..) => Err(io::Error::from_raw_os_error(libc::EINVAL)),
             InodeData::Symlink(ref target) => Ok(target.to_vec()),
         }
     }
 
     #[tracing::instrument(skip_all, fields(rq.inode = inode, name=?name))]
-    fn getxattr(
-        &self,
-        _ctx: &Context,
-        inode: Self::Inode,
-        name: &CStr,
-        size: u32,
-    ) -> io::Result<GetxattrReply> {
+    fn getxattr(&self, _ctx: &Context, inode: Self::Inode, name: &CStr, size: u32) -> io::Result<GetxattrReply> {
         if !self.settings.show_xattr {
             return Err(io::Error::from_raw_os_error(libc::ENOSYS));
         }
 
         // Peek at the inode requested, and construct the response.
-        let digest_str = match *self
-            .inode_tracker
-            .read()
-            .get(inode)
-            .ok_or_else(|| io::Error::from_raw_os_error(libc::ENODATA))?
-        {
-            InodeData::Directory(DirectoryInodeData::Sparse(ref digest, _))
-            | InodeData::Directory(DirectoryInodeData::Populated(ref digest, _))
-                if name.to_bytes() == XATTR_NAME_DIRECTORY_DIGEST =>
-            {
-                digest.to_string()
-            }
-            InodeData::Regular(ref digest, _, _) if name.to_bytes() == XATTR_NAME_BLOB_DIGEST => {
-                digest.to_string()
-            }
-            _ => {
-                return Err(io::Error::from_raw_os_error(libc::ENODATA));
-            }
-        };
+        let digest_str =
+            match *self.inode_tracker.read().get(inode).ok_or_else(|| io::Error::from_raw_os_error(libc::ENODATA))? {
+                InodeData::Directory(DirectoryInodeData::Sparse(ref digest, _))
+                | InodeData::Directory(DirectoryInodeData::Populated(ref digest, _))
+                    if name.to_bytes() == XATTR_NAME_DIRECTORY_DIGEST =>
+                {
+                    digest.to_string()
+                }
+                InodeData::Regular(ref digest, _, _) if name.to_bytes() == XATTR_NAME_BLOB_DIGEST => digest.to_string(),
+                _ => {
+                    return Err(io::Error::from_raw_os_error(libc::ENODATA));
+                }
+            };
 
         if size == 0 {
             Ok(GetxattrReply::Count(digest_str.len() as u32))
@@ -924,12 +852,7 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(rq.inode = inode))]
-    fn listxattr(
-        &self,
-        _ctx: &Context,
-        inode: Self::Inode,
-        size: u32,
-    ) -> io::Result<ListxattrReply> {
+    fn listxattr(&self, _ctx: &Context, inode: Self::Inode, size: u32) -> io::Result<ListxattrReply> {
         if !self.settings.show_xattr {
             return Err(io::Error::from_raw_os_error(libc::ENOSYS));
         }

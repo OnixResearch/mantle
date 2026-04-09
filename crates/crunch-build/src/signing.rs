@@ -5,9 +5,10 @@
 //! No I/O, no async — called from the imperative shell in
 //! `persist_and_export_output` and `check_cache`.
 
-use nix_compat::narinfo::{
-    fingerprint, Signature, SigningKey, VerifyingKey,
-};
+use nix_compat::narinfo::Signature;
+use nix_compat::narinfo::SigningKey;
+use nix_compat::narinfo::VerifyingKey;
+use nix_compat::narinfo::fingerprint;
 use nix_compat::store_path::StorePathRef;
 use snix_store::path_info::PathInfo;
 
@@ -19,10 +20,7 @@ use snix_store::path_info::PathInfo;
 /// it is replaced rather than duplicated.
 ///
 /// Returns the signature string for logging.
-pub fn sign_pathinfo(
-    path_info: &mut PathInfo,
-    signing_key: &SigningKey<ed25519_dalek::SigningKey>,
-) -> String {
+pub fn sign_pathinfo(path_info: &mut PathInfo, signing_key: &SigningKey<ed25519_dalek::SigningKey>) -> String {
     let fp = compute_fingerprint(path_info);
 
     let sig_ref = signing_key.sign(fp.as_bytes());
@@ -31,27 +29,15 @@ pub fn sign_pathinfo(
 
     // Replace existing sig from same key name, or append.
     let key_name = signing_key.name();
-    if let Some(pos) = path_info
-        .signatures
-        .iter()
-        .position(|s| s.name().as_str() == key_name)
-    {
+    if let Some(pos) = path_info.signatures.iter().position(|s| s.name().as_str() == key_name) {
         path_info.signatures[pos] = sig_owned;
     } else {
         path_info.signatures.push(sig_owned);
     }
 
+    debug_assert!(!path_info.signatures.is_empty(), "sign_pathinfo must produce at least one signature");
     debug_assert!(
-        !path_info.signatures.is_empty(),
-        "sign_pathinfo must produce at least one signature"
-    );
-    debug_assert!(
-        path_info
-            .signatures
-            .iter()
-            .filter(|s| s.name().as_str() == key_name)
-            .count()
-            == 1,
+        path_info.signatures.iter().filter(|s| s.name().as_str() == key_name).count() == 1,
         "must have exactly one signature per key name"
     );
 
@@ -82,14 +68,8 @@ impl VerifyResult {
 ///
 /// Returns a [VerifyResult] summarising how many signatures matched.
 /// The caller decides policy (e.g., require `is_trusted()` for cache hits).
-pub fn verify_pathinfo_signatures(
-    path_info: &PathInfo,
-    trusted_keys: &[VerifyingKey],
-) -> VerifyResult {
-    debug_assert!(
-        !trusted_keys.is_empty(),
-        "verify_pathinfo_signatures called with zero trusted keys"
-    );
+pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[VerifyingKey]) -> VerifyResult {
+    debug_assert!(!trusted_keys.is_empty(), "verify_pathinfo_signatures called with zero trusted keys");
 
     if path_info.signatures.is_empty() {
         return VerifyResult {
@@ -128,8 +108,7 @@ pub fn verify_pathinfo_signatures(
 
 /// The cache.nixos.org-1 public key, always included in the default
 /// trusted key set.
-pub const CACHE_NIXOS_ORG_PUBKEY: &str =
-    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
+pub const CACHE_NIXOS_ORG_PUBKEY: &str = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
 
 /// A paired signing key + verifying key, ready to use.
 ///
@@ -147,10 +126,7 @@ pub struct KeyPair {
 /// If `user_keys` is `Some(...)`, it completely replaces the defaults
 /// (except the local key is always prepended). If `None`, the default
 /// set (local + cache.nixos.org-1) is used.
-pub fn build_trusted_keys(
-    local: &KeyPair,
-    user_keys: Option<&[VerifyingKey]>,
-) -> Vec<VerifyingKey> {
+pub fn build_trusted_keys(local: &KeyPair, user_keys: Option<&[VerifyingKey]>) -> Vec<VerifyingKey> {
     match user_keys {
         Some(explicit) => {
             let mut keys = Vec::with_capacity(explicit.len().saturating_add(1));
@@ -186,9 +162,7 @@ pub fn generate_keypair() -> (KeyPair, String) {
     use ed25519_dalek::SECRET_KEY_LENGTH;
     use rand::RngCore;
 
-    let hostname = gethostname::gethostname()
-        .to_string_lossy()
-        .into_owned();
+    let hostname = gethostname::gethostname().to_string_lossy().into_owned();
     let name = format!("crunch-{hostname}-1");
 
     // Generate 32 random bytes and construct the signing key.
@@ -206,15 +180,24 @@ pub fn generate_keypair() -> (KeyPair, String) {
     let signing_key = SigningKey::new(name.clone(), dalek_signing);
     let verifying_key = VerifyingKey::new(name, dalek_verifying);
 
-    (KeyPair { signing_key, verifying_key }, line)
+    (
+        KeyPair {
+            signing_key,
+            verifying_key,
+        },
+        line,
+    )
 }
 
 /// Load a keypair from a Nix-format string (e.g. from a file).
 pub fn load_keypair(contents: &str) -> Result<KeyPair, String> {
     let line = contents.trim();
-    let (signing_key, verifying_key) = nix_compat::narinfo::parse_keypair(line)
-        .map_err(|e| format!("invalid signing key: {e}"))?;
-    Ok(KeyPair { signing_key, verifying_key })
+    let (signing_key, verifying_key) =
+        nix_compat::narinfo::parse_keypair(line).map_err(|e| format!("invalid signing key: {e}"))?;
+    Ok(KeyPair {
+        signing_key,
+        verifying_key,
+    })
 }
 
 // ── Internal helpers ────────────────────────────────────────
@@ -222,20 +205,17 @@ pub fn load_keypair(contents: &str) -> Result<KeyPair, String> {
 /// Compute the narinfo fingerprint for a PathInfo.
 fn compute_fingerprint(path_info: &PathInfo) -> String {
     let sp_ref: StorePathRef = path_info.store_path.as_ref();
-    let refs: Vec<StorePathRef> = path_info
-        .references
-        .iter()
-        .map(|r| r.as_ref())
-        .collect();
+    let refs: Vec<StorePathRef> = path_info.references.iter().map(|r| r.as_ref()).collect();
 
     fingerprint(&sp_ref, &path_info.nar_sha256, path_info.nar_size, refs.iter())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nix_compat::store_path::StorePath;
     use snix_castore::Node;
+
+    use super::*;
 
     const DUMMY_KEYPAIR_STR: &str =
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
@@ -392,8 +372,7 @@ mod tests {
     #[test]
     fn user_keys_override_defaults() {
         let kp = test_keypair();
-        let custom = VerifyingKey::parse("my-cache-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=")
-            .unwrap();
+        let custom = VerifyingKey::parse("my-cache-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=").unwrap();
 
         let keys = build_trusted_keys(&kp, Some(&[custom]));
         // Should have local key + my-cache-1, but NOT cache.nixos.org-1.

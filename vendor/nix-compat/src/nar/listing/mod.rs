@@ -5,13 +5,12 @@
 //!
 //! Listing files contains metadata about a file and its offset in the corresponding NAR.
 //!
-//! NOTE: LS entries does not offer any integrity field to validate the retrieved file at the provided
-//! offset. Validating the contents is the caller's responsibility.
+//! NOTE: LS entries does not offer any integrity field to validate the retrieved file at the
+//! provided offset. Validating the contents is the caller's responsibility.
 
-use std::{
-    collections::HashMap,
-    path::{Component, Path},
-};
+use std::collections::HashMap;
+use std::path::Component;
+use std::path::Path;
 
 use serde::Deserialize;
 
@@ -75,9 +74,7 @@ impl ListingEntry {
                         // As Nix cannot encode non-UTF8 components in the listing (see comment on
                         // the `Directory` enum variant), invalid encodings path components are
                         // errors.
-                        let entry_name = file_or_dir_name
-                            .to_str()
-                            .ok_or(ListingError::InvalidEncoding)?;
+                        let entry_name = file_or_dir_name.to_str().ok_or(ListingError::InvalidEncoding)?;
 
                         if let Some(new_entry) = entries.get(entry_name) {
                             cur = new_entry;
@@ -105,9 +102,7 @@ struct ListingVersionError(u8);
 
 impl<'de, const V: u8> Deserialize<'de> for ListingVersion<V> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         let value = u8::deserialize(deserializer)?;
         if value == V {
             Ok(ListingVersion::<V>)

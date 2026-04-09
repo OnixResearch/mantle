@@ -1,14 +1,19 @@
-use std::{
-    future::Future,
-    io,
-    num::NonZeroU64,
-    ops::RangeBounds,
-    pin::Pin,
-    task::{self, Poll, ready},
-};
-use tokio::io::{AsyncBufRead, AsyncRead, AsyncReadExt, ReadBuf};
+use std::future::Future;
+use std::io;
+use std::num::NonZeroU64;
+use std::ops::RangeBounds;
+use std::pin::Pin;
+use std::task::Poll;
+use std::task::ready;
+use std::task::{self};
 
-use trailer::{ReadTrailer, Trailer, read_trailer};
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::ReadBuf;
+use trailer::ReadTrailer;
+use trailer::Trailer;
+use trailer::read_trailer;
 
 #[doc(hidden)]
 pub use self::trailer::Pad;
@@ -63,8 +68,7 @@ enum State<R, T: Tag> {
 }
 
 impl<R> BytesReader<R>
-where
-    R: AsyncRead + Unpin,
+where R: AsyncRead + Unpin
 {
     /// Constructs a new BytesReader, using the underlying passed reader.
     pub async fn new<S: RangeBounds<u64>>(reader: R, allowed_size: S) -> io::Result<Self> {
@@ -74,14 +78,10 @@ where
 
 #[allow(private_bounds)]
 impl<R, T: Tag> BytesReader<R, T>
-where
-    R: AsyncRead + Unpin,
+where R: AsyncRead + Unpin
 {
     /// Constructs a new BytesReader, using the underlying passed reader.
-    pub(crate) async fn new_internal<S: RangeBounds<u64>>(
-        mut reader: R,
-        allowed_size: S,
-    ) -> io::Result<Self> {
+    pub(crate) async fn new_internal<S: RangeBounds<u64>>(mut reader: R, allowed_size: S) -> io::Result<Self> {
         let size = reader.read_u64_le().await?;
 
         if !allowed_size.contains(&size) {
@@ -111,9 +111,7 @@ where
     /// Remaining data length, ie not including data already read.
     pub fn len(&self) -> u64 {
         match self.state {
-            State::Body {
-                consumed, user_len, ..
-            } => user_len.get() - consumed,
+            State::Body { consumed, user_len, .. } => user_len.get() - consumed,
             State::ReadTrailer(ref fut) => fut.len() as u64,
             State::ReleaseTrailer { consumed, ref data } => data.len() as u64 - consumed as u64,
         }
@@ -122,11 +120,7 @@ where
 
 #[allow(private_bounds)]
 impl<R: AsyncRead + Unpin, T: Tag> AsyncRead for BytesReader<R, T> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut task::Context,
-        buf: &mut ReadBuf,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut task::Context, buf: &mut ReadBuf) -> Poll<io::Result<()>> {
         let this = &mut self.state;
 
         // reading nothing always succeeds
@@ -279,8 +273,8 @@ impl<R: AsyncBufRead + Unpin, T: Tag> AsyncBufRead for BytesReader<R, T> {
     }
 }
 
-/// Make a limited version of `buf`, consisting only of up to `n` bytes of the unfilled section, and call `f` with it.
-/// After `f` returns, we propagate the filled cursor advancement back to `buf`.
+/// Make a limited version of `buf`, consisting only of up to `n` bytes of the unfilled section, and
+/// call `f` with it. After `f` returns, we propagate the filled cursor advancement back to `buf`.
 fn with_limited<R>(buf: &mut ReadBuf, n: u64, f: impl FnOnce(&mut ReadBuf) -> R) -> R {
     let mut nbuf = buf.take(n.try_into().unwrap_or(usize::MAX));
     let ptr = nbuf.initialized().as_ptr();
@@ -308,20 +302,21 @@ mod tests {
     use std::sync::LazyLock;
     use std::time::Duration;
 
-    use crate::wire::bytes::{padding_len, write_bytes};
     use hex_literal::hex;
     use rstest::rstest;
-    use tokio::io::{AsyncReadExt, BufReader};
+    use tokio::io::AsyncReadExt;
+    use tokio::io::BufReader;
     use tokio_test::io::Builder;
 
     use super::*;
+    use crate::wire::bytes::padding_len;
+    use crate::wire::bytes::write_bytes;
 
     /// The maximum length of bytes packets we're willing to accept in the test
     /// cases.
     const MAX_LEN: u64 = 1024;
 
-    pub static LARGE_PAYLOAD: LazyLock<Vec<u8>> =
-        LazyLock::new(|| (0..255).collect::<Vec<u8>>().repeat(4 * 1024));
+    pub static LARGE_PAYLOAD: LazyLock<Vec<u8>> = LazyLock::new(|| (0..255).collect::<Vec<u8>>().repeat(4 * 1024));
 
     /// Helper function, calling the (simpler) write_bytes with the payload.
     /// We use this to create data we want to read from the wire.
@@ -341,13 +336,9 @@ mod tests {
     #[case::size_1m(LARGE_PAYLOAD.as_slice())] // larger bytes packet
     #[tokio::test(start_paused = true)]
     async fn read_payload_correct(#[case] payload: &[u8]) {
-        let mut mock = Builder::new()
-            .read(&produce_packet_bytes(payload).await)
-            .build();
+        let mut mock = Builder::new().read(&produce_packet_bytes(payload).await).build();
 
-        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64)
-            .await
-            .unwrap();
+        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64).await.unwrap();
         let mut buf = Vec::new();
         r.read_to_end(&mut buf).await.expect("must succeed");
 
@@ -364,20 +355,12 @@ mod tests {
     #[case::size_1m(LARGE_PAYLOAD.as_slice())] // larger bytes packet
     #[tokio::test(start_paused = true)]
     async fn read_payload_correct_readbuf(#[case] payload: &[u8]) {
-        let mut mock = BufReader::new(
-            Builder::new()
-                .read(&produce_packet_bytes(payload).await)
-                .build(),
-        );
+        let mut mock = BufReader::new(Builder::new().read(&produce_packet_bytes(payload).await).build());
 
-        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64)
-            .await
-            .unwrap();
+        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64).await.unwrap();
 
         let mut buf = Vec::new();
-        tokio::io::copy_buf(&mut r, &mut buf)
-            .await
-            .expect("copy_buf must succeed");
+        tokio::io::copy_buf(&mut r, &mut buf).await.expect("copy_buf must succeed");
 
         assert_eq!(payload, &buf[..]);
     }
@@ -390,13 +373,7 @@ mod tests {
             .read(&produce_packet_bytes(payload).await[0..8]) // We stop reading after the size packet
             .build();
 
-        assert_eq!(
-            BytesReader::new(&mut mock, ..2048)
-                .await
-                .unwrap_err()
-                .kind(),
-            io::ErrorKind::InvalidData
-        );
+        assert_eq!(BytesReader::new(&mut mock, ..2048).await.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
 
     /// Fail if the bytes packet is smaller than allowed
@@ -407,13 +384,7 @@ mod tests {
             .read(&produce_packet_bytes(payload).await[0..8]) // We stop reading after the size packet
             .build();
 
-        assert_eq!(
-            BytesReader::new(&mut mock, 1024..2048)
-                .await
-                .unwrap_err()
-                .kind(),
-            io::ErrorKind::InvalidData
-        );
+        assert_eq!(BytesReader::new(&mut mock, 1024..2048).await.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
 
     /// Read the trailer immediately if there is no payload.
@@ -422,14 +393,9 @@ mod tests {
     async fn read_trailer_immediately() {
         use crate::nar::wire::PadPar;
 
-        let mut mock = Builder::new()
-            .read(&[0; 8])
-            .read(&PadPar::PATTERN[8..])
-            .build();
+        let mut mock = Builder::new().read(&[0; 8]).read(&PadPar::PATTERN[8..]).build();
 
-        BytesReader::<_, PadPar>::new_internal(&mut mock, ..)
-            .await
-            .unwrap();
+        BytesReader::<_, PadPar>::new_internal(&mut mock, ..).await.unwrap();
 
         // The mock reader will panic if dropped without reading all data.
     }
@@ -440,15 +406,9 @@ mod tests {
     async fn read_exact_trailer() {
         use crate::nar::wire::PadPar;
 
-        let mut mock = Builder::new()
-            .read(&16u64.to_le_bytes())
-            .read(&[0x55; 16])
-            .read(&PadPar::PATTERN[8..])
-            .build();
+        let mut mock = Builder::new().read(&16u64.to_le_bytes()).read(&[0x55; 16]).read(&PadPar::PATTERN[8..]).build();
 
-        let mut reader = BytesReader::<_, PadPar>::new_internal(&mut mock, ..)
-            .await
-            .unwrap();
+        let mut reader = BytesReader::<_, PadPar>::new_internal(&mut mock, ..).await.unwrap();
 
         let mut buf = [0; 16];
         reader.read_exact(&mut buf).await.unwrap();
@@ -479,15 +439,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn read_9b_eof_during_size() {
         let payload = &hex!("FF0102030405060708");
-        let mut mock = Builder::new()
-            .read(&produce_packet_bytes(payload).await[..4])
-            .build();
+        let mut mock = Builder::new().read(&produce_packet_bytes(payload).await[..4]).build();
 
         assert_eq!(
-            BytesReader::new(&mut mock, ..MAX_LEN)
-                .await
-                .expect_err("must fail")
-                .kind(),
+            BytesReader::new(&mut mock, ..MAX_LEN).await.expect_err("must fail").kind(),
             io::ErrorKind::UnexpectedEof
         );
     }
@@ -499,9 +454,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn read_9b_eof_during_payload() {
         let payload = &hex!("FF0102030405060708");
-        let mut mock = Builder::new()
-            .read(&produce_packet_bytes(payload).await[..8 + 4])
-            .build();
+        let mut mock = Builder::new().read(&produce_packet_bytes(payload).await[..8 + 4]).build();
 
         let mut r = BytesReader::new(&mut mock, ..MAX_LEN).await.unwrap();
         let mut buf = [0; 9];
@@ -509,10 +462,7 @@ mod tests {
         r.read_exact(&mut buf[..4]).await.expect("must succeed");
 
         assert_eq!(
-            r.read_exact(&mut buf[4..=4])
-                .await
-                .expect_err("must fail")
-                .kind(),
+            r.read_exact(&mut buf[4..=4]).await.expect_err("must fail").kind(),
             std::io::ErrorKind::UnexpectedEof
         );
     }
@@ -526,19 +476,14 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn read_9b_eof_after_payload(#[case] offset: usize) {
         let payload = &hex!("FF0102030405060708");
-        let mut mock = Builder::new()
-            .read(&produce_packet_bytes(payload).await[..offset])
-            .build();
+        let mut mock = Builder::new().read(&produce_packet_bytes(payload).await[..offset]).build();
 
         let mut r = BytesReader::new(&mut mock, ..MAX_LEN).await.unwrap();
 
         // read_exact of the payload *body* will succeed, but a subsequent read will
         // return UnexpectedEof error.
         assert_eq!(r.read_exact(&mut [0; 8]).await.unwrap(), 8);
-        assert_eq!(
-            r.read_exact(&mut [0]).await.unwrap_err().kind(),
-            std::io::ErrorKind::UnexpectedEof
-        );
+        assert_eq!(r.read_exact(&mut [0]).await.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
     }
 
     /// Start a 9 bytes payload packet, but return an error after a certain position.
@@ -569,17 +514,9 @@ mod tests {
         .await
         .expect_err("must fail");
 
-        assert_eq!(
-            err.kind(),
-            std::io::ErrorKind::Other,
-            "error kind must match"
-        );
+        assert_eq!(err.kind(), std::io::ErrorKind::Other, "error kind must match");
 
-        assert_eq!(
-            err.into_inner().unwrap().to_string(),
-            "foo",
-            "error payload must contain foo"
-        );
+        assert_eq!(err.into_inner().unwrap().to_string(), "foo", "error payload must contain foo");
     }
 
     /// Start a 9 bytes payload packet, but return an error after a certain position.
@@ -611,17 +548,9 @@ mod tests {
         .await
         .expect_err("must fail");
 
-        assert_eq!(
-            err.kind(),
-            std::io::ErrorKind::Other,
-            "error kind must match"
-        );
+        assert_eq!(err.kind(), std::io::ErrorKind::Other, "error kind must match");
 
-        assert_eq!(
-            err.into_inner().unwrap().to_string(),
-            "foo",
-            "error payload must contain foo"
-        );
+        assert_eq!(err.into_inner().unwrap().to_string(), "foo", "error payload must contain foo");
     }
 
     /// If there's an error right after the padding, we don't propagate it, as
@@ -655,9 +584,7 @@ mod tests {
         let mut r = BytesReader::new(&mut mock, ..MAX_LEN).await.unwrap();
         let mut buf = Vec::new();
 
-        tokio::io::copy_buf(&mut r, &mut buf)
-            .await
-            .expect("must succeed");
+        tokio::io::copy_buf(&mut r, &mut buf).await.expect("must succeed");
         assert_eq!(buf.as_slice(), payload);
     }
 
@@ -678,9 +605,7 @@ mod tests {
             .read(&produce_packet_bytes(payload).await[offset..])
             .build();
 
-        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64)
-            .await
-            .unwrap();
+        let mut r = BytesReader::new(&mut mock, ..=LARGE_PAYLOAD.len() as u64).await.unwrap();
         let mut buf = Vec::new();
         r.read_to_end(&mut buf).await.expect("must succeed");
 

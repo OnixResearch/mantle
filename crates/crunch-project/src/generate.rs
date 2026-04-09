@@ -6,7 +6,10 @@
 //!
 //! Pure string generation. No I/O, no Nickel eval.
 
-use crate::lock::{LockEntry, LockedKind, LockedPatchSource, Lockfile};
+use crate::lock::LockEntry;
+use crate::lock::LockedKind;
+use crate::lock::LockedPatchSource;
+use crate::lock::Lockfile;
 
 /// Maximum number of inputs to generate (guard against runaway locks).
 const MAX_GENERATED_INPUTS: u32 = 4096;
@@ -50,23 +53,14 @@ pub fn generate_inputs_ncl(lock: &Lockfile) -> String {
             match &patch.source {
                 LockedPatchSource::Local { path } => {
                     out.push_str("      type = \"local\",\n");
-                    out.push_str(&format!(
-                        "      path = \"{}\",\n",
-                        escape_nickel(path)
-                    ));
+                    out.push_str(&format!("      path = \"{}\",\n", escape_nickel(path)));
                 }
                 LockedPatchSource::Remote { url } => {
                     out.push_str("      type = \"remote\",\n");
-                    out.push_str(&format!(
-                        "      url = \"{}\",\n",
-                        escape_nickel(url)
-                    ));
+                    out.push_str(&format!("      url = \"{}\",\n", escape_nickel(url)));
                 }
             }
-            out.push_str(&format!(
-                "      hash = \"{}\",\n",
-                escape_nickel(&patch.hash.value)
-            ));
+            out.push_str(&format!("      hash = \"{}\",\n", escape_nickel(&patch.hash.value)));
             out.push_str(&format!("      algo = \"{}\",\n", patch.hash.algo));
             out.push_str("    },\n");
         }
@@ -103,24 +97,15 @@ fn generate_entry(out: &mut String, name: &str, entry: &LockEntry) {
             ref_name,
         } => {
             out.push_str("    type = \"git\",\n");
-            out.push_str(&format!(
-                "    repository = \"{}\",\n",
-                escape_nickel(repository)
-            ));
+            out.push_str(&format!("    repository = \"{}\",\n", escape_nickel(repository)));
             out.push_str(&format!("    rev = \"{}\",\n", escape_nickel(rev)));
             if let Some(r) = ref_name {
-                out.push_str(&format!(
-                    "    ref_name = \"{}\",\n",
-                    escape_nickel(r)
-                ));
+                out.push_str(&format!("    ref_name = \"{}\",\n", escape_nickel(r)));
             }
         }
     }
 
-    out.push_str(&format!(
-        "    hash = \"{}\",\n",
-        escape_nickel(&entry.hash.value)
-    ));
+    out.push_str(&format!("    hash = \"{}\",\n", escape_nickel(&entry.hash.value)));
     out.push_str(&format!("    algo = \"{}\",\n", entry.hash.algo));
 
     if !entry.mirrors.is_empty() {
@@ -152,9 +137,7 @@ fn needs_quoting(name: &str) -> bool {
     if !valid_start {
         return true;
     }
-    !name
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// Escape a string for inclusion in a Nickel double-quoted string.
@@ -182,28 +165,24 @@ pub fn content_fingerprint(content: &str) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::lock::*;
     use crate::manifest::HashAlgo;
     use crate::version::SchemaVersion;
-    use std::collections::BTreeMap;
 
     fn lock_with_file(name: &str, url: &str, hash: &str) -> Lockfile {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            name.to_string(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: url.to_string(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: hash.to_string(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        inputs.insert(name.to_string(), LockEntry {
+            kind: LockedKind::File { url: url.to_string() },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: hash.to_string(),
             },
-        );
+            patches: vec![],
+            mirrors: vec![],
+        });
         Lockfile {
             version: SchemaVersion::CURRENT,
             inputs,
@@ -239,22 +218,19 @@ mod tests {
     #[test]
     fn generate_git_entry() {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "nixpkgs".to_string(),
-            LockEntry {
-                kind: LockedKind::Git {
-                    repository: "https://github.com/NixOS/nixpkgs.git".to_string(),
-                    rev: "abc123".to_string(),
-                    ref_name: Some("nixos-unstable".to_string()),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-xyz=".to_string(),
-                },
-                patches: vec![],
-                mirrors: vec!["https://mirror.example.com/nixpkgs.git".to_string()],
+        inputs.insert("nixpkgs".to_string(), LockEntry {
+            kind: LockedKind::Git {
+                repository: "https://github.com/NixOS/nixpkgs.git".to_string(),
+                rev: "abc123".to_string(),
+                ref_name: Some("nixos-unstable".to_string()),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-xyz=".to_string(),
+            },
+            patches: vec![],
+            mirrors: vec!["https://mirror.example.com/nixpkgs.git".to_string()],
+        });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
             inputs,
@@ -313,33 +289,27 @@ mod tests {
     #[test]
     fn generate_includes_patch_metadata() {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "pkg".to_string(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/pkg".to_string(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-abc=".to_string(),
-                },
-                patches: vec!["fix1".into()],
-                mirrors: vec![],
+        inputs.insert("pkg".to_string(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/pkg".to_string(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-abc=".to_string(),
+            },
+            patches: vec!["fix1".into()],
+            mirrors: vec![],
+        });
         let mut patches = BTreeMap::new();
-        patches.insert(
-            "fix1".into(),
-            LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: "patches/fix1.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-patchhash=".into(),
-                },
+        patches.insert("fix1".into(), LockedPatch {
+            source: LockedPatchSource::Local {
+                path: "patches/fix1.patch".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-patchhash=".into(),
+            },
+        });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
             inputs,
@@ -357,18 +327,15 @@ mod tests {
     #[test]
     fn generate_remote_patch_metadata() {
         let mut patches = BTreeMap::new();
-        patches.insert(
-            "remote_fix".into(),
-            LockedPatch {
-                source: LockedPatchSource::Remote {
-                    url: "https://example.com/fix.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-remotehash=".into(),
-                },
+        patches.insert("remote_fix".into(), LockedPatch {
+            source: LockedPatchSource::Remote {
+                url: "https://example.com/fix.patch".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-remotehash=".into(),
+            },
+        });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
             inputs: BTreeMap::new(),

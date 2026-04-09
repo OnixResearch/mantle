@@ -1,16 +1,19 @@
-use std::{io, path::Path, sync::Arc};
+use std::io;
+use std::path::Path;
+use std::sync::Arc;
 
-use fuse_backend_rs::{api::filesystem::FileSystem, transport::FuseSession};
+use fuse_backend_rs::api::filesystem::FileSystem;
+use fuse_backend_rs::transport::FuseSession;
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use tracing::{error, instrument};
+use tracing::error;
+use tracing::instrument;
 
 #[cfg(test)]
 mod tests;
 
 struct FuseServer<FS>
-where
-    FS: FileSystem + Sync + Send,
+where FS: FileSystem + Sync + Send
 {
     server: Arc<fuse_backend_rs::api::server::Server<Arc<FS>>>,
     channel: fuse_backend_rs::transport::FuseChannel,
@@ -22,19 +25,13 @@ const BADFD: libc::c_int = libc::EBADF;
 const BADFD: libc::c_int = libc::EBADFD;
 
 impl<FS> FuseServer<FS>
-where
-    FS: FileSystem + Sync + Send,
+where FS: FileSystem + Sync + Send
 {
     fn start(&mut self) -> io::Result<()> {
-        while let Some((reader, writer)) = self
-            .channel
-            .get_request()
-            .map_err(|_| io::Error::from_raw_os_error(libc::EINVAL))?
+        while let Some((reader, writer)) =
+            self.channel.get_request().map_err(|_| io::Error::from_raw_os_error(libc::EINVAL))?
         {
-            if let Err(e) = self
-                .server
-                .handle_message(reader, writer.into(), None, None)
-            {
+            if let Err(e) = self.server.handle_message(reader, writer.into(), None, None) {
                 match e {
                     // This indicates the session has been shut down.
                     fuse_backend_rs::Error::EncodeMessage(e) if e.raw_os_error() == Some(BADFD) => {
@@ -61,12 +58,7 @@ pub struct FuseDaemon {
 
 impl FuseDaemon {
     #[instrument(skip(fs, mountpoint), fields(mountpoint=?mountpoint), err)]
-    pub fn new<FS, P>(
-        fs: FS,
-        mountpoint: P,
-        num_threads: usize,
-        allow_other: bool,
-    ) -> Result<Self, io::Error>
+    pub fn new<FS, P>(fs: FS, mountpoint: P, num_threads: usize, allow_other: bool) -> Result<Self, io::Error>
     where
         FS: FileSystem + Sync + Send + 'static,
         P: AsRef<Path> + std::fmt::Debug,
@@ -78,23 +70,17 @@ impl FuseDaemon {
 
         #[cfg(target_os = "linux")]
         session.set_allow_other(allow_other);
-        session
-            .mount()
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        session.mount().map_err(|e| io::Error::other(e.to_string()))?;
 
         // construct a thread pool
-        let threads = threadpool::Builder::new()
-            .num_threads(num_threads)
-            .thread_name("fuse_server".to_string())
-            .build();
+        let threads =
+            threadpool::Builder::new().num_threads(num_threads).thread_name("fuse_server".to_string()).build();
 
         for _ in 0..num_threads {
             // for each thread requested, create and start a FuseServer accepting requests.
             let mut server = FuseServer {
                 server: server.clone(),
-                channel: session
-                    .new_channel()
-                    .map_err(|e| io::Error::other(e.to_string()))?,
+                channel: session.new_channel().map_err(|e| io::Error::other(e.to_string()))?,
             };
 
             // Start the FuseServer in each thread, and enter the tokio runtime context,
@@ -122,10 +108,7 @@ impl FuseDaemon {
     #[instrument(skip_all, err)]
     pub fn unmount(&self) -> Result<(), io::Error> {
         // Send the unmount command.
-        self.session
-            .lock()
-            .umount()
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        self.session.lock().umount().map_err(|e| io::Error::other(e.to_string()))?;
 
         self.wait();
         Ok(())

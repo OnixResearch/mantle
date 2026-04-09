@@ -4,8 +4,10 @@
 //! versions. Versions are compared for compatibility and drive migrations
 //! in the upgrade path.
 
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Maximum number of supported schema versions. Guards against unbounded
 /// migration chains.
@@ -36,11 +38,7 @@ impl SchemaVersion {
         assert!(major <= MAX_VERSIONS, "major version exceeds limit");
         assert!(minor <= MAX_VERSIONS, "minor version exceeds limit");
         assert!(patch <= MAX_VERSIONS, "patch version exceeds limit");
-        Self {
-            major,
-            minor,
-            patch,
-        }
+        Self { major, minor, patch }
     }
 
     /// Whether this version is compatible with `other` (same major).
@@ -50,10 +48,7 @@ impl SchemaVersion {
 
     /// Whether this version needs an upgrade to reach `target`.
     pub fn needs_upgrade_to(&self, target: &SchemaVersion) -> bool {
-        assert!(
-            self.major <= target.major,
-            "cannot downgrade: {self} > {target}"
-        );
+        assert!(self.major <= target.major, "cannot downgrade: {self} > {target}");
         self != target
     }
 }
@@ -73,9 +68,7 @@ impl Serialize for SchemaVersion {
 impl<'de> Deserialize<'de> for SchemaVersion {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        parse_version(&s).ok_or_else(|| {
-            serde::de::Error::custom(format!("invalid schema version: {s}"))
-        })
+        parse_version(&s).ok_or_else(|| serde::de::Error::custom(format!("invalid schema version: {s}")))
     }
 }
 
@@ -102,11 +95,7 @@ pub fn parse_version(s: &str) -> Option<SchemaVersion> {
         return None;
     }
 
-    Some(SchemaVersion {
-        major,
-        minor,
-        patch,
-    })
+    Some(SchemaVersion { major, minor, patch })
 }
 
 #[cfg(test)]

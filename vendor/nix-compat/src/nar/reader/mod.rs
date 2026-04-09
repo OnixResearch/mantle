@@ -4,12 +4,12 @@
 //! a variety of things, including addressing fixed-output derivations
 //! and transferring store paths between Nix stores.
 
-use std::io::{
-    self, BufRead,
-    ErrorKind::{InvalidData, UnexpectedEof},
-    Read, Write,
-};
-
+use std::io::BufRead;
+use std::io::ErrorKind::InvalidData;
+use std::io::ErrorKind::UnexpectedEof;
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
 #[cfg(not(debug_assertions))]
 use std::marker::PhantomData;
 
@@ -77,8 +77,7 @@ impl<'a, 'r> Node<'a, 'r> {
     fn new(mut reader: ArchiveReader<'a, 'r>) -> io::Result<Self> {
         Ok(match read::tag(reader.inner)? {
             wire::Node::Sym => {
-                let target =
-                    try_or_poison!(reader, read::bytes(reader.inner, wire::MAX_TARGET_LEN));
+                let target = try_or_poison!(reader, read::bytes(reader.inner, wire::MAX_TARGET_LEN));
 
                 if target.is_empty() || target.contains(&0) {
                     reader.status.poison();
@@ -181,10 +180,7 @@ impl FileReader<'_, '_> {
 
         self.reader.check_correct();
 
-        self.len = self
-            .len
-            .checked_sub(n as u64)
-            .expect("consumed bytes past EOF");
+        self.len = self.len.checked_sub(n as u64).expect("consumed bytes past EOF");
 
         self.reader.inner.consume(n);
 
@@ -287,10 +283,12 @@ impl<'a, 'r> DirReader<'a, 'r> {
     /// We explicitly don't implement [Iterator], since treating this as
     /// a regular Rust iterator will surely lead you astray.
     ///
-    ///  * You must always consume the entire iterator, unless you abandon the entire archive reader.
+    ///  * You must always consume the entire iterator, unless you abandon the entire archive
+    ///    reader.
     ///  * You must abandon the entire archive reader on the first error.
     ///  * You must abandon the directory reader upon the first [None].
-    ///  * Even if you know the amount of elements up front, you must keep reading until you encounter [None].
+    ///  * Even if you know the amount of elements up front, you must keep reading until you
+    ///    encounter [None].
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> io::Result<Option<Entry<'_, 'r>>> {
         self.reader.check_correct();
@@ -309,17 +307,9 @@ impl<'a, 'r> DirReader<'a, 'r> {
         }
 
         let mut name = [0; wire::MAX_NAME_LEN + 1];
-        let name = try_or_poison!(
-            self.reader,
-            read::bytes_buf(self.reader.inner, &mut name, wire::MAX_NAME_LEN)
-        );
+        let name = try_or_poison!(self.reader, read::bytes_buf(self.reader.inner, &mut name, wire::MAX_NAME_LEN));
 
-        if name.is_empty()
-            || name.contains(&0)
-            || name.contains(&b'/')
-            || name == b"."
-            || name == b".."
-        {
+        if name.is_empty() || name.contains(&0) || name.contains(&b'/') || name == b"." || name == b".." {
             self.reader.status.poison();
             return Err(InvalidData.into());
         }
@@ -344,10 +334,10 @@ impl<'a, 'r> DirReader<'a, 'r> {
 }
 
 /// We use a stack of statuses to:
-///   * Share poisoned state across all objects from the same underlying reader,
-///     so we can check they are abandoned when an error occurs
-///   * Make sure only the most recently created object is read from, and is fully exhausted
-///     before anything it was created from is used again.
+///   * Share poisoned state across all objects from the same underlying reader, so we can check
+///     they are abandoned when an error occurs
+///   * Make sure only the most recently created object is read from, and is fully exhausted before
+///     anything it was created from is used again.
 enum ArchiveReaderStatus<'a> {
     #[cfg(not(debug_assertions))]
     None(PhantomData<&'a ()>),
@@ -387,7 +377,8 @@ impl ArchiveReaderStatus<'_> {
         }
     }
 
-    /// Mark the parent as ready, allowing it to be used again and preventing this reference to the reader being used again.
+    /// Mark the parent as ready, allowing it to be used again and preventing this reference to the
+    /// reader being used again.
     fn ready_parent(&mut self) {
         match self {
             #[cfg(not(debug_assertions))]
@@ -398,9 +389,7 @@ impl ArchiveReaderStatus<'_> {
             }
             #[cfg(debug_assertions)]
             ArchiveReaderStatus::StackChild {
-                ready,
-                parent_ready,
-                ..
+                ready, parent_ready, ..
             } => {
                 *ready = false;
                 **parent_ready = true;
@@ -433,7 +422,8 @@ impl ArchiveReaderStatus<'_> {
 
 impl<'r> ArchiveReader<'_, 'r> {
     /// Create a new child reader from this one.
-    /// In debug mode, this reader will panic if called before the new child is exhausted / calls `ready_parent`
+    /// In debug mode, this reader will panic if called before the new child is exhausted / calls
+    /// `ready_parent`
     fn child(&mut self) -> ArchiveReader<'_, 'r> {
         ArchiveReader {
             inner: self.inner,
@@ -449,9 +439,7 @@ impl<'r> ArchiveReader<'_, 'r> {
                         ready: true,
                     }
                 }
-                ArchiveReaderStatus::StackChild {
-                    poisoned, ready, ..
-                } => {
+                ArchiveReaderStatus::StackChild { poisoned, ready, .. } => {
                     *ready = false;
                     ArchiveReaderStatus::StackChild {
                         poisoned,
@@ -467,13 +455,7 @@ impl<'r> ArchiveReader<'_, 'r> {
     /// Only does anything when debug assertions are on.
     #[inline(always)]
     fn check_correct(&self) {
-        assert!(
-            !self.status.poisoned(),
-            "Archive reader used after it was meant to be abandoned!"
-        );
-        assert!(
-            self.status.ready(),
-            "Non-ready archive reader used! (Should've been reading from something else)"
-        );
+        assert!(!self.status.poisoned(), "Archive reader used after it was meant to be abandoned!");
+        assert!(self.status.ready(), "Non-ready archive reader used! (Should've been reading from something else)");
     }
 }

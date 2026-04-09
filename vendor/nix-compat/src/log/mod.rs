@@ -2,7 +2,9 @@
 //! messages as well as in nix-daemon communication.
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
 #[cfg(feature = "serde")]
 use tracing::warn;
 
@@ -11,7 +13,13 @@ pub const AT_NIX_PREFIX: &str = "@nix ";
 
 /// The different verbosity levels Nix distinguishes.
 #[derive(
-    Clone, Debug, Eq, PartialEq, num_enum::TryFromPrimitive, num_enum::IntoPrimitive, Default,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    num_enum::TryFromPrimitive,
+    num_enum::IntoPrimitive,
+    Default
 )]
 #[cfg_attr(
     feature = "serde",
@@ -38,20 +46,16 @@ pub enum VerbosityLevel {
 
 impl std::fmt::Display for VerbosityLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                VerbosityLevel::Error => "error",
-                VerbosityLevel::Warn => "warn",
-                VerbosityLevel::Notice => "notice",
-                VerbosityLevel::Info => "info",
-                VerbosityLevel::Talkative => "talkative",
-                VerbosityLevel::Chatty => "chatty",
-                VerbosityLevel::Debug => "debug",
-                VerbosityLevel::Vomit => "vomit",
-            }
-        )
+        write!(f, "{}", match self {
+            VerbosityLevel::Error => "error",
+            VerbosityLevel::Warn => "warn",
+            VerbosityLevel::Notice => "notice",
+            VerbosityLevel::Info => "info",
+            VerbosityLevel::Talkative => "talkative",
+            VerbosityLevel::Chatty => "chatty",
+            VerbosityLevel::Debug => "debug",
+            VerbosityLevel::Vomit => "vomit",
+        })
     }
 }
 
@@ -99,9 +103,7 @@ pub enum LogMessage<'a> {
 
 #[cfg(feature = "serde")]
 fn serialize_bytes_as_string<S>(b: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
+where S: serde::Serializer {
     match std::str::from_utf8(b) {
         Ok(s) => serializer.serialize_str(s),
         Err(_) => {
@@ -118,10 +120,7 @@ where
 pub enum Field<'a> {
     Int(u64),
     String(
-        #[cfg_attr(
-            feature = "serde",
-            serde(serialize_with = "serialize_bytes_as_string", borrow)
-        )]
+        #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_bytes_as_string", borrow))]
         std::borrow::Cow<'a, [u8]>,
     ),
 }
@@ -152,26 +151,22 @@ pub enum ActivityType {
 
 impl std::fmt::Display for ActivityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ActivityType::Unknown => "unknown",
-                ActivityType::CopyPath => "copy-path",
-                ActivityType::FileTransfer => "file-transfer",
-                ActivityType::Realise => "realise",
-                ActivityType::CopyPaths => "copy-paths",
-                ActivityType::Builds => "builds",
-                ActivityType::Build => "build",
-                ActivityType::OptimiseStore => "optimise-store",
-                ActivityType::VerifyPaths => "verify-paths",
-                ActivityType::Substitute => "substitute",
-                ActivityType::QueryPathInfo => "query-path-info",
-                ActivityType::PostBuildHook => "post-build-hook",
-                ActivityType::BuildWaiting => "build-waiting",
-                ActivityType::FetchTree => "fetch-tree",
-            }
-        )
+        write!(f, "{}", match self {
+            ActivityType::Unknown => "unknown",
+            ActivityType::CopyPath => "copy-path",
+            ActivityType::FileTransfer => "file-transfer",
+            ActivityType::Realise => "realise",
+            ActivityType::CopyPaths => "copy-paths",
+            ActivityType::Builds => "builds",
+            ActivityType::Build => "build",
+            ActivityType::OptimiseStore => "optimise-store",
+            ActivityType::VerifyPaths => "verify-paths",
+            ActivityType::Substitute => "substitute",
+            ActivityType::QueryPathInfo => "query-path-info",
+            ActivityType::PostBuildHook => "post-build-hook",
+            ActivityType::BuildWaiting => "build-waiting",
+            ActivityType::FetchTree => "fetch-tree",
+        })
     }
 }
 
@@ -207,11 +202,7 @@ impl<'a> LogMessage<'a> {
 #[cfg(feature = "serde")]
 impl std::fmt::Display for LogMessage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{AT_NIX_PREFIX}{}",
-            serde_json::to_string(self).expect("Failed to serialize LogMessage")
-        )
+        write!(f, "{AT_NIX_PREFIX}{}", serde_json::to_string(self).expect("Failed to serialize LogMessage"))
     }
 }
 
@@ -233,18 +224,22 @@ mod test {
     #[cfg(feature = "serde")]
     use std::borrow::Cow;
 
-    use super::VerbosityLevel;
-    #[cfg(feature = "serde")]
-    use super::{ActivityType, Field, LogMessage, ResultType};
     #[cfg(feature = "serde")]
     use rstest::rstest;
 
+    #[cfg(feature = "serde")]
+    use super::ActivityType;
+    #[cfg(feature = "serde")]
+    use super::Field;
+    #[cfg(feature = "serde")]
+    use super::LogMessage;
+    #[cfg(feature = "serde")]
+    use super::ResultType;
+    use super::VerbosityLevel;
+
     #[test]
     fn verbosity_level() {
-        assert_eq!(
-            VerbosityLevel::try_from(0).expect("must succeed"),
-            VerbosityLevel::Error
-        );
+        assert_eq!(VerbosityLevel::try_from(0).expect("must succeed"), VerbosityLevel::Error);
         assert_eq!(VerbosityLevel::default(), VerbosityLevel::Error);
 
         // Nix can be caused to send a verbosity level larger than itself knows about,
@@ -337,11 +332,7 @@ mod test {
         );
 
         if expected_roundtrip {
-            assert_eq!(
-                input_str,
-                expected_logmessage.to_string(),
-                "Expected LogMessage to roundtrip to input_str"
-            );
+            assert_eq!(input_str, expected_logmessage.to_string(), "Expected LogMessage to roundtrip to input_str");
         }
     }
 
@@ -353,10 +344,7 @@ mod test {
     // See test_string_fields_cow below for checking CoW.
     #[case::string_escaped(r#""test\\a""#, Field::String(Cow::Borrowed(b"test\\a")))]
     fn test_fields(#[case] input_str: &str, #[case] expected_output: Field) {
-        assert_eq!(
-            expected_output,
-            serde_json::from_str::<Field>(input_str).expect("must deserialize")
-        );
+        assert_eq!(expected_output, serde_json::from_str::<Field>(input_str).expect("must deserialize"));
     }
 
     #[cfg(feature = "serde")]

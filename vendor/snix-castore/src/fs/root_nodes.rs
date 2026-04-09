@@ -1,11 +1,12 @@
-use async_trait::async_trait;
 use std::collections::BTreeMap;
 
-use crate::nodes::Directory;
-use crate::{Node, path::PathComponent};
+use async_trait::async_trait;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 
+use crate::Node;
+use crate::nodes::Directory;
+use crate::path::PathComponent;
 
 /// Provides an interface for looking up root nodes  in snix-castore by given
 /// a lookup key (usually the basename), and optionally allow a listing.
@@ -23,13 +24,11 @@ pub trait RootNodes {
     fn list(&self) -> BoxStream<'static, Result<(PathComponent, Node), Self::Error>>;
 }
 
-
 /// Implements RootNodes for something deref'ing to a BTreeMap of Nodes, where
 /// the key is the node name.
 #[async_trait]
 impl<T> RootNodes for T
-where
-    T: AsRef<BTreeMap<PathComponent, Node>> + Send + Sync,
+where T: AsRef<BTreeMap<PathComponent, Node>> + Send + Sync
 {
     type Error = std::io::Error; // infallible, really.
 
@@ -43,16 +42,12 @@ where
     }
 }
 
-
 #[async_trait]
 impl RootNodes for Directory {
     type Error = std::io::Error; // infallible, really.
 
     async fn get_by_basename(&self, name: &PathComponent) -> Result<Option<Node>, Self::Error> {
-        Ok(self
-            .nodes()
-            .find(|(key, _)| *key == name)
-            .map(|(_, node)| node.clone()))
+        Ok(self.nodes().find(|(key, _)| *key == name).map(|(_, node)| node.clone()))
     }
 
     fn list(&self) -> BoxStream<'static, Result<(PathComponent, Node), Self::Error>> {

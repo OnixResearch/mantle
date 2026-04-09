@@ -30,15 +30,17 @@
 //! # });
 //! ```
 
+use std::io::ErrorKind::InvalidInput;
+use std::io::ErrorKind::UnexpectedEof;
+use std::io::{self};
+use std::pin::Pin;
+
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+
 use crate::nar::wire;
-use std::{
-    io::{
-        self,
-        ErrorKind::{InvalidInput, UnexpectedEof},
-    },
-    pin::Pin,
-};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 /// Convenience type alias for types implementing [`AsyncWrite`].
 pub type Writer<'a> = dyn AsyncWrite + Unpin + Send + 'a;
@@ -72,11 +74,7 @@ impl<'a, 'w> Node<'a, 'w> {
 
     /// Make this node a symlink.
     pub async fn symlink(mut self, target: &[u8]) -> io::Result<()> {
-        debug_assert!(
-            target.len() <= wire::MAX_TARGET_LEN,
-            "target.len() > {}",
-            wire::MAX_TARGET_LEN
-        );
+        debug_assert!(target.len() <= wire::MAX_TARGET_LEN, "target.len() > {}", wire::MAX_TARGET_LEN);
         debug_assert!(!target.is_empty(), "target is empty");
         debug_assert!(!target.contains(&0), "target contains null byte");
 
@@ -95,12 +93,7 @@ impl<'a, 'w> Node<'a, 'w> {
         size: u64,
         reader: &mut (dyn AsyncBufRead + Unpin + Send),
     ) -> io::Result<()> {
-        self.write(if executable {
-            &wire::TOK_EXE
-        } else {
-            &wire::TOK_REG
-        })
-        .await?;
+        self.write(if executable { &wire::TOK_EXE } else { &wire::TOK_REG }).await?;
 
         self.write(&size.to_le_bytes()).await?;
 
@@ -122,10 +115,7 @@ impl<'a, 'w> Node<'a, 'w> {
         // bail if there's still data left in the passed reader.
         // This uses the same code as [BufRead::has_data_left] (unstable).
         if reader.fill_buf().await.map(|b| !b.is_empty())? {
-            return Err(io::Error::new(
-                InvalidInput,
-                "reader contained more data than specified size",
-            ));
+            return Err(io::Error::new(InvalidInput, "reader contained more data than specified size"));
         }
 
         self.pad(size).await?;
@@ -163,10 +153,7 @@ pub struct Directory<'a, 'w> {
 
 impl<'a, 'w> Directory<'a, 'w> {
     fn new(node: Node<'a, 'w>) -> Self {
-        Self {
-            node,
-            prev_name: None,
-        }
+        Self { node, prev_name: None }
     }
 
     /// Add an entry to the directory.
@@ -178,11 +165,7 @@ impl<'a, 'w> Directory<'a, 'w> {
     /// written in order of ascending name. If this is not ensured, this method
     /// may panic or silently produce invalid archives.
     pub async fn entry(&mut self, name: &[u8]) -> io::Result<Node<'_, 'w>> {
-        debug_assert!(
-            name.len() <= wire::MAX_NAME_LEN,
-            "name.len() > {}",
-            wire::MAX_NAME_LEN
-        );
+        debug_assert!(name.len() <= wire::MAX_NAME_LEN, "name.len() > {}", wire::MAX_NAME_LEN);
         debug_assert!(!name.is_empty(), "name is empty");
         debug_assert!(!name.contains(&0), "name contains null byte");
         debug_assert!(!name.contains(&b'/'), "name contains {:?}", '/');

@@ -3,26 +3,52 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE-BSD-3-Clause file.
 
-use std::io::{self, IoSlice, Read, Write};
+use std::io::IoSlice;
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
 use std::mem::size_of;
 use std::sync::Arc;
 use std::time::Duration;
+
 use vm_memory::ByteValued;
 
-use super::{
-    MetricsHook, Server, ServerUtil, ServerVersion, SrvContext, ZcReader, ZcWriter,
-    BUFFER_HEADER_SIZE, DIRENT_PADDING, MAX_BUFFER_SIZE, MAX_REQ_PAGES, MIN_READ_BUFFER,
-};
+use super::MetricsHook;
+use super::Server;
+use super::ServerUtil;
+use super::ServerVersion;
+use super::SrvContext;
+use super::ZcReader;
+use super::ZcWriter;
+use super::BUFFER_HEADER_SIZE;
+use super::DIRENT_PADDING;
+use super::MAX_BUFFER_SIZE;
+use super::MAX_REQ_PAGES;
+use super::MIN_READ_BUFFER;
 use crate::abi::fuse_abi::*;
 #[cfg(feature = "virtiofs")]
-use crate::abi::virtio_fs::{RemovemappingIn, RemovemappingOne, SetupmappingIn};
-use crate::api::filesystem::{
-    DirEntry, Entry, FileSystem, GetxattrReply, IoctlData, ListxattrReply,
-};
+use crate::abi::virtio_fs::RemovemappingIn;
+#[cfg(feature = "virtiofs")]
+use crate::abi::virtio_fs::RemovemappingOne;
+#[cfg(feature = "virtiofs")]
+use crate::abi::virtio_fs::SetupmappingIn;
+use crate::api::filesystem::DirEntry;
+use crate::api::filesystem::Entry;
+use crate::api::filesystem::FileSystem;
+use crate::api::filesystem::GetxattrReply;
+use crate::api::filesystem::IoctlData;
+use crate::api::filesystem::ListxattrReply;
+use crate::bytes_to_cstr;
+use crate::encode_io_error_kind;
+use crate::transport::pagesize;
+use crate::transport::FsCacheReqHandler;
 #[cfg(feature = "fusedev")]
 use crate::transport::FuseDevWriter;
-use crate::transport::{pagesize, FsCacheReqHandler, Reader, Writer};
-use crate::{bytes_to_cstr, encode_io_error_kind, BitmapSlice, Error, Result};
+use crate::transport::Reader;
+use crate::transport::Writer;
+use crate::BitmapSlice;
+use crate::Error;
+use crate::Result;
 
 impl<F: FileSystem + Sync> Server<F> {
     #[cfg(feature = "fusedev")]
@@ -46,15 +72,9 @@ impl<F: FileSystem + Sync> Server<F> {
         entry.namelen = (name_with_null.len() - 1) as u32;
         entry.parent = parent;
 
-        buffer_writer
-            .write_obj(header)
-            .map_err(Error::FailedToWrite)?;
-        buffer_writer
-            .write_obj(entry)
-            .map_err(Error::FailedToWrite)?;
-        buffer_writer
-            .write(name_with_null)
-            .map_err(Error::FailedToWrite)?;
+        buffer_writer.write_obj(header).map_err(Error::FailedToWrite)?;
+        buffer_writer.write_obj(entry).map_err(Error::FailedToWrite)?;
+        buffer_writer.write(name_with_null).map_err(Error::FailedToWrite)?;
         buffer_writer.commit(None).map_err(Error::InvalidMessage)
     }
     /// Main entrance to handle requests from the transport layer.
@@ -76,22 +96,14 @@ impl<F: FileSystem + Sync> Server<F> {
             .id_remap(&mut ctx.context)
             .map_err(|e| Error::FailedToRemapID((ctx.context.uid, ctx.context.gid)))?;
         if ctx.in_header.len > (MAX_BUFFER_SIZE + BUFFER_HEADER_SIZE) {
-            if in_header.opcode == Opcode::Forget as u32
-                || in_header.opcode == Opcode::BatchForget as u32
-            {
+            if in_header.opcode == Opcode::Forget as u32 || in_header.opcode == Opcode::BatchForget as u32 {
                 // Forget and batch-forget do not require reply.
-                return Err(Error::InvalidMessage(io::Error::from_raw_os_error(
-                    libc::EOVERFLOW,
-                )));
+                return Err(Error::InvalidMessage(io::Error::from_raw_os_error(libc::EOVERFLOW)));
             }
             return ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM));
         }
 
-        trace!(
-            "fuse: new req {:?}: {:?}",
-            Opcode::from(in_header.opcode),
-            in_header
-        );
+        trace!("fuse: new req {:?}: {:?}", Opcode::from(in_header.opcode), in_header);
 
         if let Some(h) = hook {
             h.collect(&in_header);
@@ -186,16 +198,11 @@ impl<F: FileSystem + Sync> Server<F> {
         match result {
             // before ABI 7.4 inode == 0 was invalid, only ENOENT means negative dentry
             #[cfg(not(feature = "fuse-t"))]
-            Ok(entry)
-                if version.minor < KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO
-                    && entry.inode == 0 =>
-            {
+            Ok(entry) if version.minor < KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO && entry.inode == 0 => {
                 ctx.reply_error(io::Error::from_raw_os_error(libc::ENOENT))
             }
             #[cfg(feature = "fuse-t")]
-            Ok(entry) if entry.inode == 0 => {
-                ctx.reply_error(io::Error::from_raw_os_error(libc::ENOENT))
-            }
+            Ok(entry) if entry.inode == 0 => ctx.reply_error(io::Error::from_raw_os_error(libc::ENOENT)),
             Ok(entry) => {
                 let out = EntryOut::from(entry);
 
@@ -235,9 +242,7 @@ impl<F: FileSystem + Sync> Server<F> {
         };
         let valid = SetattrValid::from_bits_truncate(setattr_in.valid);
         let st: stat64 = setattr_in.into();
-        let result = self
-            .fs
-            .setattr(ctx.context(), ctx.nodeid(), st, handle, valid);
+        let result = self.fs.setattr(ctx.context(), ctx.nodeid(), st, handle, valid);
 
         ctx.handle_attr_result(result)
     }
@@ -264,9 +269,7 @@ impl<F: FileSystem + Sync> Server<F> {
     }
 
     pub(super) fn mknod<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let MknodIn {
-            mode, rdev, umask, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let MknodIn { mode, rdev, umask, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         let buf = ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, size_of::<MknodIn>())?;
         let name = bytes_to_cstr(buf.as_ref()).map_err(|e| {
             let _ = ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::EINVAL));
@@ -274,10 +277,7 @@ impl<F: FileSystem + Sync> Server<F> {
             e
         })?;
 
-        match self
-            .fs
-            .mknod(ctx.context(), ctx.nodeid(), name, mode, rdev, umask)
-        {
+        match self.fs.mknod(ctx.context(), ctx.nodeid(), name, mode, rdev, umask) {
             Ok(entry) => ctx.reply_ok(Some(EntryOut::from(entry)), None),
             Err(e) => ctx.reply_error(e),
         }
@@ -292,10 +292,7 @@ impl<F: FileSystem + Sync> Server<F> {
             e
         })?;
 
-        match self
-            .fs
-            .mkdir(ctx.context(), ctx.nodeid(), name, mode, umask)
-        {
+        match self.fs.mkdir(ctx.context(), ctx.nodeid(), name, mode, umask) {
             Ok(entry) => ctx.reply_ok(Some(EntryOut::from(entry)), None),
             Err(e) => ctx.reply_error(e),
         }
@@ -339,14 +336,7 @@ impl<F: FileSystem + Sync> Server<F> {
         let buf = ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, msg_size)?;
         let (oldname, newname) = ServerUtil::extract_two_cstrs(&buf)?;
 
-        match self.fs.rename(
-            ctx.context(),
-            ctx.nodeid(),
-            oldname,
-            newdir.into(),
-            newname,
-            flags,
-        ) {
+        match self.fs.rename(ctx.context(), ctx.nodeid(), oldname, newdir.into(), newname, flags) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -362,8 +352,7 @@ impl<F: FileSystem + Sync> Server<F> {
     pub(super) fn rename2<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let Rename2In { newdir, flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        let flags =
-            flags & (libc::RENAME_EXCHANGE | libc::RENAME_NOREPLACE | libc::RENAME_WHITEOUT);
+        let flags = flags & (libc::RENAME_EXCHANGE | libc::RENAME_NOREPLACE | libc::RENAME_WHITEOUT);
 
         self.do_rename(ctx, size_of::<Rename2In>(), newdir, flags)
     }
@@ -377,10 +366,7 @@ impl<F: FileSystem + Sync> Server<F> {
             e
         })?;
 
-        match self
-            .fs
-            .link(ctx.context(), oldnodeid.into(), ctx.nodeid(), name)
-        {
+        match self.fs.link(ctx.context(), oldnodeid.into(), ctx.nodeid(), name) {
             Ok(entry) => ctx.reply_ok(Some(EntryOut::from(entry)), None),
             Err(e) => ctx.reply_error(e),
         }
@@ -431,16 +417,7 @@ impl<F: FileSystem + Sync> Server<F> {
         };
         let mut data_writer = ZcWriter(w2);
 
-        match self.fs.read(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            &mut data_writer,
-            size,
-            offset,
-            owner,
-            flags,
-        ) {
+        match self.fs.read(ctx.context(), ctx.nodeid(), fh.into(), &mut data_writer, size, offset, owner, flags) {
             Ok(count) => {
                 // Don't use `reply_ok` because we need to set a custom size length for the
                 // header.
@@ -450,12 +427,8 @@ impl<F: FileSystem + Sync> Server<F> {
                     unique: ctx.unique(),
                 };
 
-                ctx.w
-                    .write_all(out.as_slice())
-                    .map_err(Error::EncodeMessage)?;
-                ctx.w
-                    .commit(Some(&data_writer.0))
-                    .map_err(Error::EncodeMessage)?;
+                ctx.w.write_all(out.as_slice()).map_err(Error::EncodeMessage)?;
+                ctx.w.commit(Some(&data_writer.0)).map_err(Error::EncodeMessage)?;
                 Ok(out.len as usize)
             }
             Err(e) => ctx.reply_error(e),
@@ -528,36 +501,19 @@ impl<F: FileSystem + Sync> Server<F> {
 
         let flush = release_flags & RELEASE_FLUSH != 0;
         let flock_release = release_flags & RELEASE_FLOCK_UNLOCK != 0;
-        let lock_owner = if flush || flock_release {
-            Some(lock_owner)
-        } else {
-            None
-        };
+        let lock_owner = if flush || flock_release { Some(lock_owner) } else { None };
 
-        match self.fs.release(
-            ctx.context(),
-            ctx.nodeid(),
-            flags,
-            fh.into(),
-            flush,
-            flock_release,
-            lock_owner,
-        ) {
+        match self.fs.release(ctx.context(), ctx.nodeid(), flags, fh.into(), flush, flock_release, lock_owner) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
     }
 
     fn fsync<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let FsyncIn {
-            fh, fsync_flags, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let FsyncIn { fh, fsync_flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         let datasync = fsync_flags & 0x1 != 0;
 
-        match self
-            .fs
-            .fsync(ctx.context(), ctx.nodeid(), datasync, fh.into())
-        {
+        match self.fs.fsync(ctx.context(), ctx.nodeid(), datasync, fh.into()) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -565,15 +521,10 @@ impl<F: FileSystem + Sync> Server<F> {
 
     pub(super) fn setxattr<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let SetxattrIn { size, flags } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        let buf =
-            ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, size_of::<SetxattrIn>())?;
+        let buf = ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, size_of::<SetxattrIn>())?;
 
         // The name and value and encoded one after another and separated by a '\0' character.
-        let split_pos = buf
-            .iter()
-            .position(|c| *c == b'\0')
-            .map(|p| p + 1)
-            .ok_or(Error::MissingParameter)?;
+        let split_pos = buf.iter().position(|c| *c == b'\0').map(|p| p + 1).ok_or(Error::MissingParameter)?;
         let (name, value) = buf.split_at(split_pos);
 
         if size != value.len() as u32 {
@@ -585,10 +536,7 @@ impl<F: FileSystem + Sync> Server<F> {
             e
         })?;
 
-        match self
-            .fs
-            .setxattr(ctx.context(), ctx.nodeid(), name, value, flags)
-        {
+        match self.fs.setxattr(ctx.context(), ctx.nodeid(), name, value, flags) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -600,8 +548,7 @@ impl<F: FileSystem + Sync> Server<F> {
             return ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM));
         }
 
-        let buf =
-            ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, size_of::<GetxattrIn>())?;
+        let buf = ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, size_of::<GetxattrIn>())?;
         let name = bytes_to_cstr(buf.as_ref()).map_err(|e| {
             let _ = ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::EINVAL));
             error!("fuse: bytes to cstr error: {:?}, {:?}", buf, e);
@@ -643,10 +590,7 @@ impl<F: FileSystem + Sync> Server<F> {
         }
     }
 
-    pub(super) fn removexattr<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-    ) -> Result<usize> {
+    pub(super) fn removexattr<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let buf = ServerUtil::get_message_body(&mut ctx.r, &ctx.in_header, 0)?;
         let name = bytes_to_cstr(buf.as_ref()).map_err(|e| {
             let _ = ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::EINVAL));
@@ -663,10 +607,7 @@ impl<F: FileSystem + Sync> Server<F> {
     pub(super) fn flush<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let FlushIn { fh, lock_owner, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        match self
-            .fs
-            .flush(ctx.context(), ctx.nodeid(), fh.into(), lock_owner)
-        {
+        match self.fs.flush(ctx.context(), ctx.nodeid(), fh.into(), lock_owner) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -710,16 +651,9 @@ impl<F: FileSystem + Sync> Server<F> {
         match self.fs.init(capable) {
             Ok(want) => {
                 let enabled = capable & want;
-                info!(
-                    "FUSE INIT major {} minor {}\n in_opts: {:?}\nout_opts: {:?}",
-                    major, minor, capable, enabled
-                );
+                info!("FUSE INIT major {} minor {}\n in_opts: {:?}\nout_opts: {:?}", major, minor, capable, enabled);
 
-                let readahead = if cfg!(target_os = "macos") {
-                    0
-                } else {
-                    max_readahead
-                };
+                let readahead = if cfg!(target_os = "macos") { 0 } else { max_readahead };
 
                 let enabled_flags = enabled.bits();
                 let mut out = InitOut {
@@ -789,14 +723,8 @@ impl<F: FileSystem + Sync> Server<F> {
         }
     }
 
-    fn do_readdir<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-        plus: bool,
-    ) -> Result<usize> {
-        let ReadIn {
-            fh, offset, size, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+    fn do_readdir<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>, plus: bool) -> Result<usize> {
+        let ReadIn { fh, offset, size, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
         if size > MAX_BUFFER_SIZE {
             return ctx.reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM));
@@ -814,23 +742,13 @@ impl<F: FileSystem + Sync> Server<F> {
         };
 
         let res = if plus {
-            self.fs.readdirplus(
-                ctx.context(),
-                ctx.nodeid(),
-                fh.into(),
-                size,
-                offset,
-                &mut |d, e| add_dirent(&mut cursor, size, d, Some(e)),
-            )
+            self.fs.readdirplus(ctx.context(), ctx.nodeid(), fh.into(), size, offset, &mut |d, e| {
+                add_dirent(&mut cursor, size, d, Some(e))
+            })
         } else {
-            self.fs.readdir(
-                ctx.context(),
-                ctx.nodeid(),
-                fh.into(),
-                size,
-                offset,
-                &mut |d| add_dirent(&mut cursor, size, d, None),
-            )
+            self.fs.readdir(ctx.context(), ctx.nodeid(), fh.into(), size, offset, &mut |d| {
+                add_dirent(&mut cursor, size, d, None)
+            })
         };
 
         if let Err(e) = res {
@@ -844,9 +762,7 @@ impl<F: FileSystem + Sync> Server<F> {
                 unique: ctx.unique(),
             };
 
-            ctx.w
-                .write_all(out.as_slice())
-                .map_err(Error::EncodeMessage)?;
+            ctx.w.write_all(out.as_slice()).map_err(Error::EncodeMessage)?;
             ctx.w.commit(Some(&cursor)).map_err(Error::EncodeMessage)?;
             Ok(out.len as usize)
         }
@@ -861,31 +777,20 @@ impl<F: FileSystem + Sync> Server<F> {
         self.do_readdir(ctx, true)
     }
 
-    pub(super) fn releasedir<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-    ) -> Result<usize> {
+    pub(super) fn releasedir<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let ReleaseIn { fh, flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        match self
-            .fs
-            .releasedir(ctx.context(), ctx.nodeid(), flags, fh.into())
-        {
+        match self.fs.releasedir(ctx.context(), ctx.nodeid(), flags, fh.into()) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
     }
 
     fn fsyncdir<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let FsyncIn {
-            fh, fsync_flags, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let FsyncIn { fh, fsync_flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         let datasync = fsync_flags & 0x1 != 0;
 
-        match self
-            .fs
-            .fsyncdir(ctx.context(), ctx.nodeid(), datasync, fh.into())
-        {
+        match self.fs.fsyncdir(ctx.context(), ctx.nodeid(), datasync, fh.into()) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -899,14 +804,7 @@ impl<F: FileSystem + Sync> Server<F> {
             lk_flags,
             ..
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        match self.fs.getlk(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            owner,
-            lk.into(),
-            lk_flags,
-        ) {
+        match self.fs.getlk(ctx.context(), ctx.nodeid(), fh.into(), owner, lk.into(), lk_flags) {
             Ok(l) => ctx.reply_ok(Some(LkOut { lk: l.into() }), None),
             Err(e) => ctx.reply_error(e),
         }
@@ -920,14 +818,7 @@ impl<F: FileSystem + Sync> Server<F> {
             lk_flags,
             ..
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        match self.fs.setlk(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            owner,
-            lk.into(),
-            lk_flags,
-        ) {
+        match self.fs.setlk(ctx.context(), ctx.nodeid(), fh.into(), owner, lk.into(), lk_flags) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -941,14 +832,7 @@ impl<F: FileSystem + Sync> Server<F> {
             lk_flags,
             ..
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        match self.fs.setlk(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            owner,
-            lk.into(),
-            lk_flags,
-        ) {
+        match self.fs.setlk(ctx.context(), ctx.nodeid(), fh.into(), owner, lk.into(), lk_flags) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -1000,9 +884,7 @@ impl<F: FileSystem + Sync> Server<F> {
     pub(super) fn interrupt<S: BitmapSlice>(&self, _ctx: SrvContext<'_, F, S>) {}
 
     pub(super) fn bmap<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let BmapIn {
-            block, blocksize, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let BmapIn { block, blocksize, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
         match self.fs.bmap(ctx.context(), ctx.nodeid(), block, blocksize) {
             Ok(block) => ctx.reply_ok(Some(BmapOut { block }), None),
@@ -1027,9 +909,7 @@ impl<F: FileSystem + Sync> Server<F> {
             out_size,
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         // TODO: check fs capability of FUSE_CAP_IOCTL_DIR and return ENOTTY if unsupported.
-        let mut buf = IoctlData {
-            ..Default::default()
-        };
+        let mut buf = IoctlData { ..Default::default() };
         let in_size = in_size as usize;
         // Make sure we have enough bytes to read the ioctl in buffer.
         if in_size > ctx.r.available_bytes() {
@@ -1042,15 +922,7 @@ impl<F: FileSystem + Sync> Server<F> {
                 buf.data = Some(&data[..size]);
             }
         }
-        match self.fs.ioctl(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            flags,
-            cmd,
-            buf,
-            out_size,
-        ) {
+        match self.fs.ioctl(ctx.context(), ctx.nodeid(), fh.into(), flags, cmd, buf, out_size) {
             Ok(res) => ctx.reply_ok(
                 Some(IoctlOut {
                     result: res.result,
@@ -1063,36 +935,15 @@ impl<F: FileSystem + Sync> Server<F> {
     }
 
     pub(super) fn poll<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let PollIn {
-            fh,
-            kh,
-            flags,
-            events,
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let PollIn { fh, kh, flags, events } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        match self.fs.poll(
-            ctx.context(),
-            ctx.nodeid(),
-            fh.into(),
-            kh.into(),
-            flags,
-            events,
-        ) {
-            Ok(revents) => ctx.reply_ok(
-                Some(PollOut {
-                    revents,
-                    padding: 0,
-                }),
-                None,
-            ),
+        match self.fs.poll(ctx.context(), ctx.nodeid(), fh.into(), kh.into(), flags, events) {
+            Ok(revents) => ctx.reply_ok(Some(PollOut { revents, padding: 0 }), None),
             Err(e) => ctx.reply_error(e),
         }
     }
 
-    pub(super) fn notify_reply<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-    ) -> Result<usize> {
+    pub(super) fn notify_reply<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         if let Err(e) = self.fs.notify_reply() {
             ctx.reply_error(e)
         } else {
@@ -1100,10 +951,7 @@ impl<F: FileSystem + Sync> Server<F> {
         }
     }
 
-    pub(super) fn batch_forget<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-    ) -> Result<usize> {
+    pub(super) fn batch_forget<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let BatchForgetIn { count, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
         if let Some(size) = (count as usize).checked_mul(size_of::<ForgetOne>()) {
@@ -1112,23 +960,16 @@ impl<F: FileSystem + Sync> Server<F> {
                     - size_of::<BatchForgetIn>() as u32
                     - size_of::<InHeader>() as u32) as usize
             {
-                return Err(Error::InvalidMessage(io::Error::from_raw_os_error(
-                    libc::EOVERFLOW,
-                )));
+                return Err(Error::InvalidMessage(io::Error::from_raw_os_error(libc::EOVERFLOW)));
             }
         } else {
-            return Err(Error::InvalidMessage(io::Error::from_raw_os_error(
-                libc::EOVERFLOW,
-            )));
+            return Err(Error::InvalidMessage(io::Error::from_raw_os_error(libc::EOVERFLOW)));
         }
 
         let mut requests = Vec::with_capacity(count as usize);
         for _ in 0..count {
             requests.push(
-                ctx.r
-                    .read_obj::<ForgetOne>()
-                    .map(|f| (f.nodeid.into(), f.nlookup))
-                    .map_err(Error::DecodeMessage)?,
+                ctx.r.read_obj::<ForgetOne>().map(|f| (f.nodeid.into(), f.nlookup)).map_err(Error::DecodeMessage)?,
             );
         }
 
@@ -1147,10 +988,7 @@ impl<F: FileSystem + Sync> Server<F> {
             ..
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        match self
-            .fs
-            .fallocate(ctx.context(), ctx.nodeid(), fh.into(), mode, offset, length)
-        {
+        match self.fs.fallocate(ctx.context(), ctx.nodeid(), fh.into(), mode, offset, length) {
             Ok(()) => ctx.reply_ok(None::<u8>, None),
             Err(e) => ctx.reply_error(e),
         }
@@ -1158,14 +996,9 @@ impl<F: FileSystem + Sync> Server<F> {
 
     #[cfg(target_os = "linux")]
     pub(super) fn lseek<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let LseekIn {
-            fh, offset, whence, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let LseekIn { fh, offset, whence, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-        match self
-            .fs
-            .lseek(ctx.context(), ctx.nodeid(), fh.into(), offset, whence)
-        {
+        match self.fs.lseek(ctx.context(), ctx.nodeid(), fh.into(), offset, whence) {
             Ok(offset) => {
                 let out = LseekOut { offset };
 
@@ -1192,16 +1025,7 @@ impl<F: FileSystem + Sync> Server<F> {
                 moffset,
             } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
-            match self.fs.setupmapping(
-                ctx.context(),
-                ctx.nodeid(),
-                fh.into(),
-                foffset,
-                len,
-                flags,
-                moffset,
-                req,
-            ) {
+            match self.fs.setupmapping(ctx.context(), ctx.nodeid(), fh.into(), foffset, len, flags, moffset, req) {
                 Ok(()) => ctx.reply_ok(None::<u8>, None),
                 Err(e) => ctx.reply_error(e),
             }
@@ -1228,17 +1052,10 @@ impl<F: FileSystem + Sync> Server<F> {
 
             let mut requests = Vec::with_capacity(count as usize);
             for _ in 0..count {
-                requests.push(
-                    ctx.r
-                        .read_obj::<RemovemappingOne>()
-                        .map_err(Error::DecodeMessage)?,
-                );
+                requests.push(ctx.r.read_obj::<RemovemappingOne>().map_err(Error::DecodeMessage)?);
             }
 
-            match self
-                .fs
-                .removemapping(ctx.context(), ctx.nodeid(), requests, req)
-            {
+            match self.fs.removemapping(ctx.context(), ctx.nodeid(), requests, req) {
                 Ok(()) => ctx.reply_ok(None::<u8>, None),
                 Err(e) => ctx.reply_error(e),
             }
@@ -1261,10 +1078,7 @@ impl<'a, F: FileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
         trace!("fuse: new reply {:?}", header);
 
         match (data2.len(), data3.len()) {
-            (0, 0) => self
-                .w
-                .write(header.as_slice())
-                .map_err(Error::EncodeMessage)?,
+            (0, 0) => self.w.write(header.as_slice()).map_err(Error::EncodeMessage)?,
             (0, _) => self
                 .w
                 .write_vectored(&[IoSlice::new(header.as_slice()), IoSlice::new(data3)])
@@ -1290,9 +1104,7 @@ impl<'a, F: FileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
     fn do_reply_error(&mut self, err: io::Error, explicit: bool) -> Result<usize> {
         let header = OutHeader {
             len: size_of::<OutHeader>() as u32,
-            error: -err
-                .raw_os_error()
-                .unwrap_or_else(|| encode_io_error_kind(err.kind())),
+            error: -err.raw_os_error().unwrap_or_else(|| encode_io_error_kind(err.kind())),
             unique: self.unique(),
         };
 
@@ -1301,9 +1113,7 @@ impl<'a, F: FileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
         } else {
             trace!("fuse: reply error header {:?}, error {:?}", header, err);
         }
-        self.w
-            .write_all(header.as_slice())
-            .map_err(Error::EncodeMessage)?;
+        self.w.write_all(header.as_slice()).map_err(Error::EncodeMessage)?;
 
         // Commit header if it is buffered otherwise kernel gets nothing back.
         self.w

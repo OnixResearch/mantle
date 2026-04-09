@@ -1,17 +1,20 @@
-use std::{
-    io::{Cursor, Write},
-    sync::Arc,
-};
+use std::io::Cursor;
+use std::io::Write;
+use std::sync::Arc;
 
-use tokio::{
-    io::AsyncRead,
-    sync::Semaphore,
-    task::{JoinError, JoinSet},
-};
+use tokio::io::AsyncRead;
+use tokio::sync::Semaphore;
+use tokio::task::JoinError;
+use tokio::task::JoinSet;
 use tokio_util::io::InspectReader;
-use tracing::{Instrument, Level, instrument};
+use tracing::Instrument;
+use tracing::Level;
+use tracing::instrument;
 
-use crate::{B3Digest, Path, PathBuf, blobservice::BlobService};
+use crate::B3Digest;
+use crate::Path;
+use crate::PathBuf;
+use crate::blobservice::BlobService;
 
 /// Files smaller than this threshold, in bytes, are uploaded to the [BlobService] in the
 /// background.
@@ -37,11 +40,7 @@ pub enum Error {
     BlobFinalize(PathBuf, std::io::Error),
 
     #[error("unexpected size for {path} wanted: {wanted} got: {got}")]
-    UnexpectedSize {
-        path: PathBuf,
-        wanted: u64,
-        got: u64,
-    },
+    UnexpectedSize { path: PathBuf, wanted: u64, got: u64 },
 
     #[error("blob upload join error: {0}")]
     JoinError(#[from] JoinError),
@@ -62,8 +61,7 @@ pub struct ConcurrentBlobUploader<BS> {
 }
 
 impl<BS> ConcurrentBlobUploader<BS>
-where
-    BS: BlobService + Clone + 'static,
+where BS: BlobService + Clone + 'static
 {
     /// Creates a new concurrent blob uploader which uploads blobs to the provided
     /// blob service.
@@ -80,15 +78,8 @@ where
     /// This will read the entirety of the provided reader unless an error occurs, even if blobs
     /// are uploaded in the background..
     #[instrument(skip_all, fields(nar.path=%path, blob.size=expected_size), err, ret(level = Level::TRACE, Display))]
-    pub async fn upload<R>(
-        &mut self,
-        path: &Path,
-        expected_size: u64,
-        mut r: R,
-    ) -> Result<B3Digest, Error>
-    where
-        R: AsyncRead + Unpin,
-    {
+    pub async fn upload<R>(&mut self, path: &Path, expected_size: u64, mut r: R) -> Result<B3Digest, Error>
+    where R: AsyncRead + Unpin {
         if expected_size < CONCURRENT_BLOB_UPLOAD_THRESHOLD as u64 {
             let mut buffer = Vec::with_capacity(expected_size as usize);
             let mut hasher = blake3::Hasher::new();
@@ -104,9 +95,7 @@ where
                 .acquire_many_owned(expected_size as u32)
                 .await
                 .unwrap();
-            let size = tokio::io::copy(&mut reader, &mut buffer)
-                .await
-                .map_err(|e| Error::BlobRead(path.into(), e))?;
+            let size = tokio::io::copy(&mut reader, &mut buffer).await.map_err(|e| Error::BlobRead(path.into(), e))?;
             let digest: B3Digest = hasher.finalize().as_bytes().into();
 
             if size != expected_size {
@@ -123,17 +112,12 @@ where
                 let r = Cursor::new(buffer);
                 async move {
                     // We know the blob digest already, check it exists before sending it.
-                    if blob_service
-                        .has(&digest)
-                        .await
-                        .map_err(|e| Error::BlobCheck(path.clone(), e))?
-                    {
+                    if blob_service.has(&digest).await.map_err(|e| Error::BlobCheck(path.clone(), e))? {
                         drop(permit);
                         return Ok(());
                     }
 
-                    let uploaded_digest =
-                        upload_blob(&blob_service, &path, expected_size, r).await?;
+                    let uploaded_digest = upload_blob(&blob_service, &path, expected_size, r).await?;
 
                     assert_eq!(uploaded_digest, digest, "Snix bug: blob digest mismatch");
 
@@ -160,26 +144,16 @@ where
     }
 }
 
-async fn upload_blob<BS, R>(
-    blob_service: &BS,
-    path: &Path,
-    expected_size: u64,
-    mut r: R,
-) -> Result<B3Digest, Error>
+async fn upload_blob<BS, R>(blob_service: &BS, path: &Path, expected_size: u64, mut r: R) -> Result<B3Digest, Error>
 where
     BS: BlobService,
     R: AsyncRead + Unpin,
 {
     let mut writer = blob_service.open_write().await;
 
-    let size = tokio::io::copy(&mut r, &mut writer)
-        .await
-        .map_err(|e| Error::BlobRead(path.into(), e))?;
+    let size = tokio::io::copy(&mut r, &mut writer).await.map_err(|e| Error::BlobRead(path.into(), e))?;
 
-    let digest = writer
-        .close()
-        .await
-        .map_err(|e| Error::BlobFinalize(path.into(), e))?;
+    let digest = writer.close().await.map_err(|e| Error::BlobFinalize(path.into(), e))?;
 
     if size != expected_size {
         return Err(Error::UnexpectedSize {

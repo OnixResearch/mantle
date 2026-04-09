@@ -1,16 +1,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE-BSD-3-Clause file.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::fs::File;
-use std::io::{self, Read, Seek};
-use std::os::fd::{AsFd, BorrowedFd};
-use std::os::unix::io::{AsRawFd, RawFd};
-use std::sync::{Arc, Mutex, RwLock, Weak};
+use std::io::Read;
+use std::io::Seek;
+use std::io::{self};
+use std::os::fd::AsFd;
+use std::os::fd::BorrowedFd;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::RawFd;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
+use std::sync::Weak;
 
 use super::statx::statx;
-use super::util::{einval, is_safe_inode};
+use super::util::einval;
+use super::util::is_safe_inode;
 
 const MOUNT_INFO_FILE: &str = "/proc/self/mountinfo";
 
@@ -31,11 +40,7 @@ impl AsFd for MountFd {
 
 impl Drop for MountFd {
     fn drop(&mut self) {
-        debug!(
-            "Dropping MountFd: mount_id={}, mount_fd={}",
-            self.mount_id,
-            self.file.as_raw_fd(),
-        );
+        debug!("Dropping MountFd: mount_id={}, mount_fd={}", self.mount_id, self.file.as_raw_fd(),);
 
         // If `self.map.upgrade()` fails, then the `MountFds` structure was dropped while there was
         // still an `Arc<MountFd>` alive.  In this case, we don't need to remove it from the map,
@@ -92,9 +97,7 @@ impl MountFds {
     }
 
     pub fn get<F>(&self, mount_id: MountId, reopen_fd: F) -> MPRResult<Arc<MountFd>>
-    where
-        F: FnOnce(RawFd, libc::c_int, u32) -> io::Result<File>,
-    {
+    where F: FnOnce(RawFd, libc::c_int, u32) -> io::Result<File> {
         let existing_mount_fd = self
             .map
             // The `else` branch below (where `existing_mount_fd` matches `None`) takes a write lock
@@ -123,8 +126,7 @@ impl MountFds {
 
             // Clone `mount_point` so we can still use it in error messages
             let c_mount_point = CString::new(mount_point.clone()).map_err(|e| {
-                self.error_for(mount_id, e)
-                    .prefix(format!("Failed to convert \"{mount_point}\" to a CString"))
+                self.error_for(mount_id, e).prefix(format!("Failed to convert \"{mount_point}\" to a CString"))
             })?;
 
             let mount_point_fd = unsafe { libc::open(c_mount_point.as_ptr(), libc::O_PATH) };
@@ -142,22 +144,16 @@ impl MountFds {
             if !is_safe_inode(file_type) {
                 return Err(self
                     .error_for(mount_id, io::Error::from_raw_os_error(libc::EIO))
-                    .set_desc(format!(
-                        "Mount point \"{mount_point}\" is not a regular file or directory"
-                    )));
+                    .set_desc(format!("Mount point \"{mount_point}\" is not a regular file or directory")));
             }
 
             // Now that we know that this is a regular file or directory, really open it
-            let file = reopen_fd(
-                mount_point_fd.as_raw_fd(),
-                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-                st_mode,
-            )
-            .map_err(|e| {
-                self.error_for(mount_id, e).prefix(format!(
-                    "Failed to reopen mount point \"{mount_point}\" for reading"
-                ))
-            })?;
+            let file =
+                reopen_fd(mount_point_fd.as_raw_fd(), libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC, st_mode)
+                    .map_err(|e| {
+                        self.error_for(mount_id, e)
+                            .prefix(format!("Failed to reopen mount point \"{mount_point}\" for reading"))
+                    })?;
 
             let mut mount_fds_locked = self.map.write().unwrap();
 
@@ -170,11 +166,7 @@ impl MountFds {
                 // `mount_fds.map` -- use that entry (`file` will be dropped).
                 mount_fd
             } else {
-                debug!(
-                    "Creating MountFd: mount_id={}, mount_fd={}",
-                    mount_id,
-                    file.as_raw_fd(),
-                );
+                debug!("Creating MountFd: mount_id={}, mount_fd={}", mount_id, file.as_raw_fd(),);
                 let mount_fd = Arc::new(MountFd {
                     file,
                     mount_id,
@@ -195,18 +187,14 @@ impl MountFds {
         mount_point_fd: &impl AsRawFd,
         mount_point: &str,
     ) -> MPRResult<libc::mode_t> {
-        let stx = statx(mount_point_fd, None).map_err(|e| {
-            self.error_for(mount_id, e)
-                .prefix(format!("Failed to stat mount point \"{mount_point}\""))
-        })?;
+        let stx = statx(mount_point_fd, None)
+            .map_err(|e| self.error_for(mount_id, e).prefix(format!("Failed to stat mount point \"{mount_point}\"")))?;
 
         if stx.mnt_id != mount_id {
-            return Err(self
-                .error_for(mount_id, io::Error::from_raw_os_error(libc::EIO))
-                .set_desc(format!(
-                    "Mount point's ({}) mount ID ({}) does not match expected value ({})",
-                    mount_point, stx.mnt_id, mount_id
-                )));
+            return Err(self.error_for(mount_id, io::Error::from_raw_os_error(libc::EIO)).set_desc(format!(
+                "Mount point's ({}) mount ID ({}) does not match expected value ({})",
+                mount_point, stx.mnt_id, mount_id
+            )));
         }
 
         Ok(stx.st.st_mode)
@@ -218,14 +206,12 @@ impl MountFds {
             let mountinfo_file = &mut *self.mount_info.lock().unwrap();
 
             mountinfo_file.rewind().map_err(|e| {
-                self.error_for_nolookup(mount_id, e)
-                    .prefix("Failed to access /proc/self/mountinfo".into())
+                self.error_for_nolookup(mount_id, e).prefix("Failed to access /proc/self/mountinfo".into())
             })?;
 
             let mut mountinfo = String::new();
             mountinfo_file.read_to_string(&mut mountinfo).map_err(|e| {
-                self.error_for_nolookup(mount_id, e)
-                    .prefix("Failed to read /proc/self/mountinfo".into())
+                self.error_for_nolookup(mount_id, e).prefix("Failed to read /proc/self/mountinfo".into())
             })?;
 
             mountinfo
@@ -271,11 +257,7 @@ impl MountFds {
     /// (Called `..._nolookup`, because in contrast to `MountFds::error_for()`, this method will
     /// not try to look up the respective mount root path, and so is safe to call when such a
     /// lookup would be unwise.)
-    fn error_for_nolookup<E: ToString + Into<io::Error>>(
-        &self,
-        mount_id: MountId,
-        err: E,
-    ) -> MPRError {
+    fn error_for_nolookup<E: ToString + Into<io::Error>>(&self, mount_id: MountId, err: E) -> MPRError {
         let err = MPRError::from(err).set_mount_id(mount_id);
 
         if self.error_logged.read().unwrap().contains(&mount_id) {
@@ -308,17 +290,17 @@ impl MountFds {
 }
 
 /**
- * Error object (to be used as `Result<T, MPRError>`) for mount-point-related errors (hence MPR).
- * Includes a description (that is auto-generated from the `io::Error` at first), which can be
- * overridden with `MPRError::set_desc()`, or given a prefix with `MPRError::prefix()`.
+ * Error object (to be used as `Result<T, MPRError>`) for mount-point-related errors (hence
+ * MPR). Includes a description (that is auto-generated from the `io::Error` at first), which
+ * can be overridden with `MPRError::set_desc()`, or given a prefix with `MPRError::prefix()`.
  *
  * The full description can be retrieved through the `Display` trait implementation (or the
  * auto-derived `ToString`).
  *
- * `MPRError` objects should generally be logged at some point, because they may indicate an error
- * in the user's configuration or a bug in virtiofsd.  However, we only want to log them once per
- * filesystem, and so they can be silenced (setting `silent` to true if we know that we have
- * already logged an error for the respective filesystem) and then should not be logged.
+ * `MPRError` objects should generally be logged at some point, because they may indicate an
+ * error in the user's configuration or a bug in virtiofsd.  However, we only want to log them
+ * once per filesystem, and so they can be silenced (setting `silent` to true if we know that we
+ * have already logged an error for the respective filesystem) and then should not be logged.
  *
  * Naturally, a "mount-point-related" error should be associated with some mount point, which is
  * reflected in `fs_mount_id` and `fs_mount_root`.  Setting these values will improve the error
@@ -326,12 +308,12 @@ impl MountFds {
  * string.
  *
  * To achieve this association, `MPRError` objects should be created through
- * `MountFds::error_for()`, which obtains the mount root path for the given mount ID, and will thus
- * try to not only set `fs_mount_id`, but `fs_mount_root` also.  `MountFds::error_for()` will also
- * take care to set `silent` as appropriate.
+ * `MountFds::error_for()`, which obtains the mount root path for the given mount ID, and will
+ * thus try to not only set `fs_mount_id`, but `fs_mount_root` also.  `MountFds::error_for()`
+ * will also take care to set `silent` as appropriate.
  *
- * (Sometimes, though, we know an error is associated with a mount point, but we do not know with
- * which one.  That is why the `fs_mount_id` field is optional.)
+ * (Sometimes, though, we know an error is associated with a mount point, but we do not know
+ * with which one.  That is why the `fs_mount_id` field is optional.)
  */
 #[derive(Debug)]
 pub struct MPRError {
@@ -420,17 +402,11 @@ impl std::fmt::Display for MPRError {
 
             (Some(id), None) => write!(f, "Filesystem with mount ID {}: {}", id, self.description),
 
-            (None, Some(root)) => write!(
-                f,
-                "Filesystem mounted on \"{}\": {}",
-                root, self.description
-            ),
+            (None, Some(root)) => write!(f, "Filesystem mounted on \"{}\": {}", root, self.description),
 
-            (Some(id), Some(root)) => write!(
-                f,
-                "Filesystem mounted on \"{}\" (mount ID: {}): {}",
-                root, id, self.description
-            ),
+            (Some(id), Some(root)) => {
+                write!(f, "Filesystem mounted on \"{}\" (mount ID: {}): {}", root, id, self.description)
+            }
         }
     }
 }
@@ -451,16 +427,12 @@ mod tests {
         let handle = FileHandle::from_name_at(&dir, &filename).unwrap().unwrap();
 
         // Ensure that `MountFds::get()` works for new entry.
-        let fd1 = mount_fds
-            .get(handle.mnt_id, |_fd, _flags, _mode| File::open(topdir))
-            .unwrap();
+        let fd1 = mount_fds.get(handle.mnt_id, |_fd, _flags, _mode| File::open(topdir)).unwrap();
         assert_eq!(Arc::strong_count(&fd1), 1);
         assert_eq!(mount_fds.map.read().unwrap().len(), 1);
 
         // Ensure that `MountFds::get()` works for existing entry.
-        let fd2 = mount_fds
-            .get(handle.mnt_id, |_fd, _flags, _mode| File::open(topdir))
-            .unwrap();
+        let fd2 = mount_fds.get(handle.mnt_id, |_fd, _flags, _mode| File::open(topdir)).unwrap();
         assert_eq!(Arc::strong_count(&fd2), 2);
         assert_eq!(mount_fds.map.read().unwrap().len(), 1);
 

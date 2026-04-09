@@ -3,28 +3,30 @@
 //! construct or own individual services.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
-use snix_castore::blobservice::{BlobService, ObjectStoreBlobService};
-use snix_castore::directoryservice::{
-    DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig,
-};
 use snix_castore::Node;
-use snix_store::pathinfoservice::{
-    NixHTTPPathInfoService, NixHTTPPathInfoServiceConfig,
-    PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig,
-};
-use tracing::info;
-
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::ObjectStoreBlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_store::path_info::PathInfo;
+use snix_store::pathinfoservice::NixHTTPPathInfoService;
+use snix_store::pathinfoservice::NixHTTPPathInfoServiceConfig;
+use snix_store::pathinfoservice::PathInfoService;
+use snix_store::pathinfoservice::RedbPathInfoService;
+use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+use tracing::info;
 use tracing::info as trace_info;
 
 use crate::CaMappings;
-use crate::export::export_castore_to_disk;
 use crate::Error;
+use crate::export::export_castore_to_disk;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -83,9 +85,7 @@ impl StoreHandle {
     pub async fn open(config: StoreConfig) -> Result<Self, Error> {
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
-            .map_err(|e| Error::Store(format!(
-                "creating state dir {}: {e}", state_dir.display()
-            )))?;
+            .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
 
         let blob_service = open_blob_service(state_dir)?;
         let directory_service = open_directory_service()?;
@@ -93,11 +93,7 @@ impl StoreHandle {
 
         let remote_pathinfo = match config.remote_cache_url {
             Some(ref url_str) => {
-                match build_remote_pathinfo(
-                    url_str,
-                    blob_service.clone(),
-                    directory_service.clone(),
-                ) {
+                match build_remote_pathinfo(url_str, blob_service.clone(), directory_service.clone()) {
                     Ok(svc) => {
                         info!(url = %url_str, "binary cache substitution enabled");
                         Some(svc)
@@ -115,8 +111,7 @@ impl StoreHandle {
             None => None,
         };
 
-        let output_dir_str = config.output_dir.to_str()
-            .unwrap_or(&config.store_dir).to_string();
+        let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir).to_string();
         let ca_mappings = CaMappings::load(&config.state_dir);
 
         // Warn if CA mappings contain paths from a different store prefix.
@@ -156,8 +151,12 @@ impl StoreHandle {
         output_dir_str: String,
     ) -> Self {
         Self::from_services_with_store_dir(
-            blob_service, directory_service, pathinfo_service,
-            remote_pathinfo, state_dir, output_dir_str,
+            blob_service,
+            directory_service,
+            pathinfo_service,
+            remote_pathinfo,
+            state_dir,
+            output_dir_str,
             nix_compat::store_path::STORE_DIR.to_string(),
         )
     }
@@ -224,14 +223,14 @@ impl StoreHandle {
     pub async fn castore_has_content(&self, node: &Node) -> Result<bool, Error> {
         match node {
             Node::File { digest, .. } => {
-                self.blob_service.has(digest).await
-                    .map_err(|e| Error::BlobService(format!("existence check: {e}")))
+                self.blob_service.has(digest).await.map_err(|e| Error::BlobService(format!("existence check: {e}")))
             }
-            Node::Directory { digest, .. } => {
-                self.directory_service.get(digest).await
-                    .map(|opt| opt.is_some())
-                    .map_err(|e| Error::DirectoryService(format!("existence check: {e}")))
-            }
+            Node::Directory { digest, .. } => self
+                .directory_service
+                .get(digest)
+                .await
+                .map(|opt| opt.is_some())
+                .map_err(|e| Error::DirectoryService(format!("existence check: {e}"))),
             Node::Symlink { .. } => Ok(true),
         }
     }
@@ -251,22 +250,21 @@ impl StoreHandle {
                 digest.clone()
             }
             other => {
-                return Err(Error::BlobService(format!(
-                    "read_blob called on non-file node: {other:?}"
-                )));
+                return Err(Error::BlobService(format!("read_blob called on non-file node: {other:?}")));
             }
         };
 
-        let mut reader = self.blob_service.open_read(&digest).await
+        let mut reader = self
+            .blob_service
+            .open_read(&digest)
+            .await
             .map_err(|e| Error::BlobService(format!("opening blob: {e}")))?
-            .ok_or_else(|| Error::BlobService(format!(
-                "blob not found: {}",
-                data_encoding::HEXLOWER.encode(digest.as_slice())
-            )))?;
+            .ok_or_else(|| {
+                Error::BlobService(format!("blob not found: {}", data_encoding::HEXLOWER.encode(digest.as_slice())))
+            })?;
 
         let mut buf = Vec::new();
-        reader.read_to_end(&mut buf).await
-            .map_err(|e| Error::BlobService(format!("reading blob: {e}")))?;
+        reader.read_to_end(&mut buf).await.map_err(|e| Error::BlobService(format!("reading blob: {e}")))?;
 
         Ok(buf)
     }
@@ -302,32 +300,24 @@ impl StoreHandle {
         for (output_name, output) in &derivation.outputs {
             let output_path: StorePath<String> = match output.path.as_ref() {
                 Some(p) => p.clone(),
-                None => {
-                    match self.ca_mappings.get(&drv_abs, output_name) {
-                        Some(ca_abs) => {
-                            StorePath::from_absolute_path(ca_abs.as_bytes())
-                                .map_err(|_| Error::Cache(format!(
-                                    "invalid CA mapping path: {ca_abs}"
-                                )))?
-                        }
-                        None => return Ok(None),
-                    }
-                }
+                None => match self.ca_mappings.get(&drv_abs, output_name) {
+                    Some(ca_abs) => StorePath::from_absolute_path(ca_abs.as_bytes())
+                        .map_err(|_| Error::Cache(format!("invalid CA mapping path: {ca_abs}")))?,
+                    None => return Ok(None),
+                },
             };
 
             let digest = *output_path.digest();
 
-            let stored = self.pathinfo_service.get(digest).await
-                .map_err(|e| Error::Cache(format!("PathInfo lookup: {e}")))?;
+            let stored =
+                self.pathinfo_service.get(digest).await.map_err(|e| Error::Cache(format!("PathInfo lookup: {e}")))?;
 
             match stored {
                 Some(path_info) => {
                     if self.castore_has_content(&path_info.node).await? {
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
-                        self.built_outputs.insert(
-                            output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                            path_info.clone(),
-                        );
+                        self.built_outputs
+                            .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
                         infos.insert(output_name.clone(), path_info);
                     } else {
                         tracing::warn!(
@@ -339,10 +329,7 @@ impl StoreHandle {
                 }
                 None => {
                     if !is_fod {
-                        if let Some(remote_pi) = self
-                            .try_substitute_remote(digest, &output_path, output_name)
-                            .await?
-                        {
+                        if let Some(remote_pi) = self.try_substitute_remote(digest, &output_path, output_name).await? {
                             infos.insert(output_name.clone(), remote_pi);
                             continue;
                         }
@@ -381,16 +368,11 @@ impl StoreHandle {
                 self.pathinfo_service
                     .put(remote_pi.clone())
                     .await
-                    .map_err(|e| Error::Cache(format!(
-                        "persisting substituted PathInfo: {e}"
-                    )))?;
+                    .map_err(|e| Error::Cache(format!("persisting substituted PathInfo: {e}")))?;
 
-                self.output_nodes
-                    .insert(output_path.clone(), remote_pi.node.clone());
-                self.built_outputs.insert(
-                    output_path.to_absolute_path_with_prefix(&self.output_dir_str),
-                    remote_pi.clone(),
-                );
+                self.output_nodes.insert(output_path.clone(), remote_pi.node.clone());
+                self.built_outputs
+                    .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), remote_pi.clone());
 
                 Ok(Some(remote_pi))
             }
@@ -434,15 +416,12 @@ impl StoreHandle {
         if path_info.store_path != *output_path {
             return Err(Error::Store(format!(
                 "PathInfo store path mismatch: expected {}, got {}",
-                output_path,
-                path_info.store_path,
+                output_path, path_info.store_path,
             )));
         }
 
         if path_info.signatures.is_empty() {
-            return Err(Error::Store(format!(
-                "refusing to persist unsigned PathInfo for {output_path}"
-            )));
+            return Err(Error::Store(format!("refusing to persist unsigned PathInfo for {output_path}")));
         }
 
         self.pathinfo_service
@@ -452,17 +431,12 @@ impl StoreHandle {
 
         let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
         self.built_outputs.insert(abs_path.clone(), path_info.clone());
-        self.output_nodes
-            .insert(output_path.clone(), final_node.clone());
+        self.output_nodes.insert(output_path.clone(), final_node.clone());
 
         if is_root && !PathBuf::from(&abs_path).exists() {
-            match export_castore_to_disk(
-                &final_node, &abs_path,
-                &self.blob_service, &self.directory_service,
-            ).await {
+            match export_castore_to_disk(&final_node, &abs_path, &self.blob_service, &self.directory_service).await {
                 Ok(()) => {}
-                Err(e) if e.contains("Read-only file system")
-                       || e.contains("Permission denied") => {
+                Err(e) if e.contains("Read-only file system") || e.contains("Permission denied") => {
                     tracing::warn!(
                         path = %abs_path,
                         "could not export output to disk (read-only store), \
@@ -470,9 +444,7 @@ impl StoreHandle {
                     );
                 }
                 Err(e) => {
-                    return Err(Error::Export(format!(
-                        "exporting output {abs_path} to disk: {e}"
-                    )));
+                    return Err(Error::Export(format!("exporting output {abs_path} to disk: {e}")));
                 }
             }
         }
@@ -483,49 +455,35 @@ impl StoreHandle {
 
 // -- Service construction (moved from main.rs) --
 
-fn open_blob_service(
-    state_dir: &Path,
-) -> Result<Arc<dyn BlobService>, Error> {
+fn open_blob_service(state_dir: &Path) -> Result<Arc<dyn BlobService>, Error> {
     let blob_dir = state_dir.join("blobs");
     std::fs::create_dir_all(&blob_dir)
-        .map_err(|e| Error::BlobService(format!(
-            "creating blob dir {}: {e}", blob_dir.display()
-        )))?;
+        .map_err(|e| Error::BlobService(format!("creating blob dir {}: {e}", blob_dir.display())))?;
 
     let svc = ObjectStoreBlobService::new_local(&blob_dir)
-        .map_err(|e| Error::BlobService(format!(
-            "opening at {}: {e}", blob_dir.display()
-        )))?;
+        .map_err(|e| Error::BlobService(format!("opening at {}: {e}", blob_dir.display())))?;
 
     info!(path = %blob_dir.display(), "blob service opened");
     Ok(Arc::new(svc))
 }
 
 fn open_directory_service() -> Result<Arc<dyn DirectoryService>, Error> {
-    let svc = RedbDirectoryService::new_temporary(
-        "crunch".to_string(),
-        RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        },
-    )
+    let svc = RedbDirectoryService::new_temporary("crunch".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        read_only: false,
+        cache_size: None,
+    })
     .map_err(|e| Error::DirectoryService(format!("{e}")))?;
     Ok(Arc::new(svc))
 }
 
-async fn open_pathinfo_service(
-    state_dir: &Path,
-) -> Result<Arc<dyn PathInfoService>, Error> {
+async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoService>, Error> {
     let db_path = state_dir.join("pathinfo.redb");
-    match RedbPathInfoService::new(
-        "crunch".to_string(),
-        RedbPathInfoServiceConfig {
-            path: Some(db_path.clone()),
-            read_only: false,
-            cache_size: None,
-        },
-    )
+    match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
+        path: Some(db_path.clone()),
+        read_only: false,
+        cache_size: None,
+    })
     .await
     {
         Ok(svc) => {
@@ -538,11 +496,8 @@ async fn open_pathinfo_service(
                 err = %e,
                 "failed to open PathInfo database, using in-memory fallback"
             );
-            let svc = RedbPathInfoService::new_temporary(
-                "crunch".to_string(),
-                RedbPathInfoServiceConfig::default(),
-            )
-            .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
+            let svc = RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig::default())
+                .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
             Ok(Arc::new(svc))
         }
     }
@@ -555,51 +510,40 @@ fn build_remote_pathinfo(
 ) -> Result<Arc<dyn PathInfoService>, Error> {
     // NixHTTPPathInfoServiceConfig::try_from expects "nix+https://..." scheme.
     let nix_url_str = format!("nix+{url_str}");
-    let nix_url: url::Url = nix_url_str.parse()
-        .map_err(|e| Error::PathInfoService(format!(
-            "invalid substituter URL '{url_str}': {e}"
-        )))?;
+    let nix_url: url::Url = nix_url_str
+        .parse()
+        .map_err(|e| Error::PathInfoService(format!("invalid substituter URL '{url_str}': {e}")))?;
 
-    let config: NixHTTPPathInfoServiceConfig = nix_url.try_into()
-        .map_err(|e| Error::PathInfoService(format!(
-            "remote cache config for '{url_str}': {e}"
-        )))?;
+    let config: NixHTTPPathInfoServiceConfig = nix_url
+        .try_into()
+        .map_err(|e| Error::PathInfoService(format!("remote cache config for '{url_str}': {e}")))?;
 
-    let svc = NixHTTPPathInfoService::try_build(
-        "crunch-remote".to_string(),
-        config,
-        blob_service,
-        directory_service,
-    ).map_err(|e| Error::PathInfoService(format!(
-        "building remote cache client: {e}"
-    )))?;
+    let svc = NixHTTPPathInfoService::try_build("crunch-remote".to_string(), config, blob_service, directory_service)
+        .map_err(|e| Error::PathInfoService(format!("building remote cache client: {e}")))?;
 
     Ok(Arc::new(svc))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::num::NonZeroUsize;
 
     use nix_compat::narinfo::SigningKey;
-    use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::SymlinkTarget;
+    use snix_castore::blobservice::MemoryBlobService;
     use snix_store::pathinfoservice::LruPathInfoService;
+
+    use super::*;
 
     fn test_handle(state_dir: &Path) -> StoreHandle {
         let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
         let directory_service = Arc::new(
-            RedbDirectoryService::new_temporary(
-                "handle-test".to_string(),
-                RedbDirectoryServiceConfig::default(),
-            )
-            .unwrap(),
+            RedbDirectoryService::new_temporary("handle-test".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap(),
         ) as Arc<dyn DirectoryService>;
-        let pathinfo_service = Arc::new(LruPathInfoService::with_capacity(
-            "handle-test".to_string(),
-            NonZeroUsize::new(32).unwrap(),
-        )) as Arc<dyn PathInfoService>;
+        let pathinfo_service =
+            Arc::new(LruPathInfoService::with_capacity("handle-test".to_string(), NonZeroUsize::new(32).unwrap()))
+                as Arc<dyn PathInfoService>;
 
         StoreHandle::from_services_with_store_dir(
             blob_service,
@@ -617,10 +561,8 @@ mod tests {
     }
 
     fn test_signature() -> nix_compat::narinfo::Signature<String> {
-        let signing_key = SigningKey::new(
-            "store-test-1".to_string(),
-            ed25519_dalek::SigningKey::from_bytes(&[3u8; 32]),
-        );
+        let signing_key =
+            SigningKey::new("store-test-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[3u8; 32]));
         signing_key.sign(b"signed").to_owned()
     }
 

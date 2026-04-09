@@ -4,7 +4,8 @@
 //! lockfile) against what it actually contains on disk. Pure logic
 //! except for reading the generated file.
 
-use crate::generate::{content_fingerprint, generate_inputs_ncl};
+use crate::generate::content_fingerprint;
+use crate::generate::generate_inputs_ncl;
 use crate::lock::Lockfile;
 
 /// Result of a drift check.
@@ -54,28 +55,26 @@ pub fn check_drift(lock: &Lockfile, actual_content: Option<&str>) -> DriftStatus
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::lock::*;
     use crate::manifest::HashAlgo;
     use crate::version::SchemaVersion;
-    use std::collections::BTreeMap;
 
     fn simple_lock() -> Lockfile {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "foo".to_string(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/foo".to_string(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-abc=".to_string(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        inputs.insert("foo".to_string(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/foo".to_string(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-abc=".to_string(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+        });
         Lockfile {
             version: SchemaVersion::CURRENT,
             inputs,

@@ -10,11 +10,21 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::{
-    Context, DirEntry, Entry, FileLock, GetxattrReply, IoctlData, ListxattrReply, ZeroCopyReader,
-    ZeroCopyWriter,
-};
-use crate::abi::fuse_abi::{stat64, statvfs64, CreateIn, FsOptions, OpenOptions, SetattrValid};
+use super::Context;
+use super::DirEntry;
+use super::Entry;
+use super::FileLock;
+use super::GetxattrReply;
+use super::IoctlData;
+use super::ListxattrReply;
+use super::ZeroCopyReader;
+use super::ZeroCopyWriter;
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::statvfs64;
+use crate::abi::fuse_abi::CreateIn;
+use crate::abi::fuse_abi::FsOptions;
+use crate::abi::fuse_abi::OpenOptions;
+use crate::abi::fuse_abi::SetattrValid;
 #[cfg(feature = "virtiofs")]
 pub use crate::abi::virtio_fs::RemovemappingOne;
 #[cfg(feature = "virtiofs")]
@@ -157,13 +167,7 @@ pub trait FileSystem {
     ///
     /// If this call is successful then the lookup count of the `Inode` associated with the returned
     /// `Entry` must be increased by 1.
-    fn symlink(
-        &self,
-        ctx: &Context,
-        linkname: &CStr,
-        parent: Self::Inode,
-        name: &CStr,
-    ) -> io::Result<Entry> {
+    fn symlink(&self, ctx: &Context, linkname: &CStr, parent: Self::Inode, name: &CStr) -> io::Result<Entry> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -198,14 +202,7 @@ pub trait FileSystem {
     ///
     /// If this call is successful then the lookup count of the `Inode` associated with the returned
     /// `Entry` must be increased by 1.
-    fn mkdir(
-        &self,
-        ctx: &Context,
-        parent: Self::Inode,
-        name: &CStr,
-        mode: u32,
-        umask: u32,
-    ) -> io::Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: Self::Inode, name: &CStr, mode: u32, umask: u32) -> io::Result<Entry> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -257,13 +254,7 @@ pub trait FileSystem {
     ///
     /// If this call is successful then the lookup count of the `Inode` associated with the returned
     /// `Entry` must be increased by 1.
-    fn link(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        newparent: Self::Inode,
-        newname: &CStr,
-    ) -> io::Result<Entry> {
+    fn link(&self, ctx: &Context, inode: Self::Inode, newparent: Self::Inode, newname: &CStr) -> io::Result<Entry> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -431,13 +422,7 @@ pub trait FileSystem {
     /// If this method returns an `ENOSYS` error then the kernel will treat it as success and all
     /// subsequent calls to `flush` will be handled by the kernel without being forwarded to the
     /// file system.
-    fn flush(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        handle: Self::Handle,
-        lock_owner: u64,
-    ) -> io::Result<()> {
+    fn flush(&self, ctx: &Context, inode: Self::Inode, handle: Self::Handle, lock_owner: u64) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -454,13 +439,7 @@ pub trait FileSystem {
     /// If this method returns an `ENOSYS` error then the kernel will treat it as success and all
     /// subsequent calls to `fsync` will be handled by the kernel without being forwarded to the
     /// file system.
-    fn fsync(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        datasync: bool,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn fsync(&self, ctx: &Context, inode: Self::Inode, datasync: bool, handle: Self::Handle) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -540,14 +519,7 @@ pub trait FileSystem {
     ///
     /// Valid values for flags are the same as those accepted by the `setxattr(2)` system call and
     /// have the same behavior.
-    fn setxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> io::Result<()> {
+    fn setxattr(&self, ctx: &Context, inode: Self::Inode, name: &CStr, value: &[u8], flags: u32) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -562,13 +534,7 @@ pub trait FileSystem {
     /// If this method fails with an `ENOSYS` error, then the kernel will treat that as a permanent
     /// failure. The kernel will return `EOPNOTSUPP` for all future calls to `getxattr` without
     /// forwarding them to the file system.
-    fn getxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        name: &CStr,
-        size: u32,
-    ) -> io::Result<GetxattrReply> {
+    fn getxattr(&self, ctx: &Context, inode: Self::Inode, name: &CStr, size: u32) -> io::Result<GetxattrReply> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -584,12 +550,7 @@ pub trait FileSystem {
     /// If this method fails with an `ENOSYS` error, then the kernel will treat that as a permanent
     /// failure. The kernel will return `EOPNOTSUPP` for all future calls to `listxattr` without
     /// forwarding them to the file system.
-    fn listxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        size: u32,
-    ) -> io::Result<ListxattrReply> {
+    fn listxattr(&self, ctx: &Context, inode: Self::Inode, size: u32) -> io::Result<ListxattrReply> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -652,7 +613,6 @@ pub trait FileSystem {
     ///
     /// The lookup count for `Inode`s associated with the returned directory entries is **NOT**
     /// affected by this method.
-    ///
     // TODO(chirantan): Change method signature to return `Iterator<DirEntry>` rather than using an
     // `FnMut` for adding entries.
     fn readdir(
@@ -716,13 +676,7 @@ pub trait FileSystem {
     /// If this method returns an `ENOSYS` error then the kernel will treat it as success and all
     /// subsequent calls to `fsyncdir` will be handled by the kernel without being forwarded to the
     /// file system.
-    fn fsyncdir(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        datasync: bool,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn fsyncdir(&self, ctx: &Context, inode: Self::Inode, datasync: bool, handle: Self::Handle) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -736,13 +690,7 @@ pub trait FileSystem {
     /// undefined.
     ///
     /// `flags` contains used the flags used to open the directory in `opendir`.
-    fn releasedir(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        flags: u32,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn releasedir(&self, ctx: &Context, inode: Self::Inode, flags: u32, handle: Self::Handle) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -870,13 +818,7 @@ pub trait FileSystem {
     }
 
     /// Query a file's block mapping info
-    fn bmap(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        block: u64,
-        blocksize: u32,
-    ) -> io::Result<u64> {
+    fn bmap(&self, ctx: &Context, inode: Self::Inode, block: u64, blocksize: u32) -> io::Result<u64> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
@@ -952,13 +894,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         self.deref().readlink(ctx, inode)
     }
 
-    fn symlink(
-        &self,
-        ctx: &Context,
-        linkname: &CStr,
-        parent: Self::Inode,
-        name: &CStr,
-    ) -> io::Result<Entry> {
+    fn symlink(&self, ctx: &Context, linkname: &CStr, parent: Self::Inode, name: &CStr) -> io::Result<Entry> {
         self.deref().symlink(ctx, linkname, parent, name)
     }
 
@@ -974,14 +910,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         self.deref().mknod(ctx, inode, name, mode, rdev, umask)
     }
 
-    fn mkdir(
-        &self,
-        ctx: &Context,
-        parent: Self::Inode,
-        name: &CStr,
-        mode: u32,
-        umask: u32,
-    ) -> io::Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: Self::Inode, name: &CStr, mode: u32, umask: u32) -> io::Result<Entry> {
         self.deref().mkdir(ctx, parent, name, mode, umask)
     }
 
@@ -1002,17 +931,10 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         newname: &CStr,
         flags: u32,
     ) -> io::Result<()> {
-        self.deref()
-            .rename(ctx, olddir, oldname, newdir, newname, flags)
+        self.deref().rename(ctx, olddir, oldname, newdir, newname, flags)
     }
 
-    fn link(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        newparent: Self::Inode,
-        newname: &CStr,
-    ) -> io::Result<Entry> {
+    fn link(&self, ctx: &Context, inode: Self::Inode, newparent: Self::Inode, newname: &CStr) -> io::Result<Entry> {
         self.deref().link(ctx, inode, newparent, newname)
     }
 
@@ -1047,8 +969,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         lock_owner: Option<u64>,
         flags: u32,
     ) -> io::Result<usize> {
-        self.deref()
-            .read(ctx, inode, handle, w, size, offset, lock_owner, flags)
+        self.deref().read(ctx, inode, handle, w, size, offset, lock_owner, flags)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1065,37 +986,15 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         flags: u32,
         fuse_flags: u32,
     ) -> io::Result<usize> {
-        self.deref().write(
-            ctx,
-            inode,
-            handle,
-            r,
-            size,
-            offset,
-            lock_owner,
-            delayed_write,
-            flags,
-            fuse_flags,
-        )
+        self.deref()
+            .write(ctx, inode, handle, r, size, offset, lock_owner, delayed_write, flags, fuse_flags)
     }
 
-    fn flush(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        handle: Self::Handle,
-        lock_owner: u64,
-    ) -> io::Result<()> {
+    fn flush(&self, ctx: &Context, inode: Self::Inode, handle: Self::Handle, lock_owner: u64) -> io::Result<()> {
         self.deref().flush(ctx, inode, handle, lock_owner)
     }
 
-    fn fsync(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        datasync: bool,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn fsync(&self, ctx: &Context, inode: Self::Inode, datasync: bool, handle: Self::Handle) -> io::Result<()> {
         self.deref().fsync(ctx, inode, datasync, handle)
     }
 
@@ -1108,8 +1007,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         offset: u64,
         length: u64,
     ) -> io::Result<()> {
-        self.deref()
-            .fallocate(ctx, inode, handle, mode, offset, length)
+        self.deref().fallocate(ctx, inode, handle, mode, offset, length)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1123,41 +1021,22 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         flock_release: bool,
         lock_owner: Option<u64>,
     ) -> io::Result<()> {
-        self.deref()
-            .release(ctx, inode, flags, handle, flush, flock_release, lock_owner)
+        self.deref().release(ctx, inode, flags, handle, flush, flock_release, lock_owner)
     }
 
     fn statfs(&self, ctx: &Context, inode: Self::Inode) -> io::Result<statvfs64> {
         self.deref().statfs(ctx, inode)
     }
 
-    fn setxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> io::Result<()> {
+    fn setxattr(&self, ctx: &Context, inode: Self::Inode, name: &CStr, value: &[u8], flags: u32) -> io::Result<()> {
         self.deref().setxattr(ctx, inode, name, value, flags)
     }
 
-    fn getxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        name: &CStr,
-        size: u32,
-    ) -> io::Result<GetxattrReply> {
+    fn getxattr(&self, ctx: &Context, inode: Self::Inode, name: &CStr, size: u32) -> io::Result<GetxattrReply> {
         self.deref().getxattr(ctx, inode, name, size)
     }
 
-    fn listxattr(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        size: u32,
-    ) -> io::Result<ListxattrReply> {
+    fn listxattr(&self, ctx: &Context, inode: Self::Inode, size: u32) -> io::Result<ListxattrReply> {
         self.deref().listxattr(ctx, inode, size)
     }
 
@@ -1183,8 +1062,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         offset: u64,
         add_entry: &mut dyn FnMut(DirEntry) -> io::Result<usize>,
     ) -> io::Result<()> {
-        self.deref()
-            .readdir(ctx, inode, handle, size, offset, add_entry)
+        self.deref().readdir(ctx, inode, handle, size, offset, add_entry)
     }
 
     fn readdirplus(
@@ -1196,27 +1074,14 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         offset: u64,
         add_entry: &mut dyn FnMut(DirEntry, Entry) -> io::Result<usize>,
     ) -> io::Result<()> {
-        self.deref()
-            .readdirplus(ctx, inode, handle, size, offset, add_entry)
+        self.deref().readdirplus(ctx, inode, handle, size, offset, add_entry)
     }
 
-    fn fsyncdir(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        datasync: bool,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn fsyncdir(&self, ctx: &Context, inode: Self::Inode, datasync: bool, handle: Self::Handle) -> io::Result<()> {
         self.deref().fsyncdir(ctx, inode, datasync, handle)
     }
 
-    fn releasedir(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        flags: u32,
-        handle: Self::Handle,
-    ) -> io::Result<()> {
+    fn releasedir(&self, ctx: &Context, inode: Self::Inode, flags: u32, handle: Self::Handle) -> io::Result<()> {
         self.deref().releasedir(ctx, inode, flags, handle)
     }
 
@@ -1233,8 +1098,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         moffset: u64,
         vu_req: &mut dyn FsCacheReqHandler,
     ) -> io::Result<()> {
-        self.deref()
-            .setupmapping(ctx, inode, handle, foffset, len, flags, moffset, vu_req)
+        self.deref().setupmapping(ctx, inode, handle, foffset, len, flags, moffset, vu_req)
     }
 
     #[cfg(feature = "virtiofs")]
@@ -1314,18 +1178,11 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         data: IoctlData,
         out_size: u32,
     ) -> io::Result<IoctlData> {
-        self.deref()
-            .ioctl(ctx, inode, handle, flags, cmd, data, out_size)
+        self.deref().ioctl(ctx, inode, handle, flags, cmd, data, out_size)
     }
 
     /// Query a file's block mapping info
-    fn bmap(
-        &self,
-        ctx: &Context,
-        inode: Self::Inode,
-        block: u64,
-        blocksize: u32,
-    ) -> io::Result<u64> {
+    fn bmap(&self, ctx: &Context, inode: Self::Inode, block: u64, blocksize: u32) -> io::Result<u64> {
         self.deref().bmap(ctx, inode, block, blocksize)
     }
 
@@ -1339,8 +1196,7 @@ impl<FS: FileSystem> FileSystem for Arc<FS> {
         flags: u32,
         events: u32,
     ) -> io::Result<u32> {
-        self.deref()
-            .poll(ctx, inode, handle, khandle, flags, events)
+        self.deref().poll(ctx, inode, handle, khandle, flags, events)
     }
 
     /// Send notify reply.

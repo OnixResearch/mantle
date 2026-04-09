@@ -99,9 +99,10 @@ pub struct Config {
     /// The default is `/`.
     pub root_dir: String,
 
-    /// Whether the file system should support Extended Attributes (xattr). Enabling this feature may
-    /// have a significant impact on performance, especially on write parallelism. This is the result
-    /// of FUSE attempting to remove the special file privileges after each write request.
+    /// Whether the file system should support Extended Attributes (xattr). Enabling this feature
+    /// may have a significant impact on performance, especially on write parallelism. This is
+    /// the result of FUSE attempting to remove the special file privileges after each write
+    /// request.
     ///
     /// The default value for this options is `false`.
     pub xattr: bool,

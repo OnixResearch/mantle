@@ -11,12 +11,17 @@ use std::mem::ManuallyDrop;
 use async_trait::async_trait;
 
 use super::*;
-use crate::abi::fuse_abi::{
-    CreateIn, Opcode, OpenOptions, SetattrValid, FOPEN_IN_KILL_SUIDGID, WRITE_KILL_PRIV,
-};
-use crate::api::filesystem::{
-    AsyncFileSystem, AsyncZeroCopyReader, AsyncZeroCopyWriter, Context, FileSystem,
-};
+use crate::abi::fuse_abi::CreateIn;
+use crate::abi::fuse_abi::Opcode;
+use crate::abi::fuse_abi::OpenOptions;
+use crate::abi::fuse_abi::SetattrValid;
+use crate::abi::fuse_abi::FOPEN_IN_KILL_SUIDGID;
+use crate::abi::fuse_abi::WRITE_KILL_PRIV;
+use crate::api::filesystem::AsyncFileSystem;
+use crate::api::filesystem::AsyncZeroCopyReader;
+use crate::api::filesystem::AsyncZeroCopyWriter;
+use crate::api::filesystem::Context;
+use crate::api::filesystem::FileSystem;
 
 impl<S: BitmapSlice + Send + Sync + 'static> BackendFileSystem for PassthroughFs<S> {
     fn mount(&self) -> io::Result<(Entry, u64)> {
@@ -305,14 +310,8 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
      */
 }
 
-
 impl<S: BitmapSlice + Send + Sync> AsyncFileSystem for PassthroughFs<S> {
-    async fn async_lookup(
-        &self,
-        ctx: &Context,
-        parent: <Self as FileSystem>::Inode,
-        name: &CStr,
-    ) -> io::Result<Entry> {
+    async fn async_lookup(&self, ctx: &Context, parent: <Self as FileSystem>::Inode, name: &CStr) -> io::Result<Entry> {
         unimplemented!()
         /*
         // Don't use is_safe_path_component(), allow "." and ".." for NFS export support

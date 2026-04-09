@@ -1,18 +1,16 @@
-use snix_castore::{
-    blobservice::BlobService, directoryservice::DirectoryService, import::fs::ingest_path,
-};
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
+use nix_compat::store_path::StorePath;
+use nix_compat::store_path::{self};
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::import::fs::ingest_path;
 use tracing::instrument;
 
-use nix_compat::{
-    nixhash::{CAHash, NixHash},
-    store_path::{self, StorePath},
-};
-
-use crate::{
-    nar::NarCalculationService,
-    pathinfoservice::{PathInfo, PathInfoService},
-    proto::nar_info,
-};
+use crate::nar::NarCalculationService;
+use crate::pathinfoservice::PathInfo;
+use crate::pathinfoservice::PathInfoService;
+use crate::proto::nar_info;
 
 impl From<CAHash> for nar_info::Ca {
     fn from(value: CAHash) -> Self {
@@ -54,24 +52,17 @@ where
         .map_err(std::io::Error::other)?;
 
     // Ask for the NAR size and sha256
-    let (nar_size, nar_sha256) = nar_calculation_service
-        .calculate_nar(&root_node)
-        .await
-        .map_err(std::io::Error::other)?;
+    let (nar_size, nar_sha256) =
+        nar_calculation_service.calculate_nar(&root_node).await.map_err(std::io::Error::other)?;
 
     let ca = CAHash::Nar(NixHash::Sha256(nar_sha256));
 
     // Calculate the output path. Will fail if the previously passed name doesn't pass
     // the [nix_compat::store_path::validate_name] check.
     let output_path: StorePath<String> =
-        store_path::build_ca_path(name.as_ref(), &ca, std::iter::empty::<&str>(), false).map_err(
-            |_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("invalid name: {0}", name.as_ref()),
-                )
-            },
-        )?;
+        store_path::build_ca_path(name.as_ref(), &ca, std::iter::empty::<&str>(), false).map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("invalid name: {0}", name.as_ref()))
+        })?;
 
     // Insert a PathInfo. On success, return it back to the caller.
     path_info_service

@@ -1,11 +1,23 @@
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned};
+use proc_macro2::Span;
+use proc_macro2::TokenStream;
+use quote::quote;
+use quote::quote_spanned;
+use syn::DeriveInput;
+use syn::Generics;
+use syn::Path;
+use syn::Type;
 use syn::spanned::Spanned;
-use syn::{DeriveInput, Generics, Path, Type};
 
+use crate::internal::Container;
+use crate::internal::Context;
+use crate::internal::Data;
+use crate::internal::Field;
+use crate::internal::Remote;
+use crate::internal::Style;
+use crate::internal::Variant;
+use crate::internal::attrs;
 use crate::internal::attrs::Default;
 use crate::internal::inputs::RemoteInput;
-use crate::internal::{Container, Context, Data, Field, Remote, Style, Variant, attrs};
 
 pub fn expand_nix_serialize(crate_path: Path, input: &mut DeriveInput) -> syn::Result<TokenStream> {
     let cx = Context::new();
@@ -17,18 +29,10 @@ pub fn expand_nix_serialize(crate_path: Path, input: &mut DeriveInput) -> syn::R
     let body = nix_serialize_body(&cont);
     let crate_path = cont.crate_path();
 
-    Ok(nix_serialize_impl(
-        crate_path,
-        &ty,
-        &cont.original.generics,
-        body,
-    ))
+    Ok(nix_serialize_impl(crate_path, &ty, &cont.original.generics, body))
 }
 
-pub fn expand_nix_serialize_remote(
-    crate_path: Path,
-    input: &RemoteInput,
-) -> syn::Result<TokenStream> {
+pub fn expand_nix_serialize_remote(crate_path: Path, input: &RemoteInput) -> syn::Result<TokenStream> {
     let cx = Context::new();
     let remote = Remote::from_ast(&cx, crate_path, input);
     if let Some(attrs) = remote.as_ref().map(|r| &r.attrs)
@@ -47,12 +51,7 @@ pub fn expand_nix_serialize_remote(
     Ok(nix_serialize_impl(crate_path, remote.ty, &generics, body))
 }
 
-fn nix_serialize_impl(
-    crate_path: &Path,
-    ty: &Type,
-    generics: &Generics,
-    body: TokenStream,
-) -> TokenStream {
+fn nix_serialize_impl(crate_path: &Path, ty: &Type, generics: &Generics, body: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
@@ -70,10 +69,7 @@ fn nix_serialize_impl(
     }
 }
 
-fn nix_serialize_body_into(
-    crate_path: &syn::Path,
-    attrs: &attrs::Container,
-) -> Option<TokenStream> {
+fn nix_serialize_body_into(crate_path: &syn::Path, attrs: &attrs::Container) -> Option<TokenStream> {
     if let Default::Default(span) = &attrs.display {
         Some(nix_serialize_display(span.span()))
     } else if let Default::Path(path) = &attrs.display {
@@ -81,10 +77,7 @@ fn nix_serialize_body_into(
     } else if let Some(type_into) = attrs.type_into.as_ref() {
         Some(nix_serialize_into(type_into))
     } else {
-        attrs
-            .type_try_into
-            .as_ref()
-            .map(|type_try_into| nix_serialize_try_into(crate_path, type_try_into))
+        attrs.type_try_into.as_ref().map(|type_try_into| nix_serialize_try_into(crate_path, type_try_into))
     }
 }
 
@@ -184,9 +177,7 @@ fn nix_serialize_variant(variant: &Variant<'_>) -> TokenStream {
 }
 
 fn nix_serialize_enum(variants: &[Variant<'_>]) -> TokenStream {
-    let match_variant = variants
-        .iter()
-        .map(|variant| nix_serialize_variant(variant));
+    let match_variant = variants.iter().map(|variant| nix_serialize_variant(variant));
     quote! {
         match self {
             #(#match_variant)*

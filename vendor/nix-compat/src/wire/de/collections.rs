@@ -1,18 +1,15 @@
-use std::{collections::BTreeMap, future::Future};
+use std::collections::BTreeMap;
+use std::future::Future;
 
-use super::{NixDeserialize, NixRead};
+use super::NixDeserialize;
+use super::NixRead;
 
 #[allow(clippy::manual_async_fn)]
 impl<T> NixDeserialize for Vec<T>
-where
-    T: NixDeserialize + Send,
+where T: NixDeserialize + Send
 {
-    fn try_deserialize<R>(
-        reader: &mut R,
-    ) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    fn try_deserialize<R>(reader: &mut R) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
+    where R: ?Sized + NixRead + Send {
         async move {
             if let Some(len) = reader.try_read_value::<usize>().await? {
                 let mut ret = Vec::with_capacity(len);
@@ -33,12 +30,8 @@ where
     K: NixDeserialize + Ord + Send,
     V: NixDeserialize + Send,
 {
-    fn try_deserialize<R>(
-        reader: &mut R,
-    ) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    fn try_deserialize<R>(reader: &mut R) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
+    where R: ?Sized + NixRead + Send {
         async move {
             if let Some(len) = reader.try_read_value::<usize>().await? {
                 let mut ret = BTreeMap::new();
@@ -64,7 +57,9 @@ mod test {
     use rstest::rstest;
     use tokio_test::io::Builder;
 
-    use crate::wire::de::{NixDeserialize, NixRead, NixReader};
+    use crate::wire::de::NixDeserialize;
+    use crate::wire::de::NixRead;
+    use crate::wire::de::NixReader;
 
     #[rstest]
     #[case::empty(vec![], &hex!("0000 0000 0000 0000"))]
@@ -94,9 +89,7 @@ mod test {
     #[case::one(map![0x7469usize => 10u64], &hex!("0100 0000 0000 0000 6974 0000 0000 0000 0A00 0000 0000 0000"))]
     #[tokio::test]
     async fn test_read_small_btree_map<E>(#[case] expected: E, #[case] data: &[u8])
-    where
-        E: NixDeserialize + PartialEq + fmt::Debug,
-    {
+    where E: NixDeserialize + PartialEq + fmt::Debug {
         let mock = Builder::new().read(data).build();
         let mut reader = NixReader::new(mock);
         let actual: E = reader.read_value().await.unwrap();

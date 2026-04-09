@@ -1,19 +1,17 @@
-use super::{Error, NixDeserialize, NixRead};
+use super::Error;
+use super::NixDeserialize;
+use super::NixRead;
 
 impl NixDeserialize for u64 {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         reader.try_read_number().await
     }
 }
 
 impl NixDeserialize for usize {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         if let Some(value) = reader.try_read_number().await? {
             value.try_into().map_err(R::Error::invalid_data).map(Some)
         } else {
@@ -24,17 +22,13 @@ impl NixDeserialize for usize {
 
 impl NixDeserialize for bool {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         Ok(reader.try_read_number().await?.map(|v| v != 0))
     }
 }
 impl NixDeserialize for i64 {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         Ok(reader.try_read_number().await?.map(|v| v as i64))
     }
 }
@@ -45,7 +39,8 @@ mod test {
     use rstest::rstest;
     use tokio_test::io::Builder;
 
-    use crate::wire::de::{NixRead, NixReader};
+    use crate::wire::de::NixRead;
+    use crate::wire::de::NixReader;
 
     #[rstest]
     #[case::simple_false(false, &hex!("0000 0000 0000 0000"))]
@@ -92,9 +87,6 @@ mod test {
     async fn test_read_usize_overflow() {
         let mock = Builder::new().read(&u64::MAX.to_le_bytes()).build();
         let mut reader = NixReader::new(mock);
-        assert_eq!(
-            std::io::ErrorKind::InvalidData,
-            reader.read_value::<usize>().await.unwrap_err().kind()
-        );
+        assert_eq!(std::io::ErrorKind::InvalidData, reader.read_value::<usize>().await.unwrap_err().kind());
     }
 }

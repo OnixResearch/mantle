@@ -1,15 +1,21 @@
 //! Convert `CrunchDerivation` → `nix_compat::Derivation` with BLAKE3 store paths.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use bstr::BString;
-use nix_compat::derivation::{Derivation, Output};
-use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+use nix_compat::derivation::Derivation;
+use nix_compat::derivation::Output;
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::HashAlgo;
+use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
 
-use crate::error::Error;
 use crate::conversion_cache::ConversionCache;
-use crate::types::{CrunchDerivation, FixedOutput, Input};
+use crate::error::Error;
+use crate::types::CrunchDerivation;
+use crate::types::FixedOutput;
+use crate::types::Input;
 
 /// Maximum derivation dependency depth before we bail out.
 /// Prevents stack overflow from pathological or accidental deep graphs.
@@ -36,10 +42,7 @@ fn convert_with_depth(
 ) -> Result<(StorePath<String>, Derivation), Error> {
     // Tiger Style: fixed limit on recursion depth.
     if depth >= MAX_RECURSION_DEPTH {
-        return Err(Error::CircularDependency(format!(
-            "{} (depth limit {} exceeded)",
-            drv.name, MAX_RECURSION_DEPTH
-        )));
+        return Err(Error::CircularDependency(format!("{} (depth limit {} exceeded)", drv.name, MAX_RECURSION_DEPTH)));
     }
 
     debug_assert!(!drv.name.is_empty(), "derivation name must not be empty");
@@ -67,8 +70,7 @@ fn convert_inner(
     let store_dir = known_paths.store_dir().to_string();
 
     // 1. Resolve inputs (recursive for derivation deps).
-    let (input_derivations, input_sources) =
-        resolve_inputs(&drv.inputs, known_paths, depth)?;
+    let (input_derivations, input_sources) = resolve_inputs(&drv.inputs, known_paths, depth)?;
 
     // 2. Build the nix_compat::Derivation struct.
     let ca_hash = drv.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
@@ -84,10 +86,7 @@ fn resolve_inputs(
     inputs: &[Input],
     known_paths: &mut ConversionCache,
     depth: u32,
-) -> Result<(
-    BTreeMap<StorePath<String>, BTreeSet<String>>,
-    BTreeSet<StorePath<String>>,
-), Error> {
+) -> Result<(BTreeMap<StorePath<String>, BTreeSet<String>>, BTreeSet<StorePath<String>>), Error> {
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
     let mut input_sources: BTreeSet<StorePath<String>> = BTreeSet::new();
 
@@ -109,20 +108,13 @@ fn resolve_inputs(
                 let (nested_drv_path, _nested_nix_drv) =
                     convert_with_depth(&output_ref.drv, known_paths, depth.saturating_add(1))?;
                 // Coalesce: merge into existing entry if same drv appears twice.
-                input_derivations
-                    .entry(nested_drv_path)
-                    .or_default()
-                    .insert(output_ref.output.clone());
+                input_derivations.entry(nested_drv_path).or_default().insert(output_ref.output.clone());
             }
             Input::Derivation(nested_drv) => {
                 let (nested_drv_path, _nested_nix_drv) =
                     convert_with_depth(nested_drv, known_paths, depth.saturating_add(1))?;
-                let output_names: BTreeSet<String> =
-                    nested_drv.outputs.iter().cloned().collect();
-                input_derivations
-                    .entry(nested_drv_path)
-                    .or_default()
-                    .extend(output_names);
+                let output_names: BTreeSet<String> = nested_drv.outputs.iter().cloned().collect();
+                input_derivations.entry(nested_drv_path).or_default().extend(output_names);
             }
         }
     }
@@ -140,13 +132,10 @@ fn build_nix_derivation(
 ) -> Derivation {
     let mut outputs = BTreeMap::new();
     for output_name in &drv.outputs {
-        outputs.insert(
-            output_name.clone(),
-            Output {
-                path: None,
-                ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
-            },
-        );
+        outputs.insert(output_name.clone(), Output {
+            path: None,
+            ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
+        });
     }
 
     let mut environment: BTreeMap<String, BString> = BTreeMap::new();
@@ -162,10 +151,7 @@ fn build_nix_derivation(
     }
     // Set $outputs listing all output names (Nix convention).
     // Builder scripts use this to iterate: for o in $outputs; do ...
-    environment.insert(
-        "outputs".to_string(),
-        drv.outputs.join(" ").as_bytes().into(),
-    );
+    environment.insert("outputs".to_string(), drv.outputs.join(" ").as_bytes().into());
 
     Derivation {
         arguments: drv.args.clone(),
@@ -225,9 +211,7 @@ fn finalize_and_register(
 
     // Tiger Style: assert postconditions.
     debug_assert!(
-        known_paths.get_by_drv_path(
-            &drv_path.to_absolute_path_with_prefix(store_dir)
-        ).is_some(),
+        known_paths.get_by_drv_path(&drv_path.to_absolute_path_with_prefix(store_dir)).is_some(),
         "derivation must be registered in KnownPaths after insert"
     );
     debug_assert!(
@@ -240,16 +224,12 @@ fn finalize_and_register(
 
 /// Parse a store path string into a `StorePath`.
 fn parse_store_path(s: &str) -> Result<StorePath<String>, Error> {
-    StorePath::from_absolute_path(s.as_bytes())
-        .map_err(|_| Error::InvalidStorePath(s.to_string()))
+    StorePath::from_absolute_path(s.as_bytes()).map_err(|_| Error::InvalidStorePath(s.to_string()))
 }
 
 /// Parse a `FixedOutput` into a `CAHash`.
 fn parse_fixed_output(fo: &FixedOutput) -> Result<CAHash, Error> {
-    let algo: HashAlgo = fo
-        .algo
-        .parse()
-        .map_err(|_| Error::UnknownHashAlgo(fo.algo.clone()))?;
+    let algo: HashAlgo = fo.algo.parse().map_err(|_| Error::UnknownHashAlgo(fo.algo.clone()))?;
 
     // Try SRI format first ("sha256-..."), then hex
     let nix_hash = if fo.hash.contains('-') {
@@ -280,10 +260,11 @@ fn derivation_identity(drv: &CrunchDerivation) -> String {
 
 #[cfg(test)]
 mod tests {
+    use nix_compat::nixhash::CAHash;
+
     use super::*;
     use crate::conversion_cache::ConversionCache;
     use crate::types::*;
-    use nix_compat::nixhash::CAHash;
 
     fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
         CrunchDerivation {
@@ -311,19 +292,13 @@ mod tests {
         // These exact paths are regression fixtures. They change only
         // when the environment/outputs schema changes (e.g., adding
         // the `outputs` env var).
-        assert!(
-            drv_path.to_absolute_path().starts_with("/nix/store/"),
-            "drv path must be a store path"
-        );
+        assert!(drv_path.to_absolute_path().starts_with("/nix/store/"), "drv path must be a store path");
         assert!(
             drv_path.to_absolute_path().ends_with("-hello.drv"),
             "drv path must end with -hello.drv: {}",
             drv_path.to_absolute_path()
         );
-        assert!(
-            out_path.to_absolute_path().starts_with("/nix/store/"),
-            "out path must be a store path"
-        );
+        assert!(out_path.to_absolute_path().starts_with("/nix/store/"), "out path must be a store path");
         assert!(
             out_path.to_absolute_path().ends_with("-hello"),
             "out path must end with -hello: {}",
@@ -352,14 +327,7 @@ mod tests {
         assert_eq!(nix_drv.environment.get("name").unwrap(), "hello");
 
         // "out" env entry matches the computed output path
-        let out_path = nix_drv
-            .outputs
-            .get("out")
-            .unwrap()
-            .path
-            .as_ref()
-            .unwrap()
-            .to_absolute_path();
+        let out_path = nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap().to_absolute_path();
         let out_env: &[u8] = nix_drv.environment.get("out").unwrap().as_ref();
         assert_eq!(out_env, out_path.as_bytes());
     }
@@ -416,10 +384,7 @@ mod tests {
         for name in &["out", "dev", "lib"] {
             let env_val: &[u8] = nix_drv.environment.get(*name).unwrap().as_ref();
             let env_str = std::str::from_utf8(env_val).unwrap();
-            assert!(
-                env_str.starts_with("/nix/store/"),
-                "${name} should be a store path, got: {env_str}"
-            );
+            assert!(env_str.starts_with("/nix/store/"), "${name} should be a store path, got: {env_str}");
         }
 
         // All three paths are distinct
@@ -484,10 +449,7 @@ mod tests {
 
         assert_eq!(nix_drv.input_derivations.len(), 1);
         let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
-        assert!(
-            dep_path.to_absolute_path().ends_with("-libfoo.drv"),
-            "dep path: {}", dep_path.to_absolute_path()
-        );
+        assert!(dep_path.to_absolute_path().ends_with("-libfoo.drv"), "dep path: {}", dep_path.to_absolute_path());
         assert!(dep_outputs.contains("out"));
     }
 
@@ -504,13 +466,13 @@ mod tests {
         // Both parent and dep are in KnownPaths
         assert!(kp.get_by_drv_path(&parent_path.to_absolute_path()).is_some());
         // The nested dep should also be registered. Find it by name.
-        let libfoo_registered = kp.get_by_drv_path(
-            &{
+        let libfoo_registered = kp
+            .get_by_drv_path(&{
                 let mut kp2 = ConversionCache::default();
                 let (p, _) = convert(&minimal_drv("libfoo", "/bin/sh"), &mut kp2).unwrap();
                 p.to_absolute_path()
-            },
-        ).is_some();
+            })
+            .is_some();
         assert!(libfoo_registered, "libfoo should be registered in KnownPaths");
     }
 
@@ -526,10 +488,7 @@ mod tests {
             ..minimal_drv("right", "/bin/sh")
         };
         let top = CrunchDerivation {
-            inputs: vec![
-                Input::Derivation(Box::new(left)),
-                Input::Derivation(Box::new(right)),
-            ],
+            inputs: vec![Input::Derivation(Box::new(left)), Input::Derivation(Box::new(right))],
             ..minimal_drv("top", "/bin/sh")
         };
         let mut kp = ConversionCache::default();
@@ -558,10 +517,7 @@ mod tests {
         let mut kp = ConversionCache::default();
         let err = convert(&outer, &mut kp).unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("ircular"),
-            "expected circular dependency error, got: {msg}"
-        );
+        assert!(msg.contains("ircular"), "expected circular dependency error, got: {msg}");
     }
 
     // ── Phase 4: fixed-output derivations ─────────────────────────────
@@ -570,8 +526,7 @@ mod tests {
     fn fod_flat_sha256() {
         let drv = CrunchDerivation {
             fixed_output: Some(FixedOutput {
-                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                    .to_string(),
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
                 algo: "sha256".to_string(),
                 mode: "flat".to_string(),
             }),
@@ -594,8 +549,7 @@ mod tests {
     fn fod_recursive_sha256() {
         let drv = CrunchDerivation {
             fixed_output: Some(FixedOutput {
-                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                    .to_string(),
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
                 algo: "sha256".to_string(),
                 mode: "recursive".to_string(),
             }),
@@ -630,14 +584,7 @@ mod tests {
         assert!(drv_path.to_absolute_path().ends_with("-src-sri.drv"));
         // SRI and hex parse to the same hash → same FOD output path.
         assert_eq!(
-            nix_drv
-                .outputs
-                .get("out")
-                .unwrap()
-                .path
-                .as_ref()
-                .unwrap()
-                .to_absolute_path(),
+            nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap().to_absolute_path(),
             "/nix/store/mikp7vivga7ysvaqnj6594dm3qz3qdz5-src-sri"
         );
     }
@@ -645,8 +592,7 @@ mod tests {
     #[test]
     fn fod_hex_parses_to_flat_ca_hash() {
         let fo = FixedOutput {
-            hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                .to_string(),
+            hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
             algo: "sha256".to_string(),
             mode: "flat".to_string(),
         };
@@ -677,18 +623,14 @@ mod tests {
         };
         let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
-        assert!(
-            err.to_string().contains("hash algorithm"),
-            "expected hash algorithm error, got: {err}"
-        );
+        assert!(err.to_string().contains("hash algorithm"), "expected hash algorithm error, got: {err}");
     }
 
     #[test]
     fn fod_invalid_mode_rejected() {
         let drv = CrunchDerivation {
             fixed_output: Some(FixedOutput {
-                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                    .to_string(),
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
                 algo: "sha256".to_string(),
                 mode: "broken".to_string(),
             }),
@@ -696,10 +638,7 @@ mod tests {
         };
         let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
-        assert!(
-            err.to_string().contains("hash mode"),
-            "expected hash mode error, got: {err}"
-        );
+        assert!(err.to_string().contains("hash mode"), "expected hash mode error, got: {err}");
     }
 
     // ── Private helper tests ─────────────────────────────────────────
@@ -799,10 +738,7 @@ mod tests {
 
         // output paths are None (not known until after build)
         for (name, output) in &nix_drv.outputs {
-            assert!(
-                output.path.is_none(),
-                "CA output '{name}' should have None path"
-            );
+            assert!(output.path.is_none(), "CA output '{name}' should have None path");
         }
     }
 
@@ -853,10 +789,7 @@ mod tests {
         let (_, nix_drv) = convert(&drv, &mut kp).unwrap();
 
         for (name, output) in &nix_drv.outputs {
-            assert!(
-                output.path.is_some(),
-                "IA output '{name}' should have Some path"
-            );
+            assert!(output.path.is_some(), "IA output '{name}' should have Some path");
         }
     }
 
@@ -867,8 +800,7 @@ mod tests {
         let drv = CrunchDerivation {
             addressing_mode: "content-addressed".to_string(),
             fixed_output: Some(FixedOutput {
-                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                    .to_string(),
+                hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
                 algo: "sha256".to_string(),
                 mode: "flat".to_string(),
             }),
@@ -938,14 +870,8 @@ mod tests {
             "builder": "/bin/sh"
         }"#;
 
-        assert!(matches!(
-            serde_json::from_str::<Input>(json_selection).unwrap(),
-            Input::OutputSelection(_)
-        ));
-        assert!(matches!(
-            serde_json::from_str::<Input>(json_derivation).unwrap(),
-            Input::Derivation(_)
-        ));
+        assert!(matches!(serde_json::from_str::<Input>(json_selection).unwrap(), Input::OutputSelection(_)));
+        assert!(matches!(serde_json::from_str::<Input>(json_derivation).unwrap(), Input::Derivation(_)));
     }
 
     #[test]
@@ -970,10 +896,7 @@ mod tests {
 
         assert_eq!(nix_drv.input_derivations.len(), 1);
         let (dep_path, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
-        assert!(
-            dep_path.to_absolute_path().ends_with("-libfoo.drv"),
-            "dep path: {}", dep_path.to_absolute_path()
-        );
+        assert!(dep_path.to_absolute_path().ends_with("-libfoo.drv"), "dep path: {}", dep_path.to_absolute_path());
         // Only the selected output, not all three.
         assert_eq!(dep_outputs.len(), 1);
         assert!(dep_outputs.contains("dev"));
@@ -1047,18 +970,9 @@ mod tests {
         let mut kp = ConversionCache::default();
         let err = convert(&drv, &mut kp).unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("libfoo"),
-            "error should name the derivation, got: {msg}"
-        );
-        assert!(
-            msg.contains("headers"),
-            "error should name the invalid output, got: {msg}"
-        );
-        assert!(
-            msg.contains("out, dev, lib"),
-            "error should list available outputs, got: {msg}"
-        );
+        assert!(msg.contains("libfoo"), "error should name the derivation, got: {msg}");
+        assert!(msg.contains("headers"), "error should name the invalid output, got: {msg}");
+        assert!(msg.contains("out, dev, lib"), "error should list available outputs, got: {msg}");
     }
 
     #[test]

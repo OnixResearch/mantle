@@ -1,16 +1,25 @@
-use std::fmt::{self, Write as _};
+use std::fmt::Write as _;
+use std::fmt::{self};
 use std::future::poll_fn;
-use std::io::{self, Cursor};
+use std::io::Cursor;
+use std::io::{self};
 use std::pin::Pin;
-use std::task::{Context, Poll, ready};
+use std::task::Context;
+use std::task::Poll;
+use std::task::ready;
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::BytesMut;
 use pin_project_lite::pin_project;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
 
-use crate::wire::{EMPTY_BYTES, ProtocolVersion, padding_len};
-
-use super::{Error, NixWrite};
+use super::Error;
+use super::NixWrite;
+use crate::wire::EMPTY_BYTES;
+use crate::wire::ProtocolVersion;
+use crate::wire::padding_len;
 
 pub struct NixWriterBuilder {
     buf: Option<BytesMut>,
@@ -52,9 +61,7 @@ impl NixWriterBuilder {
     }
 
     pub fn build<W>(self, writer: W) -> NixWriter<W> {
-        let buf = self
-            .buf
-            .unwrap_or_else(|| BytesMut::with_capacity(self.max_buf_size));
+        let buf = self.buf.unwrap_or_else(|| BytesMut::with_capacity(self.max_buf_size));
         NixWriter {
             buf,
             inner: writer,
@@ -83,8 +90,7 @@ impl NixWriter<Cursor<Vec<u8>>> {
 }
 
 impl<W> NixWriter<W>
-where
-    W: AsyncWriteExt,
+where W: AsyncWriteExt
 {
     pub fn new(writer: W) -> NixWriter<W> {
         NixWriter::builder().build(writer)
@@ -108,10 +114,7 @@ where
         while !this.buf.is_empty() {
             let n = ready!(this.inner.as_mut().poll_write(cx, &this.buf[..]))?;
             if n == 0 {
-                return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::WriteZero,
-                    "failed to write the buffer",
-                )));
+                return Poll::Ready(Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write the buffer")));
             }
             this.buf.advance(n);
         }
@@ -120,8 +123,7 @@ where
 }
 
 impl<W> NixWriter<W>
-where
-    W: AsyncWriteExt + Unpin,
+where W: AsyncWriteExt + Unpin
 {
     async fn flush_buf(&mut self) -> Result<(), io::Error> {
         let mut s = Pin::new(self);
@@ -130,14 +132,9 @@ where
 }
 
 impl<W> AsyncWrite for NixWriter<W>
-where
-    W: AsyncWrite,
+where W: AsyncWrite
 {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, io::Error>> {
         // Flush
         if self.remaining_mut() < buf.len() {
             ready!(self.as_mut().poll_flush_buf(cx))?;
@@ -156,18 +153,14 @@ where
         self.project().inner.poll_flush(cx)
     }
 
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), io::Error>> {
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         ready!(self.as_mut().poll_flush_buf(cx))?;
         self.project().inner.poll_shutdown(cx)
     }
 }
 
 impl<W> NixWrite for NixWriter<W>
-where
-    W: AsyncWrite + Send + Unpin,
+where W: AsyncWrite + Send + Unpin
 {
     type Error = io::Error;
 
@@ -223,9 +216,8 @@ mod test {
     use tokio::io::AsyncWriteExt as _;
     use tokio_test::io::Builder;
 
-    use crate::wire::ser::NixWrite;
-
     use super::NixWriter;
+    use crate::wire::ser::NixWrite;
 
     #[rstest]
     #[case(1, &hex!("0100 0000 0000 0000"))]

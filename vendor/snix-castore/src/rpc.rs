@@ -4,11 +4,14 @@
 //! variants map to the trait methods on `BlobService` and `DirectoryService`.
 //! In-process, these go through tokio mpsc channels with zero serialization.
 
+use std::io;
+
 use async_trait::async_trait;
 use bytes::Bytes;
-use irpc::{channel::oneshot, rpc_requests};
-use serde::{Deserialize, Serialize};
-use std::io;
+use irpc::channel::oneshot;
+use irpc::rpc_requests;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::B3Digest;
 
@@ -76,10 +79,7 @@ impl crate::blobservice::BlobService for IrpcBlobService {
             .map_err(io::Error::other)
     }
 
-    async fn open_read(
-        &self,
-        digest: &B3Digest,
-    ) -> io::Result<Option<Box<dyn crate::blobservice::BlobReader>>> {
+    async fn open_read(&self, digest: &B3Digest) -> io::Result<Option<Box<dyn crate::blobservice::BlobReader>>> {
         let data = self
             .client
             .rpc(ReadBlobRequest(*digest))
@@ -87,9 +87,7 @@ impl crate::blobservice::BlobService for IrpcBlobService {
             .map_err(|e| io::Error::other(e.to_string()))?
             .map_err(io::Error::other)?;
 
-        Ok(data.map(|bytes| -> Box<dyn crate::blobservice::BlobReader> {
-            Box::new(io::Cursor::new(bytes))
-        }))
+        Ok(data.map(|bytes| -> Box<dyn crate::blobservice::BlobReader> { Box::new(io::Cursor::new(bytes)) }))
     }
 
     async fn open_write(&self) -> Box<dyn crate::blobservice::BlobWriter> {
@@ -100,10 +98,7 @@ impl crate::blobservice::BlobService for IrpcBlobService {
         })
     }
 
-    async fn chunks(
-        &self,
-        digest: &B3Digest,
-    ) -> io::Result<Option<Vec<crate::proto::stat_blob_response::ChunkMeta>>> {
+    async fn chunks(&self, digest: &B3Digest) -> io::Result<Option<Vec<crate::proto::stat_blob_response::ChunkMeta>>> {
         let result = self
             .client
             .rpc(ChunksRequest(*digest))
@@ -142,10 +137,7 @@ impl tokio::io::AsyncWrite for IrpcBlobWriter {
         std::task::Poll::Ready(Ok(data.len()))
     }
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<io::Result<()>> {
+    fn poll_flush(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<io::Result<()>> {
         std::task::Poll::Ready(Ok(()))
     }
 
@@ -214,10 +206,7 @@ impl IrpcDirectoryService {
 
 #[async_trait]
 impl crate::directoryservice::DirectoryService for IrpcDirectoryService {
-    async fn get(
-        &self,
-        digest: &B3Digest,
-    ) -> Result<Option<crate::Directory>, crate::directoryservice::Error> {
+    async fn get(&self, digest: &B3Digest) -> Result<Option<crate::Directory>, crate::directoryservice::Error> {
         self.client
             .rpc(GetDirectoryRequest(*digest))
             .await

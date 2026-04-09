@@ -2,10 +2,9 @@
 //! Derivations from ATerm.
 use nom::IResult;
 
-use crate::{
-    nixhash,
-    store_path::{self, StorePath},
-};
+use crate::nixhash;
+use crate::store_path::StorePath;
+use crate::store_path::{self};
 
 pub type NomResult<I, O> = IResult<I, O, NomError<I>>;
 

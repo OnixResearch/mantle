@@ -1,8 +1,13 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashSet;
+use std::path::Path;
+use std::path::PathBuf;
 
 use itertools::Itertools;
-use snix_castore::{DirectoryError, Node, PathComponent};
+use snix_castore::DirectoryError;
+use snix_castore::Node;
+use snix_castore::PathComponent;
 
 use crate::buildservice::BuildResult;
 
@@ -119,9 +124,7 @@ where
 }
 
 fn path_to_string(path: &Path) -> String {
-    path.to_str()
-        .expect("Snix Bug: unable to convert Path to String")
-        .to_string()
+    path.to_str().expect("Snix Bug: unable to convert Path to String").to_string()
 }
 
 impl From<crate::buildservice::BuildRequest> for BuildRequest {
@@ -148,17 +151,11 @@ impl From<crate::buildservice::BuildRequest> for BuildRequest {
             inputs: value
                 .inputs
                 .into_iter()
-                .map(|(name, node)| {
-                    snix_castore::proto::Entry::from_name_and_node(name.into(), node)
-                })
+                .map(|(name, node)| snix_castore::proto::Entry::from_name_and_node(name.into(), node))
                 .collect(),
             command_args: value.command_args,
             working_dir: path_to_string(&value.working_dir),
-            scratch_paths: value
-                .scratch_paths
-                .iter()
-                .map(|p| path_to_string(p))
-                .collect(),
+            scratch_paths: value.scratch_paths.iter().map(|p| path_to_string(p)).collect(),
             inputs_dir: path_to_string(&value.inputs_dir),
             outputs: value.outputs.iter().map(|p| path_to_string(p)).collect(),
             environment_vars: value.environment_vars.into_iter().map(Into::into).collect(),
@@ -234,13 +231,9 @@ impl TryFrom<BuildRequest> for crate::buildservice::BuildRequest {
         }
 
         // validate build constraints
-        let constraints = value
-            .constraints
-            .map_or(Ok(HashSet::new()), |constraints| {
-                constraints
-                    .try_into()
-                    .map_err(ValidateBuildRequestError::InvalidBuildConstraints)
-            })?;
+        let constraints = value.constraints.map_or(Ok(HashSet::new()), |constraints| {
+            constraints.try_into().map_err(ValidateBuildRequestError::InvalidBuildConstraints)
+        })?;
 
         // validate additional_files
         for (i, additional_file) in value.additional_files.iter().enumerate() {
@@ -274,10 +267,7 @@ impl From<BuildResult> for BuildResponse {
                 .outputs
                 .into_iter()
                 .map(|output| build_response::Output {
-                    output: Some(snix_castore::proto::Entry::from_name_and_node(
-                        "".into(),
-                        output.node,
-                    )),
+                    output: Some(snix_castore::proto::Entry::from_name_and_node("".into(), output.node)),
                     needles: output.output_needles.into_iter().collect(),
                 })
                 .collect(),
@@ -356,11 +346,7 @@ impl From<build_request::AdditionalFile> for crate::buildservice::AdditionalFile
 impl From<crate::buildservice::AdditionalFile> for build_request::AdditionalFile {
     fn from(value: crate::buildservice::AdditionalFile) -> Self {
         Self {
-            path: value
-                .path
-                .to_str()
-                .expect("Snix bug: expected a valid path")
-                .to_string(),
+            path: value.path.to_str().expect("Snix bug: expected a valid path").to_string(),
             contents: value.contents,
         }
     }
@@ -406,8 +392,10 @@ impl TryFrom<build_request::BuildConstraints> for HashSet<crate::buildservice::B
 
 #[cfg(test)]
 mod tests {
-    use super::{is_clean_path, is_clean_relative_path};
     use rstest::rstest;
+
+    use super::is_clean_path;
+    use super::is_clean_relative_path;
 
     #[rstest]
     #[case::fail_trailing_slash("foo/bar/", false)]

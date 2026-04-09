@@ -1,31 +1,38 @@
-use async_trait::async_trait;
-use anyhow::Context;
-use bstr::BStr;
-use snix_castore::{
-    blobservice::BlobService,
-    directoryservice::DirectoryService,
-    fs::fuse::FuseDaemon,
-    import::fs::ingest_path,
-    refscan::{ReferencePattern, ReferenceScanner},
-};
-use tokio::process::{Child, Command};
+use std::ffi::OsStr;
+use std::path::PathBuf;
+use std::process::Stdio;
 
-use tracing::{Span, debug, instrument, warn};
+use anyhow::Context;
+use async_trait::async_trait;
+use bstr::BStr;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::fs::fuse::FuseDaemon;
+use snix_castore::import::fs::ingest_path;
+use snix_castore::refscan::ReferencePattern;
+use snix_castore::refscan::ReferenceScanner;
+use tokio::process::Child;
+use tokio::process::Command;
+use tracing::Span;
+use tracing::debug;
+use tracing::instrument;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::buildservice::{BuildOutput, BuildRequest, BuildResult};
-use crate::oci::{get_host_output_paths, make_bundle, make_spec};
-use std::{ffi::OsStr, path::PathBuf, process::Stdio};
-
 use super::BuildService;
+use crate::buildservice::BuildOutput;
+use crate::buildservice::BuildRequest;
+use crate::buildservice::BuildResult;
+use crate::oci::get_host_output_paths;
+use crate::oci::make_bundle;
+use crate::oci::make_spec;
 
 /// Compile-time default for the sandbox shell.
 const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
 
 /// Resolve the sandbox shell path at runtime.
 fn sandbox_shell() -> String {
-    std::env::var("SNIX_BUILD_SANDBOX_SHELL")
-        .unwrap_or_else(|_| SANDBOX_SHELL_DEFAULT.to_string())
+    std::env::var("SNIX_BUILD_SANDBOX_SHELL").unwrap_or_else(|_| SANDBOX_SHELL_DEFAULT.to_string())
 }
 const MAX_CONCURRENT_BUILDS: usize = 2; // TODO: make configurable
 
@@ -57,7 +64,6 @@ impl<BS, DS> OCIBuildService<BS, DS> {
         }
     }
 }
-
 
 #[async_trait]
 impl<BS, DS> BuildService for OCIBuildService<BS, DS>
@@ -132,11 +138,8 @@ where
 
         // wait for the process to exit
         // FUTUREWORK: change the trait to allow reporting progress / logs…
-        let child_output = child
-            .wait_with_output()
-            .await
-            .context("failed to run process")
-            .map_err(std::io::Error::other)?;
+        let child_output =
+            child.wait_with_output().await.context("failed to run process").map_err(std::io::Error::other)?;
 
         // Check the exit code
         if !child_output.status.success() {
@@ -151,8 +154,8 @@ where
         // Ingest build outputs into the castore.
         // We use try_join_all here. No need to spawn new tasks, as this is
         // mostly IO bound.
-        let outputs = futures::future::try_join_all(host_output_paths.into_iter().enumerate().map(
-            |(i, host_output_path)| {
+        let outputs =
+            futures::future::try_join_all(host_output_paths.into_iter().enumerate().map(|(i, host_output_path)| {
                 let output_path = &request.outputs[i];
                 let patterns = patterns.clone();
                 async move {
@@ -184,9 +187,8 @@ where
                             .collect(),
                     })
                 }
-            },
-        ))
-        .await?;
+            }))
+            .await?;
 
         Ok(BuildResult { outputs, log: None })
     }
@@ -195,10 +197,7 @@ where
 /// Spawns runc with the bundle at bundle_path.
 /// On success, returns the child.
 #[instrument(err)]
-fn spawn_bundle(
-    bundle_path: impl AsRef<OsStr> + std::fmt::Debug,
-    bundle_name: &str,
-) -> std::io::Result<Child> {
+fn spawn_bundle(bundle_path: impl AsRef<OsStr> + std::fmt::Debug, bundle_name: &str) -> std::io::Result<Child> {
     let mut command = Command::new("runc");
 
     command

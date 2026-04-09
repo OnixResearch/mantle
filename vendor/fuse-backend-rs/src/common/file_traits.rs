@@ -15,13 +15,25 @@
 //! [2]: https://docs.rs/vm-memory/0.2.0/vm_memory/volatile_memory/struct.VolatileSlice.html
 
 use std::fs::File;
-use std::io::{Error, ErrorKind, Result};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
 use std::os::unix::io::AsRawFd;
 
-use libc::{c_int, c_void, read, readv, size_t, write, writev};
+use libc::c_int;
+use libc::c_void;
+use libc::read;
+use libc::readv;
+use libc::size_t;
+use libc::write;
+use libc::writev;
 
 use crate::file_buf::FileVolatileSlice;
-use crate::{off64_t, pread64, preadv64, pwrite64, pwritev64};
+use crate::off64_t;
+use crate::pread64;
+use crate::preadv64;
+use crate::pwrite64;
+use crate::pwritev64;
 
 /// A trait for setting the size of a file.
 ///
@@ -52,10 +64,7 @@ pub trait FileReadWriteVolatile {
     /// The default implementation calls `read_volatile` with either the first nonempty buffer
     /// provided, or returns `Ok(0)` if none exists.
     fn read_vectored_volatile(&mut self, bufs: &[FileVolatileSlice]) -> Result<usize> {
-        bufs.iter()
-            .find(|b| !b.is_empty())
-            .map(|b| self.read_volatile(*b))
-            .unwrap_or(Ok(0))
+        bufs.iter().find(|b| !b.is_empty()).map(|b| self.read_volatile(*b)).unwrap_or(Ok(0))
     }
 
     /// Reads bytes from this into the given slice until all bytes in the slice are written, or an
@@ -83,10 +92,7 @@ pub trait FileReadWriteVolatile {
     /// concatenated would. The default implementation calls `write_volatile` with either the first
     /// nonempty buffer provided, or returns `Ok(0)` if none exists.
     fn write_vectored_volatile(&mut self, bufs: &[FileVolatileSlice]) -> Result<usize> {
-        bufs.iter()
-            .find(|b| !b.is_empty())
-            .map(|b| self.write_volatile(*b))
-            .unwrap_or(Ok(0))
+        bufs.iter().find(|b| !b.is_empty()).map(|b| self.write_volatile(*b)).unwrap_or(Ok(0))
     }
 
     /// Write bytes from the slice to the given file until all the bytes from the slice have been
@@ -113,11 +119,7 @@ pub trait FileReadWriteVolatile {
     /// method must behave as a single call to `read_at_volatile` with the buffers concatenated
     /// would. The default implementation calls `read_at_volatile` with either the first nonempty
     /// buffer provided, or returns `Ok(0)` if none exists.
-    fn read_vectored_at_volatile(
-        &mut self,
-        bufs: &[FileVolatileSlice],
-        offset: u64,
-    ) -> Result<usize> {
+    fn read_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
         if let Some(slice) = bufs.first() {
             self.read_at_volatile(*slice, offset)
         } else {
@@ -127,11 +129,7 @@ pub trait FileReadWriteVolatile {
 
     /// Reads bytes from this file at `offset` into the given slice until all bytes in the slice are
     /// read, or an error is returned.
-    fn read_exact_at_volatile(
-        &mut self,
-        mut slice: FileVolatileSlice,
-        mut offset: u64,
-    ) -> Result<()> {
+    fn read_exact_at_volatile(&mut self, mut slice: FileVolatileSlice, mut offset: u64) -> Result<()> {
         while !slice.is_empty() {
             match self.read_at_volatile(slice, offset) {
                 Ok(0) => return Err(Error::from(ErrorKind::UnexpectedEof)),
@@ -157,11 +155,7 @@ pub trait FileReadWriteVolatile {
     /// consumed. This method must behave as a call to `write_at_volatile` with the buffers
     /// concatenated would. The default implementation calls `write_at_volatile` with either the
     /// first nonempty buffer provided, or returns `Ok(0)` if none exists.
-    fn write_vectored_at_volatile(
-        &mut self,
-        bufs: &[FileVolatileSlice],
-        offset: u64,
-    ) -> Result<usize> {
+    fn write_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
         if let Some(slice) = bufs.first() {
             self.write_at_volatile(*slice, offset)
         } else {
@@ -171,11 +165,7 @@ pub trait FileReadWriteVolatile {
 
     /// Writes bytes from this file at `offset` into the given slice until all bytes in the slice
     /// are written, or an error is returned.
-    fn write_all_at_volatile(
-        &mut self,
-        mut slice: FileVolatileSlice,
-        mut offset: u64,
-    ) -> Result<()> {
+    fn write_all_at_volatile(&mut self, mut slice: FileVolatileSlice, mut offset: u64) -> Result<()> {
         while !slice.is_empty() {
             match self.write_at_volatile(slice, offset) {
                 Ok(0) => return Err(Error::from(ErrorKind::WriteZero)),
@@ -222,11 +212,7 @@ impl<T: FileReadWriteVolatile + ?Sized> FileReadWriteVolatile for &mut T {
         (**self).read_at_volatile(slice, offset)
     }
 
-    fn read_vectored_at_volatile(
-        &mut self,
-        bufs: &[FileVolatileSlice],
-        offset: u64,
-    ) -> Result<usize> {
+    fn read_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
         (**self).read_vectored_at_volatile(bufs, offset)
     }
 
@@ -238,11 +224,7 @@ impl<T: FileReadWriteVolatile + ?Sized> FileReadWriteVolatile for &mut T {
         (**self).write_at_volatile(slice, offset)
     }
 
-    fn write_vectored_at_volatile(
-        &mut self,
-        bufs: &[FileVolatileSlice],
-        offset: u64,
-    ) -> Result<usize> {
+    fn write_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
         (**self).write_vectored_at_volatile(bufs, offset)
     }
 
@@ -257,8 +239,7 @@ macro_rules! volatile_impl {
             fn read_volatile(&mut self, slice: FileVolatileSlice) -> Result<usize> {
                 // Safe because only bytes inside the slice are accessed and the kernel is expected
                 // to handle arbitrary memory for I/O.
-                let ret =
-                    unsafe { read(self.as_raw_fd(), slice.as_ptr() as *mut c_void, slice.len()) };
+                let ret = unsafe { read(self.as_raw_fd(), slice.as_ptr() as *mut c_void, slice.len()) };
 
                 if ret >= 0 {
                     Ok(ret as usize)
@@ -294,13 +275,7 @@ macro_rules! volatile_impl {
             fn write_volatile(&mut self, slice: FileVolatileSlice) -> Result<usize> {
                 // Safe because only bytes inside the slice are accessed and the kernel is expected
                 // to handle arbitrary memory for I/O.
-                let ret = unsafe {
-                    write(
-                        self.as_raw_fd(),
-                        slice.as_ptr() as *const c_void,
-                        slice.len(),
-                    )
-                };
+                let ret = unsafe { write(self.as_raw_fd(), slice.as_ptr() as *const c_void, slice.len()) };
                 if ret >= 0 {
                     Ok(ret as usize)
                 } else {
@@ -334,14 +309,8 @@ macro_rules! volatile_impl {
             fn read_at_volatile(&mut self, slice: FileVolatileSlice, offset: u64) -> Result<usize> {
                 // Safe because only bytes inside the slice are accessed and the kernel is expected
                 // to handle arbitrary memory for I/O.
-                let ret = unsafe {
-                    pread64(
-                        self.as_raw_fd(),
-                        slice.as_ptr() as *mut c_void,
-                        slice.len(),
-                        offset as off64_t,
-                    )
-                };
+                let ret =
+                    unsafe { pread64(self.as_raw_fd(), slice.as_ptr() as *mut c_void, slice.len(), offset as off64_t) };
 
                 if ret >= 0 {
                     Ok(ret as usize)
@@ -350,11 +319,7 @@ macro_rules! volatile_impl {
                 }
             }
 
-            fn read_vectored_at_volatile(
-                &mut self,
-                bufs: &[FileVolatileSlice],
-                offset: u64,
-            ) -> Result<usize> {
+            fn read_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
                 let iovecs: Vec<libc::iovec> = bufs
                     .iter()
                     .map(|s| libc::iovec {
@@ -369,14 +334,7 @@ macro_rules! volatile_impl {
 
                 // Safe because only bytes inside the buffers are accessed and the kernel is
                 // expected to handle arbitrary memory for I/O.
-                let ret = unsafe {
-                    preadv64(
-                        self.as_raw_fd(),
-                        &iovecs[0],
-                        iovecs.len() as c_int,
-                        offset as off64_t,
-                    )
-                };
+                let ret = unsafe { preadv64(self.as_raw_fd(), &iovecs[0], iovecs.len() as c_int, offset as off64_t) };
 
                 if ret >= 0 {
                     Ok(ret as usize)
@@ -385,20 +343,11 @@ macro_rules! volatile_impl {
                 }
             }
 
-            fn write_at_volatile(
-                &mut self,
-                slice: FileVolatileSlice,
-                offset: u64,
-            ) -> Result<usize> {
+            fn write_at_volatile(&mut self, slice: FileVolatileSlice, offset: u64) -> Result<usize> {
                 // Safe because only bytes inside the slice are accessed and the kernel is expected
                 // to handle arbitrary memory for I/O.
                 let ret = unsafe {
-                    pwrite64(
-                        self.as_raw_fd(),
-                        slice.as_ptr() as *const c_void,
-                        slice.len(),
-                        offset as off64_t,
-                    )
+                    pwrite64(self.as_raw_fd(), slice.as_ptr() as *const c_void, slice.len(), offset as off64_t)
                 };
 
                 if ret >= 0 {
@@ -408,11 +357,7 @@ macro_rules! volatile_impl {
                 }
             }
 
-            fn write_vectored_at_volatile(
-                &mut self,
-                bufs: &[FileVolatileSlice],
-                offset: u64,
-            ) -> Result<usize> {
+            fn write_vectored_at_volatile(&mut self, bufs: &[FileVolatileSlice], offset: u64) -> Result<usize> {
                 let iovecs: Vec<libc::iovec> = bufs
                     .iter()
                     .map(|s| libc::iovec {
@@ -427,14 +372,7 @@ macro_rules! volatile_impl {
 
                 // Safe because only bytes inside the buffers are accessed and the kernel is
                 // expected to handle arbitrary memory for I/O.
-                let ret = unsafe {
-                    pwritev64(
-                        self.as_raw_fd(),
-                        &iovecs[0],
-                        iovecs.len() as c_int,
-                        offset as off64_t,
-                    )
-                };
+                let ret = unsafe { pwritev64(self.as_raw_fd(), &iovecs[0], iovecs.len() as c_int, offset as off64_t) };
                 if ret >= 0 {
                     Ok(ret as usize)
                 } else {
@@ -465,17 +403,14 @@ mod async_io {
     ///
     /// The asynchronous IO framework provided by [tokio-uring](https://docs.rs/tokio-uring/latest/tokio_uring/)
     /// needs to take ownership of data buffers during asynchronous IO operations.
-    /// The [AsyncFileReadWriteVolatile] trait is designed to support io-uring based asynchronous IO.
+    /// The [AsyncFileReadWriteVolatile] trait is designed to support io-uring based asynchronous
+    /// IO.
     #[async_trait::async_trait(?Send)]
     pub trait AsyncFileReadWriteVolatile {
         /// Read bytes from this file at `offset` into the given slice in asynchronous mode.
         ///
         /// Return the number of bytes read on success.
-        async fn async_read_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf);
+        async fn async_read_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf);
 
         /// Asynchronous version of [FileReadWriteVolatile::read_vectored_at_volatile], to read data
         /// into [FileVolatileSlice] buffers.
@@ -494,11 +429,7 @@ mod async_io {
 
         /// Asynchronous version of [FileReadWriteVolatile::write_at_volatile], to write
         /// data from a [FileVolatileSlice] buffer.
-        async fn async_write_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf);
+        async fn async_write_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf);
 
         /// Asynchronous version of [FileReadWriteVolatile::write_vectored_at_volatile], to write
         /// data from [FileVolatileSlice] buffers.
@@ -511,11 +442,7 @@ mod async_io {
 
     #[async_trait::async_trait(?Send)]
     impl AsyncFileReadWriteVolatile for File {
-        async fn async_read_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf) {
+        async fn async_read_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf) {
             self.async_read_at(buf, offset).await
         }
 
@@ -669,11 +596,7 @@ mod async_io {
             (Ok(count), bufs)
         }
 
-        async fn async_write_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf) {
+        async fn async_write_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf) {
             self.async_write_at(buf, offset).await
         }
 
@@ -830,11 +753,7 @@ mod async_io {
 
     #[async_trait::async_trait(?Send)]
     impl<T: AsyncFileReadWriteVolatile + ?Sized> AsyncFileReadWriteVolatile for Arc<T> {
-        async fn async_read_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf) {
+        async fn async_read_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf) {
             self.async_read_at_volatile(buf, offset).await
         }
 
@@ -846,11 +765,7 @@ mod async_io {
             self.async_read_vectored_at_volatile(bufs, offset).await
         }
 
-        async fn async_write_at_volatile(
-            &self,
-            buf: FileVolatileBuf,
-            offset: u64,
-        ) -> (Result<usize>, FileVolatileBuf) {
+        async fn async_write_at_volatile(&self, buf: FileVolatileBuf, offset: u64) -> (Result<usize>, FileVolatileBuf) {
             self.async_write_at_volatile(buf, offset).await
         }
 
@@ -898,10 +813,8 @@ mod async_io {
             let mut buf2 = vec![0; 4];
 
             block_on(async {
-                let vslice1 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
                     vslice2.borrow_as_buf(false)
                 }];
@@ -917,10 +830,8 @@ mod async_io {
             let mut buf2 = vec![0; 4];
 
             block_on(async {
-                let vslice1 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
                     vslice2.borrow_as_buf(false)
                 }];
@@ -935,8 +846,7 @@ mod async_io {
             assert_eq!(buf1[9], b't');
 
             block_on(async {
-                let vslice1 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }];
                 let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, _vbufs) = file.async_read_vectored_at_volatile(vbufs, 14).await;
@@ -952,18 +862,12 @@ mod async_io {
 
             block_on(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
-                let vslice6 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
-                let vslice7 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(6), 1) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
+                let vslice6 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
+                let vslice7 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(6), 1) };
                 let vbufs = vec![
                     unsafe { vslice1.borrow_as_buf(false) },
                     unsafe { vslice2.borrow_as_buf(false) },
@@ -988,16 +892,11 @@ mod async_io {
 
             block_on(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
-                let vslice6 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
+                let vslice6 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
                 let vbufs = vec![
                     unsafe { vslice1.borrow_as_buf(false) },
                     unsafe { vslice2.borrow_as_buf(false) },
@@ -1014,14 +913,10 @@ mod async_io {
 
             block_on(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
                 let vbufs = vec![
                     unsafe { vslice1.borrow_as_buf(false) },
                     unsafe { vslice2.borrow_as_buf(false) },
@@ -1037,12 +932,9 @@ mod async_io {
 
             block_on(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
                 let vbufs = vec![
                     unsafe { vslice1.borrow_as_buf(false) },
                     unsafe { vslice2.borrow_as_buf(false) },
@@ -1057,10 +949,8 @@ mod async_io {
 
             block_on(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
-                let vslice2 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 =
-                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice2 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
                 let vbufs = vec![
                     unsafe { vslice1.borrow_as_buf(false) },
                     unsafe { vslice2.borrow_as_buf(false) },
@@ -1077,9 +967,13 @@ mod async_io {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io::{Seek, SeekFrom, Write};
+    use std::io::Seek;
+    use std::io::SeekFrom;
+    use std::io::Write;
+
     use vmm_sys_util::tempfile::TempFile;
+
+    use super::*;
 
     #[test]
     fn test_read_volatile() {
@@ -1090,8 +984,7 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_volatile(slice).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1128,8 +1021,7 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 31];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_volatile(slice).unwrap();
         assert_eq!(buf[..31], buf2);
 
@@ -1144,8 +1036,7 @@ mod tests {
         file.write_all(&buf).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_at_volatile(slice, 0).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1182,8 +1073,7 @@ mod tests {
         file.write_all(&buf).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_at_volatile(slice, 0).unwrap();
         assert_eq!(buf, buf2);
 
@@ -1196,14 +1086,12 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_volatile(slice).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1242,14 +1130,12 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_all_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_volatile(slice).unwrap();
         assert_eq!(buf, buf2);
 
@@ -1261,14 +1147,12 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_at_volatile(slice, 0).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1309,14 +1193,12 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_all_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice =
-            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice = unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_at_volatile(slice, 0).unwrap();
         assert_eq!(buf, buf2);
 

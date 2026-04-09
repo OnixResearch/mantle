@@ -19,20 +19,13 @@ pub struct VerifyingKey {
 
 impl VerifyingKey {
     pub fn new(name: String, verifying_key: ed25519_dalek::VerifyingKey) -> Self {
-        Self {
-            name,
-            verifying_key,
-        }
+        Self { name, verifying_key }
     }
 
     pub fn parse(input: &str) -> Result<Self, Error> {
         let (name, bytes64) = input.split_once(':').ok_or(Error::MissingSeparator)?;
 
-        if name.is_empty()
-            || !name
-                .chars()
-                .all(|c| char::is_alphanumeric(c) || c == '-' || c == '.')
-        {
+        if name.is_empty() || !name.chars().all(|c| char::is_alphanumeric(c) || c == '-' || c == '.') {
             return Err(Error::InvalidName(name.to_string()));
         }
 
@@ -51,8 +44,7 @@ impl VerifyingKey {
             Err(_) => return Err(Error::DecodeError(input.to_string())),
         }
 
-        let verifying_key =
-            ed25519_dalek::VerifyingKey::from_bytes(&bytes).map_err(Error::InvalidVerifyingKey)?;
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&bytes).map_err(Error::InvalidVerifyingKey)?;
 
         Ok(Self {
             name: name.to_string(),
@@ -64,8 +56,8 @@ impl VerifyingKey {
         &self.name
     }
 
-    /// Verify the passed in signature is a correct signature for the passed in fingerprint and is signed
-    /// by the key material referred to by [Self],
+    /// Verify the passed in signature is a correct signature for the passed in fingerprint and is
+    /// signed by the key material referred to by [Self],
     /// which means the name in the signature has to match,
     /// and the signature bytes themselves need to be a valid signature made by
     /// the signing key identified by [Self::verifying key].
@@ -94,12 +86,7 @@ pub enum Error {
 
 impl Display for VerifyingKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}",
-            self.name,
-            BASE64.encode(self.verifying_key.as_bytes())
-        )
+        write!(f, "{}:{}", self.name, BASE64.encode(self.verifying_key.as_bytes()))
     }
 }
 
@@ -109,9 +96,8 @@ mod test {
     use ed25519_dalek::PUBLIC_KEY_LENGTH;
     use rstest::rstest;
 
-    use crate::narinfo::SignatureRef;
-
     use super::VerifyingKey;
+    use crate::narinfo::SignatureRef;
     const FINGERPRINT: &str = "1;/nix/store/syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin;sha256:1b4sb93wp679q4zx9k1ignby1yna3z7c4c2ri3wphylbc2dwsys0;196040;/nix/store/0jqd0rlxzra1rs38rdxl43yh6rxchgc6-curl-7.82.0,/nix/store/6w8g7njm4mck5dmjxws0z1xnrxvl81xa-glibc-2.34-115,/nix/store/j5jxw3iy7bbz4a57fh9g2xm2gxmyal8h-zlib-1.2.12,/nix/store/yxvjs9drzsphm9pcf42a4byzj1kb9m7k-openssl-1.1.1n";
 
     #[rstest]

@@ -1,13 +1,15 @@
 //! Contains a testcase for castore/fs, using a PathInfoService as RootNodesProvider.
 
-use snix_castore::{
-    blobservice::MemoryBlobService,
-    directoryservice::RedbDirectoryService,
-    fs::{FSSettings, SnixStoreFs, fuse::FuseDaemon},
-};
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::fs::FSSettings;
+use snix_castore::fs::SnixStoreFs;
+use snix_castore::fs::fuse::FuseDaemon;
 use tempfile::TempDir;
 
-use crate::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig, RootNodesWrapper};
+use crate::pathinfoservice::RedbPathInfoService;
+use crate::pathinfoservice::RedbPathInfoServiceConfig;
+use crate::pathinfoservice::RootNodesWrapper;
 
 /// Regression test for #206.
 /// Call opendir(), which calls `list()` or the `RootNodesProvider`, which some
@@ -25,11 +27,8 @@ fn list_async_pathinfoservice() {
 
     let directory_service = {
         let url: url::Url = "redb+memory:".parse().expect("URL to parse");
-        RedbDirectoryService::new_temporary(
-            "root".to_owned(),
-            url.try_into().expect("url to parse to config"),
-        )
-        .expect("DirectoryService to be created")
+        RedbDirectoryService::new_temporary("root".to_owned(), url.try_into().expect("url to parse to config"))
+            .expect("DirectoryService to be created")
     };
 
     // Manually start a tokio runtime, we want most of this test to not be in
@@ -43,15 +42,9 @@ fn list_async_pathinfoservice() {
     let p_mountpoint = tmpdir.path();
 
     let path_info_service = {
-        let url = format!(
-            "redb:{}",
-            tmpdir_pathinfoservice
-                .path()
-                .join("pathinfos.redb")
-                .to_string_lossy()
-        )
-        .parse::<url::Url>()
-        .expect("URL to parse");
+        let url = format!("redb:{}", tmpdir_pathinfoservice.path().join("pathinfos.redb").to_string_lossy())
+            .parse::<url::Url>()
+            .expect("URL to parse");
 
         tokio_runtime
             .block_on(tokio_runtime.spawn(async move {
@@ -80,11 +73,7 @@ fn list_async_pathinfoservice() {
         .block_on({
             let handle = tokio_runtime.handle();
             let p = p_mountpoint.to_path_buf();
-            async move {
-                handle
-                    .spawn_blocking(move || FuseDaemon::new(fs, p, 4, false))
-                    .await
-            }
+            async move { handle.spawn_blocking(move || FuseDaemon::new(fs, p, 4, false)).await }
         })
         .expect("task to finish")
         .expect("mount to succeed");

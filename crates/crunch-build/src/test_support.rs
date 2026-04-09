@@ -4,38 +4,42 @@
 //! for in-memory blob/directory/pathinfo services.
 #![cfg(test)]
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use async_trait::async_trait;
-
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, Mutex};
-
-use nix_compat::derivation::{Derivation, Output};
+use nix_compat::derivation::Derivation;
+use nix_compat::derivation::Output;
+use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
-use snix_build::buildservice::{BuildOutput, BuildRequest, BuildResult, BuildService};
-use snix_castore::blobservice::{BlobService, MemoryBlobService};
-use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+use snix_build::buildservice::BuildOutput;
+use snix_build::buildservice::BuildRequest;
+use snix_build::buildservice::BuildResult;
+use snix_build::buildservice::BuildService;
 use snix_castore::Node;
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_store::pathinfoservice::LruPathInfoService;
 use tokio::io::AsyncWriteExt;
 
 use crate::registry::DerivationRegistry;
 use crate::signing;
-use nix_compat::narinfo::VerifyingKey;
 
 /// Create a temporary in-memory directory service.
 pub fn tmp_ds() -> RedbDirectoryService {
-    RedbDirectoryService::new_temporary(
-        "test".to_string(),
-        RedbDirectoryServiceConfig::default(),
-    )
-    .unwrap()
+    RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
 }
 
 /// A test keypair (same as nix-compat's DUMMY_KEYPAIR).
 pub fn test_keypair() -> signing::KeyPair {
     signing::load_keypair(
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 /// Default trusted keys for tests (local + cache.nixos.org-1).
@@ -45,10 +49,7 @@ pub fn test_trusted_keys() -> Vec<VerifyingKey> {
 
 /// Create an in-memory LRU path info service.
 pub fn test_pis() -> LruPathInfoService {
-    LruPathInfoService::with_capacity(
-        "test".to_string(),
-        std::num::NonZeroUsize::new(128).unwrap(),
-    )
+    LruPathInfoService::with_capacity("test".to_string(), std::num::NonZeroUsize::new(128).unwrap())
 }
 
 /// A mock BuildService that records command_args from each request and
@@ -71,15 +72,11 @@ impl MockBuildService {
     }
 }
 
-
 #[async_trait]
 #[async_trait]
 impl BuildService for MockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(request.command_args.clone());
+        self.calls.lock().unwrap().push(request.command_args.clone());
 
         let mut writer = BlobService::open_write(&self.blob_service).await;
         writer.write_all(b"mock output").await.unwrap();
@@ -112,13 +109,10 @@ pub fn build_and_register(
     kp: &mut DerivationRegistry,
 ) -> (StorePath<String>, Derivation) {
     let mut outputs = BTreeMap::new();
-    outputs.insert(
-        "out".to_string(),
-        Output {
-            path: None,
-            ca_hash: None,
-        },
-    );
+    outputs.insert("out".to_string(), Output {
+        path: None,
+        ca_hash: None,
+    });
     let mut environment = BTreeMap::new();
     environment.insert("name".to_string(), name.into());
     environment.insert("system".to_string(), "x86_64-linux".into());
@@ -127,10 +121,7 @@ pub fn build_and_register(
 
     let mut input_derivations = BTreeMap::new();
     for (dp, on) in input_drvs {
-        input_derivations
-            .entry(dp.clone())
-            .or_insert_with(BTreeSet::new)
-            .insert(on.to_string());
+        input_derivations.entry(dp.clone()).or_insert_with(BTreeSet::new).insert(on.to_string());
     }
 
     let mut drv = Derivation {
@@ -144,8 +135,7 @@ pub fn build_and_register(
     };
 
     let hdm = drv.hash_derivation_modulo(|parent_path| {
-        kp.get_hdm_by_drv_path(&parent_path.to_absolute_path())
-            .expect("parent should be in known_paths")
+        kp.get_hdm_by_drv_path(&parent_path.to_absolute_path()).expect("parent should be in known_paths")
     });
     drv.calculate_output_paths(name, &hdm).unwrap();
     let drv_path = drv.calculate_derivation_path(name).unwrap();
@@ -176,25 +166,19 @@ pub fn build_and_register_multi(
     environment.insert("name".to_string(), name.into());
     environment.insert("system".to_string(), "x86_64-linux".into());
     environment.insert("builder".to_string(), "/bin/sh".into());
-    environment.insert(
-        "outputs".to_string(),
-        output_names.join(" ").into(),
-    );
+    environment.insert("outputs".to_string(), output_names.join(" ").into());
 
     for on in output_names {
-        outputs.insert(
-            on.to_string(),
-            Output { path: None, ca_hash: None },
-        );
+        outputs.insert(on.to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
         environment.insert(on.to_string(), "".into());
     }
 
     let mut input_derivations = BTreeMap::new();
     for (dp, on) in input_drvs {
-        input_derivations
-            .entry(dp.clone())
-            .or_insert_with(BTreeSet::new)
-            .insert(on.to_string());
+        input_derivations.entry(dp.clone()).or_insert_with(BTreeSet::new).insert(on.to_string());
     }
 
     let mut drv = Derivation {
@@ -208,8 +192,7 @@ pub fn build_and_register_multi(
     };
 
     let hdm = drv.hash_derivation_modulo(|parent_path| {
-        kp.get_hdm_by_drv_path(&parent_path.to_absolute_path())
-            .expect("parent should be in known_paths")
+        kp.get_hdm_by_drv_path(&parent_path.to_absolute_path()).expect("parent should be in known_paths")
     });
     drv.calculate_output_paths(name, &hdm).unwrap();
     let drv_path = drv.calculate_derivation_path(name).unwrap();
@@ -226,10 +209,7 @@ pub fn build_and_register_multi(
 /// Like `build_and_register` but names the output with `.drv` suffix
 /// so the dynamic derivation detector picks it up.
 #[allow(dead_code)]
-pub fn build_and_register_producer(
-    name: &str,
-    kp: &mut DerivationRegistry,
-) -> (StorePath<String>, Derivation) {
+pub fn build_and_register_producer(name: &str, kp: &mut DerivationRegistry) -> (StorePath<String>, Derivation) {
     // Producer name ends with .drv so output path triggers detection.
     let producer_name = format!("{name}.drv");
     build_and_register(&producer_name, &[], kp)
@@ -266,22 +246,17 @@ impl DrvProducingMockBuildService {
     }
 }
 
-
 #[async_trait]
 #[async_trait]
 impl BuildService for DrvProducingMockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(request.command_args.clone());
+        self.calls.lock().unwrap().push(request.command_args.clone());
 
         // Check if any name substring matches this request's args.
-        let content: Vec<u8> = self.drv_outputs
+        let content: Vec<u8> = self
+            .drv_outputs
             .iter()
-            .find(|(marker, _)| {
-                request.command_args.iter().any(|a| a.contains(marker.as_str()))
-            })
+            .find(|(marker, _)| request.command_args.iter().any(|a| a.contains(marker.as_str())))
             .map(|(_, aterm)| aterm.clone())
             .unwrap_or_else(|| b"mock output".to_vec());
 
@@ -317,10 +292,7 @@ pub struct FailingMockBuildService {
 }
 
 impl FailingMockBuildService {
-    pub fn new(
-        blob_service: MemoryBlobService,
-        fail_markers: Vec<String>,
-    ) -> (Self, Arc<Mutex<Vec<Vec<String>>>>) {
+    pub fn new(blob_service: MemoryBlobService, fail_markers: Vec<String>) -> (Self, Arc<Mutex<Vec<Vec<String>>>>) {
         let calls = Arc::new(Mutex::new(Vec::new()));
         (
             Self {
@@ -333,26 +305,20 @@ impl FailingMockBuildService {
     }
 }
 
-
 #[async_trait]
 #[async_trait]
 impl BuildService for FailingMockBuildService {
     async fn do_build(&self, request: BuildRequest) -> std::io::Result<BuildResult> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(request.command_args.clone());
+        self.calls.lock().unwrap().push(request.command_args.clone());
 
         // Check if this build should fail.
-        let should_fail = self.fail_markers.iter().any(|marker| {
-            request.command_args.iter().any(|a| a.contains(marker.as_str()))
-        });
+        let should_fail = self
+            .fail_markers
+            .iter()
+            .any(|marker| request.command_args.iter().any(|a| a.contains(marker.as_str())));
 
         if should_fail {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "simulated build failure",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "simulated build failure"));
         }
 
         let mut writer = BlobService::open_write(&self.blob_service).await;

@@ -7,9 +7,8 @@ use std::thread;
 use ::proptest::prelude::TestCaseError;
 use thiserror::Error;
 
-use crate::wire::ProtocolVersion;
-
 use super::NixWrite;
+use crate::wire::ProtocolVersion;
 
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -134,30 +133,24 @@ impl Builder {
     }
 
     pub fn write_slice(&mut self, value: &[u8]) -> &mut Self {
-        self.ops
-            .push_back(Operation::WriteSlice(value.to_vec(), Ok(())));
+        self.ops.push_back(Operation::WriteSlice(value.to_vec(), Ok(())));
         self
     }
 
     pub fn write_slice_error(&mut self, value: &[u8], err: Error) -> &mut Self {
-        self.ops
-            .push_back(Operation::WriteSlice(value.to_vec(), Err(err)));
+        self.ops.push_back(Operation::WriteSlice(value.to_vec(), Err(err)));
         self
     }
 
     pub fn write_display<D>(&mut self, value: D) -> &mut Self
-    where
-        D: fmt::Display,
-    {
+    where D: fmt::Display {
         let msg = value.to_string();
         self.ops.push_back(Operation::WriteDisplay(msg, Ok(())));
         self
     }
 
     pub fn write_display_error<D>(&mut self, value: D, err: Error) -> &mut Self
-    where
-        D: fmt::Display,
-    {
+    where D: fmt::Display {
         let msg = value.to_string();
         self.ops.push_back(Operation::WriteDisplay(msg, Err(err)));
         self
@@ -176,9 +169,7 @@ impl Builder {
     fn write_operation(&mut self, op: &Operation) -> &mut Self {
         match op {
             Operation::WriteNumber(value, Ok(_)) => self.write_number(*value),
-            Operation::WriteNumber(value, Err(Error::UnexpectedNumber(_))) => {
-                self.write_number(*value)
-            }
+            Operation::WriteNumber(value, Err(Error::UnexpectedNumber(_))) => self.write_number(*value),
             Operation::WriteNumber(_, Err(Error::ExtraWrite(OperationType::WriteNumber))) => self,
             Operation::WriteNumber(_, Err(Error::WrongWrite(op, OperationType::WriteNumber))) => {
                 self.write_operation_type(*op)
@@ -208,9 +199,7 @@ impl Builder {
             Operation::WriteDisplay(value, Err(Error::IO(kind, msg))) => {
                 self.write_display_error(value, Error::IO(*kind, msg.clone()))
             }
-            Operation::WriteDisplay(value, Err(Error::UnexpectedDisplay(_))) => {
-                self.write_display(value)
-            }
+            Operation::WriteDisplay(value, Err(Error::UnexpectedDisplay(_))) => self.write_display(value),
             Operation::WriteDisplay(_, Err(Error::ExtraWrite(OperationType::WriteDisplay))) => self,
             Operation::WriteDisplay(_, Err(Error::WrongWrite(op, OperationType::WriteDisplay))) => {
                 self.write_operation_type(*op)
@@ -244,10 +233,7 @@ impl Mock {
     async fn assert_operation(&mut self, op: Operation) {
         match op {
             Operation::WriteNumber(_, Err(Error::UnexpectedNumber(value))) => {
-                assert_eq!(
-                    self.write_number(value).await,
-                    Err(Error::UnexpectedNumber(value))
-                );
+                assert_eq!(self.write_number(value).await, Err(Error::UnexpectedNumber(value)));
             }
             Operation::WriteNumber(value, res) => {
                 assert_eq!(self.write_number(value).await, res);
@@ -273,10 +259,7 @@ impl Mock {
 
         match op {
             Operation::WriteNumber(_, Err(Error::UnexpectedNumber(value))) => {
-                prop_assert_eq!(
-                    self.write_number(value).await,
-                    Err(Error::UnexpectedNumber(value))
-                );
+                prop_assert_eq!(self.write_number(value).await, Err(Error::UnexpectedNumber(value)));
             }
             Operation::WriteNumber(value, res) => {
                 prop_assert_eq!(self.write_number(value).await, res);
@@ -366,32 +349,26 @@ impl Drop for Mock {
 mod proptest {
     use std::io;
 
-    use proptest::{
-        prelude::{Arbitrary, BoxedStrategy, Just, Strategy, any},
-        prop_oneof,
-    };
+    use proptest::prelude::Arbitrary;
+    use proptest::prelude::BoxedStrategy;
+    use proptest::prelude::Just;
+    use proptest::prelude::Strategy;
+    use proptest::prelude::any;
+    use proptest::prop_oneof;
 
-    use super::{Error, Operation, OperationType};
+    use super::Error;
+    use super::Operation;
+    use super::OperationType;
 
     pub fn arb_write_number_operation() -> impl Strategy<Value = Operation> {
-        (
-            any::<u64>(),
-            prop_oneof![
-                Just(Ok(())),
-                any::<u64>().prop_map(|v| Err(Error::UnexpectedNumber(v))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteSlice,
-                    OperationType::WriteNumber
-                ))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteDisplay,
-                    OperationType::WriteNumber
-                ))),
-                any::<String>().prop_map(|s| Err(Error::Custom(s))),
-                (any::<io::ErrorKind>(), any::<String>())
-                    .prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
-            ],
-        )
+        (any::<u64>(), prop_oneof![
+            Just(Ok(())),
+            any::<u64>().prop_map(|v| Err(Error::UnexpectedNumber(v))),
+            Just(Err(Error::WrongWrite(OperationType::WriteSlice, OperationType::WriteNumber))),
+            Just(Err(Error::WrongWrite(OperationType::WriteDisplay, OperationType::WriteNumber))),
+            any::<String>().prop_map(|s| Err(Error::Custom(s))),
+            (any::<io::ErrorKind>(), any::<String>()).prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
+        ])
             .prop_filter("same number", |(v, res)| match res {
                 Err(Error::UnexpectedNumber(exp_v)) => v != exp_v,
                 _ => true,
@@ -400,24 +377,14 @@ mod proptest {
     }
 
     pub fn arb_write_slice_operation() -> impl Strategy<Value = Operation> {
-        (
-            any::<Vec<u8>>(),
-            prop_oneof![
-                Just(Ok(())),
-                any::<Vec<u8>>().prop_map(|v| Err(Error::UnexpectedSlice(v))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteNumber,
-                    OperationType::WriteSlice
-                ))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteDisplay,
-                    OperationType::WriteSlice
-                ))),
-                any::<String>().prop_map(|s| Err(Error::Custom(s))),
-                (any::<io::ErrorKind>(), any::<String>())
-                    .prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
-            ],
-        )
+        (any::<Vec<u8>>(), prop_oneof![
+            Just(Ok(())),
+            any::<Vec<u8>>().prop_map(|v| Err(Error::UnexpectedSlice(v))),
+            Just(Err(Error::WrongWrite(OperationType::WriteNumber, OperationType::WriteSlice))),
+            Just(Err(Error::WrongWrite(OperationType::WriteDisplay, OperationType::WriteSlice))),
+            any::<String>().prop_map(|s| Err(Error::Custom(s))),
+            (any::<io::ErrorKind>(), any::<String>()).prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
+        ])
             .prop_filter("same slice", |(v, res)| match res {
                 Err(Error::UnexpectedSlice(exp_v)) => v != exp_v,
                 _ => true,
@@ -428,37 +395,24 @@ mod proptest {
     #[allow(dead_code)]
     pub fn arb_extra_write() -> impl Strategy<Value = Operation> {
         prop_oneof![
-            any::<u64>().prop_map(|msg| {
-                Operation::WriteNumber(msg, Err(Error::ExtraWrite(OperationType::WriteNumber)))
-            }),
-            any::<Vec<u8>>().prop_map(|msg| {
-                Operation::WriteSlice(msg, Err(Error::ExtraWrite(OperationType::WriteSlice)))
-            }),
-            any::<String>().prop_map(|msg| {
-                Operation::WriteDisplay(msg, Err(Error::ExtraWrite(OperationType::WriteDisplay)))
-            }),
+            any::<u64>()
+                .prop_map(|msg| { Operation::WriteNumber(msg, Err(Error::ExtraWrite(OperationType::WriteNumber))) }),
+            any::<Vec<u8>>()
+                .prop_map(|msg| { Operation::WriteSlice(msg, Err(Error::ExtraWrite(OperationType::WriteSlice))) }),
+            any::<String>()
+                .prop_map(|msg| { Operation::WriteDisplay(msg, Err(Error::ExtraWrite(OperationType::WriteDisplay))) }),
         ]
     }
 
     pub fn arb_write_display_operation() -> impl Strategy<Value = Operation> {
-        (
-            any::<String>(),
-            prop_oneof![
-                Just(Ok(())),
-                any::<String>().prop_map(|v| Err(Error::UnexpectedDisplay(v))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteNumber,
-                    OperationType::WriteDisplay
-                ))),
-                Just(Err(Error::WrongWrite(
-                    OperationType::WriteSlice,
-                    OperationType::WriteDisplay
-                ))),
-                any::<String>().prop_map(|s| Err(Error::Custom(s))),
-                (any::<io::ErrorKind>(), any::<String>())
-                    .prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
-            ],
-        )
+        (any::<String>(), prop_oneof![
+            Just(Ok(())),
+            any::<String>().prop_map(|v| Err(Error::UnexpectedDisplay(v))),
+            Just(Err(Error::WrongWrite(OperationType::WriteNumber, OperationType::WriteDisplay))),
+            Just(Err(Error::WrongWrite(OperationType::WriteSlice, OperationType::WriteDisplay))),
+            any::<String>().prop_map(|s| Err(Error::Custom(s))),
+            (any::<io::ErrorKind>(), any::<String>()).prop_map(|(kind, msg)| Err(Error::IO(kind, msg))),
+        ])
             .prop_filter("same string", |(v, res)| match res {
                 Err(Error::UnexpectedDisplay(exp_v)) => v != exp_v,
                 _ => true,
@@ -491,13 +445,13 @@ mod test {
     use proptest::prelude::any;
     use proptest::proptest;
 
+    use super::Builder;
+    use super::Error;
     use crate::wire::ser::Error as _;
     use crate::wire::ser::NixWrite;
     use crate::wire::ser::mock::Operation;
     use crate::wire::ser::mock::OperationType;
     use crate::wire::ser::mock::proptest::arb_extra_write;
-
-    use super::{Builder, Error};
 
     #[tokio::test]
     async fn write_number() {
@@ -507,87 +461,57 @@ mod test {
 
     #[tokio::test]
     async fn write_number_error() {
-        let mut mock = Builder::new()
-            .write_number_error(10, Error::custom("bad number"))
-            .build();
-        assert_eq!(
-            Err(Error::custom("bad number")),
-            mock.write_number(10).await
-        );
+        let mut mock = Builder::new().write_number_error(10, Error::custom("bad number")).build();
+        assert_eq!(Err(Error::custom("bad number")), mock.write_number(10).await);
     }
 
     #[tokio::test]
     async fn write_number_unexpected() {
         let mut mock = Builder::new().write_slice(b"").build();
-        assert_eq!(
-            Err(Error::unexpected_write_number(OperationType::WriteSlice)),
-            mock.write_number(11).await
-        );
+        assert_eq!(Err(Error::unexpected_write_number(OperationType::WriteSlice)), mock.write_number(11).await);
     }
 
     #[tokio::test]
     async fn write_number_unexpected_number() {
         let mut mock = Builder::new().write_number(10).build();
-        assert_eq!(
-            Err(Error::UnexpectedNumber(11)),
-            mock.write_number(11).await
-        );
+        assert_eq!(Err(Error::UnexpectedNumber(11)), mock.write_number(11).await);
     }
 
     #[tokio::test]
     async fn extra_write_number() {
         let mut mock = Builder::new().build();
-        assert_eq!(
-            Err(Error::ExtraWrite(OperationType::WriteNumber)),
-            mock.write_number(11).await
-        );
+        assert_eq!(Err(Error::ExtraWrite(OperationType::WriteNumber)), mock.write_number(11).await);
     }
 
     #[tokio::test]
     async fn write_slice() {
-        let mut mock = Builder::new()
-            .write_slice(&[])
-            .write_slice(&hex!("0000 1234 5678 9ABC DEFF"))
-            .build();
+        let mut mock = Builder::new().write_slice(&[]).write_slice(&hex!("0000 1234 5678 9ABC DEFF")).build();
         mock.write_slice(&[]).await.expect("write_slice empty");
-        mock.write_slice(&hex!("0000 1234 5678 9ABC DEFF"))
-            .await
-            .expect("write_slice");
+        mock.write_slice(&hex!("0000 1234 5678 9ABC DEFF")).await.expect("write_slice");
     }
 
     #[tokio::test]
     async fn write_slice_error() {
-        let mut mock = Builder::new()
-            .write_slice_error(&[], Error::custom("bad slice"))
-            .build();
+        let mut mock = Builder::new().write_slice_error(&[], Error::custom("bad slice")).build();
         assert_eq!(Err(Error::custom("bad slice")), mock.write_slice(&[]).await);
     }
 
     #[tokio::test]
     async fn write_slice_unexpected() {
         let mut mock = Builder::new().write_number(10).build();
-        assert_eq!(
-            Err(Error::unexpected_write_slice(OperationType::WriteNumber)),
-            mock.write_slice(b"").await
-        );
+        assert_eq!(Err(Error::unexpected_write_slice(OperationType::WriteNumber)), mock.write_slice(b"").await);
     }
 
     #[tokio::test]
     async fn write_slice_unexpected_slice() {
         let mut mock = Builder::new().write_slice(b"").build();
-        assert_eq!(
-            Err(Error::UnexpectedSlice(b"bad slice".to_vec())),
-            mock.write_slice(b"bad slice").await
-        );
+        assert_eq!(Err(Error::UnexpectedSlice(b"bad slice".to_vec())), mock.write_slice(b"bad slice").await);
     }
 
     #[tokio::test]
     async fn extra_write_slice() {
         let mut mock = Builder::new().build();
-        assert_eq!(
-            Err(Error::ExtraWrite(OperationType::WriteSlice)),
-            mock.write_slice(b"extra slice").await
-        );
+        assert_eq!(Err(Error::ExtraWrite(OperationType::WriteSlice)), mock.write_slice(b"extra slice").await);
     }
 
     #[tokio::test]
@@ -598,40 +522,26 @@ mod test {
 
     #[tokio::test]
     async fn write_display_error() {
-        let mut mock = Builder::new()
-            .write_display_error("testing", Error::custom("bad number"))
-            .build();
-        assert_eq!(
-            Err(Error::custom("bad number")),
-            mock.write_display("testing").await
-        );
+        let mut mock = Builder::new().write_display_error("testing", Error::custom("bad number")).build();
+        assert_eq!(Err(Error::custom("bad number")), mock.write_display("testing").await);
     }
 
     #[tokio::test]
     async fn write_display_unexpected() {
         let mut mock = Builder::new().write_number(10).build();
-        assert_eq!(
-            Err(Error::unexpected_write_display(OperationType::WriteNumber)),
-            mock.write_display("").await
-        );
+        assert_eq!(Err(Error::unexpected_write_display(OperationType::WriteNumber)), mock.write_display("").await);
     }
 
     #[tokio::test]
     async fn write_display_unexpected_display() {
         let mut mock = Builder::new().write_display("").build();
-        assert_eq!(
-            Err(Error::UnexpectedDisplay("bad display".to_string())),
-            mock.write_display("bad display").await
-        );
+        assert_eq!(Err(Error::UnexpectedDisplay("bad display".to_string())), mock.write_display("bad display").await);
     }
 
     #[tokio::test]
     async fn extra_write_display() {
         let mut mock = Builder::new().build();
-        assert_eq!(
-            Err(Error::ExtraWrite(OperationType::WriteDisplay)),
-            mock.write_display("extra slice").await
-        );
+        assert_eq!(Err(Error::ExtraWrite(OperationType::WriteDisplay)), mock.write_display("extra slice").await);
     }
 
     #[test]
@@ -642,10 +552,7 @@ mod test {
 
     #[test]
     fn proptest_mock() {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         proptest!(|(
             operations in any::<Vec<Operation>>(),
             extra_operations in proptest::collection::vec(arb_extra_write(), 0..3)

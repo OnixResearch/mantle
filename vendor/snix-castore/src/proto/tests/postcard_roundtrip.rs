@@ -1,5 +1,6 @@
-use super::super::*;
 use bytes::Bytes;
+
+use super::super::*;
 
 #[test]
 fn directory_roundtrip() {

@@ -1,21 +1,27 @@
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::io::Write;
+use std::io::{self};
+use std::sync::Arc;
+use std::task::Poll;
+
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use std::io::{self, Cursor, Write};
-use std::task::Poll;
-use std::{collections::HashMap, sync::Arc};
+use tracing::Level;
+use tracing::instrument;
 
-use tracing::{Level, instrument};
-
-use super::{BlobReader, BlobService, BlobWriter};
+use super::BlobReader;
+use super::BlobService;
+use super::BlobWriter;
 use crate::B3Digest;
-use crate::composition::{CompositionContext, ServiceBuilder};
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
 
 #[derive(Clone, Default)]
 pub struct MemoryBlobService {
     instance_name: String,
     db: Arc<RwLock<HashMap<B3Digest, Vec<u8>>>>,
 }
-
 
 #[async_trait]
 impl BlobService for MemoryBlobService {
@@ -55,7 +61,6 @@ impl TryFrom<url::Url> for MemoryBlobServiceConfig {
         Ok(MemoryBlobServiceConfig {})
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for MemoryBlobServiceConfig {
@@ -98,10 +103,7 @@ impl tokio::io::AsyncWrite for MemoryBlobWriter {
         b: &[u8],
     ) -> std::task::Poll<Result<usize, io::Error>> {
         Poll::Ready(match &mut self.writers {
-            None => Err(io::Error::new(
-                io::ErrorKind::NotConnected,
-                "already closed",
-            )),
+            None => Err(io::Error::new(io::ErrorKind::NotConnected, "already closed")),
             Some((buf, hasher)) => {
                 let bytes_written = buf.write(b)?;
                 hasher.write(&b[..bytes_written])
@@ -114,10 +116,7 @@ impl tokio::io::AsyncWrite for MemoryBlobWriter {
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), io::Error>> {
         Poll::Ready(match self.writers {
-            None => Err(io::Error::new(
-                io::ErrorKind::NotConnected,
-                "already closed",
-            )),
+            None => Err(io::Error::new(io::ErrorKind::NotConnected, "already closed")),
             Some(_) => Ok(()),
         })
     }
@@ -130,7 +129,6 @@ impl tokio::io::AsyncWrite for MemoryBlobWriter {
         Poll::Ready(Ok(()))
     }
 }
-
 
 #[async_trait]
 impl BlobWriter for MemoryBlobWriter {

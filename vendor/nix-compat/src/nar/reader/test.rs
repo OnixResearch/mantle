@@ -9,11 +9,7 @@ fn symlink() {
 
     match node {
         nar::reader::Node::Symlink { target } => {
-            assert_eq!(
-                &b"/nix/store/somewhereelse"[..],
-                &target,
-                "target must match"
-            );
+            assert_eq!(&b"/nix/store/somewhereelse"[..], &target, "target must match");
         }
         _ => panic!("unexpected type"),
     }
@@ -25,10 +21,7 @@ fn file() {
     let node = nar::reader::open(&mut f).unwrap();
 
     match node {
-        nar::reader::Node::File {
-            executable,
-            mut reader,
-        } => {
+        nar::reader::Node::File { executable, mut reader } => {
             assert!(!executable);
             let mut buf = vec![];
             reader.read_to_end(&mut buf).expect("read must succeed");
@@ -46,30 +39,18 @@ fn complicated() {
     match node {
         nar::reader::Node::Directory(mut dir_reader) => {
             // first entry is .keep, an empty regular file.
-            must_read_file(
-                ".keep",
-                dir_reader
-                    .next()
-                    .expect("next must succeed")
-                    .expect("must be some"),
-            );
+            must_read_file(".keep", dir_reader.next().expect("next must succeed").expect("must be some"));
 
             // second entry is aa, a symlink to /nix/store/somewhereelse
             must_be_symlink(
                 "aa",
                 "/nix/store/somewhereelse",
-                dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some"),
+                dir_reader.next().expect("next must be some").expect("must be some"),
             );
 
             {
                 // third entry is a directory called "keep"
-                let entry = dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some");
+                let entry = dir_reader.next().expect("next must be some").expect("must be some");
 
                 assert_eq!(b"keep", entry.name);
 
@@ -77,10 +58,7 @@ fn complicated() {
                     nar::reader::Node::Directory(mut subdir_reader) => {
                         {
                             // first entry is .keep, an empty regular file.
-                            let entry = subdir_reader
-                                .next()
-                                .expect("next must succeed")
-                                .expect("must be some");
+                            let entry = subdir_reader.next().expect("next must succeed").expect("must be some");
 
                             must_read_file(".keep", entry);
                         }
@@ -112,10 +90,7 @@ fn file_read_abandoned() {
         nar::reader::Node::Directory(mut dir_reader) => {
             // first entry is .keep, an empty regular file.
             {
-                let entry = dir_reader
-                    .next()
-                    .expect("next must succeed")
-                    .expect("must be some");
+                let entry = dir_reader.next().expect("next must succeed").expect("must be some");
 
                 assert_eq!(b".keep", entry.name);
                 // don't bother to finish reading it.
@@ -137,30 +112,18 @@ fn dir_read_abandoned() {
     match node {
         nar::reader::Node::Directory(mut dir_reader) => {
             // first entry is .keep, an empty regular file.
-            must_read_file(
-                ".keep",
-                dir_reader
-                    .next()
-                    .expect("next must succeed")
-                    .expect("must be some"),
-            );
+            must_read_file(".keep", dir_reader.next().expect("next must succeed").expect("must be some"));
 
             // second entry is aa, a symlink to /nix/store/somewhereelse
             must_be_symlink(
                 "aa",
                 "/nix/store/somewhereelse",
-                dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some"),
+                dir_reader.next().expect("next must be some").expect("must be some"),
             );
 
             {
                 // third entry is a directory called "keep"
-                let entry = dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some");
+                let entry = dir_reader.next().expect("next must be some").expect("must be some");
 
                 assert_eq!(b"keep", entry.name);
 
@@ -188,30 +151,18 @@ fn dir_read_after_none() {
     match node {
         nar::reader::Node::Directory(mut dir_reader) => {
             // first entry is .keep, an empty regular file.
-            must_read_file(
-                ".keep",
-                dir_reader
-                    .next()
-                    .expect("next must succeed")
-                    .expect("must be some"),
-            );
+            must_read_file(".keep", dir_reader.next().expect("next must succeed").expect("must be some"));
 
             // second entry is aa, a symlink to /nix/store/somewhereelse
             must_be_symlink(
                 "aa",
                 "/nix/store/somewhereelse",
-                dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some"),
+                dir_reader.next().expect("next must be some").expect("must be some"),
             );
 
             {
                 // third entry is a directory called "keep"
-                let entry = dir_reader
-                    .next()
-                    .expect("next must be some")
-                    .expect("must be some");
+                let entry = dir_reader.next().expect("next must be some").expect("must be some");
 
                 assert_eq!(b"keep", entry.name);
 
@@ -220,10 +171,7 @@ fn dir_read_after_none() {
                         // first entry is .keep, an empty regular file.
                         must_read_file(
                             ".keep",
-                            subdir_reader
-                                .next()
-                                .expect("next must succeed")
-                                .expect("must be some"),
+                            subdir_reader.next().expect("next must succeed").expect("must be some"),
                         );
 
                         // we must read the None
@@ -251,10 +199,7 @@ fn must_read_file(name: &'static str, entry: nar::reader::Entry<'_, '_>) {
     assert_eq!(name.as_bytes(), entry.name);
 
     match entry.node {
-        nar::reader::Node::File {
-            executable,
-            mut reader,
-        } => {
+        nar::reader::Node::File { executable, mut reader } => {
             assert!(!executable);
             assert_eq!(reader.read(&mut [0]).unwrap(), 0);
         }
@@ -262,11 +207,7 @@ fn must_read_file(name: &'static str, entry: nar::reader::Entry<'_, '_>) {
     }
 }
 
-fn must_be_symlink(
-    name: &'static str,
-    exp_target: &'static str,
-    entry: nar::reader::Entry<'_, '_>,
-) {
+fn must_be_symlink(name: &'static str, exp_target: &'static str, entry: nar::reader::Entry<'_, '_>) {
     assert_eq!(name.as_bytes(), entry.name);
 
     match entry.node {

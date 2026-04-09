@@ -1,12 +1,12 @@
 use async_trait::async_trait;
+use tracing::instrument;
+use tracing::warn;
+
 use super::Directory;
 use super::DirectoryPutter;
 use super::DirectoryService;
 use crate::B3Digest;
 use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
-
-use tracing::instrument;
-use tracing::warn;
 
 /// This is an implementation of DirectoryPutter that simply
 /// inserts individual Directory messages one by one, on close, after
@@ -18,8 +18,7 @@ pub struct SimplePutter<'a, DS> {
 }
 
 impl<'a, DS> SimplePutter<'a, DS>
-where
-    DS: DirectoryService,
+where DS: DirectoryService
 {
     pub fn new(directory_service: &'a DS) -> Self {
         Self {
@@ -28,7 +27,6 @@ where
         }
     }
 }
-
 
 #[async_trait]
 #[async_trait]
@@ -73,10 +71,7 @@ pub enum Error {
     #[error("DirectoryGraphBuilder already closed")]
     AlreadyClosed,
     #[error("got unexpected digest from backend, expected {expected}, actual {actual}")]
-    UnexpectedDigest {
-        expected: B3Digest,
-        actual: B3Digest,
-    },
+    UnexpectedDigest { expected: B3Digest, actual: B3Digest },
     #[error("failure during graph validation")]
     GraphValidation(#[from] super::OrderingError),
 }

@@ -1,3 +1,22 @@
+#[cfg(feature = "serde")]
+use std::collections::BTreeSet;
+use std::fs;
+#[cfg(feature = "serde")]
+use std::path::Path;
+#[cfg(feature = "serde")]
+use std::path::PathBuf;
+#[cfg(feature = "serde")]
+use std::str::FromStr;
+
+#[cfg(feature = "serde")]
+use bstr::BStr;
+#[cfg(feature = "serde")]
+use bstr::BString;
+#[cfg(feature = "serde")]
+use hex_literal::hex;
+#[cfg(feature = "serde")]
+use rstest::rstest;
+
 use super::parse_error::ErrorKind;
 use crate::derivation::Derivation;
 #[cfg(feature = "serde")]
@@ -6,19 +25,6 @@ use crate::derivation::parse_error::NomError;
 use crate::derivation::parser::Error;
 #[cfg(feature = "serde")]
 use crate::store_path::StorePath;
-#[cfg(feature = "serde")]
-use bstr::{BStr, BString};
-#[cfg(feature = "serde")]
-use hex_literal::hex;
-#[cfg(feature = "serde")]
-use rstest::rstest;
-#[cfg(feature = "serde")]
-use std::collections::BTreeSet;
-use std::fs;
-#[cfg(feature = "serde")]
-use std::path::{Path, PathBuf};
-#[cfg(feature = "serde")]
-use std::str::FromStr;
 
 const RESOURCES_PATHS: &str = "src/derivation/tests/derivation_tests";
 
@@ -29,10 +35,8 @@ fn check_serialization(
     #[exclude("(cp1252)|(latin1)")] // skip JSON files known to fail parsing
     path_to_drv_file: PathBuf,
 ) {
-    let json_bytes =
-        fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
-    let derivation: Derivation =
-        serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
+    let json_bytes = fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
+    let derivation: Derivation = serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
 
     let mut serialized_derivation = Vec::new();
     derivation.serialize(&mut serialized_derivation).unwrap();
@@ -49,14 +53,10 @@ fn validate(
     #[exclude("(cp1252)|(latin1)")] // skip JSON files known to fail parsing
     path_to_drv_file: PathBuf,
 ) {
-    let json_bytes =
-        fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
-    let derivation: Derivation =
-        serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
+    let json_bytes = fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
+    let derivation: Derivation = serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
 
-    derivation
-        .validate(true)
-        .expect("derivation failed to validate")
+    derivation.validate(true).expect("derivation failed to validate")
 }
 
 #[cfg(feature = "serde")]
@@ -66,10 +66,8 @@ fn check_to_aterm_bytes(
     #[exclude("(cp1252)|(latin1)")] // skip JSON files known to fail parsing
     path_to_drv_file: PathBuf,
 ) {
-    let json_bytes =
-        fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
-    let derivation: Derivation =
-        serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
+    let json_bytes = fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
+    let derivation: Derivation = serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
 
     let expected = fs::read(&path_to_drv_file).expect("unable to read .drv");
 
@@ -81,29 +79,21 @@ fn check_to_aterm_bytes(
 /// representations.
 #[cfg(feature = "serde")]
 #[rstest]
-fn from_aterm_bytes(
-    #[files("src/derivation/tests/derivation_tests/ok/*.drv")] path_to_drv_file: PathBuf,
-) {
+fn from_aterm_bytes(#[files("src/derivation/tests/derivation_tests/ok/*.drv")] path_to_drv_file: PathBuf) {
     // Read in ATerm representation.
     let aterm_bytes = fs::read(&path_to_drv_file).expect("unable to read .drv");
     let parsed_drv = Derivation::from_aterm_bytes(&aterm_bytes).expect("must succeed");
 
     // For where we're able to load JSON fixtures, parse them and compare the structs.
     // For where we're not, compare the bytes manually.
-    if path_to_drv_file.file_name().is_some_and(|s| {
-        s.as_encoded_bytes().ends_with(b"cp1252.drv")
-            || s.as_encoded_bytes().ends_with(b"latin1.drv")
-    }) {
-        assert_eq!(
-            &[0xc5, 0xc4, 0xd6][..],
-            parsed_drv.environment.get("chars").unwrap(),
-            "expected bytes to match",
-        );
+    if path_to_drv_file
+        .file_name()
+        .is_some_and(|s| s.as_encoded_bytes().ends_with(b"cp1252.drv") || s.as_encoded_bytes().ends_with(b"latin1.drv"))
+    {
+        assert_eq!(&[0xc5, 0xc4, 0xd6][..], parsed_drv.environment.get("chars").unwrap(), "expected bytes to match",);
     } else {
-        let json_bytes =
-            fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
-        let fixture_derivation: Derivation =
-            serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
+        let json_bytes = fs::read(path_to_drv_file.with_extension("drv.json")).expect("unable to read JSON");
+        let fixture_derivation: Derivation = serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
 
         assert_eq!(fixture_derivation, parsed_drv);
     }
@@ -121,8 +111,7 @@ fn from_aterm_bytes(
 
 #[test]
 fn from_aterm_bytes_duplicate_map_key() {
-    let buf: Vec<u8> =
-        fs::read(format!("{}/{}", RESOURCES_PATHS, "duplicate.drv")).expect("unable to read .drv");
+    let buf: Vec<u8> = fs::read(format!("{}/{}", RESOURCES_PATHS, "duplicate.drv")).expect("unable to read .drv");
 
     let err = Derivation::from_aterm_bytes(&buf).expect_err("must fail");
 
@@ -140,11 +129,8 @@ fn from_aterm_bytes_duplicate_map_key() {
 /// Ensure the parser detects and fails in this case.
 #[test]
 fn from_aterm_bytes_trailer() {
-    let mut buf: Vec<u8> = fs::read(format!(
-        "{}/ok/{}",
-        RESOURCES_PATHS, "0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
-    ))
-    .expect("unable to read .drv");
+    let mut buf: Vec<u8> = fs::read(format!("{}/ok/{}", RESOURCES_PATHS, "0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"))
+        .expect("unable to read .drv");
 
     buf.push(0x00);
 
@@ -161,16 +147,11 @@ fn from_aterm_bytes_trailer() {
 #[case::fixed_sha1("bar", "ss2p4wmxijn652haqyd7dckxwl4c7hxx-bar.drv")]
 #[case::simple_sha1("foo", "ch49594n9avinrf8ip0aslidkc4lxkqv-foo.drv")]
 #[case::multiple_outputs("has-multi-out", "h32dahq0bx5rp1krcdx3a53asj21jvhk-has-multi-out.drv")]
-#[case::structured_attrs(
-    "structured-attrs",
-    "9lj1lkjm2ag622mh4h9rpy6j607an8g2-structured-attrs.drv"
-)]
+#[case::structured_attrs("structured-attrs", "9lj1lkjm2ag622mh4h9rpy6j607an8g2-structured-attrs.drv")]
 #[case::unicode("unicode", "52a9id8hx688hvlnz4d1n25ml1jdykz0-unicode.drv")]
 fn derivation_path(#[case] name: &str, #[case] nix_fixture_name: &str) {
-    let json_bytes = fs::read(format!("{RESOURCES_PATHS}/ok/{nix_fixture_name}.json"))
-        .expect("unable to read JSON");
-    let derivation: Derivation =
-        serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
+    let json_bytes = fs::read(format!("{RESOURCES_PATHS}/ok/{nix_fixture_name}.json")).expect("unable to read JSON");
+    let derivation: Derivation = serde_json::from_slice(&json_bytes).expect("JSON was not well-formatted");
 
     let blake3_path = derivation.calculate_derivation_path(name).unwrap();
 
@@ -193,13 +174,10 @@ fn derivation_without_output_paths(derivation: &Derivation) -> Derivation {
     for (output_name, output) in &derivation.outputs {
         trimmed_env.insert(output_name.clone(), "".into());
         assert!(trimmed_outputs.contains_key(output_name));
-        trimmed_outputs.insert(
-            output_name.to_string(),
-            Output {
-                path: None,
-                ..output.clone()
-            },
-        );
+        trimmed_outputs.insert(output_name.to_string(), Output {
+            path: None,
+            ..output.clone()
+        });
     }
 
     // replace environment and outputs with the trimmed variants
@@ -219,8 +197,7 @@ fn derivation_without_output_paths(derivation: &Derivation) -> Derivation {
 #[case::fixed_sha256("0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv", hex!("724f3e3634fce4cbbbd3483287b8798588e80280660b9a63fd13a1bc90485b33"))]
 #[case::fixed_sha1("ss2p4wmxijn652haqyd7dckxwl4c7hxx-bar.drv", hex!("c79aebd0ce3269393d4a1fde2cbd1d975d879b40f0bf40a48f550edc107fd5df"))]
 fn hash_derivation_modulo_fixed(#[case] drv_path: &str, #[case] nix_sha256_digest: [u8; 32]) {
-    let json_bytes =
-        fs::read(format!("{RESOURCES_PATHS}/ok/{drv_path}.json")).expect("unable to read JSON");
+    let json_bytes = fs::read(format!("{RESOURCES_PATHS}/ok/{drv_path}.json")).expect("unable to read JSON");
     let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
 
     let actual = drv.hash_derivation_modulo(|_| panic!("must not be called"));
@@ -249,10 +226,7 @@ fn hash_derivation_modulo_fixed(#[case] drv_path: &str, #[case] nix_sha256_diges
 #[case::fixed_sha1("bar", "ss2p4wmxijn652haqyd7dckxwl4c7hxx-bar.drv")]
 #[case::simple_sha1("foo", "ch49594n9avinrf8ip0aslidkc4lxkqv-foo.drv")]
 #[case::multiple_outputs("has-multi-out", "h32dahq0bx5rp1krcdx3a53asj21jvhk-has-multi-out.drv")]
-#[case::structured_attrs(
-    "structured-attrs",
-    "9lj1lkjm2ag622mh4h9rpy6j607an8g2-structured-attrs.drv"
-)]
+#[case::structured_attrs("structured-attrs", "9lj1lkjm2ag622mh4h9rpy6j607an8g2-structured-attrs.drv")]
 #[case::unicode("unicode", "52a9id8hx688hvlnz4d1n25ml1jdykz0-unicode.drv")]
 #[case::cp1252("cp1252", "m1vfixn8iprlf0v9abmlrz7mjw1xj8kp-cp1252.drv")]
 #[case::latin1("latin1", "x6p0hg79i3wg0kkv7699935f7rrj9jf3-latin1.drv")]
@@ -274,10 +248,7 @@ fn output_paths(#[case] name: &str, #[case] drv_path_str: &str) {
             let json_bytes = fs::read(format!(
                 "{}/ok/{}.json",
                 RESOURCES_PATHS,
-                Path::new(&parent_drv_path.to_string())
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
+                Path::new(&parent_drv_path.to_string()).file_name().unwrap().to_string_lossy()
             ))
             .expect("unable to read JSON");
             let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
@@ -297,10 +268,7 @@ fn output_paths(#[case] name: &str, #[case] drv_path_str: &str) {
     // BLAKE3 paths differ from Nix-SHA-256 paths in fixture
     for (output_name, output) in &derivation.outputs {
         let nix_output = nix_derivation.outputs.get(output_name).unwrap();
-        assert_ne!(
-            output.path, nix_output.path,
-            "BLAKE3 output path for '{output_name}' must differ from Nix"
-        );
+        assert_ne!(output.path, nix_output.path, "BLAKE3 output path for '{output_name}' must differ from Nix");
     }
 
     // Deterministic: strip and recompute, same result
@@ -310,10 +278,7 @@ fn output_paths(#[case] name: &str, #[case] drv_path_str: &str) {
             let json_bytes = fs::read(format!(
                 "{}/ok/{}.json",
                 RESOURCES_PATHS,
-                Path::new(&parent_drv_path.to_string())
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
+                Path::new(&parent_drv_path.to_string()).file_name().unwrap().to_string_lossy()
             ))
             .expect("unable to read JSON");
             let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
@@ -369,32 +334,23 @@ fn output_path_construction() {
     bar_env.insert("builder".to_string(), ":".into());
     bar_env.insert("name".to_string(), "bar".into());
     bar_env.insert("out".to_string(), "".into());
-    bar_env.insert(
-        "outputHash".to_string(),
-        "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".into(),
-    );
+    bar_env.insert("outputHash".to_string(), "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".into());
     bar_env.insert("outputHashAlgo".to_string(), "sha256".into());
     bar_env.insert("outputHashMode".to_string(), "recursive".into());
     bar_env.insert("system".to_string(), ":".into());
 
-    bar_drv.outputs.insert(
-        "out".to_string(),
-        Output {
-            path: None,
-            ca_hash: Some(crate::nixhash::CAHash::Nar(
-                crate::nixhash::NixHash::from_algo_and_digest(
-                    crate::nixhash::HashAlgo::Sha256,
-                    &data_encoding::HEXLOWER
-                        .decode(
-                            "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                                .as_bytes(),
-                        )
-                        .unwrap(),
-                )
-                .unwrap(),
-            )),
-        },
-    );
+    bar_drv.outputs.insert("out".to_string(), Output {
+        path: None,
+        ca_hash: Some(crate::nixhash::CAHash::Nar(
+            crate::nixhash::NixHash::from_algo_and_digest(
+                crate::nixhash::HashAlgo::Sha256,
+                &data_encoding::HEXLOWER
+                    .decode("08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".as_bytes())
+                    .unwrap(),
+            )
+            .unwrap(),
+        )),
+    });
 
     let bar_hdm = bar_drv.hash_derivation_modulo(|_| panic!("FOD should not lookup"));
     bar_drv.calculate_output_paths("bar", &bar_hdm).unwrap();
@@ -414,22 +370,17 @@ fn output_path_construction() {
     };
 
     let foo_env = &mut foo_drv.environment;
-    foo_env.insert(
-        "bar".to_string(),
-        bar_out.path.as_ref().unwrap().to_absolute_path().as_bytes().into(),
-    );
+    foo_env.insert("bar".to_string(), bar_out.path.as_ref().unwrap().to_absolute_path().as_bytes().into());
     foo_env.insert("builder".to_string(), ":".into());
     foo_env.insert("name".to_string(), "foo".into());
     foo_env.insert("out".to_string(), "".into());
     foo_env.insert("system".to_string(), ":".into());
 
-    foo_drv.outputs.insert(
-        "out".to_string(),
-        Output { path: None, ca_hash: None },
-    );
-    foo_drv
-        .input_derivations
-        .insert(bar_drv_path.clone(), BTreeSet::from(["out".to_string()]));
+    foo_drv.outputs.insert("out".to_string(), Output {
+        path: None,
+        ca_hash: None,
+    });
+    foo_drv.input_derivations.insert(bar_drv_path.clone(), BTreeSet::from(["out".to_string()]));
 
     let foo_hdm = foo_drv.hash_derivation_modulo(|_drv_path| bar_hdm);
     foo_drv.calculate_output_paths("foo", &foo_hdm).unwrap();
@@ -449,11 +400,26 @@ fn output_path_construction() {
     let mut bar_drv2 = Derivation {
         builder: ":".to_string(),
         system: ":".to_string(),
-        environment: bar_drv.environment.iter()
-            .map(|(k, v)| if k == "out" { (k.clone(), "".into()) } else { (k.clone(), v.clone()) })
+        environment: bar_drv
+            .environment
+            .iter()
+            .map(|(k, v)| {
+                if k == "out" {
+                    (k.clone(), "".into())
+                } else {
+                    (k.clone(), v.clone())
+                }
+            })
             .collect(),
-        outputs: bar_drv.outputs.iter()
-            .map(|(k, v)| (k.clone(), Output { path: None, ..v.clone() }))
+        outputs: bar_drv
+            .outputs
+            .iter()
+            .map(|(k, v)| {
+                (k.clone(), Output {
+                    path: None,
+                    ..v.clone()
+                })
+            })
             .collect(),
         ..bar_drv.clone()
     };
@@ -467,16 +433,12 @@ fn output_path_construction() {
 #[cfg(feature = "serde")]
 #[test]
 fn derivation_path_with_store_dir_default() {
-    let json_bytes = fs::read(format!(
-        "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"
-    ))
-    .expect("unable to read JSON");
+    let json_bytes = fs::read(format!("{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"))
+        .expect("unable to read JSON");
     let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
 
     let default_path = drv.calculate_derivation_path("bar").unwrap();
-    let explicit_path = drv
-        .calculate_derivation_path_with_store_dir("bar", "/nix/store")
-        .unwrap();
+    let explicit_path = drv.calculate_derivation_path_with_store_dir("bar", "/nix/store").unwrap();
 
     assert_eq!(default_path, explicit_path);
 }
@@ -485,16 +447,12 @@ fn derivation_path_with_store_dir_default() {
 #[cfg(feature = "serde")]
 #[test]
 fn derivation_path_with_store_dir_custom() {
-    let json_bytes = fs::read(format!(
-        "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"
-    ))
-    .expect("unable to read JSON");
+    let json_bytes = fs::read(format!("{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv.json"))
+        .expect("unable to read JSON");
     let drv: Derivation = serde_json::from_slice(&json_bytes).expect("must deserialize");
 
     let default_path = drv.calculate_derivation_path("bar").unwrap();
-    let custom_path = drv
-        .calculate_derivation_path_with_store_dir("bar", "/opt/crunch")
-        .unwrap();
+    let custom_path = drv.calculate_derivation_path_with_store_dir("bar", "/opt/crunch").unwrap();
 
     assert_ne!(default_path, custom_path, "custom store dir must produce different drv path");
 }
@@ -504,10 +462,8 @@ fn derivation_path_with_store_dir_custom() {
 #[test]
 fn output_paths_with_store_dir_default() {
     let nix_drv = Derivation::from_aterm_bytes(
-        &fs::read(format!(
-            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
-        ))
-        .expect("unable to read .drv"),
+        &fs::read(format!("{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"))
+            .expect("unable to read .drv"),
     )
     .expect("must succeed");
 
@@ -517,8 +473,7 @@ fn output_paths_with_store_dir_default() {
     let hdm = drv1.hash_derivation_modulo(|_| panic!("FOD"));
 
     drv1.calculate_output_paths("bar", &hdm).unwrap();
-    drv2.calculate_output_paths_with_store_dir("bar", &hdm, "/nix/store")
-        .unwrap();
+    drv2.calculate_output_paths_with_store_dir("bar", &hdm, "/nix/store").unwrap();
 
     assert_eq!(drv1.outputs, drv2.outputs);
     assert_eq!(drv1.environment, drv2.environment);
@@ -531,23 +486,17 @@ fn output_paths_with_store_dir_default() {
 #[test]
 fn hdm_with_store_dir_custom() {
     let nix_drv = Derivation::from_aterm_bytes(
-        &fs::read(format!(
-            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
-        ))
-        .expect("unable to read .drv"),
+        &fs::read(format!("{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"))
+            .expect("unable to read .drv"),
     )
     .expect("must succeed");
 
     let hdm_default = nix_drv.hash_derivation_modulo(|_| panic!("FOD"));
-    let hdm_custom = nix_drv.hash_derivation_modulo_with_store_dir(
-        |_| panic!("FOD"),
-        "/opt/crunch",
-    );
+    let hdm_custom = nix_drv.hash_derivation_modulo_with_store_dir(|_| panic!("FOD"), "/opt/crunch");
 
     // FOD digests include the output path string, which has the prefix.
     // Different prefixes produce different FOD digests.
-    assert_ne!(hdm_default, hdm_custom,
-        "FOD HDM should differ with different store dir (path string changes)");
+    assert_ne!(hdm_default, hdm_custom, "FOD HDM should differ with different store dir (path string changes)");
 }
 
 /// hash_derivation_modulo_with_store_dir: non-FOD derivation produces
@@ -560,27 +509,18 @@ fn hdm_with_store_dir_non_fod() {
     let mut drv = Derivation::default();
     drv.builder = ":".to_string();
     drv.system = ":".to_string();
-    drv.outputs.insert(
-        "out".to_string(),
-        crate::derivation::Output {
-            path: None,
-            ca_hash: None,
-        },
-    );
+    drv.outputs.insert("out".to_string(), crate::derivation::Output {
+        path: None,
+        ca_hash: None,
+    });
     // Add an input source so the ATerm changes with different prefixes
-    let sp = crate::store_path::StorePath::from_bytes(
-        b"00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60"
-    ).unwrap();
+    let sp = crate::store_path::StorePath::from_bytes(b"00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60").unwrap();
     drv.input_sources.insert(sp);
 
     let hdm_default = drv.hash_derivation_modulo(|_| unreachable!());
-    let hdm_custom = drv.hash_derivation_modulo_with_store_dir(
-        |_| unreachable!(),
-        "/opt/crunch",
-    );
+    let hdm_custom = drv.hash_derivation_modulo_with_store_dir(|_| unreachable!(), "/opt/crunch");
 
-    assert_ne!(hdm_default, hdm_custom,
-        "non-FOD derivation HDM must differ with different store dir");
+    assert_ne!(hdm_default, hdm_custom, "non-FOD derivation HDM must differ with different store dir");
 }
 
 /// calculate_output_paths_with_store_dir: custom dir differs from default.
@@ -588,10 +528,8 @@ fn hdm_with_store_dir_non_fod() {
 #[test]
 fn output_paths_with_store_dir_custom() {
     let nix_drv = Derivation::from_aterm_bytes(
-        &fs::read(format!(
-            "{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"
-        ))
-        .expect("unable to read .drv"),
+        &fs::read(format!("{RESOURCES_PATHS}/ok/0hm2f1psjpcwg8fijsmr4wwxrx59s092-bar.drv"))
+            .expect("unable to read .drv"),
     )
     .expect("must succeed");
 
@@ -601,9 +539,7 @@ fn output_paths_with_store_dir_custom() {
     let hdm = drv_default.hash_derivation_modulo(|_| panic!("FOD"));
 
     drv_default.calculate_output_paths("bar", &hdm).unwrap();
-    drv_custom
-        .calculate_output_paths_with_store_dir("bar", &hdm, "/opt/crunch")
-        .unwrap();
+    drv_custom.calculate_output_paths_with_store_dir("bar", &hdm, "/opt/crunch").unwrap();
 
     // Paths differ
     let default_out = drv_default.outputs["out"].path.as_ref().unwrap();

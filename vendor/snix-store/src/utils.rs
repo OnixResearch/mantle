@@ -1,34 +1,32 @@
-use std::{
-    collections::HashMap,
-    pin::Pin,
-    sync::Arc,
-    task::{self, Poll},
-};
-use tokio::io::{self, AsyncWrite};
+use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Poll;
+use std::task::{self};
 
+use snix_castore::blobservice::BlobService;
+use snix_castore::composition::Composition;
+use snix_castore::composition::DeserializeWithRegistry;
+use snix_castore::composition::ServiceBuilder;
+use snix_castore::composition::with_registry;
+use snix_castore::directoryservice::DirectoryService;
 use snix_castore::utils as castore_utils;
-use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService};
+use tokio::io::AsyncWrite;
+use tokio::io::{self};
 use url::Url;
 
 use crate::composition::REG;
-use crate::nar::{NarCalculationService, SimpleRenderer};
+use crate::nar::NarCalculationService;
+use crate::nar::SimpleRenderer;
 use crate::pathinfoservice::PathInfoService;
-use snix_castore::composition::{
-    Composition, DeserializeWithRegistry, ServiceBuilder, with_registry,
-};
 
 #[derive(serde::Deserialize, Default)]
 pub struct CompositionConfigs {
-    pub blobservices:
-        HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn BlobService>>>>,
-    pub directoryservices: HashMap<
-        String,
-        DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>,
-    >,
-    pub pathinfoservices: HashMap<
-        String,
-        DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>>,
-    >,
+    pub blobservices: HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn BlobService>>>>,
+    pub directoryservices:
+        HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>>,
+    pub pathinfoservices:
+        HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn PathInfoService>>>>,
 }
 
 /// Provides a set of clap arguments to configure snix-\[ca\]store services.
@@ -115,18 +113,13 @@ pub async fn addrs_to_configs(
     let directory_service_url = Url::parse(&urls.castore_service_addrs.directory_service_addr)?;
     let path_info_service_url = Url::parse(&urls.path_info_service_addr)?;
 
-    configs.blobservices.insert(
-        "root".into(),
-        with_registry(&REG, || blob_service_url.try_into())?,
-    );
-    configs.directoryservices.insert(
-        "root".into(),
-        with_registry(&REG, || directory_service_url.try_into())?,
-    );
-    configs.pathinfoservices.insert(
-        "root".into(),
-        with_registry(&REG, || path_info_service_url.try_into())?,
-    );
+    configs.blobservices.insert("root".into(), with_registry(&REG, || blob_service_url.try_into())?);
+    configs
+        .directoryservices
+        .insert("root".into(), with_registry(&REG, || directory_service_url.try_into())?);
+    configs
+        .pathinfoservices
+        .insert("root".into(), with_registry(&REG, || path_info_service_url.try_into())?);
 
     Ok(configs)
 }
@@ -174,19 +167,9 @@ pub async fn construct_services_from_configs(
     // Until we revamped store composition and config, detect this special case here.
     let nar_calculation_service: Box<dyn NarCalculationService> = path_info_service
         .nar_calculation_service()
-        .unwrap_or_else(|| {
-            Box::new(SimpleRenderer::new(
-                blob_service.clone(),
-                directory_service.clone(),
-            ))
-        });
+        .unwrap_or_else(|| Box::new(SimpleRenderer::new(blob_service.clone(), directory_service.clone())));
 
-    Ok((
-        blob_service,
-        directory_service,
-        path_info_service,
-        nar_calculation_service,
-    ))
+    Ok((blob_service, directory_service, path_info_service, nar_calculation_service))
 }
 
 /// The inverse of [tokio_util::io::SyncIoBridge].
@@ -194,11 +177,7 @@ pub async fn construct_services_from_configs(
 pub struct AsyncIoBridge<T>(pub T);
 
 impl<W: std::io::Write + Unpin> AsyncWrite for AsyncIoBridge<W> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        _cx: &mut task::Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(self: Pin<&mut Self>, _cx: &mut task::Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         Poll::Ready(self.get_mut().0.write(buf))
     }
 
@@ -206,10 +185,7 @@ impl<W: std::io::Write + Unpin> AsyncWrite for AsyncIoBridge<W> {
         Poll::Ready(self.get_mut().0.flush())
     }
 
-    fn poll_shutdown(
-        self: Pin<&mut Self>,
-        _cx: &mut task::Context<'_>,
-    ) -> Poll<Result<(), io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut task::Context<'_>) -> Poll<Result<(), io::Error>> {
         Poll::Ready(Ok(()))
     }
 }

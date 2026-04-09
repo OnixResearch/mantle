@@ -2,8 +2,13 @@ use std::cmp::Ordering;
 
 mod url;
 
-use crate::{B3Digest, DirectoryError, path::PathComponent};
-pub use url::{parse_infused_nar_path, parse_urlsafe_proto, write_infused_nar_path};
+pub use url::parse_infused_nar_path;
+pub use url::parse_urlsafe_proto;
+pub use url::write_infused_nar_path;
+
+use crate::B3Digest;
+use crate::DirectoryError;
+use crate::path::PathComponent;
 
 // Data types — plain Rust structs with serde derives.
 include!("../generated/snix.castore.v1.rs");
@@ -28,8 +33,7 @@ impl Directory {
     /// the number of directory elements, and their size fields.
     pub fn size(&self) -> u64 {
         if cfg!(debug_assertions) {
-            self.size_checked()
-                .expect("Directory::size exceeds u64::MAX")
+            self.size_checked().expect("Directory::size exceeds u64::MAX")
         } else {
             self.size_checked().unwrap_or(u64::MAX)
         }
@@ -47,8 +51,7 @@ impl Directory {
     /// Calculates the digest of a Directory, which is the blake3 hash of
     /// its postcard-serialized canonical form.
     pub fn digest(&self) -> B3Digest {
-        let encoded = postcard::to_stdvec(self)
-            .expect("Directory serialization cannot fail");
+        let encoded = postcard::to_stdvec(self).expect("Directory serialization cannot fail");
         let mut hasher = blake3::Hasher::new();
         hasher.update(&encoded).finalize().as_bytes().into()
     }
@@ -62,44 +65,26 @@ impl TryFrom<Directory> for crate::Directory {
         // We'll notice duplicates across all three fields when constructing the Directory.
         // FUTUREWORK: use is_sorted() once stable, and/or implement the producer for
         // [crate::Directory::try_from_iter] iterating over all three and doing all checks inline.
-        value
-            .directories
-            .iter()
-            .try_fold(&b""[..], |prev_name, e| {
-                match e.name.as_ref().cmp(prev_name) {
-                    Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
-                    Ordering::Equal => Err(DirectoryError::DuplicateName(
-                        e.name
-                            .to_owned()
-                            .try_into()
-                            .map_err(DirectoryError::InvalidName)?,
-                    )),
-                    Ordering::Greater => Ok(e.name.as_ref()),
-                }
-            })?;
-        value.files.iter().try_fold(&b""[..], |prev_name, e| {
-            match e.name.as_ref().cmp(prev_name) {
-                Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
-                Ordering::Equal => Err(DirectoryError::DuplicateName(
-                    e.name
-                        .to_owned()
-                        .try_into()
-                        .map_err(DirectoryError::InvalidName)?,
-                )),
-                Ordering::Greater => Ok(e.name.as_ref()),
+        value.directories.iter().try_fold(&b""[..], |prev_name, e| match e.name.as_ref().cmp(prev_name) {
+            Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
+            Ordering::Equal => {
+                Err(DirectoryError::DuplicateName(e.name.to_owned().try_into().map_err(DirectoryError::InvalidName)?))
             }
+            Ordering::Greater => Ok(e.name.as_ref()),
         })?;
-        value.symlinks.iter().try_fold(&b""[..], |prev_name, e| {
-            match e.name.as_ref().cmp(prev_name) {
-                Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
-                Ordering::Equal => Err(DirectoryError::DuplicateName(
-                    e.name
-                        .to_owned()
-                        .try_into()
-                        .map_err(DirectoryError::InvalidName)?,
-                )),
-                Ordering::Greater => Ok(e.name.as_ref()),
+        value.files.iter().try_fold(&b""[..], |prev_name, e| match e.name.as_ref().cmp(prev_name) {
+            Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
+            Ordering::Equal => {
+                Err(DirectoryError::DuplicateName(e.name.to_owned().try_into().map_err(DirectoryError::InvalidName)?))
             }
+            Ordering::Greater => Ok(e.name.as_ref()),
+        })?;
+        value.symlinks.iter().try_fold(&b""[..], |prev_name, e| match e.name.as_ref().cmp(prev_name) {
+            Ordering::Less => Err(DirectoryError::WrongSorting(e.name.to_owned())),
+            Ordering::Equal => {
+                Err(DirectoryError::DuplicateName(e.name.to_owned().try_into().map_err(DirectoryError::InvalidName)?))
+            }
+            Ordering::Greater => Ok(e.name.as_ref()),
         })?;
 
         // FUTUREWORK: use is_sorted() once stable, and/or implement the producer for
@@ -182,32 +167,24 @@ impl Entry {
     /// Converts a proto [Entry] to a [crate::Node], and splits off the name as a [PathComponent].
     pub fn try_into_name_and_node(self) -> Result<(PathComponent, crate::Node), DirectoryError> {
         let (name_bytes, node) = self.try_into_unchecked_name_and_checked_node()?;
-        Ok((
-            name_bytes.try_into().map_err(DirectoryError::InvalidName)?,
-            node,
-        ))
+        Ok((name_bytes.try_into().map_err(DirectoryError::InvalidName)?, node))
     }
 
     /// Converts a proto [Entry] to a [crate::Node], and splits off the name as a
     /// [bytes::Bytes] without doing any checking of it.
-    fn try_into_unchecked_name_and_checked_node(
-        self,
-    ) -> Result<(bytes::Bytes, crate::Node), DirectoryError> {
+    fn try_into_unchecked_name_and_checked_node(self) -> Result<(bytes::Bytes, crate::Node), DirectoryError> {
         match self.entry.ok_or_else(|| DirectoryError::NoEntrySet)? {
             entry::Entry::Directory(n) => {
-                let digest = B3Digest::try_from(n.digest)
-                    .map_err(|e| DirectoryError::InvalidNode(n.name.clone(), e.into()))?;
+                let digest =
+                    B3Digest::try_from(n.digest).map_err(|e| DirectoryError::InvalidNode(n.name.clone(), e.into()))?;
 
-                let node = crate::Node::Directory {
-                    digest,
-                    size: n.size,
-                };
+                let node = crate::Node::Directory { digest, size: n.size };
 
                 Ok((n.name, node))
             }
             entry::Entry::File(n) => {
-                let digest = B3Digest::try_from(n.digest)
-                    .map_err(|e| DirectoryError::InvalidNode(n.name.clone(), e.into()))?;
+                let digest =
+                    B3Digest::try_from(n.digest).map_err(|e| DirectoryError::InvalidNode(n.name.clone(), e.into()))?;
 
                 let node = crate::Node::File {
                     digest,
@@ -221,10 +198,7 @@ impl Entry {
             entry::Entry::Symlink(n) => {
                 let node = crate::Node::Symlink {
                     target: n.target.try_into().map_err(|e| {
-                        DirectoryError::InvalidNode(
-                            n.name.clone(),
-                            crate::ValidateNodeError::InvalidSymlinkTarget(e),
-                        )
+                        DirectoryError::InvalidNode(n.name.clone(), crate::ValidateNodeError::InvalidSymlinkTarget(e))
                     })?,
                 };
 
@@ -288,10 +262,7 @@ impl StatBlobResponse {
     pub fn validate(&self) -> Result<(), ValidateStatBlobResponseError> {
         for (i, chunk) in self.chunks.iter().enumerate() {
             if chunk.digest.len() != blake3::KEY_LEN {
-                return Err(ValidateStatBlobResponseError::InvalidDigestLen(
-                    chunk.digest.len(),
-                    i,
-                ));
+                return Err(ValidateStatBlobResponseError::InvalidDigestLen(chunk.digest.len(), i));
             }
         }
         Ok(())

@@ -1,12 +1,26 @@
 use quote::ToTokens;
+use syn::Attribute;
+use syn::Expr;
+use syn::ExprLit;
+use syn::ExprPath;
+use syn::Lit;
+use syn::Token;
 use syn::meta::ParseNestedMeta;
 use syn::parse::Parse;
-use syn::{Attribute, Expr, ExprLit, ExprPath, Lit, Token, parse_quote};
+use syn::parse_quote;
 
 use super::Context;
-use super::symbol::{
-    CRATE, DEFAULT, DISPLAY, FROM, FROM_STR, INTO, NIX, Symbol, TRY_FROM, TRY_INTO, VERSION,
-};
+use super::symbol::CRATE;
+use super::symbol::DEFAULT;
+use super::symbol::DISPLAY;
+use super::symbol::FROM;
+use super::symbol::FROM_STR;
+use super::symbol::INTO;
+use super::symbol::NIX;
+use super::symbol::Symbol;
+use super::symbol::TRY_FROM;
+use super::symbol::TRY_INTO;
+use super::symbol::VERSION;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Default {
@@ -168,35 +182,21 @@ impl Container {
     }
 }
 
-pub fn get_lit_str(
-    ctx: &Context,
-    meta: &ParseNestedMeta,
-    attr: Symbol,
-) -> syn::Result<Option<syn::LitStr>> {
+pub fn get_lit_str(ctx: &Context, meta: &ParseNestedMeta, attr: Symbol) -> syn::Result<Option<syn::LitStr>> {
     let expr: Expr = meta.value()?.parse()?;
     let mut value = &expr;
     while let Expr::Group(e) = value {
         value = &e.expr;
     }
-    if let Expr::Lit(ExprLit {
-        lit: Lit::Str(s), ..
-    }) = value
-    {
+    if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = value {
         Ok(Some(s.clone()))
     } else {
-        ctx.error_spanned(
-            expr,
-            format_args!("expected nix attribute {attr} to be string"),
-        );
+        ctx.error_spanned(expr, format_args!("expected nix attribute {attr} to be string"));
         Ok(None)
     }
 }
 
-pub fn parse_lit<T: Parse>(
-    ctx: &Context,
-    meta: &ParseNestedMeta,
-    attr: Symbol,
-) -> syn::Result<Option<T>> {
+pub fn parse_lit<T: Parse>(ctx: &Context, meta: &ParseNestedMeta, attr: Symbol) -> syn::Result<Option<T>> {
     match get_lit_str(ctx, meta, attr)? {
         Some(lit) => Ok(Some(lit.parse()?)),
         None => Ok(None),
@@ -205,11 +205,11 @@ pub fn parse_lit<T: Parse>(
 
 #[cfg(test)]
 mod test {
-    use syn::{Attribute, parse_quote};
-
-    use crate::internal::Context;
+    use syn::Attribute;
+    use syn::parse_quote;
 
     use super::*;
+    use crate::internal::Context;
 
     #[test]
     fn parse_field_version() {
@@ -217,13 +217,10 @@ mod test {
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::Default(parse_quote!(version)),
-                version: Some(parse_quote!(..34)),
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::Default(parse_quote!(version)),
+            version: Some(parse_quote!(..34)),
+        });
     }
 
     #[test]
@@ -232,13 +229,10 @@ mod test {
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::Default(parse_quote!(default)),
-                version: None,
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::Default(parse_quote!(default)),
+            version: None,
+        });
     }
 
     #[test]
@@ -247,45 +241,34 @@ mod test {
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::Path(parse_quote!(Default::default)),
-                version: None,
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::Path(parse_quote!(Default::default)),
+            version: None,
+        });
     }
 
     #[test]
     fn parse_field_both() {
-        let attrs: Vec<Attribute> =
-            vec![parse_quote!(#[nix(version="..", default="Default::default")])];
+        let attrs: Vec<Attribute> = vec![parse_quote!(#[nix(version="..", default="Default::default")])];
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::Path(parse_quote!(Default::default)),
-                version: Some(parse_quote!(..)),
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::Path(parse_quote!(Default::default)),
+            version: Some(parse_quote!(..)),
+        });
     }
 
     #[test]
     fn parse_field_both_rev() {
-        let attrs: Vec<Attribute> =
-            vec![parse_quote!(#[nix(default="Default::default", version="..")])];
+        let attrs: Vec<Attribute> = vec![parse_quote!(#[nix(default="Default::default", version="..")])];
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::Path(parse_quote!(Default::default)),
-                version: Some(parse_quote!(..)),
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::Path(parse_quote!(Default::default)),
+            version: Some(parse_quote!(..)),
+        });
     }
 
     #[test]
@@ -294,13 +277,10 @@ mod test {
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::None,
-                version: None,
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::None,
+            version: None,
+        });
     }
 
     #[test]
@@ -309,13 +289,10 @@ mod test {
         let ctx = Context::new();
         let field = Field::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            field,
-            Field {
-                default: Default::None,
-                version: None,
-            }
-        );
+        assert_eq!(field, Field {
+            default: Default::None,
+            version: None,
+        });
     }
 
     #[test]
@@ -324,12 +301,9 @@ mod test {
         let ctx = Context::new();
         let variant = Variant::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            variant,
-            Variant {
-                version: parse_quote!(..34),
-            }
-        );
+        assert_eq!(variant, Variant {
+            version: parse_quote!(..34),
+        });
     }
 
     #[test]
@@ -338,12 +312,9 @@ mod test {
         let ctx = Context::new();
         let variant = Variant::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            variant,
-            Variant {
-                version: parse_quote!(..),
-            }
-        );
+        assert_eq!(variant, Variant {
+            version: parse_quote!(..),
+        });
     }
 
     #[test]
@@ -352,12 +323,9 @@ mod test {
         let ctx = Context::new();
         let variant = Variant::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            variant,
-            Variant {
-                version: parse_quote!(..),
-            }
-        );
+        assert_eq!(variant, Variant {
+            version: parse_quote!(..),
+        });
     }
 
     #[test]
@@ -366,18 +334,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: Some(parse_quote!(from_str)),
-                type_from: None,
-                type_try_from: None,
-                type_into: None,
-                type_try_into: None,
-                display: Default::None,
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: Some(parse_quote!(from_str)),
+            type_from: None,
+            type_try_from: None,
+            type_into: None,
+            type_try_into: None,
+            display: Default::None,
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -386,18 +351,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: Some(parse_quote!(u64)),
-                type_try_from: None,
-                type_into: None,
-                type_try_into: None,
-                display: Default::None,
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: Some(parse_quote!(u64)),
+            type_try_from: None,
+            type_into: None,
+            type_try_into: None,
+            display: Default::None,
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -406,18 +368,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: None,
-                type_try_from: Some(parse_quote!(u64)),
-                type_into: None,
-                type_try_into: None,
-                display: Default::None,
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: None,
+            type_try_from: Some(parse_quote!(u64)),
+            type_into: None,
+            type_try_into: None,
+            display: Default::None,
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -426,18 +385,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: None,
-                type_try_from: None,
-                type_into: Some(parse_quote!(u64)),
-                type_try_into: None,
-                display: Default::None,
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: None,
+            type_try_from: None,
+            type_into: Some(parse_quote!(u64)),
+            type_try_into: None,
+            display: Default::None,
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -446,18 +402,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: None,
-                type_try_from: None,
-                type_into: None,
-                type_try_into: Some(parse_quote!(u64)),
-                display: Default::None,
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: None,
+            type_try_from: None,
+            type_into: None,
+            type_try_into: Some(parse_quote!(u64)),
+            display: Default::None,
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -466,18 +419,15 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: None,
-                type_try_from: None,
-                type_into: None,
-                type_try_into: None,
-                display: Default::Default(parse_quote!(display)),
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: None,
+            type_try_from: None,
+            type_into: None,
+            type_try_into: None,
+            display: Default::Default(parse_quote!(display)),
+            crate_path: None,
+        });
     }
 
     #[test]
@@ -486,17 +436,14 @@ mod test {
         let ctx = Context::new();
         let container = Container::from_ast(&ctx, &attrs);
         ctx.check().unwrap();
-        assert_eq!(
-            container,
-            Container {
-                from_str: None,
-                type_from: None,
-                type_try_from: None,
-                type_into: None,
-                type_try_into: None,
-                display: Default::Path(parse_quote!(Path::display)),
-                crate_path: None,
-            }
-        );
+        assert_eq!(container, Container {
+            from_str: None,
+            type_from: None,
+            type_try_from: None,
+            type_into: None,
+            type_try_into: None,
+            display: Default::Path(parse_quote!(Path::display)),
+            crate_path: None,
+        });
     }
 }

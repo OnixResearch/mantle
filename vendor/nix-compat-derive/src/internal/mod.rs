@@ -34,9 +34,7 @@ impl<'a> Field<'a> {
     pub fn var_ident(&self) -> syn::Ident {
         match &self.member {
             syn::Member::Named(name) => name.clone(),
-            syn::Member::Unnamed(idx) => {
-                syn::Ident::new(&format!("field{}", idx.index), self.original.span())
-            }
+            syn::Member::Unnamed(idx) => syn::Ident::new(&format!("field{}", idx.index), self.original.span()),
         }
     }
 }
@@ -88,28 +86,16 @@ pub struct Container<'a> {
 }
 
 impl<'a> Container<'a> {
-    pub fn from_ast(
-        ctx: &Context,
-        crate_path: syn::Path,
-        input: &'a mut syn::DeriveInput,
-    ) -> Option<Container<'a>> {
+    pub fn from_ast(ctx: &Context, crate_path: syn::Path, input: &'a mut syn::DeriveInput) -> Option<Container<'a>> {
         let attrs = attrs::Container::from_ast(ctx, &input.attrs);
         let data = match &input.data {
             syn::Data::Struct(s) => match &s.fields {
-                syn::Fields::Named(fields) => {
-                    Data::Struct(Style::Struct, fields_ast(ctx, &fields.named))
-                }
-                syn::Fields::Unnamed(fields) => {
-                    Data::Struct(Style::Tuple, fields_ast(ctx, &fields.unnamed))
-                }
+                syn::Fields::Named(fields) => Data::Struct(Style::Struct, fields_ast(ctx, &fields.named)),
+                syn::Fields::Unnamed(fields) => Data::Struct(Style::Tuple, fields_ast(ctx, &fields.unnamed)),
                 syn::Fields::Unit => Data::Struct(Style::Unit, Vec::new()),
             },
             syn::Data::Enum(e) => {
-                let variants = e
-                    .variants
-                    .iter()
-                    .map(|variant| Variant::from_ast(ctx, variant))
-                    .collect();
+                let variants = e.variants.iter().map(|variant| Variant::from_ast(ctx, variant)).collect();
                 Data::Enum(variants)
             }
             syn::Data::Union(u) => {
@@ -148,11 +134,7 @@ pub struct Remote<'a> {
 }
 
 impl<'a> Remote<'a> {
-    pub fn from_ast(
-        ctx: &Context,
-        crate_path: syn::Path,
-        input: &'a inputs::RemoteInput,
-    ) -> Option<Remote<'a>> {
+    pub fn from_ast(ctx: &Context, crate_path: syn::Path, input: &'a inputs::RemoteInput) -> Option<Remote<'a>> {
         let attrs = attrs::Container::from_ast(ctx, &input.attrs);
         Some(Remote {
             ty: &input.ident,
@@ -171,9 +153,5 @@ impl<'a> Remote<'a> {
 }
 
 fn fields_ast<'a>(ctx: &Context, fields: &'a Punctuated<syn::Field, Token![,]>) -> Vec<Field<'a>> {
-    fields
-        .iter()
-        .enumerate()
-        .map(|(idx, field)| Field::from_ast(ctx, idx, field))
-        .collect()
+    fields.iter().enumerate().map(|(idx, field)| Field::from_ast(ctx, idx, field)).collect()
 }

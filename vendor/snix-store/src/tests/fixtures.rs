@@ -1,15 +1,17 @@
-use std::{io::Cursor, sync::Arc};
+use std::io::Cursor;
+use std::sync::Arc;
 
 use rstest::fixture;
 use rstest_reuse::template;
-use snix_castore::{
-    blobservice::{BlobService, MemoryBlobService},
-    directoryservice::DirectoryService,
-    fixtures::{
-        DIRECTORY_COMPLICATED, DIRECTORY_WITH_KEEP, EMPTY_BLOB_CONTENTS, EMPTY_BLOB_DIGEST,
-        HELLOWORLD_BLOB_CONTENTS, HELLOWORLD_BLOB_DIGEST,
-    },
-};
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::fixtures::DIRECTORY_COMPLICATED;
+use snix_castore::fixtures::DIRECTORY_WITH_KEEP;
+use snix_castore::fixtures::EMPTY_BLOB_CONTENTS;
+use snix_castore::fixtures::EMPTY_BLOB_DIGEST;
+use snix_castore::fixtures::HELLOWORLD_BLOB_CONTENTS;
+use snix_castore::fixtures::HELLOWORLD_BLOB_DIGEST;
 
 #[fixture]
 pub(crate) fn blob_service() -> Arc<dyn BlobService> {
@@ -26,9 +28,7 @@ pub(crate) async fn blob_service_with_contents() -> Arc<dyn BlobService> {
         // put all data into the stores.
         // insert blob into the store
         let mut writer = blob_service.open_write().await;
-        tokio::io::copy(&mut Cursor::new(blob_contents), &mut writer)
-            .await
-            .unwrap();
+        tokio::io::copy(&mut Cursor::new(blob_contents), &mut writer).await.unwrap();
         assert_eq!(blob_digest.clone(), writer.close().await.unwrap());
     }
     blob_service

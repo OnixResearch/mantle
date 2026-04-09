@@ -1,5 +1,8 @@
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
+
 use bstr::ByteSlice;
-use std::fmt::{self, Debug, Display};
 
 /// A wrapper type for validated path components in the castore model.
 /// Internally uses a [bytes::Bytes], but disallows
@@ -83,10 +86,7 @@ impl TryFrom<&str> for PathComponent {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if let Err(e) = validate_name(value) {
-            return Err(PathComponentError::Convert(
-                value.to_owned().into(),
-                Box::new(e),
-            ));
+            return Err(PathComponentError::Convert(value.to_owned().into(), Box::new(e)));
         }
 
         Ok(Self {
@@ -101,10 +101,7 @@ impl TryFrom<&std::ffi::CStr> for PathComponent {
     fn try_from(value: &std::ffi::CStr) -> Result<Self, Self::Error> {
         let value = value.to_bytes();
         if let Err(e) = validate_name(value) {
-            return Err(PathComponentError::Convert(
-                value.to_owned().into(),
-                Box::new(e),
-            ));
+            return Err(PathComponentError::Convert(value.to_owned().into(), Box::new(e)));
         }
 
         Ok(Self {
@@ -152,7 +149,9 @@ mod tests {
     use bytes::Bytes;
     use rstest::rstest;
 
-    use super::{PathComponent, PathComponentError, validate_name};
+    use super::PathComponent;
+    use super::PathComponentError;
+    use super::validate_name;
 
     #[rstest]
     #[case::empty(b"", PathComponentError::Empty)]
@@ -163,11 +162,7 @@ mod tests {
     #[case::slashes2(b"/", PathComponentError::Slashes)]
     fn errors(#[case] v: &'static [u8], #[case] err: PathComponentError) {
         {
-            assert_eq!(
-                Err(err.clone()),
-                validate_name(v),
-                "validate_name must fail as expected"
-            );
+            assert_eq!(Err(err.clone()), validate_name(v), "validate_name must fail as expected");
         }
 
         let exp_err_v = Bytes::from_static(v);
@@ -176,10 +171,7 @@ mod tests {
         {
             let v = Bytes::from_static(v);
             assert_eq!(
-                Err(PathComponentError::Convert(
-                    exp_err_v.clone(),
-                    Box::new(err.clone())
-                )),
+                Err(PathComponentError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                 PathComponent::try_from(v),
                 "conversion must fail as expected"
             );
@@ -187,10 +179,7 @@ mod tests {
         // &[u8]
         {
             assert_eq!(
-                Err(PathComponentError::Convert(
-                    exp_err_v.clone(),
-                    Box::new(err.clone())
-                )),
+                Err(PathComponentError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                 PathComponent::try_from(v),
                 "conversion must fail as expected"
             );
@@ -199,10 +188,7 @@ mod tests {
         {
             if let Ok(v) = std::str::from_utf8(v) {
                 assert_eq!(
-                    Err(PathComponentError::Convert(
-                        exp_err_v.clone(),
-                        Box::new(err.clone())
-                    )),
+                    Err(PathComponentError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                     PathComponent::try_from(v),
                     "conversion must fail as expected"
                 );
@@ -213,10 +199,7 @@ mod tests {
             if let Ok(v) = CString::new(v) {
                 let v = v.as_ref();
                 assert_eq!(
-                    Err(PathComponentError::Convert(
-                        exp_err_v.clone(),
-                        Box::new(err.clone())
-                    )),
+                    Err(PathComponentError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                     PathComponent::try_from(v),
                     "conversion must fail as expected"
                 );
@@ -235,10 +218,7 @@ mod tests {
 
     #[test]
     fn error_toolong() {
-        assert_eq!(
-            Err(PathComponentError::TooLong),
-            validate_name("X".repeat(500).into_bytes().as_slice())
-        )
+        assert_eq!(Err(PathComponentError::TooLong), validate_name("X".repeat(500).into_bytes().as_slice()))
     }
 
     #[test]
@@ -248,42 +228,26 @@ mod tests {
         // Bytes
         {
             let v: Bytes = "aa".into();
-            assert_eq!(
-                Ok(exp.clone()),
-                PathComponent::try_from(v),
-                "conversion must succeed"
-            );
+            assert_eq!(Ok(exp.clone()), PathComponent::try_from(v), "conversion must succeed");
         }
 
         // &[u8]
         {
             let v: &[u8] = b"aa";
-            assert_eq!(
-                Ok(exp.clone()),
-                PathComponent::try_from(v),
-                "conversion must succeed"
-            );
+            assert_eq!(Ok(exp.clone()), PathComponent::try_from(v), "conversion must succeed");
         }
 
         // &str
         {
             let v: &str = "aa";
-            assert_eq!(
-                Ok(exp.clone()),
-                PathComponent::try_from(v),
-                "conversion must succeed"
-            );
+            assert_eq!(Ok(exp.clone()), PathComponent::try_from(v), "conversion must succeed");
         }
 
         // &CStr
         {
             let v = CString::new("aa").expect("CString must construct");
             let v = v.as_c_str();
-            assert_eq!(
-                Ok(exp.clone()),
-                PathComponent::try_from(v),
-                "conversion must succeed"
-            );
+            assert_eq!(Ok(exp.clone()), PathComponent::try_from(v), "conversion must succeed");
         }
     }
 }

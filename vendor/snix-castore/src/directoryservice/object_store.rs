@@ -1,26 +1,34 @@
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::collections::hash_map;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use data_encoding::HEXLOWER;
 use futures::SinkExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
+use object_store::ObjectStore;
 use object_store::ObjectStoreExt;
-use object_store::{ObjectStore, path::Path};
-
+use object_store::path::Path;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::LengthDelimitedCodec;
-
-use tracing::{Level, instrument, trace, warn};
+use tracing::Level;
+use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 use url::Url;
 
-use super::{Directory, DirectoryPutter, DirectoryService, RootToLeavesValidator};
-use crate::composition::{CompositionContext, ServiceBuilder};
+use super::Directory;
+use super::DirectoryPutter;
+use super::DirectoryService;
+use super::RootToLeavesValidator;
+use crate::B3Digest;
+use crate::Node;
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
 use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
-use crate::{B3Digest, Node, proto};
+use crate::proto;
 
 /// Stores directory closures in an object store.
 /// Notably, this makes use of the option to disallow accessing child directories except when
@@ -47,13 +55,8 @@ fn derive_dirs_path(base_path: &Path, digest: &B3Digest) -> Path {
 
 /// Helper function, parsing protobuf-encoded Directories into [crate::Directory],
 /// if the digest is allowed.
-fn parse_proto_directory<F>(
-    encoded_directory: &[u8],
-    digest_allowed: F,
-) -> Result<crate::Directory, Error>
-where
-    F: Fn(&B3Digest) -> bool,
-{
+fn parse_proto_directory<F>(encoded_directory: &[u8], digest_allowed: F) -> Result<crate::Directory, Error>
+where F: Fn(&B3Digest) -> bool {
     let actual_digest = B3Digest::from(blake3::hash(encoded_directory).as_bytes());
     if !digest_allowed(&actual_digest) {
         return Err(Error::UnexpectedDigest(actual_digest));
@@ -103,7 +106,6 @@ impl ObjectStoreDirectoryService {
     }
 }
 
-
 #[async_trait]
 impl DirectoryService for ObjectStoreDirectoryService {
     /// This is the same steps as for get_recursive anyways, so we just call get_recursive and
@@ -116,10 +118,7 @@ impl DirectoryService for ObjectStoreDirectoryService {
     #[instrument(level = "trace", skip_all, fields(directory.digest = %directory.digest(), instance_name = %self.instance_name))]
     async fn put(&self, directory: Directory) -> Result<B3Digest, super::Error> {
         // Ensure the directory doesn't contain other directory children
-        if directory
-            .nodes()
-            .any(|(_, e)| matches!(e, Node::Directory { .. }))
-        {
+        if directory.nodes().any(|(_, e)| matches!(e, Node::Directory { .. })) {
             Err(Error::PutForDirectoryWithChildren)?
         }
 
@@ -129,10 +128,7 @@ impl DirectoryService for ObjectStoreDirectoryService {
     }
 
     #[instrument(level = "trace", skip_all, fields(directory.digest = %root_directory_digest, instance_name = %self.instance_name))]
-    fn get_recursive(
-        &self,
-        root_directory_digest: &B3Digest,
-    ) -> BoxStream<'_, Result<Directory, super::Error>> {
+    fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'_, Result<Directory, super::Error>> {
         // Check that we are not passing on bogus from the object store to the client, and that the
         // trust chain from the root digest to the leaves is intact.
         let dir_path = derive_dirs_path(&self.base_path, root_directory_digest);
@@ -171,18 +167,14 @@ impl DirectoryService for ObjectStoreDirectoryService {
                 }
 
                 order_validator.finalize().map_err(Error::DirectoryOrdering)?;
-        }.boxed()
+        }
+        .boxed()
     }
 
     #[instrument(skip_all)]
     fn put_multiple_start(&self) -> Box<dyn DirectoryPutter + '_>
-    where
-        Self: Clone,
-    {
-        Box::new(ObjectStoreDirectoryPutter::new(
-            self.object_store.clone(),
-            &self.base_path,
-        ))
+    where Self: Clone {
+        Box::new(ObjectStoreDirectoryPutter::new(self.object_store.clone(), &self.base_path))
     }
 }
 
@@ -227,24 +219,21 @@ impl TryFrom<url::Url> for ObjectStoreDirectoryServiceConfig {
         // parse it back as url, as Url::set_scheme() rejects some of the transitions we want to do.
         let trimmed_url = {
             let s = url.to_string();
-            let mut url = Url::parse(s.strip_prefix("objectstore+").ok_or(Error::WrongConfig(
-                "Missing objectstore+ part in URI scheme",
-            ))?)?;
-            // trim the query pairs, they might contain credentials or local settings we don't want to send as-is.
+            let mut url = Url::parse(
+                s.strip_prefix("objectstore+")
+                    .ok_or(Error::WrongConfig("Missing objectstore+ part in URI scheme"))?,
+            )?;
+            // trim the query pairs, they might contain credentials or local settings we don't want to send
+            // as-is.
             url.set_query(None);
             url
         };
         Ok(ObjectStoreDirectoryServiceConfig {
             object_store_url: trimmed_url.into(),
-            object_store_options: url
-                .query_pairs()
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
+            object_store_options: url.query_pairs().into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
         })
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for ObjectStoreDirectoryServiceConfig {
@@ -255,28 +244,18 @@ impl ServiceBuilder for ObjectStoreDirectoryServiceConfig {
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
         let opts = {
-            let mut opts: HashMap<&str, _> = self
-                .object_store_options
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .collect();
+            let mut opts: HashMap<&str, _> =
+                self.object_store_options.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
 
-            if let hash_map::Entry::Vacant(e) =
-                opts.entry(object_store::ClientConfigKey::UserAgent.as_ref())
-            {
+            if let hash_map::Entry::Vacant(e) = opts.entry(object_store::ClientConfigKey::UserAgent.as_ref()) {
                 e.insert(crate::USER_AGENT);
             }
 
             opts
         };
 
-        let (object_store, path) =
-            object_store::parse_url_opts(&self.object_store_url.parse()?, opts)?;
-        Ok(Arc::new(ObjectStoreDirectoryService::new(
-            instance_name.to_string(),
-            Arc::new(object_store),
-            path,
-        )))
+        let (object_store, path) = object_store::parse_url_opts(&self.object_store_url.parse()?, opts)?;
+        Ok(Arc::new(ObjectStoreDirectoryService::new(instance_name.to_string(), Arc::new(object_store), path)))
     }
 }
 
@@ -297,15 +276,11 @@ impl<'a> ObjectStoreDirectoryPutter<'a> {
     }
 }
 
-
 #[async_trait]
 impl DirectoryPutter for ObjectStoreDirectoryPutter<'_> {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]
     async fn put(&mut self, directory: Directory) -> Result<(), super::Error> {
-        let builder = self
-            .builder
-            .as_mut()
-            .ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
+        let builder = self.builder.as_mut().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
 
         builder.try_insert(directory)?;
 
@@ -314,10 +289,7 @@ impl DirectoryPutter for ObjectStoreDirectoryPutter<'_> {
 
     #[instrument(level = "trace", skip_all, ret, err)]
     async fn close(&mut self) -> Result<B3Digest, super::Error> {
-        let builder = self
-            .builder
-            .take()
-            .ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
+        let builder = self.builder.take().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
 
         // Retrieve the validated directories.
         let directory_graph = builder.build()?;
@@ -335,10 +307,8 @@ impl DirectoryPutter for ObjectStoreDirectoryPutter<'_> {
             Err(object_store::Error::NotFound { .. }) => {
                 trace!("uploading directory tree");
 
-                let object_store_writer =
-                    object_store::buffered::BufWriter::new(self.object_store.clone(), dir_path);
-                let compressed_writer =
-                    async_compression::tokio::write::ZstdEncoder::new(object_store_writer);
+                let object_store_writer = object_store::buffered::BufWriter::new(self.object_store.clone(), dir_path);
+                let compressed_writer = async_compression::tokio::write::ZstdEncoder::new(object_store_writer);
                 let mut directories_sink = LengthDelimitedCodec::builder()
                     .max_frame_length(MAX_FRAME_LENGTH)
                     .length_field_type::<u32>()

@@ -64,12 +64,13 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::B3Digest;
+    use crate::B3HashingReader;
     use crate::fixtures::BLOB_A;
     use crate::fixtures::BLOB_A_DIGEST;
     use crate::fixtures::BLOB_B;
     use crate::fixtures::BLOB_B_DIGEST;
     use crate::fixtures::EMPTY_BLOB_DIGEST;
-    use crate::{B3Digest, B3HashingReader};
 
     #[rstest]
     #[case::blob_a(&BLOB_A, &BLOB_A_DIGEST)]
@@ -80,9 +81,7 @@ mod tests {
         let r = Cursor::new(data);
         let mut hr = B3HashingReader::from(r);
 
-        tokio::io::copy(&mut hr, &mut tokio::io::sink())
-            .await
-            .expect("read must succeed");
+        tokio::io::copy(&mut hr, &mut tokio::io::sink()).await.expect("read must succeed");
 
         assert_eq!(*b3_digest, hr.digest().into());
     }

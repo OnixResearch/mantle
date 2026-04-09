@@ -1,16 +1,20 @@
-use crate::nar::seekable::Reader;
-use crate::tests::fixtures::blob_service_with_contents as blob_service;
-use crate::tests::fixtures::directory_service_with_contents as directory_service;
-use crate::tests::fixtures::*;
+use std::io;
+use std::pin::Pin;
+use std::sync::Arc;
+
 use rstest::*;
 use rstest_reuse::*;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use std::io;
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncSeek, AsyncSeekExt};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncSeek;
+use tokio::io::AsyncSeekExt;
+
+use crate::nar::seekable::Reader;
+use crate::tests::fixtures::blob_service_with_contents as blob_service;
+use crate::tests::fixtures::directory_service_with_contents as directory_service;
+use crate::tests::fixtures::*;
 
 #[apply(castore_fixtures_template)]
 #[tokio::test]
@@ -71,12 +75,8 @@ async fn seek_twice(
     .await
     .expect("must succeed");
 
-    Pin::new(&mut reader)
-        .start_seek(io::SeekFrom::Start(1))
-        .expect("must succeed");
-    let seek_err = Pin::new(&mut reader)
-        .start_seek(io::SeekFrom::Start(2))
-        .expect_err("must fail");
+    Pin::new(&mut reader).start_seek(io::SeekFrom::Start(1)).expect("must succeed");
+    let seek_err = Pin::new(&mut reader).start_seek(io::SeekFrom::Start(2)).expect_err("must fail");
 
     assert_eq!(seek_err.kind(), io::ErrorKind::Other);
     assert_eq!(seek_err.to_string(), "Already seeking".to_string());
@@ -84,10 +84,7 @@ async fn seek_twice(
 
 #[rstest]
 #[tokio::test]
-async fn seek(
-    #[future] blob_service: Arc<dyn BlobService>,
-    #[future] directory_service: Arc<dyn DirectoryService>,
-) {
+async fn seek(#[future] blob_service: Arc<dyn BlobService>, #[future] directory_service: Arc<dyn DirectoryService>) {
     let mut reader = Reader::new(
         crate::fixtures::CASTORE_NODE_HELLOWORLD.clone(),
         // don't put anything in the stores, as we don't actually do any requests.

@@ -1,24 +1,31 @@
-use async_trait::async_trait;
-use super::{PathInfo, PathInfoService};
-use crate::{
-    nar::{NarIngestionError, ingest_nar_and_hash},
-    pathinfoservice,
-};
-use futures::{TryStreamExt, stream::BoxStream};
-use nix_compat::{
-    narinfo::{self, NarInfo, Signature},
-    nixbase32,
-    nixhash::NixHash,
-    store_path::StorePath,
-};
-use reqwest::StatusCode;
-use snix_castore::composition::{CompositionContext, ServiceBuilder};
-use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService};
 use std::sync::Arc;
-use tokio::io::{self, AsyncRead};
 
-use tracing::{Span, instrument, warn};
+use async_trait::async_trait;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use nix_compat::narinfo::NarInfo;
+use nix_compat::narinfo::Signature;
+use nix_compat::narinfo::{self};
+use nix_compat::nixbase32;
+use nix_compat::nixhash::NixHash;
+use nix_compat::store_path::StorePath;
+use reqwest::StatusCode;
+use snix_castore::blobservice::BlobService;
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::ServiceBuilder;
+use snix_castore::directoryservice::DirectoryService;
+use tokio::io::AsyncRead;
+use tokio::io::{self};
+use tracing::Span;
+use tracing::instrument;
+use tracing::warn;
 use url::Url;
+
+use super::PathInfo;
+use super::PathInfoService;
+use crate::nar::NarIngestionError;
+use crate::nar::ingest_nar_and_hash;
+use crate::pathinfoservice;
 
 /// NixHTTPPathInfoService acts as a bridge in between the Nix HTTP Binary cache
 /// protocol provided by Nix binary caches such as cache.nixos.org, and the Snix
@@ -58,9 +65,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
     ) -> Result<Self, Error> {
         let mut trusted_public_keys = Vec::new();
         for s in config.params.trusted_public_keys {
-            trusted_public_keys.push(
-                narinfo::VerifyingKey::parse(&s).map_err(|e| Error::ParseTrustedPublicKey(s, e))?,
-            )
+            trusted_public_keys.push(narinfo::VerifyingKey::parse(&s).map_err(|e| Error::ParseTrustedPublicKey(s, e))?)
         }
 
         Ok(Self {
@@ -84,9 +89,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
     #[instrument(level=tracing::Level::TRACE, skip_all,fields(path.digest=nixbase32::encode(&digest)),err)]
     fn derive_narinfo_url(&self, digest: [u8; 20]) -> Result<Url, Error> {
         let s = format!("{}.narinfo", nixbase32::encode(&digest));
-        self.base_url
-            .join(&s)
-            .map_err(|e| Error::JoinUrl(self.base_url.to_owned(), s.to_owned(), e))
+        self.base_url.join(&s).map_err(|e| Error::JoinUrl(self.base_url.to_owned(), s.to_owned(), e))
     }
 }
 
@@ -131,7 +134,6 @@ pub enum Error {
     ListNotSupported,
 }
 
-
 #[async_trait]
 impl<BS, DS> PathInfoService for NixHTTPPathInfoService<BS, DS>
 where
@@ -145,12 +147,7 @@ where
         let span = Span::current();
         span.record("narinfo.url", narinfo_url.to_string());
 
-        let resp = self
-            .http_client
-            .get(narinfo_url)
-            .send()
-            .await
-            .map_err(Error::Reqwest)?;
+        let resp = self.http_client.get(narinfo_url).send().await.map_err(Error::Reqwest)?;
 
         // In the case of a 404, return a NotFound.
         // We also return a NotFound in case of a 403 - this is to match the behaviour as Nix,
@@ -168,12 +165,11 @@ where
         if !self.trusted_public_keys.is_empty() {
             let fingerprint = narinfo.fingerprint();
 
-            if !self.trusted_public_keys.iter().any(|pubkey| {
-                narinfo
-                    .signatures
-                    .iter()
-                    .any(|sig| pubkey.verify(&fingerprint, sig))
-            }) {
+            if !self
+                .trusted_public_keys
+                .iter()
+                .any(|pubkey| narinfo.signatures.iter().any(|sig| pubkey.verify(&fingerprint, sig)))
+            {
                 Err(Error::NoValidSignature)?
             }
         }
@@ -191,12 +187,7 @@ where
             .map_err(|e| Error::JoinUrl(self.base_url.clone(), narinfo.url.to_owned(), e))?;
         span.record("nar.url", nar_url.to_string());
 
-        let resp = self
-            .http_client
-            .get(nar_url.clone())
-            .send()
-            .await
-            .map_err(Error::Reqwest)?;
+        let resp = self.http_client.get(nar_url.clone()).send().await.map_err(Error::Reqwest)?;
 
         // if the request is not successful, return an error.
         if !resp.status().is_success() {
@@ -211,27 +202,26 @@ where
         }));
 
         // handle decompression, depending on the compression field.
-        let mut r: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
-            None => Box::new(r) as Box<dyn AsyncRead + Send + Unpin>,
-            Some("bzip2") => Box::new(async_compression::tokio::bufread::BzDecoder::new(r))
-                as Box<dyn AsyncRead + Send + Unpin>,
-            Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(r))
-                as Box<dyn AsyncRead + Send + Unpin>,
-            Some("xz") => Box::new(async_compression::tokio::bufread::XzDecoder::new(r))
-                as Box<dyn AsyncRead + Send + Unpin>,
-            Some("zstd") => Box::new(async_compression::tokio::bufread::ZstdDecoder::new(r))
-                as Box<dyn AsyncRead + Send + Unpin>,
-            Some(comp_str) => Err(Error::UnsupportedNARCompression(comp_str.to_owned()))?,
-        };
+        let mut r: Box<dyn AsyncRead + Send + Unpin> =
+            match narinfo.compression {
+                None => Box::new(r) as Box<dyn AsyncRead + Send + Unpin>,
+                Some("bzip2") => {
+                    Box::new(async_compression::tokio::bufread::BzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
+                }
+                Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(r))
+                    as Box<dyn AsyncRead + Send + Unpin>,
+                Some("xz") => {
+                    Box::new(async_compression::tokio::bufread::XzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
+                }
+                Some("zstd") => Box::new(async_compression::tokio::bufread::ZstdDecoder::new(r))
+                    as Box<dyn AsyncRead + Send + Unpin>,
+                Some(comp_str) => Err(Error::UnsupportedNARCompression(comp_str.to_owned()))?,
+            };
 
-        let (root_node, nar_hash, nar_size) = ingest_nar_and_hash(
-            self.blob_service.clone(),
-            &self.directory_service,
-            &mut r,
-            &narinfo.ca,
-        )
-        .await
-        .map_err(Error::IngestNAR)?;
+        let (root_node, nar_hash, nar_size) =
+            ingest_nar_and_hash(self.blob_service.clone(), &self.directory_service, &mut r, &narinfo.ca)
+                .await
+                .map_err(Error::IngestNAR)?;
 
         // ensure the ingested narhash and narsize do actually match.
         if narinfo.nar_size != nar_size {
@@ -270,12 +260,7 @@ where
         let span = Span::current();
         span.record("narinfo.url", narinfo_url.to_string());
 
-        let resp = self
-            .http_client
-            .head(narinfo_url)
-            .send()
-            .await
-            .map_err(Error::Reqwest)?;
+        let resp = self.http_client.head(narinfo_url).send().await.map_err(Error::Reqwest)?;
 
         // In the case of a 404, return a NotFound.
         // We also return a NotFound in case of a 403 - this is to match the behaviour as Nix,
@@ -293,9 +278,7 @@ where
     }
 
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
-        Box::pin(futures::stream::once(async {
-            Err(Error::ListNotSupported)?
-        }))
+        Box::pin(futures::stream::once(async { Err(Error::ListNotSupported)? }))
     }
 }
 
@@ -317,7 +300,8 @@ struct NixHTTPPathInfoServiceParams {
     directory_service: String,
     #[serde(default)]
     /// An optional list of [narinfo::VerifyingKey].
-    /// If not empty, the .narinfo files received need to have correct signature by at least one of these.
+    /// If not empty, the .narinfo files received need to have correct signature by at least one of
+    /// these.
     trusted_public_keys: Vec<String>,
 }
 
@@ -331,10 +315,8 @@ fn default_directory_service() -> String {
 impl TryFrom<Url> for NixHTTPPathInfoServiceConfig {
     type Error = Box<dyn std::error::Error + Send + Sync>;
     fn try_from(url: Url) -> Result<Self, Self::Error> {
-        let scheme = url
-            .scheme()
-            .strip_prefix("nix+")
-            .ok_or_else(|| Error::WrongConfig("scheme must start with nix+"))?;
+        let scheme =
+            url.scheme().strip_prefix("nix+").ok_or_else(|| Error::WrongConfig("scheme must start with nix+"))?;
 
         if !url.has_authority() {
             Err(Error::WrongConfig("url must have authority component"))?
@@ -353,12 +335,8 @@ impl TryFrom<Url> for NixHTTPPathInfoServiceConfig {
             // Also make sure to drop the query, we don't want to leak our
             // config to the remote HTTP endpoint we query.
             base_url: {
-                let mut url: Url = url
-                    .to_string()
-                    .strip_prefix("nix+")
-                    .unwrap()
-                    .parse()
-                    .expect("stripped URL to parse again");
+                let mut url: Url =
+                    url.to_string().strip_prefix("nix+").unwrap().parse().expect("stripped URL to parse again");
                 url.set_query(None);
                 url
             },
@@ -366,7 +344,6 @@ impl TryFrom<Url> for NixHTTPPathInfoServiceConfig {
         })
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for NixHTTPPathInfoServiceConfig {
@@ -392,9 +369,11 @@ impl ServiceBuilder for NixHTTPPathInfoServiceConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{NixHTTPPathInfoServiceConfig, NixHTTPPathInfoServiceParams};
     use rstest::rstest;
     use url::Url;
+
+    use super::NixHTTPPathInfoServiceConfig;
+    use super::NixHTTPPathInfoServiceParams;
 
     #[rstest]
     /// Correct Scheme for the cache.nixos.org binary cache.
@@ -474,7 +453,8 @@ mod tests {
     #[case::wrong_scheme("nix+grpc://example.com", None)]
     #[case::missing_host("nix+http:///", None)]
     #[case::missing_authority("nix+http:", None)]
-    /// Correct cache.nixos.org binary cache URL, but wrong `trusted_public_keys` param usage (should be list)
+    /// Correct cache.nixos.org binary cache URL, but wrong `trusted_public_keys` param usage
+    /// (should be list)
     #[case::trusted_public_keys_no_sequence(
         "nix+https://cache.nixos.org?trusted_public_keys=cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
         None

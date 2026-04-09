@@ -45,7 +45,8 @@
 //! ```
 //!
 //! Now, when a user deserializes a store config with the type tag "myblobservicetype" into a
-//! `Box<dyn ServiceBuilder<Output = Arc<dyn BlobService>>>`, it will be done via `MyBlobServiceConfig`.
+//! `Box<dyn ServiceBuilder<Output = Arc<dyn BlobService>>>`, it will be done via
+//! `MyBlobServiceConfig`.
 //!
 //! ### Example 2.: Composing stores to get one store
 //!
@@ -96,21 +97,24 @@
 //! result in a new, distinct anonymous store each time, so creating
 //! two `memory://` stores with this method will not share the same view.
 //! This behavior might change in the future.
-use async_trait::async_trait;
-
-use erased_serde::deserialize;
-use futures::FutureExt;
-use futures::future::{BoxFuture, err};
-use serde::de::DeserializeOwned;
-use serde_tagged::de::{BoxFnSeed, SeedFactory};
-use serde_tagged::util::TagString;
-use std::any::{Any, TypeId};
+use std::any::Any;
+use std::any::TypeId;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+use std::sync::LazyLock;
 
+use async_trait::async_trait;
+use erased_serde::deserialize;
+use futures::FutureExt;
+use futures::future::BoxFuture;
+use futures::future::err;
+use serde::de::DeserializeOwned;
+use serde_tagged::de::BoxFnSeed;
+use serde_tagged::de::SeedFactory;
+use serde_tagged::util::TagString;
 
 /// Resolves tag names to the corresponding Config type.
 // Registry implementation details:
@@ -133,8 +137,7 @@ use std::sync::{Arc, LazyLock};
 // I said it was ugly...
 #[derive(Default)]
 pub struct Registry(BTreeMap<(TypeId, &'static str), Box<dyn Any + Sync>>);
-pub type FromUrlSeed<T> =
-    Box<dyn Fn(url::Url) -> Result<T, Box<dyn std::error::Error + Send + Sync>> + Sync>;
+pub type FromUrlSeed<T> = Box<dyn Fn(url::Url) -> Result<T, Box<dyn std::error::Error + Send + Sync>> + Sync>;
 pub struct RegistryEntry<T> {
     serde_deserialize_seed: BoxFnSeed<DeserializeWithRegistry<T>>,
     from_url_seed: FromUrlSeed<DeserializeWithRegistry<T>>,
@@ -148,9 +151,7 @@ impl<'r, 'de: 'r, T: 'static> SeedFactory<'de, TagString<'de>> for RegistryWithF
 
     // Required method
     fn seed<E>(self, tag: TagString<'de>) -> Result<Self::Seed, E>
-    where
-        E: serde::de::Error,
-    {
+    where E: serde::de::Error {
         // using find() and not get() because of https://github.com/rust-lang/rust/issues/80389
         let seed: &Box<dyn Any + Sync> = self
             .0
@@ -183,9 +184,7 @@ impl Registry {
     /// then convert it into a `Box<dyn FooTrait>` using From::from.
     pub fn register<
         T: 'static,
-        C: DeserializeOwned
-            + TryFrom<url::Url, Error = Box<dyn std::error::Error + Send + Sync>>
-            + Into<T>,
+        C: DeserializeOwned + TryFrom<url::Url, Error = Box<dyn std::error::Error + Send + Sync>> + Into<T>,
     >(
         &mut self,
         type_name: &'static str,
@@ -194,15 +193,9 @@ impl Registry {
             (TypeId::of::<T>(), type_name),
             Box::new(RegistryEntry {
                 serde_deserialize_seed: BoxFnSeed::new(|x| {
-                    deserialize::<C>(x)
-                        .map(Into::into)
-                        .map(DeserializeWithRegistry)
+                    deserialize::<C>(x).map(Into::into).map(DeserializeWithRegistry)
                 }),
-                from_url_seed: Box::new(|url| {
-                    C::try_from(url)
-                        .map(Into::into)
-                        .map(DeserializeWithRegistry)
-                }),
+                from_url_seed: Box::new(|url| C::try_from(url).map(Into::into).map(DeserializeWithRegistry)),
             }),
         );
     }
@@ -210,9 +203,7 @@ impl Registry {
 
 impl<'de, T: 'static> serde::Deserialize<'de> for DeserializeWithRegistry<T> {
     fn deserialize<D>(de: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         serde_tagged::de::internal::deserialize(
             de,
             "type",
@@ -303,20 +294,12 @@ impl CompositionContext<'_> {
     /// Resolves an instance ref (instance name prefixed with "&") or an
     /// anonymous store URL to an instantiated service.
     /// The latter is only allowed if xp-composition-url-refs is enabled.
-    pub async fn resolve<T: ?Sized + Send + Sync + 'static>(
-        &self,
-        s: &str,
-    ) -> Result<Arc<T>, CompositionError> {
+    pub async fn resolve<T: ?Sized + Send + Sync + 'static>(&self, s: &str) -> Result<Arc<T>, CompositionError> {
         // The string is expected to start with a `&`...
         if let Some(instance_name) = s.strip_prefix("&") {
             // disallow recursion
-            if self
-                .stack
-                .contains(&(TypeId::of::<T>(), instance_name.to_owned()))
-            {
-                return Err(CompositionError::Recursion(
-                    self.stack.iter().map(|(_, n)| n.clone()).collect(),
-                ));
+            if self.stack.contains(&(TypeId::of::<T>(), instance_name.to_owned())) {
+                return Err(CompositionError::Recursion(self.stack.iter().map(|(_, n)| n.clone()).collect()));
             }
 
             self.build_internal(instance_name.to_owned()).await
@@ -325,10 +308,7 @@ impl CompositionContext<'_> {
             #[cfg(feature = "xp-composition-url-refs")]
             {
                 // This might be a URL, we are building an anonymous store
-                Ok(self
-                    .build_anonymous(s)
-                    .await
-                    .map_err(|e| CompositionError::Failed(s.to_string(), Arc::from(e)))?)
+                Ok(self.build_anonymous(s).await.map_err(|e| CompositionError::Failed(s.to_string(), Arc::from(e)))?)
             }
 
             #[cfg(not(feature = "xp-composition-url-refs"))]
@@ -353,10 +333,7 @@ impl CompositionContext<'_> {
         &self,
         instance_name: String,
     ) -> BoxFuture<'_, Result<Arc<T>, CompositionError>> {
-        debug_assert!(
-            !instance_name.starts_with("&"),
-            "build_internal should never be called with &"
-        );
+        debug_assert!(!instance_name.starts_with("&"), "build_internal should never be called with &");
 
         let mut stores = match self.composition {
             Some(comp) => comp.stores.lock().unwrap(),
@@ -371,15 +348,12 @@ impl CompositionContext<'_> {
         // this temporary value.
         let prev_val = std::mem::replace(
             entry,
-            Box::new(InstantiationState::<T>::Done(Err(
-                CompositionError::Poisoned(instance_name.to_owned()),
-            ))),
+            Box::new(InstantiationState::<T>::Done(Err(CompositionError::Poisoned(instance_name.to_owned())))),
         );
         let (new_val, ret) = match *prev_val.downcast::<InstantiationState<T>>().unwrap() {
-            InstantiationState::Done(service) => (
-                InstantiationState::Done(service.clone()),
-                futures::future::ready(service).boxed(),
-            ),
+            InstantiationState::Done(service) => {
+                (InstantiationState::Done(service.clone()), futures::future::ready(service).boxed())
+            }
             // the construction of the store has not started yet.
             InstantiationState::Config(config) => {
                 let (tx, rx) = tokio::sync::watch::channel(None);
@@ -396,13 +370,10 @@ impl CompositionContext<'_> {
                             },
                         };
 
-                        let res = config
-                            .build(&instance_name, &new_context)
-                            .await
-                            .map_err(|e| match e.downcast() {
-                                Ok(e) => *e,
-                                Err(e) => CompositionError::Failed(instance_name, e.into()),
-                            });
+                        let res = config.build(&instance_name, &new_context).await.map_err(|e| match e.downcast() {
+                            Ok(e) => *e,
+                            Err(e) => CompositionError::Failed(instance_name, e.into()),
+                        });
                         tx.send(Some(res.clone())).unwrap();
                         res
                     })
@@ -411,27 +382,22 @@ impl CompositionContext<'_> {
             }
             // there is already a task driving forward the construction of this store, wait for it
             // to notify us via the provided channel
-            InstantiationState::InProgress(mut recv) => {
-                (InstantiationState::InProgress(recv.clone()), {
-                    (async move {
-                        loop {
-                            if let Some(v) =
-                                recv.borrow_and_update().as_ref().map(|res| res.clone())
-                            {
-                                break v;
-                            }
-                            recv.changed().await.unwrap();
+            InstantiationState::InProgress(mut recv) => (InstantiationState::InProgress(recv.clone()), {
+                (async move {
+                    loop {
+                        if let Some(v) = recv.borrow_and_update().as_ref().map(|res| res.clone()) {
+                            break v;
                         }
-                    })
-                    .boxed()
+                        recv.changed().await.unwrap();
+                    }
                 })
-            }
+                .boxed()
+            }),
         };
         *entry = Box::new(new_val);
         ret
     }
 }
-
 
 /// This is the trait usually implemented on a per-store-type Config struct and
 /// used to instantiate it.
@@ -445,9 +411,7 @@ pub trait ServiceBuilder: Send + Sync {
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync + 'static>>;
 }
 
-impl<T: ?Sized, S: ServiceBuilder<Output = T> + 'static> From<S>
-    for Box<dyn ServiceBuilder<Output = T>>
-{
+impl<T: ?Sized, S: ServiceBuilder<Output = T> + 'static> From<S> for Box<dyn ServiceBuilder<Output = T>> {
     fn from(t: S) -> Self {
         Box::new(t)
     }
@@ -478,30 +442,14 @@ pub enum CompositionError {
     Failed(String, Arc<dyn std::error::Error + Send + Sync>),
 }
 
-impl<T: ?Sized + Send + Sync + 'static>
-    Extend<(
-        String,
-        DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = T>>>,
-    )> for Composition
+impl<T: ?Sized + Send + Sync + 'static> Extend<(String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = T>>>)>
+    for Composition
 {
     fn extend<I>(&mut self, configs: I)
-    where
-        I: IntoIterator<
-            Item = (
-                String,
-                DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = T>>>,
-            ),
-        >,
-    {
-        self.stores
-            .lock()
-            .unwrap()
-            .extend(configs.into_iter().map(|(k, v)| {
-                (
-                    (TypeId::of::<T>(), k),
-                    Box::new(InstantiationState::Config(v.0)) as Box<dyn Any + Send + Sync>,
-                )
-            }))
+    where I: IntoIterator<Item = (String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = T>>>)> {
+        self.stores.lock().unwrap().extend(configs.into_iter().map(|(k, v)| {
+            ((TypeId::of::<T>(), k), Box::new(InstantiationState::Config(v.0)) as Box<dyn Any + Send + Sync>)
+        }))
     }
 }
 
@@ -528,9 +476,7 @@ impl Composition {
         &self,
         instance_name: &str,
     ) -> Result<Arc<T>, CompositionError> {
-        self.context()
-            .build_internal(instance_name.to_string())
-            .await
+        self.context().build_internal(instance_name.to_string()).await
     }
 
     pub fn context(&self) -> CompositionContext<'_> {
@@ -544,9 +490,10 @@ impl Composition {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use super::*;
     use crate::blobservice::BlobService;
-    use std::sync::Arc;
 
     /// Test that we return a reference to the same instance of MemoryBlobService (via ptr_eq)
     /// when instantiating the same entrypoint twice. By instantiating concurrently, we also
@@ -559,18 +506,14 @@ mod test {
             }
         });
 
-        let blob_services_configs =
-            with_registry(&REG, || serde_json::from_value(blob_services_configs_json)).unwrap();
+        let blob_services_configs = with_registry(&REG, || serde_json::from_value(blob_services_configs_json)).unwrap();
         let mut blob_service_composition = Composition::new(&REG);
         blob_service_composition.extend_with_configs::<dyn BlobService>(blob_services_configs);
         let (blob_service1, blob_service2) = tokio::join!(
             blob_service_composition.build::<dyn BlobService>("root"),
             blob_service_composition.build::<dyn BlobService>("root")
         );
-        assert!(Arc::ptr_eq(
-            &blob_service1.unwrap(),
-            &blob_service2.unwrap()
-        ));
+        assert!(Arc::ptr_eq(&blob_service1.unwrap(), &blob_service2.unwrap()));
     }
 
     /// Test that we throw the correct error when an instantiation would recurse (deadlock)
@@ -589,14 +532,10 @@ mod test {
             }
         });
 
-        let blob_services_configs =
-            with_registry(&REG, || serde_json::from_value(blob_services_configs_json)).unwrap();
+        let blob_services_configs = with_registry(&REG, || serde_json::from_value(blob_services_configs_json)).unwrap();
         let mut blob_service_composition = Composition::new(&REG);
         blob_service_composition.extend_with_configs::<dyn BlobService>(blob_services_configs);
-        match blob_service_composition
-            .build::<dyn BlobService>("root")
-            .await
-        {
+        match blob_service_composition.build::<dyn BlobService>("root").await {
             Err(CompositionError::Recursion(stack)) => {
                 assert_eq!(stack, vec!["root".to_string(), "other".to_string()])
             }

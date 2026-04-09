@@ -2,10 +2,13 @@
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use irpc::{channel::oneshot, rpc_requests};
-use serde::{Deserialize, Serialize};
+use irpc::channel::oneshot;
+use irpc::rpc_requests;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::pathinfoservice::{PathInfo, PathInfoService};
+use crate::pathinfoservice::PathInfo;
+use crate::pathinfoservice::PathInfoService;
 
 // ---------------------------------------------------------------------------
 // Protocol definition

@@ -1,9 +1,11 @@
 use async_trait::async_trait;
-use crate::composition::{Registry, ServiceBuilder};
-use crate::{B3Digest, Directory};
-
 use auto_impl::auto_impl;
 use futures::stream::BoxStream;
+
+use crate::B3Digest;
+use crate::Directory;
+use crate::composition::Registry;
+use crate::composition::ServiceBuilder;
 
 mod combinators;
 mod directory_graph;
@@ -17,19 +19,27 @@ pub mod traversal;
 #[cfg(test)]
 pub mod tests;
 
-pub use self::combinators::{Cache, CacheConfig};
-pub use self::directory_graph::{DirectoryGraph, DirectoryGraphBuilder};
+pub use self::combinators::Cache;
+pub use self::combinators::CacheConfig;
+pub use self::directory_graph::DirectoryGraph;
+pub use self::directory_graph::DirectoryGraphBuilder;
 pub use self::from_addr::from_addr;
-pub use self::object_store::{ObjectStoreDirectoryService, ObjectStoreDirectoryServiceConfig};
-pub use self::order_validator::{LeavesToRootValidator, OrderingError, RootToLeavesValidator};
-pub use self::redb::{RedbDirectoryService, RedbDirectoryServiceConfig};
+pub use self::object_store::ObjectStoreDirectoryService;
+pub use self::object_store::ObjectStoreDirectoryServiceConfig;
+pub use self::order_validator::LeavesToRootValidator;
+pub use self::order_validator::OrderingError;
+pub use self::order_validator::RootToLeavesValidator;
+pub use self::redb::RedbDirectoryService;
+pub use self::redb::RedbDirectoryServiceConfig;
 pub use self::simple_putter::SimplePutter;
 
 #[cfg(feature = "cloud")]
 mod bigtable;
 
 #[cfg(feature = "cloud")]
-pub use self::bigtable::{BigtableDirectoryService, BigtableParameters};
+pub use self::bigtable::BigtableDirectoryService;
+#[cfg(feature = "cloud")]
+pub use self::bigtable::BigtableParameters;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -69,10 +79,7 @@ pub trait DirectoryService: Send + Sync {
     /// that has initially been requested.
     ///
     /// In case the directory can not be found, this should return an empty stream.
-    fn get_recursive(
-        &self,
-        root_directory_digest: &B3Digest,
-    ) -> BoxStream<'_, Result<Directory, Error>>;
+    fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'_, Result<Directory, Error>>;
 
     /// Allows persisting a closure of [Directory], which is a graph of
     /// connected Directory messages.
@@ -107,7 +114,9 @@ pub trait DirectoryPutter: Send {
 
 /// Registers the builtin DirectoryService implementations with the registry
 pub(crate) fn register_directory_services(reg: &mut Registry) {
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::CacheConfig>("cache");
+    reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::CacheConfig>(
+        "cache",
+    );
     reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::ObjectStoreDirectoryServiceConfig>("objectstore");
     reg.register::<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>, super::directoryservice::RedbDirectoryServiceConfig>("redb");
     #[cfg(feature = "cloud")]

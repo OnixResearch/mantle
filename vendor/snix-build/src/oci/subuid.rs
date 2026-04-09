@@ -1,14 +1,14 @@
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-    num::ParseIntError,
-    path::PathBuf,
-};
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::num::ParseIntError;
+use std::path::PathBuf;
 
-use nix::{
-    errno::Errno,
-    unistd::{Gid, Group, Uid, User},
-};
+use nix::errno::Errno;
+use nix::unistd::Gid;
+use nix::unistd::Group;
+use nix::unistd::Uid;
+use nix::unistd::User;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -49,14 +49,13 @@ pub(crate) struct SubordinateInfo {
 }
 
 impl SubordinateInfo {
-    /// Parses /etc/subuid and /etc/subgid and returns a single [SubordinateInfo] for the effective user.
+    /// Parses /etc/subuid and /etc/subgid and returns a single [SubordinateInfo] for the effective
+    /// user.
     pub(crate) fn for_effective_user() -> Result<SubordinateInfo, SubordinateError> {
         let (user, group) = user_info()?;
 
-        let subuid =
-            first_subordinate_id(&PathBuf::from("/etc/subuid"), user.uid.as_raw(), &user.name)?;
-        let subgid =
-            first_subordinate_id(&PathBuf::from("/etc/subgid"), user.uid.as_raw(), &user.name)?;
+        let subuid = first_subordinate_id(&PathBuf::from("/etc/subuid"), user.uid.as_raw(), &user.name)?;
+        let subgid = first_subordinate_id(&PathBuf::from("/etc/subgid"), user.uid.as_raw(), &user.name)?;
         Ok(SubordinateInfo {
             uid: user.uid.as_raw(),
             gid: group.gid.as_raw(),
@@ -69,13 +68,9 @@ impl SubordinateInfo {
 /// Returns user and group entries for current effective user.
 fn user_info() -> Result<(User, Group), SubordinateError> {
     let u = Uid::effective();
-    let user = User::from_uid(u)
-        .map_err(SubordinateError::UidError)?
-        .ok_or(SubordinateError::NoPasswdEntry(u))?;
+    let user = User::from_uid(u).map_err(SubordinateError::UidError)?.ok_or(SubordinateError::NoPasswdEntry(u))?;
     let g = Gid::effective();
-    let group = Group::from_gid(g)
-        .map_err(SubordinateError::GidError)?
-        .ok_or(SubordinateError::NoGroupEntry(g))?;
+    let group = Group::from_gid(g).map_err(SubordinateError::GidError)?.ok_or(SubordinateError::NoGroupEntry(g))?;
     Ok((user, group))
 }
 
@@ -88,23 +83,17 @@ fn first_subordinate_id(file: &PathBuf, id: u32, name: &str) -> Result<u32, Subo
         let line = line.trim();
         let parts: Vec<&str> = line.split(':').collect();
         if parts.len() == 3 && (parts[0] == name || id.to_string() == parts[0]) {
-            let subuid = parts[1]
-                .parse::<u32>()
-                .map_err(|e| SubordinateError::ParseError(file.clone(), line.into(), e))?;
-            let range = parts[2]
-                .parse::<u32>()
-                .map_err(|e| SubordinateError::ParseError(file.clone(), line.into(), e))?;
+            let subuid =
+                parts[1].parse::<u32>().map_err(|e| SubordinateError::ParseError(file.clone(), line.into(), e))?;
+            let range =
+                parts[2].parse::<u32>().map_err(|e| SubordinateError::ParseError(file.clone(), line.into(), e))?;
             if range > 0 {
                 return Ok(subuid);
             }
         }
     }
 
-    Err(SubordinateError::MissingEntry(
-        file.clone(),
-        name.into(),
-        id,
-    ))
+    Err(SubordinateError::MissingEntry(file.clone(), name.into(), id))
 }
 
 #[cfg(test)]
@@ -123,16 +112,15 @@ mod tests {
     #[test]
     fn test_parse_uid_file_with_name_should_return_first_match() {
         let file = create_fixture(["nobody:10000:65", "root:1000:2", "0:2:2"]);
-        let id = super::first_subordinate_id(&file.path().into(), 0, "root")
-            .expect("Faild to look up subordinate id.");
+        let id = super::first_subordinate_id(&file.path().into(), 0, "root").expect("Faild to look up subordinate id.");
         assert_eq!(id, 1000);
     }
 
     #[test]
     fn test_parse_uid_file_with_uid_should_return_first_match() {
         let file = create_fixture(["nobody:10000:65", "0:2:2"]);
-        let id = super::first_subordinate_id(&file.path().into(), 0, "root")
-            .expect("Failed to look up subordinate id.");
+        let id =
+            super::first_subordinate_id(&file.path().into(), 0, "root").expect("Failed to look up subordinate id.");
         assert_eq!(id, 2);
     }
 
@@ -147,16 +135,15 @@ mod tests {
     #[test]
     fn test_parse_error() {
         let file = create_fixture(["root:hello:2", "1000:2:2"]);
-        let id = super::first_subordinate_id(&file.path().into(), 0, "root")
-            .expect_err("Expected parsing to fail.");
+        let id = super::first_subordinate_id(&file.path().into(), 0, "root").expect_err("Expected parsing to fail.");
         assert!(matches!(id, SubordinateError::ParseError(_, _, _)));
     }
 
     #[test]
     fn test_parse_errors_in_other_users_files_are_ignored() {
         let file = create_fixture(["root:hello:2", "1000:2:2"]);
-        let id = super::first_subordinate_id(&file.path().into(), 1000, "user")
-            .expect("Failed to look up subordinate id.");
+        let id =
+            super::first_subordinate_id(&file.path().into(), 1000, "user").expect("Failed to look up subordinate id.");
         assert_eq!(id, 2);
     }
 }

@@ -4,14 +4,22 @@
 
 //! `File` to wrap over `tokio::fs::File` and `tokio-uring::fs::File`.
 
-use std::fmt::{Debug, Formatter};
-use std::io::{ErrorKind, IoSlice, IoSliceMut};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::io::ErrorKind;
+use std::io::IoSlice;
+use std::io::IoSliceMut;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::FromRawFd;
+use std::os::unix::io::RawFd;
 use std::path::Path;
 
-use crate::async_runtime::{RuntimeType, RUNTIME_TYPE};
+use crate::async_runtime::RuntimeType;
+use crate::async_runtime::RUNTIME_TYPE;
 use crate::file_buf::FileVolatileBuf;
-use crate::{off64_t, preadv64, pwritev64};
+use crate::off64_t;
+use crate::preadv64;
+use crate::pwritev64;
 
 /// An adapter enum to support both tokio and tokio-uring asynchronous `File`.
 pub enum File {
@@ -24,11 +32,7 @@ pub enum File {
 
 impl File {
     /// Asynchronously open a file.
-    pub async fn async_open<P: AsRef<Path>>(
-        path: P,
-        write: bool,
-        create: bool,
-    ) -> std::io::Result<Self> {
+    pub async fn async_open<P: AsRef<Path>>(path: P, write: bool, create: bool) -> std::io::Result<Self> {
         match *RUNTIME_TYPE {
             RuntimeType::Tokio => tokio::fs::OpenOptions::new()
                 .read(true)
@@ -49,11 +53,7 @@ impl File {
     }
 
     /// Asynchronously read data at `offset` into the buffer.
-    pub async fn async_read_at(
-        &self,
-        buf: FileVolatileBuf,
-        offset: u64,
-    ) -> (std::io::Result<usize>, FileVolatileBuf) {
+    pub async fn async_read_at(&self, buf: FileVolatileBuf, offset: u64) -> (std::io::Result<usize>, FileVolatileBuf) {
         match self {
             File::Tokio(f) => {
                 // tokio::fs:File doesn't support read_at() yet.
@@ -86,11 +86,7 @@ impl File {
     }
 
     /// Asynchronously write data at `offset` from the buffer.
-    pub async fn async_write_at(
-        &self,
-        buf: FileVolatileBuf,
-        offset: u64,
-    ) -> (std::io::Result<usize>, FileVolatileBuf) {
+    pub async fn async_write_at(&self, buf: FileVolatileBuf, offset: u64) -> (std::io::Result<usize>, FileVolatileBuf) {
         match self {
             File::Tokio(f) => {
                 // tokio::fs:File doesn't support read_at() yet.
@@ -143,9 +139,7 @@ impl File {
                     Err(std::io::Error::last_os_error())
                 } else {
                     // Safe because we dup a new raw fd.
-                    Ok(File::Uring(unsafe {
-                        tokio_uring::fs::File::from_raw_fd(fd)
-                    }))
+                    Ok(File::Uring(unsafe { tokio_uring::fs::File::from_raw_fd(fd) }))
                 }
             }
         }
@@ -175,14 +169,8 @@ pub fn preadv(fd: RawFd, bufs: &mut [FileVolatileBuf], offset: u64) -> std::io::
 
     loop {
         // SAFETY: it is ABI compatible, a pointer cast here is valid
-        let res = unsafe {
-            preadv64(
-                fd,
-                iov.as_ptr() as *const libc::iovec,
-                iov.len() as libc::c_int,
-                offset as off64_t,
-            )
-        };
+        let res =
+            unsafe { preadv64(fd, iov.as_ptr() as *const libc::iovec, iov.len() as libc::c_int, offset as off64_t) };
 
         if res >= 0 {
             let mut count = res as usize;
@@ -212,14 +200,8 @@ pub fn pwritev(fd: RawFd, bufs: &[FileVolatileBuf], offset: u64) -> std::io::Res
 
     loop {
         // SAFETY: it is ABI compatible, a pointer cast here is valid
-        let res = unsafe {
-            pwritev64(
-                fd,
-                iov.as_ptr() as *const libc::iovec,
-                iov.len() as libc::c_int,
-                offset as off64_t,
-            )
-        };
+        let res =
+            unsafe { pwritev64(fd, iov.as_ptr() as *const libc::iovec, iov.len() as libc::c_int, offset as off64_t) };
 
         if res >= 0 {
             return Ok(res as usize);
@@ -235,9 +217,10 @@ pub fn pwritev(fd: RawFd, bufs: &[FileVolatileBuf], offset: u64) -> std::io::Res
 
 #[cfg(test)]
 mod tests {
+    use vmm_sys_util::tempdir::TempDir;
+
     use super::*;
     use crate::async_runtime::block_on;
-    use vmm_sys_util::tempdir::TempDir;
 
     #[test]
     fn test_new_async_file() {
@@ -255,11 +238,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.as_path().to_path_buf();
         std::fs::write(path.join("test.txt"), b"test").unwrap();
-        let file = block_on(async {
-            File::async_open(path.join("test.txt"), false, false)
-                .await
-                .unwrap()
-        });
+        let file = block_on(async { File::async_open(path.join("test.txt"), false, false).await.unwrap() });
 
         let md = file.metadata().unwrap();
         assert!(md.is_file());
@@ -276,9 +255,7 @@ mod tests {
         std::fs::write(path.join("test.txt"), b"test").unwrap();
 
         block_on(async {
-            let file = File::async_open(path.join("test.txt"), false, false)
-                .await
-                .unwrap();
+            let file = File::async_open(path.join("test.txt"), false, false).await.unwrap();
 
             let mut buffer = [0u8; 3];
             let buf = unsafe { FileVolatileBuf::new(&mut buffer) };
@@ -299,9 +276,7 @@ mod tests {
         std::fs::write(path.join("test.txt"), b"test").unwrap();
 
         block_on(async {
-            let file = File::async_open(path.join("test.txt"), false, false)
-                .await
-                .unwrap();
+            let file = File::async_open(path.join("test.txt"), false, false).await.unwrap();
 
             let mut buffer = [0u8; 3];
             let buf = unsafe { FileVolatileBuf::new(&mut buffer) };
@@ -322,18 +297,10 @@ mod tests {
         let path = dir.as_path().to_path_buf();
 
         block_on(async {
-            let file = File::async_open(path.join("test.txt"), true, true)
-                .await
-                .unwrap();
+            let file = File::async_open(path.join("test.txt"), true, true).await.unwrap();
 
             let buffer = b"test";
-            let buf = unsafe {
-                FileVolatileBuf::from_raw_ptr(
-                    buffer.as_ptr() as *mut u8,
-                    buffer.len(),
-                    buffer.len(),
-                )
-            };
+            let buf = unsafe { FileVolatileBuf::from_raw_ptr(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len()) };
             let (res, buf) = file.async_write_at(buf, 0).await;
             assert_eq!(res.unwrap(), 4);
             assert_eq!(buf.len(), 4);
@@ -349,26 +316,13 @@ mod tests {
         let path = dir.as_path().to_path_buf();
 
         block_on(async {
-            let file = File::async_open(path.join("test.txt"), true, true)
-                .await
-                .unwrap();
+            let file = File::async_open(path.join("test.txt"), true, true).await.unwrap();
 
             let buffer = b"tes";
-            let buf = unsafe {
-                FileVolatileBuf::from_raw_ptr(
-                    buffer.as_ptr() as *mut u8,
-                    buffer.len(),
-                    buffer.len(),
-                )
-            };
+            let buf = unsafe { FileVolatileBuf::from_raw_ptr(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len()) };
             let buffer2 = b"t";
-            let buf2 = unsafe {
-                FileVolatileBuf::from_raw_ptr(
-                    buffer2.as_ptr() as *mut u8,
-                    buffer2.len(),
-                    buffer2.len(),
-                )
-            };
+            let buf2 =
+                unsafe { FileVolatileBuf::from_raw_ptr(buffer2.as_ptr() as *mut u8, buffer2.len(), buffer2.len()) };
             let bufs = vec![buf, buf2];
             let (res, bufs) = file.async_writev_at(bufs, 0).await;
 
@@ -387,21 +341,13 @@ mod tests {
         let path = dir.as_path().to_path_buf();
 
         block_on(async {
-            let file = File::async_open(path.join("test.txt"), true, true)
-                .await
-                .unwrap();
+            let file = File::async_open(path.join("test.txt"), true, true).await.unwrap();
 
             let file2 = file.async_try_clone().await.unwrap();
             drop(file);
 
             let buffer = b"test";
-            let buf = unsafe {
-                FileVolatileBuf::from_raw_ptr(
-                    buffer.as_ptr() as *mut u8,
-                    buffer.len(),
-                    buffer.len(),
-                )
-            };
+            let buf = unsafe { FileVolatileBuf::from_raw_ptr(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len()) };
             let (res, buf) = file2.async_write_at(buf, 0).await;
             assert_eq!(res.unwrap(), 4);
             assert_eq!(buf.len(), 4);

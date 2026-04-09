@@ -28,12 +28,13 @@
 //! # Ok::<(), std::io::Error>(())
 //! ```
 
+use std::io::BufRead;
+use std::io::ErrorKind::InvalidInput;
+use std::io::ErrorKind::UnexpectedEof;
+use std::io::Write;
+use std::io::{self};
+
 use crate::nar::wire;
-use std::io::{
-    self, BufRead,
-    ErrorKind::{InvalidInput, UnexpectedEof},
-    Write,
-};
 
 /// Create a new NAR, writing the output to the specified writer.
 pub fn open<W: Write>(writer: &mut W) -> io::Result<Node<'_, W>> {
@@ -64,11 +65,7 @@ impl<'a, W: Write> Node<'a, W> {
 
     /// Make this node a symlink.
     pub fn symlink(mut self, target: &[u8]) -> io::Result<()> {
-        debug_assert!(
-            target.len() <= wire::MAX_TARGET_LEN,
-            "target.len() > {}",
-            wire::MAX_TARGET_LEN
-        );
+        debug_assert!(target.len() <= wire::MAX_TARGET_LEN, "target.len() > {}", wire::MAX_TARGET_LEN);
         debug_assert!(!target.is_empty(), "target is empty");
         debug_assert!(!target.contains(&0), "target contains null byte");
 
@@ -82,11 +79,7 @@ impl<'a, W: Write> Node<'a, W> {
 
     /// Make this node a single file.
     pub fn file(mut self, executable: bool, size: u64, reader: &mut dyn BufRead) -> io::Result<()> {
-        self.write(if executable {
-            &wire::TOK_EXE
-        } else {
-            &wire::TOK_REG
-        })?;
+        self.write(if executable { &wire::TOK_EXE } else { &wire::TOK_REG })?;
 
         self.write(&size.to_le_bytes())?;
 
@@ -108,10 +101,7 @@ impl<'a, W: Write> Node<'a, W> {
         // bail if there's still data left in the passed reader.
         // This uses the same code as [BufRead::has_data_left] (unstable).
         if reader.fill_buf().map(|b| !b.is_empty())? {
-            return Err(io::Error::new(
-                InvalidInput,
-                "reader contained more data than specified size",
-            ));
+            return Err(io::Error::new(InvalidInput, "reader contained more data than specified size"));
         }
 
         self.pad(size)?;
@@ -151,16 +141,8 @@ impl<'a, W: Write> Node<'a, W> {
     /// skip.close(writer)?;
     /// # Ok::<(), std::io::Error>(())
     /// ```
-    pub fn file_manual_write(
-        mut self,
-        executable: bool,
-        size: u64,
-    ) -> io::Result<(&'a mut W, FileManualWrite)> {
-        self.write(if executable {
-            &wire::TOK_EXE
-        } else {
-            &wire::TOK_REG
-        })?;
+    pub fn file_manual_write(mut self, executable: bool, size: u64) -> io::Result<(&'a mut W, FileManualWrite)> {
+        self.write(if executable { &wire::TOK_EXE } else { &wire::TOK_REG })?;
 
         self.write(&size.to_le_bytes())?;
 
@@ -196,10 +178,7 @@ pub struct Directory<'a, W: Write> {
 
 impl<'a, W: Write> Directory<'a, W> {
     fn new(node: Node<'a, W>) -> Self {
-        Self {
-            node,
-            prev_name: None,
-        }
+        Self { node, prev_name: None }
     }
 
     /// Add an entry to the directory.
@@ -211,11 +190,7 @@ impl<'a, W: Write> Directory<'a, W> {
     /// written in order of ascending name. If this is not ensured, this method
     /// may panic or silently produce invalid archives.
     pub fn entry(&mut self, name: &[u8]) -> io::Result<Node<'_, W>> {
-        debug_assert!(
-            name.len() <= wire::MAX_NAME_LEN,
-            "name.len() > {}",
-            wire::MAX_NAME_LEN
-        );
+        debug_assert!(name.len() <= wire::MAX_NAME_LEN, "name.len() > {}", wire::MAX_NAME_LEN);
         debug_assert!(!name.is_empty(), "name is empty");
         debug_assert!(!name.contains(&0), "name contains null byte");
         debug_assert!(!name.contains(&b'/'), "name contains {:?}", '/');
@@ -276,7 +251,8 @@ pub struct FileManualWrite {
 }
 
 impl FileManualWrite {
-    /// Finish writing the file structure to the NAR after having manually written the file contents.
+    /// Finish writing the file structure to the NAR after having manually written the file
+    /// contents.
     ///
     /// **Important:** This *must* be called with the writer returned by file_manual_write after
     /// the file contents have been manually and fully written. Otherwise the resulting NAR file

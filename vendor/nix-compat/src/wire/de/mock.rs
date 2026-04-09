@@ -6,9 +6,8 @@ use std::thread;
 use bytes::Bytes;
 use thiserror::Error;
 
-use crate::wire::ProtocolVersion;
-
 use super::NixRead;
+use crate::wire::ProtocolVersion;
 
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -189,23 +188,17 @@ mod test {
     use bytes::Bytes;
     use hex_literal::hex;
 
+    use super::Builder;
+    use super::Error;
     use crate::wire::de::NixRead;
-
-    use super::{Builder, Error};
 
     #[tokio::test]
     async fn read_slice() {
-        let mut mock = Builder::new()
-            .read_number(10)
-            .read_slice(&[])
-            .read_slice(&hex!("0000 1234 5678 9ABC DEFF"))
-            .build();
+        let mut mock =
+            Builder::new().read_number(10).read_slice(&[]).read_slice(&hex!("0000 1234 5678 9ABC DEFF")).build();
         assert_eq!(10, mock.read_number().await.unwrap());
         assert_eq!(&[] as &[u8], &mock.read_bytes().await.unwrap()[..]);
-        assert_eq!(
-            &hex!("0000 1234 5678 9ABC DEFF"),
-            &mock.read_bytes().await.unwrap()[..]
-        );
+        assert_eq!(&hex!("0000 1234 5678 9ABC DEFF"), &mock.read_bytes().await.unwrap()[..]);
         assert_eq!(None, mock.try_read_number().await.unwrap());
         assert_eq!(None, mock.try_read_bytes().await.unwrap());
     }
@@ -219,10 +212,7 @@ mod test {
             .build();
         assert_eq!(10, mock.read_number().await.unwrap());
         assert_eq!(&[] as &[u8], &mock.read_bytes().await.unwrap()[..]);
-        assert_eq!(
-            &hex!("0000 1234 5678 9ABC DEFF"),
-            &mock.read_bytes().await.unwrap()[..]
-        );
+        assert_eq!(&hex!("0000 1234 5678 9ABC DEFF"), &mock.read_bytes().await.unwrap()[..]);
         assert_eq!(None, mock.try_read_number().await.unwrap());
         assert_eq!(None, mock.try_read_bytes().await.unwrap());
     }
@@ -238,19 +228,13 @@ mod test {
     #[tokio::test]
     async fn expect_number() {
         let mut mock = Builder::new().read_number(10).build();
-        assert_eq!(
-            Error::expected_read_number(),
-            mock.read_bytes().await.unwrap_err()
-        );
+        assert_eq!(Error::expected_read_number(), mock.read_bytes().await.unwrap_err());
     }
 
     #[tokio::test]
     async fn expect_bytes() {
         let mut mock = Builder::new().read_slice(&[]).build();
-        assert_eq!(
-            Error::expected_read_bytes(),
-            mock.read_number().await.unwrap_err()
-        );
+        assert_eq!(Error::expected_read_bytes(), mock.read_number().await.unwrap_err());
     }
 
     #[test]

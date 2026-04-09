@@ -11,24 +11,25 @@ use std::collections::BTreeSet;
 use std::io;
 
 use async_trait::async_trait;
-use snix_build::buildservice::{BuildOutput, BuildRequest, BuildResult, BuildService};
+use snix_build::buildservice::BuildOutput;
+use snix_build::buildservice::BuildRequest;
+use snix_build::buildservice::BuildResult;
+use snix_build::buildservice::BuildService;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
 use snix_castore::import::fs::ingest_path;
 use tracing::info;
 use url::Url;
 
-use crate::fetcher::{self, FetchError};
+use crate::fetcher::FetchError;
+use crate::fetcher::{self};
 
 /// The builder string that identifies builtin fetcher derivations.
 pub const FETCH_BUILDER: &str = "builtin:fetchurl";
 
 /// Returns `true` if this `BuildRequest` targets the builtin fetcher.
 pub fn is_fetch_request(request: &BuildRequest) -> bool {
-    request
-        .command_args
-        .first()
-        .is_some_and(|b| b == FETCH_BUILDER)
+    request.command_args.first().is_some_and(|b| b == FETCH_BUILDER)
 }
 
 // ── FetchKind ──────────────────────────────────────────────────────────
@@ -56,17 +57,10 @@ enum FetchKind {
 /// Does NOT extract hash information.
 fn parse_fetch_kind(request: &BuildRequest) -> Result<FetchKind, FetchError> {
     // Tiger Style: precondition.
-    debug_assert!(
-        !request.command_args.is_empty(),
-        "command_args must not be empty"
-    );
+    debug_assert!(!request.command_args.is_empty(), "command_args must not be empty");
 
     if !is_fetch_request(request) {
-        let builder = request
-            .command_args
-            .first()
-            .map(|s| s.as_str())
-            .unwrap_or("(none)");
+        let builder = request.command_args.first().map(|s| s.as_str()).unwrap_or("(none)");
         return Err(FetchError::NotAFetcher(builder.to_string()));
     }
 
@@ -79,12 +73,8 @@ fn parse_fetch_kind(request: &BuildRequest) -> Result<FetchKind, FetchError> {
             .and_then(|e| String::from_utf8(e.value.to_vec()).ok())
     };
     // Helper: check a boolean flag env var ("1" = true).
-    let env_flag = |key: &str| -> bool {
-        request
-            .environment_vars
-            .iter()
-            .any(|e| e.key == key && e.value.as_ref() == b"1")
-    };
+    let env_flag =
+        |key: &str| -> bool { request.environment_vars.iter().any(|e| e.key == key && e.value.as_ref() == b"1") };
 
     // Git fetch: type == "git"
     if env_str("type").as_deref() == Some("git") {
@@ -94,8 +84,7 @@ fn parse_fetch_kind(request: &BuildRequest) -> Result<FetchKind, FetchError> {
     }
 
     let url_str = env_str("url").ok_or(FetchError::MissingUrl)?;
-    let url =
-        Url::parse(&url_str).map_err(|e| FetchError::InvalidUrl(format!("{url_str}: {e}")))?;
+    let url = Url::parse(&url_str).map_err(|e| FetchError::InvalidUrl(format!("{url_str}: {e}")))?;
 
     if env_flag("unpack") {
         Ok(FetchKind::Tarball { url })
@@ -142,10 +131,7 @@ fn execute_fetch(kind: &FetchKind, out_path: &str) -> Result<(), FetchError> {
     }
 
     // Tiger Style: post-condition.
-    debug_assert!(
-        std::path::Path::new(out_path).exists(),
-        "fetch must produce output at {out_path}"
-    );
+    debug_assert!(std::path::Path::new(out_path).exists(), "fetch must produce output at {out_path}");
 
     Ok(())
 }
@@ -184,21 +170,14 @@ where
 {
     async fn do_build(&self, request: BuildRequest) -> io::Result<BuildResult> {
         // Tiger Style: assert the request has at least one output.
-        debug_assert!(
-            !request.outputs.is_empty(),
-            "fetch request must have at least one output"
-        );
+        debug_assert!(!request.outputs.is_empty(), "fetch request must have at least one output");
 
         let kind = parse_fetch_kind(&request).map_err(io::Error::other)?;
 
         // Download to a temp directory (cleaned up on drop).
-        let tmp = tempfile::tempdir()
-            .map_err(|e| io::Error::other(format!("creating fetch temp dir: {e}")))?;
+        let tmp = tempfile::tempdir().map_err(|e| io::Error::other(format!("creating fetch temp dir: {e}")))?;
         let out_path = tmp.path().join("output");
-        let out_str = out_path
-            .to_str()
-            .ok_or_else(|| io::Error::other("temp path not valid UTF-8"))?
-            .to_string();
+        let out_str = out_path.to_str().ok_or_else(|| io::Error::other("temp path not valid UTF-8"))?.to_string();
 
         // Blocking download on a dedicated thread.
         let kind_clone = kind.clone();
@@ -209,20 +188,14 @@ where
 
         // Verify output was produced.
         if !out_path.exists() {
-            return Err(io::Error::other(format!(
-                "fetcher did not produce output for {kind:?}"
-            )));
+            return Err(io::Error::other(format!("fetcher did not produce output for {kind:?}")));
         }
 
         // Ingest into castore.
-        let node = ingest_path::<_, _, _, &[u8]>(
-            self.blob_service.clone(),
-            self.directory_service.clone(),
-            &out_path,
-            None,
-        )
-        .await
-        .map_err(|e| io::Error::other(format!("ingesting fetch output: {e}")))?;
+        let node =
+            ingest_path::<_, _, _, &[u8]>(self.blob_service.clone(), self.directory_service.clone(), &out_path, None)
+                .await
+                .map_err(|e| io::Error::other(format!("ingesting fetch output: {e}")))?;
 
         // One BuildOutput per requested output.
         // Fetcher outputs have no self-references → empty needles.
@@ -250,20 +223,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bytes::Bytes;
-    use snix_build::buildservice::EnvVar;
-    use snix_castore::blobservice::MemoryBlobService;
-    use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
-    use snix_castore::Node;
     use std::path::PathBuf;
 
+    use bytes::Bytes;
+    use snix_build::buildservice::EnvVar;
+    use snix_castore::Node;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+
+    use super::*;
+
     fn tmp_ds() -> RedbDirectoryService {
-        RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .unwrap()
+        RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
     }
 
     fn env(key: &str, value: &str) -> EnvVar {
@@ -324,20 +296,14 @@ mod tests {
 
     #[test]
     fn parse_tarball_fetch() {
-        let req = fetch_request(vec![
-            env("url", "https://example.com/src.tar.gz"),
-            env("unpack", "1"),
-        ]);
+        let req = fetch_request(vec![env("url", "https://example.com/src.tar.gz"), env("unpack", "1")]);
         let kind = parse_fetch_kind(&req).unwrap();
         assert!(matches!(kind, FetchKind::Tarball { .. }));
     }
 
     #[test]
     fn parse_executable_fetch() {
-        let req = fetch_request(vec![
-            env("url", "https://example.com/run"),
-            env("executable", "1"),
-        ]);
+        let req = fetch_request(vec![env("url", "https://example.com/run"), env("executable", "1")]);
         let kind = parse_fetch_kind(&req).unwrap();
         assert!(matches!(kind, FetchKind::Executable { .. }));
     }
@@ -373,10 +339,7 @@ mod tests {
 
     #[test]
     fn parse_git_missing_rev() {
-        let req = fetch_request(vec![
-            env("url", "https://github.com/user/repo.git"),
-            env("type", "git"),
-        ]);
+        let req = fetch_request(vec![env("url", "https://github.com/user/repo.git"), env("type", "git")]);
         let err = parse_fetch_kind(&req).unwrap_err();
         assert!(matches!(err, FetchError::MissingGitRev));
     }

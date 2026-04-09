@@ -6,16 +6,24 @@
 
 #![allow(missing_docs)]
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::mem;
 
 use bitflags::bitflags;
+pub use libc::blksize_t;
+pub use libc::dev_t;
+pub use libc::ino64_t;
+pub use libc::mode_t;
+pub use libc::nlink_t;
+pub use libc::off64_t;
+pub use libc::pread64;
+pub use libc::preadv64;
+pub use libc::pwrite64;
+pub use libc::pwritev64;
+pub use libc::stat64;
+pub use libc::statvfs64;
 use vm_memory::ByteValued;
-
-pub use libc::{
-    blksize_t, dev_t, ino64_t, mode_t, nlink_t, off64_t, pread64, preadv64, pwrite64, pwritev64,
-    stat64, statvfs64,
-};
 
 /// Version number of this interface.
 pub const KERNEL_VERSION: u32 = 7;
@@ -209,7 +217,7 @@ const FD_PASSTHROUGH: u64 = 0x8000_0000_0000_0000;
  * upstream kernel use (1 << 0) as FUSE_ATTR_SUBMOUNT,
  * so FUSE_ATTR_DAX will use (1 << 1)
  *
- */
+ * */
 /// This attribute indicates whether the file supports dax in per-file DAX mode
 pub const FUSE_ATTR_DAX: u32 = 1 << 1;
 

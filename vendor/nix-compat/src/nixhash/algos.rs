@@ -2,7 +2,9 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 #[cfg(feature = "serde")]
-use serde_with::{DeserializeFromStr, SerializeDisplay};
+use serde_with::DeserializeFromStr;
+#[cfg(feature = "serde")]
+use serde_with::SerializeDisplay;
 
 use crate::nixhash::Error;
 

@@ -1,7 +1,11 @@
-use crate::ValidateNodeError;
-use crate::proto::{Directory, DirectoryEntry, DirectoryError, FileEntry, SymlinkEntry};
-
 use hex_literal::hex;
+
+use crate::ValidateNodeError;
+use crate::proto::Directory;
+use crate::proto::DirectoryEntry;
+use crate::proto::DirectoryError;
+use crate::proto::FileEntry;
+use crate::proto::SymlinkEntry;
 
 const DUMMY_DIGEST: [u8; 32] = [0; 32];
 

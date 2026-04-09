@@ -17,14 +17,21 @@
 //! [tokio]: https://tokio.rs/
 //! [tokio-uring]: https://github.com/tokio-rs/tokio-uring
 
-use std::io::{IoSlice, IoSliceMut, Read, Write};
+use std::error;
+use std::fmt;
+use std::io::IoSlice;
+use std::io::IoSliceMut;
+use std::io::Read;
+use std::io::Write;
 use std::marker::PhantomData;
+use std::slice;
 use std::sync::atomic::Ordering;
-use std::{error, fmt, slice};
 
-use vm_memory::{
-    bitmap::BitmapSlice, volatile_memory::Error as VError, AtomicAccess, Bytes, VolatileSlice,
-};
+use vm_memory::bitmap::BitmapSlice;
+use vm_memory::volatile_memory::Error as VError;
+use vm_memory::AtomicAccess;
+use vm_memory::Bytes;
+use vm_memory::VolatileSlice;
 
 /// Error codes related to buffer management.
 #[allow(missing_docs)]
@@ -42,10 +49,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::OutOfBounds { addr } => write!(f, "address 0x{addr:x} is out of bounds"),
-            Error::Overflow { base, offset } => write!(
-                f,
-                "address 0x{base:x} offset by 0x{offset:x} would overflow"
-            ),
+            Error::Overflow { base, offset } => write!(f, "address 0x{base:x} offset by 0x{offset:x} would overflow"),
             Error::VolatileSlice(e) => write!(f, "{e}"),
         }
     }
@@ -171,10 +175,7 @@ impl<'a> FileVolatileSlice<'a> {
             base: self.addr,
             offset: count,
         })?;
-        let new_size = self
-            .size
-            .checked_sub(count)
-            .ok_or(Error::OutOfBounds { addr: new_addr })?;
+        let new_size = self.size.checked_sub(count).ok_or(Error::OutOfBounds { addr: new_addr })?;
         Ok(Self::new(new_addr as *mut u8, new_size))
     }
 }
@@ -199,30 +200,22 @@ impl<'a> Bytes<usize> for FileVolatileSlice<'a> {
     }
 
     fn read_from<F>(&self, addr: usize, src: &mut F, count: usize) -> Result<usize, Self::E>
-    where
-        F: Read,
-    {
+    where F: Read {
         VolatileSlice::read_from(&self.as_volatile_slice(), addr, src, count)
     }
 
     fn read_exact_from<F>(&self, addr: usize, src: &mut F, count: usize) -> Result<(), Self::E>
-    where
-        F: Read,
-    {
+    where F: Read {
         VolatileSlice::read_exact_from(&self.as_volatile_slice(), addr, src, count)
     }
 
     fn write_to<F>(&self, addr: usize, dst: &mut F, count: usize) -> Result<usize, Self::E>
-    where
-        F: Write,
-    {
+    where F: Write {
         VolatileSlice::write_to(&self.as_volatile_slice(), addr, dst, count)
     }
 
     fn write_all_to<F>(&self, addr: usize, dst: &mut F, count: usize) -> Result<(), Self::E>
-    where
-        F: Write,
-    {
+    where F: Write {
         VolatileSlice::write_all_to(&self.as_volatile_slice(), addr, dst, count)
     }
 
@@ -381,8 +374,10 @@ mod async_io {
 
     #[cfg(test)]
     mod tests {
+        use tokio_uring::buf::IoBuf;
+        use tokio_uring::buf::IoBufMut;
+
         use super::*;
-        use tokio_uring::buf::{IoBuf, IoBufMut};
 
         #[test]
         fn test_new_file_volatile_buf() {

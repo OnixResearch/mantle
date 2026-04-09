@@ -1,10 +1,11 @@
 use async_trait::async_trait;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use futures::stream::BoxStream;
-use futures::{StreamExt, TryStreamExt};
 use nix_compat::store_path::StorePathRef;
+use snix_castore::Node;
+use snix_castore::PathComponent;
 use snix_castore::fs::RootNodes;
-use snix_castore::{Node, PathComponent};
-
 
 use super::PathInfoService;
 
@@ -15,8 +16,7 @@ use super::PathInfoService;
 pub struct RootNodesWrapper<T>(T);
 
 impl<T> From<T> for RootNodesWrapper<T>
-where
-    T: PathInfoService,
+where T: PathInfoService
 {
     fn from(value: T) -> Self {
         Self(value)
@@ -31,11 +31,9 @@ pub struct Error(#[from] super::Error);
 /// directory structure like /nix/store where each entry in the root filesystem
 /// directory corresponds to a CA node.
 #[cfg(any(feature = "fuse", feature = "virtiofs"))]
-
 #[async_trait]
 impl<T> RootNodes for RootNodesWrapper<T>
-where
-    T: PathInfoService,
+where T: PathInfoService
 {
     type Error = Error;
 
@@ -44,11 +42,7 @@ where
             return Ok(None);
         };
 
-        Ok(self
-            .0
-            .get(*store_path.digest())
-            .await?
-            .map(|path_info| path_info.node))
+        Ok(self.0.get(*store_path.digest()).await?.map(|path_info| path_info.node))
     }
 
     fn list(&self) -> BoxStream<'static, Result<(PathComponent, Node), Self::Error>> {

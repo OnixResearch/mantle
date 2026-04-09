@@ -1,11 +1,14 @@
-use std::{
-    num::NonZeroU64,
-    pin::Pin,
-    task::{self, Poll, ready},
-};
+use std::num::NonZeroU64;
+use std::pin::Pin;
+use std::task::Poll;
+use std::task::ready;
+use std::task::{self};
 
 use pin_project_lite::pin_project;
-use tokio::io::{self, AsyncRead, AsyncReadExt, ReadBuf};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::ReadBuf;
+use tokio::io::{self};
 
 /// State machine for [`NixFramedReader`].
 ///
@@ -37,10 +40,7 @@ impl<R> NixFramedReader<R> {
     pub fn new(reader: R) -> Self {
         Self {
             reader,
-            state: State::Length {
-                buf: [0; 8],
-                filled: 0,
-            },
+            state: State::Length { buf: [0; 8], filled: 0 },
         }
     }
 }
@@ -88,11 +88,7 @@ impl<R: AsyncRead> NixFramedReader<R> {
 }
 
 impl<R: AsyncRead> AsyncRead for NixFramedReader<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         let mut this = self.as_mut().project();
 
         // reading nothing always succeeds
@@ -131,10 +127,7 @@ impl<R: AsyncRead> AsyncRead for NixFramedReader<R> {
                     }))?;
 
                     *this.state = match NonZeroU64::new(remaining.get() - bytes_read as u64) {
-                        None => State::Length {
-                            buf: [0; 8],
-                            filled: 0,
-                        },
+                        None => State::Length { buf: [0; 8], filled: 0 },
                         Some(remaining) => State::Chunk { remaining },
                     };
 
@@ -150,8 +143,8 @@ impl<R: AsyncRead> AsyncRead for NixFramedReader<R> {
     }
 }
 
-/// Make a limited version of `buf`, consisting only of up to `n` bytes of the unfilled section, and call `f` with it.
-/// After `f` returns, we propagate the filled cursor advancement back to `buf`.
+/// Make a limited version of `buf`, consisting only of up to `n` bytes of the unfilled section, and
+/// call `f` with it. After `f` returns, we propagate the filled cursor advancement back to `buf`.
 // TODO(edef): duplicate of src/wire/bytes/reader/mod.rs:with_limited
 fn with_limited<R>(buf: &mut ReadBuf, n: u64, f: impl FnOnce(&mut ReadBuf) -> R) -> R {
     let mut nbuf = buf.take(n.try_into().unwrap_or(usize::MAX));
@@ -177,14 +170,16 @@ fn with_limited<R>(buf: &mut ReadBuf, n: u64, f: impl FnOnce(&mut ReadBuf) -> R)
 
 #[cfg(test)]
 mod nix_framed_tests {
-    use std::{
-        cmp::min,
-        pin::Pin,
-        task::{self, Poll},
-        time::Duration,
-    };
+    use std::cmp::min;
+    use std::pin::Pin;
+    use std::task::Poll;
+    use std::task::{self};
+    use std::time::Duration;
 
-    use tokio::io::{self, AsyncRead, AsyncReadExt, ReadBuf};
+    use tokio::io::AsyncRead;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::ReadBuf;
+    use tokio::io::{self};
     use tokio_test::io::Builder;
 
     use crate::nix_daemon::framing::NixFramedReader;
@@ -228,10 +223,7 @@ mod nix_framed_tests {
         let err = reader.read_to_string(&mut String::new()).await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
         let is_eof = reader.is_eof_unpin().await.map_err(|e| e.kind());
-        assert!(matches!(
-            is_eof,
-            Ok(false) | Err(io::ErrorKind::UnexpectedEof)
-        ));
+        assert!(matches!(is_eof, Ok(false) | Err(io::ErrorKind::UnexpectedEof)));
     }
 
     #[tokio::test(start_paused = true)]
@@ -269,10 +261,7 @@ mod nix_framed_tests {
 
         let mut reader = NixFramedReader::new(&mut mock);
         let mut result = String::new();
-        reader
-            .read_to_string(&mut result)
-            .await
-            .expect("Could not read into result");
+        reader.read_to_string(&mut result).await.expect("Could not read into result");
         assert_eq!("hello world", result);
         assert!(reader.is_eof_unpin().await.unwrap());
     }
@@ -284,10 +273,7 @@ mod nix_framed_tests {
 
     impl<'a> SplitMock<'a> {
         fn new(data: &'a [u8]) -> Self {
-            Self {
-                data,
-                pending: false,
-            }
+            Self { data, pending: false }
         }
     }
 

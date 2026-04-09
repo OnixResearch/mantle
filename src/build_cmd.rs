@@ -1,8 +1,13 @@
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use crunch_build::signing;
-use crunch_pipeline::{BuildConfig, PipelineResult, drv_key_for, label_for_key, parse_drv_key};
+use crunch_pipeline::BuildConfig;
+use crunch_pipeline::PipelineResult;
+use crunch_pipeline::drv_key_for;
+use crunch_pipeline::label_for_key;
+use crunch_pipeline::parse_drv_key;
 use nix_compat::store_path::StorePath;
 
 use crate::errors::RunError;
@@ -45,16 +50,11 @@ pub fn cmd_build(
 }
 
 pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
     rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
 }
 
-pub fn report_build_result(
-    config: &BuildConfig,
-    result: &PipelineResult,
-    fix: bool,
-) -> Result<(), RunError> {
+pub fn report_build_result(config: &BuildConfig, result: &PipelineResult, fix: bool) -> Result<(), RunError> {
     let logs_dir = log_dir();
     let _ = std::fs::create_dir_all(&logs_dir);
 
@@ -71,10 +71,7 @@ pub fn report_build_result(
     write_failure_logs(config, result, &logs_dir);
     print_failed_builds(result);
 
-    Err(RunError::Build(format!(
-        "{} root build(s) failed",
-        result.failed.len(),
-    )))
+    Err(RunError::Build(format!("{} root build(s) failed", result.failed.len(),)))
 }
 
 fn maybe_single_fod_mismatch(
@@ -95,21 +92,10 @@ fn maybe_single_fod_mismatch(
     let drv_path = parse_drv_key(&config.store_dir, &failed.drv_key)?;
     let label = label_for_key(result, &failed.drv_key).unwrap_or(drv_path.name());
 
-    Some(crate::fix::handle_fod_mismatch(
-        mismatch,
-        &drv_path,
-        label,
-        logs_dir,
-        &config.file,
-        fix,
-    ))
+    Some(crate::fix::handle_fod_mismatch(mismatch, &drv_path, label, logs_dir, &config.file, fix))
 }
 
-fn write_success_logs_and_outputs(
-    config: &BuildConfig,
-    result: &PipelineResult,
-    logs_dir: &Path,
-) {
+fn write_success_logs_and_outputs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
     let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir);
 
     for outcome in &result.outcomes {
@@ -129,9 +115,7 @@ fn write_success_logs_and_outputs(
 
         let multi = outcome.outputs.len() > 1;
         for (output_name, path_info) in &outcome.outputs {
-            let path = path_info
-                .store_path
-                .to_absolute_path_with_prefix(output_dir_str);
+            let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
             let suffix = match (outcome.cached, multi && output_name != "out") {
                 (true, true) => format!(" ({output_name}, cached)"),
                 (true, false) => " (cached)".to_string(),
@@ -143,11 +127,7 @@ fn write_success_logs_and_outputs(
     }
 }
 
-fn write_failure_logs(
-    config: &BuildConfig,
-    result: &PipelineResult,
-    logs_dir: &Path,
-) {
+fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
     for failed in &result.failed {
         let Some(drv_path) = parse_drv_key(&config.store_dir, &failed.drv_key) else {
             continue;
@@ -164,19 +144,11 @@ fn print_failed_builds(result: &PipelineResult) {
     }
 }
 
-pub fn write_log(
-    log_dir: &Path,
-    drv_path: &StorePath<String>,
-    label: &str,
-    success: bool,
-    body: &str,
-) {
+pub fn write_log(log_dir: &Path, drv_path: &StorePath<String>, label: &str, success: bool, body: &str) {
     let log_file = log_dir.join(format!("{}.log", drv_path));
     let status = if success { "success" } else { "failure" };
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let timestamp =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let content = format!(
         "# crunch build log\n# derivation: {label}\n# drv_path: {drv_path}\n# status: {status}\n# timestamp: {timestamp}\n\n{body}\n"
     );
@@ -184,23 +156,17 @@ pub fn write_log(
 }
 
 pub fn state_dir() -> PathBuf {
-    std::env::var("CRUNCH_STATE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let state = std::env::var("XDG_STATE_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".local/state")
-                });
-            state.join("crunch")
-        })
+    std::env::var("CRUNCH_STATE_DIR").map(PathBuf::from).unwrap_or_else(|_| {
+        let state = std::env::var("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            PathBuf::from(home).join(".local/state")
+        });
+        state.join("crunch")
+    })
 }
 
 pub fn log_dir() -> PathBuf {
-    std::env::var("CRUNCH_LOG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| state_dir().join("logs"))
+    std::env::var("CRUNCH_LOG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir().join("logs"))
 }
 
 /// Load a signing keypair from the given path, the default config location,
@@ -212,36 +178,25 @@ pub fn load_or_generate_signing_keypair(
     // 1. Explicit path from --signing-key.
     if let Some(path) = explicit_path {
         let contents = std::fs::read_to_string(path)
-            .map_err(|e| RunError::Internal(format!(
-                "reading signing key {}: {e}", path.display()
-            )))?;
+            .map_err(|e| RunError::Internal(format!("reading signing key {}: {e}", path.display())))?;
         return signing::load_keypair(&contents)
-            .map_err(|e| RunError::Internal(format!(
-                "parsing signing key {}: {e}", path.display()
-            )));
+            .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", path.display())));
     }
 
-    // 2. Default location: $CRUNCH_CONFIG_DIR/signing-key or
-    //    $state_dir/signing-key.
+    // 2. Default location: $CRUNCH_CONFIG_DIR/signing-key or $state_dir/signing-key.
     let config_dir = config_dir_or(state_dir);
     let default_path = config_dir.join("signing-key");
     if default_path.exists() {
         let contents = std::fs::read_to_string(&default_path)
-            .map_err(|e| RunError::Internal(format!(
-                "reading signing key {}: {e}", default_path.display()
-            )))?;
+            .map_err(|e| RunError::Internal(format!("reading signing key {}: {e}", default_path.display())))?;
         return signing::load_keypair(&contents)
-            .map_err(|e| RunError::Internal(format!(
-                "parsing signing key {}: {e}", default_path.display()
-            )));
+            .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", default_path.display())));
     }
 
     // 3. Auto-generate.
     let (keypair, line) = signing::generate_keypair();
     std::fs::create_dir_all(&config_dir)
-        .map_err(|e| RunError::Internal(format!(
-            "creating config dir {}: {e}", config_dir.display()
-        )))?;
+        .map_err(|e| RunError::Internal(format!("creating config dir {}: {e}", config_dir.display())))?;
 
     // Write with 0600 permissions.
     #[cfg(unix)]
@@ -258,16 +213,12 @@ pub fn load_or_generate_signing_keypair(
                 f.write_all(b"\n")?;
                 Ok(())
             })
-            .map_err(|e| RunError::Internal(format!(
-                "writing signing key {}: {e}", default_path.display()
-            )))?;
+            .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
     }
     #[cfg(not(unix))]
     {
         std::fs::write(&default_path, format!("{line}\n"))
-            .map_err(|e| RunError::Internal(format!(
-                "writing signing key {}: {e}", default_path.display()
-            )))?;
+            .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
     }
 
     eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
@@ -289,10 +240,7 @@ pub fn load_configured_trusted_public_keys(
     }
 
     let contents = std::fs::read_to_string(&default_path)
-        .map_err(|e| RunError::Internal(format!(
-            "reading trusted public keys {}: {e}",
-            default_path.display()
-        )))?;
+        .map_err(|e| RunError::Internal(format!("reading trusted public keys {}: {e}", default_path.display())))?;
 
     let mut parsed = Vec::new();
     for raw_line in contents.lines() {
@@ -308,15 +256,13 @@ pub fn load_configured_trusted_public_keys(
             if trimmed.is_empty() {
                 continue;
             }
-            parsed.push(
-                nix_compat::narinfo::VerifyingKey::parse(trimmed).map_err(|e| {
-                    RunError::Internal(format!(
-                        "invalid trusted public key '{}' in {}: {e}",
-                        trimmed,
-                        default_path.display()
-                    ))
-                })?,
-            );
+            parsed.push(nix_compat::narinfo::VerifyingKey::parse(trimmed).map_err(|e| {
+                RunError::Internal(format!(
+                    "invalid trusted public key '{}' in {}: {e}",
+                    trimmed,
+                    default_path.display()
+                ))
+            })?);
         }
     }
 
@@ -328,14 +274,12 @@ pub fn load_configured_trusted_public_keys(
 }
 
 fn config_dir_or(state_dir: &Path) -> PathBuf {
-    std::env::var("CRUNCH_CONFIG_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| state_dir.to_path_buf())
+    std::env::var("CRUNCH_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir.to_path_buf())
 }
 
 pub fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> {
-    let stdlib_dir = crunch_eval::stdlib::stdlib_import_path()
-        .map_err(|e| RunError::Internal(format!("stdlib: {e}")))?;
+    let stdlib_dir =
+        crunch_eval::stdlib::stdlib_import_path().map_err(|e| RunError::Internal(format!("stdlib: {e}")))?;
     let mut paths: Vec<OsString> = vec![stdlib_dir.into()];
     for path in extra {
         paths.push(path.into());

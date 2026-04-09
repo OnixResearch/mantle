@@ -7,9 +7,10 @@
 //! This module is pure data — no I/O, no async, no Builder references.
 //! State transitions are validated and return errors on invalid moves.
 
+use std::collections::HashMap;
+
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
-use std::collections::HashMap;
 
 use crate::error::Error;
 
@@ -97,10 +98,7 @@ impl Goal {
     ///
     /// The goal has no derivation yet — a producer build must complete
     /// and provide the `.drv` content via `set_derivation()`.
-    pub fn new_awaiting(
-        drv_path: StorePath<String>,
-        producer_key: String,
-    ) -> Self {
+    pub fn new_awaiting(drv_path: StorePath<String>, producer_key: String) -> Self {
         Self {
             drv_path,
             derivation: None,
@@ -125,10 +123,7 @@ impl Goal {
                 self.state,
             )));
         }
-        debug_assert!(
-            self.derivation.is_none(),
-            "AwaitingDerivation goal should not already have a derivation"
-        );
+        debug_assert!(self.derivation.is_none(), "AwaitingDerivation goal should not already have a derivation");
         self.derivation = Some(derivation);
         self.state = GoalState::Pending;
         Ok(())
@@ -264,9 +259,7 @@ pub struct GoalRegistry {
 
 impl GoalRegistry {
     pub fn new() -> Self {
-        Self {
-            goals: HashMap::new(),
-        }
+        Self { goals: HashMap::new() }
     }
 
     /// Number of tracked goals.
@@ -298,14 +291,10 @@ impl GoalRegistry {
     /// key already exists.
     pub fn insert(&mut self, key: String, goal: Goal) -> Result<(), Error> {
         if self.goals.len() as u32 >= MAX_GOALS {
-            return Err(Error::Store(format!(
-                "goal limit ({MAX_GOALS}) exceeded"
-            )));
+            return Err(Error::Store(format!("goal limit ({MAX_GOALS}) exceeded")));
         }
         if self.goals.contains_key(&key) {
-            return Err(Error::Store(format!(
-                "goal already exists: {key}"
-            )));
+            return Err(Error::Store(format!("goal already exists: {key}")));
         }
 
         // Tiger Style: assert postcondition.
@@ -318,15 +307,9 @@ impl GoalRegistry {
 
     /// Get or create a goal. Returns the key and whether it was newly
     /// created. This is the dedup mechanism — same drv path → same goal.
-    pub fn get_or_insert(
-        &mut self,
-        key: String,
-        make_goal: impl FnOnce() -> Goal,
-    ) -> Result<(&mut Goal, bool), Error> {
+    pub fn get_or_insert(&mut self, key: String, make_goal: impl FnOnce() -> Goal) -> Result<(&mut Goal, bool), Error> {
         if self.goals.len() as u32 >= MAX_GOALS && !self.goals.contains_key(&key) {
-            return Err(Error::Store(format!(
-                "goal limit ({MAX_GOALS}) exceeded"
-            )));
+            return Err(Error::Store(format!("goal limit ({MAX_GOALS}) exceeded")));
         }
         use std::collections::hash_map::Entry;
         match self.goals.entry(key) {
@@ -342,10 +325,7 @@ impl GoalRegistry {
 
     /// Count goals in a given state.
     pub fn count_in_state(&self, state: &GoalState) -> u32 {
-        self.goals
-            .values()
-            .filter(|g| &g.state == state)
-            .count() as u32
+        self.goals.values().filter(|g| &g.state == state).count() as u32
     }
 
     /// Count root goals.
@@ -386,8 +366,7 @@ impl GoalRegistry {
         self.goals
             .iter()
             .filter(|(_, g)| {
-                g.state == GoalState::AwaitingDerivation
-                    && g.producer_key.as_deref() == Some(producer_key)
+                g.state == GoalState::AwaitingDerivation && g.producer_key.as_deref() == Some(producer_key)
             })
             .map(|(k, _)| k.clone())
             .collect()
@@ -402,9 +381,12 @@ impl Default for GoalRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
     use nix_compat::derivation::Output;
-    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::*;
 
     fn make_drv() -> Derivation {
         let mut outputs = BTreeMap::new();
@@ -960,10 +942,8 @@ mod tests {
         // Now get_or_insert a new goal and verify it's the right one.
         let target_sp = fake_sp("target.drv");
         let target_key = target_sp.to_absolute_path();
-        let (goal, is_new) = reg.get_or_insert(
-            target_key.clone(),
-            || Goal::new_root(target_sp.clone(), make_drv()),
-        ).unwrap();
+        let (goal, is_new) =
+            reg.get_or_insert(target_key.clone(), || Goal::new_root(target_sp.clone(), make_drv())).unwrap();
 
         assert!(is_new, "should be newly created");
         assert!(goal.is_root, "returned goal must be the root one we created");
@@ -979,10 +959,8 @@ mod tests {
         let g = Goal::new(sp.clone(), make_drv());
         reg.insert(key.clone(), g).unwrap();
 
-        let (goal, is_new) = reg.get_or_insert(
-            key.clone(),
-            || panic!("should not call make_goal for existing entry"),
-        ).unwrap();
+        let (goal, is_new) =
+            reg.get_or_insert(key.clone(), || panic!("should not call make_goal for existing entry")).unwrap();
 
         assert!(!is_new);
         assert_eq!(goal.drv_path, sp);

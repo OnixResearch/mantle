@@ -15,23 +15,15 @@ pub fn validate_mirrors(mirrors: &[String]) -> Vec<String> {
     let mut issues = Vec::new();
 
     if mirrors.len() as u64 > MAX_MIRRORS as u64 {
-        issues.push(format!(
-            "too many mirrors: {} (max {MAX_MIRRORS})",
-            mirrors.len()
-        ));
+        issues.push(format!("too many mirrors: {} (max {MAX_MIRRORS})", mirrors.len()));
     }
 
     for (i, url) in mirrors.iter().enumerate() {
         if url.is_empty() {
             issues.push(format!("mirror[{i}]: empty URL"));
         }
-        if !url.starts_with("http://")
-            && !url.starts_with("https://")
-            && !url.starts_with("file://")
-        {
-            issues.push(format!(
-                "mirror[{i}]: unsupported scheme in '{url}'"
-            ));
+        if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") {
+            issues.push(format!("mirror[{i}]: unsupported scheme in '{url}'"));
         }
     }
 
@@ -98,10 +90,7 @@ mod tests {
 
     #[test]
     fn url_with_mirrors_order() {
-        let urls = url_with_mirrors(
-            "https://primary.example.com/f",
-            &["https://m1.example.com/f".into()],
-        );
+        let urls = url_with_mirrors("https://primary.example.com/f", &["https://m1.example.com/f".into()]);
         assert_eq!(urls.len(), 2);
         assert_eq!(urls[0], "https://primary.example.com/f");
         assert_eq!(urls[1], "https://m1.example.com/f");

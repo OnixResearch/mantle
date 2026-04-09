@@ -1,10 +1,24 @@
+use std::borrow::Cow;
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Deserializer;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+#[cfg(feature = "serde")]
+use serde::Serializer;
+#[cfg(feature = "serde")]
+use serde::de::Unexpected;
+#[cfg(feature = "serde")]
+use serde::ser::SerializeMap;
+#[cfg(feature = "serde")]
+use serde_json::Map;
+#[cfg(feature = "serde")]
+use serde_json::Value;
+
 use crate::nixbase32;
 use crate::nixhash::NixHash;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Unexpected, ser::SerializeMap};
-#[cfg(feature = "serde")]
-use serde_json::{Map, Value};
-use std::borrow::Cow;
 
 /// A Nix CAHash describes a content-addressed hash of a path.
 ///
@@ -120,9 +134,7 @@ impl CAHash {
     /// representation.
     #[cfg(feature = "serde")]
     pub(crate) fn from_map<'de, D>(map: &Map<String, Value>) -> Result<Option<Self>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         use super::algos::SUPPORTED_ALGOS;
         use super::decode_digest;
         use crate::nixhash::HashAlgo;
@@ -133,13 +145,11 @@ impl CAHash {
         }
 
         let hash_algo_v = map.get("hashAlgo").ok_or_else(|| {
-            serde::de::Error::missing_field(
-                "couldn't extract `hashAlgo` key, but `hash` key present",
-            )
+            serde::de::Error::missing_field("couldn't extract `hashAlgo` key, but `hash` key present")
         })?;
-        let hash_algo = hash_algo_v.as_str().ok_or_else(|| {
-            serde::de::Error::invalid_type(Unexpected::Other(&hash_algo_v.to_string()), &"a string")
-        })?;
+        let hash_algo = hash_algo_v
+            .as_str()
+            .ok_or_else(|| serde::de::Error::invalid_type(Unexpected::Other(&hash_algo_v.to_string()), &"a string"))?;
         let (mode_is_nar, hash_algo) = if let Some(s) = hash_algo.strip_prefix("r:") {
             (true, s)
         } else {
@@ -152,16 +162,13 @@ impl CAHash {
             )
         })?;
 
-        let hash_v = map.get("hash").ok_or_else(|| {
-            serde::de::Error::missing_field(
-                "couldn't extract `hash` key but `hashAlgo` key present",
-            )
-        })?;
-        let hash = hash_v.as_str().ok_or_else(|| {
-            serde::de::Error::invalid_type(Unexpected::Other(&hash_v.to_string()), &"a string")
-        })?;
-        let hash = decode_digest(hash.as_bytes(), hash_algo)
-            .map_err(|e| serde::de::Error::custom(e.to_string()))?;
+        let hash_v = map
+            .get("hash")
+            .ok_or_else(|| serde::de::Error::missing_field("couldn't extract `hash` key but `hashAlgo` key present"))?;
+        let hash = hash_v
+            .as_str()
+            .ok_or_else(|| serde::de::Error::invalid_type(Unexpected::Other(&hash_v.to_string()), &"a string"))?;
+        let hash = decode_digest(hash.as_bytes(), hash_algo).map_err(|e| serde::de::Error::custom(e.to_string()))?;
         if mode_is_nar {
             Ok(Some(Self::Nar(hash)))
         } else {
@@ -174,9 +181,7 @@ impl CAHash {
 impl Serialize for CAHash {
     /// map a CAHash into the serde data model.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         let mut map = serializer.serialize_map(Some(2))?;
         match self {
             CAHash::Flat(h) => {
@@ -202,9 +207,7 @@ impl Serialize for CAHash {
 #[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for CAHash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let value = Self::from_map::<D>(&Map::deserialize(deserializer)?)?;
 
         match value {
@@ -220,10 +223,11 @@ mod tests {
     use hex_literal::hex;
 
     #[cfg(feature = "serde")]
-    use crate::{
-        derivation::CAHash,
-        nixhash::{HashAlgo, NixHash},
-    };
+    use crate::derivation::CAHash;
+    #[cfg(feature = "serde")]
+    use crate::nixhash::HashAlgo;
+    #[cfg(feature = "serde")]
+    use crate::nixhash::NixHash;
 
     #[cfg(feature = "serde")]
     #[test]

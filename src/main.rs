@@ -11,9 +11,11 @@ mod store_cmd;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
-
-use build_cmd::{build_import_paths, cmd_build, state_dir};
+use build_cmd::build_import_paths;
+use build_cmd::cmd_build;
+use build_cmd::state_dir;
+use clap::Parser;
+use clap::Subcommand;
 use errors::RunError;
 
 #[derive(Parser, Debug)]
@@ -243,20 +245,16 @@ pub enum StoreAction {
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    let level = args
-        .log_level
-        .as_deref()
-        .map(|value| value.parse().unwrap_or(tracing::Level::INFO))
-        .unwrap_or(if args.verbose {
+    let level = args.log_level.as_deref().map(|value| value.parse().unwrap_or(tracing::Level::INFO)).unwrap_or(
+        if args.verbose {
             tracing::Level::DEBUG
         } else {
             tracing::Level::WARN
-        });
+        },
+    );
 
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env().add_directive(level.into()),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive(level.into()))
         .with_writer(std::io::stderr)
         .init();
 
@@ -286,8 +284,8 @@ fn run(args: Args) -> Result<(), RunError> {
     match args.command {
         Command::Eval { file, import_paths } => {
             let import_paths = build_import_paths(&import_paths)?;
-            let json = crunch_eval::evaluate_to_json(&file, &import_paths)
-                .map_err(|e| RunError::Eval(format!("{e}")))?;
+            let json =
+                crunch_eval::evaluate_to_json(&file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
             println!("{json}");
             Ok(())
         }
@@ -304,26 +302,19 @@ fn run(args: Args) -> Result<(), RunError> {
         } => {
             let import_paths = build_import_paths(&import_paths)?;
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let sub_url = if no_substitute {
+            let sub_url = if no_substitute { None } else { Some(substituters) };
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = if trusted_public_keys.is_empty() {
                 None
             } else {
-                Some(substituters)
+                let mut keys = Vec::new();
+                for key_str in &trusted_public_keys {
+                    keys.push(
+                        nix_compat::narinfo::VerifyingKey::parse(key_str)
+                            .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
+                    );
+                }
+                Some(keys)
             };
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> =
-                if trusted_public_keys.is_empty() {
-                    None
-                } else {
-                    let mut keys = Vec::new();
-                    for key_str in &trusted_public_keys {
-                        keys.push(
-                            nix_compat::narinfo::VerifyingKey::parse(key_str)
-                                .map_err(|e| RunError::Internal(format!(
-                                    "invalid trusted public key '{key_str}': {e}"
-                                )))?,
-                        );
-                    }
-                    Some(keys)
-                };
             cmd_build(
                 &file,
                 &import_paths,
@@ -355,9 +346,7 @@ fn run(args: Args) -> Result<(), RunError> {
         Command::Init => project_cmd::cmd_init(&std::env::current_dir().unwrap()),
         Command::Check => project_cmd::cmd_check(&std::env::current_dir().unwrap()),
         Command::Show => project_cmd::cmd_show(&std::env::current_dir().unwrap()),
-        Command::Refresh { names } => {
-            project_cmd::cmd_refresh(&std::env::current_dir().unwrap(), &names)
-        }
+        Command::Refresh { names } => project_cmd::cmd_refresh(&std::env::current_dir().unwrap(), &names),
         Command::ListStale => project_cmd::cmd_list_stale(&std::env::current_dir().unwrap()),
         Command::Upgrade => project_cmd::cmd_upgrade(&std::env::current_dir().unwrap()),
         Command::SelfBuild {
@@ -369,21 +358,18 @@ fn run(args: Args) -> Result<(), RunError> {
             trust_unsigned,
         } => {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> =
-                if trusted_public_keys.is_empty() {
-                    None
-                } else {
-                    let mut keys = Vec::new();
-                    for key_str in &trusted_public_keys {
-                        keys.push(
-                            nix_compat::narinfo::VerifyingKey::parse(key_str)
-                                .map_err(|e| RunError::Internal(format!(
-                                    "invalid trusted public key '{key_str}': {e}"
-                                )))?,
-                        );
-                    }
-                    Some(keys)
-                };
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = if trusted_public_keys.is_empty() {
+                None
+            } else {
+                let mut keys = Vec::new();
+                for key_str in &trusted_public_keys {
+                    keys.push(
+                        nix_compat::narinfo::VerifyingKey::parse(key_str)
+                            .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
+                    );
+                }
+                Some(keys)
+            };
             self_build::cmd_self_build(
                 &args.store,
                 &resolved_state_dir,
@@ -395,7 +381,8 @@ fn run(args: Args) -> Result<(), RunError> {
                 signing_key.as_deref(),
                 parsed_trusted.as_deref(),
                 trust_unsigned,
-            ).map(|_report| ())
+            )
+            .map(|_report| ())
         }
     }
 }
@@ -408,11 +395,7 @@ fn resolve_store_prefix(args: &Args) -> String {
     }
 }
 
-fn cmd_bootstrap_fetch(
-    output: &std::path::Path,
-    store_dir: &std::path::Path,
-    verbose: bool,
-) -> Result<(), RunError> {
+fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, verbose: bool) -> Result<(), RunError> {
     if !store_dir.exists() {
         return Err(RunError::Internal(format!(
             "store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
@@ -420,8 +403,7 @@ fn cmd_bootstrap_fetch(
         )));
     }
 
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
 
     rt.block_on(async { bootstrap::bootstrap_fetch(store_dir, output, verbose).await })
 }
@@ -437,8 +419,7 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
     let ncl = bootstrap::generate_seed_ncl(&entries);
 
-    std::fs::write(output, &ncl)
-        .map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
+    std::fs::write(output, &ncl).map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
 
     eprintln!("Wrote {}", output.display());
     Ok(())

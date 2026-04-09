@@ -4,14 +4,21 @@
 //! Specific implementations, such as ingesting from the filesystem, live in
 //! child modules.
 
-use crate::directoryservice::{DirectoryPutter, DirectoryService};
-use crate::path::{Path, PathBuf};
-use crate::{B3Digest, Directory, Node};
-use futures::{Stream, StreamExt};
+use futures::Stream;
+use futures::StreamExt;
+use hashbrown::HashMap;
+use hashbrown::HashSet;
+use hashbrown::hash_set;
 use tracing::Level;
-
-use hashbrown::{HashMap, HashSet, hash_set};
 use tracing::instrument;
+
+use crate::B3Digest;
+use crate::Directory;
+use crate::Node;
+use crate::directoryservice::DirectoryPutter;
+use crate::directoryservice::DirectoryService;
+use crate::path::Path;
+use crate::path::PathBuf;
 
 mod error;
 pub use error::IngestionError;
@@ -26,11 +33,10 @@ pub mod fs;
 /// The stream must have the following invariants:
 /// - All children entries must come before their parents.
 /// - The last entry must be the root node which must have a single path component.
-/// - Every entry should have a unique path, and only consist of normal components.
-///   This means, no windows path prefixes, absolute paths, `.` or `..`.
-/// - All referenced directories must have an associated directory entry in the stream.
-///   This means if there is a file entry for `foo/bar`, there must also be a `foo` directory
-///   entry.
+/// - Every entry should have a unique path, and only consist of normal components. This means, no
+///   windows path prefixes, absolute paths, `.` or `..`.
+/// - All referenced directories must have an associated directory entry in the stream. This means
+///   if there is a file entry for `foo/bar`, there must also be a `foo` directory entry.
 ///
 /// Internally we maintain a [HashMap] of [PathBuf] to partially populated [Directory] at that
 /// path. Once we receive an [IngestionEntry] for the directory itself, we remove it from the
@@ -38,10 +44,7 @@ pub mod fs;
 ///
 /// On success, returns the root node.
 #[instrument(skip_all, ret(level = Level::TRACE), err)]
-pub async fn ingest_entries<DS, S, E>(
-    directory_service: DS,
-    mut entries: S,
-) -> Result<Node, IngestionError<E>>
+pub async fn ingest_entries<DS, S, E>(directory_service: DS, mut entries: S) -> Result<Node, IngestionError<E>>
 where
     DS: DirectoryService,
     S: Stream<Item = Result<IngestionEntry, E>> + Send + std::marker::Unpin,
@@ -78,13 +81,11 @@ where
                 let directory_digest = directory.digest();
 
                 // Get a directory putter, or create a new one if this is the first directory uploaded.
-                let directory_putter = maybe_directory_putter
-                    .get_or_insert_with(|| directory_service.put_multiple_start());
+                let directory_putter =
+                    maybe_directory_putter.get_or_insert_with(|| directory_service.put_multiple_start());
 
                 // Use the directory_putter to upload the directory, if we didn't upload it yet.
-                if let hash_set::Entry::Vacant(vacant_entry) =
-                    sent_directories.entry(directory_digest)
-                {
+                if let hash_set::Entry::Vacant(vacant_entry) = sent_directories.entry(directory_digest) {
                     // upload, ...
                     if let Err(e) = directory_putter.put(directory).await {
                         return Err(IngestionError::UploadDirectoryError(path, e));
@@ -94,13 +95,10 @@ where
                 }
 
                 // return the Node::Directory, so it can be used in its parents.
-                (
-                    path,
-                    Node::Directory {
-                        digest: directory_digest,
-                        size: directory_size,
-                    },
-                )
+                (path, Node::Directory {
+                    digest: directory_digest,
+                    size: directory_size,
+                })
             }
             IngestionEntry::Symlink { path, target } => {
                 let target: crate::SymlinkTarget = bytes::Bytes::from(target)
@@ -113,14 +111,11 @@ where
                 size,
                 executable,
                 digest,
-            } => (
-                path,
-                Node::File {
-                    digest,
-                    size,
-                    executable,
-                },
-            ),
+            } => (path, Node::File {
+                digest,
+                size,
+                executable,
+            }),
         };
 
         let parent = path.parent().expect("Snix bug: got entry with root node");
@@ -143,24 +138,16 @@ where
         }
     };
 
-    assert!(
-        entries.count().await == 0,
-        "Snix bug: left over elements in the stream"
-    );
+    assert!(entries.count().await == 0, "Snix bug: left over elements in the stream");
 
-    assert!(
-        directories.is_empty(),
-        "Snix bug: left over directories after processing ingestion stream"
-    );
+    assert!(directories.is_empty(), "Snix bug: left over directories after processing ingestion stream");
 
     // if there were directories uploaded, make sure we flush the putter, so
     // they're all persisted to the backend.
     if let Some(mut directory_putter) = maybe_directory_putter {
         #[cfg_attr(not(debug_assertions), allow(unused))]
-        let root_directory_digest = directory_putter
-            .close()
-            .await
-            .map_err(|e| IngestionError::FinalizeDirectoryUpload(e))?;
+        let root_directory_digest =
+            directory_putter.close().await.map_err(|e| IngestionError::FinalizeDirectoryUpload(e))?;
 
         #[cfg(debug_assertions)]
         {
@@ -210,13 +197,15 @@ impl IngestionEntry {
 mod test {
     use rstest::rstest;
 
-    use crate::fixtures::DUMMY_DIGEST;
-    use crate::fixtures::{DIRECTORY_COMPLICATED, DIRECTORY_WITH_KEEP, EMPTY_BLOB_DIGEST};
-    use crate::utils::gen_test_directory_service;
-    use crate::{Directory, Node};
-
     use super::IngestionEntry;
     use super::ingest_entries;
+    use crate::Directory;
+    use crate::Node;
+    use crate::fixtures::DIRECTORY_COMPLICATED;
+    use crate::fixtures::DIRECTORY_WITH_KEEP;
+    use crate::fixtures::DUMMY_DIGEST;
+    use crate::fixtures::EMPTY_BLOB_DIGEST;
+    use crate::utils::gen_test_directory_service;
 
     #[rstest]
     #[case::single_file(vec![IngestionEntry::Regular {

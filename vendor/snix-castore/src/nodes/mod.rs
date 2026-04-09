@@ -2,9 +2,11 @@
 mod directory;
 mod symlink_target;
 
-use crate::B3Digest;
 pub use directory::Directory;
-pub use symlink_target::{SymlinkTarget, SymlinkTargetError};
+pub use symlink_target::SymlinkTarget;
+pub use symlink_target::SymlinkTargetError;
+
+use crate::B3Digest;
 
 /// A Node is either a directory, file or symlink.
 /// Nodes themselves don't have names, what gives them names is either them

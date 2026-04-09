@@ -1,16 +1,26 @@
-use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, quote, quote_spanned};
+use proc_macro2::Span;
+use proc_macro2::TokenStream;
+use quote::ToTokens;
+use quote::quote;
+use quote::quote_spanned;
+use syn::DeriveInput;
+use syn::Generics;
+use syn::Path;
+use syn::Type;
 use syn::spanned::Spanned;
-use syn::{DeriveInput, Generics, Path, Type};
 
+use crate::internal::Container;
+use crate::internal::Context;
+use crate::internal::Data;
+use crate::internal::Field;
+use crate::internal::Remote;
+use crate::internal::Style;
+use crate::internal::Variant;
+use crate::internal::attrs;
 use crate::internal::attrs::Default;
 use crate::internal::inputs::RemoteInput;
-use crate::internal::{Container, Context, Data, Field, Remote, Style, Variant, attrs};
 
-pub fn expand_nix_deserialize(
-    crate_path: Path,
-    input: &mut DeriveInput,
-) -> syn::Result<TokenStream> {
+pub fn expand_nix_deserialize(crate_path: Path, input: &mut DeriveInput) -> syn::Result<TokenStream> {
     let cx = Context::new();
     let cont = Container::from_ast(&cx, crate_path, input);
     cx.check()?;
@@ -20,18 +30,10 @@ pub fn expand_nix_deserialize(
     let body = nix_deserialize_body(&cont);
     let crate_path = cont.crate_path();
 
-    Ok(nix_deserialize_impl(
-        crate_path,
-        &ty,
-        &cont.original.generics,
-        body,
-    ))
+    Ok(nix_deserialize_impl(crate_path, &ty, &cont.original.generics, body))
 }
 
-pub fn expand_nix_deserialize_remote(
-    crate_path: Path,
-    input: &RemoteInput,
-) -> syn::Result<TokenStream> {
+pub fn expand_nix_deserialize_remote(crate_path: Path, input: &RemoteInput) -> syn::Result<TokenStream> {
     let cx = Context::new();
     let remote = Remote::from_ast(&cx, crate_path, input);
     if let Some(attrs) = remote.as_ref().map(|r| &r.attrs)
@@ -50,12 +52,7 @@ pub fn expand_nix_deserialize_remote(
     Ok(nix_deserialize_impl(crate_path, remote.ty, &generics, body))
 }
 
-fn nix_deserialize_impl(
-    crate_path: &Path,
-    ty: &Type,
-    generics: &Generics,
-    body: TokenStream,
-) -> TokenStream {
+fn nix_deserialize_impl(crate_path: &Path, ty: &Type, generics: &Generics, body: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
@@ -73,10 +70,7 @@ fn nix_deserialize_impl(
     }
 }
 
-fn nix_deserialize_body_from(
-    crate_path: &syn::Path,
-    attrs: &attrs::Container,
-) -> Option<TokenStream> {
+fn nix_deserialize_body_from(crate_path: &syn::Path, attrs: &attrs::Container) -> Option<TokenStream> {
     if let Some(span) = attrs.from_str.as_ref() {
         Some(nix_deserialize_from_str(crate_path, span.span()))
     } else if let Some(type_from) = attrs.type_from.as_ref() {
@@ -224,9 +218,7 @@ fn nix_deserialize_variant(variant: &Variant<'_>) -> TokenStream {
 }
 
 fn nix_deserialize_enum(variants: &[Variant<'_>]) -> TokenStream {
-    let match_variant = variants
-        .iter()
-        .map(|variant| nix_deserialize_variant(variant));
+    let match_variant = variants.iter().map(|variant| nix_deserialize_variant(variant));
     quote! {
         #[allow(unused_assignments)]
         async move {

@@ -2,15 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use log::{error, info, warn};
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
-use fuse_backend_rs::api::{server::Server, Vfs, VfsOptions};
-use fuse_backend_rs::passthrough::{Config, PassthroughFs};
-use fuse_backend_rs::transport::{FuseChannel, FuseSession};
+use fuse_backend_rs::api::server::Server;
+use fuse_backend_rs::api::Vfs;
+use fuse_backend_rs::api::VfsOptions;
+use fuse_backend_rs::passthrough::Config;
+use fuse_backend_rs::passthrough::PassthroughFs;
+use fuse_backend_rs::transport::FuseChannel;
+use fuse_backend_rs::transport::FuseSession;
+use log::error;
+use log::info;
+use log::warn;
 
 /// A fusedev daemon example
 #[allow(dead_code)]
@@ -53,8 +59,7 @@ impl Daemon {
     /// Mounts a fusedev daemon to the mountpoint, then start service threads to handle
     /// FUSE requests.
     pub fn mount(&mut self) -> Result<()> {
-        let mut se =
-            FuseSession::new(Path::new(&self.mountpoint), "passthru_example", "", false).unwrap();
+        let mut se = FuseSession::new(Path::new(&self.mountpoint), "passthru_example", "", false).unwrap();
         se.mount().unwrap();
         for _ in 0..self.thread_cnt {
             let mut server = FuseServer {
@@ -100,15 +105,10 @@ impl FuseServer {
         // Given error EBADF, it means kernel has shut down this session.
         let _ebadf = std::io::Error::from_raw_os_error(libc::EBADF);
         loop {
-            if let Some((reader, writer)) = self
-                .ch
-                .get_request()
-                .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?
+            if let Some((reader, writer)) =
+                self.ch.get_request().map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?
             {
-                if let Err(e) = self
-                    .server
-                    .handle_message(reader, writer.into(), None, None)
-                {
+                if let Err(e) = self.server.handle_message(reader, writer.into(), None, None) {
                     match e {
                         fuse_backend_rs::Error::EncodeMessage(_ebadf) => {
                             break;

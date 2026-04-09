@@ -4,7 +4,8 @@
 //! written to a temporary directory for use as an import path, or
 //! resolved from the source tree during development.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// The embedded stdlib files.
 const STDLIB_FILES: &[(&str, &str)] = &[
@@ -25,12 +26,10 @@ pub fn write_stdlib(dir: Option<&Path>) -> Result<PathBuf, std::io::Error> {
     let target = match dir {
         Some(d) => d.to_path_buf(),
         None => {
-            let cache = std::env::var("XDG_CACHE_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".cache")
-                });
+            let cache = std::env::var("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                PathBuf::from(home).join(".cache")
+            });
             cache.join("crunch").join("stdlib")
         }
     };
@@ -61,10 +60,7 @@ pub fn source_stdlib_dir() -> Option<PathBuf> {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib"),
     ];
     for candidate in &candidates {
-        let resolved = candidate
-            .canonicalize()
-            .ok()
-            .filter(|p| p.join("lib.ncl").exists());
+        let resolved = candidate.canonicalize().ok().filter(|p| p.join("lib.ncl").exists());
         if let Some(path) = resolved {
             return Some(path);
         }
@@ -113,19 +109,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_stdlib(Some(dir.path())).unwrap();
 
-        let mtime_before = std::fs::metadata(dir.path().join("lib.ncl"))
-            .unwrap()
-            .modified()
-            .unwrap();
+        let mtime_before = std::fs::metadata(dir.path().join("lib.ncl")).unwrap().modified().unwrap();
 
         // Small sleep to ensure mtime granularity
         std::thread::sleep(std::time::Duration::from_millis(50));
         write_stdlib(Some(dir.path())).unwrap();
 
-        let mtime_after = std::fs::metadata(dir.path().join("lib.ncl"))
-            .unwrap()
-            .modified()
-            .unwrap();
+        let mtime_after = std::fs::metadata(dir.path().join("lib.ncl")).unwrap().modified().unwrap();
 
         assert_eq!(mtime_before, mtime_after, "file should not be rewritten");
     }
@@ -141,10 +131,7 @@ mod tests {
         let stdlib_dir = stdlib_import_path().unwrap();
         let import_paths = vec![stdlib_dir.into_os_string()];
 
-        let expr = crate::evaluate_str(
-            r#"let lib = import "lib.ncl" in "ok""#,
-            &import_paths,
-        ).unwrap();
+        let expr = crate::evaluate_str(r#"let lib = import "lib.ncl" in "ok""#, &import_paths).unwrap();
         assert_eq!(expr.as_str(), Some("ok"));
     }
 }

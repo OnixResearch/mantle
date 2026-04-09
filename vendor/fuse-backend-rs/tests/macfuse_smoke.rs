@@ -37,11 +37,7 @@ mod macfuse_tests {
 
     fn exec(cmd: &str) -> Result<String> {
         debug!("exec: {}", cmd);
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .env("RUST_BACKTRACE", "1")
-            .output()?;
+        let output = Command::new("sh").arg("-c").arg(cmd).env("RUST_BACKTRACE", "1").output()?;
 
         if !output.status.success() || output.stderr.len() > 0 {
             let msg = std::str::from_utf8(&output.stderr).unwrap();

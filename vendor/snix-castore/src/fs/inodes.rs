@@ -1,6 +1,8 @@
 //! This module contains all the data structures used to track information
 //! about inodes, which present snix-castore nodes in a filesystem.
-use crate::{B3Digest, Node, path::PathComponent};
+use crate::B3Digest;
+use crate::Node;
+use crate::path::PathComponent;
 
 #[derive(Clone, Debug)]
 pub enum InodeData {
@@ -23,9 +25,7 @@ impl InodeData {
     /// Constructs a new InodeData from a `&Node`.
     pub fn from_node(node: &Node) -> Self {
         match node {
-            Node::Directory { digest, size } => {
-                Self::Directory(DirectoryInodeData::Sparse(*digest, *size))
-            }
+            Node::Directory { digest, size } => Self::Directory(DirectoryInodeData::Sparse(*digest, *size)),
             Node::File {
                 digest,
                 size,

@@ -1,13 +1,14 @@
-use std::{
-    ffi::OsString,
-    fs,
-    path::{Path, PathBuf},
-    process::{Output, Stdio},
-};
+use std::ffi::OsString;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Output;
+use std::process::Stdio;
 
 use tokio::process::Command;
 
-use crate::sandbox::{InputsProvider, SandboxSpec};
+use crate::sandbox::InputsProvider;
+use crate::sandbox::SandboxSpec;
 
 const COMMON_BWRAP_ARGS: &[&str] = &[
     "--unshare-uts",
@@ -67,8 +68,8 @@ services: files
 ///
 /// The root filesystem is tmpfs, has /dev and /proc.
 ///
-/// The rest of the filesystem is based on the [SandboxSpec::scratches], [SandboxSpec::additional_files]
-/// and [SandboxSpec::inputs_provider].
+/// The rest of the filesystem is based on the [SandboxSpec::scratches],
+/// [SandboxSpec::additional_files] and [SandboxSpec::inputs_provider].
 ///
 /// # Scratches
 ///
@@ -130,9 +131,7 @@ impl Bwrap {
     // TODO(#132): support streaming std{err,out}
     /// Run the sandbox and return the result.
     pub async fn run(mut self) -> std::io::Result<SandboxOutcome> {
-        let _guard = self
-            .inputs_provider
-            .provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
+        let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
 
         Ok(SandboxOutcome {
             output: Command::new("bwrap")
@@ -157,9 +156,7 @@ impl Bwrap {
             args.extend([
                 "--setenv".into(),
                 env.key.clone().into(),
-                str::from_utf8(&env.value)
-                    .expect("invalid string in env")
-                    .into(),
+                str::from_utf8(&env.value).expect("invalid string in env").into(),
             ]);
         }
 
@@ -168,9 +165,7 @@ impl Bwrap {
         args.extend([
             "--ro-bind".into(),
             Path::new("/").join(&host_inputs_dir).into(),
-            Path::new("/")
-                .join(spec.inputs_provider().inputs_dir())
-                .into(),
+            Path::new("/").join(spec.inputs_provider().inputs_dir()).into(),
         ]);
         for scratch in spec.scratches() {
             let scratch_path = scratch_dir.join(scratch);
@@ -184,9 +179,7 @@ impl Bwrap {
                     "--overlay".into(),
                     scratch_path.into(),
                     overlay_workdir.into(),
-                    Path::new("/")
-                        .join(spec.inputs_provider().inputs_dir())
-                        .into(),
+                    Path::new("/").join(spec.inputs_provider().inputs_dir()).into(),
                 ]);
             } else {
                 args.extend([
@@ -196,10 +189,7 @@ impl Bwrap {
                 ]);
             }
         }
-        args.extend([
-            "--chdir".into(),
-            Path::new("/").join(spec.sandbox_workdir()).into(),
-        ]);
+        args.extend(["--chdir".into(), Path::new("/").join(spec.sandbox_workdir()).into()]);
 
         if let Some(shell) = spec.provide_shell() {
             args.extend_from_slice(&["--ro-bind".into(), shell.clone().into(), "/bin/sh".into()]);
@@ -262,11 +252,7 @@ impl Bwrap {
         } else {
             // Use predefined /etc/hosts like nix does.
             // Among other things it is required for libuv getaddrinfo() tests to pass.
-            args.extend([
-                "--ro-bind".into(),
-                etc.join("hosts").into(),
-                "/etc/hosts".into(),
-            ]);
+            args.extend(["--ro-bind".into(), etc.join("hosts").into(), "/etc/hosts".into()]);
         }
         args.extend(spec.command().into_iter().map(|s| s.into()));
 

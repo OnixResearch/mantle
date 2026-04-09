@@ -4,10 +4,16 @@
 
 #![allow(missing_docs)]
 
-use std::ffi::{CStr, CString};
-use std::io::{Error, ErrorKind, Result};
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
 
-use super::{Context, Entry, FileSystem, GetxattrReply};
+use super::Context;
+use super::Entry;
+use super::FileSystem;
+use super::GetxattrReply;
 use crate::abi::fuse_abi::stat64;
 
 pub const OPAQUE_XATTR_LEN: u32 = 16;
@@ -113,13 +119,7 @@ pub trait Layer: FileSystem {
         }
         // A directory is made opaque by setting the xattr "trusted.overlay.opaque" to "y".
         // See ref: https://docs.kernel.org/filesystems/overlayfs.html#whiteouts-and-opaque-directories
-        self.setxattr(
-            ctx,
-            ino.into(),
-            to_cstring(OPAQUE_XATTR)?.as_c_str(),
-            b"y",
-            0,
-        )
+        self.setxattr(ctx, ino.into(), to_cstring(OPAQUE_XATTR)?.as_c_str(), b"y", 0)
     }
 
     /// Check if the directory is opaque.

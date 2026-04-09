@@ -8,8 +8,8 @@
 //! 2. supports mounting a file system at "/" or and subdirectory
 //! 3. supports mounting multiple file systems at different paths
 //! 4. remounting another file system at the same path will evict the old one
-//! 5. doesn't support recursive mounts. If /a is a mounted file system, you can't
-//!    mount another file systems under /a.
+//! 5. doesn't support recursive mounts. If /a is a mounted file system, you can't mount another
+//!    file systems under /a.
 //!
 //! Its main usage is to avoid virtio-fs device hotplug. With this simple union fs,
 //! a new backend file system could be mounted onto a subdirectory, instead of hot-adding
@@ -20,10 +20,15 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::fmt;
 use std::io;
-use std::io::{Error, ErrorKind, Result};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
@@ -367,13 +372,7 @@ impl Vfs {
         *self.opts.load_full()
     }
 
-    fn insert_mount_locked(
-        &self,
-        fs: BackFileSystem,
-        mut entry: Entry,
-        fs_idx: VfsIndex,
-        path: &str,
-    ) -> Result<()> {
+    fn insert_mount_locked(&self, fs: BackFileSystem, mut entry: Entry, fs_idx: VfsIndex, path: &str) -> Result<()> {
         // The visibility of mountpoints and superblocks:
         // superblock should be committed first because it won't be accessed until
         // a lookup returns a cross mountpoint inode.
@@ -418,13 +417,11 @@ impl Vfs {
         let _guard = self.lock.lock().unwrap();
         if self.initialized() {
             let opts = self.opts.load().deref().out_opts;
-            fs.init(opts).map_err(|e| {
-                VfsError::Initialize(format!("Can't initialize with opts {opts:?}, {e:?}"))
-            })?;
+            fs.init(opts)
+                .map_err(|e| VfsError::Initialize(format!("Can't initialize with opts {opts:?}, {e:?}")))?;
         }
         let index = self.allocate_fs_idx().map_err(VfsError::FsIndex)?;
-        self.insert_mount_locked(fs, entry, index, path)
-            .map_err(VfsError::Mount)?;
+        self.insert_mount_locked(fs, entry, index, path).map_err(VfsError::Mount)?;
 
         Ok(index)
     }
@@ -436,10 +433,7 @@ impl Vfs {
         if ino > VFS_MAX_INO {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!(
-                    "Unsupported max inode number, requested {} supported {}",
-                    ino, VFS_MAX_INO
-                ),
+                format!("Unsupported max inode number, requested {} supported {}", ino, VFS_MAX_INO),
             ));
         }
 
@@ -459,10 +453,7 @@ impl Vfs {
         let parent = self
             .root
             .get_parent_inode(inode)
-            .ok_or(VfsError::NotFound(format!(
-                "{}'s parent inode does not exist",
-                inode
-            )))?;
+            .ok_or(VfsError::NotFound(format!("{}'s parent inode does not exist", inode)))?;
         let mut mountpoints = self.mountpoints.load().deref().deref().clone();
         let fs_idx = mountpoints
             .get(&inode)
@@ -470,8 +461,8 @@ impl Vfs {
             .map(|x| {
                 // Do not remove pseudofs inode. We keep all pseudofs inode so that
                 // 1. they can be reused later on
-                // 2. during live upgrade, it is easier reconstruct pseudofs inodes since
-                //    we do not have to track pseudofs deletions
+                // 2. during live upgrade, it is easier reconstruct pseudofs inodes since we do not have to track
+                //    pseudofs deletions
                 // In order to make the hot upgrade of virtiofs easy, VFS will save pseudo
                 // inodes when umount for easy recovery. However, in the fuse scenario, if
                 // umount does not remove the pseudo inode, it will cause an invalid
@@ -509,9 +500,10 @@ impl Vfs {
         };
 
         if let Some(mnt) = self.mountpoints.load().get(&inode) {
-            Ok(Some(self.get_fs_by_idx(mnt.fs_idx).map_err(|e| {
-                VfsError::NotFound(format!("fs index {}, {:?}", mnt.fs_idx, e))
-            })?))
+            Ok(Some(
+                self.get_fs_by_idx(mnt.fs_idx)
+                    .map_err(|e| VfsError::NotFound(format!("fs index {}, {:?}", mnt.fs_idx, e)))?,
+            ))
         } else {
             // Pseudo fs dir inode exists, but that no backend is ever mounted
             // is a normal case.
@@ -526,8 +518,8 @@ impl Vfs {
 
     // Inode converting rules:
     // 1. Pseudo fs inode is not hashed
-    // 2. Index is always larger than 0 so that pseudo fs inodes are never affected
-    //    and can be found directly
+    // 2. Index is always larger than 0 so that pseudo fs inodes are never affected and can be found
+    //    directly
     // 3. Other inodes are hashed via (index << 56 | inode)
     fn convert_inode(&self, fs_idx: VfsIndex, inode: u64) -> Result<u64> {
         // Do not hash negative dentry
@@ -541,12 +533,7 @@ impl Vfs {
             ));
         }
         let ino: u64 = ((fs_idx as u64) << VFS_INDEX_SHIFT) | inode;
-        trace!(
-            "fuse: vfs fs_idx {} inode {} fuse ino {:#x}",
-            fs_idx,
-            inode,
-            ino
-        );
+        trace!("fuse: vfs fs_idx {} inode {} fuse ino {:#x}", fs_idx, inode, ino);
         Ok(ino)
     }
 
@@ -575,28 +562,16 @@ impl Vfs {
     /// to VFS internal IDs.
     fn remap_attr_id(&self, map_internal_to_external: bool, attr: &mut stat64) {
         if let Some((internal_id, external_id, range)) = self.id_mapping {
-            if map_internal_to_external
-                && attr.st_uid >= internal_id
-                && attr.st_uid < internal_id + range
-            {
+            if map_internal_to_external && attr.st_uid >= internal_id && attr.st_uid < internal_id + range {
                 attr.st_uid += external_id - internal_id;
             }
-            if map_internal_to_external
-                && attr.st_gid >= internal_id
-                && attr.st_gid < internal_id + range
-            {
+            if map_internal_to_external && attr.st_gid >= internal_id && attr.st_gid < internal_id + range {
                 attr.st_gid += external_id - internal_id;
             }
-            if !map_internal_to_external
-                && attr.st_uid >= external_id
-                && attr.st_uid < external_id + range
-            {
+            if !map_internal_to_external && attr.st_uid >= external_id && attr.st_uid < external_id + range {
                 attr.st_uid += internal_id - external_id;
             }
-            if !map_internal_to_external
-                && attr.st_gid >= external_id
-                && attr.st_gid < external_id + range
-            {
+            if !map_internal_to_external && attr.st_gid >= external_id && attr.st_gid < external_id + range {
                 attr.st_gid += internal_id - external_id;
             }
         }
@@ -630,10 +605,7 @@ impl Vfs {
             }
         }
 
-        Err(Error::new(
-            ErrorKind::Other,
-            "vfs maximum mountpoints reached",
-        ))
+        Err(Error::new(ErrorKind::Other, "vfs maximum mountpoints reached"))
     }
 
     fn get_fs_by_idx(&self, fs_idx: VfsIndex) -> Result<Arc<BackFileSystem>> {
@@ -662,13 +634,7 @@ impl Vfs {
         }
     }
 
-    fn lookup_pseudo(
-        &self,
-        fs: &PseudoFs,
-        idata: VfsInode,
-        ctx: &Context,
-        name: &CStr,
-    ) -> Result<Entry> {
+    fn lookup_pseudo(&self, fs: &PseudoFs, idata: VfsInode, ctx: &Context, name: &CStr) -> Result<Entry> {
         trace!("lookup pseudo ino {} name {:?}", idata.ino(), name);
         let mut entry = fs.lookup(ctx, idata.ino(), name)?;
 
@@ -694,21 +660,22 @@ impl Vfs {
 /// Sava and restore Vfs state.
 #[cfg(feature = "persist")]
 pub mod persist {
-    use std::{
-        ops::Deref,
-        sync::{atomic::Ordering, Arc},
-    };
+    use std::ops::Deref;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
 
     use dbs_snapshot::Snapshot;
-    use versionize::{VersionMap, Versionize, VersionizeResult};
+    use versionize::VersionMap;
+    use versionize::Versionize;
+    use versionize::VersionizeResult;
     use versionize_derive::Versionize;
 
-    use crate::api::{
-        filesystem::FsOptions,
-        pseudo_fs::persist::PseudoFsState,
-        vfs::{VfsError, VfsResult},
-        Vfs, VfsOptions,
-    };
+    use crate::api::filesystem::FsOptions;
+    use crate::api::pseudo_fs::persist::PseudoFsState;
+    use crate::api::vfs::VfsError;
+    use crate::api::vfs::VfsResult;
+    use crate::api::Vfs;
+    use crate::api::VfsOptions;
 
     /// VfsState stores the state of the VFS.
     #[derive(Versionize, Debug)]
@@ -765,19 +732,13 @@ pub mod persist {
 
         fn restore(state: &VfsOptionsState) -> VfsResult<VfsOptions> {
             Ok(VfsOptions {
-                in_opts: FsOptions::from_bits(state.in_opts).ok_or(VfsError::Persist(
-                    "Failed to restore VfsOptions.in_opts".to_owned(),
-                ))?,
-                out_opts: FsOptions::from_bits(state.out_opts).ok_or(VfsError::Persist(
-                    "Failed to restore VfsOptions.out_opts".to_owned(),
-                ))?,
+                in_opts: FsOptions::from_bits(state.in_opts)
+                    .ok_or(VfsError::Persist("Failed to restore VfsOptions.in_opts".to_owned()))?,
+                out_opts: FsOptions::from_bits(state.out_opts)
+                    .ok_or(VfsError::Persist("Failed to restore VfsOptions.out_opts".to_owned()))?,
                 no_readdir: state.no_readdir,
                 seal_size: state.seal_size,
-                id_mapping: (
-                    state.id_mapping_internal,
-                    state.id_mapping_external,
-                    state.id_mapping_range,
-                ),
+                id_mapping: (state.id_mapping_internal, state.id_mapping_external, state.id_mapping_range),
 
                 #[cfg(target_os = "linux")]
                 no_open: state.no_open,
@@ -875,9 +836,8 @@ pub mod persist {
             let target_version = vm.latest_version();
             let mut s = Snapshot::new(vm, target_version);
             let mut buf = Vec::new();
-            s.save(&mut buf, &vfs_state).map_err(|e| {
-                VfsError::Persist(format!("Failed to save Vfs using snapshot: {:?}", e))
-            })?;
+            s.save(&mut buf, &vfs_state)
+                .map_err(|e| VfsError::Persist(format!("Failed to save Vfs using snapshot: {:?}", e)))?;
 
             Ok(buf)
         }
@@ -885,15 +845,11 @@ pub mod persist {
         /// Restores part of the Vfs metadata from a byte array.
         /// For more information, see the example of `save_to_bytes`.
         pub fn restore_from_bytes(&self, buf: &mut Vec<u8>) -> VfsResult<()> {
-            let mut state: VfsState =
-                Snapshot::load(&mut buf.as_slice(), buf.len(), Vfs::get_version_map())
-                    .map_err(|e| {
-                        VfsError::Persist(format!("Failed to load Vfs using snapshot: {:?}", e))
-                    })?
-                    .0;
+            let mut state: VfsState = Snapshot::load(&mut buf.as_slice(), buf.len(), Vfs::get_version_map())
+                .map_err(|e| VfsError::Persist(format!("Failed to load Vfs using snapshot: {:?}", e)))?
+                .0;
             let opts = VfsOptions::restore(&state.options)?;
-            self.initialized
-                .store(!opts.in_opts.is_empty(), Ordering::Release);
+            self.initialized.store(!opts.in_opts.is_empty(), Ordering::Release);
             self.opts.store(Arc::new(opts));
 
             self.next_super.store(state.next_super, Ordering::SeqCst);
@@ -910,7 +866,8 @@ pub mod persist {
         // This test is to make sure that VfsState can be serialized and deserialized
         #[test]
         fn test_vfs_save_restore_simple() {
-            use crate::api::{Vfs, VfsOptions};
+            use crate::api::Vfs;
+            use crate::api::VfsOptions;
 
             // create new vfs
             let vfs = &Vfs::new(VfsOptions::default());
@@ -926,8 +883,11 @@ pub mod persist {
 
         #[test]
         fn test_vfs_save_restore_with_backend_fs() {
-            use crate::api::{Vfs, VfsIndex, VfsOptions};
-            use crate::passthrough::{Config, PassthroughFs};
+            use crate::api::Vfs;
+            use crate::api::VfsIndex;
+            use crate::api::VfsOptions;
+            use crate::passthrough::Config;
+            use crate::passthrough::PassthroughFs;
 
             let new_backend_fs = || {
                 let fs_cfg = Config::default();
@@ -964,15 +924,11 @@ pub mod persist {
             // check the vfs and restored_vfs
             assert_eq!(
                 vfs.next_super.load(std::sync::atomic::Ordering::SeqCst),
-                restored_vfs
-                    .next_super
-                    .load(std::sync::atomic::Ordering::SeqCst)
+                restored_vfs.next_super.load(std::sync::atomic::Ordering::SeqCst)
             );
             assert_eq!(
                 vfs.initialized.load(std::sync::atomic::Ordering::SeqCst),
-                restored_vfs
-                    .initialized
-                    .load(std::sync::atomic::Ordering::SeqCst)
+                restored_vfs.initialized.load(std::sync::atomic::Ordering::SeqCst)
             );
             for path in paths.iter() {
                 let inode = vfs.root.path_walk(path).unwrap();
@@ -983,10 +939,15 @@ pub mod persist {
 
         #[test]
         fn test_vfs_save_restore_with_backend_fs_with_initialized() {
-            use crate::api::filesystem::{FileSystem, FsOptions};
-            use crate::api::{Vfs, VfsIndex, VfsOptions};
-            use crate::passthrough::{Config, PassthroughFs};
             use std::sync::atomic::Ordering;
+
+            use crate::api::filesystem::FileSystem;
+            use crate::api::filesystem::FsOptions;
+            use crate::api::Vfs;
+            use crate::api::VfsIndex;
+            use crate::api::VfsOptions;
+            use crate::passthrough::Config;
+            use crate::passthrough::PassthroughFs;
 
             let new_backend_fs = || {
                 let fs_cfg = Config::default();
@@ -1026,15 +987,11 @@ pub mod persist {
             // check the vfs and restored_vfs
             assert_eq!(
                 vfs.next_super.load(std::sync::atomic::Ordering::SeqCst),
-                restored_vfs
-                    .next_super
-                    .load(std::sync::atomic::Ordering::SeqCst)
+                restored_vfs.next_super.load(std::sync::atomic::Ordering::SeqCst)
             );
             assert_eq!(
                 vfs.initialized.load(std::sync::atomic::Ordering::Acquire),
-                restored_vfs
-                    .initialized
-                    .load(std::sync::atomic::Ordering::Acquire)
+                restored_vfs.initialized.load(std::sync::atomic::Ordering::Acquire)
             );
             for path in paths.iter() {
                 let inode = vfs.root.path_walk(path).unwrap();
@@ -1047,10 +1004,12 @@ pub mod persist {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+    use std::io::Error;
+    use std::io::ErrorKind;
+
     use super::*;
     use crate::api::Vfs;
-    use std::ffi::CString;
-    use std::io::{Error, ErrorKind};
 
     pub(crate) struct FakeFileSystemOne {}
     impl FileSystem for FakeFileSystemOne {
@@ -1065,9 +1024,7 @@ mod tests {
             _inode: Self::Inode,
             _handle: Option<Self::Handle>,
         ) -> Result<(stat64, Duration)> {
-            let mut attr = Attr {
-                ..Default::default()
-            };
+            let mut attr = Attr { ..Default::default() };
             attr.ino = 1;
             Ok((attr.into(), Duration::from_secs(1)))
         }
@@ -1150,12 +1107,14 @@ mod tests {
 
     #[cfg(feature = "async-io")]
     mod async_io {
-        use super::*;
-        use crate::abi::fuse_abi::{OpenOptions, SetattrValid};
         use async_trait::async_trait;
 
+        use super::*;
+        use crate::abi::fuse_abi::OpenOptions;
+        use crate::abi::fuse_abi::SetattrValid;
+
         #[allow(unused_variables)]
-        
+
         impl AsyncFileSystem for FakeFileSystemOne {
             async fn async_lookup(
                 &self,
@@ -1286,7 +1245,7 @@ mod tests {
         }
 
         #[allow(unused_variables)]
-        
+
         impl AsyncFileSystem for FakeFileSystemTwo {
             async fn async_lookup(
                 &self,
@@ -1487,8 +1446,7 @@ mod tests {
 
         let vfs = Vfs::default();
         #[cfg(target_os = "linux")]
-        let in_opts =
-            FsOptions::ASYNC_READ | FsOptions::ZERO_MESSAGE_OPEN | FsOptions::ZERO_MESSAGE_OPENDIR;
+        let in_opts = FsOptions::ASYNC_READ | FsOptions::ZERO_MESSAGE_OPEN | FsOptions::ZERO_MESSAGE_OPENDIR;
         #[cfg(target_os = "macos")]
         let in_opts = FsOptions::ASYNC_READ;
         vfs.init(in_opts).unwrap();
@@ -1512,34 +1470,18 @@ mod tests {
         assert!(vfs.mount(Box::new(fs), "/x/y").is_ok());
 
         // Lookup inode on pseudo file system.
-        let entry1 = vfs
-            .lookup(&ctx, ROOT_ID.into(), CString::new("x").unwrap().as_c_str())
-            .unwrap();
+        let entry1 = vfs.lookup(&ctx, ROOT_ID.into(), CString::new("x").unwrap().as_c_str()).unwrap();
         assert_eq!(entry1.inode, 0x2);
 
         // Lookup inode on mounted file system.
-        let entry2 = vfs
-            .lookup(
-                &ctx,
-                entry1.inode.into(),
-                CString::new("y").unwrap().as_c_str(),
-            )
-            .unwrap();
+        let entry2 = vfs.lookup(&ctx, entry1.inode.into(), CString::new("y").unwrap().as_c_str()).unwrap();
         assert_eq!(entry2.inode, 0x100_0000_0000_0001);
 
         // lookup for negative result.
-        let entry3 = vfs
-            .lookup(
-                &ctx,
-                entry2.inode.into(),
-                CString::new("z").unwrap().as_c_str(),
-            )
-            .unwrap();
+        let entry3 = vfs.lookup(&ctx, entry2.inode.into(), CString::new("z").unwrap().as_c_str()).unwrap();
         assert_eq!(entry3.inode, 0);
 
-        let (stat, _) = vfs
-            .getattr(&ctx, VfsInode(0x100_0000_0000_0001), None)
-            .unwrap();
+        let (stat, _) = vfs.getattr(&ctx, VfsInode(0x100_0000_0000_0001), None).unwrap();
         assert_eq!(stat.st_ino, 0x100_0000_0000_0001);
     }
 
@@ -1553,13 +1495,7 @@ mod tests {
 
         // Lookup inode on pseudo file system.
         let ctx = Context::new();
-        let entry1 = vfs
-            .lookup(
-                &ctx,
-                ROOT_ID.into(),
-                CString::new("bar").unwrap().as_c_str(),
-            )
-            .unwrap();
+        let entry1 = vfs.lookup(&ctx, ROOT_ID.into(), CString::new("bar").unwrap().as_c_str()).unwrap();
         assert_eq!(entry1.inode, 0x200_0000_0000_0001);
         assert_eq!(entry1.attr.st_ino, 0x200_0000_0000_0001);
     }
@@ -1662,15 +1598,9 @@ mod tests {
 
     #[test]
     fn test_fmt_vfs_error() {
+        assert_eq!(format!("{}", VfsError::Unsupported), "Vfs operation not supported".to_string());
         assert_eq!(
-            format!("{}", VfsError::Unsupported),
-            "Vfs operation not supported".to_string()
-        );
-        assert_eq!(
-            format!(
-                "{}",
-                VfsError::Mount(Error::new(ErrorKind::Other, "mount".to_string()),)
-            ),
+            format!("{}", VfsError::Mount(Error::new(ErrorKind::Other, "mount".to_string()),)),
             "Mount backend filesystem: mount".to_string()
         );
         assert_eq!(
@@ -1678,17 +1608,11 @@ mod tests {
             "Illegal inode index: inode index".to_string()
         );
         assert_eq!(
-            format!(
-                "{}",
-                VfsError::FsIndex(Error::new(ErrorKind::Other, "fs index".to_string()),)
-            ),
+            format!("{}", VfsError::FsIndex(Error::new(ErrorKind::Other, "fs index".to_string()),)),
             "Filesystem index error: fs index".to_string()
         );
         assert_eq!(
-            format!(
-                "{}",
-                VfsError::PathWalk(Error::new(ErrorKind::Other, "path walk".to_string()),)
-            ),
+            format!("{}", VfsError::PathWalk(Error::new(ErrorKind::Other, "path walk".to_string()),)),
             "Walking path error: path walk".to_string()
         );
         assert_eq!(

@@ -1,21 +1,26 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use futures::{StreamExt, TryStreamExt, stream::BoxStream};
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use redb::ReadableDatabase;
+use redb::TableDefinition;
+use tracing::instrument;
+use tracing::warn;
 
-use redb::{ReadableDatabase, TableDefinition};
-use std::{path::PathBuf, sync::Arc};
+use super::Directory;
+use super::DirectoryPutter;
+use super::DirectoryService;
+use super::traversal;
+use crate::B3Digest;
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
+use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
+use crate::proto;
 
-use tracing::{instrument, warn};
-
-use super::{Directory, DirectoryPutter, DirectoryService, traversal};
-use crate::{
-    B3Digest,
-    composition::{CompositionContext, ServiceBuilder},
-    directoryservice::directory_graph::DirectoryGraphBuilder,
-    proto,
-};
-
-const DIRECTORY_TABLE: TableDefinition<[u8; B3Digest::LENGTH], Vec<u8>> =
-    TableDefinition::new("directory");
+const DIRECTORY_TABLE: TableDefinition<[u8; B3Digest::LENGTH], Vec<u8>> = TableDefinition::new("directory");
 
 enum Db {
     ReadOnly(redb::ReadOnlyDatabase),
@@ -48,10 +53,7 @@ pub struct RedbDirectoryService {
 
 impl RedbDirectoryService {
     /// Constructs a new instance using the specified config.
-    pub async fn new(
-        instance_name: String,
-        config: RedbDirectoryServiceConfig,
-    ) -> Result<Self, Error> {
+    pub async fn new(instance_name: String, config: RedbDirectoryServiceConfig) -> Result<Self, Error> {
         if let Some(path) = config.path.clone() {
             if &path == "" {
                 return Err(Error::WrongConfig("empty path is disallowed"));
@@ -61,9 +63,7 @@ impl RedbDirectoryService {
             }
 
             if config.read_only {
-                let db =
-                    tokio::task::spawn_blocking(|| redb::Database::builder().open_read_only(path))
-                        .await??;
+                let db = tokio::task::spawn_blocking(|| redb::Database::builder().open_read_only(path)).await??;
 
                 return Ok(Self {
                     instance_name,
@@ -96,14 +96,8 @@ impl RedbDirectoryService {
 
     /// Constructs a new instance using the in-memory backend.
     /// Sync, as there's no real IO happening.
-    pub fn new_temporary(
-        instance_name: String,
-        config: RedbDirectoryServiceConfig,
-    ) -> Result<Self, Error> {
-        debug_assert!(
-            config.path.is_none(),
-            "Snix bug: config.path is not None, but new_temporary requested"
-        );
+    pub fn new_temporary(instance_name: String, config: RedbDirectoryServiceConfig) -> Result<Self, Error> {
+        debug_assert!(config.path.is_none(), "Snix bug: config.path is not None, but new_temporary requested");
 
         if config.read_only {
             return Err(Error::WrongConfig("in-memory database cannot be read-only"));
@@ -141,7 +135,6 @@ fn create_schema(db: &redb::Database) -> Result<(), Error> {
 
     Ok(())
 }
-
 
 #[async_trait]
 impl DirectoryService for RedbDirectoryService {
@@ -205,10 +198,7 @@ impl DirectoryService for RedbDirectoryService {
     }
 
     #[instrument(skip_all, fields(directory.digest = %root_directory_digest, instance_name = %self.instance_name))]
-    fn get_recursive(
-        &self,
-        root_directory_digest: &B3Digest,
-    ) -> BoxStream<'static, Result<Directory, super::Error>> {
+    fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'static, Result<Directory, super::Error>> {
         // FUTUREWORK: Ideally we should have all of the directory traversing happen in a single
         // redb transaction to avoid constantly closing and opening new transactions for the
         // database.
@@ -239,29 +229,20 @@ pub struct RedbDirectoryPutter<'a> {
     builder: Option<DirectoryGraphBuilder>,
 }
 
-
 #[async_trait]
 impl DirectoryPutter for RedbDirectoryPutter<'_> {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]
     async fn put(&mut self, directory: Directory) -> Result<(), super::Error> {
-        let builder = self
-            .builder
-            .as_mut()
-            .ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
+        let builder = self.builder.as_mut().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
 
-        builder
-            .try_insert(directory)
-            .map_err(Error::DirectoryOrdering)?;
+        builder.try_insert(directory).map_err(Error::DirectoryOrdering)?;
 
         Ok(())
     }
 
     #[instrument(level = "trace", skip_all, ret, err)]
     async fn close(&mut self) -> Result<B3Digest, super::Error> {
-        let builder = self
-            .builder
-            .take()
-            .ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
+        let builder = self.builder.take().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
 
         // Insert all directories as a batch.
         let root_digest = tokio::task::spawn_blocking({
@@ -310,10 +291,7 @@ pub enum Error {
     DirectoryTraversal(#[source] traversal::Error),
 
     #[error("requested directory has wrong digest, expected {expected}, actual {actual}")]
-    WrongDigest {
-        expected: B3Digest,
-        actual: B3Digest,
-    },
+    WrongDigest { expected: B3Digest, actual: B3Digest },
     #[error("failed to decode: {0}")]
     PostcardDecode(#[from] postcard::Error),
     #[error("failed to validate directory: {0}")]
@@ -363,12 +341,8 @@ impl TryFrom<url::Url> for RedbDirectoryServiceConfig {
 
         let path: Option<PathBuf> = match (url.scheme(), url.has_authority(), url.path()) {
             ("redb+memory", false, "") => None,
-            ("redb+memory", false, _) => Err(Box::new(Error::WrongConfig(
-                "redb+memory with path is disallowed",
-            )))?,
-            ("redb+memory", true, _) => Err(Box::new(Error::WrongConfig(
-                "redb+memory may not have authority",
-            )))?,
+            ("redb+memory", false, _) => Err(Box::new(Error::WrongConfig("redb+memory with path is disallowed")))?,
+            ("redb+memory", true, _) => Err(Box::new(Error::WrongConfig("redb+memory may not have authority")))?,
             ("redb", _, "") => Err(Box::new(Error::WrongConfig(
                 "redb without path is disallowed, use redb+memory if you want in-memory",
             )))?,
@@ -377,15 +351,13 @@ impl TryFrom<url::Url> for RedbDirectoryServiceConfig {
             (_scheme, _, _) => Err(Box::new(Error::WrongConfig("unrecognized scheme")))?,
         };
 
-        let mut config: RedbDirectoryServiceConfig =
-            serde_qs::from_str(url.query().unwrap_or_default())?;
+        let mut config: RedbDirectoryServiceConfig = serde_qs::from_str(url.query().unwrap_or_default())?;
 
         config.path = path;
 
         Ok(config)
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for RedbDirectoryServiceConfig {
@@ -395,9 +367,7 @@ impl ServiceBuilder for RedbDirectoryServiceConfig {
         instance_name: &str,
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Arc::new(
-            RedbDirectoryService::new(instance_name.to_string(), self.to_owned()).await?,
-        ))
+        Ok(Arc::new(RedbDirectoryService::new(instance_name.to_string(), self.to_owned()).await?))
     }
 }
 
@@ -405,10 +375,10 @@ impl ServiceBuilder for RedbDirectoryServiceConfig {
 mod tests {
     use tempfile::TempDir;
 
-    use crate::{
-        directoryservice::{DirectoryService, RedbDirectoryService, RedbDirectoryServiceConfig},
-        fixtures::DIRECTORY_A,
-    };
+    use crate::directoryservice::DirectoryService;
+    use crate::directoryservice::RedbDirectoryService;
+    use crate::directoryservice::RedbDirectoryServiceConfig;
+    use crate::fixtures::DIRECTORY_A;
 
     #[tokio::test]
     async fn reopen_as_read_only() {
@@ -423,14 +393,10 @@ mod tests {
 
         // Create a read-write directory service and insert some data.
         {
-            let directory_service = RedbDirectoryService::new("rw".to_string(), config.clone())
-                .await
-                .expect("to construct");
+            let directory_service =
+                RedbDirectoryService::new("rw".to_string(), config.clone()).await.expect("to construct");
 
-            directory_service
-                .put(DIRECTORY_A.clone())
-                .await
-                .expect("to insert");
+            directory_service.put(DIRECTORY_A.clone()).await.expect("to insert");
         } // we drop the rw database here.
 
         // Re-open the same path in ro mode (twice)
@@ -440,12 +406,9 @@ mod tests {
         };
 
         let directory_service_ro_1 =
-            RedbDirectoryService::new("ro1".to_string(), ro_config.clone())
-                .await
-                .expect("to construct");
-        let directory_service_ro_2 = RedbDirectoryService::new("ro2".to_string(), ro_config)
-            .await
-            .expect("to construct");
+            RedbDirectoryService::new("ro1".to_string(), ro_config.clone()).await.expect("to construct");
+        let directory_service_ro_2 =
+            RedbDirectoryService::new("ro2".to_string(), ro_config).await.expect("to construct");
 
         assert_eq!(
             directory_service_ro_1
@@ -480,9 +443,7 @@ mod tests {
 
         // Opening a read-only redb should fail if the path doesn't exist.
         assert!(
-            RedbDirectoryService::new("test".to_string(), config)
-                .await
-                .is_err(),
+            RedbDirectoryService::new("test".to_string(), config).await.is_err(),
             "opening new path r/o should fail"
         );
     }
@@ -498,19 +459,15 @@ mod tests {
             read_only: false,
         };
 
-        let _directory_service = RedbDirectoryService::new("rw".to_string(), config.clone())
-            .await
-            .expect("to construct");
+        let _directory_service =
+            RedbDirectoryService::new("rw".to_string(), config.clone()).await.expect("to construct");
 
         // Opening a read-only redb should fail if it's already opened read-write.
         assert!(
-            RedbDirectoryService::new(
-                "ro".to_string(),
-                RedbDirectoryServiceConfig {
-                    read_only: true,
-                    ..config
-                }
-            )
+            RedbDirectoryService::new("ro".to_string(), RedbDirectoryServiceConfig {
+                read_only: true,
+                ..config
+            })
             .await
             .is_err(),
             "opening r/o should fail if still open r/w"

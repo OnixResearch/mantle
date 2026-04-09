@@ -1,10 +1,11 @@
+use tempfile::TempDir;
+
 use crate::Node;
-use crate::blobservice::{self, BlobService};
+use crate::blobservice::BlobService;
+use crate::blobservice::{self};
 use crate::fixtures::*;
 use crate::import::fs::ingest_path;
 use crate::utils::gen_test_directory_service;
-
-use tempfile::TempDir;
 
 #[cfg(target_family = "unix")]
 #[tokio::test]
@@ -15,20 +16,12 @@ async fn symlink() {
     let tmpdir = TempDir::new().unwrap();
 
     std::fs::create_dir_all(&tmpdir).unwrap();
-    std::os::unix::fs::symlink(
-        "/nix/store/somewhereelse",
-        tmpdir.path().join("doesntmatter"),
-    )
-    .unwrap();
+    std::os::unix::fs::symlink("/nix/store/somewhereelse", tmpdir.path().join("doesntmatter")).unwrap();
 
-    let root_node = ingest_path::<_, _, _, &[u8]>(
-        blob_service,
-        directory_service,
-        tmpdir.path().join("doesntmatter"),
-        None,
-    )
-    .await
-    .expect("must succeed");
+    let root_node =
+        ingest_path::<_, _, _, &[u8]>(blob_service, directory_service, tmpdir.path().join("doesntmatter"), None)
+            .await
+            .expect("must succeed");
 
     assert_eq!(
         Node::Symlink {
@@ -47,14 +40,10 @@ async fn single_file() {
 
     std::fs::write(tmpdir.path().join("root"), HELLOWORLD_BLOB_CONTENTS).unwrap();
 
-    let root_node = ingest_path::<_, _, _, &[u8]>(
-        blob_service.clone(),
-        directory_service,
-        tmpdir.path().join("root"),
-        None,
-    )
-    .await
-    .expect("must succeed");
+    let root_node =
+        ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service, tmpdir.path().join("root"), None)
+            .await
+            .expect("must succeed");
 
     assert_eq!(
         Node::File {
@@ -88,14 +77,9 @@ async fn complicated() {
     // File ``keep/.keep`
     std::fs::write(tmpdir.path().join("keep").join(".keep"), vec![]).unwrap();
 
-    let root_node = ingest_path::<_, _, _, &[u8]>(
-        blob_service.clone(),
-        &directory_service,
-        tmpdir.path(),
-        None,
-    )
-    .await
-    .expect("must succeed");
+    let root_node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), &directory_service, tmpdir.path(), None)
+        .await
+        .expect("must succeed");
 
     // ensure root_node matched expectations
     assert_eq!(
@@ -107,20 +91,8 @@ async fn complicated() {
     );
 
     // ensure DIRECTORY_WITH_KEEP and DIRECTORY_COMPLICATED have been uploaded
-    assert!(
-        directory_service
-            .get(&DIRECTORY_WITH_KEEP.digest())
-            .await
-            .unwrap()
-            .is_some()
-    );
-    assert!(
-        directory_service
-            .get(&DIRECTORY_COMPLICATED.digest())
-            .await
-            .unwrap()
-            .is_some()
-    );
+    assert!(directory_service.get(&DIRECTORY_WITH_KEEP.digest()).await.unwrap().is_some());
+    assert!(directory_service.get(&DIRECTORY_COMPLICATED.digest()).await.unwrap().is_some());
 
     // ensure EMPTY_BLOB_CONTENTS has been uploaded
     assert!(blob_service.has(&EMPTY_BLOB_DIGEST).await.unwrap());

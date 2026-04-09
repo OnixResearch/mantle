@@ -4,8 +4,11 @@
 //! module defines the Rust-side representation after Nickel evaluation
 //! and deserialization. The types here are pure data — no I/O, no eval.
 
-use crate::version::{SchemaVersion, parse_version};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::version::SchemaVersion;
+use crate::version::parse_version;
 
 /// Maximum number of inputs in a single manifest.
 pub const MAX_INPUTS: u32 = 4096;
@@ -48,10 +51,7 @@ impl ProjectManifest {
         // Validate version string
         match parse_version(&self.version) {
             None => {
-                problems.push(format!(
-                    "invalid manifest version: '{}'",
-                    self.version
-                ));
+                problems.push(format!("invalid manifest version: '{}'", self.version));
             }
             Some(v) if !v.is_compatible_with(&SchemaVersion::CURRENT) => {
                 problems.push(format!(
@@ -64,10 +64,7 @@ impl ProjectManifest {
         }
 
         if self.inputs.len() as u64 > MAX_INPUTS as u64 {
-            problems.push(format!(
-                "too many inputs: {} (max {MAX_INPUTS})",
-                self.inputs.len()
-            ));
+            problems.push(format!("too many inputs: {} (max {MAX_INPUTS})", self.inputs.len()));
         }
 
         // Check for duplicate input names
@@ -80,15 +77,11 @@ impl ProjectManifest {
         }
 
         // Check that patch references point to defined patches
-        let patch_names: std::collections::HashSet<&str> =
-            self.patches.iter().map(|p| p.name.as_str()).collect();
+        let patch_names: std::collections::HashSet<&str> = self.patches.iter().map(|p| p.name.as_str()).collect();
         for input in &self.inputs {
             for patch_ref in &input.patches {
                 if !patch_names.contains(patch_ref.as_str()) {
-                    problems.push(format!(
-                        "input '{}' references undefined patch '{patch_ref}'",
-                        input.name
-                    ));
+                    problems.push(format!("input '{}' references undefined patch '{patch_ref}'", input.name));
                 }
             }
         }
@@ -276,9 +269,7 @@ mod tests {
                     },
                     hash: HashSpec::default(),
                     frozen: false,
-                    mirrors: vec![
-                        "https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into(),
-                    ],
+                    mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
                     patches: vec![],
                 },
                 ManifestInput {
@@ -288,9 +279,7 @@ mod tests {
                     },
                     hash: HashSpec {
                         algo: HashAlgo::Sha256,
-                        expected: Some(
-                            "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".into(),
-                        ),
+                        expected: Some("sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".into()),
                     },
                     frozen: true,
                     mirrors: vec![],

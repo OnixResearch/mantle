@@ -33,11 +33,7 @@ fn init_fails_if_already_initialized() {
     let dir = TempDir::new().unwrap();
 
     // First init succeeds
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     // Second init fails
     crunch()
@@ -52,11 +48,7 @@ fn init_fails_if_already_initialized() {
 fn check_passes_on_fresh_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     crunch()
         .arg("check")
@@ -82,11 +74,7 @@ fn check_fails_without_init() {
 fn show_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     crunch()
         .arg("show")
@@ -100,11 +88,7 @@ fn show_on_empty_project() {
 fn list_stale_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     crunch()
         .arg("list-stale")
@@ -118,11 +102,7 @@ fn list_stale_on_empty_project() {
 fn upgrade_on_current_version() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     crunch()
         .arg("upgrade")
@@ -136,11 +116,7 @@ fn upgrade_on_current_version() {
 fn refresh_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     crunch()
         .arg("refresh")
@@ -154,11 +130,7 @@ fn refresh_on_empty_project() {
 fn check_detects_drift() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     // Corrupt the generated file to create drift
     std::fs::write(dir.path().join(".crunch/inputs.ncl"), "stale").unwrap();
@@ -175,11 +147,7 @@ fn check_detects_drift() {
 fn refresh_hashes_local_patch_relative_to_project_root() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     std::fs::create_dir_all(dir.path().join("patches")).unwrap();
     std::fs::write(dir.path().join("patches/fix.patch"), "diff --git a/x b/x\n").unwrap();
@@ -219,12 +187,9 @@ fn refresh_hashes_local_patch_relative_to_project_root() {
     let lock_text = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
     let lock = crunch_project::Lockfile::from_json(&lock_text).unwrap();
     assert_eq!(lock.inputs["pkg"].patches, vec!["mypatch"]);
-    assert_eq!(
-        lock.patches["mypatch"].source,
-        crunch_project::LockedPatchSource::Local {
-            path: "patches/fix.patch".into(),
-        }
-    );
+    assert_eq!(lock.patches["mypatch"].source, crunch_project::LockedPatchSource::Local {
+        path: "patches/fix.patch".into(),
+    });
     assert!(lock.patches["mypatch"].hash.value.starts_with("sha256-"));
 }
 
@@ -232,11 +197,7 @@ fn refresh_hashes_local_patch_relative_to_project_root() {
 fn check_detects_missing_inputs_file() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
-        .arg("init")
-        .current_dir(dir.path())
-        .assert()
-        .success();
+    crunch().arg("init").current_dir(dir.path()).assert().success();
 
     // Delete the generated file
     std::fs::remove_file(dir.path().join(".crunch/inputs.ncl")).unwrap();

@@ -7,7 +7,9 @@ use std::io;
 use std::mem::MaybeUninit;
 use std::os::unix::io::AsRawFd;
 
-use super::os_compat::{statx_st, STATX_BASIC_STATS, STATX_MNT_ID};
+use super::os_compat::statx_st;
+use super::os_compat::STATX_BASIC_STATS;
+use super::os_compat::STATX_MNT_ID;
 use super::FileHandle;
 use crate::api::EMPTY_CSTR;
 
@@ -130,13 +132,8 @@ pub fn statx(dir: &impl AsRawFd, path: Option<&CStr>) -> io::Result<StatExt> {
 
         // if `statx()` doesn't provide the mount id (before kernel 5.8),
         // let's try `name_to_handle_at()`, if everything fails just use 0
-        let mnt_id = stx
-            .mount_id()
-            .or_else(|| get_mount_id(dir, path))
-            .unwrap_or(0);
-        let st = stx
-            .stat64()
-            .ok_or_else(|| io::Error::from_raw_os_error(libc::ENOSYS))?;
+        let mnt_id = stx.mount_id().or_else(|| get_mount_id(dir, path)).unwrap_or(0);
+        let st = stx.stat64().ok_or_else(|| io::Error::from_raw_os_error(libc::ENOSYS))?;
 
         Ok(StatExt { st, mnt_id })
     } else {
@@ -146,9 +143,10 @@ pub fn statx(dir: &impl AsRawFd, path: Option<&CStr>) -> io::Result<StatExt> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::ffi::CString;
     use std::fs::File;
+
+    use super::*;
 
     #[test]
     fn test_statx() {

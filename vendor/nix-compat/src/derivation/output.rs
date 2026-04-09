@@ -1,12 +1,17 @@
-use crate::nixhash::CAHash;
-use crate::{derivation::OutputError, store_path::StorePath};
+use std::borrow::Cow;
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
 #[cfg(feature = "serde")]
 use serde::de::Unexpected;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-#[cfg(feature = "serde")]
 use serde_json::Map;
-use std::borrow::Cow;
+
+use crate::derivation::OutputError;
+use crate::nixhash::CAHash;
+use crate::store_path::StorePath;
 
 /// References the derivation output.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -22,15 +27,11 @@ pub struct Output {
 #[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Output {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         let fields = Map::deserialize(deserializer)?;
         let path: &str = fields
             .get("path")
-            .ok_or(serde::de::Error::missing_field(
-                "`path` is missing but required for outputs",
-            ))?
+            .ok_or(serde::de::Error::missing_field("`path` is missing but required for outputs"))?
             .as_str()
             .ok_or(serde::de::Error::invalid_type(
                 serde::de::Unexpected::Other("certainly not a string"),

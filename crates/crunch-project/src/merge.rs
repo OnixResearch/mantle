@@ -5,7 +5,9 @@
 //! and inconsistencies. No I/O, no network.
 
 use crate::lock::Lockfile;
-use crate::manifest::{InputKind, ManifestInput, ProjectManifest};
+use crate::manifest::InputKind;
+use crate::manifest::ManifestInput;
+use crate::manifest::ProjectManifest;
 
 /// Maximum number of validation issues before we stop collecting.
 const MAX_ISSUES: u32 = 512;
@@ -63,11 +65,7 @@ pub fn check_manifest_lock(manifest: &ProjectManifest, lock: &Lockfile) -> Merge
 }
 
 /// Find manifest inputs that have no lock entry.
-fn check_missing_entries(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    issues: &mut Vec<MergeIssue>,
-) {
+fn check_missing_entries(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
     for input in &manifest.inputs {
         if issues.len() as u64 >= MAX_ISSUES as u64 {
             break;
@@ -76,23 +74,15 @@ fn check_missing_entries(
             issues.push(MergeIssue {
                 severity: Severity::Error,
                 input_name: Some(input.name.clone()),
-                message: format!(
-                    "input '{}' is in the manifest but has no lock entry",
-                    input.name
-                ),
+                message: format!("input '{}' is in the manifest but has no lock entry", input.name),
             });
         }
     }
 }
 
 /// Find lock entries that have no corresponding manifest input.
-fn check_orphaned_entries(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    issues: &mut Vec<MergeIssue>,
-) {
-    let manifest_names: std::collections::HashSet<&str> =
-        manifest.inputs.iter().map(|i| i.name.as_str()).collect();
+fn check_orphaned_entries(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
+    let manifest_names: std::collections::HashSet<&str> = manifest.inputs.iter().map(|i| i.name.as_str()).collect();
 
     for name in lock.inputs.keys() {
         if issues.len() as u64 >= MAX_ISSUES as u64 {
@@ -102,20 +92,14 @@ fn check_orphaned_entries(
             issues.push(MergeIssue {
                 severity: Severity::Warning,
                 input_name: Some(name.clone()),
-                message: format!(
-                    "lock entry '{name}' has no corresponding manifest input (orphaned)"
-                ),
+                message: format!("lock entry '{name}' has no corresponding manifest input (orphaned)"),
             });
         }
     }
 }
 
 /// Check that input kinds in manifest and lock are compatible.
-fn check_kind_consistency(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    issues: &mut Vec<MergeIssue>,
-) {
+fn check_kind_consistency(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
     for input in &manifest.inputs {
         if issues.len() as u64 >= MAX_ISSUES as u64 {
             break;
@@ -138,11 +122,7 @@ fn check_kind_consistency(
 }
 
 /// Check that patch references are consistent between manifest and lock.
-fn check_patch_consistency(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    issues: &mut Vec<MergeIssue>,
-) {
+fn check_patch_consistency(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
     for input in &manifest.inputs {
         if issues.len() as u64 >= MAX_ISSUES as u64 {
             break;
@@ -163,11 +143,7 @@ fn check_patch_consistency(
 }
 
 /// Frozen inputs must have lock entries with non-empty hashes.
-fn check_frozen_inputs(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    issues: &mut Vec<MergeIssue>,
-) {
+fn check_frozen_inputs(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
     for input in &manifest.inputs {
         if !input.frozen {
             continue;
@@ -180,20 +156,14 @@ fn check_frozen_inputs(
                 issues.push(MergeIssue {
                     severity: Severity::Error,
                     input_name: Some(input.name.clone()),
-                    message: format!(
-                        "input '{}' is frozen but has no lock entry",
-                        input.name
-                    ),
+                    message: format!("input '{}' is frozen but has no lock entry", input.name),
                 });
             }
             Some(entry) if entry.hash.value.is_empty() => {
                 issues.push(MergeIssue {
                     severity: Severity::Error,
                     input_name: Some(input.name.clone()),
-                    message: format!(
-                        "input '{}' is frozen but lock entry has no hash",
-                        input.name
-                    ),
+                    message: format!("input '{}' is frozen but lock entry has no hash", input.name),
                 });
             }
             _ => {}
@@ -202,10 +172,7 @@ fn check_frozen_inputs(
 }
 
 /// Check if a manifest kind is compatible with a locked kind.
-fn kinds_compatible(
-    manifest: &InputKind,
-    locked: &crate::lock::LockedKind,
-) -> bool {
+fn kinds_compatible(manifest: &InputKind, locked: &crate::lock::LockedKind) -> bool {
     use crate::lock::LockedKind;
     matches!(
         (manifest, locked),
@@ -236,10 +203,7 @@ fn locked_kind_label(kind: &crate::lock::LockedKind) -> &'static str {
 ///
 /// Returns names of inputs that have no lock entry or whose lock entry
 /// is stale. Frozen inputs are excluded.
-pub fn inputs_needing_refresh(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-) -> Vec<String> {
+pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Vec<String> {
     let mut result = Vec::new();
 
     for input in &manifest.inputs {
@@ -265,18 +229,12 @@ pub fn inputs_needing_refresh(
 ///
 /// Returns an error message for any name in `selected` that does not
 /// exist in the manifest.
-pub fn filter_inputs<'a>(
-    manifest: &'a ProjectManifest,
-    selected: &[String],
-) -> (Vec<&'a ManifestInput>, Vec<String>) {
+pub fn filter_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> (Vec<&'a ManifestInput>, Vec<String>) {
     let mut found = Vec::new();
     let mut not_found = Vec::new();
 
-    let manifest_names: std::collections::HashMap<&str, &ManifestInput> = manifest
-        .inputs
-        .iter()
-        .map(|i| (i.name.as_str(), i))
-        .collect();
+    let manifest_names: std::collections::HashMap<&str, &ManifestInput> =
+        manifest.inputs.iter().map(|i| (i.name.as_str(), i)).collect();
 
     for name in selected {
         match manifest_names.get(name.as_str()) {
@@ -289,18 +247,10 @@ pub fn filter_inputs<'a>(
 }
 
 /// Compute which lock entries would be removed if they're not in the manifest.
-pub fn orphaned_lock_entries(
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-) -> Vec<String> {
-    let manifest_names: std::collections::HashSet<&str> =
-        manifest.inputs.iter().map(|i| i.name.as_str()).collect();
+pub fn orphaned_lock_entries(manifest: &ProjectManifest, lock: &Lockfile) -> Vec<String> {
+    let manifest_names: std::collections::HashSet<&str> = manifest.inputs.iter().map(|i| i.name.as_str()).collect();
 
-    lock.inputs
-        .keys()
-        .filter(|name| !manifest_names.contains(name.as_str()))
-        .cloned()
-        .collect()
+    lock.inputs.keys().filter(|name| !manifest_names.contains(name.as_str())).cloned().collect()
 }
 
 #[cfg(test)]
@@ -380,10 +330,7 @@ mod tests {
     #[test]
     fn orphaned_lock_entry() {
         let m = manifest_with(vec![file_input("foo")]);
-        let l = lock_with(vec![
-            ("foo", file_lock_entry()),
-            ("stale", file_lock_entry()),
-        ]);
+        let l = lock_with(vec![("foo", file_lock_entry()), ("stale", file_lock_entry())]);
         let report = check_manifest_lock(&m, &l);
         assert!(!report.has_errors()); // warnings only
         assert_eq!(report.issues.len(), 1);
@@ -394,22 +341,19 @@ mod tests {
     #[test]
     fn kind_mismatch() {
         let m = manifest_with(vec![file_input("foo")]);
-        let l = lock_with(vec![(
-            "foo",
-            LockEntry {
-                kind: LockedKind::Git {
-                    repository: "https://example.com/repo.git".into(),
-                    rev: "abc".into(),
-                    ref_name: None,
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-abc=".into(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        let l = lock_with(vec![("foo", LockEntry {
+            kind: LockedKind::Git {
+                repository: "https://example.com/repo.git".into(),
+                rev: "abc".into(),
+                ref_name: None,
             },
-        )]);
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-abc=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+        })]);
         let report = check_manifest_lock(&m, &l);
         assert!(report.has_errors());
         assert!(report.issues[0].message.contains("does not match"));
@@ -465,10 +409,7 @@ mod tests {
     #[test]
     fn orphaned_entries_detected() {
         let m = manifest_with(vec![file_input("a")]);
-        let l = lock_with(vec![
-            ("a", file_lock_entry()),
-            ("b", file_lock_entry()),
-        ]);
+        let l = lock_with(vec![("a", file_lock_entry()), ("b", file_lock_entry())]);
         let orphans = orphaned_lock_entries(&m, &l);
         assert_eq!(orphans, vec!["b"]);
     }

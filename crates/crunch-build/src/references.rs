@@ -1,6 +1,7 @@
 //! Reference resolution: refscan needle mapping and Nix closure queries.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
@@ -16,25 +17,13 @@ pub(crate) fn resolve_references(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
 ) -> Vec<StorePath<String>> {
-    let output_paths: Vec<StorePath<String>> = derivation
-        .outputs
-        .values()
-        .filter_map(|o| o.path.clone())
-        .collect();
+    let output_paths: Vec<StorePath<String>> = derivation.outputs.values().filter_map(|o| o.path.clone()).collect();
     let input_paths: Vec<StorePath<String>> = inputs.keys().cloned().collect();
 
-    let all_paths: Vec<StorePath<String>> = output_paths
-        .into_iter()
-        .chain(input_paths.into_iter())
-        .collect();
+    let all_paths: Vec<StorePath<String>> = output_paths.into_iter().chain(input_paths.into_iter()).collect();
 
-    found_needles
-        .iter()
-        .filter_map(|&idx| all_paths.get(idx as usize).cloned())
-        .collect()
+    found_needles.iter().filter_map(|&idx| all_paths.get(idx as usize).cloned()).collect()
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -42,17 +31,10 @@ mod tests {
 
     fn make_test_drv_for_refs() -> (Derivation, BTreeMap<StorePath<String>, Node>) {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            nix_compat::derivation::Output {
-                path: Some(
-                    StorePath::from_absolute_path(
-                        b"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out",
-                    ).unwrap(),
-                ),
-                ca_hash: None,
-            },
-        );
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: Some(StorePath::from_absolute_path(b"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out").unwrap()),
+            ca_hash: None,
+        });
         let drv = Derivation {
             arguments: vec![],
             builder: "/bin/sh".to_string(),
@@ -63,16 +45,12 @@ mod tests {
             system: "x86_64-linux".to_string(),
         };
 
-        let input_path: StorePath<String> = StorePath::from_absolute_path(
-            b"/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input",
-        ).unwrap();
+        let input_path: StorePath<String> =
+            StorePath::from_absolute_path(b"/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input").unwrap();
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            input_path,
-            Node::Symlink {
-                target: snix_castore::SymlinkTarget::try_from("x").unwrap(),
-            },
-        );
+        inputs.insert(input_path, Node::Symlink {
+            target: snix_castore::SymlinkTarget::try_from("x").unwrap(),
+        });
         (drv, inputs)
     }
 
@@ -84,10 +62,7 @@ mod tests {
 
         let refs = resolve_references(&found, &needles, &drv, &inputs);
         assert_eq!(refs.len(), 1);
-        assert_eq!(
-            refs[0].to_absolute_path(),
-            "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out"
-        );
+        assert_eq!(refs[0].to_absolute_path(), "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-out");
     }
 
     #[test]
@@ -98,10 +73,7 @@ mod tests {
 
         let refs = resolve_references(&found, &needles, &drv, &inputs);
         assert_eq!(refs.len(), 1);
-        assert_eq!(
-            refs[0].to_absolute_path(),
-            "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input"
-        );
+        assert_eq!(refs[0].to_absolute_path(), "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-input");
     }
 
     #[test]

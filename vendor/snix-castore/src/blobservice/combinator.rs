@@ -1,13 +1,15 @@
-use async_trait::async_trait;
 use std::sync::Arc;
 
-
+use async_trait::async_trait;
 use tracing::instrument;
 
+use super::BlobReader;
+use super::BlobService;
+use super::BlobWriter;
+use super::ChunkedReader;
 use crate::B3Digest;
-use crate::composition::{CompositionContext, ServiceBuilder};
-
-use super::{BlobReader, BlobService, BlobWriter, ChunkedReader};
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
 
 /// Combinator for a BlobService, using a "near" and "far" blobservice.
 /// Requests are tried in (and returned from) the near store first, only if
@@ -35,7 +37,6 @@ where
         }
     }
 }
-
 
 #[async_trait]
 impl<BL, BR> BlobService for CombinedBlobService<BL, BR>
@@ -74,12 +75,9 @@ where
                     // near backend first.
 
                     let chunked_reader = ChunkedReader::from_chunks(
-                        remote_chunks.into_iter().map(|chunk| {
-                            (
-                                chunk.digest.try_into().expect("invalid b3 digest"),
-                                chunk.size,
-                            )
-                        }),
+                        remote_chunks
+                            .into_iter()
+                            .map(|chunk| (chunk.digest.try_into().expect("invalid b3 digest"), chunk.size)),
                         Arc::new(self.clone()) as Arc<dyn BlobService>,
                     );
                     Ok(Some(Box::new(chunked_reader)))
@@ -109,7 +107,6 @@ impl TryFrom<url::Url> for CombinedBlobServiceConfig {
     }
 }
 
-
 #[async_trait]
 impl ServiceBuilder for CombinedBlobServiceConfig {
     type Output = dyn BlobService;
@@ -118,8 +115,7 @@ impl ServiceBuilder for CombinedBlobServiceConfig {
         instance_name: &str,
         context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        let (local, remote) =
-            futures::join!(context.resolve(&self.near), context.resolve(&self.far));
+        let (local, remote) = futures::join!(context.resolve(&self.near), context.resolve(&self.far));
         Ok(Arc::new(CombinedBlobService {
             instance_name: instance_name.to_string(),
             near: local?,

@@ -1,12 +1,16 @@
-use crate::pathinfoservice::PathInfo;
+use std::sync::LazyLock;
+
 use md5::Digest;
-use nix_compat::nixhash::{CAHash, NixHash};
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
 use snix_castore::Node;
-use snix_castore::fixtures::{
-    DIRECTORY_COMPLICATED, DUMMY_DIGEST, HELLOWORLD_BLOB_CONTENTS, HELLOWORLD_BLOB_DIGEST,
-};
-use std::sync::LazyLock;
+use snix_castore::fixtures::DIRECTORY_COMPLICATED;
+use snix_castore::fixtures::DUMMY_DIGEST;
+use snix_castore::fixtures::HELLOWORLD_BLOB_CONTENTS;
+use snix_castore::fixtures::HELLOWORLD_BLOB_DIGEST;
+
+use crate::pathinfoservice::PathInfo;
 
 pub const DUMMY_PATH_STR: &str = "00000000000000000000000000000000-dummy";
 pub const DUMMY_PATH_DIGEST: [u8; 20] = [0; 20];
@@ -20,15 +24,14 @@ pub static CASTORE_NODE_SYMLINK: LazyLock<Node> = LazyLock::new(|| Node::Symlink
 
 /// The NAR representation of a symlink pointing to `/nix/store/somewhereelse`
 pub const NAR_CONTENTS_SYMLINK: [u8; 136] = [
-    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e',
-    b'-', b'1', 0, 0, 0, // "nix-archive-1"
+    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e', b'-', b'1', 0, 0,
+    0, // "nix-archive-1"
     1, 0, 0, 0, 0, 0, 0, 0, b'(', 0, 0, 0, 0, 0, 0, 0, // "("
     4, 0, 0, 0, 0, 0, 0, 0, b't', b'y', b'p', b'e', 0, 0, 0, 0, // "type"
     7, 0, 0, 0, 0, 0, 0, 0, b's', b'y', b'm', b'l', b'i', b'n', b'k', 0, // "symlink"
     6, 0, 0, 0, 0, 0, 0, 0, b't', b'a', b'r', b'g', b'e', b't', 0, 0, // target
-    24, 0, 0, 0, 0, 0, 0, 0, b'/', b'n', b'i', b'x', b'/', b's', b't', b'o', b'r', b'e', b'/',
-    b's', b'o', b'm', b'e', b'w', b'h', b'e', b'r', b'e', b'e', b'l', b's',
-    b'e', // "/nix/store/somewhereelse"
+    24, 0, 0, 0, 0, 0, 0, 0, b'/', b'n', b'i', b'x', b'/', b's', b't', b'o', b'r', b'e', b'/', b's', b'o', b'm', b'e',
+    b'w', b'h', b'e', b'r', b'e', b'e', b'l', b's', b'e', // "/nix/store/somewhereelse"
     1, 0, 0, 0, 0, 0, 0, 0, b')', 0, 0, 0, 0, 0, 0, 0, // ")"
 ];
 
@@ -40,14 +43,14 @@ pub static CASTORE_NODE_HELLOWORLD: LazyLock<Node> = LazyLock::new(|| Node::File
 
 /// The NAR representation of a regular file with the contents "Hello World!"
 pub const NAR_CONTENTS_HELLOWORLD: [u8; 128] = [
-    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e',
-    b'-', b'1', 0, 0, 0, // "nix-archive-1"
+    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e', b'-', b'1', 0, 0,
+    0, // "nix-archive-1"
     1, 0, 0, 0, 0, 0, 0, 0, b'(', 0, 0, 0, 0, 0, 0, 0, // "("
     4, 0, 0, 0, 0, 0, 0, 0, b't', b'y', b'p', b'e', 0, 0, 0, 0, // "type"
     7, 0, 0, 0, 0, 0, 0, 0, b'r', b'e', b'g', b'u', b'l', b'a', b'r', 0, // "regular"
     8, 0, 0, 0, 0, 0, 0, 0, b'c', b'o', b'n', b't', b'e', b'n', b't', b's', // "contents"
-    12, 0, 0, 0, 0, 0, 0, 0, b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
-    b'!', 0, 0, 0, 0, // "Hello World!"
+    12, 0, 0, 0, 0, 0, 0, 0, b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd', b'!', 0, 0, 0,
+    0, // "Hello World!"
     1, 0, 0, 0, 0, 0, 0, 0, b')', 0, 0, 0, 0, 0, 0, 0, // ")"
 ];
 
@@ -69,8 +72,8 @@ pub static CASTORE_NODE_COMPLICATED: LazyLock<Node> = LazyLock::new(|| Node::Dir
 
 /// The NAR representation of a more complicated directory structure.
 pub const NAR_CONTENTS_COMPLICATED: [u8; 840] = [
-    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e',
-    b'-', b'1', 0, 0, 0, // "nix-archive-1"
+    13, 0, 0, 0, 0, 0, 0, 0, b'n', b'i', b'x', b'-', b'a', b'r', b'c', b'h', b'i', b'v', b'e', b'-', b'1', 0, 0,
+    0, // "nix-archive-1"
     1, 0, 0, 0, 0, 0, 0, 0, b'(', 0, 0, 0, 0, 0, 0, 0, // "("
     4, 0, 0, 0, 0, 0, 0, 0, b't', b'y', b'p', b'e', 0, 0, 0, 0, // "type"
     9, 0, 0, 0, 0, 0, 0, 0, b'd', b'i', b'r', b'e', b'c', b't', b'o', b'r', b'y', 0, 0, 0, 0, 0, 0,
@@ -96,9 +99,8 @@ pub const NAR_CONTENTS_COMPLICATED: [u8; 840] = [
     4, 0, 0, 0, 0, 0, 0, 0, b't', b'y', b'p', b'e', 0, 0, 0, 0, // "type"
     7, 0, 0, 0, 0, 0, 0, 0, b's', b'y', b'm', b'l', b'i', b'n', b'k', 0, // "symlink"
     6, 0, 0, 0, 0, 0, 0, 0, b't', b'a', b'r', b'g', b'e', b't', 0, 0, // target
-    24, 0, 0, 0, 0, 0, 0, 0, b'/', b'n', b'i', b'x', b'/', b's', b't', b'o', b'r', b'e', b'/',
-    b's', b'o', b'm', b'e', b'w', b'h', b'e', b'r', b'e', b'e', b'l', b's',
-    b'e', // "/nix/store/somewhereelse"
+    24, 0, 0, 0, 0, 0, 0, 0, b'/', b'n', b'i', b'x', b'/', b's', b't', b'o', b'r', b'e', b'/', b's', b'o', b'm', b'e',
+    b'w', b'h', b'e', b'r', b'e', b'e', b'l', b's', b'e', // "/nix/store/somewhereelse"
     1, 0, 0, 0, 0, 0, 0, 0, b')', 0, 0, 0, 0, 0, 0, 0, // ")"
     1, 0, 0, 0, 0, 0, 0, 0, b')', 0, 0, 0, 0, 0, 0, 0, // ")"
     5, 0, 0, 0, 0, 0, 0, 0, b'e', b'n', b't', b'r', b'y', 0, 0, 0, // "entry"

@@ -1,8 +1,8 @@
 //! Contains [DerivationError], exported as [crate::derivation::DerivationError]
-use crate::store_path;
 use thiserror::Error;
 
 use super::CAHash;
+use crate::store_path;
 
 /// Errors that can occur during the validation of Derivation structs.
 #[derive(Debug, Error, PartialEq)]

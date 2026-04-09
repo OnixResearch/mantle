@@ -1,10 +1,14 @@
 //! irpc service definition and client wrapper for the build service.
 
 use async_trait::async_trait;
-use irpc::{channel::oneshot, rpc_requests};
-use serde::{Deserialize, Serialize};
+use irpc::channel::oneshot;
+use irpc::rpc_requests;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::buildservice::{BuildRequest, BuildResult, BuildService};
+use crate::buildservice::BuildRequest;
+use crate::buildservice::BuildResult;
+use crate::buildservice::BuildService;
 
 // ---------------------------------------------------------------------------
 // Protocol definition

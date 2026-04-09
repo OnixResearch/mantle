@@ -1,25 +1,34 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+use std::sync::LazyLock;
+
 #[cfg(feature = "clap")]
-use clap_verbosity_flag::{InfoLevel, LogLevel, Verbosity};
+use clap_verbosity_flag::InfoLevel;
+#[cfg(feature = "clap")]
+use clap_verbosity_flag::LogLevel;
+#[cfg(feature = "clap")]
+use clap_verbosity_flag::Verbosity;
 #[cfg(any(feature = "otlp", feature = "tracy", feature = "chrome"))]
 use enumset::EnumSet;
-use std::sync::LazyLock;
-use tracing::Level;
-use tracing_indicatif::{
-    IndicatifLayer, IndicatifWriter, filter::IndicatifFilter, style::ProgressStyle,
-    util::FilteredFormatFields, writer,
-};
-use tracing_subscriber::{
-    EnvFilter, Layer, Registry,
-    layer::{Identity, SubscriberExt},
-    util::SubscriberInitExt as _,
-};
-
 #[cfg(feature = "otlp")]
-use opentelemetry_sdk::{
-    Resource, propagation::TraceContextPropagator, resource::SdkProvidedResourceDetector,
-};
+use opentelemetry_sdk::Resource;
+#[cfg(feature = "otlp")]
+use opentelemetry_sdk::propagation::TraceContextPropagator;
+#[cfg(feature = "otlp")]
+use opentelemetry_sdk::resource::SdkProvidedResourceDetector;
+use tracing::Level;
+use tracing_indicatif::IndicatifLayer;
+use tracing_indicatif::IndicatifWriter;
+use tracing_indicatif::filter::IndicatifFilter;
+use tracing_indicatif::style::ProgressStyle;
+use tracing_indicatif::util::FilteredFormatFields;
+use tracing_indicatif::writer;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
+use tracing_subscriber::Registry;
+use tracing_subscriber::layer::Identity;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt as _;
 #[cfg(feature = "tracy")]
 use tracing_tracy::TracyLayer;
 
@@ -27,13 +36,12 @@ pub mod propagate;
 
 /// A classical progress bar.
 pub static PB_PROGRESS_STYLE: LazyLock<ProgressStyle> = LazyLock::new(|| {
-    ProgressStyle::with_template(
-        "{span_child_prefix} {wide_msg} {bar:10} ({elapsed}) {pos:>7}/{len:7}",
-    )
-    .expect("invalid progress template")
+    ProgressStyle::with_template("{span_child_prefix} {wide_msg} {bar:10} ({elapsed}) {pos:>7}/{len:7}")
+        .expect("invalid progress template")
 });
 
-/// Used for file transfers, where we know an exact number of bytes and showing a trasfer speed makes sense.
+/// Used for file transfers, where we know an exact number of bytes and showing a trasfer speed
+/// makes sense.
 pub static PB_TRANSFER_STYLE: LazyLock<ProgressStyle> = LazyLock::new(|| {
     ProgressStyle::with_template(
         "{span_child_prefix} {wide_msg} {binary_bytes:>7}/{binary_total_bytes:7}@{decimal_bytes_per_sec} ({elapsed}) {bar:10} "
@@ -41,10 +49,8 @@ pub static PB_TRANSFER_STYLE: LazyLock<ProgressStyle> = LazyLock::new(|| {
     .expect("invalid progress template")
 });
 pub static PB_SPINNER_STYLE: LazyLock<ProgressStyle> = LazyLock::new(|| {
-    ProgressStyle::with_template(
-        "{span_child_prefix}{spinner} {wide_msg} ({elapsed}) {pos:>7}/{len:7}",
-    )
-    .expect("invalid progress template")
+    ProgressStyle::with_template("{span_child_prefix}{spinner} {wide_msg} ({elapsed}) {pos:>7}/{len:7}")
+        .expect("invalid progress template")
 });
 
 /// Used for long-running operations without a known total.
@@ -116,8 +122,9 @@ impl TracingHandle {
         Ok(())
     }
 
-    /// This will flush all attached tracing providers and will wait until the flush is completed, then call shutdown.
-    /// If no tracing providers like otlp are attached then this will be a noop.
+    /// This will flush all attached tracing providers and will wait until the flush is completed,
+    /// then call shutdown. If no tracing providers like otlp are attached then this will be a
+    /// noop.
     ///
     /// This should only be called on a regular shutdown.
     pub async fn shutdown(&mut self) -> Result<(), Error> {
@@ -126,22 +133,14 @@ impl TracingHandle {
         {
             use tokio::task::spawn_blocking;
             if let Some(tracer_provider) = self.tracer_provider.take() {
-                spawn_blocking(move || tracer_provider.shutdown())
-                    .await
-                    .map_err(|err| {
-                        Error::OTEL(opentelemetry_sdk::error::OTelSdkError::InternalFailure(
-                            err.to_string(),
-                        ))
-                    })??;
+                spawn_blocking(move || tracer_provider.shutdown()).await.map_err(|err| {
+                    Error::OTEL(opentelemetry_sdk::error::OTelSdkError::InternalFailure(err.to_string()))
+                })??;
             }
             if let Some(meter_provider) = self.meter_provider.take() {
-                spawn_blocking(move || meter_provider.shutdown())
-                    .await
-                    .map_err(|err| {
-                        Error::OTEL(opentelemetry_sdk::error::OTelSdkError::InternalFailure(
-                            err.to_string(),
-                        ))
-                    })??;
+                spawn_blocking(move || meter_provider.shutdown()).await.map_err(|err| {
+                    Error::OTEL(opentelemetry_sdk::error::OTelSdkError::InternalFailure(err.to_string()))
+                })??;
             }
         }
         #[cfg(feature = "tracy")]
@@ -213,9 +212,7 @@ impl TracingBuilder {
     #[cfg(any(feature = "otlp", feature = "tracy", feature = "chrome"))]
     /// Enable the given tracers
     pub fn enable_tracers<I>(mut self, tracers: I) -> TracingBuilder
-    where
-        I: IntoIterator<Item = Tracer>,
-    {
+    where I: IntoIterator<Item = Tracer> {
         self.tracers.extend(tracers);
         self
     }
@@ -251,19 +248,16 @@ impl TracingBuilder {
     /// ```
     /// [`Layer`]: tracing_subscriber::layer::Layer
     pub fn build_with_additional<L>(self, additional_layer: L) -> Result<TracingHandle, Error>
-    where
-        L: Layer<Registry> + Send + Sync + 'static,
-    {
+    where L: Layer<Registry> + Send + Sync + 'static {
         // Set up the tracing subscriber.
         let indicatif_layer = IndicatifLayer::new().with_progress_style(PB_SPINNER_STYLE.clone());
         let stdout_writer = indicatif_layer.get_stdout_writer();
         let stderr_writer = indicatif_layer.get_stderr_writer();
 
         let layered = tracing_subscriber::fmt::Layer::new()
-            .fmt_fields(FilteredFormatFields::new(
-                tracing_subscriber::fmt::format::DefaultFields::new(),
-                |field| field.name() != "indicatif.pb_show",
-            ))
+            .fmt_fields(FilteredFormatFields::new(tracing_subscriber::fmt::format::DefaultFields::new(), |field| {
+                field.name() != "indicatif.pb_show"
+            }))
             .with_writer(indicatif_layer.get_stderr_writer())
             .compact()
             .and_then((!self.disable_progress_bars).then(|| {
@@ -279,10 +273,7 @@ impl TracingBuilder {
                 .include_args(true)
                 .trace_style(tracing_chrome::TraceStyle::Async)
                 .build();
-            (
-                Layer::and_then(layered, Some(chrome_layer)),
-                Some(std::rc::Rc::new(guard)),
-            )
+            (Layer::and_then(layered, Some(chrome_layer)), Some(std::rc::Rc::new(guard)))
         } else {
             (Layer::and_then(layered, None), None)
         };
@@ -301,11 +292,9 @@ impl TracingBuilder {
                 // register a text map propagator for trace propagation
                 opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
-                let tracer_provider =
-                    gen_tracer_provider().expect("Unable to configure trace provider");
+                let tracer_provider = gen_tracer_provider().expect("Unable to configure trace provider");
 
-                let meter_provider =
-                    gen_meter_provider().expect("Unable to configure meter provider");
+                let meter_provider = gen_meter_provider().expect("Unable to configure meter provider");
 
                 // Register the returned meter provider as the global one.
                 // FUTUREWORK: store in the struct and provide getter too?
@@ -375,10 +364,7 @@ impl TracingBuilder {
 
     #[cfg(feature = "clap")]
     /// Configure with the tracing-related args.
-    pub fn handle_tracing_args<L: LogLevel>(
-        #[allow(unused_mut)] mut self,
-        args: &TracingArgs<L>,
-    ) -> Self {
+    pub fn handle_tracing_args<L: LogLevel>(#[allow(unused_mut)] mut self, args: &TracingArgs<L>) -> Self {
         #[cfg(any(feature = "otlp", feature = "tracy", feature = "chrome"))]
         {
             self = self.enable_tracers(args.tracers());
@@ -391,22 +377,19 @@ impl TracingBuilder {
 #[cfg(feature = "otlp")]
 fn gen_resources() -> Resource {
     // use SdkProvidedResourceDetector.detect to detect resources.
-    Resource::builder()
-        .with_detector(Box::new(SdkProvidedResourceDetector))
-        .build()
+    Resource::builder().with_detector(Box::new(SdkProvidedResourceDetector)).build()
 }
 
 /// Returns an OTLP tracer, and the TX part of a channel, which can be used
 /// to request flushes (and signal back the completion of the flush).
 #[cfg(feature = "otlp")]
-fn gen_tracer_provider()
--> Result<opentelemetry_sdk::trace::SdkTracerProvider, opentelemetry_otlp::ExporterBuildError> {
-    use opentelemetry_otlp::{ExportConfig, SpanExporter, WithExportConfig};
+fn gen_tracer_provider() -> Result<opentelemetry_sdk::trace::SdkTracerProvider, opentelemetry_otlp::ExporterBuildError>
+{
+    use opentelemetry_otlp::ExportConfig;
+    use opentelemetry_otlp::SpanExporter;
+    use opentelemetry_otlp::WithExportConfig;
 
-    let exporter = SpanExporter::builder()
-        .with_tonic()
-        .with_export_config(ExportConfig::default())
-        .build()?;
+    let exporter = SpanExporter::builder().with_tonic().with_export_config(ExportConfig::default()).build()?;
 
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
@@ -443,25 +426,21 @@ fn gen_tracer_provider()
 const _OTEL_METRIC_EXPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[cfg(feature = "otlp")]
-fn gen_meter_provider()
--> Result<opentelemetry_sdk::metrics::SdkMeterProvider, opentelemetry_otlp::ExporterBuildError> {
+fn gen_meter_provider() -> Result<opentelemetry_sdk::metrics::SdkMeterProvider, opentelemetry_otlp::ExporterBuildError>
+{
     use std::time::Duration;
 
     use opentelemetry_otlp::WithExportConfig;
-    use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+    use opentelemetry_sdk::metrics::PeriodicReader;
+    use opentelemetry_sdk::metrics::SdkMeterProvider;
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_tonic()
         .with_timeout(Duration::from_secs(10))
         .build()?;
 
-    let reader = PeriodicReader::builder(exporter)
-        .with_interval(_OTEL_METRIC_EXPORT_INTERVAL)
-        .build();
+    let reader = PeriodicReader::builder(exporter).with_interval(_OTEL_METRIC_EXPORT_INTERVAL).build();
 
-    Ok(SdkMeterProvider::builder()
-        .with_reader(reader)
-        .with_resource(gen_resources())
-        .build())
+    Ok(SdkMeterProvider::builder().with_reader(reader).with_resource(gen_resources()).build())
 }
 
 #[cfg(feature = "clap")]

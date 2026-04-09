@@ -5,12 +5,18 @@
 
 //! Asynchronous Multi-Producer Multi-Consumer channel.
 //!
-//! This module provides an asynchronous multi-producer multi-consumer channel based on [tokio::sync::Notify].
+//! This module provides an asynchronous multi-producer multi-consumer channel based on
+//! [tokio::sync::Notify].
 
 use std::collections::VecDeque;
-use std::io::{Error, ErrorKind, Result};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+
 use tokio::sync::Notify;
 
 /// An asynchronous multi-producer multi-consumer channel based on [tokio::sync::Notify].
@@ -87,11 +93,8 @@ impl<T> Channel<T> {
     }
 
     /// Flush all pending requests specified by the predicator.
-    ///
     pub fn flush_pending_prefetch_requests<F>(&self, mut f: F)
-    where
-        F: FnMut(&T) -> bool,
-    {
+    where F: FnMut(&T) -> bool {
         self.requests.lock().unwrap().retain(|t| !f(t));
     }
 
@@ -108,8 +111,9 @@ impl<T> Channel<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
+
+    use super::*;
 
     #[test]
     fn test_new_channel() {
@@ -146,10 +150,7 @@ mod tests {
             channel2.send(1u32).unwrap();
         });
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
             let msg = channel.recv().await.unwrap();
             assert_eq!(msg, 1);

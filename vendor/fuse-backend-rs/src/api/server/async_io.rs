@@ -9,20 +9,49 @@ use std::time::Duration;
 use async_trait::async_trait;
 use vm_memory::ByteValued;
 
-use crate::abi::fuse_abi::{
-    stat64, AttrOut, CreateIn, EntryOut, FallocateIn, FsyncIn, GetattrIn, Opcode, OpenIn, OpenOut,
-    OutHeader, ReadIn, SetattrIn, SetattrValid, WriteIn, WriteOut, FATTR_FH, GETATTR_FH,
-    KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO, READ_LOCKOWNER, WRITE_CACHE, WRITE_LOCKOWNER,
-};
-use crate::api::filesystem::{
-    AsyncFileSystem, AsyncZeroCopyReader, AsyncZeroCopyWriter, ZeroCopyReader, ZeroCopyWriter,
-};
-use crate::api::server::{
-    MetricsHook, Server, ServerUtil, SrvContext, BUFFER_HEADER_SIZE, MAX_BUFFER_SIZE,
-};
-use crate::file_traits::{AsyncFileReadWriteVolatile, FileReadWriteVolatile};
-use crate::transport::{FsCacheReqHandler, Reader, Writer};
-use crate::{bytes_to_cstr, encode_io_error_kind, BitmapSlice, Error, Result};
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::AttrOut;
+use crate::abi::fuse_abi::CreateIn;
+use crate::abi::fuse_abi::EntryOut;
+use crate::abi::fuse_abi::FallocateIn;
+use crate::abi::fuse_abi::FsyncIn;
+use crate::abi::fuse_abi::GetattrIn;
+use crate::abi::fuse_abi::Opcode;
+use crate::abi::fuse_abi::OpenIn;
+use crate::abi::fuse_abi::OpenOut;
+use crate::abi::fuse_abi::OutHeader;
+use crate::abi::fuse_abi::ReadIn;
+use crate::abi::fuse_abi::SetattrIn;
+use crate::abi::fuse_abi::SetattrValid;
+use crate::abi::fuse_abi::WriteIn;
+use crate::abi::fuse_abi::WriteOut;
+use crate::abi::fuse_abi::FATTR_FH;
+use crate::abi::fuse_abi::GETATTR_FH;
+use crate::abi::fuse_abi::KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO;
+use crate::abi::fuse_abi::READ_LOCKOWNER;
+use crate::abi::fuse_abi::WRITE_CACHE;
+use crate::abi::fuse_abi::WRITE_LOCKOWNER;
+use crate::api::filesystem::AsyncFileSystem;
+use crate::api::filesystem::AsyncZeroCopyReader;
+use crate::api::filesystem::AsyncZeroCopyWriter;
+use crate::api::filesystem::ZeroCopyReader;
+use crate::api::filesystem::ZeroCopyWriter;
+use crate::api::server::MetricsHook;
+use crate::api::server::Server;
+use crate::api::server::ServerUtil;
+use crate::api::server::SrvContext;
+use crate::api::server::BUFFER_HEADER_SIZE;
+use crate::api::server::MAX_BUFFER_SIZE;
+use crate::bytes_to_cstr;
+use crate::encode_io_error_kind;
+use crate::file_traits::AsyncFileReadWriteVolatile;
+use crate::file_traits::FileReadWriteVolatile;
+use crate::transport::FsCacheReqHandler;
+use crate::transport::Reader;
+use crate::transport::Writer;
+use crate::BitmapSlice;
+use crate::Error;
+use crate::Result;
 
 struct AsyncZcReader<'a, S: BitmapSlice = ()>(Reader<'a, S>);
 
@@ -44,12 +73,7 @@ impl<'a, S: BitmapSlice> AsyncZeroCopyReader for AsyncZcReader<'a, S> {
 }
 
 impl<'a, S: BitmapSlice> ZeroCopyReader for AsyncZcReader<'a, S> {
-    fn read_to(
-        &mut self,
-        f: &mut dyn FileReadWriteVolatile,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    fn read_to(&mut self, f: &mut dyn FileReadWriteVolatile, count: usize, off: u64) -> io::Result<usize> {
         self.0.read_to_at(f, count, off)
     }
 }
@@ -80,12 +104,7 @@ impl<'a, S: BitmapSlice> AsyncZeroCopyWriter for AsyncZcWriter<'a, S> {
 }
 
 impl<'a, S: BitmapSlice> ZeroCopyWriter for AsyncZcWriter<'a, S> {
-    fn write_from(
-        &mut self,
-        f: &mut dyn FileReadWriteVolatile,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    fn write_from(&mut self, f: &mut dyn FileReadWriteVolatile, count: usize, off: u64) -> io::Result<usize> {
         self.0.write_from_at(f, count, off)
     }
 
@@ -129,17 +148,11 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         if ctx.in_header.len > (MAX_BUFFER_SIZE + BUFFER_HEADER_SIZE)
             || ctx.w.available_bytes() < size_of::<OutHeader>()
         {
-            return ctx
-                .async_do_reply_error(io::Error::from_raw_os_error(libc::ENOMEM), true)
-                .await;
+            return ctx.async_do_reply_error(io::Error::from_raw_os_error(libc::ENOMEM), true).await;
         }
         let in_header = &ctx.in_header;
 
-        trace!(
-            "fuse: new req {:?}: {:?}",
-            Opcode::from(in_header.opcode),
-            in_header
-        );
+        trace!("fuse: new req {:?}: {:?}", Opcode::from(in_header.opcode), in_header);
 
         if let Some(h) = hook {
             h.collect(&in_header);
@@ -205,10 +218,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
                     self.destroy(ctx);
                     Ok(0)
                 }
-                _ => {
-                    ctx.async_reply_error(io::Error::from_raw_os_error(libc::ENOSYS))
-                        .await
-                }
+                _ => ctx.async_reply_error(io::Error::from_raw_os_error(libc::ENOSYS)).await,
             },
         };
 
@@ -228,27 +238,18 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
             Ok(name) => name,
             Err(e) => {
                 error!("fuse: bytes to cstr error: {:?}, {:?}", buf, e);
-                let _ = ctx
-                    .async_reply_error(io::Error::from_raw_os_error(libc::EINVAL))
-                    .await;
+                let _ = ctx.async_reply_error(io::Error::from_raw_os_error(libc::EINVAL)).await;
                 return Err(e);
             }
         };
 
         let version = self.vers.load();
-        let result = self
-            .fs
-            .async_lookup(ctx.context(), ctx.nodeid(), name)
-            .await;
+        let result = self.fs.async_lookup(ctx.context(), ctx.nodeid(), name).await;
 
         match result {
             // before ABI 7.4 inode == 0 was invalid, only ENOENT means negative dentry
-            Ok(entry)
-                if version.minor < KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO
-                    && entry.inode == 0 =>
-            {
-                ctx.async_reply_error(io::Error::from_raw_os_error(libc::ENOENT))
-                    .await
+            Ok(entry) if version.minor < KERNEL_MINOR_VERSION_LOOKUP_NEGATIVE_ENTRY_ZERO && entry.inode == 0 => {
+                ctx.async_reply_error(io::Error::from_raw_os_error(libc::ENOENT)).await
             }
             Ok(entry) => {
                 let out = EntryOut::from(entry);
@@ -265,10 +266,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         } else {
             None
         };
-        let result = self
-            .fs
-            .async_getattr(ctx.context(), ctx.nodeid(), handle)
-            .await;
+        let result = self.fs.async_getattr(ctx.context(), ctx.nodeid(), handle).await;
 
         ctx.async_handle_attr_result(result).await
     }
@@ -282,20 +280,14 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         };
         let valid = SetattrValid::from_bits_truncate(setattr_in.valid);
         let st: stat64 = setattr_in.into();
-        let result = self
-            .fs
-            .async_setattr(ctx.context(), ctx.nodeid(), st, handle, valid)
-            .await;
+        let result = self.fs.async_setattr(ctx.context(), ctx.nodeid(), st, handle, valid).await;
 
         ctx.async_handle_attr_result(result).await
     }
 
     async fn async_open<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let OpenIn { flags, fuse_flags } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        let result = self
-            .fs
-            .async_open(ctx.context(), ctx.nodeid(), flags, fuse_flags)
-            .await;
+        let result = self.fs.async_open(ctx.context(), ctx.nodeid(), flags, fuse_flags).await;
 
         match result {
             Ok((handle, opts)) => {
@@ -323,9 +315,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
         if size > MAX_BUFFER_SIZE {
-            return ctx
-                .async_reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM))
-                .await;
+            return ctx.async_reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM)).await;
         }
 
         let owner = if read_flags & READ_LOCKOWNER != 0 {
@@ -342,16 +332,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         let mut data_writer = AsyncZcWriter(w2);
         let result = self
             .fs
-            .async_read(
-                ctx.context(),
-                ctx.nodeid(),
-                fh.into(),
-                &mut data_writer,
-                size,
-                offset,
-                owner,
-                flags,
-            )
+            .async_read(ctx.context(), ctx.nodeid(), fh.into(), &mut data_writer, size, offset, owner, flags)
             .await;
 
         match result {
@@ -364,14 +345,8 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
                     unique: ctx.unique(),
                 };
 
-                ctx.w
-                    .async_write_all(out.as_slice())
-                    .await
-                    .map_err(Error::EncodeMessage)?;
-                ctx.w
-                    .async_commit(Some(&data_writer.0))
-                    .await
-                    .map_err(Error::EncodeMessage)?;
+                ctx.w.async_write_all(out.as_slice()).await.map_err(Error::EncodeMessage)?;
+                ctx.w.async_commit(Some(&data_writer.0)).await.map_err(Error::EncodeMessage)?;
                 Ok(out.len as usize)
             }
             Err(e) => ctx.async_reply_error_explicit(e).await,
@@ -390,9 +365,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
 
         if size > MAX_BUFFER_SIZE {
-            return ctx
-                .async_reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM))
-                .await;
+            return ctx.async_reply_error_explicit(io::Error::from_raw_os_error(libc::ENOMEM)).await;
         }
 
         let owner = if fuse_flags & WRITE_LOCKOWNER != 0 {
@@ -431,30 +404,19 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
     }
 
     async fn async_fsync<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let FsyncIn {
-            fh, fsync_flags, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let FsyncIn { fh, fsync_flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         let datasync = fsync_flags & 0x1 != 0;
 
-        match self
-            .fs
-            .async_fsync(ctx.context(), ctx.nodeid(), datasync, fh.into())
-            .await
-        {
+        match self.fs.async_fsync(ctx.context(), ctx.nodeid(), datasync, fh.into()).await {
             Ok(()) => ctx.async_reply_ok(None::<u8>, None).await,
             Err(e) => ctx.async_reply_error(e).await,
         }
     }
 
     async fn async_fsyncdir<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
-        let FsyncIn {
-            fh, fsync_flags, ..
-        } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
+        let FsyncIn { fh, fsync_flags, .. } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
         let datasync = fsync_flags & 0x1 != 0;
-        let result = self
-            .fs
-            .async_fsyncdir(ctx.context(), ctx.nodeid(), datasync, fh.into())
-            .await;
+        let result = self.fs.async_fsyncdir(ctx.context(), ctx.nodeid(), datasync, fh.into()).await;
 
         match result {
             Ok(()) => ctx.async_reply_ok(None::<u8>, None).await,
@@ -469,17 +431,12 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
             Ok(name) => name,
             Err(e) => {
                 error!("fuse: bytes to cstr error: {:?}, {:?}", buf, e);
-                let _ = ctx
-                    .async_reply_error(io::Error::from_raw_os_error(libc::EINVAL))
-                    .await;
+                let _ = ctx.async_reply_error(io::Error::from_raw_os_error(libc::EINVAL)).await;
                 return Err(e);
             }
         };
 
-        let result = self
-            .fs
-            .async_create(ctx.context(), ctx.nodeid(), name, args)
-            .await;
+        let result = self.fs.async_create(ctx.context(), ctx.nodeid(), name, args).await;
 
         match result {
             Ok((entry, handle, opts)) => {
@@ -499,17 +456,13 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
                 };
 
                 // Kind of a hack to write both structs.
-                ctx.async_reply_ok(Some(entry_out), Some(open_out.as_slice()))
-                    .await
+                ctx.async_reply_ok(Some(entry_out), Some(open_out.as_slice())).await
             }
             Err(e) => ctx.async_reply_error(e).await,
         }
     }
 
-    async fn async_fallocate<S: BitmapSlice>(
-        &self,
-        mut ctx: SrvContext<'_, F, S>,
-    ) -> Result<usize> {
+    async fn async_fallocate<S: BitmapSlice>(&self, mut ctx: SrvContext<'_, F, S>) -> Result<usize> {
         let FallocateIn {
             fh,
             offset,
@@ -517,10 +470,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
             mode,
             ..
         } = ctx.r.read_obj().map_err(Error::DecodeMessage)?;
-        let result = self
-            .fs
-            .async_fallocate(ctx.context(), ctx.nodeid(), fh.into(), mode, offset, length)
-            .await;
+        let result = self.fs.async_fallocate(ctx.context(), ctx.nodeid(), fh.into(), mode, offset, length).await;
 
         match result {
             Ok(()) => ctx.async_reply_ok(None::<u8>, None).await,
@@ -530,11 +480,7 @@ impl<F: AsyncFileSystem + Sync> Server<F> {
 }
 
 impl<'a, F: AsyncFileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
-    async fn async_reply_ok<T: ByteValued>(
-        &mut self,
-        out: Option<T>,
-        data: Option<&[u8]>,
-    ) -> Result<usize> {
+    async fn async_reply_ok<T: ByteValued>(&mut self, out: Option<T>, data: Option<&[u8]>) -> Result<usize> {
         let data2 = out.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
         let data3 = data.unwrap_or(&[]);
         let len = size_of::<OutHeader>() + data2.len() + data3.len();
@@ -560,9 +506,7 @@ impl<'a, F: AsyncFileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
     async fn async_do_reply_error(&mut self, err: io::Error, internal_err: bool) -> Result<usize> {
         let header = OutHeader {
             len: size_of::<OutHeader>() as u32,
-            error: -err
-                .raw_os_error()
-                .unwrap_or_else(|| encode_io_error_kind(err.kind())),
+            error: -err.raw_os_error().unwrap_or_else(|| encode_io_error_kind(err.kind())),
             unique: self.in_header.unique,
         };
 
@@ -570,10 +514,7 @@ impl<'a, F: AsyncFileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
         if internal_err {
             error!("fuse: reply error header {:?}, error {:?}", header, err);
         }
-        self.w
-            .async_write_all(header.as_slice())
-            .await
-            .map_err(Error::EncodeMessage)?;
+        self.w.async_write_all(header.as_slice()).await.map_err(Error::EncodeMessage)?;
 
         // Commit header if it is buffered otherwise kernel gets nothing back.
         self.w
@@ -596,10 +537,7 @@ impl<'a, F: AsyncFileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
         self.async_do_reply_error(err, true).await
     }
 
-    async fn async_handle_attr_result(
-        &mut self,
-        result: io::Result<(stat64, Duration)>,
-    ) -> Result<usize> {
+    async fn async_handle_attr_result(&mut self, result: io::Result<(stat64, Duration)>) -> Result<usize> {
         match result {
             Ok((st, timeout)) => {
                 let out = AttrOut {
@@ -618,11 +556,12 @@ impl<'a, F: AsyncFileSystem, S: BitmapSlice> SrvContext<'a, F, S> {
 #[cfg(feature = "fusedev")]
 #[cfg(test)]
 mod tests {
+    use std::os::unix::io::AsRawFd;
+
     use super::*;
     use crate::api::Vfs;
-    use crate::transport::{FuseBuf, FuseDevWriter};
-
-    use std::os::unix::io::AsRawFd;
+    use crate::transport::FuseBuf;
+    use crate::transport::FuseDevWriter;
 
     #[test]
     fn test_vfs_async_invalid_header() {
@@ -632,13 +571,10 @@ mod tests {
         let r = Reader::<()>::from_fuse_buffer(FuseBuf::new(&mut r_buf)).unwrap();
         let file = vmm_sys_util::tempfile::TempFile::new().unwrap();
         let mut buf = vec![0x0u8; 1000];
-        let w = FuseDevWriter::<()>::new(file.as_file().as_raw_fd(), &mut buf)
-            .unwrap()
-            .into();
+        let w = FuseDevWriter::<()>::new(file.as_file().as_raw_fd(), &mut buf).unwrap().into();
 
-        let result = crate::async_runtime::block_on(async {
-            unsafe { server.async_handle_message(r, w, None, None).await }
-        });
+        let result =
+            crate::async_runtime::block_on(async { unsafe { server.async_handle_message(r, w, None, None).await } });
         assert!(result.is_err());
     }
 }

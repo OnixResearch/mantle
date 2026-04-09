@@ -4,13 +4,17 @@
 
 use futures::TryStreamExt;
 use rstest::*;
-use rstest_reuse::{self, *};
+use rstest_reuse::*;
+use rstest_reuse::{self};
 
 use super::DirectoryService;
+use crate::Directory;
+use crate::Node;
 use crate::directoryservice;
-use crate::fixtures::{DIRECTORY_A, DIRECTORY_B, DIRECTORY_C, DIRECTORY_D};
-use crate::{Directory, Node};
-
+use crate::fixtures::DIRECTORY_A;
+use crate::fixtures::DIRECTORY_B;
+use crate::fixtures::DIRECTORY_C;
+use crate::fixtures::DIRECTORY_D;
 
 // TODO: add tests doing individual puts of a closure, then doing a get_recursive
 // (and figure out semantics if necessary)
@@ -31,13 +35,7 @@ pub fn directory_services(#[case] directory_service: impl DirectoryService) {}
 async fn test_non_exist(directory_service: impl DirectoryService) {
     // single get
 
-    assert_eq!(
-        None,
-        directory_service
-            .get(&DIRECTORY_A.digest())
-            .await
-            .expect("get to succeed")
-    );
+    assert_eq!(None, directory_service.get(&DIRECTORY_A.digest()).await.expect("get to succeed"));
 
     // recursive get
     assert_eq!(
@@ -56,19 +54,13 @@ async fn test_non_exist(directory_service: impl DirectoryService) {
 #[tokio::test]
 async fn put_get(directory_service: impl DirectoryService) {
     // Insert a Directory.
-    let digest = directory_service
-        .put(DIRECTORY_A.clone())
-        .await
-        .expect("put to succeed");
+    let digest = directory_service.put(DIRECTORY_A.clone()).await.expect("put to succeed");
     assert_eq!(DIRECTORY_A.digest(), digest, "returned digest must match");
 
     // single get
     assert_eq!(
         Some(DIRECTORY_A.clone()),
-        directory_service
-            .get(&DIRECTORY_A.digest())
-            .await
-            .expect("get to succeed")
+        directory_service.get(&DIRECTORY_A.digest()).await.expect("get to succeed")
     );
 
     // recursive get
@@ -90,26 +82,13 @@ async fn put_get(directory_service: impl DirectoryService) {
 async fn put_get_multiple_success(directory_service: impl DirectoryService) {
     // Insert a Directory closure.
     let mut handle = directory_service.put_multiple_start();
-    handle
-        .put(DIRECTORY_A.clone())
-        .await
-        .expect("put to succeed");
-    handle
-        .put(DIRECTORY_C.clone())
-        .await
-        .expect("put to succeed");
+    handle.put(DIRECTORY_A.clone()).await.expect("put to succeed");
+    handle.put(DIRECTORY_C.clone()).await.expect("put to succeed");
     let root_digest = handle.close().await.expect("close to succeed");
-    assert_eq!(
-        DIRECTORY_C.digest(),
-        root_digest,
-        "root digest should match"
-    );
+    assert_eq!(DIRECTORY_C.digest(), root_digest, "root digest should match");
 
     // Get the root node.
-    assert_eq!(
-        Some(DIRECTORY_C.clone()),
-        directory_service.get(&DIRECTORY_C.digest()).await.unwrap()
-    );
+    assert_eq!(Some(DIRECTORY_C.clone()), directory_service.get(&DIRECTORY_C.digest()).await.unwrap());
 
     // Get the closure. Ensure it's sent from the root to the leaves.
     assert_eq!(
@@ -129,24 +108,11 @@ async fn put_get_multiple_success(directory_service: impl DirectoryService) {
 async fn put_get_multiple_dedup(directory_service: impl DirectoryService) {
     // Insert a Directory closure.
     let mut handle = directory_service.put_multiple_start();
-    handle
-        .put(DIRECTORY_A.clone())
-        .await
-        .expect("put to succeed");
-    handle
-        .put(DIRECTORY_A.clone())
-        .await
-        .expect("put to succeed");
-    handle
-        .put(DIRECTORY_C.clone())
-        .await
-        .expect("put to succeed");
+    handle.put(DIRECTORY_A.clone()).await.expect("put to succeed");
+    handle.put(DIRECTORY_A.clone()).await.expect("put to succeed");
+    handle.put(DIRECTORY_C.clone()).await.expect("put to succeed");
     let root_digest = handle.close().await.expect("close to succeed");
-    assert_eq!(
-        DIRECTORY_C.digest(),
-        root_digest,
-        "root digest should match"
-    );
+    assert_eq!(DIRECTORY_C.digest(), root_digest, "root digest should match");
 
     // Ensure the returned closure only contains `DIRECTORY_A` once.
     assert_eq!(
@@ -169,11 +135,7 @@ async fn put_get_foo(directory_service: impl DirectoryService) {
     handle.put(DIRECTORY_B.clone()).await.unwrap();
     handle.put(DIRECTORY_D.clone()).await.unwrap();
     let root_digest = handle.close().await.unwrap();
-    assert_eq!(
-        DIRECTORY_D.digest(),
-        root_digest,
-        "root digest should match"
-    );
+    assert_eq!(DIRECTORY_D.digest(), root_digest, "root digest should match");
 
     // Ensure we can get the closure back out of the service, and it is returned in a valid order
     // (there are multiple valid possibilities)
@@ -184,46 +146,26 @@ async fn put_get_foo(directory_service: impl DirectoryService) {
         .expect("get_recursive to succeed");
 
     let valid_closures = [
-        vec![
-            DIRECTORY_D.clone(),
-            DIRECTORY_B.clone(),
-            DIRECTORY_A.clone(),
-        ],
-        vec![
-            DIRECTORY_D.clone(),
-            DIRECTORY_A.clone(),
-            DIRECTORY_B.clone(),
-        ],
+        vec![DIRECTORY_D.clone(), DIRECTORY_B.clone(), DIRECTORY_A.clone()],
+        vec![DIRECTORY_D.clone(), DIRECTORY_A.clone(), DIRECTORY_B.clone()],
     ];
     if !valid_closures.contains(&retrieved_closure) {
         panic!("invalid closure returned: {retrieved_closure:?}");
     }
 }
 
-/// Uploading A, then C (referring to A twice), then B (itself referring to A) should fail during close,
-/// as B itself would be left unconnected.
+/// Uploading A, then C (referring to A twice), then B (itself referring to A) should fail during
+/// close, as B itself would be left unconnected.
 #[apply(directory_services)]
 #[tokio::test]
 async fn upload_reject_unconnected(directory_service: impl DirectoryService) {
     let mut handle = directory_service.put_multiple_start();
 
-    handle
-        .put(DIRECTORY_A.clone())
-        .await
-        .expect("put to succeed");
-    handle
-        .put(DIRECTORY_C.clone())
-        .await
-        .expect("put to succeed");
-    handle
-        .put(DIRECTORY_B.clone())
-        .await
-        .expect("put to succeed");
+    handle.put(DIRECTORY_A.clone()).await.expect("put to succeed");
+    handle.put(DIRECTORY_C.clone()).await.expect("put to succeed");
+    handle.put(DIRECTORY_B.clone()).await.expect("put to succeed");
 
-    assert!(
-        handle.close().await.is_err(),
-        "closing handle should fail, as B would be left unconnected"
-    );
+    assert!(handle.close().await.is_err(), "closing handle should fail, as B would be left unconnected");
 }
 
 /// Uploading a directory that refers to another directory not yet uploaded
@@ -240,10 +182,7 @@ async fn upload_reject_dangling_pointer(directory_service: impl DirectoryService
 
     // DIRECTORY_B refers to DIRECTORY_A, which is not uploaded with this handle.
     if handle.put(DIRECTORY_B.clone()).await.is_ok() {
-        assert!(
-            handle.close().await.is_err(),
-            "when succeeding put, close must fail"
-        )
+        assert!(handle.close().await.is_err(), "when succeeding put, close must fail")
     }
 }
 
@@ -253,13 +192,10 @@ async fn upload_reject_dangling_pointer(directory_service: impl DirectoryService
 #[apply(directory_services)]
 #[tokio::test]
 async fn upload_reject_wrong_size(directory_service: impl DirectoryService) {
-    let wrong_parent_directory = Directory::try_from_iter([(
-        "foo".try_into().unwrap(),
-        Node::Directory {
-            digest: DIRECTORY_A.digest(),
-            size: DIRECTORY_A.size() + 42, // wrong!
-        },
-    )])
+    let wrong_parent_directory = Directory::try_from_iter([("foo".try_into().unwrap(), Node::Directory {
+        digest: DIRECTORY_A.digest(),
+        size: DIRECTORY_A.size() + 42, // wrong!
+    })])
     .unwrap();
 
     // Now upload both. Ensure it either fails during the second put, or during
@@ -267,9 +203,6 @@ async fn upload_reject_wrong_size(directory_service: impl DirectoryService) {
     let mut handle = directory_service.put_multiple_start();
     handle.put(DIRECTORY_A.clone()).await.unwrap();
     if handle.put(wrong_parent_directory).await.is_ok() {
-        assert!(
-            handle.close().await.is_err(),
-            "when second put succeeds, close must fail"
-        )
+        assert!(handle.close().await.is_err(), "when second put succeeds, close must fail")
     }
 }

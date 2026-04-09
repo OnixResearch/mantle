@@ -1,6 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
-use super::inodes::{DirectoryInodeData, InodeData};
+use super::inodes::DirectoryInodeData;
+use super::inodes::InodeData;
 use crate::B3Digest;
 
 /// InodeTracker keeps track of inodes, stores data being these inodes and deals
@@ -132,10 +134,9 @@ impl InodeTracker {
 
 #[cfg(test)]
 mod tests {
-    use crate::fixtures;
-
     use super::InodeData;
     use super::InodeTracker;
+    use crate::fixtures;
 
     /// Getting something non-existent should be none
     #[test]
@@ -148,11 +149,7 @@ mod tests {
     #[test]
     fn put_regular() {
         let mut inode_tracker = InodeTracker::default();
-        let f = InodeData::Regular(
-            *fixtures::BLOB_A_DIGEST,
-            fixtures::BLOB_A.len() as u64,
-            false,
-        );
+        let f = InodeData::Regular(*fixtures::BLOB_A_DIGEST, fixtures::BLOB_A.len() as u64, false);
 
         // put it in
         let ino = inode_tracker.put(f.clone());
@@ -172,11 +169,7 @@ mod tests {
         // inserting another file should return a different ino
         assert_ne!(
             ino,
-            inode_tracker.put(InodeData::Regular(
-                *fixtures::BLOB_B_DIGEST,
-                fixtures::BLOB_B.len() as u64,
-                false,
-            ))
+            inode_tracker.put(InodeData::Regular(*fixtures::BLOB_B_DIGEST, fixtures::BLOB_B.len() as u64, false,))
         );
     }
 

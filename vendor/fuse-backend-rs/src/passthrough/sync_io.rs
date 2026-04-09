@@ -5,11 +5,17 @@
 
 //! Fuse passthrough file system, mirroring an existing FS hierarchy.
 
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
+use std::ffi::CString;
 use std::fs::File;
 use std::io;
-use std::mem::{self, size_of, ManuallyDrop, MaybeUninit};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::mem::size_of;
+use std::mem::ManuallyDrop;
+use std::mem::MaybeUninit;
+use std::mem::{self};
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::FromRawFd;
+use std::os::unix::io::RawFd;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,13 +23,23 @@ use std::time::Duration;
 use super::os_compat::LinuxDirent64;
 use super::util::stat_fd;
 use super::*;
-use crate::abi::fuse_abi::{CreateIn, Opcode, FOPEN_IN_KILL_SUIDGID, WRITE_KILL_PRIV};
+use crate::abi::fuse_abi::CreateIn;
+use crate::abi::fuse_abi::Opcode;
+use crate::abi::fuse_abi::FOPEN_IN_KILL_SUIDGID;
+use crate::abi::fuse_abi::WRITE_KILL_PRIV;
 #[cfg(any(feature = "vhost-user-fs", feature = "virtiofs"))]
 use crate::abi::virtio_fs;
-use crate::api::filesystem::{
-    Context, DirEntry, Entry, FileSystem, FsOptions, GetxattrReply, ListxattrReply, OpenOptions,
-    SetattrValid, ZeroCopyReader, ZeroCopyWriter,
-};
+use crate::api::filesystem::Context;
+use crate::api::filesystem::DirEntry;
+use crate::api::filesystem::Entry;
+use crate::api::filesystem::FileSystem;
+use crate::api::filesystem::FsOptions;
+use crate::api::filesystem::GetxattrReply;
+use crate::api::filesystem::ListxattrReply;
+use crate::api::filesystem::OpenOptions;
+use crate::api::filesystem::SetattrValid;
+use crate::api::filesystem::ZeroCopyReader;
+use crate::api::filesystem::ZeroCopyWriter;
 use crate::bytes_to_cstr;
 #[cfg(any(feature = "vhost-user-fs", feature = "virtiofs"))]
 use crate::transport::FsCacheReqHandler;
@@ -77,8 +93,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
             let (guard, dir) = data.get_file_mut();
 
             // Safe because this doesn't modify any memory and we check the return value.
-            let res =
-                unsafe { libc::lseek64(dir.as_raw_fd(), offset as libc::off64_t, libc::SEEK_SET) };
+            let res = unsafe { libc::lseek64(dir.as_raw_fd(), offset as libc::off64_t, libc::SEEK_SET) };
             if res < 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -109,21 +124,14 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         while !rem.is_empty() {
             // We only use debug asserts here because these values are coming from the kernel and we
             // trust them implicitly.
-            debug_assert!(
-                rem.len() >= size_of::<LinuxDirent64>(),
-                "fuse: not enough space left in `rem`"
-            );
+            debug_assert!(rem.len() >= size_of::<LinuxDirent64>(), "fuse: not enough space left in `rem`");
 
             let (front, back) = rem.split_at(size_of::<LinuxDirent64>());
 
-            let dirent64 = LinuxDirent64::from_slice(front)
-                .expect("fuse: unable to get LinuxDirent64 from slice");
+            let dirent64 = LinuxDirent64::from_slice(front).expect("fuse: unable to get LinuxDirent64 from slice");
 
             let namelen = dirent64.d_reclen as usize - size_of::<LinuxDirent64>();
-            debug_assert!(
-                namelen <= back.len(),
-                "fuse: back is smaller than `namelen`"
-            );
+            debug_assert!(namelen <= back.len(), "fuse: back is smaller than `namelen`");
 
             let name = &back[..namelen];
             let res = if name.starts_with(CURRENT_DIR_CSTR) || name.starts_with(PARENT_DIR_CSTR) {
@@ -156,10 +164,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
                 )
             };
 
-            debug_assert!(
-                rem.len() >= dirent64.d_reclen as usize,
-                "fuse: rem is smaller than `d_reclen`"
-            );
+            debug_assert!(rem.len() >= dirent64.d_reclen as usize, "fuse: rem is smaller than `d_reclen`");
 
             match res {
                 Ok(0) => break,
@@ -182,9 +187,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         flags: u32,
         fuse_flags: u32,
     ) -> io::Result<(Option<Handle>, OpenOptions, Option<u32>)> {
-        let killpriv = if self.killpriv_v2.load(Ordering::Relaxed)
-            && (fuse_flags & FOPEN_IN_KILL_SUIDGID != 0)
-        {
+        let killpriv = if self.killpriv_v2.load(Ordering::Relaxed) && (fuse_flags & FOPEN_IN_KILL_SUIDGID != 0) {
             self::drop_cap_fsetid()?
         } else {
             None
@@ -199,10 +202,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         let mut opts = OpenOptions::empty();
         match self.cfg.cache_policy {
             // We only set the direct I/O option on files.
-            CachePolicy::Never => opts.set(
-                OpenOptions::DIRECT_IO,
-                flags & (libc::O_DIRECTORY as u32) == 0,
-            ),
+            CachePolicy::Never => opts.set(OpenOptions::DIRECT_IO, flags & (libc::O_DIRECTORY as u32) == 0),
             CachePolicy::Metadata => {
                 if flags & (libc::O_DIRECTORY as u32) == 0 {
                     opts |= OpenOptions::DIRECT_IO;
@@ -222,11 +222,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         Ok((Some(handle), opts, None))
     }
 
-    fn do_getattr(
-        &self,
-        inode: Inode,
-        handle: Option<Handle>,
-    ) -> io::Result<(libc::stat64, Duration)> {
+    fn do_getattr(&self, inode: Inode, handle: Option<Handle>) -> io::Result<(libc::stat64, Duration)> {
         let st;
         let data = self.inode_map.get(inode).map_err(|e| {
             error!("fuse: do_getattr ino {} Not find err {:?}", inode, e);
@@ -263,12 +259,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         }
     }
 
-    fn get_dirdata(
-        &self,
-        handle: Handle,
-        inode: Inode,
-        flags: libc::c_int,
-    ) -> io::Result<Arc<HandleData>> {
+    fn get_dirdata(&self, handle: Handle, inode: Inode, flags: libc::c_int) -> io::Result<Arc<HandleData>> {
         let no_open = self.no_opendir.load(Ordering::Relaxed);
         if !no_open {
             self.handle_map.get(handle, inode)
@@ -278,12 +269,7 @@ impl<S: BitmapSlice + Send + Sync> PassthroughFs<S> {
         }
     }
 
-    fn get_data(
-        &self,
-        handle: Handle,
-        inode: Inode,
-        flags: libc::c_int,
-    ) -> io::Result<Arc<HandleData>> {
+    fn get_data(&self, handle: Handle, inode: Inode, flags: libc::c_int) -> io::Result<Arc<HandleData>> {
         let no_open = self.no_open.load(Ordering::Relaxed);
         if !no_open {
             self.handle_map.get(handle, inode)
@@ -306,29 +292,21 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         let mut opts = FsOptions::DO_READDIRPLUS | FsOptions::READDIRPLUS_AUTO;
         // !cfg.do_import means we are under vfs, in which case capable is already
         // negotiated and must be honored.
-        if (!self.cfg.do_import || self.cfg.writeback)
-            && capable.contains(FsOptions::WRITEBACK_CACHE)
-        {
+        if (!self.cfg.do_import || self.cfg.writeback) && capable.contains(FsOptions::WRITEBACK_CACHE) {
             opts |= FsOptions::WRITEBACK_CACHE;
             self.writeback.store(true, Ordering::Relaxed);
         }
-        if (!self.cfg.do_import || self.cfg.no_open)
-            && capable.contains(FsOptions::ZERO_MESSAGE_OPEN)
-        {
+        if (!self.cfg.do_import || self.cfg.no_open) && capable.contains(FsOptions::ZERO_MESSAGE_OPEN) {
             opts |= FsOptions::ZERO_MESSAGE_OPEN;
             // We can't support FUSE_ATOMIC_O_TRUNC with no_open
             opts.remove(FsOptions::ATOMIC_O_TRUNC);
             self.no_open.store(true, Ordering::Relaxed);
         }
-        if (!self.cfg.do_import || self.cfg.no_opendir)
-            && capable.contains(FsOptions::ZERO_MESSAGE_OPENDIR)
-        {
+        if (!self.cfg.do_import || self.cfg.no_opendir) && capable.contains(FsOptions::ZERO_MESSAGE_OPENDIR) {
             opts |= FsOptions::ZERO_MESSAGE_OPENDIR;
             self.no_opendir.store(true, Ordering::Relaxed);
         }
-        if (!self.cfg.do_import || self.cfg.killpriv_v2)
-            && capable.contains(FsOptions::HANDLE_KILLPRIV_V2)
-        {
+        if (!self.cfg.do_import || self.cfg.killpriv_v2) && capable.contains(FsOptions::HANDLE_KILLPRIV_V2) {
             opts |= FsOptions::HANDLE_KILLPRIV_V2;
             self.killpriv_v2.store(true, Ordering::Relaxed);
         }
@@ -385,28 +363,16 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn opendir(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        flags: u32,
-    ) -> io::Result<(Option<Handle>, OpenOptions)> {
+    fn opendir(&self, _ctx: &Context, inode: Inode, flags: u32) -> io::Result<(Option<Handle>, OpenOptions)> {
         if self.no_opendir.load(Ordering::Relaxed) {
             info!("fuse: opendir is not supported.");
             Err(enosys())
         } else {
-            self.do_open(inode, flags | (libc::O_DIRECTORY as u32), 0)
-                .map(|(a, b, _)| (a, b))
+            self.do_open(inode, flags | (libc::O_DIRECTORY as u32), 0).map(|(a, b, _)| (a, b))
         }
     }
 
-    fn releasedir(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        _flags: u32,
-        handle: Handle,
-    ) -> io::Result<()> {
+    fn releasedir(&self, _ctx: &Context, inode: Inode, _flags: u32, handle: Handle) -> io::Result<()> {
         if self.no_opendir.load(Ordering::Relaxed) {
             info!("fuse: releasedir is not supported.");
             Err(io::Error::from_raw_os_error(libc::ENOSYS))
@@ -415,14 +381,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn mkdir(
-        &self,
-        ctx: &Context,
-        parent: Inode,
-        name: &CStr,
-        mode: u32,
-        umask: u32,
-    ) -> io::Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: Inode, name: &CStr, mode: u32, umask: u32) -> io::Result<Entry> {
         self.validate_path_component(name)?;
 
         let data = self.inode_map.get(parent)?;
@@ -575,13 +534,12 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
             // open_inode().
             None => {
                 // Cap restored when _killpriv is dropped
-                let _killpriv = if self.killpriv_v2.load(Ordering::Relaxed)
-                    && (args.fuse_flags & FOPEN_IN_KILL_SUIDGID != 0)
-                {
-                    self::drop_cap_fsetid()?
-                } else {
-                    None
-                };
+                let _killpriv =
+                    if self.killpriv_v2.load(Ordering::Relaxed) && (args.fuse_flags & FOPEN_IN_KILL_SUIDGID != 0) {
+                        self::drop_cap_fsetid()?
+                    } else {
+                        None
+                    };
 
                 let (_uid, _gid) = set_creds(ctx.uid, ctx.gid)?;
                 self.open_inode(entry.inode, args.flags as i32)?
@@ -707,22 +665,16 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         let mut f = ManuallyDrop::new(f);
 
         // Cap restored when _killpriv is dropped
-        let _killpriv =
-            if self.killpriv_v2.load(Ordering::Relaxed) && (fuse_flags & WRITE_KILL_PRIV != 0) {
-                self::drop_cap_fsetid()?
-            } else {
-                None
-            };
+        let _killpriv = if self.killpriv_v2.load(Ordering::Relaxed) && (fuse_flags & WRITE_KILL_PRIV != 0) {
+            self::drop_cap_fsetid()?
+        } else {
+            None
+        };
 
         r.read_to(&mut *f, size as usize, offset)
     }
 
-    fn getattr(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        handle: Option<Handle>,
-    ) -> io::Result<(libc::stat64, Duration)> {
+    fn getattr(&self, _ctx: &Context, inode: Inode, handle: Option<Handle>) -> io::Result<(libc::stat64, Duration)> {
         self.do_getattr(inode, handle)
     }
 
@@ -767,9 +719,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
             let res = unsafe {
                 match data {
                     Data::Handle(ref h) => libc::fchmod(h.borrow_fd().as_raw_fd(), attr.st_mode),
-                    Data::ProcPath(ref p) => {
-                        libc::fchmodat(self.proc_self_fd.as_raw_fd(), p.as_ptr(), attr.st_mode, 0)
-                    }
+                    Data::ProcPath(ref p) => libc::fchmodat(self.proc_self_fd.as_raw_fd(), p.as_ptr(), attr.st_mode, 0),
                 }
             };
             if res < 0 {
@@ -811,9 +761,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
 
         if valid.contains(SetattrValid::SIZE) {
             // Cap restored when _killpriv is dropped
-            let _killpriv = if self.killpriv_v2.load(Ordering::Relaxed)
-                && valid.contains(SetattrValid::KILL_SUIDGID)
-            {
+            let _killpriv = if self.killpriv_v2.load(Ordering::Relaxed) && valid.contains(SetattrValid::KILL_SUIDGID) {
                 self::drop_cap_fsetid()?
             } else {
                 None
@@ -821,9 +769,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
 
             // Safe because this doesn't modify any memory and we check the return value.
             let res = match data {
-                Data::Handle(ref h) => unsafe {
-                    libc::ftruncate(h.borrow_fd().as_raw_fd(), attr.st_size)
-                },
+                Data::Handle(ref h) => unsafe { libc::ftruncate(h.borrow_fd().as_raw_fd(), attr.st_size) },
                 _ => {
                     // There is no `ftruncateat` so we need to get a new fd and truncate it.
                     let f = self.open_inode(inode, libc::O_NONBLOCK | libc::O_RDWR)?;
@@ -863,9 +809,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
 
             // Safe because this doesn't modify any memory and we check the return value.
             let res = match data {
-                Data::Handle(ref h) => unsafe {
-                    libc::futimens(h.borrow_fd().as_raw_fd(), tvs.as_ptr())
-                },
+                Data::Handle(ref h) => unsafe { libc::futimens(h.borrow_fd().as_raw_fd(), tvs.as_ptr()) },
                 Data::ProcPath(ref p) => unsafe {
                     libc::utimensat(self.proc_self_fd.as_raw_fd(), p.as_ptr(), tvs.as_ptr(), 0)
                 },
@@ -915,15 +859,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn mknod(
-        &self,
-        ctx: &Context,
-        parent: Inode,
-        name: &CStr,
-        mode: u32,
-        rdev: u32,
-        umask: u32,
-    ) -> io::Result<Entry> {
+    fn mknod(&self, ctx: &Context, parent: Inode, name: &CStr, mode: u32, rdev: u32, umask: u32) -> io::Result<Entry> {
         self.validate_path_component(name)?;
 
         let data = self.inode_map.get(parent)?;
@@ -933,14 +869,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
             let (_uid, _gid) = set_creds(ctx.uid, ctx.gid)?;
 
             // Safe because this doesn't modify any memory and we check the return value.
-            unsafe {
-                libc::mknodat(
-                    file.as_raw_fd(),
-                    name.as_ptr(),
-                    (mode & !umask) as libc::mode_t,
-                    u64::from(rdev),
-                )
-            }
+            unsafe { libc::mknodat(file.as_raw_fd(), name.as_ptr(), (mode & !umask) as libc::mode_t, u64::from(rdev)) }
         };
         if res < 0 {
             Err(io::Error::last_os_error())
@@ -949,13 +878,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn link(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        newparent: Inode,
-        newname: &CStr,
-    ) -> io::Result<Entry> {
+    fn link(&self, _ctx: &Context, inode: Inode, newparent: Inode, newname: &CStr) -> io::Result<Entry> {
         self.validate_path_component(newname)?;
 
         let data = self.inode_map.get(inode)?;
@@ -968,13 +891,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
 
         // Safe because this doesn't modify any memory and we check the return value.
         let res = unsafe {
-            libc::linkat(
-                file.as_raw_fd(),
-                empty.as_ptr(),
-                new_file.as_raw_fd(),
-                newname.as_ptr(),
-                libc::AT_EMPTY_PATH,
-            )
+            libc::linkat(file.as_raw_fd(), empty.as_ptr(), new_file.as_raw_fd(), newname.as_ptr(), libc::AT_EMPTY_PATH)
         };
         if res == 0 {
             self.do_lookup(newparent, newname)
@@ -983,13 +900,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn symlink(
-        &self,
-        ctx: &Context,
-        linkname: &CStr,
-        parent: Inode,
-        name: &CStr,
-    ) -> io::Result<Entry> {
+    fn symlink(&self, ctx: &Context, linkname: &CStr, parent: Inode, name: &CStr) -> io::Result<Entry> {
         self.validate_path_component(name)?;
 
         let data = self.inode_map.get(parent)?;
@@ -1034,13 +945,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         Ok(buf)
     }
 
-    fn flush(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        handle: Handle,
-        _lock_owner: u64,
-    ) -> io::Result<()> {
+    fn flush(&self, _ctx: &Context, inode: Inode, handle: Handle, _lock_owner: u64) -> io::Result<()> {
         if self.no_open.load(Ordering::Relaxed) {
             return Err(enosys());
         }
@@ -1064,13 +969,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn fsync(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        datasync: bool,
-        handle: Handle,
-    ) -> io::Result<()> {
+    fn fsync(&self, _ctx: &Context, inode: Inode, datasync: bool, handle: Handle) -> io::Result<()> {
         let data = self.get_data(handle, inode, libc::O_RDONLY)?;
         let fd = data.borrow_fd();
 
@@ -1089,13 +988,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn fsyncdir(
-        &self,
-        ctx: &Context,
-        inode: Inode,
-        datasync: bool,
-        handle: Handle,
-    ) -> io::Result<()> {
+    fn fsyncdir(&self, ctx: &Context, inode: Inode, datasync: bool, handle: Handle) -> io::Result<()> {
         self.fsync(ctx, inode, datasync, handle)
     }
 
@@ -1141,14 +1034,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         Ok(())
     }
 
-    fn setxattr(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> io::Result<()> {
+    fn setxattr(&self, _ctx: &Context, inode: Inode, name: &CStr, value: &[u8], flags: u32) -> io::Result<()> {
         if !self.cfg.xattr {
             return Err(enosys());
         }
@@ -1177,13 +1063,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn getxattr(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        name: &CStr,
-        size: u32,
-    ) -> io::Result<GetxattrReply> {
+    fn getxattr(&self, _ctx: &Context, inode: Inode, name: &CStr, size: u32) -> io::Result<GetxattrReply> {
         if !self.cfg.xattr {
             return Err(enosys());
         }
@@ -1232,13 +1112,8 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         // The f{set,get,remove,list}xattr functions don't work on an fd opened with `O_PATH` so we
         // need to use the {set,get,remove,list}xattr variants.
         // Safe because this will only modify the contents of `buf`.
-        let res = unsafe {
-            libc::listxattr(
-                pathname.as_ptr(),
-                buf.as_mut_ptr() as *mut libc::c_char,
-                size as libc::size_t,
-            )
-        };
+        let res =
+            unsafe { libc::listxattr(pathname.as_ptr(), buf.as_mut_ptr() as *mut libc::c_char, size as libc::size_t) };
         if res < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -1288,23 +1163,12 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
 
         if self.seal_size.load(Ordering::Relaxed) {
             let st = stat_fd(&fd, None)?;
-            self.seal_size_check(
-                Opcode::Fallocate,
-                st.st_size as u64,
-                offset,
-                length,
-                mode as i32,
-            )?;
+            self.seal_size_check(Opcode::Fallocate, st.st_size as u64, offset, length, mode as i32)?;
         }
 
         // Safe because this doesn't modify any memory and we check the return value.
         let res = unsafe {
-            libc::fallocate64(
-                fd.as_raw_fd(),
-                mode as libc::c_int,
-                offset as libc::off64_t,
-                length as libc::off64_t,
-            )
+            libc::fallocate64(fd.as_raw_fd(), mode as libc::c_int, offset as libc::off64_t, length as libc::off64_t)
         };
         if res == 0 {
             Ok(())
@@ -1313,14 +1177,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         }
     }
 
-    fn lseek(
-        &self,
-        _ctx: &Context,
-        inode: Inode,
-        handle: Handle,
-        offset: u64,
-        whence: u32,
-    ) -> io::Result<u64> {
+    fn lseek(&self, _ctx: &Context, inode: Inode, handle: Handle, offset: u64, whence: u32) -> io::Result<u64> {
         // Let the Arc<HandleData> in scope, otherwise fd may get invalid.
         let data = self.handle_map.get(handle, inode)?;
 
@@ -1328,13 +1185,7 @@ impl<S: BitmapSlice + Send + Sync> FileSystem for PassthroughFs<S> {
         let (_guard, file) = data.get_file_mut();
 
         // Safe because this doesn't modify any memory and we check the return value.
-        let res = unsafe {
-            libc::lseek(
-                file.as_raw_fd(),
-                offset as libc::off64_t,
-                whence as libc::c_int,
-            )
-        };
+        let res = unsafe { libc::lseek(file.as_raw_fd(), offset as libc::off64_t, whence as libc::c_int) };
         if res < 0 {
             Err(io::Error::last_os_error())
         } else {

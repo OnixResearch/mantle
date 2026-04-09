@@ -1,14 +1,20 @@
 use async_trait::async_trait;
-use crate::{pathinfoservice, utils::AsyncIoBridge};
-
-use super::{NarCalculationService, RenderError};
 use count_write::CountWrite;
 use nix_compat::nar::writer::r#async as nar_writer;
-use sha2::{Digest, Sha256};
-use snix_castore::{Node, blobservice::BlobService, directoryservice::DirectoryService};
-use tokio::io::{self, AsyncWrite, BufReader};
-
+use sha2::Digest;
+use sha2::Sha256;
+use snix_castore::Node;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use tokio::io::AsyncWrite;
+use tokio::io::BufReader;
+use tokio::io::{self};
 use tracing::instrument;
+
+use super::NarCalculationService;
+use super::RenderError;
+use crate::pathinfoservice;
+use crate::utils::AsyncIoBridge;
 
 pub struct SimpleRenderer<BS, DS> {
     blob_service: BS,
@@ -24,23 +30,14 @@ impl<BS, DS> SimpleRenderer<BS, DS> {
     }
 }
 
-
 #[async_trait]
 impl<BS, DS> NarCalculationService for SimpleRenderer<BS, DS>
 where
     BS: BlobService + Clone,
     DS: DirectoryService + Clone,
 {
-    async fn calculate_nar(
-        &self,
-        root_node: &Node,
-    ) -> Result<(u64, [u8; 32]), pathinfoservice::Error> {
-        Ok(calculate_size_and_sha256(
-            root_node,
-            self.blob_service.clone(),
-            self.directory_service.clone(),
-        )
-        .await?)
+    async fn calculate_nar(&self, root_node: &Node) -> Result<(u64, [u8; 32]), pathinfoservice::Error> {
+        Ok(calculate_size_and_sha256(root_node, self.blob_service.clone(), self.directory_service.clone()).await?)
     }
 }
 
@@ -88,18 +85,9 @@ where
     DS: DirectoryService + Send,
 {
     // Initialize NAR writer
-    let nar_root_node = nar_writer::open(&mut w)
-        .await
-        .map_err(RenderError::NARWriterError)?;
+    let nar_root_node = nar_writer::open(&mut w).await.map_err(RenderError::NARWriterError)?;
 
-    walk_node(
-        nar_root_node,
-        root_node,
-        b"",
-        blob_service,
-        directory_service,
-    )
-    .await?;
+    walk_node(nar_root_node, root_node, b"", blob_service, directory_service).await?;
 
     Ok(())
 }
@@ -119,21 +107,14 @@ where
 {
     match castore_node {
         Node::Symlink { target, .. } => {
-            nar_node
-                .symlink(target.as_ref())
-                .await
-                .map_err(RenderError::NARWriterError)?;
+            nar_node.symlink(target.as_ref()).await.map_err(RenderError::NARWriterError)?;
         }
         Node::File {
             digest,
             size,
             executable,
         } => {
-            let mut blob_reader = match blob_service
-                .open_read(digest)
-                .await
-                .map_err(RenderError::BlobService)?
-            {
+            let mut blob_reader = match blob_service.open_read(digest).await.map_err(RenderError::BlobService)? {
                 Some(blob_reader) => Ok(BufReader::new(blob_reader)),
                 None => Err(RenderError::NARWriterError(io::Error::new(
                     io::ErrorKind::NotFound,
@@ -141,29 +122,16 @@ where
                 ))),
             }?;
 
-            nar_node
-                .file(*executable, *size, &mut blob_reader)
-                .await
-                .map_err(RenderError::NARWriterError)?;
+            nar_node.file(*executable, *size, &mut blob_reader).await.map_err(RenderError::NARWriterError)?;
         }
         Node::Directory { digest, .. } => {
             // look it up with the directory service
-            match directory_service
-                .get(digest)
-                .await
-                .map_err(RenderError::DirectoryService)?
-            {
+            match directory_service.get(digest).await.map_err(RenderError::DirectoryService)? {
                 // if it's None, that's an error!
-                None => Err(RenderError::DirectoryNotFound(
-                    *digest,
-                    bytes::Bytes::copy_from_slice(name),
-                ))?,
+                None => Err(RenderError::DirectoryNotFound(*digest, bytes::Bytes::copy_from_slice(name)))?,
                 Some(directory) => {
                     // start a directory node
-                    let mut nar_node_directory = nar_node
-                        .directory()
-                        .await
-                        .map_err(RenderError::NARWriterError)?;
+                    let mut nar_node_directory = nar_node.directory().await.map_err(RenderError::NARWriterError)?;
 
                     // We put blob_service, directory_service back here whenever we come up from
                     // the recursion.
@@ -173,26 +141,16 @@ where
                     // for each node in the directory, create a new entry with its name,
                     // and then recurse on that entry.
                     for (name, node) in directory.nodes() {
-                        let child_node = nar_node_directory
-                            .entry(name.as_ref())
-                            .await
-                            .map_err(RenderError::NARWriterError)?;
+                        let child_node =
+                            nar_node_directory.entry(name.as_ref()).await.map_err(RenderError::NARWriterError)?;
 
-                        (blob_service, directory_service) = Box::pin(walk_node(
-                            child_node,
-                            node,
-                            name.as_ref(),
-                            blob_service,
-                            directory_service,
-                        ))
-                        .await?;
+                        (blob_service, directory_service) =
+                            Box::pin(walk_node(child_node, node, name.as_ref(), blob_service, directory_service))
+                                .await?;
                     }
 
                     // close the directory
-                    nar_node_directory
-                        .close()
-                        .await
-                        .map_err(RenderError::NARWriterError)?;
+                    nar_node_directory.close().await.map_err(RenderError::NARWriterError)?;
 
                     return Ok((blob_service, directory_service));
                 }

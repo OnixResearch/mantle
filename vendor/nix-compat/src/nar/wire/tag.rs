@@ -139,7 +139,8 @@ pub(crate) use make;
 
 #[cfg(test)]
 mod test {
-    use super::super::tag::{self, Tag};
+    use super::super::tag::Tag;
+    use super::super::tag::{self};
 
     const TOK_A: [u8; 3] = [0xed, 0xef, 0x1c];
     const TOK_B: [u8; 3] = [0xed, 0xf0, 0x1c];

@@ -15,10 +15,18 @@
 mod pseudo_fs;
 
 pub mod vfs;
-pub use vfs::{
-    validate_path_component, BackFileSystem, BackendFileSystem, Vfs, VfsIndex, VfsOptions,
-    CURRENT_DIR_CSTR, EMPTY_CSTR, PARENT_DIR_CSTR, PROC_SELF_FD_CSTR, SLASH_ASCII, VFS_MAX_INO,
-};
+pub use vfs::validate_path_component;
+pub use vfs::BackFileSystem;
+pub use vfs::BackendFileSystem;
+pub use vfs::Vfs;
+pub use vfs::VfsIndex;
+pub use vfs::VfsOptions;
+pub use vfs::CURRENT_DIR_CSTR;
+pub use vfs::EMPTY_CSTR;
+pub use vfs::PARENT_DIR_CSTR;
+pub use vfs::PROC_SELF_FD_CSTR;
+pub use vfs::SLASH_ASCII;
+pub use vfs::VFS_MAX_INO;
 
 pub mod filesystem;
 pub mod server;

@@ -1,42 +1,35 @@
 //! Integration tests: generated inputs.ncl imports cleanly from Nickel.
 
-use crunch_project::*;
 use std::collections::BTreeMap;
+
+use crunch_project::*;
 
 fn lock_with_entries() -> Lockfile {
     let mut inputs = BTreeMap::new();
-    inputs.insert(
-        "nixpkgs".to_string(),
-        LockEntry {
-            kind: LockedKind::Git {
-                repository: "https://github.com/NixOS/nixpkgs.git".to_string(),
-                rev: "abc123def456".to_string(),
-                ref_name: Some("nixos-unstable".to_string()),
-            },
-            hash: LockedHash {
-                algo: HashAlgo::Sha256,
-                value: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
-            },
-            patches: vec![],
-            mirrors: vec![
-                "https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".to_string(),
-            ],
+    inputs.insert("nixpkgs".to_string(), LockEntry {
+        kind: LockedKind::Git {
+            repository: "https://github.com/NixOS/nixpkgs.git".to_string(),
+            rev: "abc123def456".to_string(),
+            ref_name: Some("nixos-unstable".to_string()),
         },
-    );
-    inputs.insert(
-        "hello-src".to_string(),
-        LockEntry {
-            kind: LockedKind::Tarball {
-                url: "https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz".to_string(),
-            },
-            hash: LockedHash {
-                algo: HashAlgo::Sha256,
-                value: "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".to_string(),
-            },
-            patches: vec![],
-            mirrors: vec![],
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
         },
-    );
+        patches: vec![],
+        mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".to_string()],
+    });
+    inputs.insert("hello-src".to_string(), LockEntry {
+        kind: LockedKind::Tarball {
+            url: "https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz".to_string(),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=".to_string(),
+        },
+        patches: vec![],
+        mirrors: vec![],
+    });
     Lockfile {
         version: SchemaVersion::CURRENT,
         inputs,
@@ -82,14 +75,8 @@ fn generated_inputs_field_values_match_lock() {
     let nixpkgs = record.value_by_name("nixpkgs").unwrap();
     let nix_rec = nixpkgs.as_record().unwrap();
     assert_eq!(nix_rec.value_by_name("type").unwrap().as_str(), Some("git"));
-    assert_eq!(
-        nix_rec.value_by_name("rev").unwrap().as_str(),
-        Some("abc123def456")
-    );
-    assert_eq!(
-        nix_rec.value_by_name("ref_name").unwrap().as_str(),
-        Some("nixos-unstable")
-    );
+    assert_eq!(nix_rec.value_by_name("rev").unwrap().as_str(), Some("abc123def456"));
+    assert_eq!(nix_rec.value_by_name("ref_name").unwrap().as_str(), Some("nixos-unstable"));
     assert_eq!(
         nix_rec.value_by_name("hash").unwrap().as_str(),
         Some("sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
@@ -103,10 +90,7 @@ fn generated_inputs_field_values_match_lock() {
     // Check hello-src fields
     let hello = record.value_by_name("hello-src").unwrap();
     let hello_rec = hello.as_record().unwrap();
-    assert_eq!(
-        hello_rec.value_by_name("type").unwrap().as_str(),
-        Some("tarball")
-    );
+    assert_eq!(hello_rec.value_by_name("type").unwrap().as_str(), Some("tarball"));
     assert_eq!(
         hello_rec.value_by_name("url").unwrap().as_str(),
         Some("https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz")
@@ -135,10 +119,7 @@ fn generated_inputs_importable_from_package_code() {
     let expr = crunch_eval::evaluate(&package_file, &[]).unwrap();
     let record = expr.as_record().unwrap();
 
-    assert_eq!(
-        record.value_by_name("nixpkgs_rev").unwrap().as_str(),
-        Some("abc123def456")
-    );
+    assert_eq!(record.value_by_name("nixpkgs_rev").unwrap().as_str(), Some("abc123def456"));
     assert_eq!(
         record.value_by_name("hello_url").unwrap().as_str(),
         Some("https://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz")
@@ -157,10 +138,7 @@ fn drift_detection_matches_generation() {
     assert_eq!(check_drift(&lock, None), DriftStatus::Missing);
 
     // Stale content
-    assert!(matches!(
-        check_drift(&lock, Some("old content")),
-        DriftStatus::Drifted { .. }
-    ));
+    assert!(matches!(check_drift(&lock, Some("old content")), DriftStatus::Drifted { .. }));
 }
 
 #[test]
@@ -181,8 +159,7 @@ fn manifest_loading_via_nickel_eval() {
     let file = dir.path().join("manifest.ncl");
     std::fs::write(&file, manifest_ncl).unwrap();
 
-    let manifest: ProjectManifest =
-        crunch_eval::evaluate_and_deserialize(&file, &[]).unwrap();
+    let manifest: ProjectManifest = crunch_eval::evaluate_and_deserialize(&file, &[]).unwrap();
 
     assert_eq!(manifest.version, "1.0.0");
     assert_eq!(manifest.inputs.len(), 1);

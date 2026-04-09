@@ -10,25 +10,47 @@
 
 use std::fs::File;
 use std::mem::size_of;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::FromRawFd;
+use std::os::unix::io::RawFd;
 use std::os::unix::prelude::CommandExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 
-use libc::{proc_pidpath, PROC_PIDPATHINFO_MAXSIZE};
+use libc::proc_pidpath;
+use libc::PROC_PIDPATHINFO_MAXSIZE;
 use nix::errno::Errno;
-use nix::sys::signal::{signal, SigHandler, Signal};
-use nix::sys::socket::{recv, send, setsockopt, SetSockOpt};
-use nix::sys::socket::{socketpair, AddressFamily, MsgFlags, SockFlag, SockType};
-use nix::unistd::{close, fork, getpid, read, ForkResult};
+use nix::sys::signal::signal;
+use nix::sys::signal::SigHandler;
+use nix::sys::signal::Signal;
+use nix::sys::socket::recv;
+use nix::sys::socket::send;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::socketpair;
+use nix::sys::socket::AddressFamily;
+use nix::sys::socket::MsgFlags;
+use nix::sys::socket::SetSockOpt;
+use nix::sys::socket::SockFlag;
+use nix::sys::socket::SockType;
+use nix::unistd::close;
+use nix::unistd::fork;
+use nix::unistd::getpid;
+use nix::unistd::read;
+use nix::unistd::ForkResult;
 use vm_memory::ByteValued;
 
-use super::{
-    Error::IoError, Error::SessionFailure, FuseBuf, FuseDevWriter, Reader, Result,
-    FUSE_HEADER_SIZE, FUSE_KERN_BUF_PAGES,
-};
+use super::Error::IoError;
+use super::Error::SessionFailure;
+use super::FuseBuf;
+use super::FuseDevWriter;
+use super::Reader;
+use super::Result;
+use super::FUSE_HEADER_SIZE;
+use super::FUSE_KERN_BUF_PAGES;
 use crate::transport::pagesize;
 
 // These follows definition from libfuse.
@@ -93,12 +115,7 @@ unsafe impl Send for FuseSession {}
 
 impl FuseSession {
     /// Create a new fuse session, without mounting/connecting to the in kernel fuse driver.
-    pub fn new(
-        mountpoint: &Path,
-        fsname: &str,
-        subtype: &str,
-        readonly: bool,
-    ) -> Result<FuseSession> {
+    pub fn new(mountpoint: &Path, fsname: &str, subtype: &str, readonly: bool) -> Result<FuseSession> {
         let dest = mountpoint
             .canonicalize()
             .map_err(|_| SessionFailure(format!("invalid mountpoint {:?}", mountpoint)))?;
@@ -175,9 +192,7 @@ impl FuseSession {
     /// Create a new fuse message channel.
     pub fn new_channel(&self) -> Result<FuseChannel> {
         if let Some(file) = &self.file {
-            let file = file
-                .try_clone()
-                .map_err(|e| SessionFailure(format!("dup fd: {}", e)))?;
+            let file = file.try_clone().map_err(|e| SessionFailure(format!("dup fd: {}", e)))?;
             let file_lock = self.file_lock.clone();
             FuseChannel::new(file, file_lock, self.bufsize)
         } else {
@@ -279,7 +294,8 @@ impl FuseChannel {
                         trace!("failld read EINTR");
                         continue;
                     }
-                    // EAGIN requires the caller to handle it, and the current implementation assumes that FD is blocking.
+                    // EAGIN requires the caller to handle it, and the current implementation assumes that FD is
+                    // blocking.
                     Errno::EAGAIN => {
                         trace!("failld read EAGAIN");
                         return Err(IoError(e.into()));
@@ -333,39 +349,20 @@ impl FuseChannel {
     }
 }
 
-fn fuse_kern_mount(
-    mountpoint: &Path,
-    fsname: &str,
-    subtype: &str,
-    rd_only: bool,
-) -> Result<(File, File)> {
+fn fuse_kern_mount(mountpoint: &Path, fsname: &str, subtype: &str, rd_only: bool) -> Result<(File, File)> {
     unsafe { signal(Signal::SIGCHLD, SigHandler::SigDfl) }
         .map_err(|e| SessionFailure(format!("fail to reset SIGCHLD handler{:?}", e)))?;
 
-    let (fd0, fd1) = socketpair(
-        AddressFamily::Unix,
-        SockType::Stream,
-        None,
-        SockFlag::empty(),
-    )
-    .map_err(|e| SessionFailure(format!("create socket failed {:?}", e)))?;
+    let (fd0, fd1) = socketpair(AddressFamily::Unix, SockType::Stream, None, SockFlag::empty())
+        .map_err(|e| SessionFailure(format!("create socket failed {:?}", e)))?;
 
-    setsockopt(fd0, SndBuf, &FS_SND_SIZE)
-        .map_err(|e| SessionFailure(format!("set fd0 socket snd size {:?}", e)))?;
-    setsockopt(fd0, RcvBuf, &FS_SND_SIZE)
-        .map_err(|e| SessionFailure(format!("set fd0 socket rcv size {:?}", e)))?;
-    setsockopt(fd1, SndBuf, &FS_SND_SIZE)
-        .map_err(|e| SessionFailure(format!("set fd1 socket snd size {:?}", e)))?;
-    setsockopt(fd1, RcvBuf, &FS_SND_SIZE)
-        .map_err(|e| SessionFailure(format!("set fd1 socket rcv size {:?}", e)))?;
+    setsockopt(fd0, SndBuf, &FS_SND_SIZE).map_err(|e| SessionFailure(format!("set fd0 socket snd size {:?}", e)))?;
+    setsockopt(fd0, RcvBuf, &FS_SND_SIZE).map_err(|e| SessionFailure(format!("set fd0 socket rcv size {:?}", e)))?;
+    setsockopt(fd1, SndBuf, &FS_SND_SIZE).map_err(|e| SessionFailure(format!("set fd1 socket snd size {:?}", e)))?;
+    setsockopt(fd1, RcvBuf, &FS_SND_SIZE).map_err(|e| SessionFailure(format!("set fd1 socket rcv size {:?}", e)))?;
 
-    let (mon_fd0, mon_fd1) = socketpair(
-        AddressFamily::Unix,
-        SockType::Stream,
-        None,
-        SockFlag::empty(),
-    )
-    .map_err(|e| SessionFailure(format!("create mon socket failed {:?}", e)))?;
+    let (mon_fd0, mon_fd1) = socketpair(AddressFamily::Unix, SockType::Stream, None, SockFlag::empty())
+        .map_err(|e| SessionFailure(format!("create mon socket failed {:?}", e)))?;
 
     let res;
     unsafe {
@@ -375,14 +372,12 @@ fn fuse_kern_mount(
     match res {
         ForkResult::Parent { .. } => {
             close(fd0).map_err(|e| SessionFailure(format!("parent close fd0 failed {:?}", e)))?;
-            close(mon_fd0)
-                .map_err(|e| SessionFailure(format!("parent close mon fd0 failed {:?}", e)))?;
+            close(mon_fd0).map_err(|e| SessionFailure(format!("parent close mon fd0 failed {:?}", e)))?;
             unsafe { Ok((File::from_raw_fd(fd1), File::from_raw_fd(mon_fd1))) }
         }
         ForkResult::Child => {
             close(fd1).map_err(|e| SessionFailure(format!("child close fd1 failed {:?}", e)))?;
-            close(mon_fd1)
-                .map_err(|e| SessionFailure(format!("child close mon fd1 failed {:?}", e)))?;
+            close(mon_fd1).map_err(|e| SessionFailure(format!("child close mon fd1 failed {:?}", e)))?;
 
             let mut daemon_path: Vec<u8> = Vec::with_capacity(PROC_PIDPATHINFO_MAXSIZE as usize);
             unsafe {
@@ -434,11 +429,13 @@ fn fuse_kern_umount(file: File) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs::File;
     use std::os::unix::io::FromRawFd;
     use std::path::Path;
+
     use vmm_sys_util::tempdir::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_new_session() {
@@ -457,9 +454,10 @@ mod tests {
     }
 }
 
-use crate::abi::fuse_abi::InHeader;
 #[cfg(feature = "async-io")]
 pub use asyncio::FuseDevTask;
+
+use crate::abi::fuse_abi::InHeader;
 
 #[cfg(feature = "async-io")]
 /// Task context to handle fuse request in asynchronous mode.
@@ -469,8 +467,12 @@ mod asyncio {
 
     use crate::api::filesystem::AsyncFileSystem;
     use crate::api::server::Server;
-    use crate::async_util::{AsyncDriver, AsyncExecutorState, AsyncUtil};
-    use crate::transport::{FuseBuf, Reader, Writer};
+    use crate::async_util::AsyncDriver;
+    use crate::async_util::AsyncExecutorState;
+    use crate::async_util::AsyncUtil;
+    use crate::transport::FuseBuf;
+    use crate::transport::Reader;
+    use crate::transport::Writer;
 
     /// Task context to handle fuse request in asynchronous mode.
     ///
@@ -507,12 +509,7 @@ mod asyncio {
         ///
         /// # Safety
         /// The caller must ensure `fd` is valid during the lifetime of the returned task object.
-        pub fn new(
-            buf_size: usize,
-            fd: RawFd,
-            server: Arc<Server<F>>,
-            state: AsyncExecutorState,
-        ) -> Self {
+        pub fn new(buf_size: usize, fd: RawFd, server: Arc<Server<F>>, state: AsyncExecutorState) -> Self {
             FuseDevTask {
                 fd,
                 server,
@@ -544,16 +541,12 @@ mod asyncio {
                         // consumption. Here we assume Reader won't be used anymore once
                         // we start to write to the Writer. To get rid of this hack,
                         // just allocate a dedicated data buffer for Writer.
-                        let buf = unsafe {
-                            std::slice::from_raw_parts_mut(self.buf.as_mut_ptr(), self.buf.len())
-                        };
+                        let buf = unsafe { std::slice::from_raw_parts_mut(self.buf.as_mut_ptr(), self.buf.len()) };
                         // Reader::new() and Writer::new() should always return success.
                         let reader = Reader::new(FuseBuf::new(&mut self.buf[0..len])).unwrap();
                         let writer = Writer::new(self.fd, buf).unwrap();
                         let result = unsafe {
-                            self.server
-                                .async_handle_message(drive.clone(), reader, writer, None, None)
-                                .await
+                            self.server.async_handle_message(drive.clone(), reader, writer, None, None).await
                         };
 
                         if let Err(e) = result {
@@ -593,8 +586,11 @@ mod asyncio {
 
         use super::*;
         use crate::api::server::Server;
-        use crate::api::{Vfs, VfsOptions};
-        use crate::async_util::{AsyncDriver, AsyncExecutor, AsyncExecutorState};
+        use crate::api::Vfs;
+        use crate::api::VfsOptions;
+        use crate::async_util::AsyncDriver;
+        use crate::async_util::AsyncExecutor;
+        use crate::async_util::AsyncExecutorState;
 
         #[test]
         fn test_fuse_task() {

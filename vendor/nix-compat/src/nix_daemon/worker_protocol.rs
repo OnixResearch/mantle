@@ -1,15 +1,17 @@
-use std::{
-    cmp::min,
-    collections::BTreeMap,
-    io::{Error, ErrorKind},
-};
+use std::cmp::min;
+use std::collections::BTreeMap;
+use std::io::Error;
+use std::io::ErrorKind;
 
-use nix_compat_derive::{NixDeserialize, NixSerialize};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use nix_compat_derive::NixDeserialize;
+use nix_compat_derive::NixSerialize;
+use num_enum::IntoPrimitive;
+use num_enum::TryFromPrimitive;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
-use crate::{log::VerbosityLevel, wire};
-
+use crate::log::VerbosityLevel;
+use crate::wire;
 use crate::wire::ProtocolVersion;
 
 pub(crate) static WORKER_MAGIC_1: u64 = 0x6e697863; // "nixc"
@@ -58,7 +60,13 @@ pub static MAX_SETTING_SIZE: usize = 1024;
 /// operations marked as obsolete are obsolete for Nix 2.20, not
 /// necessarily for Nix 2.3. We'll revisit this later on.
 #[derive(
-    Clone, Debug, PartialEq, TryFromPrimitive, IntoPrimitive, NixDeserialize, NixSerialize,
+    Clone,
+    Debug,
+    PartialEq,
+    TryFromPrimitive,
+    IntoPrimitive,
+    NixDeserialize,
+    NixSerialize
 )]
 #[nix(try_from = "u64", into = "u64")]
 #[repr(u64)]
@@ -149,8 +157,7 @@ pub struct ClientSettings {
 /// # Arguments
 ///
 /// * conn: connection with the Nix client.
-/// * nix_version: semantic version of the Nix daemon. "2.18.2" for
-///   instance.
+/// * nix_version: semantic version of the Nix daemon. "2.18.2" for instance.
 /// * trusted: trust level of the Nix client.
 ///
 /// # Return
@@ -176,9 +183,8 @@ where
         conn.flush().await?;
         let client_version = conn.read_u64_le().await?;
         // Parse into ProtocolVersion.
-        let client_version: ProtocolVersion = client_version
-            .try_into()
-            .map_err(|e| Error::new(ErrorKind::Unsupported, e))?;
+        let client_version: ProtocolVersion =
+            client_version.try_into().map_err(|e| Error::new(ErrorKind::Unsupported, e))?;
         if client_version < ProtocolVersion::from_parts(1, 10) {
             return Err(Error::new(
                 ErrorKind::Unsupported,
@@ -212,12 +218,8 @@ where
 /// Read a worker [Operation] from the wire.
 pub async fn read_op<R: AsyncReadExt + Unpin>(r: &mut R) -> std::io::Result<Operation> {
     let op_number = r.read_u64_le().await?;
-    Operation::try_from(op_number).map_err(|_| {
-        Error::new(
-            ErrorKind::InvalidData,
-            format!("Invalid OP number {op_number}"),
-        )
-    })
+    Operation::try_from(op_number)
+        .map_err(|_| Error::new(ErrorKind::InvalidData, format!("Invalid OP number {op_number}")))
 }
 
 /// Write a worker [Operation] to the wire.
@@ -239,9 +241,7 @@ pub enum Trust {
 /// targetting protocol versions pre-dating the trust notion, we
 /// decided not to implement it here.
 pub async fn write_worker_trust_level<W>(conn: &mut W, t: Trust) -> std::io::Result<()>
-where
-    W: AsyncReadExt + AsyncWriteExt + Unpin,
-{
+where W: AsyncReadExt + AsyncWriteExt + Unpin {
     match t {
         Trust::Trusted => conn.write_u64_le(1).await,
         Trust::NotTrusted => conn.write_u64_le(2).await,
@@ -272,9 +272,7 @@ mod tests {
             // Trusted (1 == client trusted
             .write(&[1, 0, 0, 0, 0, 0, 0, 0])
             .build();
-        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted)
-            .await
-            .unwrap();
+        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted).await.unwrap();
 
         assert_eq!(picked_version, PROTOCOL_VERSION)
     }
@@ -298,9 +296,7 @@ mod tests {
             // Trusted (1 == client trusted
             .write(&[1, 0, 0, 0, 0, 0, 0, 0])
             .build();
-        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted)
-            .await
-            .unwrap();
+        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted).await.unwrap();
 
         assert_eq!(picked_version, PROTOCOL_VERSION)
     }
@@ -325,9 +321,7 @@ mod tests {
             // Trusted (1 == client trusted
             //.write(&[1, 0, 0, 0, 0, 0, 0, 0])
             .build();
-        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted)
-            .await
-            .unwrap();
+        let picked_version = server_handshake_client(&mut test_conn, "2.18.2", Trust::Trusted).await.unwrap();
 
         assert_eq!(picked_version, ProtocolVersion::from_parts(1, 24))
     }

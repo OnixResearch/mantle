@@ -1,10 +1,12 @@
-use std::{
-    mem::MaybeUninit,
-    pin::Pin,
-    task::{self, Poll},
-};
+use std::mem::MaybeUninit;
+use std::pin::Pin;
+use std::task::Poll;
+use std::task::{self};
 
-use tokio::io::{self, AsyncBufRead, AsyncRead, ErrorKind::InvalidData};
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncRead;
+use tokio::io::ErrorKind::InvalidData;
+use tokio::io::{self};
 
 // Required reading for understanding this module.
 use crate::{
@@ -86,11 +88,7 @@ impl FileReader<'_, '_> {
 }
 
 impl AsyncRead for FileReader<'_, '_> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut task::Context,
-        buf: &mut io::ReadBuf,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut task::Context, buf: &mut io::ReadBuf) -> Poll<io::Result<()>> {
         Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
     }
 }
@@ -132,10 +130,12 @@ impl<'a, 'r> DirReader<'a, 'r> {
     /// We explicitly don't implement [Iterator], since treating this as
     /// a regular Rust iterator will surely lead you astray.
     ///
-    ///  * You must always consume the entire iterator, unless you abandon the entire archive reader.
+    ///  * You must always consume the entire iterator, unless you abandon the entire archive
+    ///    reader.
     ///  * You must abandon the entire archive reader on the first error.
     ///  * You must abandon the directory reader upon the first [None].
-    ///  * Even if you know the amount of elements up front, you must keep reading until you encounter [None].
+    ///  * Even if you know the amount of elements up front, you must keep reading until you
+    ///    encounter [None].
     pub async fn next(&mut self) -> io::Result<Option<Entry<'_, 'r>>> {
         // COME FROM the previous iteration: if we've already read an entry,
         // read its terminating TOK_PAR here.
@@ -148,8 +148,7 @@ impl<'a, 'r> DirReader<'a, 'r> {
         }
 
         let mut name = [MaybeUninit::uninit(); nar::wire::MAX_NAME_LEN + 1];
-        let name =
-            wire::read_bytes_buf(self.reader, &mut name, 1..=nar::wire::MAX_NAME_LEN).await?;
+        let name = wire::read_bytes_buf(self.reader, &mut name, 1..=nar::wire::MAX_NAME_LEN).await?;
 
         if name.contains(&0) || name.contains(&b'/') || name == b"." || name == b".." {
             return Err(InvalidData.into());

@@ -15,11 +15,15 @@ mod virtiofs {
     use std::os::unix::io::RawFd;
 
     #[cfg(feature = "vhost-user-fs")]
-    use vhost::vhost_user::message::{
-        VhostUserFSSlaveMsg, VhostUserFSSlaveMsgFlags, VHOST_USER_FS_SLAVE_ENTRIES,
-    };
+    use vhost::vhost_user::message::VhostUserFSSlaveMsg;
     #[cfg(feature = "vhost-user-fs")]
-    use vhost::vhost_user::{SlaveFsCacheReq, VhostUserMasterReqHandler};
+    use vhost::vhost_user::message::VhostUserFSSlaveMsgFlags;
+    #[cfg(feature = "vhost-user-fs")]
+    use vhost::vhost_user::message::VHOST_USER_FS_SLAVE_ENTRIES;
+    #[cfg(feature = "vhost-user-fs")]
+    use vhost::vhost_user::SlaveFsCacheReq;
+    #[cfg(feature = "vhost-user-fs")]
+    use vhost::vhost_user::VhostUserMasterReqHandler;
 
     use crate::abi::virtio_fs::RemovemappingOne;
     #[cfg(feature = "vhost-user-fs")]
@@ -40,14 +44,7 @@ mod virtiofs {
     /// directly accessed from host page cache.
     pub trait FsCacheReqHandler: Send + Sync + 'static {
         /// Setup a dedicated mapping so that guest can access file data in DAX style.
-        fn map(
-            &mut self,
-            foffset: u64,
-            moffset: u64,
-            len: u64,
-            flags: u64,
-            fd: RawFd,
-        ) -> io::Result<()>;
+        fn map(&mut self, foffset: u64, moffset: u64, len: u64, flags: u64, fd: RawFd) -> io::Result<()>;
 
         /// Remove those mappings that provide the access to file data.
         fn unmap(&mut self, requests: Vec<RemovemappingOne>) -> io::Result<()>;
@@ -55,14 +52,7 @@ mod virtiofs {
 
     #[cfg(feature = "vhost-user-fs")]
     impl FsCacheReqHandler for SlaveFsCacheReq {
-        fn map(
-            &mut self,
-            foffset: u64,
-            moffset: u64,
-            len: u64,
-            flags: u64,
-            fd: RawFd,
-        ) -> io::Result<()> {
+        fn map(&mut self, foffset: u64, moffset: u64, len: u64, flags: u64, fd: RawFd) -> io::Result<()> {
             let mut msg: VhostUserFSSlaveMsg = Default::default();
             msg.fd_offset[0] = foffset;
             msg.cache_offset[0] = moffset;

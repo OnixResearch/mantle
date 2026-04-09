@@ -1,9 +1,13 @@
-use crate::nixbase32;
-use bstr::ByteSlice;
-use data_encoding::{BASE64, BASE64_NOPAD, HEXLOWER};
 use std::cmp::Ordering;
 use std::fmt::Display;
+
+use bstr::ByteSlice;
+use data_encoding::BASE64;
+use data_encoding::BASE64_NOPAD;
+use data_encoding::HEXLOWER;
 use thiserror;
+
+use crate::nixbase32;
 
 mod algos;
 mod ca_hash;
@@ -136,9 +140,7 @@ impl NixHash {
             "md5" => nixbase32::decode_fixed(digest).map(NixHash::Md5),
             "sha1" => nixbase32::decode_fixed(digest).map(NixHash::Sha1),
             "sha256" => nixbase32::decode_fixed(digest).map(NixHash::Sha256),
-            "sha512" => nixbase32::decode_fixed(digest)
-                .map(Box::new)
-                .map(NixHash::Sha512),
+            "sha512" => nixbase32::decode_fixed(digest).map(Box::new).map(NixHash::Sha512),
             "blake3" => nixbase32::decode_fixed(digest).map(NixHash::Blake3),
             _ => return None,
         })
@@ -147,11 +149,7 @@ impl NixHash {
 
     /// Formats a [NixHash] in the Nix nixbase32 format.
     pub fn to_nix_nixbase32(&self) -> String {
-        format!(
-            "{}:{}",
-            self.algo(),
-            nixbase32::encode(self.digest_as_bytes())
-        )
+        format!("{}:{}", self.algo(), nixbase32::encode(self.digest_as_bytes()))
     }
 
     /// Parses a Nix SRI string to a NixHash.
@@ -184,25 +182,16 @@ impl NixHash {
         // checking.
         let mut spec = BASE64_NOPAD.specification();
         spec.check_trailing_bits = false;
-        let encoding = spec
-            .encoding()
-            .expect("Snix bug: failed to get the special base64 encoder for Nix SRI hashes");
+        let encoding = spec.encoding().expect("Snix bug: failed to get the special base64 encoder for Nix SRI hashes");
 
-        let digest = encoding
-            .decode(digest_str.trim_end_with(|c| c == '='))
-            .map_err(Error::InvalidBase64Encoding)?;
+        let digest = encoding.decode(digest_str.trim_end_with(|c| c == '=')).map_err(Error::InvalidBase64Encoding)?;
 
         Self::from_algo_and_digest(algo, &digest)
     }
 
     /// Writes a [NixHash] in SRI format to a [std::fmt::Write].
     pub fn write_sri_str(&self, w: &mut impl std::fmt::Write) -> Result<(), std::fmt::Error> {
-        write!(
-            w,
-            "{}-{}",
-            self.algo(),
-            BASE64.encode(self.digest_as_bytes())
-        )
+        write!(w, "{}-{}", self.algo(), BASE64.encode(self.digest_as_bytes()))
     }
 
     /// Formats a [NixHash] to an SRI string.
@@ -215,11 +204,7 @@ impl NixHash {
 
     /// Formats a [NixHash] in the Nix lowerhex format.
     pub fn to_nix_lowerhex_string(&self) -> String {
-        format!(
-            "{}:{}",
-            self.algo(),
-            HEXLOWER.encode(self.digest_as_bytes())
-        )
+        format!("{}:{}", self.algo(), HEXLOWER.encode(self.digest_as_bytes()))
     }
 
     /// This parses all known output formats for NixHash.
@@ -298,15 +283,11 @@ fn decode_digest(s: &[u8], algo: HashAlgo) -> Result<NixHash, Error> {
     // for the chosen hash algo, calculate the expected (decoded) digest length
     // (as bytes)
     let digest = if s.len() == HEXLOWER.encode_len(algo.digest_length()) {
-        HEXLOWER
-            .decode(s.as_ref())
-            .map_err(Error::InvalidBase16Encoding)?
+        HEXLOWER.decode(s.as_ref()).map_err(Error::InvalidBase16Encoding)?
     } else if s.len() == nixbase32::encode_len(algo.digest_length()) {
         nixbase32::decode(s).map_err(Error::InvalidBase32Encoding)?
     } else if s.len() == BASE64.encode_len(algo.digest_length()) {
-        BASE64
-            .decode(s.as_ref())
-            .map_err(Error::InvalidBase64Encoding)?
+        BASE64.decode(s.as_ref()).map_err(Error::InvalidBase64Encoding)?
     } else {
         Err(Error::InvalidDigestLength(algo))?
     };
@@ -316,15 +297,17 @@ fn decode_digest(s: &[u8], algo: HashAlgo) -> Result<NixHash, Error> {
 
 #[cfg(test)]
 mod tests {
-    use crate::nixhash::{HashAlgo, NixHash};
-    use hex_literal::hex;
-    use rstest::rstest;
     use std::sync::LazyLock;
 
+    use hex_literal::hex;
+    use rstest::rstest;
+
+    use crate::nixhash::HashAlgo;
+    use crate::nixhash::NixHash;
+
     const NIXHASH_SHA1: NixHash = NixHash::Sha1(hex!("6016777997c30ab02413cf5095622cd7924283ac"));
-    const NIXHASH_SHA256: NixHash = NixHash::Sha256(hex!(
-        "a5ce9c155ed09397614646c9717fc7cd94b1023d7b76b618d409e4fefd6e9d39"
-    ));
+    const NIXHASH_SHA256: NixHash =
+        NixHash::Sha256(hex!("a5ce9c155ed09397614646c9717fc7cd94b1023d7b76b618d409e4fefd6e9d39"));
     static NIXHASH_SHA512: LazyLock<NixHash> = LazyLock::new(|| {
         NixHash::Sha512(Box::new(hex!(
             "ab40d0be3541f0774bba7815d13d10b03252e96e95f7dbb4ee99a3b431c21662fd6971a020160e39848aa5f305b9be0f78727b2b0789e39f124d21e92b8f39ef"
@@ -332,7 +315,8 @@ mod tests {
     });
     const NIXHASH_MD5: NixHash = NixHash::Md5(hex!("c4874a8897440b393d862d8fd459073f"));
 
-    /// Test parsing a hash string in various formats, and also when/how the out-of-band algo is needed.
+    /// Test parsing a hash string in various formats, and also when/how the out-of-band algo is
+    /// needed.
     #[rstest]
     // regular SRI hashes. We test some funny encoding edge cases in a separate test.
     #[case::sri_sha1("sha1-YBZ3eZfDCrAkE89QlWIs15JCg6w=", HashAlgo::Sha1, NIXHASH_SHA1)]
@@ -347,11 +331,7 @@ mod tests {
         (*NIXHASH_SHA512).clone()
     )]
     // lowerhex
-    #[case::lowerhex_sha1(
-        "sha1:6016777997c30ab02413cf5095622cd7924283ac",
-        HashAlgo::Sha1,
-        NIXHASH_SHA1
-    )]
+    #[case::lowerhex_sha1("sha1:6016777997c30ab02413cf5095622cd7924283ac", HashAlgo::Sha1, NIXHASH_SHA1)]
     #[case::lowerhex_sha256(
         "sha256:a5ce9c155ed09397614646c9717fc7cd94b1023d7b76b618d409e4fefd6e9d39",
         HashAlgo::Sha256,
@@ -379,22 +359,15 @@ mod tests {
     #[case::nixbase32_sha512("sha512:3pkk3rbx4hls4lzwf4hfavvf9w0zgmr0prsb2l47471c850f5lzsqhnq8qv98wrxssdpxwmdvlm4cmh20yx25bqp95pgw216nzd0h5b", HashAlgo::Sha512, (*NIXHASH_SHA512).clone())]
     #[case::nixbase32_md5("md5:1z0xcx93rdhqykj2s4jy44m1y4", HashAlgo::Md5, NIXHASH_MD5)]
     fn from_str(#[case] s: &str, #[case] algo: HashAlgo, #[case] expected: NixHash) {
-        assert_eq!(
-            expected,
-            NixHash::from_str(s, Some(algo)).expect("must parse"),
-            "should parse"
-        );
+        assert_eq!(expected, NixHash::from_str(s, Some(algo)).expect("must parse"), "should parse");
 
         // We expect all s to contain an algo in-band, so expect it to parse without an algo too.
-        assert_eq!(
-            expected,
-            NixHash::from_str(s, None).expect("must parse without algo too"),
-            "should parse"
-        );
+        assert_eq!(expected, NixHash::from_str(s, None).expect("must parse without algo too"), "should parse");
 
         // Whenever we encounter a hash with a `$algo:` prefix, we pop that prefix
         // and test it parses without it if the algo is passed in externally, but fails if not.
-        // We do this for a subset of inputs here in the testcase, rather than adding 12 new testcases (4 algos x 3 encodings)
+        // We do this for a subset of inputs here in the testcase, rather than adding 12 new testcases (4
+        // algos x 3 encodings)
         if let Some(digest_str) = s
             .strip_prefix("sha1:")
             .or(s.strip_prefix("sha256:"))
@@ -403,11 +376,9 @@ mod tests {
         {
             assert_eq!(
                 expected,
-                NixHash::from_str(digest_str, Some(algo))
-                    .expect("must parse digest-only if algo specified")
+                NixHash::from_str(digest_str, Some(algo)).expect("must parse digest-only if algo specified")
             );
-            NixHash::from_str(digest_str, None)
-                .expect_err("must fail parsing digest-only if algo not specified");
+            NixHash::from_str(digest_str, None).expect_err("must fail parsing digest-only if algo not specified");
         }
     }
 
@@ -424,8 +395,7 @@ mod tests {
     /// Test parsing an SRI hash via the [nixhash::from_sri_str] method.
     #[test]
     fn from_sri_str() {
-        let nix_hash = NixHash::from_sri("sha256-pc6cFV7Qk5dhRkbJcX/HzZSxAj17drYY1Ank/v1unTk=")
-            .expect("must succeed");
+        let nix_hash = NixHash::from_sri("sha256-pc6cFV7Qk5dhRkbJcX/HzZSxAj17drYY1Ank/v1unTk=").expect("must succeed");
 
         assert_eq!(HashAlgo::Sha256, nix_hash.algo());
         assert_eq!(
@@ -436,9 +406,7 @@ mod tests {
 
     /// Test parsing sha512 SRI hash with various paddings, Nix accepts all of them.
     #[rstest]
-    #[case::no_padding(
-        "sha512-7g91TBvYoYQorRTqo+rYD/i5YnWvUBLnqDhPHxBJDaBW7smuPMeRp6E6JOFuVN9bzN0QnH1ToUU0u9c2CjALEQ"
-    )]
+    #[case::no_padding("sha512-7g91TBvYoYQorRTqo+rYD/i5YnWvUBLnqDhPHxBJDaBW7smuPMeRp6E6JOFuVN9bzN0QnH1ToUU0u9c2CjALEQ")]
     #[case::too_little_padding(
         "sha512-7g91TBvYoYQorRTqo+rYD/i5YnWvUBLnqDhPHxBJDaBW7smuPMeRp6E6JOFuVN9bzN0QnH1ToUU0u9c2CjALEQ="
     )]
@@ -473,10 +441,8 @@ mod tests {
     /// Ensure we fail on SRI hashes that Nix doesn't support.
     #[test]
     fn from_sri_str_unsupported() {
-        NixHash::from_sri(
-            "sha384-o4UVSl89mIB0sFUK+3jQbG+C9Zc9dRlV/Xd3KAvXEbhqxu0J5OAdg6b6VHKHwQ7U",
-        )
-        .expect_err("must fail");
+        NixHash::from_sri("sha384-o4UVSl89mIB0sFUK+3jQbG+C9Zc9dRlV/Xd3KAvXEbhqxu0J5OAdg6b6VHKHwQ7U")
+            .expect_err("must fail");
     }
 
     /// Ensure we reject invalid base64 encoding
@@ -497,20 +463,15 @@ mod tests {
     fn sha256_broken_padding() {
         let broken_base64 = "fgIr3TyFGDAXP5+qoAaiMKDg/a1MlT6Fv/S/DaA24S8";
         // if padded with a trailing '='
-        let expected_digest =
-            hex!("7e022bdd3c851830173f9faaa006a230a0e0fdad4c953e85bff4bf0da036e12f");
+        let expected_digest = hex!("7e022bdd3c851830173f9faaa006a230a0e0fdad4c953e85bff4bf0da036e12f");
 
         // passing hash algo out of band should succeed
-        let nix_hash = NixHash::from_str(
-            &format!("sha256-{}", &broken_base64),
-            Some(HashAlgo::Sha256),
-        )
-        .expect("must succeed");
+        let nix_hash =
+            NixHash::from_str(&format!("sha256-{}", &broken_base64), Some(HashAlgo::Sha256)).expect("must succeed");
         assert_eq!(&expected_digest, &nix_hash.digest_as_bytes());
 
         // not passing hash algo out of band should succeed
-        let nix_hash =
-            NixHash::from_str(&format!("sha256-{}", &broken_base64), None).expect("must succeed");
+        let nix_hash = NixHash::from_str(&format!("sha256-{}", &broken_base64), None).expect("must succeed");
         assert_eq!(&expected_digest, &nix_hash.digest_as_bytes());
 
         // not passing SRI, but hash algo out of band should fail
@@ -526,17 +487,14 @@ mod tests {
     #[test]
     fn sha256_weird_base64() {
         let weird_base64 = "syceJMUEknBDCHK8eGs6rUU3IQn+HnQfURfCrDxYPa9=";
-        let expected_digest =
-            hex!("b3271e24c5049270430872bc786b3aad45372109fe1e741f5117c2ac3c583daf");
+        let expected_digest = hex!("b3271e24c5049270430872bc786b3aad45372109fe1e741f5117c2ac3c583daf");
 
         let nix_hash =
-            NixHash::from_str(&format!("sha256-{}", &weird_base64), Some(HashAlgo::Sha256))
-                .expect("must succeed");
+            NixHash::from_str(&format!("sha256-{}", &weird_base64), Some(HashAlgo::Sha256)).expect("must succeed");
         assert_eq!(&expected_digest, &nix_hash.digest_as_bytes());
 
         // not passing hash algo out of band should succeed
-        let nix_hash =
-            NixHash::from_str(&format!("sha256-{}", &weird_base64), None).expect("must succeed");
+        let nix_hash = NixHash::from_str(&format!("sha256-{}", &weird_base64), None).expect("must succeed");
         assert_eq!(&expected_digest, &nix_hash.digest_as_bytes());
 
         // not passing SRI, but hash algo out of band should fail
@@ -546,17 +504,14 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn serialize_deserialize() {
-        let nixhash_actual = NixHash::Sha256(hex!(
-            "b3271e24c5049270430872bc786b3aad45372109fe1e741f5117c2ac3c583daf"
-        ));
+        let nixhash_actual = NixHash::Sha256(hex!("b3271e24c5049270430872bc786b3aad45372109fe1e741f5117c2ac3c583daf"));
         let nixhash_str_json = "\"sha256-syceJMUEknBDCHK8eGs6rUU3IQn+HnQfURfCrDxYPa8=\"";
 
         let serialized = serde_json::to_string(&nixhash_actual).expect("can serialize");
 
         assert_eq!(nixhash_str_json, &serialized);
 
-        let deserialized: NixHash =
-            serde_json::from_str(nixhash_str_json).expect("must deserialize");
+        let deserialized: NixHash = serde_json::from_str(nixhash_str_json).expect("must deserialize");
         assert_eq!(&nixhash_actual, &deserialized);
     }
 }

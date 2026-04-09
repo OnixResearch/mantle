@@ -1,12 +1,19 @@
-use petgraph::{
-    graph::{DiGraph, NodeIndex},
-    visit::{Bfs, DfsPostOrder, Walker},
-};
-use std::collections::{HashMap, HashSet, hash_map};
-use tracing::{instrument, warn};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::hash_map;
 
+use petgraph::graph::DiGraph;
+use petgraph::graph::NodeIndex;
+use petgraph::visit::Bfs;
+use petgraph::visit::DfsPostOrder;
+use petgraph::visit::Walker;
+use tracing::instrument;
+use tracing::warn;
+
+use crate::B3Digest;
+use crate::Directory;
+use crate::Node;
 use crate::directoryservice::order_validator::OrderingError;
-use crate::{B3Digest, Directory, Node};
 
 /// This represents a full (and validated) graph of [Directory] nodes.
 /// It can be constructed using [DirectoryGraphBuilder], and is normally used to
@@ -40,22 +47,16 @@ impl DirectoryGraph {
         let order = match order {
             DirectoryOrder::RootToLeaves => {
                 // do a BFS traversal of the graph, starting with the root node
-                Bfs::new(&self.graph, self.root_idx)
-                    .iter(&self.graph)
-                    .collect::<Vec<_>>()
+                Bfs::new(&self.graph, self.root_idx).iter(&self.graph).collect::<Vec<_>>()
             }
             DirectoryOrder::LeavesToRoot => {
                 // do a DFS Post-Order traversal of the graph, starting with the root node
-                DfsPostOrder::new(&self.graph, self.root_idx)
-                    .iter(&self.graph)
-                    .collect::<Vec<_>>()
+                DfsPostOrder::new(&self.graph, self.root_idx).iter(&self.graph).collect::<Vec<_>>()
             }
         };
 
         let (mut nodes, _edges) = self.graph.into_nodes_edges();
-        order
-            .into_iter()
-            .map(move |i| std::mem::take(&mut nodes[i.index()].weight))
+        order.into_iter().map(move |i| std::mem::take(&mut nodes[i.index()].weight))
     }
 
     /// Drains the graph in Leaves-To-Root Order.
@@ -71,9 +72,7 @@ impl DirectoryGraph {
     }
 
     pub fn root(&self) -> &Directory {
-        self.graph
-            .node_weight(self.root_idx)
-            .expect("Snix bug: root not found")
+        self.graph.node_weight(self.root_idx).expect("Snix bug: root not found")
     }
 }
 
@@ -143,10 +142,7 @@ impl DirectoryGraphBuilder {
         let directory_digest = directory.digest();
         let directory_size = directory.size();
 
-        let hash_map::Entry::Vacant(entry) = self
-            .digest_to_node_idx_size
-            .entry(directory_digest.to_owned())
-        else {
+        let hash_map::Entry::Vacant(entry) = self.digest_to_node_idx_size.entry(directory_digest.to_owned()) else {
             warn!("directory received multiple times");
             return Ok(());
         };
@@ -159,17 +155,8 @@ impl DirectoryGraphBuilder {
             // We also obviously won't find ourselves in [self.rtl_edges_todo],
             // as we're the first element.
             if self.graph.node_count() == 1 {
-                let directory = self
-                    .graph
-                    .node_weight(node_idx)
-                    .expect("Snix bug: node not found")
-                    .to_owned();
-                if directory_digest
-                    != self
-                        .exp_root_digest
-                        .take()
-                        .expect("exp_root_digest to be some")
-                {
+                let directory = self.graph.node_weight(node_idx).expect("Snix bug: node not found").to_owned();
+                if directory_digest != self.exp_root_digest.take().expect("exp_root_digest to be some") {
                     Err(OrderingError::Unexpected { directory })?
                 }
             } else if let Some((digest, (size, src_idxs))) =
@@ -184,11 +171,7 @@ impl DirectoryGraphBuilder {
                     self.graph.add_edge(src_idx, node_idx, ());
                 }
             } else {
-                let directory = self
-                    .graph
-                    .node_weight(node_idx)
-                    .expect("Snix bug: node not found")
-                    .to_owned();
+                let directory = self.graph.node_weight(node_idx).expect("Snix bug: node not found").to_owned();
 
                 Err(OrderingError::Unexpected { directory })?
             }
@@ -196,10 +179,7 @@ impl DirectoryGraphBuilder {
 
         // Look at outgoing digests. For this we have to retrieve the previously-inserted Directory again.
         // We copy out the digests (as all code paths add edges, which mutates the graph).
-        let directory = self
-            .graph
-            .node_weight(node_idx)
-            .expect("Snix bug: node not found");
+        let directory = self.graph.node_weight(node_idx).expect("Snix bug: node not found");
         let out_digests_sizes = directory
             .nodes()
             .filter_map(|(_, node)| {
@@ -215,9 +195,7 @@ impl DirectoryGraphBuilder {
             match self.insertion_order {
                 DirectoryOrder::RootToLeaves => {
                     // Add outgoing pointers to the graph, or to [self.rtl_edges_todo], if not yet known.
-                    if let Some(&(out_node_idx, seen_dir_size)) =
-                        self.digest_to_node_idx_size.get(&out_digest)
-                    {
+                    if let Some(&(out_node_idx, seen_dir_size)) = self.digest_to_node_idx_size.get(&out_digest) {
                         // check size
                         if seen_dir_size != out_size {
                             Err(OrderingError::WrongSize {
@@ -250,9 +228,7 @@ impl DirectoryGraphBuilder {
                 DirectoryOrder::LeavesToRoot => {
                     // Check all pointers in the currently added directory have already been added previously;
                     // each sent directory may only refer to directories already sent.
-                    if let Some(&(out_node_idx, seen_dir_size)) =
-                        self.digest_to_node_idx_size.get(&out_digest)
-                    {
+                    if let Some(&(out_node_idx, seen_dir_size)) = self.digest_to_node_idx_size.get(&out_digest) {
                         // check the size from the pointer matches actual size
                         if seen_dir_size != out_size {
                             Err(OrderingError::WrongSize {
@@ -264,10 +240,7 @@ impl DirectoryGraphBuilder {
                         // draw the edge
                         self.graph.add_edge(node_idx, out_node_idx, ());
                     } else {
-                        let directory = self
-                            .graph
-                            .node_weight(node_idx)
-                            .expect("Snix bug: node not found");
+                        let directory = self.graph.node_weight(node_idx).expect("Snix bug: node not found");
 
                         Err(OrderingError::UnknownLTR {
                             digest: out_digest,
@@ -303,16 +276,10 @@ impl DirectoryGraphBuilder {
                 }
 
                 if !self.rtl_edges_todo.is_empty() {
-                    return Err(OrderingError::DirectoriesMissing(HashSet::from_iter(
-                        self.rtl_edges_todo.into_keys(),
-                    )));
+                    return Err(OrderingError::DirectoriesMissing(HashSet::from_iter(self.rtl_edges_todo.into_keys())));
                 }
 
-                debug_assert_eq!(
-                    self.graph.externals(petgraph::Incoming).count(),
-                    1,
-                    "one incoming"
-                );
+                debug_assert_eq!(self.graph.externals(petgraph::Incoming).count(), 1, "one incoming");
                 Ok(DirectoryGraph {
                     graph: self.graph,
                     // 1. petgraph invariant: adding nodes or edges does not alter indices
@@ -332,12 +299,9 @@ impl DirectoryGraphBuilder {
 
                 if incomings.len() != 1 {
                     return Err(OrderingError::DirectoriesMissing(HashSet::from_iter(
-                        incomings.iter().map(|i| {
-                            self.graph
-                                .node_weight(*i)
-                                .expect("Snix bug: node not found")
-                                .digest()
-                        }),
+                        incomings
+                            .iter()
+                            .map(|i| self.graph.node_weight(*i).expect("Snix bug: node not found").digest()),
                     )));
                 }
                 Ok(DirectoryGraph {
@@ -351,21 +315,23 @@ impl DirectoryGraphBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::DirectoryOrder;
-    use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
-    use crate::fixtures::{DIRECTORY_A, DIRECTORY_B, DIRECTORY_C};
-    use crate::{Directory, Node};
-    use rstest::rstest;
     use std::sync::LazyLock;
 
+    use rstest::rstest;
+
+    use super::DirectoryOrder;
+    use crate::Directory;
+    use crate::Node;
+    use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
+    use crate::fixtures::DIRECTORY_A;
+    use crate::fixtures::DIRECTORY_B;
+    use crate::fixtures::DIRECTORY_C;
+
     pub static BROKEN_PARENT_DIRECTORY: LazyLock<Directory> = LazyLock::new(|| {
-        Directory::try_from_iter([(
-            "foo".try_into().unwrap(),
-            Node::Directory {
-                digest: DIRECTORY_A.digest(),
-                size: DIRECTORY_A.size() + 42, // wrong!
-            },
-        )])
+        Directory::try_from_iter([("foo".try_into().unwrap(), Node::Directory {
+            digest: DIRECTORY_A.digest(),
+            size: DIRECTORY_A.size() + 42, // wrong!
+        })])
         .unwrap()
     });
 
@@ -381,8 +347,8 @@ mod tests {
     #[case::ltr_same_child(DirectoryOrder::LeavesToRoot, &[&*DIRECTORY_A, &*DIRECTORY_A, &*DIRECTORY_C], false, Some(vec![&*DIRECTORY_A, &*DIRECTORY_C]))]
     /// Uploading A, then C (referring to A twice) should succeed.
     #[case::ltr_same_child_dedup(DirectoryOrder::LeavesToRoot, &[&*DIRECTORY_A, &*DIRECTORY_C], false, Some(vec![&*DIRECTORY_A, &*DIRECTORY_C]))]
-    /// Uploading A, then C (referring to A twice), then B (itself referring to A) should fail during close,
-    /// as B itself would be left unconnected.
+    /// Uploading A, then C (referring to A twice), then B (itself referring to A) should fail
+    /// during close, as B itself would be left unconnected.
     #[case::ltr_unconnected_node(DirectoryOrder::LeavesToRoot, &[&*DIRECTORY_A, &*DIRECTORY_C, &*DIRECTORY_B], false, None)]
     /// Uploading B (referring to A) should fail immediately, because A was never uploaded.
     #[case::ltr_dangling_pointer(DirectoryOrder::LeavesToRoot, &[&*DIRECTORY_B], true, None)]
@@ -395,7 +361,8 @@ mod tests {
     #[case::rtl_simple_closure(DirectoryOrder::RootToLeaves, &[&*DIRECTORY_B, &*DIRECTORY_A], false, Some(vec![&*DIRECTORY_A, &*DIRECTORY_B]))]
     /// Downloading C (referring to A twice), then A should succeed.
     #[case::rtl_same_child_dedup(DirectoryOrder::RootToLeaves, &[&*DIRECTORY_C, &*DIRECTORY_A], false, Some(vec![&*DIRECTORY_A, &*DIRECTORY_C]))]
-    /// Downloading C, then B (both referring to A but not referring to each other) should fail immediately as B has no connection to C (the root)
+    /// Downloading C, then B (both referring to A but not referring to each other) should fail
+    /// immediately as B has no connection to C (the root)
     #[case::rtl_unconnected_node(DirectoryOrder::RootToLeaves, &[&*DIRECTORY_C, &*DIRECTORY_B], true, None)]
     /// Downloading a directory which refers to another Directory with a wrong size should fail.
     #[case::rtl_wrong_size_in_parent(DirectoryOrder::RootToLeaves, &[&*BROKEN_PARENT_DIRECTORY, &*DIRECTORY_A], true, None)]
@@ -410,22 +377,16 @@ mod tests {
         let mut builder = match insertion_order {
             // in the RTL case, pull the first element from directories_to_upload and initialize with it
             DirectoryOrder::RootToLeaves => DirectoryGraphBuilder::new_root_to_leaves(
-                it.peek()
-                    .expect("directories_to_upload to not be empty")
-                    .digest(),
+                it.peek().expect("directories_to_upload to not be empty").digest(),
             ),
             DirectoryOrder::LeavesToRoot => DirectoryGraphBuilder::new_leaves_to_root(),
         };
 
         while let Some(d) = it.next() {
             if it.peek().is_none() /* is last */ && exp_fail_upload_last {
-                builder
-                    .try_insert((*d).to_owned())
-                    .expect_err("last insert to fail");
+                builder.try_insert((*d).to_owned()).expect_err("last insert to fail");
             } else {
-                builder
-                    .try_insert((*d).to_owned())
-                    .expect("insert to succeed");
+                builder.try_insert((*d).to_owned()).expect("insert to succeed");
             }
         }
 
@@ -439,13 +400,7 @@ mod tests {
             // drain
             let drained_ltr = directory_graph.drain_leaves_to_root().collect::<Vec<_>>();
 
-            assert_eq!(
-                exp_drain_ltr
-                    .iter()
-                    .map(|d| (*d).to_owned())
-                    .collect::<Vec<_>>(),
-                drained_ltr
-            );
+            assert_eq!(exp_drain_ltr.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>(), drained_ltr);
         } else {
             assert!(builder.build().is_err(), "expected build to fail");
         }

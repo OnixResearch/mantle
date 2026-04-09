@@ -8,13 +8,17 @@ use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
-use crunch_glue::{CrunchDerivation, ConversionCache, Input};
-use crunch_build::{DerivationRegistry, populate_registry};
+use crunch_build::DerivationRegistry;
+use crunch_build::populate_registry;
+use crunch_glue::ConversionCache;
+use crunch_glue::CrunchDerivation;
+use crunch_glue::Input;
 
 fn test_keypair() -> crunch_build::KeyPair {
     crunch_build::load_keypair(
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 fn test_trusted_keys() -> Vec<nix_compat::narinfo::VerifyingKey> {
@@ -28,10 +32,7 @@ fn stdlib_import_path() -> Vec<OsString> {
 
 /// Check if bwrap is available on this system.
 fn has_bwrap() -> bool {
-    std::process::Command::new("bwrap")
-        .arg("--version")
-        .output()
-        .is_ok_and(|o| o.status.success())
+    std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
 // -- Cache hit test (no sandbox needed) --
@@ -72,23 +73,21 @@ fn cache_hit_skips_build() {
     let mut cc = ConversionCache::default();
     let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_build::buildservice::DummyBuildService;
         use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_castore::directoryservice::RedbDirectoryService;
+        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
         .unwrap();
 
         let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
@@ -101,7 +100,11 @@ fn cache_hit_skips_build() {
             directory_service,
             DummyBuildService::default(),
             pis,
-            PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
             false,
         );
 
@@ -109,10 +112,7 @@ fn cache_hit_skips_build() {
     });
 
     // DummyBuildService errors when build is attempted (no cache hit)
-    assert!(
-        result.is_err(),
-        "should fail because output doesn't exist and DummyBuildService can't build"
-    );
+    assert!(result.is_err(), "should fail because output doesn't exist and DummyBuildService can't build");
     let err = result.unwrap_err().to_string();
     assert!(
         err.contains("builds are not supported")
@@ -126,7 +126,8 @@ fn cache_hit_skips_build() {
 
 #[test]
 fn fod_hash_mismatch_error() {
-    use nix_compat::nixhash::{CAHash, NixHash};
+    use nix_compat::nixhash::CAHash;
+    use nix_compat::nixhash::NixHash;
 
     // Expected sha256 hash
     let expected = [0xAA_u8; 32];
@@ -146,8 +147,7 @@ fn fod_hash_mismatch_error() {
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: Some(crunch_glue::FixedOutput {
-            hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-                .to_string(),
+            hash: "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba".to_string(),
             algo: "sha256".to_string(),
             mode: "recursive".to_string(),
         }),
@@ -157,8 +157,8 @@ fn fod_hash_mismatch_error() {
     let mut cc = ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
     // The FOD has ca_hash set — verify it was constructed
     let out = nix_drv.outputs.get("out").unwrap();
     assert!(out.ca_hash.is_some(), "FOD should have ca_hash on output");
@@ -169,10 +169,7 @@ fn fod_hash_mismatch_error() {
     match &out.ca_hash {
         Some(CAHash::Nar(NixHash::Sha256(digest))) => {
             let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-            assert_eq!(
-                hex,
-                "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba"
-            );
+            assert_eq!(hex, "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba");
         }
         other => panic!("expected Nar(Sha256), got: {other:?}"),
     }
@@ -207,31 +204,22 @@ fn end_to_end_trivial_build() {
     let mut cc = ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
-    let out_path = nix_drv
-        .outputs
-        .get("out")
-        .unwrap()
-        .path
-        .as_ref()
-        .unwrap()
-        .to_absolute_path();
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
+    let out_path = nix_drv.outputs.get("out").unwrap().path.as_ref().unwrap().to_absolute_path();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_castore::directoryservice::RedbDirectoryService;
+        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
         .unwrap();
 
         #[cfg(target_os = "linux")]
@@ -241,11 +229,8 @@ fn end_to_end_trivial_build() {
             let workdir = std::env::temp_dir().join("crunch-test-builds");
             std::fs::create_dir_all(&workdir).unwrap();
 
-            let build_service = BubblewrapBuildService::new(
-                workdir.clone(),
-                blob_service.clone(),
-                directory_service.clone(),
-            );
+            let build_service =
+                BubblewrapBuildService::new(workdir.clone(), blob_service.clone(), directory_service.clone());
 
             let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
                 "test".to_string(),
@@ -257,7 +242,11 @@ fn end_to_end_trivial_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
+                PathBuf::from("/nix/store"),
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                true,
                 true,
             );
 
@@ -271,9 +260,7 @@ fn end_to_end_trivial_build() {
 
         #[cfg(not(target_os = "linux"))]
         {
-            Err(crunch_build::Error::Sandbox(std::io::Error::other(
-                "not on linux",
-            )))
+            Err(crunch_build::Error::Sandbox(std::io::Error::other("not on linux")))
         }
     });
 
@@ -327,28 +314,23 @@ fn end_to_end_ca_build() {
     let mut cc = ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
     // CA derivation: output paths are None before build
-    assert!(
-        nix_drv.outputs["out"].path.is_none(),
-        "CA output should be None before build"
-    );
+    assert!(nix_drv.outputs["out"].path.is_none(), "CA output should be None before build");
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_castore::directoryservice::RedbDirectoryService;
+        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
         .unwrap();
 
         #[cfg(target_os = "linux")]
@@ -358,11 +340,8 @@ fn end_to_end_ca_build() {
             let workdir = std::env::temp_dir().join("crunch-test-ca-builds");
             std::fs::create_dir_all(&workdir).unwrap();
 
-            let build_service = BubblewrapBuildService::new(
-                workdir.clone(),
-                blob_service.clone(),
-                directory_service.clone(),
-            );
+            let build_service =
+                BubblewrapBuildService::new(workdir.clone(), blob_service.clone(), directory_service.clone());
 
             let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
                 "test".to_string(),
@@ -374,7 +353,11 @@ fn end_to_end_ca_build() {
                 directory_service,
                 build_service,
                 pis,
-                PathBuf::from("/nix/store"), nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
+                PathBuf::from("/nix/store"),
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                true,
                 true,
             );
 
@@ -387,9 +370,7 @@ fn end_to_end_ca_build() {
 
         #[cfg(not(target_os = "linux"))]
         {
-            Err(crunch_build::Error::Sandbox(std::io::Error::other(
-                "not on linux",
-            )))
+            Err(crunch_build::Error::Sandbox(std::io::Error::other("not on linux")))
         }
     });
 
@@ -401,10 +382,7 @@ fn end_to_end_ca_build() {
             let pi = &outcome.outputs["out"];
             // CA output should have a store path now
             let ca_path = pi.store_path.to_absolute_path();
-            assert!(
-                ca_path.starts_with("/nix/store/"),
-                "CA path should be in store: {ca_path}"
-            );
+            assert!(ca_path.starts_with("/nix/store/"), "CA path should be in store: {ca_path}");
             // CA field should be set
             assert!(pi.ca.is_some(), "CA PathInfo should have ca field");
 
@@ -412,11 +390,7 @@ fn end_to_end_ca_build() {
             let drv_abs = drv_path.to_absolute_path();
             let resolved = kp.get_output_path(&drv_abs, "out");
             assert!(resolved.is_some(), "CA output should be resolved in KnownPaths");
-            assert_eq!(
-                resolved.unwrap().to_absolute_path(),
-                ca_path,
-                "resolved path should match build outcome"
-            );
+            assert_eq!(resolved.unwrap().to_absolute_path(), ca_path, "resolved path should match build outcome");
 
             // Clean up the output from the store
             let _ = std::fs::remove_dir_all(&ca_path);
@@ -445,8 +419,7 @@ fn eval_hello_world_with_seed() {
     import_paths.push(examples_dir.into());
 
     let hello_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/hello-world.ncl");
-    let drv: CrunchDerivation =
-        crunch_eval::evaluate_and_deserialize(&hello_path, &import_paths).unwrap();
+    let drv: CrunchDerivation = crunch_eval::evaluate_and_deserialize(&hello_path, &import_paths).unwrap();
 
     assert_eq!(drv.name, "hello-world");
     assert!(!drv.inputs.is_empty());
@@ -456,10 +429,7 @@ fn eval_hello_world_with_seed() {
     for input in &drv.inputs {
         match input {
             Input::Source(p) => {
-                assert!(
-                    p.starts_with("/nix/store/"),
-                    "source input should be a store path: {p}"
-                );
+                assert!(p.starts_with("/nix/store/"), "source input should be a store path: {p}");
             }
             Input::Derivation(_) | Input::OutputSelection(_) => {
                 panic!("hello-world should only have source inputs from seed");
@@ -474,16 +444,15 @@ fn eval_hello_world_with_seed() {
     // CA derivations have None output paths until after build.
     // Input-addressed derivations have Some.
     if drv.addressing_mode == "content-addressed" {
-        assert!(nix_drv.outputs.get("out").unwrap().path.is_none(),
-            "CA derivation should have None output path before build");
+        assert!(
+            nix_drv.outputs.get("out").unwrap().path.is_none(),
+            "CA derivation should have None output path before build"
+        );
     } else {
         assert!(nix_drv.outputs.get("out").unwrap().path.is_some());
     }
     // Should have source inputs
-    assert!(
-        !nix_drv.input_sources.is_empty(),
-        "should have input_sources from seed"
-    );
+    assert!(!nix_drv.input_sources.is_empty(), "should have input_sources from seed");
 }
 
 // ── Fetcher integration tests ──────────────────────────────────────────
@@ -500,10 +469,7 @@ fn spawn_http_server(body: Vec<u8>) -> (std::net::SocketAddr, std::thread::JoinH
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
 
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                body.len()
-            );
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
             let _ = stream.write_all(response.as_bytes());
             let _ = stream.write_all(&body);
             let _ = stream.flush();
@@ -550,8 +516,8 @@ fn fetchurl_downloads_and_verifies_hash() {
     let mut cc = ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
     let out_path = nix_drv
         .outputs
         .get("out")
@@ -564,17 +530,15 @@ fn fetchurl_downloads_and_verifies_hash() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_castore::directoryservice::RedbDirectoryService;
+        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
         .unwrap();
 
         let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
@@ -590,7 +554,10 @@ fn fetchurl_downloads_and_verifies_hash() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
             true,
         );
 
@@ -604,10 +571,7 @@ fn fetchurl_downloads_and_verifies_hash() {
             assert!(!outcome.cached);
             assert!(outcome.outputs.contains_key("out"));
 
-            assert!(
-                std::path::Path::new(&out_path).exists(),
-                "output should exist at {out_path}"
-            );
+            assert!(std::path::Path::new(&out_path).exists(), "output should exist at {out_path}");
             let fetched = std::fs::read(&out_path).unwrap();
             assert_eq!(fetched, content, "fetched content should match");
         }
@@ -634,8 +598,9 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
     tar_builder.append_dir_all("project-v1.0", &inner).unwrap();
     let tar_data = tar_builder.into_inner().unwrap();
 
-    use flate2::write::GzEncoder;
     use std::io::Write;
+
+    use flate2::write::GzEncoder;
     let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::fast());
     encoder.write_all(&tar_data).unwrap();
     let gz_data = encoder.finish().unwrap();
@@ -670,8 +635,8 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
     let mut cc = ConversionCache::default();
     let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
-        let mut kp = DerivationRegistry::default();
-        populate_registry(&mut kp, cc.iter_entries());
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
     let out_path = nix_drv
         .outputs
         .get("out")
@@ -684,17 +649,15 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
         use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::{RedbDirectoryService, RedbDirectoryServiceConfig};
+        use snix_castore::directoryservice::RedbDirectoryService;
+        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: None,
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
         .unwrap();
 
         let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
@@ -710,7 +673,10 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
             build_service,
             pis,
             output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR, test_keypair(), test_trusted_keys(), true,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
             true,
         );
 

@@ -5,16 +5,23 @@
 
 use std::cmp::Ordering;
 use std::ffi::CStr;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::fs::File;
 use std::io;
 use std::os::fd::AsFd;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
+use std::os::unix::io::FromRawFd;
+use std::os::unix::io::RawFd;
 use std::sync::Arc;
 
-use vmm_sys_util::fam::{FamStruct, FamStructWrapper};
+use vmm_sys_util::fam::FamStruct;
+use vmm_sys_util::fam::FamStructWrapper;
 
-use super::mount_fd::{MPRResult, MountFd, MountFds, MountId};
+use super::mount_fd::MPRResult;
+use super::mount_fd::MountFd;
+use super::mount_fd::MountFds;
+use super::mount_fd::MountId;
 use crate::api::EMPTY_CSTR;
 
 /// An arbitrary maximum size for CFileHandle::f_handle.
@@ -104,10 +111,7 @@ impl Ord for CFileHandle {
         }
         unsafe {
             if s_fh.f_handle.as_ptr() != o_fh.f_handle.as_ptr() {
-                return s_fh
-                    .f_handle
-                    .as_slice(length)
-                    .cmp(o_fh.f_handle.as_slice(length));
+                return s_fh.f_handle.as_slice(length).cmp(o_fh.f_handle.as_slice(length));
             }
         }
 
@@ -132,11 +136,7 @@ impl Eq for CFileHandle {}
 impl Debug for CFileHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let fh = self.wrapper.as_fam_struct_ref();
-        write!(
-            f,
-            "File handle: type {}, len {}",
-            fh.handle_type, fh.handle_bytes
-        )
+        write!(f, "File handle: type {}, len {}", fh.handle_type, fh.handle_bytes)
     }
 }
 
@@ -257,14 +257,8 @@ impl FileHandle {
     /// for the mount the file handle is for.
     ///
     /// `reopen_fd` will be invoked to duplicate an `O_PATH` fd with custom `libc::open()` flags.
-    pub fn into_openable<F>(
-        self,
-        mount_fds: &MountFds,
-        reopen_fd: F,
-    ) -> MPRResult<OpenableFileHandle>
-    where
-        F: FnOnce(RawFd, libc::c_int, u32) -> io::Result<File>,
-    {
+    pub fn into_openable<F>(self, mount_fds: &MountFds, reopen_fd: F) -> MPRResult<OpenableFileHandle>
+    where F: FnOnce(RawFd, libc::c_int, u32) -> io::Result<File> {
         let mount_fd = mount_fds.get(self.mnt_id, reopen_fd)?;
         Ok(OpenableFileHandle {
             handle: Arc::new(self),
@@ -295,11 +289,7 @@ impl OpenableFileHandle {
     /// Open a file from an openable file handle.
     pub fn open(&self, flags: libc::c_int) -> io::Result<File> {
         let ret = unsafe {
-            open_by_handle_at(
-                self.mount_fd.as_fd().as_raw_fd(),
-                self.handle.handle.wrapper.as_fam_struct_ptr(),
-                flags,
-            )
+            open_by_handle_at(self.mount_fd.as_fd().as_raw_fd(), self.handle.handle.wrapper.as_fam_struct_ptr(), flags)
         };
         if ret >= 0 {
             // Safe because `open_by_handle_at()` guarantees this is a valid fd
@@ -319,21 +309,16 @@ impl OpenableFileHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::ffi::CString;
 
-    fn generate_c_file_handle(
-        handle_bytes: usize,
-        handle_type: libc::c_int,
-        buf: Vec<libc::c_char>,
-    ) -> CFileHandle {
+    use super::*;
+
+    fn generate_c_file_handle(handle_bytes: usize, handle_type: libc::c_int, buf: Vec<libc::c_char>) -> CFileHandle {
         let mut wrapper = CFileHandle::new(handle_bytes);
         let fh = wrapper.wrapper.as_mut_fam_struct();
         fh.handle_type = handle_type;
         unsafe {
-            fh.f_handle
-                .as_mut_slice(handle_bytes)
-                .copy_from_slice(buf.as_slice());
+            fh.f_handle.as_mut_slice(handle_bytes).copy_from_slice(buf.as_slice());
         }
 
         wrapper
@@ -342,34 +327,19 @@ mod tests {
     #[test]
     fn test_file_handle_derives() {
         let h1 = generate_c_file_handle(128, 3, vec![0; 128]);
-        let mut fh1 = FileHandle {
-            mnt_id: 0,
-            handle: h1,
-        };
+        let mut fh1 = FileHandle { mnt_id: 0, handle: h1 };
 
         let h2 = generate_c_file_handle(127, 3, vec![0; 127]);
-        let fh2 = FileHandle {
-            mnt_id: 0,
-            handle: h2,
-        };
+        let fh2 = FileHandle { mnt_id: 0, handle: h2 };
 
         let h3 = generate_c_file_handle(128, 4, vec![0; 128]);
-        let fh3 = FileHandle {
-            mnt_id: 0,
-            handle: h3,
-        };
+        let fh3 = FileHandle { mnt_id: 0, handle: h3 };
 
         let h4 = generate_c_file_handle(128, 3, vec![1; 128]);
-        let fh4 = FileHandle {
-            mnt_id: 0,
-            handle: h4,
-        };
+        let fh4 = FileHandle { mnt_id: 0, handle: h4 };
 
         let h5 = generate_c_file_handle(128, 3, vec![0; 128]);
-        let mut fh5 = FileHandle {
-            mnt_id: 0,
-            handle: h5,
-        };
+        let mut fh5 = FileHandle { mnt_id: 0, handle: h5 };
 
         assert!(fh1 > fh2);
         assert_ne!(fh1, fh2);
@@ -380,19 +350,11 @@ mod tests {
         assert_eq!(fh1, fh5);
 
         unsafe {
-            fh1.handle
-                .wrapper
-                .as_mut_fam_struct()
-                .f_handle
-                .as_mut_slice(128)[0] = 1;
+            fh1.handle.wrapper.as_mut_fam_struct().f_handle.as_mut_slice(128)[0] = 1;
         }
         assert!(fh1 > fh5);
         unsafe {
-            fh5.handle
-                .wrapper
-                .as_mut_fam_struct()
-                .f_handle
-                .as_mut_slice(128)[0] = 1;
+            fh5.handle.wrapper.as_mut_fam_struct().f_handle.as_mut_slice(128)[0] = 1;
         }
         assert_eq!(fh1, fh5);
     }
@@ -405,10 +367,7 @@ mod tests {
 
         assert_eq!(fh.handle_bytes as usize, MAX_HANDLE_SIZE);
         assert_eq!(fh.handle_type, 3);
-        assert_eq!(
-            unsafe { fh.f_handle.as_slice(MAX_HANDLE_SIZE) },
-            buf.as_slice(),
-        );
+        assert_eq!(unsafe { fh.f_handle.as_slice(MAX_HANDLE_SIZE) }, buf.as_slice(),);
     }
 
     #[test]
@@ -417,19 +376,11 @@ mod tests {
         let dir = File::open(topdir).unwrap();
         let filename = CString::new("build.rs").unwrap();
 
-        let dir_handle = FileHandle::from_name_at(&dir, &CString::new("").unwrap())
-            .unwrap()
-            .unwrap();
+        let dir_handle = FileHandle::from_name_at(&dir, &CString::new("").unwrap()).unwrap().unwrap();
         let file_handle = FileHandle::from_name_at(&dir, &filename).unwrap().unwrap();
 
         assert_eq!(dir_handle.mnt_id, file_handle.mnt_id);
-        assert_ne!(
-            dir_handle.handle.wrapper.as_fam_struct_ref().handle_bytes,
-            0
-        );
-        assert_ne!(
-            file_handle.handle.wrapper.as_fam_struct_ref().handle_bytes,
-            0
-        );
+        assert_ne!(dir_handle.handle.wrapper.as_fam_struct_ref().handle_bytes, 0);
+        assert_ne!(file_handle.handle.wrapper.as_fam_struct_ref().handle_bytes, 0);
     }
 }

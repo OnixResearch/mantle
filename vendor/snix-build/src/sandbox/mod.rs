@@ -1,8 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use typed_builder::TypedBuilder;
 
-use crate::buildservice::{AdditionalFile, EnvVar};
+use crate::buildservice::AdditionalFile;
+use crate::buildservice::EnvVar;
 
 /// A sandbox builder.
 ///
@@ -145,12 +147,9 @@ impl InputsProvider {
         }
     }
 
-    /// This method signature artificially extends the mutable borrow of self to make sure that the method is not callable
-    /// until the returned InputsGuard is dropped.
-    pub fn provide_inputs<'a>(
-        &'a mut self,
-        path: impl AsRef<Path>,
-    ) -> std::io::Result<Box<dyn InputsGuard + 'a>> {
+    /// This method signature artificially extends the mutable borrow of self to make sure that the
+    /// method is not callable until the returned InputsGuard is dropped.
+    pub fn provide_inputs<'a>(&'a mut self, path: impl AsRef<Path>) -> std::io::Result<Box<dyn InputsGuard + 'a>> {
         (self.provider)(path.as_ref())
     }
 
@@ -195,7 +194,6 @@ type ProviderFn = Box<dyn FnMut(&Path) -> std::io::Result<Box<dyn InputsGuard>> 
 /// ```compile_fail
 /// use snix_build::sandbox::SandboxSpec;
 /// let _ = SandboxSpec::builder().build();
-///
 /// ```
 ///
 /// When all required fields are set, can build():

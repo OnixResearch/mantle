@@ -1,31 +1,31 @@
-use std::{
-    cmp::min,
-    collections::HashMap,
-    io,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::cmp::min;
+use std::collections::HashMap;
+use std::io;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
-use super::RenderError;
-
-use bytes::{BufMut, Bytes};
-
-use nix_compat::nar::writer::sync as nar_writer;
-use snix_castore::directoryservice::{DirectoryGraph, DirectoryService};
-use snix_castore::{B3Digest, Node};
-use snix_castore::{
-    Directory,
-    blobservice::{BlobReader, BlobService},
-    directoryservice::DirectoryGraphBuilder,
-};
-
+use bytes::BufMut;
+use bytes::Bytes;
 use futures::FutureExt;
 use futures::TryStreamExt;
-use futures::future::{BoxFuture, FusedFuture, TryMaybeDone};
-
+use futures::future::BoxFuture;
+use futures::future::FusedFuture;
+use futures::future::TryMaybeDone;
+use nix_compat::nar::writer::sync as nar_writer;
+use snix_castore::B3Digest;
+use snix_castore::Directory;
+use snix_castore::Node;
+use snix_castore::blobservice::BlobReader;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryGraph;
+use snix_castore::directoryservice::DirectoryGraphBuilder;
+use snix_castore::directoryservice::DirectoryService;
 use tokio::io::AsyncSeekExt;
 use tracing::instrument;
+
+use super::RenderError;
 
 #[derive(Debug)]
 struct BlobRef {
@@ -109,9 +109,7 @@ fn walk_node(
             skip.close(cur_segment)?;
         }
         snix_castore::Node::Directory { digest, .. } => {
-            let directory = directories
-                .get(digest)
-                .expect("Snix bug: directory not found");
+            let directory = directories.get(digest).expect("Snix bug: directory not found");
 
             // start a directory node
             let mut nar_node_directory = nar_node.directory()?;
@@ -135,10 +133,10 @@ impl<B: BlobService + 'static> Reader<B> {
     /// Creates a new seekable NAR renderer for the given castore root node.
     ///
     /// This function pre-fetches the directory closure using `get_recursive()` and assembles the
-    /// NAR structure, except the file contents which are stored as 'holes' with references to a blob
-    /// of a specific BLAKE3 digest and known size. The AsyncRead implementation will then switch
-    /// between serving the precomputed literal segments, and the appropriate blob for the file
-    /// contents.
+    /// NAR structure, except the file contents which are stored as 'holes' with references to a
+    /// blob of a specific BLAKE3 digest and known size. The AsyncRead implementation will then
+    /// switch between serving the precomputed literal segments, and the appropriate blob for
+    /// the file contents.
     #[instrument(skip(blob_service, directory_service), err)]
     pub async fn new(
         root_node: Node,
@@ -150,14 +148,8 @@ impl<B: BlobService + 'static> Reader<B> {
             let mut directories = directory_service.get_recursive(digest);
             let mut builder = DirectoryGraphBuilder::new_root_to_leaves(digest.to_owned());
 
-            while let Some(directory) = directories
-                .try_next()
-                .await
-                .map_err(RenderError::DirectoryService)?
-            {
-                builder
-                    .try_insert(directory)
-                    .map_err(RenderError::OrderingError)?;
+            while let Some(directory) = directories.try_next().await.map_err(RenderError::DirectoryService)? {
+                builder.try_insert(directory).map_err(RenderError::OrderingError)?;
             }
 
             match builder.build() {
@@ -187,11 +179,7 @@ impl<B: BlobService + 'static> Reader<B> {
         let directories: HashMap<B3Digest, Directory> = directory_closure
             .map(|directory_graph| {
                 // We don't really care about the drain order
-                HashMap::from_iter(
-                    directory_graph
-                        .drain_leaves_to_root()
-                        .map(|d| (d.digest(), d)),
-                )
+                HashMap::from_iter(directory_graph.drain_leaves_to_root().map(|d| (d.digest(), d)))
             })
             .unwrap_or_default();
 
@@ -201,13 +189,7 @@ impl<B: BlobService + 'static> Reader<B> {
 
         let nar_node = nar_writer::open(&mut cur_segment)?;
 
-        walk_node(
-            &mut segments,
-            &mut offset,
-            &directories,
-            &root_node,
-            nar_node,
-        )?;
+        walk_node(&mut segments, &mut offset, &directories, &root_node, nar_node)?;
         // Flush the final segment
         flush_segment(&mut segments, &mut offset, std::mem::take(&mut cur_segment));
 
@@ -222,10 +204,7 @@ impl<B: BlobService + 'static> Reader<B> {
     }
 
     pub fn stream_len(&self) -> u64 {
-        self.segments
-            .last()
-            .map(|&(off, ref data)| off + data.len())
-            .expect("no segment found")
+        self.segments.last().map(|&(off, ref data)| off + data.len()).expect("no segment found")
     }
 }
 
@@ -253,17 +232,12 @@ impl<B: BlobService + 'static> tokio::io::AsyncSeek for Reader<B> {
         let prev_position_index = this.position_index;
 
         this.position_bytes = min(pos, stream_len);
-        this.position_index = match this
-            .segments
-            .binary_search_by_key(&this.position_bytes, |&(off, _)| off)
-        {
+        this.position_index = match this.segments.binary_search_by_key(&this.position_bytes, |&(off, _)| off) {
             Ok(idx) => idx,
             Err(idx) => idx - 1,
         };
 
-        let Some((offset, Data::Blob(BlobRef { digest, .. }))) =
-            this.segments.get(this.position_index)
-        else {
+        let Some((offset, Data::Blob(BlobRef { digest, .. }))) = this.segments.get(this.position_index) else {
             // If not seeking into a blob, we clear the active blob reader and then we're done
             this.current_blob = TryMaybeDone::Gone;
             return Ok(());
@@ -289,14 +263,10 @@ impl<B: BlobService + 'static> tokio::io::AsyncSeek for Reader<B> {
             let digest = *digest;
             this.current_blob = futures::future::try_maybe_done(
                 (async move {
-                    let mut reader =
-                        blob_service
-                            .open_read(&digest)
-                            .await?
-                            .ok_or(io::Error::new(
-                                io::ErrorKind::NotFound,
-                                RenderError::BlobNotFound(digest, Default::default()),
-                            ))?;
+                    let mut reader = blob_service.open_read(&digest).await?.ok_or(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        RenderError::BlobNotFound(digest, Default::default()),
+                    ))?;
                     if offset_in_segment != 0 {
                         reader.seek(io::SeekFrom::Start(offset_in_segment)).await?;
                     }
@@ -321,11 +291,7 @@ impl<B: BlobService + 'static> tokio::io::AsyncSeek for Reader<B> {
 }
 
 impl<B: BlobService + 'static> tokio::io::AsyncRead for Reader<B> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &mut tokio::io::ReadBuf,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut tokio::io::ReadBuf) -> Poll<io::Result<()>> {
         let this = &mut *self;
 
         let Some(&(offset, ref segment)) = this.segments.get(this.position_index) else {
@@ -344,9 +310,7 @@ impl<B: BlobService + 'static> tokio::io::AsyncRead for Reader<B> {
             Data::Blob(BlobRef { size, .. }) => {
                 futures::ready!(this.current_blob.poll_unpin(cx))?;
                 this.seeking = false;
-                let blob = Pin::new(&mut this.current_blob)
-                    .output_mut()
-                    .expect("missing blob");
+                let blob = Pin::new(&mut this.current_blob).output_mut().expect("missing blob");
                 futures::ready!(Pin::new(blob).poll_read(cx, buf))?;
                 let read_length = buf.filled().len() - prev_read_buf_pos;
                 let maximum_expected_read_length = (offset + size) - this.position_bytes;
@@ -354,10 +318,7 @@ impl<B: BlobService + 'static> tokio::io::AsyncRead for Reader<B> {
                 let too_much_returned = read_length as u64 > maximum_expected_read_length;
                 match (is_eof, too_much_returned) {
                     (true, false) => {
-                        return Poll::Ready(Err(io::Error::new(
-                            io::ErrorKind::UnexpectedEof,
-                            "blob short read",
-                        )));
+                        return Poll::Ready(Err(io::Error::new(io::ErrorKind::UnexpectedEof, "blob short read")));
                     }
                     (false, true) => {
                         buf.set_filled(prev_read_buf_pos);
@@ -382,9 +343,7 @@ impl<B: BlobService + 'static> tokio::io::AsyncRead for Reader<B> {
             this.position_index += 1;
         }
         if prev_position_index != this.position_index {
-            let Some((_offset, Data::Blob(BlobRef { digest, .. }))) =
-                this.segments.get(this.position_index)
-            else {
+            let Some((_offset, Data::Blob(BlobRef { digest, .. }))) = this.segments.get(this.position_index) else {
                 // If the next segment is not a blob, we clear the active blob reader and then we're done
                 this.current_blob = TryMaybeDone::Gone;
                 return Poll::Ready(Ok(()));
@@ -395,13 +354,10 @@ impl<B: BlobService + 'static> tokio::io::AsyncRead for Reader<B> {
             let digest = *digest;
             this.current_blob = futures::future::try_maybe_done(
                 (async move {
-                    let reader = blob_service
-                        .open_read(&digest)
-                        .await?
-                        .ok_or(io::Error::new(
-                            io::ErrorKind::NotFound,
-                            RenderError::BlobNotFound(digest, Default::default()),
-                        ))?;
+                    let reader = blob_service.open_read(&digest).await?.ok_or(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        RenderError::BlobNotFound(digest, Default::default()),
+                    ))?;
                     Ok(reader)
                 })
                 .boxed(),

@@ -4,15 +4,25 @@
 //! for the real logic. This module owns argument parsing, file I/O,
 //! and output formatting — nothing else.
 
+use std::path::Path;
+
+use crunch_project::DriftStatus;
+use crunch_project::Lockfile;
+use crunch_project::ProjectManifest;
+use crunch_project::RefreshFailure;
+use crunch_project::RefreshOutcome;
+use crunch_project::SchemaVersion;
+use crunch_project::Severity;
+use crunch_project::apply_outcomes;
+use crunch_project::check_drift;
+use crunch_project::check_manifest_lock;
+use crunch_project::generate_inputs_ncl;
+use crunch_project::list_stale;
+use crunch_project::refresh_inputs;
+use crunch_project::upgrade_lockfile;
+
 use crate::errors::RunError;
 use crate::project_resolve::LiveResolver;
-use crunch_project::{
-    DriftStatus, Lockfile, ProjectManifest, RefreshFailure, RefreshOutcome,
-    SchemaVersion, Severity, apply_outcomes, check_drift,
-    check_manifest_lock, generate_inputs_ncl, list_stale, refresh_inputs,
-    upgrade_lockfile,
-};
-use std::path::Path;
 
 /// Project file names.
 const MANIFEST_FILE: &str = "crunch-project.ncl";
@@ -29,10 +39,7 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     let inputs_path = dir.join(INPUTS_FILE);
 
     if manifest_path.exists() {
-        return Err(RunError::Internal(format!(
-            "{MANIFEST_FILE} already exists in {}",
-            dir.display()
-        )));
+        return Err(RunError::Internal(format!("{MANIFEST_FILE} already exists in {}", dir.display())));
     }
 
     // Write manifest template
@@ -49,18 +56,13 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
 
     // Write empty lockfile
     let lock = Lockfile::new();
-    let lock_json = lock
-        .to_json()
-        .map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
-    std::fs::write(&lock_path, &lock_json)
-        .map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
+    let lock_json = lock.to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+    std::fs::write(&lock_path, &lock_json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
 
     // Create .crunch/ and generate empty inputs
-    std::fs::create_dir_all(&inputs_dir)
-        .map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
+    std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
     let inputs_ncl = generate_inputs_ncl(&lock);
-    std::fs::write(&inputs_path, &inputs_ncl)
-        .map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
+    std::fs::write(&inputs_path, &inputs_ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
 
     // Add .crunch/ to .gitignore if not already there
     add_gitignore_entry(dir);
@@ -113,10 +115,8 @@ pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
         }
     }
 
-    let has_errors = !manifest_problems.is_empty()
-        || !lock_problems.is_empty()
-        || report.has_errors()
-        || !drift.is_ok();
+    let has_errors =
+        !manifest_problems.is_empty() || !lock_problems.is_empty() || report.has_errors() || !drift.is_ok();
 
     if has_errors {
         Err(RunError::Internal("project check failed".into()))
@@ -152,10 +152,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
                 rev,
                 ref_name,
             } => {
-                let ref_str = ref_name
-                    .as_deref()
-                    .map(|r| format!(" ({r})"))
-                    .unwrap_or_default();
+                let ref_str = ref_name.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
                 format!("git: {repository} @ {rev}{ref_str}")
             }
         };
@@ -209,9 +206,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
 
     let failure_count = input_failures.len() + result.failures.len();
     if failure_count > 0 {
-        return Err(RunError::Internal(format!(
-            "refresh failed for {failure_count} item(s)"
-        )));
+        return Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")));
     }
 
     Ok(())
@@ -234,10 +229,7 @@ pub fn cmd_list_stale(dir: &Path) -> Result<(), RunError> {
         println!("all inputs up to date");
     }
     if !report.failed.is_empty() {
-        return Err(RunError::Internal(format!(
-            "stale check failed for {} item(s)",
-            report.failed.len()
-        )));
+        return Err(RunError::Internal(format!("stale check failed for {} item(s)", report.failed.len())));
     }
 
     Ok(())
@@ -248,20 +240,12 @@ pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
     let lock = load_lockfile(dir)?;
 
     if lock.version == SchemaVersion::CURRENT {
-        eprintln!(
-            "project files already at current version ({})",
-            SchemaVersion::CURRENT
-        );
+        eprintln!("project files already at current version ({})", SchemaVersion::CURRENT);
         return Ok(());
     }
 
-    eprintln!(
-        "upgrading lockfile from {} to {}",
-        lock.version,
-        SchemaVersion::CURRENT
-    );
-    let upgraded = upgrade_lockfile(lock)
-        .map_err(|e| RunError::Internal(format!("upgrade: {e}")))?;
+    eprintln!("upgrading lockfile from {} to {}", lock.version, SchemaVersion::CURRENT);
+    let upgraded = upgrade_lockfile(lock).map_err(|e| RunError::Internal(format!("upgrade: {e}")))?;
 
     write_lockfile(dir, &upgraded)?;
     write_inputs_ncl(dir, &upgraded)?;
@@ -294,30 +278,24 @@ fn load_lockfile(dir: &Path) -> Result<Lockfile, RunError> {
         )));
     }
 
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| RunError::Internal(format!("reading {LOCK_FILE}: {e}")))?;
-    Lockfile::from_json(&content)
-        .map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| RunError::Internal(format!("reading {LOCK_FILE}: {e}")))?;
+    Lockfile::from_json(&content).map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))
 }
 
 fn write_lockfile(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let path = dir.join(LOCK_FILE);
-    let json = lock
-        .to_json()
-        .map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
-    std::fs::write(&path, &json)
-        .map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
+    let json = lock.to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+    std::fs::write(&path, &json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
     Ok(())
 }
 
 fn write_inputs_ncl(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let inputs_dir = dir.join(INPUTS_DIR);
-    std::fs::create_dir_all(&inputs_dir)
-        .map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
+    std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
     let ncl = generate_inputs_ncl(lock);
     let path = dir.join(INPUTS_FILE);
-    std::fs::write(&path, &ncl)
-        .map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
+    std::fs::write(&path, &ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
     Ok(())
 }
 

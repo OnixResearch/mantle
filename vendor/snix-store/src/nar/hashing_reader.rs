@@ -1,13 +1,15 @@
-use std::{
-    io::Result,
-    pin::Pin,
-    task::{Context, Poll, ready},
-};
+use std::io::Result;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::ready;
 
 use md5::Digest;
-use nix_compat::nixhash::{HashAlgo, NixHash};
+use nix_compat::nixhash::HashAlgo;
+use nix_compat::nixhash::NixHash;
 use pin_project_lite::pin_project;
-use tokio::io::{AsyncRead, ReadBuf};
+use tokio::io::AsyncRead;
+use tokio::io::ReadBuf;
 
 pin_project! {
     /// AsyncRead implementation with a type-erased hasher.
@@ -42,30 +44,36 @@ trait ToHash: Send {
 }
 
 impl ToHash for sha1::Sha1 {
-    fn update_hash(&mut self, data: &[u8]) { Digest::update(self, data); }
+    fn update_hash(&mut self, data: &[u8]) {
+        Digest::update(self, data);
+    }
     fn consume(self: Box<Self>) -> NixHash {
         NixHash::Sha1(self.finalize().to_vec().try_into().expect("Snix bug"))
     }
 }
 
 impl ToHash for sha2::Sha256 {
-    fn update_hash(&mut self, data: &[u8]) { Digest::update(self, data); }
+    fn update_hash(&mut self, data: &[u8]) {
+        Digest::update(self, data);
+    }
     fn consume(self: Box<Self>) -> NixHash {
         NixHash::Sha256(self.finalize().to_vec().try_into().expect("Snix bug"))
     }
 }
 
 impl ToHash for sha2::Sha512 {
-    fn update_hash(&mut self, data: &[u8]) { Digest::update(self, data); }
+    fn update_hash(&mut self, data: &[u8]) {
+        Digest::update(self, data);
+    }
     fn consume(self: Box<Self>) -> NixHash {
-        NixHash::Sha512(Box::new(
-            self.finalize().to_vec().try_into().expect("Snix bug"),
-        ))
+        NixHash::Sha512(Box::new(self.finalize().to_vec().try_into().expect("Snix bug")))
     }
 }
 
 impl ToHash for md5::Md5 {
-    fn update_hash(&mut self, data: &[u8]) { Digest::update(self, data); }
+    fn update_hash(&mut self, data: &[u8]) {
+        Digest::update(self, data);
+    }
     fn consume(self: Box<Self>) -> NixHash {
         NixHash::Md5(self.finalize().to_vec().try_into().expect("Snix bug"))
     }
@@ -75,7 +83,9 @@ impl ToHash for md5::Md5 {
 struct Blake3Wrapper(blake3::Hasher);
 
 impl ToHash for Blake3Wrapper {
-    fn update_hash(&mut self, data: &[u8]) { self.0.update(data); }
+    fn update_hash(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
     fn consume(self: Box<Self>) -> NixHash {
         // Use blake3::Hasher::finalize explicitly (not Digest::finalize)
         let hash = blake3::Hasher::finalize(&self.0);
@@ -114,11 +124,7 @@ impl<R> HashingReader<R> {
 }
 
 impl<R: AsyncRead> AsyncRead for HashingReader<R> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<Result<()>> {
         let me = self.project();
         let filled_length = buf.filled().len();
         ready!(me.reader.poll_read(cx, buf))?;

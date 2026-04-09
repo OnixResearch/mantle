@@ -20,21 +20,14 @@ mod fusedev_tests {
     use crate::example::passthroughfs;
 
     fn validate_two_git_directory(src: &str, dest: &str) -> bool {
-        let str = format!(
-            "cd {}; git config --global --add safe.directory {}; git ls-files; cd - > /dev/null",
-            src, src
-        );
+        let str =
+            format!("cd {}; git config --global --add safe.directory {}; git ls-files; cd - > /dev/null", src, src);
         let src_files = exec(str.as_str()).unwrap();
-        let str = format!(
-            "cd {}; git config --global --add safe.directory {}; git ls-files; cd - > /dev/null",
-            dest, dest
-        );
+        let str =
+            format!("cd {}; git config --global --add safe.directory {}; git ls-files; cd - > /dev/null", dest, dest);
         let dest_files = exec(str.as_str()).unwrap();
         if src_files != dest_files {
-            error!(
-                "src {}:\n{}\ndest {}:\n{}",
-                src, src_files, dest, dest_files
-            );
+            error!("src {}:\n{}\ndest {}:\n{}", src, src_files, dest, dest_files);
             return false;
         }
 
@@ -64,11 +57,7 @@ mod fusedev_tests {
 
     fn exec(cmd: &str) -> Result<String> {
         debug!("exec: {}", cmd);
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .env("RUST_BACKTRACE", "1")
-            .output()?;
+        let output = Command::new("sh").arg("-c").arg(cmd).env("RUST_BACKTRACE", "1").output()?;
 
         if !output.status.success() || output.stderr.len() > 0 {
             let msg = std::str::from_utf8(&output.stderr).unwrap();
@@ -87,10 +76,7 @@ mod fusedev_tests {
         let src_dir = src.to_str().unwrap();
         let tmp_dir = TempDir::new().unwrap();
         let mnt_dir = tmp_dir.as_path().to_str().unwrap();
-        info!(
-            "test passthroughfs src {:?} mountpoint {}",
-            src_dir, mnt_dir
-        );
+        info!("test passthroughfs src {:?} mountpoint {}", src_dir, mnt_dir);
 
         let mut daemon = passthroughfs::Daemon::new(src_dir, mnt_dir, 2).unwrap();
         daemon.mount().unwrap();

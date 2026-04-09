@@ -3,8 +3,10 @@
 //! Each test uses `--store <tempdir>` so outputs land in a writable
 //! directory without needing a writable /nix/store. Requires bwrap.
 
+use std::path::Path;
+use std::path::PathBuf;
+
 use assert_cmd::Command;
-use std::path::{Path, PathBuf};
 
 fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
@@ -12,10 +14,7 @@ fn crunch_cmd() -> Command {
 
 fn can_build() -> bool {
     Path::new("/nix/store").exists()
-        && std::process::Command::new("bwrap")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success())
+        && std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
 /// Run `crunch build` with `--store <dir>` and return stdout.
@@ -39,20 +38,12 @@ fn build_ncl_with_state(ncl_content: &str, store: &Path, state_dir: Option<&Path
         let sd = work.path().join("state");
         cmd.arg("--state-dir").arg(&sd);
     }
-    cmd.arg("build")
-        .arg("--no-substitute")
-        .arg("-I")
-        .arg(work.path())
-        .arg(&ncl_file);
+    cmd.arg("build").arg("--no-substitute").arg("-I").arg(work.path()).arg(&ncl_file);
 
     let output = cmd.output().expect("should execute");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "build failed (exit {}):\n{stderr}",
-        output.status.code().unwrap_or(-1),
-    );
+    assert!(output.status.success(), "build failed (exit {}):\n{stderr}", output.status.code().unwrap_or(-1),);
     String::from_utf8(output.stdout).unwrap()
 }
 
@@ -163,9 +154,7 @@ fn smoke_build_and_run_shell_script() {
     assert!(greet.exists(), "greet script should exist");
 
     // Actually run the built script
-    let run = std::process::Command::new(&greet)
-        .output()
-        .expect("should be able to execute the built script");
+    let run = std::process::Command::new(&greet).output().expect("should be able to execute the built script");
     assert!(run.status.success(), "greet should exit 0");
     let run_stdout = String::from_utf8_lossy(&run.stdout);
     assert_eq!(run_stdout.trim(), "hello-from-crunch");
@@ -234,19 +223,13 @@ fn smoke_build_cached_on_second_run() {
     let path1 = first_output_path(&stdout1);
     assert!(path1.exists());
     // First build should NOT say "(cached)"
-    assert!(
-        !stdout1.contains("(cached)"),
-        "first build should not be cached: {stdout1}"
-    );
+    assert!(!stdout1.contains("(cached)"), "first build should not be cached: {stdout1}");
 
     // Second build — same store + same state dir → cache hit
     let stdout2 = build_ncl_with_state(ncl, store.path(), Some(state.path()));
     let path2 = first_output_path(&stdout2);
     assert_eq!(path1, path2, "same derivation should produce same path");
-    assert!(
-        stdout2.contains("(cached)"),
-        "second build should be cached: {stdout2}"
-    );
+    assert!(stdout2.contains("(cached)"), "second build should be cached: {stdout2}");
 }
 
 #[test]
@@ -290,10 +273,7 @@ fn smoke_fetchurl_downloads_and_stores() {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                body.len()
-            );
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
             let _ = stream.write_all(resp.as_bytes());
             let _ = stream.write_all(body);
         }
@@ -301,8 +281,9 @@ fn smoke_fetchurl_downloads_and_stores() {
 
     // Compute the expected sha256 of the content for the FOD hash.
     // fetchurl does a flat hash of the downloaded bytes.
-    use sha2::{Sha256, Digest};
     use base64::Engine;
+    use sha2::Digest;
+    use sha2::Sha256;
     let hash = Sha256::digest(body);
     let sri = format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(hash));
 
@@ -335,10 +316,7 @@ crunch.fetchurl {{
     server.join().unwrap();
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "fetchurl build should succeed: {stderr}"
-    );
+    assert!(output.status.success(), "fetchurl build should succeed: {stderr}");
 
     let stdout_str = String::from_utf8(output.stdout).unwrap();
     let out = first_output_path(&stdout_str);

@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use url::Url;
 
-use crate::composition::{
-    CompositionContext, DeserializeWithRegistry, REG, ServiceBuilder, with_registry,
-};
-
 use super::BlobService;
+use crate::composition::CompositionContext;
+use crate::composition::DeserializeWithRegistry;
+use crate::composition::REG;
+use crate::composition::ServiceBuilder;
+use crate::composition::with_registry;
 
 /// Constructs a new instance of a [BlobService] from an URI.
 ///
@@ -16,26 +17,23 @@ use super::BlobService;
 /// - `objectstore+*://` ([super::ObjectStoreBlobService])
 ///
 /// See their `from_url` methods for more details about their syntax.
-pub async fn from_addr(
-    uri: &str,
-) -> Result<Arc<dyn BlobService>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn from_addr(uri: &str) -> Result<Arc<dyn BlobService>, Box<dyn std::error::Error + Send + Sync>> {
     let url = Url::parse(uri).map_err(|e| format!("unable to parse url: {e}"))?;
 
     let blob_service_config = with_registry(&REG, || {
         <DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn BlobService>>>>::try_from(url)
     })?
     .0;
-    let blob_service = blob_service_config
-        .build("anonymous", &CompositionContext::blank(&REG))
-        .await?;
+    let blob_service = blob_service_config.build("anonymous", &CompositionContext::blank(&REG)).await?;
 
     Ok(blob_service)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::from_addr;
     use rstest::rstest;
+
+    use super::from_addr;
 
     #[rstest]
     /// This uses an unsupported scheme.
@@ -60,7 +58,8 @@ mod tests {
     #[case::grpc_unsupported_http_host_without_port("grpc+http://localhost", false)]
     /// Correct scheme to connect to localhost over http, without specifying a port.
     #[case::grpc_unsupported_https_host_without_port("grpc+https://localhost", false)]
-    /// Correct scheme to connect to localhost over http, but with additional path, which is invalid.
+    /// Correct scheme to connect to localhost over http, but with additional path, which is
+    /// invalid.
     #[case::grpc_invalid_has_path("grpc+http://localhost/some-path", false)]
     /// An example for object store (InMemory)
     #[case::objectstore_valid_memory("objectstore+memory:///", true)]

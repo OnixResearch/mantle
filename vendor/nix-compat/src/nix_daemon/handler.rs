@@ -1,34 +1,43 @@
-use std::{future::Future, ops::DerefMut, sync::Arc};
+use std::future::Future;
+use std::ops::DerefMut;
+use std::sync::Arc;
 
 use bytes::Bytes;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf, split},
-    sync::Mutex,
-};
-use tracing::{debug, warn};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::ReadHalf;
+use tokio::io::WriteHalf;
+use tokio::io::split;
+use tokio::sync::Mutex;
+use tracing::debug;
+use tracing::warn;
 
-use super::{
-    NixDaemonIO,
-    framing::{NixFramedReader, StderrReadFramedReader},
-    types::{AddToStoreNarRequest, QueryValidPaths},
-    worker_protocol::{ClientSettings, Operation, STDERR_LAST, Trust, server_handshake_client},
-};
-
-use crate::{
-    store_path::StorePath,
-    wire::{
-        ProtocolVersion,
-        de::{NixRead, NixReader},
-        ser::{NixSerialize, NixWrite, NixWriter, NixWriterBuilder},
-    },
-};
-
-use crate::{nix_daemon::types::NixError, worker_protocol::STDERR_ERROR};
+use super::NixDaemonIO;
+use super::framing::NixFramedReader;
+use super::framing::StderrReadFramedReader;
+use super::types::AddToStoreNarRequest;
+use super::types::QueryValidPaths;
+use super::worker_protocol::ClientSettings;
+use super::worker_protocol::Operation;
+use super::worker_protocol::STDERR_LAST;
+use super::worker_protocol::Trust;
+use super::worker_protocol::server_handshake_client;
+use crate::nix_daemon::types::NixError;
+use crate::store_path::StorePath;
+use crate::wire::ProtocolVersion;
+use crate::wire::de::NixRead;
+use crate::wire::de::NixReader;
+use crate::wire::ser::NixSerialize;
+use crate::wire::ser::NixWrite;
+use crate::wire::ser::NixWriter;
+use crate::wire::ser::NixWriterBuilder;
+use crate::worker_protocol::STDERR_ERROR;
 
 /// Handles a single connection with a nix client.
 ///
 /// As part of its [`initialization`] it performs the handshake with the client
-/// and determines the [ProtocolVersion] and [ClientSettings] to use for the remainder of the session.
+/// and determines the [ProtocolVersion] and [ClientSettings] to use for the remainder of the
+/// session.
 ///
 /// Once initialized, [NixDaemon::handle_client] needs to be called to handle
 /// the rest of the session, it delegates all operation handling to an instance
@@ -45,8 +54,7 @@ pub struct NixDaemon<IO, R, W> {
 }
 
 impl<IO, R, W> NixDaemon<IO, R, W>
-where
-    IO: NixDaemonIO + Sync + Send,
+where IO: NixDaemonIO + Sync + Send
 {
     pub fn new(
         io: Arc<IO>,
@@ -77,39 +85,24 @@ where
     ///
     /// The resulting daemon can handle the client session by calling [NixDaemon::handle_client].
     pub async fn initialize(io: Arc<IO>, mut connection: RW) -> Result<Self, std::io::Error>
-    where
-        RW: AsyncReadExt + AsyncWriteExt + Send + Unpin,
-    {
-        let protocol_version =
-            server_handshake_client(&mut connection, "2.18.2", Trust::Trusted).await?;
+    where RW: AsyncReadExt + AsyncWriteExt + Send + Unpin {
+        let protocol_version = server_handshake_client(&mut connection, "2.18.2", Trust::Trusted).await?;
 
         connection.write_u64_le(STDERR_LAST).await?;
         let (reader, writer) = split(connection);
-        let mut reader = NixReader::builder()
-            .set_version(protocol_version)
-            .build(reader);
-        let mut writer = NixWriterBuilder::default()
-            .set_version(protocol_version)
-            .build(writer);
+        let mut reader = NixReader::builder().set_version(protocol_version).build(reader);
+        let mut writer = NixWriterBuilder::default().set_version(protocol_version).build(writer);
 
         // The first op is always SetOptions
         let operation: Operation = reader.read_value().await?;
         if operation != Operation::SetOptions {
-            return Err(std::io::Error::other(
-                "Expected SetOptions operation, but got {operation}",
-            ));
+            return Err(std::io::Error::other("Expected SetOptions operation, but got {operation}"));
         }
         let client_settings: ClientSettings = reader.read_value().await?;
         writer.write_number(STDERR_LAST).await?;
         writer.flush().await?;
 
-        Ok(Self::new(
-            io,
-            protocol_version,
-            client_settings,
-            reader,
-            writer,
-        ))
+        Ok(Self::new(io, protocol_version, client_settings, reader, writer))
     }
 
     /// Main client connection loop, reads client's requests and responds to them accordingly.
@@ -159,10 +152,7 @@ where
                     Operation::QueryReferrers | Operation::QueryRealisation => {
                         let _: String = self.reader.read_value().await?;
                         Self::handle(&self.writer, async move {
-                            warn!(
-                                ?operation,
-                                "This operation is not implemented. Returning empty result..."
-                            );
+                            warn!(?operation, "This operation is not implemented. Returning empty result...");
                             Ok(Vec::<StorePath<String>>::new())
                         })
                         .await?
@@ -174,27 +164,21 @@ where
                             ..21 => {
                                 // Before protocol version 1.21, the nar is sent unframed, so we just
                                 // pass the reader directly to the operation.
-                                Self::handle(
-                                    &self.writer,
-                                    self.io.add_to_store_nar(request, &mut self.reader),
-                                )
-                                .await?
+                                Self::handle(&self.writer, self.io.add_to_store_nar(request, &mut self.reader)).await?
                             }
                             21..23 => {
                                 // Protocol versions 1.21 .. 1.23 use STDERR_READ protocol, see logging.md#stderr_read.
                                 Self::handle(&self.writer, async {
                                     let mut writer = self.writer.lock().await;
-                                    let mut reader = StderrReadFramedReader::new(
-                                        &mut self.reader,
-                                        writer.deref_mut(),
-                                    );
+                                    let mut reader = StderrReadFramedReader::new(&mut self.reader, writer.deref_mut());
                                     self.io.add_to_store_nar(request, &mut reader).await
                                     // TODO(edef): enforce framing synchronisation
                                 })
                                 .await?
                             }
                             23.. => {
-                                // Starting at protocol version 1.23, the framed protocol is used, see serialization.md#framed
+                                // Starting at protocol version 1.23, the framed protocol is used, see
+                                // serialization.md#framed
                                 let mut framed = NixFramedReader::new(&mut self.reader);
 
                                 Self::handle(&self.writer, async {
@@ -214,15 +198,11 @@ where
                         }
                     }
                     _ => {
-                        return Err(std::io::Error::other(format!(
-                            "Operation {operation:?} is not implemented"
-                        )));
+                        return Err(std::io::Error::other(format!("Operation {operation:?} is not implemented")));
                     }
                 },
                 _ => {
-                    return Err(std::io::Error::other(format!(
-                        "Unknown operation code received: {op_code}"
-                    )));
+                    return Err(std::io::Error::other(format!("Unknown operation code received: {op_code}")));
                 }
             }
         }
@@ -267,17 +247,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::{io::ErrorKind, sync::Arc};
+    use std::io::ErrorKind;
+    use std::sync::Arc;
 
     use mockall::predicate;
     use tokio::io::AsyncWriteExt;
 
-    use crate::{
-        nix_daemon::MockNixDaemonIO,
-        wire::ProtocolVersion,
-        worker_protocol::{ClientSettings, WORKER_MAGIC_1, WORKER_MAGIC_2},
-    };
+    use super::*;
+    use crate::nix_daemon::MockNixDaemonIO;
+    use crate::wire::ProtocolVersion;
+    use crate::worker_protocol::ClientSettings;
+    use crate::worker_protocol::WORKER_MAGIC_1;
+    use crate::worker_protocol::WORKER_MAGIC_2;
 
     #[tokio::test]
     async fn test_daemon_initialization() {
@@ -304,10 +285,7 @@ mod tests {
 
         let mut bytes = Vec::new();
         let mut writer = NixWriter::new(&mut bytes);
-        writer
-            .write_value(&ClientSettings::default())
-            .await
-            .unwrap();
+        writer.write_value(&ClientSettings::default()).await.unwrap();
         writer.flush().await.unwrap();
 
         let test_conn = test_conn
@@ -319,37 +297,24 @@ mod tests {
             .build();
 
         let mock = MockNixDaemonIO::new();
-        let daemon = NixDaemon::initialize(Arc::new(mock), test_conn)
-            .await
-            .unwrap();
+        let daemon = NixDaemon::initialize(Arc::new(mock), test_conn).await.unwrap();
         assert_eq!(daemon.client_settings, ClientSettings::default());
         assert_eq!(daemon.protocol_version, ProtocolVersion::from_parts(1, 35));
     }
 
     async fn serialize<T>(req: &T, protocol_version: ProtocolVersion) -> Vec<u8>
-    where
-        T: NixSerialize + Send,
-    {
+    where T: NixSerialize + Send {
         let mut result: Vec<u8> = Vec::new();
-        let mut w = NixWriter::builder()
-            .set_version(protocol_version)
-            .build(&mut result);
+        let mut w = NixWriter::builder().set_version(protocol_version).build(&mut result);
         w.write_value(req).await.unwrap();
         w.flush().await.unwrap();
         result
     }
 
-    async fn respond<T>(
-        resp: &Result<T, std::io::Error>,
-        protocol_version: ProtocolVersion,
-    ) -> Vec<u8>
-    where
-        T: NixSerialize + Send,
-    {
+    async fn respond<T>(resp: &Result<T, std::io::Error>, protocol_version: ProtocolVersion) -> Vec<u8>
+    where T: NixSerialize + Send {
         let mut result: Vec<u8> = Vec::new();
-        let mut w = NixWriter::builder()
-            .set_version(protocol_version)
-            .build(&mut result);
+        let mut w = NixWriter::builder().set_version(protocol_version).build(&mut result);
         match resp {
             Ok(value) => {
                 w.write_value(&STDERR_LAST).await.unwrap();
@@ -357,9 +322,7 @@ mod tests {
             }
             Err(e) => {
                 w.write_value(&STDERR_ERROR).await.unwrap();
-                w.write_value(&NixError::new(format!("{e:?}")))
-                    .await
-                    .unwrap();
+                w.write_value(&NixError::new(format!("{e:?}"))).await.unwrap();
             }
         }
         w.flush().await.unwrap();
@@ -393,14 +356,7 @@ mod tests {
             NixReader::new(reader),
             NixWriter::new(writer),
         );
-        assert_eq!(
-            ErrorKind::UnexpectedEof,
-            daemon
-                .handle_client()
-                .await
-                .expect_err("Expecting eof")
-                .kind()
-        );
+        assert_eq!(ErrorKind::UnexpectedEof, daemon.handle_client().await.expect_err("Expecting eof").kind());
     }
 
     #[tokio::test]
@@ -430,13 +386,6 @@ mod tests {
             NixReader::new(reader),
             NixWriter::new(writer),
         );
-        assert_eq!(
-            ErrorKind::UnexpectedEof,
-            daemon
-                .handle_client()
-                .await
-                .expect_err("Expecting eof")
-                .kind()
-        );
+        assert_eq!(ErrorKind::UnexpectedEof, daemon.handle_client().await.expect_err("Expecting eof").kind());
     }
 }

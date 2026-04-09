@@ -3,19 +3,25 @@
 use std::collections::HashMap;
 
 use petgraph::Direction;
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::{DfsPostOrder, EdgeRef};
+use petgraph::graph::DiGraph;
+use petgraph::graph::NodeIndex;
+use petgraph::visit::DfsPostOrder;
+use petgraph::visit::EdgeRef;
 use tokio::io::AsyncRead;
 use tokio_stream::StreamExt;
 use tokio_tar::Archive;
-use tracing::{Level, instrument, warn};
+use tracing::Level;
+use tracing::instrument;
+use tracing::warn;
 
+use super::blobs::ConcurrentBlobUploader;
+use super::blobs::{self};
 use crate::Node;
 use crate::blobservice::BlobService;
 use crate::directoryservice::DirectoryService;
-use crate::import::{IngestionEntry, IngestionError, ingest_entries};
-
-use super::blobs::{self, ConcurrentBlobUploader};
+use crate::import::IngestionEntry;
+use crate::import::IngestionError;
+use crate::import::ingest_entries;
 
 type TarPathBuf = std::path::PathBuf;
 
@@ -87,24 +93,12 @@ where
 
         let header = entry.header();
         let entry = match header.entry_type() {
-            tokio_tar::EntryType::Regular
-            | tokio_tar::EntryType::GNUSparse
-            | tokio_tar::EntryType::Continuous => {
-                let size = header
-                    .size()
-                    .map_err(|e| Error::Size(tar_path.clone(), e))?;
+            tokio_tar::EntryType::Regular | tokio_tar::EntryType::GNUSparse | tokio_tar::EntryType::Continuous => {
+                let size = header.size().map_err(|e| Error::Size(tar_path.clone(), e))?;
 
-                let digest = blob_uploader
-                    .upload(&path, size, &mut entry)
-                    .await
-                    .map_err(Error::BlobUploadError)?;
+                let digest = blob_uploader.upload(&path, size, &mut entry).await.map_err(Error::BlobUploadError)?;
 
-                let executable = entry
-                    .header()
-                    .mode()
-                    .map_err(|e| Error::Mode(tar_path, e))?
-                    & 64
-                    != 0;
+                let executable = entry.header().mode().map_err(|e| Error::Mode(tar_path, e))? & 64 != 0;
 
                 IngestionEntry::Regular {
                     path,
@@ -138,11 +132,8 @@ where
 
     blob_uploader.join().await.map_err(Error::BlobUploadError)?;
 
-    let root_node = ingest_entries(
-        directory_service,
-        futures::stream::iter(nodes.finalize()?.into_iter().map(Ok)),
-    )
-    .await?;
+    let root_node =
+        ingest_entries(directory_service, futures::stream::iter(nodes.finalize()?.into_iter().map(Ok))).await?;
 
     Ok(root_node)
 }
@@ -229,7 +220,8 @@ impl IngestionEntryGraph {
         Ok(index)
     }
 
-    /// Traverses the graph in DFS post order and collects the entries into a [`Vec<IngestionEntry>`].
+    /// Traverses the graph in DFS post order and collects the entries into a
+    /// [`Vec<IngestionEntry>`].
     ///
     /// Unreachable parts of the graph are not included in the result.
     pub fn finalize(self) -> Result<Vec<IngestionEntry>, Error> {
@@ -256,37 +248,23 @@ impl IngestionEntryGraph {
     ///
     /// This should never be called if both the old and new nodes are directories.
     fn replace_node(&mut self, index: NodeIndex, new_entry: IngestionEntry) {
-        let entry = self
-            .graph
-            .node_weight_mut(index)
-            .expect("Snix bug: missing node entry");
+        let entry = self.graph.node_weight_mut(index).expect("Snix bug: missing node entry");
 
         debug_assert!(!(entry.is_dir() && new_entry.is_dir()));
 
         // Replace the node itself.
-        warn!(
-            "saw duplicate entry in archive at path {:?}. old: {:?} new: {:?}",
-            entry.path(),
-            &entry,
-            &new_entry
-        );
+        warn!("saw duplicate entry in archive at path {:?}. old: {:?} new: {:?}", entry.path(), &entry, &new_entry);
         *entry = new_entry;
 
         // Remove any outgoing edges to disconnect the old node's children.
-        let edges = self
-            .graph
-            .edges_directed(index, Direction::Outgoing)
-            .map(|edge| edge.id())
-            .collect::<Vec<_>>();
+        let edges = self.graph.edges_directed(index, Direction::Outgoing).map(|edge| edge.id()).collect::<Vec<_>>();
         for edge in edges {
             self.graph.remove_edge(edge);
         }
     }
 
     fn get_node(&self, index: NodeIndex) -> &IngestionEntry {
-        self.graph
-            .node_weight(index)
-            .expect("Snix bug: missing node entry")
+        self.graph.node_weight(index).expect("Snix bug: missing node entry")
     }
 }
 
@@ -294,14 +272,14 @@ impl IngestionEntryGraph {
 mod test {
     use std::sync::LazyLock;
 
-    use super::{Error, IngestionEntryGraph};
+    use rstest::rstest;
+
+    use super::Error;
+    use super::IngestionEntryGraph;
     use crate::B3Digest;
     use crate::import::IngestionEntry;
 
-    use rstest::rstest;
-
-    pub static EMPTY_DIGEST: LazyLock<B3Digest> =
-        LazyLock::new(|| blake3::hash(&[]).as_bytes().into());
+    pub static EMPTY_DIGEST: LazyLock<B3Digest> = LazyLock::new(|| blake3::hash(&[]).as_bytes().into());
     pub static DIR_A: LazyLock<IngestionEntry> = LazyLock::new(|| IngestionEntry::Dir {
         path: "a".parse().unwrap(),
     });
@@ -334,10 +312,7 @@ mod test {
     #[case::implicit_directories(&[&*FILE_A_B_C], &[&*FILE_A_B_C, &*DIR_A_B, &*DIR_A])]
     #[case::explicit_directories(&[&*DIR_A, &*DIR_A_B, &*FILE_A_B_C], &[&*FILE_A_B_C, &*DIR_A_B, &*DIR_A])]
     #[case::inaccesible_tree(&[&*DIR_A, &*DIR_A_B, &*FILE_A_B], &[&*FILE_A_B, &*DIR_A])]
-    fn node_ingestion_success(
-        #[case] in_entries: &[&IngestionEntry],
-        #[case] exp_entries: &[&IngestionEntry],
-    ) {
+    fn node_ingestion_success(#[case] in_entries: &[&IngestionEntry], #[case] exp_entries: &[&IngestionEntry]) {
         let mut nodes = IngestionEntryGraph::new();
 
         for entry in in_entries {
@@ -346,8 +321,7 @@ mod test {
 
         let entries = nodes.finalize().expect("invalid entries");
 
-        let exp_entries: Vec<IngestionEntry> =
-            exp_entries.iter().map(|entry| (*entry).clone()).collect();
+        let exp_entries: Vec<IngestionEntry> = exp_entries.iter().map(|entry| (*entry).clone()).collect();
 
         assert_eq!(entries, exp_entries);
     }

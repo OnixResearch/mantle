@@ -1,9 +1,10 @@
 // Copyright (C) 2023 Ant Group. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::super::CachePolicy;
 use std::fmt;
 use std::time::Duration;
+
+use self::super::CachePolicy;
 
 #[derive(Default, Clone, Debug)]
 pub struct Config {

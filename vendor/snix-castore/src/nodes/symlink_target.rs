@@ -1,5 +1,8 @@
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
+
 use bstr::ByteSlice;
-use std::fmt::{self, Debug, Display};
 
 /// A wrapper type for symlink targets.
 /// Internally uses a [bytes::Bytes], but disallows empty targets and those
@@ -73,10 +76,7 @@ impl TryFrom<&str> for SymlinkTarget {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if let Err(e) = validate_symlink_target(value) {
-            return Err(SymlinkTargetError::Convert(
-                value.to_owned().into(),
-                Box::new(e),
-            ));
+            return Err(SymlinkTargetError::Convert(value.to_owned().into(), Box::new(e)));
         }
 
         Ok(Self {
@@ -116,19 +116,16 @@ mod tests {
     use bytes::Bytes;
     use rstest::rstest;
 
+    use super::SymlinkTarget;
+    use super::SymlinkTargetError;
     use super::validate_symlink_target;
-    use super::{SymlinkTarget, SymlinkTargetError};
 
     #[rstest]
     #[case::empty(b"", SymlinkTargetError::Empty)]
     #[case::null(b"foo\0", SymlinkTargetError::Null)]
     fn errors(#[case] v: &'static [u8], #[case] err: SymlinkTargetError) {
         {
-            assert_eq!(
-                Err(err.clone()),
-                validate_symlink_target(v),
-                "validate_symlink_target must fail as expected"
-            );
+            assert_eq!(Err(err.clone()), validate_symlink_target(v), "validate_symlink_target must fail as expected");
         }
 
         let exp_err_v = Bytes::from_static(v);
@@ -137,10 +134,7 @@ mod tests {
         {
             let v = Bytes::from_static(v);
             assert_eq!(
-                Err(SymlinkTargetError::Convert(
-                    exp_err_v.clone(),
-                    Box::new(err.clone())
-                )),
+                Err(SymlinkTargetError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                 SymlinkTarget::try_from(v),
                 "conversion must fail as expected"
             );
@@ -148,10 +142,7 @@ mod tests {
         // &[u8]
         {
             assert_eq!(
-                Err(SymlinkTargetError::Convert(
-                    exp_err_v.clone(),
-                    Box::new(err.clone())
-                )),
+                Err(SymlinkTargetError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                 SymlinkTarget::try_from(v),
                 "conversion must fail as expected"
             );
@@ -160,10 +151,7 @@ mod tests {
         {
             if let Ok(v) = std::str::from_utf8(v) {
                 assert_eq!(
-                    Err(SymlinkTargetError::Convert(
-                        exp_err_v.clone(),
-                        Box::new(err.clone())
-                    )),
+                    Err(SymlinkTargetError::Convert(exp_err_v.clone(), Box::new(err.clone()))),
                     SymlinkTarget::try_from(v),
                     "conversion must fail as expected"
                 );
@@ -173,10 +161,7 @@ mod tests {
 
     #[test]
     fn error_toolong() {
-        assert_eq!(
-            Err(SymlinkTargetError::TooLong),
-            validate_symlink_target("X".repeat(5000).into_bytes().as_slice())
-        )
+        assert_eq!(Err(SymlinkTargetError::TooLong), validate_symlink_target("X".repeat(5000).into_bytes().as_slice()))
     }
 
     #[rstest]
@@ -193,30 +178,18 @@ mod tests {
         // Bytes
         {
             let v: Bytes = v.into();
-            assert_eq!(
-                Ok(exp.clone()),
-                SymlinkTarget::try_from(v),
-                "conversion must succeed"
-            )
+            assert_eq!(Ok(exp.clone()), SymlinkTarget::try_from(v), "conversion must succeed")
         }
 
         // &[u8]
         {
-            assert_eq!(
-                Ok(exp.clone()),
-                SymlinkTarget::try_from(v),
-                "conversion must succeed"
-            )
+            assert_eq!(Ok(exp.clone()), SymlinkTarget::try_from(v), "conversion must succeed")
         }
 
         // &str, if this is valid UTF-8
         {
             if let Ok(v) = std::str::from_utf8(v) {
-                assert_eq!(
-                    Ok(exp.clone()),
-                    SymlinkTarget::try_from(v),
-                    "conversion must succeed"
-                )
+                assert_eq!(Ok(exp.clone()), SymlinkTarget::try_from(v), "conversion must succeed")
             }
         }
     }

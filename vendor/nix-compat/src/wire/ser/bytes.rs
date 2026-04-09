@@ -1,48 +1,39 @@
 use bytes::Bytes;
 
-use super::{NixSerialize, NixWrite};
+use super::NixSerialize;
+use super::NixWrite;
 
 impl NixSerialize for Bytes {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_slice(self).await
     }
 }
 
 impl NixSerialize for &[u8] {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_slice(self).await
     }
 }
 
 impl NixSerialize for String {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_slice(self.as_bytes()).await
     }
 }
 
 impl NixSerialize for str {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_slice(self.as_bytes()).await
     }
 }
 
 impl NixSerialize for &str {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_slice(self.as_bytes()).await
     }
 }
@@ -54,7 +45,8 @@ mod test {
     use tokio::io::AsyncWriteExt as _;
     use tokio_test::io::Builder;
 
-    use crate::wire::ser::{NixWrite, NixWriter};
+    use crate::wire::ser::NixWrite;
+    use crate::wire::ser::NixWriter;
 
     #[rstest]
     #[case::empty("", &hex!("0000 0000 0000 0000"))]

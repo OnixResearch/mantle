@@ -1,12 +1,11 @@
-use crate::build_cmd::{
-    load_configured_trusted_public_keys,
-    load_or_generate_signing_keypair,
-    state_dir,
-};
+use crate::build_cmd::load_configured_trusted_public_keys;
+use crate::build_cmd::load_or_generate_signing_keypair;
+use crate::build_cmd::state_dir;
 use crate::errors::RunError;
 
 pub fn cmd_store(action: crate::StoreAction) -> Result<(), RunError> {
-    use snix_store::pathinfoservice::{RedbPathInfoService, RedbPathInfoServiceConfig};
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
     let state = state_dir();
     let db_path = state.join("pathinfo.redb");
@@ -17,19 +16,18 @@ pub fn cmd_store(action: crate::StoreAction) -> Result<(), RunError> {
         )));
     }
 
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
+    let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
 
     rt.block_on(async {
-        let read_only = matches!(action, crate::StoreAction::List | crate::StoreAction::Info { .. } | crate::StoreAction::Verify { .. });
-        let svc = RedbPathInfoService::new(
-            "crunch".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(db_path.clone()),
-                read_only,
-                cache_size: None,
-            },
-        )
+        let read_only = matches!(
+            action,
+            crate::StoreAction::List | crate::StoreAction::Info { .. } | crate::StoreAction::Verify { .. }
+        );
+        let svc = RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
+            path: Some(db_path.clone()),
+            read_only,
+            cache_size: None,
+        })
         .await
         .map_err(|e| RunError::Internal(format!("opening PathInfo database: {e}")))?;
 
@@ -42,14 +40,8 @@ pub fn cmd_store(action: crate::StoreAction) -> Result<(), RunError> {
                 trusted_public_keys,
                 trust_unsigned,
             } => {
-                cmd_store_verify(
-                    &svc,
-                    path.as_deref(),
-                    signing_key.as_deref(),
-                    &trusted_public_keys,
-                    trust_unsigned,
-                )
-                .await
+                cmd_store_verify(&svc, path.as_deref(), signing_key.as_deref(), &trusted_public_keys, trust_unsigned)
+                    .await
             }
             crate::StoreAction::Sign { path, all, signing_key } => {
                 cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref()).await
@@ -58,12 +50,8 @@ pub fn cmd_store(action: crate::StoreAction) -> Result<(), RunError> {
     })
 }
 
-async fn cmd_store_list(
-    svc: &impl snix_store::pathinfoservice::PathInfoService,
-) -> Result<(), RunError> {
-    let entries = crunch_store::store_list(svc)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
+async fn cmd_store_list(svc: &impl snix_store::pathinfoservice::PathInfoService) -> Result<(), RunError> {
+    let entries = crunch_store::store_list(svc).await.map_err(|e| RunError::Internal(format!("{e}")))?;
     if entries.is_empty() {
         eprintln!("No paths in PathInfo database.");
     } else {
@@ -75,13 +63,8 @@ async fn cmd_store_list(
     Ok(())
 }
 
-async fn cmd_store_info(
-    svc: &impl snix_store::pathinfoservice::PathInfoService,
-    path: &str,
-) -> Result<(), RunError> {
-    let details = crunch_store::store_info(svc, path)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
+async fn cmd_store_info(svc: &impl snix_store::pathinfoservice::PathInfoService, path: &str) -> Result<(), RunError> {
+    let details = crunch_store::store_info(svc, path).await.map_err(|e| RunError::Internal(format!("{e}")))?;
     if details.is_empty() {
         return Err(RunError::Internal(format!("no PathInfo matching '{path}'")));
     }
@@ -128,24 +111,19 @@ async fn cmd_store_verify(
             let mut keys = Vec::new();
             for key_str in explicit_trusted_public_keys {
                 keys.push(
-                    nix_compat::narinfo::VerifyingKey::parse(key_str).map_err(|e| {
-                        RunError::Internal(format!(
-                            "invalid trusted public key '{key_str}': {e}"
-                        ))
-                    })?,
+                    nix_compat::narinfo::VerifyingKey::parse(key_str)
+                        .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
                 );
             }
             Some(keys)
         };
 
     let keypair = load_or_generate_signing_keypair(signing_key_path, &state_dir())?;
-    let configured_trusted_keys =
-        load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), &state_dir())?;
+    let configured_trusted_keys = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), &state_dir())?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
 
-    let hash_results = crunch_store::store_verify(svc, path_filter)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let hash_results =
+        crunch_store::store_verify(svc, path_filter).await.map_err(|e| RunError::Internal(format!("{e}")))?;
     let signature_results = crunch_store::store_verify_signatures(svc, path_filter, &trusted_keys)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
@@ -160,17 +138,16 @@ async fn cmd_store_verify(
     for result in &hash_results {
         match result {
             crunch_store::VerifyResult::Ok(path) => {
-                let sig_result = signature_by_path.get(path).ok_or_else(|| {
-                    RunError::Internal(format!("missing signature result for {path}"))
-                })?;
+                let sig_result = signature_by_path
+                    .get(path)
+                    .ok_or_else(|| RunError::Internal(format!("missing signature result for {path}")))?;
 
                 if trust_unsigned {
                     println!("OK {path}  signatures=skipped");
                 } else if sig_result.is_trusted() {
                     println!(
                         "OK {path}  trusted_signatures={}/{}",
-                        sig_result.trusted_count,
-                        sig_result.total_signatures
+                        sig_result.trusted_count, sig_result.total_signatures
                     );
                 } else {
                     if sig_result.total_signatures == 0 {
@@ -179,8 +156,7 @@ async fn cmd_store_verify(
                         let untrusted = sig_result.untrusted_names.join(",");
                         println!(
                             "UNTRUSTED {path}  trusted_signatures=0/{}  signers={}",
-                            sig_result.total_signatures,
-                            untrusted
+                            sig_result.total_signatures, untrusted
                         );
                     }
                     mismatches = mismatches.saturating_add(1);
@@ -204,9 +180,7 @@ async fn cmd_store_verify(
 
     eprintln!("{checked} checked, {mismatches} mismatches");
     if mismatches > 0 {
-        return Err(RunError::Build(format!(
-            "{mismatches} path(s) failed verification"
-        )));
+        return Err(RunError::Build(format!("{mismatches} path(s) failed verification")));
     }
     Ok(())
 }
@@ -218,20 +192,14 @@ async fn cmd_store_sign(
     signing_key_path: Option<&std::path::Path>,
 ) -> Result<(), RunError> {
     if path_filter.is_none() && !sign_all {
-        return Err(RunError::Internal(
-            "provide a store path or use --all to sign all entries".to_string(),
-        ));
+        return Err(RunError::Internal("provide a store path or use --all to sign all entries".to_string()));
     }
 
-    let keypair = crate::build_cmd::load_or_generate_signing_keypair(
-        signing_key_path, &state_dir(),
-    )?;
+    let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, &state_dir())?;
 
-    let results = crunch_store::store_sign(
-        svc, &keypair.signing_key, path_filter, sign_all,
-    )
-    .await
-    .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, sign_all)
+        .await
+        .map_err(|e| RunError::Internal(format!("{e}")))?;
 
     let mut signed: u32 = 0;
     let mut appended: u32 = 0;
@@ -255,12 +223,6 @@ async fn cmd_store_sign(
         }
     }
 
-    eprintln!(
-        "{} signed, {} appended, {} replaced, {} total",
-        signed,
-        appended,
-        replaced,
-        results.len()
-    );
+    eprintln!("{} signed, {} appended, {} replaced, {} total", signed, appended, replaced, results.len());
     Ok(())
 }

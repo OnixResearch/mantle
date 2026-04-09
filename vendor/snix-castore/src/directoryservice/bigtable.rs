@@ -1,19 +1,29 @@
-use async_trait::async_trait;
-use bigtable_rs::{bigtable, google::bigtable::v2 as bigtable_v2};
-use data_encoding::HEXLOWER;
-use futures::stream::BoxStream;
-use futures::{StreamExt, TryStreamExt};
-
-use serde::{Deserialize, Serialize};
-use serde_with::{DurationSeconds, serde_as};
 use std::sync::Arc;
 
-use tracing::{instrument, trace, warn};
+use async_trait::async_trait;
+use bigtable_rs::bigtable;
+use bigtable_rs::google::bigtable::v2 as bigtable_v2;
+use data_encoding::HEXLOWER;
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_with::DurationSeconds;
+use serde_with::serde_as;
+use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 
-use super::{Directory, DirectoryPutter, DirectoryService, SimplePutter};
-use crate::composition::{CompositionContext, ServiceBuilder};
+use super::Directory;
+use super::DirectoryPutter;
+use super::DirectoryService;
+use super::SimplePutter;
+use crate::B3Digest;
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
 use crate::directoryservice::traversal;
-use crate::{B3Digest, proto};
+use crate::proto;
 
 /// There should not be more than 10 MiB in a single cell.
 /// <https://cloud.google.com/bigtable/docs/schema-design#cells>
@@ -50,10 +60,7 @@ pub struct BigtableDirectoryService {
 
 impl BigtableDirectoryService {
     #[cfg(not(test))]
-    pub async fn connect(
-        instance_name: String,
-        params: BigtableParameters,
-    ) -> Result<Self, bigtable::Error> {
+    pub async fn connect(instance_name: String, params: BigtableParameters) -> Result<Self, bigtable::Error> {
         let connection = bigtable::BigTableConnection::new(
             &params.project_id,
             &params.instance_name,
@@ -71,15 +78,14 @@ impl BigtableDirectoryService {
     }
 
     #[cfg(test)]
-    pub async fn connect(
-        instance_name: String,
-        params: BigtableParameters,
-    ) -> Result<Self, bigtable::Error> {
+    pub async fn connect(instance_name: String, params: BigtableParameters) -> Result<Self, bigtable::Error> {
         use std::time::Duration;
 
-        use async_process::{Command, Stdio};
+        use async_process::Command;
+        use async_process::Stdio;
         use tempfile::TempDir;
-        use tokio_retry::{Retry, strategy::ExponentialBackoff};
+        use tokio_retry::Retry;
+        use tokio_retry::strategy::ExponentialBackoff;
 
         let tmpdir = TempDir::new().unwrap();
 
@@ -94,41 +100,25 @@ impl BigtableDirectoryService {
             .spawn()
             .expect("failed to spawn emulator");
 
-        Retry::spawn(
-            ExponentialBackoff::from_millis(20)
-                .max_delay(Duration::from_secs(1))
-                .take(3),
-            || async {
-                if socket_path.exists() {
-                    Ok(())
-                } else {
-                    Err(())
-                }
-            },
-        )
+        Retry::spawn(ExponentialBackoff::from_millis(20).max_delay(Duration::from_secs(1)).take(3), || async {
+            if socket_path.exists() { Ok(()) } else { Err(()) }
+        })
         .await
         .expect("failed to wait for socket");
 
         // populate the emulator
-        for cmd in &[
-            vec!["createtable", &params.table_name],
-            vec!["createfamily", &params.table_name, &params.family_name],
-        ] {
+        for cmd in &[vec!["createtable", &params.table_name], vec![
+            "createfamily",
+            &params.table_name,
+            &params.family_name,
+        ]] {
             Command::new("cbt")
                 .args({
-                    let mut args = vec![
-                        "-instance",
-                        &params.instance_name,
-                        "-project",
-                        &params.project_id,
-                    ];
+                    let mut args = vec!["-instance", &params.instance_name, "-project", &params.project_id];
                     args.extend_from_slice(cmd);
                     args
                 })
-                .env(
-                    "BIGTABLE_EMULATOR_HOST",
-                    format!("unix://{}", socket_path.to_string_lossy()),
-                )
+                .env("BIGTABLE_EMULATOR_HOST", format!("unix://{}", socket_path.to_string_lossy()))
                 .output()
                 .await
                 .expect("failed to run cbt setup command");
@@ -157,7 +147,6 @@ fn derive_directory_key(digest: &B3Digest) -> String {
     HEXLOWER.encode(digest.as_slice())
 }
 
-
 #[async_trait]
 impl DirectoryService for BigtableDirectoryService {
     #[instrument(skip(self, digest), err, fields(directory.digest = %digest, instance_name=%self.instance_name))]
@@ -176,37 +165,28 @@ impl DirectoryService for BigtableDirectoryService {
             // Filter selected family name, and column qualifier matching our digest.
             // This is to ensure we don't fail once we start bucketing.
             filter: Some(bigtable_v2::RowFilter {
-                filter: Some(bigtable_v2::row_filter::Filter::Chain(
-                    bigtable_v2::row_filter::Chain {
-                        filters: vec![
-                            bigtable_v2::RowFilter {
-                                filter: Some(
-                                    bigtable_v2::row_filter::Filter::FamilyNameRegexFilter(
-                                        self.params.family_name.to_string(),
-                                    ),
-                                ),
-                            },
-                            bigtable_v2::RowFilter {
-                                filter: Some(
-                                    bigtable_v2::row_filter::Filter::ColumnQualifierRegexFilter(
-                                        directory_key.clone().into(),
-                                    ),
-                                ),
-                            },
-                        ],
-                    },
-                )),
+                filter: Some(bigtable_v2::row_filter::Filter::Chain(bigtable_v2::row_filter::Chain {
+                    filters: vec![
+                        bigtable_v2::RowFilter {
+                            filter: Some(bigtable_v2::row_filter::Filter::FamilyNameRegexFilter(
+                                self.params.family_name.to_string(),
+                            )),
+                        },
+                        bigtable_v2::RowFilter {
+                            filter: Some(bigtable_v2::row_filter::Filter::ColumnQualifierRegexFilter(
+                                directory_key.clone().into(),
+                            )),
+                        },
+                    ],
+                })),
             }),
             ..Default::default()
         };
 
-        let mut response = client
-            .read_rows(request)
-            .await
-            .map_err(|e| Error::BigTable {
-                msg: "reading rows",
-                source: e,
-            })?;
+        let mut response = client.read_rows(request).await.map_err(|e| Error::BigTable {
+            msg: "reading rows",
+            source: e,
+        })?;
 
         if response.len() != 1 {
             if response.len() > 1 {
@@ -223,9 +203,7 @@ impl DirectoryService for BigtableDirectoryService {
             Err(Error::UnexpectedDataReturned("got wrong row key"))?
         }
 
-        let row_cell = row_cells
-            .pop()
-            .ok_or_else(|| Error::UnexpectedDataReturned("found no cells"))?;
+        let row_cell = row_cells.pop().ok_or_else(|| Error::UnexpectedDataReturned("found no cells"))?;
 
         // Ensure there's only one cell (so no more left after the pop())
         // This shouldn't happen, We filter out other cells in our query.
@@ -281,14 +259,12 @@ impl DirectoryService for BigtableDirectoryService {
                 false_mutations: vec![
                     // https://cloud.google.com/bigtable/docs/writes
                     bigtable_v2::Mutation {
-                        mutation: Some(bigtable_v2::mutation::Mutation::SetCell(
-                            bigtable_v2::mutation::SetCell {
-                                family_name: self.params.family_name.to_string(),
-                                column_qualifier: directory_key.clone().into(),
-                                timestamp_micros: -1, // use server time to fill timestamp
-                                value: data,
-                            },
-                        )),
+                        mutation: Some(bigtable_v2::mutation::Mutation::SetCell(bigtable_v2::mutation::SetCell {
+                            family_name: self.params.family_name.to_string(),
+                            column_qualifier: directory_key.clone().into(),
+                            timestamp_micros: -1, // use server time to fill timestamp
+                            value: data,
+                        })),
                     },
                 ],
             })
@@ -306,10 +282,7 @@ impl DirectoryService for BigtableDirectoryService {
     }
 
     #[instrument(skip_all, fields(directory.digest = %root_directory_digest, instance_name=%self.instance_name))]
-    fn get_recursive(
-        &self,
-        root_directory_digest: &B3Digest,
-    ) -> BoxStream<'static, Result<Directory, super::Error>> {
+    fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'static, Result<Directory, super::Error>> {
         let svc = self.clone();
         super::traversal::root_to_leaves(*root_directory_digest, move |digest| {
             let svc = svc.clone();
@@ -393,7 +366,6 @@ fn default_timeout() -> Option<std::time::Duration> {
     Some(std::time::Duration::from_secs(4))
 }
 
-
 #[async_trait]
 impl ServiceBuilder for BigtableParameters {
     type Output = dyn DirectoryService;
@@ -402,9 +374,7 @@ impl ServiceBuilder for BigtableParameters {
         instance_name: &str,
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Arc::new(
-            BigtableDirectoryService::connect(instance_name.to_string(), self.clone()).await?,
-        ))
+        Ok(Arc::new(BigtableDirectoryService::connect(instance_name.to_string(), self.clone()).await?))
     }
 }
 
@@ -412,14 +382,10 @@ impl TryFrom<url::Url> for BigtableParameters {
     type Error = Box<dyn std::error::Error + Send + Sync>;
     fn try_from(mut url: url::Url) -> Result<Self, Self::Error> {
         // parse the instance name from the hostname.
-        let instance_name = url
-            .host_str()
-            .ok_or_else(|| Error::WrongConfig("instance name missing"))?
-            .to_owned();
+        let instance_name = url.host_str().ok_or_else(|| Error::WrongConfig("instance name missing"))?.to_owned();
 
         // … but add it to the query string now, so we just need to parse that.
-        url.query_pairs_mut()
-            .append_pair("instance_name", &instance_name);
+        url.query_pairs_mut().append_pair("instance_name", &instance_name);
 
         let params: BigtableParameters = serde_qs::from_str(url.query().unwrap_or_default())?;
 

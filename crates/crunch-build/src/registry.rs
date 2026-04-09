@@ -8,9 +8,10 @@
 //! This module has no dependency on crunch-glue. The build engine
 //! only needs `nix_compat::Derivation` and associated store paths.
 
+use std::collections::HashMap;
+
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
-use std::collections::HashMap;
 
 /// Maximum registry entries. Matches `goal::MAX_GOALS`.
 const MAX_ENTRIES: u32 = 16_384;
@@ -81,14 +82,8 @@ impl DerivationRegistry {
         derivation: Derivation,
         content_addressed: bool,
     ) {
-        debug_assert!(
-            !derivation.outputs.is_empty(),
-            "derivation must have at least one output"
-        );
-        debug_assert!(
-            self.entries.len() < MAX_ENTRIES as usize,
-            "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})"
-        );
+        debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
+        debug_assert!(self.entries.len() < MAX_ENTRIES as usize, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
 
         let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_abs.clone(), hdm);
@@ -124,17 +119,12 @@ impl DerivationRegistry {
     /// For input-addressed derivations, returns the pre-computed path
     /// from `derivation.outputs`. For CA derivations, returns the
     /// resolved path set by `resolve_output()`.
-    pub fn get_output_path(
-        &self,
-        drv_abs: &str,
-        output_name: &str,
-    ) -> Option<StorePath<String>> {
+    pub fn get_output_path(&self, drv_abs: &str, output_name: &str) -> Option<StorePath<String>> {
         let entry = self.entries.get(drv_abs)?;
         if entry.content_addressed {
             entry.resolved_outputs.get(output_name).cloned()
         } else {
-            entry.derivation.outputs.get(output_name)
-                .and_then(|o| o.path.clone())
+            entry.derivation.outputs.get(output_name).and_then(|o| o.path.clone())
         }
     }
 
@@ -148,15 +138,12 @@ impl DerivationRegistry {
         output_name: &str,
         final_path: StorePath<String>,
     ) -> Result<(), crate::Error> {
-        let entry = self.entries.get_mut(drv_abs).ok_or_else(|| {
-            crate::Error::Store(format!(
-                "resolve_output: derivation not registered: {drv_abs}"
-            ))
-        })?;
+        let entry = self
+            .entries
+            .get_mut(drv_abs)
+            .ok_or_else(|| crate::Error::Store(format!("resolve_output: derivation not registered: {drv_abs}")))?;
         if !entry.content_addressed {
-            return Err(crate::Error::Store(format!(
-                "resolve_output called on non-CA derivation: {drv_abs}"
-            )));
+            return Err(crate::Error::Store(format!("resolve_output called on non-CA derivation: {drv_abs}")));
         }
         entry.resolved_outputs.insert(output_name.to_string(), final_path);
         Ok(())
@@ -175,13 +162,8 @@ impl Default for DerivationRegistry {
 ///
 /// The caller iterates the cache and feeds entries here. The registry
 /// and cache never see each other directly.
-pub fn populate_registry<I>(
-    registry: &mut DerivationRegistry,
-    entries: I,
-)
-where
-    I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool)>,
-{
+pub fn populate_registry<I>(registry: &mut DerivationRegistry, entries: I)
+where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool)> {
     for (drv_path, hdm, derivation, content_addressed) in entries {
         registry.insert(drv_path, hdm, derivation, content_addressed);
     }
@@ -189,9 +171,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
     use nix_compat::derivation::Output;
-    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::*;
 
     fn dummy_derivation() -> Derivation {
         let mut outputs = BTreeMap::new();

@@ -1,15 +1,19 @@
-use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::io::Read;
+use std::io::{self};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
-use crunch_project::{GitReference, HashAlgo, HashResolutionMode, RefreshResolver};
+use crunch_project::GitReference;
+use crunch_project::HashAlgo;
+use crunch_project::HashResolutionMode;
+use crunch_project::RefreshResolver;
 use digest::Digest;
 use nix_compat::nixhash::NixHash;
 use snix_castore::Node;
 use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::{
-    RedbDirectoryService, RedbDirectoryServiceConfig,
-};
+use snix_castore::directoryservice::RedbDirectoryService;
+use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_castore::import::fs::ingest_path;
 use snix_store::nar::write_nar;
 use snix_store::utils::AsyncIoBridge;
@@ -65,20 +69,13 @@ impl RefreshResolver for LiveResolver {
         Ok(Some(hash_git_tree(repository, rev, algo)?))
     }
 
-    fn hash_local_file(
-        &self,
-        path: &str,
-        algo: &HashAlgo,
-    ) -> Result<Option<String>, crunch_project::Error> {
+    fn hash_local_file(&self, path: &str, algo: &HashAlgo) -> Result<Option<String>, crunch_project::Error> {
         let resolved = resolve_local_path(&self.project_root, path);
         Ok(Some(hash_flat_file(&resolved, algo)?))
     }
 }
 
-fn resolve_git_reference(
-    repository: &str,
-    reference: &GitReference,
-) -> Result<String, crunch_project::Error> {
+fn resolve_git_reference(repository: &str, reference: &GitReference) -> Result<String, crunch_project::Error> {
     match reference {
         GitReference::Rev(rev) => {
             validate_git_rev(rev)?;
@@ -99,44 +96,30 @@ fn resolve_git_reference(
 
 fn validate_git_rev(rev: &str) -> Result<(), crunch_project::Error> {
     if rev.len() != 40 {
-        return Err(crunch_project::Error::Validation(format!(
-            "git rev must be 40 hex characters, got {rev}"
-        )));
+        return Err(crunch_project::Error::Validation(format!("git rev must be 40 hex characters, got {rev}")));
     }
     if !rev.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(crunch_project::Error::Validation(format!(
-            "git rev must be hex, got {rev}"
-        )));
+        return Err(crunch_project::Error::Validation(format!("git rev must be hex, got {rev}")));
     }
     Ok(())
 }
 
-fn run_git_ls_remote(
-    repository: &str,
-    refs: &[&str],
-) -> Result<String, crunch_project::Error> {
+fn run_git_ls_remote(repository: &str, refs: &[&str]) -> Result<String, crunch_project::Error> {
     let git = find_git_binary()?;
     let output = Command::new(&git)
         .arg("ls-remote")
         .arg(repository)
         .args(refs)
         .output()
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "running git ls-remote for {repository}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("running git ls-remote for {repository}: {err}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(crunch_project::Error::Manifest(format!(
-            "git ls-remote failed for {repository}: {stderr}"
-        )));
+        return Err(crunch_project::Error::Manifest(format!("git ls-remote failed for {repository}: {stderr}")));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn parse_branch_output(
-    output: &str,
-    branch: &str,
-) -> Result<String, crunch_project::Error> {
+fn parse_branch_output(output: &str, branch: &str) -> Result<String, crunch_project::Error> {
     let wanted = format!("refs/heads/{branch}");
     for line in output.lines() {
         let Some((rev, reference)) = line.split_once('\t') else {
@@ -147,15 +130,10 @@ fn parse_branch_output(
             return Ok(rev.to_string());
         }
     }
-    Err(crunch_project::Error::Manifest(format!(
-        "git branch not found: {branch}"
-    )))
+    Err(crunch_project::Error::Manifest(format!("git branch not found: {branch}")))
 }
 
-fn parse_tag_output(
-    output: &str,
-    tag: &str,
-) -> Result<String, crunch_project::Error> {
+fn parse_tag_output(output: &str, tag: &str) -> Result<String, crunch_project::Error> {
     let direct = format!("refs/tags/{tag}");
     let peeled = format!("refs/tags/{tag}^{{}}");
     let mut direct_rev: Option<String> = None;
@@ -172,45 +150,29 @@ fn parse_tag_output(
             direct_rev = Some(rev.to_string());
         }
     }
-    direct_rev.ok_or_else(|| {
-        crunch_project::Error::Manifest(format!("git tag not found: {tag}"))
-    })
+    direct_rev.ok_or_else(|| crunch_project::Error::Manifest(format!("git tag not found: {tag}")))
 }
 
-fn hash_flat_url(
-    url: &str,
-    algo: &HashAlgo,
-) -> Result<String, crunch_project::Error> {
+fn hash_flat_url(url: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
     let reader = open_url_reader(url)?;
     let bounded = BoundedReader::new(reader, MAX_DOWNLOAD_BYTES, url.to_string());
     hash_reader_to_sri(bounded, algo, &format!("downloaded content for {url}"))
 }
 
-fn hash_tarball_url(
-    url: &str,
-    algo: &HashAlgo,
-) -> Result<String, crunch_project::Error> {
+fn hash_tarball_url(url: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
     let reader = open_url_reader(url)?;
     let bounded = BoundedReader::new(reader, MAX_DOWNLOAD_BYTES, url.to_string());
     let unpacked = crunch_build::fetcher::decompress_reader(url, bounded)
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "decompressing {url}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("decompressing {url}: {err}")))?;
     let dir = tempdir()?;
     let out = path_to_str(dir.path(), "temporary unpack directory")?;
     crunch_build::fetcher::extract_tar(unpacked, out)
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "extracting tarball {url}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("extracting tarball {url}: {err}")))?;
     ensure_tree_within_limits(dir.path())?;
     hash_recursive_path(dir.path(), algo)
 }
 
-fn hash_git_tree(
-    repository: &str,
-    rev: &str,
-    algo: &HashAlgo,
-) -> Result<String, crunch_project::Error> {
+fn hash_git_tree(repository: &str, rev: &str, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
     let git = find_git_binary()?;
     let dir = tempdir()?;
     let bare = dir.path().join("source.git");
@@ -221,33 +183,20 @@ fn hash_git_tree(
     hash_recursive_path(&checkout, algo)
 }
 
-fn run_git_clone_bare(
-    git: &Path,
-    repository: &str,
-    bare: &Path,
-) -> Result<(), crunch_project::Error> {
+fn run_git_clone_bare(git: &Path, repository: &str, bare: &Path) -> Result<(), crunch_project::Error> {
     let output = Command::new(git)
         .args(["clone", "--bare", repository])
         .arg(bare)
         .output()
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "running git clone for {repository}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("running git clone for {repository}: {err}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(crunch_project::Error::Manifest(format!(
-            "git clone failed for {repository}: {stderr}"
-        )));
+        return Err(crunch_project::Error::Manifest(format!("git clone failed for {repository}: {stderr}")));
     }
     Ok(())
 }
 
-fn run_git_checkout_tree(
-    git: &Path,
-    bare: &Path,
-    checkout: &Path,
-    rev: &str,
-) -> Result<(), crunch_project::Error> {
+fn run_git_checkout_tree(git: &Path, bare: &Path, checkout: &Path, rev: &str) -> Result<(), crunch_project::Error> {
     std::fs::create_dir_all(checkout)?;
     let output = Command::new(git)
         .arg("--git-dir")
@@ -256,38 +205,22 @@ fn run_git_checkout_tree(
         .arg(checkout)
         .args(["checkout", rev, "--", "."])
         .output()
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "running git checkout for {rev}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("running git checkout for {rev}: {err}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(crunch_project::Error::Manifest(format!(
-            "git checkout failed for {rev}: {stderr}"
-        )));
+        return Err(crunch_project::Error::Manifest(format!("git checkout failed for {rev}: {stderr}")));
     }
     Ok(())
 }
 
-fn hash_flat_file(
-    path: &Path,
-    algo: &HashAlgo,
-) -> Result<String, crunch_project::Error> {
-    let file = std::fs::File::open(path).map_err(|err| {
-        crunch_project::Error::Manifest(format!("opening {}: {err}", path.display()))
-    })?;
-    let bounded = BoundedReader::new(
-        io::BufReader::new(file),
-        MAX_DOWNLOAD_BYTES,
-        path.display().to_string(),
-    );
+fn hash_flat_file(path: &Path, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
+    let file = std::fs::File::open(path)
+        .map_err(|err| crunch_project::Error::Manifest(format!("opening {}: {err}", path.display())))?;
+    let bounded = BoundedReader::new(io::BufReader::new(file), MAX_DOWNLOAD_BYTES, path.display().to_string());
     hash_reader_to_sri(bounded, algo, &format!("local file {}", path.display()))
 }
 
-fn hash_reader_to_sri<R: Read>(
-    mut reader: R,
-    algo: &HashAlgo,
-    label: &str,
-) -> Result<String, crunch_project::Error> {
+fn hash_reader_to_sri<R: Read>(mut reader: R, algo: &HashAlgo, label: &str) -> Result<String, crunch_project::Error> {
     let mut buffer = [0u8; 64 * 1024];
     match algo {
         HashAlgo::Sha256 => {
@@ -305,9 +238,9 @@ fn hash_reader_to_sri<R: Read>(
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
             loop {
-                let read = reader.read(&mut buffer).map_err(|err| {
-                    crunch_project::Error::Manifest(format!("reading {label}: {err}"))
-                })?;
+                let read = reader
+                    .read(&mut buffer)
+                    .map_err(|err| crunch_project::Error::Manifest(format!("reading {label}: {err}")))?;
                 if read == 0 {
                     break;
                 }
@@ -325,9 +258,9 @@ fn read_into_hasher<R: Read, H: Digest>(
     label: &str,
 ) -> Result<(), crunch_project::Error> {
     loop {
-        let read = reader.read(buffer).map_err(|err| {
-            crunch_project::Error::Manifest(format!("reading {label}: {err}"))
-        })?;
+        let read = reader
+            .read(buffer)
+            .map_err(|err| crunch_project::Error::Manifest(format!("reading {label}: {err}")))?;
         if read == 0 {
             return Ok(());
         }
@@ -335,37 +268,22 @@ fn read_into_hasher<R: Read, H: Digest>(
     }
 }
 
-fn hash_recursive_path(
-    path: &Path,
-    algo: &HashAlgo,
-) -> Result<String, crunch_project::Error> {
+fn hash_recursive_path(path: &Path, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
     let root = path.to_path_buf();
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "creating hash runtime: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("creating hash runtime: {err}")))?;
     rt.block_on(async move {
         let blob_service = MemoryBlobService::default();
         let directory_service = RedbDirectoryService::new_temporary(
             "project-refresh".to_string(),
             RedbDirectoryServiceConfig::default(),
         )
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "creating temporary directory service: {err}"
-        )))?;
-        let node = ingest_path::<_, _, _, &[u8]>(
-            blob_service.clone(),
-            directory_service.clone(),
-            &root,
-            None,
-        )
-        .await
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "ingesting {}: {err}",
-            root.display()
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary directory service: {err}")))?;
+        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
+            .await
+            .map_err(|err| crunch_project::Error::Manifest(format!("ingesting {}: {err}", root.display())))?;
         nar_hash_to_sri(&node, algo, blob_service, directory_service).await
     })
 }
@@ -379,46 +297,25 @@ async fn nar_hash_to_sri(
     let nix_hash = match algo {
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
-            write_nar(
-                AsyncIoBridge(&mut hasher),
-                node,
-                blob_service,
-                directory_service,
-            )
-            .await
-            .map_err(|err| crunch_project::Error::Manifest(format!(
-                "writing NAR: {err}"
-            )))?;
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
+                .await
+                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
             let hash: [u8; 32] = hasher.finalize().into();
             NixHash::Sha256(hash)
         }
         HashAlgo::Sha512 => {
             let mut hasher = sha2::Sha512::new();
-            write_nar(
-                AsyncIoBridge(&mut hasher),
-                node,
-                blob_service,
-                directory_service,
-            )
-            .await
-            .map_err(|err| crunch_project::Error::Manifest(format!(
-                "writing NAR: {err}"
-            )))?;
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
+                .await
+                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
             let hash: [u8; 64] = hasher.finalize().into();
             NixHash::Sha512(Box::new(hash))
         }
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
-            write_nar(
-                AsyncIoBridge(&mut hasher),
-                node,
-                blob_service,
-                directory_service,
-            )
-            .await
-            .map_err(|err| crunch_project::Error::Manifest(format!(
-                "writing NAR: {err}"
-            )))?;
+            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
+                .await
+                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
             NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes())
         }
     };
@@ -437,9 +334,8 @@ fn ensure_tree_within_limits(path: &Path) -> Result<(), crunch_project::Error> {
                 path.display()
             )));
         }
-        let metadata = std::fs::symlink_metadata(&current).map_err(|err| {
-            crunch_project::Error::Manifest(format!("stat {}: {err}", current.display()))
-        })?;
+        let metadata = std::fs::symlink_metadata(&current)
+            .map_err(|err| crunch_project::Error::Manifest(format!("stat {}: {err}", current.display())))?;
         if metadata.is_file() {
             bytes_total = bytes_total.saturating_add(metadata.len());
             if bytes_total > MAX_TREE_BYTES {
@@ -453,22 +349,18 @@ fn ensure_tree_within_limits(path: &Path) -> Result<(), crunch_project::Error> {
         if !metadata.is_dir() {
             continue;
         }
-        for child in std::fs::read_dir(&current).map_err(|err| {
-            crunch_project::Error::Manifest(format!("read_dir {}: {err}", current.display()))
-        })? {
-            let child = child.map_err(|err| {
-                crunch_project::Error::Manifest(format!("walking {}: {err}", current.display()))
-            })?;
+        for child in std::fs::read_dir(&current)
+            .map_err(|err| crunch_project::Error::Manifest(format!("read_dir {}: {err}", current.display())))?
+        {
+            let child = child
+                .map_err(|err| crunch_project::Error::Manifest(format!("walking {}: {err}", current.display())))?;
             pending.push(child.path());
         }
     }
     Ok(())
 }
 
-fn resolve_local_path(
-    project_root: &Path,
-    path: &str,
-) -> PathBuf {
+fn resolve_local_path(project_root: &Path, path: &str) -> PathBuf {
     let source = Path::new(path);
     if source.is_absolute() {
         source.to_path_buf()
@@ -477,13 +369,9 @@ fn resolve_local_path(
     }
 }
 
-fn path_to_str<'a>(
-    path: &'a Path,
-    what: &str,
-) -> Result<&'a str, crunch_project::Error> {
-    path.to_str().ok_or_else(|| {
-        crunch_project::Error::Manifest(format!("{what} is not valid UTF-8: {}", path.display()))
-    })
+fn path_to_str<'a>(path: &'a Path, what: &str) -> Result<&'a str, crunch_project::Error> {
+    path.to_str()
+        .ok_or_else(|| crunch_project::Error::Manifest(format!("{what} is not valid UTF-8: {}", path.display())))
 }
 
 fn find_git_binary() -> Result<PathBuf, crunch_project::Error> {
@@ -512,26 +400,19 @@ fn find_git_binary() -> Result<PathBuf, crunch_project::Error> {
             }
         }
     }
-    Err(crunch_project::Error::Manifest(
-        "git not found in PATH".to_string(),
-    ))
+    Err(crunch_project::Error::Manifest("git not found in PATH".to_string()))
 }
 
-fn open_url_reader(
-    url: &str,
-) -> Result<Box<dyn Read + Send>, crunch_project::Error> {
+fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, crunch_project::Error> {
     if let Some(path) = url.strip_prefix("file://") {
-        let file = std::fs::File::open(path).map_err(|err| {
-            crunch_project::Error::Manifest(format!("opening local file URL {url}: {err}"))
-        })?;
+        let file = std::fs::File::open(path)
+            .map_err(|err| crunch_project::Error::Manifest(format!("opening local file URL {url}: {err}")))?;
         return Ok(Box::new(io::BufReader::new(file)));
     }
     let response = fetch_agent()
         .get(url)
         .call()
-        .map_err(|err| crunch_project::Error::Manifest(format!(
-            "downloading {url}: {err}"
-        )))?;
+        .map_err(|err| crunch_project::Error::Manifest(format!("downloading {url}: {err}")))?;
     Ok(Box::new(response.into_body().into_reader()))
 }
 
@@ -571,10 +452,7 @@ impl<R: Read> Read for BoundedReader<R> {
             if read == 0 {
                 return Ok(0);
             }
-            return Err(io::Error::other(format!(
-                "download exceeds {} bytes: {}",
-                self.limit_bytes, self.label
-            )));
+            return Err(io::Error::other(format!("download exceeds {} bytes: {}", self.limit_bytes, self.label)));
         }
         let remaining = self.limit_bytes.saturating_sub(self.seen_bytes);
         let allowed = remaining.min(buf.len() as u64) as usize;

@@ -4,9 +4,10 @@
 //! dedup, HDM cache, cycle detection. Build-time state (output
 //! resolution, CA tracking) lives in `crunch_build::DerivationRegistry`.
 
+use std::collections::HashMap;
+
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
-use std::collections::HashMap;
 
 /// Tracks derivations produced by `convert()`.
 ///
@@ -61,13 +62,7 @@ impl ConversionCache {
     }
 
     /// Register a fully-converted derivation (input-addressed).
-    pub fn insert(
-        &mut self,
-        aterm_hash: [u8; 32],
-        drv_path: StorePath<String>,
-        hdm: [u8; 32],
-        derivation: Derivation,
-    ) {
+    pub fn insert(&mut self, aterm_hash: [u8; 32], drv_path: StorePath<String>, hdm: [u8; 32], derivation: Derivation) {
         self.insert_ca(aterm_hash, drv_path, hdm, derivation, false);
     }
 
@@ -80,24 +75,13 @@ impl ConversionCache {
         derivation: Derivation,
         content_addressed: bool,
     ) {
-        debug_assert!(
-            !derivation.outputs.is_empty(),
-            "derivation must have at least one output"
-        );
-        debug_assert!(
-            aterm_hash != [0u8; 32],
-            "aterm_hash must not be all zeros"
-        );
+        debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
+        debug_assert!(aterm_hash != [0u8; 32], "aterm_hash must not be all zeros");
 
         let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
         self.drv_path_to_aterm.insert(drv_path_str.clone(), aterm_hash);
-        self.pending.push((
-            drv_path.clone(),
-            hdm,
-            derivation.clone(),
-            content_addressed,
-        ));
+        self.pending.push((drv_path.clone(), hdm, derivation.clone(), content_addressed));
         debug_assert!(
             (self.pending.len() as u32) <= MAX_PENDING,
             "pending entries exceeded limit ({}); call drain_pending()",
@@ -147,17 +131,10 @@ impl ConversionCache {
     ///
     /// Yields `(drv_path, hdm, derivation, content_addressed)` for
     /// each registered derivation.
-    pub fn iter_entries(
-        &self,
-    ) -> impl Iterator<Item = (StorePath<String>, [u8; 32], Derivation, bool)> + '_ {
-        self.by_aterm_hash.values().map(|e| {
-            (
-                e.drv_path.clone(),
-                e.hash_derivation_modulo,
-                e.derivation.clone(),
-                e.content_addressed,
-            )
-        })
+    pub fn iter_entries(&self) -> impl Iterator<Item = (StorePath<String>, [u8; 32], Derivation, bool)> + '_ {
+        self.by_aterm_hash
+            .values()
+            .map(|e| (e.drv_path.clone(), e.hash_derivation_modulo, e.derivation.clone(), e.content_addressed))
     }
 
     /// Drain entries added since the last drain. Returns new entries
@@ -166,9 +143,7 @@ impl ConversionCache {
     ///
     /// Call after each `convert()` to get derivations produced by
     /// that root and its transitive deps.
-    pub fn drain_pending(
-        &mut self,
-    ) -> Vec<(StorePath<String>, [u8; 32], Derivation, bool)> {
+    pub fn drain_pending(&mut self) -> Vec<(StorePath<String>, [u8; 32], Derivation, bool)> {
         std::mem::take(&mut self.pending)
     }
 
@@ -186,9 +161,12 @@ impl Default for ConversionCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
     use nix_compat::derivation::Output;
+
+    use super::*;
 
     fn dummy_derivation(_name: &str) -> Derivation {
         let mut outputs = BTreeMap::new();

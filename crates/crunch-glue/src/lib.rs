@@ -4,15 +4,16 @@
 //! The pipeline: `Expr::to_serde::<CrunchDerivation>()` -> `convert()` ->
 //! `(StorePath, nix_compat::Derivation)`.
 
-mod types;
-mod convert;
 mod conversion_cache;
+mod convert;
 mod error;
 pub mod nickel_string;
+mod types;
 
+pub use conversion_cache::ConversionCache;
+pub use conversion_cache::ConversionEntry;
 pub use convert::convert;
 pub use error::Error;
-pub use conversion_cache::{ConversionCache, ConversionEntry};
 pub use types::*;
 
 #[cfg(test)]

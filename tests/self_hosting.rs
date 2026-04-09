@@ -17,19 +17,17 @@
 //! 5. Verifies stage2 produced a working binary
 //! 6. Checks that stage2 used crunch-built bwrap (not host fallback)
 
+use std::path::Path;
+use std::path::PathBuf;
+
 use assert_cmd::Command;
-use std::path::{Path, PathBuf};
 
 /// Check prerequisites for the proof.
 fn can_self_build() -> bool {
     // Need bwrap, git, cargo, tar on PATH.
     let tools = ["bwrap", "git", "cargo", "tar"];
     for tool in tools {
-        if std::process::Command::new(tool)
-            .arg("--version")
-            .output()
-            .is_err()
-        {
+        if std::process::Command::new(tool).arg("--version").output().is_err() {
             eprintln!("SKIP: {tool} not on PATH");
             return false;
         }
@@ -114,9 +112,7 @@ fn find_busybox_on_disk(store: &Path) -> Option<PathBuf> {
 #[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    path.metadata()
-        .map(|m| m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
+    path.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
 }
 
 /// Parse proof lines from stderr.
@@ -144,18 +140,9 @@ fn self_hosting_stage0_stage1_stage2() {
     std::fs::create_dir_all(&store).unwrap();
 
     // The store starts empty. Verify no stale outputs exist.
-    assert!(
-        find_bwrap_on_disk(&store).is_none(),
-        "fresh store must not contain bwrap",
-    );
-    assert!(
-        find_busybox_on_disk(&store).is_none(),
-        "fresh store must not contain busybox",
-    );
-    assert!(
-        find_crunch_binary(&store).is_none(),
-        "fresh store must not contain crunch",
-    );
+    assert!(find_bwrap_on_disk(&store).is_none(), "fresh store must not contain bwrap",);
+    assert!(find_busybox_on_disk(&store).is_none(), "fresh store must not contain busybox",);
+    assert!(find_crunch_binary(&store).is_none(), "fresh store must not contain crunch",);
 
     // ── Stage 0: checkout binary builds stage1 ──────────────────
 
@@ -188,40 +175,24 @@ fn self_hosting_stage0_stage1_stage2() {
     );
 
     // Find the stage1 binary.
-    let stage1_binary = find_crunch_binary(&store)
-        .expect("stage0 should produce *-crunch/bin/crunch");
+    let stage1_binary = find_crunch_binary(&store).expect("stage0 should produce *-crunch/bin/crunch");
     eprintln!("stage1 binary: {}", stage1_binary.display());
 
     // Verify stage1 runs.
-    let stage1_help = std::process::Command::new(&stage1_binary)
-        .arg("--help")
-        .output()
-        .expect("stage1 binary should run");
-    assert!(
-        stage1_help.status.success(),
-        "stage1 --help failed",
-    );
+    let stage1_help =
+        std::process::Command::new(&stage1_binary).arg("--help").output().expect("stage1 binary should run");
+    assert!(stage1_help.status.success(), "stage1 --help failed",);
 
     // ── Verify bootstrap tools on disk (spec requirement) ─────
 
-    let bwrap_bin = find_bwrap_on_disk(&store)
-        .expect("*-bwrap/bin/bwrap must exist on disk after stage0");
+    let bwrap_bin = find_bwrap_on_disk(&store).expect("*-bwrap/bin/bwrap must exist on disk after stage0");
     #[cfg(unix)]
-    assert!(
-        is_executable(&bwrap_bin),
-        "bwrap binary must be executable: {}",
-        bwrap_bin.display(),
-    );
+    assert!(is_executable(&bwrap_bin), "bwrap binary must be executable: {}", bwrap_bin.display(),);
     eprintln!("bwrap on disk: {}", bwrap_bin.display());
 
-    let busybox_bin = find_busybox_on_disk(&store)
-        .expect("*-busybox/bin/busybox must exist on disk after stage0");
+    let busybox_bin = find_busybox_on_disk(&store).expect("*-busybox/bin/busybox must exist on disk after stage0");
     #[cfg(unix)]
-    assert!(
-        is_executable(&busybox_bin),
-        "busybox binary must be executable: {}",
-        busybox_bin.display(),
-    );
+    assert!(is_executable(&busybox_bin), "busybox binary must be executable: {}", busybox_bin.display(),);
     eprintln!("busybox on disk: {}", busybox_bin.display());
 
     // ── Prepare for Stage 2 ─────────────────────────────────────
@@ -235,13 +206,11 @@ fn self_hosting_stage0_stage1_stage2() {
     // inside the *-crunch directory we're about to remove.
 
     let stage1_copy = proof_dir.path().join("stage1-crunch");
-    std::fs::copy(&stage1_binary, &stage1_copy)
-        .expect("copy stage1 binary out of store");
+    std::fs::copy(&stage1_binary, &stage1_copy).expect("copy stage1 binary out of store");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&stage1_copy,
-            std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&stage1_copy, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     let stage1_binary = stage1_copy;
 
@@ -249,10 +218,7 @@ fn self_hosting_stage0_stage1_stage2() {
     // Stage2 reuses the castore/PathInfo cache for intermediate deps.
     let removed = remove_crunch_outputs(&store);
     assert!(removed >= 1, "should have removed at least 1 *-crunch dir");
-    assert!(
-        find_crunch_binary(&store).is_none(),
-        "crunch output should be gone after invalidation",
-    );
+    assert!(find_crunch_binary(&store).is_none(), "crunch output should be gone after invalidation",);
 
     // Fresh state dir so pathinfo.redb doesn't give a false cache hit
     // on the final crunch output.
@@ -287,43 +253,30 @@ fn self_hosting_stage0_stage1_stage2() {
 
     // ── Verify stage2 output ────────────────────────────────────
 
-    let stage2_binary = find_crunch_binary(&store)
-        .expect("stage2 should produce *-crunch/bin/crunch");
+    let stage2_binary = find_crunch_binary(&store).expect("stage2 should produce *-crunch/bin/crunch");
     eprintln!("stage2 binary: {}", stage2_binary.display());
 
     // Stage2 binary should run.
-    let stage2_help = std::process::Command::new(&stage2_binary)
-        .arg("--help")
-        .output()
-        .expect("stage2 binary should run");
-    assert!(
-        stage2_help.status.success(),
-        "stage2 --help failed",
-    );
+    let stage2_help =
+        std::process::Command::new(&stage2_binary).arg("--help").output().expect("stage2 binary should run");
+    assert!(stage2_help.status.success(), "stage2 --help failed",);
     let stage2_stdout = String::from_utf8_lossy(&stage2_help.stdout);
-    assert!(
-        stage2_stdout.contains("crunch"),
-        "stage2 --help should mention crunch",
-    );
+    assert!(stage2_stdout.contains("crunch"), "stage2 --help should mention crunch",);
 
     // ── Verify proof markers ────────────────────────────────────
 
     // Stage2 was driven by stage1 binary, not the checkout binary.
     let s2_invoking = extract_proof_field(&stage2_stderr, "invoking-binary");
-    assert!(
-        s2_invoking.is_some(),
-        "stage2 should emit invoking-binary proof line",
-    );
+    assert!(s2_invoking.is_some(), "stage2 should emit invoking-binary proof line",);
     let s2_invoking_path = PathBuf::from(s2_invoking.unwrap());
     // The invoking binary MUST be the stage1 binary we found earlier.
     // current_exe() may resolve symlinks or return a different
     // representation, so canonicalize both before comparing.
-    let stage1_canonical = std::fs::canonicalize(&stage1_binary)
-        .unwrap_or_else(|_| stage1_binary.clone());
-    let invoking_canonical = std::fs::canonicalize(&s2_invoking_path)
-        .unwrap_or_else(|_| s2_invoking_path.clone());
+    let stage1_canonical = std::fs::canonicalize(&stage1_binary).unwrap_or_else(|_| stage1_binary.clone());
+    let invoking_canonical = std::fs::canonicalize(&s2_invoking_path).unwrap_or_else(|_| s2_invoking_path.clone());
     assert_eq!(
-        invoking_canonical, stage1_canonical,
+        invoking_canonical,
+        stage1_canonical,
         "stage2 invoking binary must be the stage1 binary.\n\
          invoking: {}\n\
          stage1:   {}",
@@ -335,34 +288,18 @@ fn self_hosting_stage0_stage1_stage2() {
     // now exports bwrap and busybox as separate root builds (step 2/4)
     // so they land on disk in the --store directory.
     let s2_bwrap = extract_proof_field(&stage2_stderr, "bwrap-source");
-    assert!(
-        s2_bwrap.is_some(),
-        "stage2 should emit bwrap-source proof line",
-    );
+    assert!(s2_bwrap.is_some(), "stage2 should emit bwrap-source proof line",);
     let bwrap_val = s2_bwrap.unwrap();
-    assert!(
-        bwrap_val.starts_with("crunch-built:"),
-        "stage2 bwrap must be crunch-built, got: {bwrap_val}",
-    );
+    assert!(bwrap_val.starts_with("crunch-built:"), "stage2 bwrap must be crunch-built, got: {bwrap_val}",);
 
     // Stage2 MUST find crunch-built busybox on disk.
     let s2_busybox = extract_proof_field(&stage2_stderr, "busybox-path");
-    assert!(
-        s2_busybox.is_some(),
-        "stage2 should emit busybox-path proof line",
-    );
-    assert_ne!(
-        s2_busybox.unwrap(),
-        "none",
-        "stage2 must have a crunch-built busybox, not none",
-    );
+    assert!(s2_busybox.is_some(), "stage2 should emit busybox-path proof line",);
+    assert_ne!(s2_busybox.unwrap(), "none", "stage2 must have a crunch-built busybox, not none",);
 
     // Output binary recorded.
     let s2_output = extract_proof_field(&stage2_stderr, "output-binary");
-    assert!(
-        s2_output.is_some(),
-        "stage2 should emit output-binary proof line",
-    );
+    assert!(s2_output.is_some(), "stage2 should emit output-binary proof line",);
 
     eprintln!("\n=== PROOF PASSED ===");
     eprintln!("stage1: {}", stage1_binary.display());

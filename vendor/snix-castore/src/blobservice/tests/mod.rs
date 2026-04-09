@@ -2,9 +2,11 @@
 //! We use [rstest] and [rstest_reuse] to provide all services we want to test
 //! against, and then apply this template to all test functions.
 
-use rstest::*;
-use rstest_reuse::{self, *};
 use std::io;
+
+use rstest::*;
+use rstest_reuse::*;
+use rstest_reuse::{self};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 
@@ -14,7 +16,6 @@ use crate::fixtures::BLOB_A;
 use crate::fixtures::BLOB_A_DIGEST;
 use crate::fixtures::BLOB_B;
 use crate::fixtures::BLOB_B_DIGEST;
-
 
 /// This produces a template, which will be applied to all individual test functions.
 /// See https://github.com/la10736/rstest/issues/130#issuecomment-968864832
@@ -28,25 +29,14 @@ pub fn blob_services(#[case] blob_service: impl BlobService) {}
 #[apply(blob_services)]
 #[tokio::test]
 async fn has_nonexistent_false(blob_service: impl BlobService) {
-    assert!(
-        !blob_service
-            .has(&BLOB_A_DIGEST)
-            .await
-            .expect("must not fail")
-    );
+    assert!(!blob_service.has(&BLOB_A_DIGEST).await.expect("must not fail"));
 }
 
 /// Using [BlobService::chunks] on a non-existing blob should return Ok(None)
 #[apply(blob_services)]
 #[tokio::test]
 async fn chunks_nonexistent_false(blob_service: impl BlobService) {
-    assert!(
-        blob_service
-            .chunks(&BLOB_A_DIGEST)
-            .await
-            .expect("must be ok")
-            .is_none()
-    );
+    assert!(blob_service.chunks(&BLOB_A_DIGEST).await.expect("must be ok").is_none());
 }
 
 // TODO: do tests with `chunks`
@@ -55,13 +45,7 @@ async fn chunks_nonexistent_false(blob_service: impl BlobService) {
 #[apply(blob_services)]
 #[tokio::test]
 async fn not_found_read(blob_service: impl BlobService) {
-    assert!(
-        blob_service
-            .open_read(&BLOB_A_DIGEST)
-            .await
-            .expect("must not fail")
-            .is_none()
-    )
+    assert!(blob_service.open_read(&BLOB_A_DIGEST).await.expect("must not fail").is_none())
 }
 
 /// Put a blob in the store, check has, get it back.
@@ -74,41 +58,22 @@ async fn put_has_get(blob_service: impl BlobService) {
     for (blob_contents, blob_digest) in &[(&*BLOB_A, *BLOB_A_DIGEST), (&*BLOB_B, *BLOB_B_DIGEST)] {
         let mut w = blob_service.open_write().await;
 
-        let l = tokio::io::copy(&mut io::Cursor::new(blob_contents), &mut w)
-            .await
-            .expect("copy must succeed");
-        assert_eq!(
-            blob_contents.len(),
-            l as usize,
-            "written bytes must match blob length"
-        );
+        let l = tokio::io::copy(&mut io::Cursor::new(blob_contents), &mut w).await.expect("copy must succeed");
+        assert_eq!(blob_contents.len(), l as usize, "written bytes must match blob length");
 
         let digest = w.close().await.expect("close must succeed");
 
         assert_eq!(*blob_digest, digest, "returned digest must be correct");
 
-        assert!(
-            blob_service.has(blob_digest).await.expect("must not fail"),
-            "blob service should now have the blob"
-        );
+        assert!(blob_service.has(blob_digest).await.expect("must not fail"), "blob service should now have the blob");
 
-        let r = blob_service
-            .open_read(blob_digest)
-            .await
-            .expect("open_read must succeed")
-            .expect("must be some");
+        let r = blob_service.open_read(blob_digest).await.expect("open_read must succeed").expect("must be some");
 
         let mut buf: Vec<u8> = Vec::new();
         let mut pinned_reader = std::pin::pin!(r);
-        let l = tokio::io::copy(&mut pinned_reader, &mut buf)
-            .await
-            .expect("copy must succeed");
+        let l = tokio::io::copy(&mut pinned_reader, &mut buf).await.expect("copy must succeed");
 
-        assert_eq!(
-            blob_contents.len(),
-            l as usize,
-            "read bytes must match blob length"
-        );
+        assert_eq!(blob_contents.len(), l as usize, "read bytes must match blob length");
 
         assert_eq!(&blob_contents[..], &buf, "read blob contents must match");
     }
@@ -120,17 +85,11 @@ async fn put_has_get(blob_service: impl BlobService) {
 async fn put_seek(blob_service: impl BlobService) {
     let mut w = blob_service.open_write().await;
 
-    tokio::io::copy(&mut io::Cursor::new(&BLOB_B.to_vec()), &mut w)
-        .await
-        .expect("copy must succeed");
+    tokio::io::copy(&mut io::Cursor::new(&BLOB_B.to_vec()), &mut w).await.expect("copy must succeed");
     w.close().await.expect("close must succeed");
 
     // open a blob for reading
-    let mut r = blob_service
-        .open_read(&BLOB_B_DIGEST)
-        .await
-        .expect("open_read must succeed")
-        .expect("must be some");
+    let mut r = blob_service.open_read(&BLOB_B_DIGEST).await.expect("open_read must succeed").expect("must be some");
 
     let mut pos: u64 = 0;
 
@@ -139,19 +98,12 @@ async fn put_seek(blob_service: impl BlobService) {
         let mut buf = [0; 10];
         r.read_exact(&mut buf).await.expect("must succeed");
 
-        assert_eq!(
-            &BLOB_B[pos as usize..pos as usize + buf.len()],
-            buf,
-            "expected first 10 bytes to match"
-        );
+        assert_eq!(&BLOB_B[pos as usize..pos as usize + buf.len()], buf, "expected first 10 bytes to match");
 
         pos += buf.len() as u64;
     }
     // seek by 0 bytes, using SeekFrom::Start.
-    let p = r
-        .seek(io::SeekFrom::Start(pos))
-        .await
-        .expect("must not fail");
+    let p = r.seek(io::SeekFrom::Start(pos)).await.expect("must not fail");
     assert_eq!(pos, p);
 
     // read the next 10 bytes, they must match the data in the fixture.
@@ -159,20 +111,13 @@ async fn put_seek(blob_service: impl BlobService) {
         let mut buf = [0; 10];
         r.read_exact(&mut buf).await.expect("must succeed");
 
-        assert_eq!(
-            &BLOB_B[pos as usize..pos as usize + buf.len()],
-            buf,
-            "expected data to match"
-        );
+        assert_eq!(&BLOB_B[pos as usize..pos as usize + buf.len()], buf, "expected data to match");
 
         pos += buf.len() as u64;
     }
 
     // seek by 5 bytes, using SeekFrom::Start.
-    let p = r
-        .seek(io::SeekFrom::Start(pos + 5))
-        .await
-        .expect("must not fail");
+    let p = r.seek(io::SeekFrom::Start(pos + 5)).await.expect("must not fail");
     pos += 5;
     assert_eq!(pos, p);
 
@@ -181,20 +126,13 @@ async fn put_seek(blob_service: impl BlobService) {
         let mut buf = [0; 10];
         r.read_exact(&mut buf).await.expect("must succeed");
 
-        assert_eq!(
-            &BLOB_B[pos as usize..pos as usize + buf.len()],
-            buf,
-            "expected data to match"
-        );
+        assert_eq!(&BLOB_B[pos as usize..pos as usize + buf.len()], buf, "expected data to match");
 
         pos += buf.len() as u64;
     }
 
     // seek by 12345 bytes, using SeekFrom::
-    let p = r
-        .seek(io::SeekFrom::Current(12345))
-        .await
-        .expect("must not fail");
+    let p = r.seek(io::SeekFrom::Current(12345)).await.expect("must not fail");
     pos += 12345;
     assert_eq!(pos, p);
 
@@ -203,11 +141,7 @@ async fn put_seek(blob_service: impl BlobService) {
         let mut buf = [0; 10];
         r.read_exact(&mut buf).await.expect("must succeed");
 
-        assert_eq!(
-            &BLOB_B[pos as usize..pos as usize + buf.len()],
-            buf,
-            "expected data to match"
-        );
+        assert_eq!(&BLOB_B[pos as usize..pos as usize + buf.len()], buf, "expected data to match");
 
         #[allow(unused_assignments)]
         {
@@ -216,10 +150,7 @@ async fn put_seek(blob_service: impl BlobService) {
     }
 
     // seeking to the end is okay…
-    let p = r
-        .seek(io::SeekFrom::Start(BLOB_B.len() as u64))
-        .await
-        .expect("must not fail");
+    let p = r.seek(io::SeekFrom::Start(BLOB_B.len() as u64)).await.expect("must not fail");
     pos = BLOB_B.len() as u64;
     assert_eq!(pos, p);
 

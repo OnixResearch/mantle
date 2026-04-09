@@ -1,15 +1,17 @@
 //! Contains data structures to deal with Paths in the snix-castore model.
+use std::borrow::Borrow;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
+use std::mem;
+use std::ops::Deref;
+use std::str::FromStr;
+
 use bstr::ByteSlice;
-use std::{
-    borrow::Borrow,
-    fmt::{self, Debug, Display},
-    mem,
-    ops::Deref,
-    str::FromStr,
-};
 
 mod component;
-pub use component::{PathComponent, PathComponentError};
+pub use component::PathComponent;
+pub use component::PathComponentError;
 
 /// Represents a Path in the castore model.
 /// These are always relative, and platform-independent, which distinguishes
@@ -64,15 +66,13 @@ impl Path {
             return None;
         }
 
-        Some(
-            if let Some((parent, _file_name)) = self.inner.rsplit_once_str(b"/") {
-                // SAFETY: The parent of a valid Path is a valid Path.
-                unsafe { Path::from_bytes_unchecked(parent) }
-            } else {
-                // The parent of a bare file name is the root.
-                Path::ROOT
-            },
-        )
+        Some(if let Some((parent, _file_name)) = self.inner.rsplit_once_str(b"/") {
+            // SAFETY: The parent of a valid Path is a valid Path.
+            unsafe { Path::from_bytes_unchecked(parent) }
+        } else {
+            // The parent of a bare file name is the root.
+            Path::ROOT
+        })
     }
 
     /// Creates a PathBuf with `name` adjoined to self.
@@ -218,9 +218,7 @@ impl FromStr for PathBuf {
     type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<PathBuf, Self::Err> {
-        Ok(Path::from_bytes(s.as_bytes())
-            .ok_or(std::io::ErrorKind::InvalidData)?
-            .to_owned())
+        Ok(Path::from_bytes(s.as_bytes()).ok_or(std::io::ErrorKind::InvalidData)?.to_owned())
     }
 }
 
@@ -283,10 +281,7 @@ impl PathBuf {
     /// on different platforms, due to different underlying byte
     /// representations, which is why it's restricted to unix for now.
     #[cfg(unix)]
-    pub fn from_host_path(
-        host_path: &std::path::Path,
-        canonicalize_dotdot: bool,
-    ) -> Result<Self, std::io::Error> {
+    pub fn from_host_path(host_path: &std::path::Path, canonicalize_dotdot: bool) -> Result<Self, std::io::Error> {
         let mut p = PathBuf::with_capacity(host_path.as_os_str().len());
 
         for component in host_path.components() {
@@ -305,17 +300,11 @@ impl PathBuf {
                         p = p
                             .parent()
                             .ok_or_else(|| {
-                                std::io::Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    "found .. going too far up",
-                                )
+                                std::io::Error::new(std::io::ErrorKind::InvalidData, "found .. going too far up")
                             })?
                             .to_owned();
                     } else {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "found disallowed ..",
-                        ));
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "found disallowed .."));
                     }
                 }
                 std::path::Component::Normal(s) => {
@@ -346,9 +335,11 @@ impl PathBuf {
 
 #[cfg(test)]
 mod test {
-    use super::{Path, PathBuf};
     use bstr::ByteSlice;
     use rstest::rstest;
+
+    use super::Path;
+    use super::PathBuf;
 
     // TODO: add some manual tests including invalid UTF-8 (hard to express
     // with rstest)
@@ -368,11 +359,7 @@ mod test {
         let p: PathBuf = s.parse().expect("must parse");
 
         assert_eq!(s.as_bytes(), p.as_bytes(), "inner bytes mismatch");
-        assert_eq!(
-            num_components,
-            p.components_bytes().count(),
-            "number of components mismatch"
-        );
+        assert_eq!(num_components, p.components_bytes().count(), "number of components mismatch");
     }
 
     #[rstest]
@@ -426,10 +413,8 @@ mod test {
     #[case("", ".")]
     #[case("", "..")]
     pub fn join_push_fail(#[case] mut p: PathBuf, #[case] name: &str) {
-        p.try_join(name.as_bytes())
-            .expect_err("join succeeded unexpectedly");
-        p.try_push(name.as_bytes())
-            .expect_err("push succeeded unexpectedly");
+        p.try_join(name.as_bytes()).expect_err("join succeeded unexpectedly");
+        p.try_push(name.as_bytes()).expect_err("push succeeded unexpectedly");
     }
 
     #[rstest]
@@ -438,12 +423,7 @@ mod test {
     #[case("a/b", vec!["a", "b"])]
     #[case("a/b/c", vec!["a","b", "c"])]
     pub fn components_bytes(#[case] p: PathBuf, #[case] exp_components: Vec<&str>) {
-        assert_eq!(
-            exp_components,
-            p.components_bytes()
-                .map(|x| x.to_str().unwrap())
-                .collect::<Vec<_>>()
-        );
+        assert_eq!(exp_components, p.components_bytes().map(|x| x.to_str().unwrap()).collect::<Vec<_>>());
     }
 
     #[rstest]
@@ -478,10 +458,7 @@ mod test {
     #[case::invalid_name("foo/bar\0", false)]
     // #[cfg_attr(windows, case::prefix("\\\\nix-store", false))]
     // #[cfg_attr(windows, case::letter("C:\\foo.txt", false))]
-    pub fn from_host_path_fail(
-        #[case] host_path: std::path::PathBuf,
-        #[case] canonicalize_dotdot: bool,
-    ) {
+    pub fn from_host_path_fail(#[case] host_path: std::path::PathBuf, #[case] canonicalize_dotdot: bool) {
         PathBuf::from_host_path(&host_path, canonicalize_dotdot).expect_err("must fail");
     }
 

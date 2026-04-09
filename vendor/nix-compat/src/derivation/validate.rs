@@ -1,19 +1,18 @@
-use crate::derivation::{Derivation, DerivationError};
+use crate::derivation::Derivation;
+use crate::derivation::DerivationError;
 use crate::store_path;
 
 /// Validates an output name using derivation output name rules.
 ///
 /// Output names must:
 /// - Not be empty
-/// - Not be "drv" (reserved name that would conflict with the existing drvPath key in builtins.derivation)
+/// - Not be "drv" (reserved name that would conflict with the existing drvPath key in
+///   builtins.derivation)
 /// - Pass the `store_path::validate_name` check
 ///
 /// This function is used by both derivation validation and builtins.placeholder.
 pub fn validate_output_name(output_name: &str) -> Result<(), DerivationError> {
-    if output_name.is_empty()
-        || output_name == "drv"
-        || store_path::validate_name(output_name.as_bytes()).is_err()
-    {
+    if output_name.is_empty() || output_name == "drv" || store_path::validate_name(output_name.as_bytes()).is_err() {
         return Err(DerivationError::InvalidOutputName(output_name.to_string()));
     }
     Ok(())
@@ -43,9 +42,7 @@ impl Derivation {
                     return Err(DerivationError::MoreThanOneOutputButFixed());
                 }
                 if output_name != "out" {
-                    return Err(DerivationError::InvalidOutputNameForFixed(
-                        output_name.to_string(),
-                    ));
+                    return Err(DerivationError::InvalidOutputNameForFixed(output_name.to_string()));
                 }
             }
 
@@ -58,23 +55,17 @@ impl Derivation {
         for (input_derivation_path, output_names) in &self.input_derivations {
             // Validate input_derivation_path
             if !input_derivation_path.name().ends_with(".drv") {
-                return Err(DerivationError::InvalidInputDerivationPrefix(
-                    input_derivation_path.to_string(),
-                ));
+                return Err(DerivationError::InvalidInputDerivationPrefix(input_derivation_path.to_string()));
             }
 
             if output_names.is_empty() {
-                return Err(DerivationError::EmptyInputDerivationOutputNames(
-                    input_derivation_path.to_string(),
-                ));
+                return Err(DerivationError::EmptyInputDerivationOutputNames(input_derivation_path.to_string()));
             }
 
             for output_name in output_names.iter() {
                 // For input derivation output names, we use the same validation
                 // but map the error to the appropriate InputDerivationOutputName variant
-                if let Err(DerivationError::InvalidOutputName(_)) =
-                    validate_output_name(output_name)
-                {
+                if let Err(DerivationError::InvalidOutputName(_)) = validate_output_name(output_name) {
                     return Err(DerivationError::InvalidInputDerivationOutputName(
                         input_derivation_path.to_string(),
                         output_name.to_string(),
@@ -110,7 +101,10 @@ mod test {
     use std::collections::BTreeMap;
 
     use super::validate_output_name;
-    use crate::derivation::{CAHash, Derivation, DerivationError, Output};
+    use crate::derivation::CAHash;
+    use crate::derivation::Derivation;
+    use crate::derivation::DerivationError;
+    use crate::derivation::Output;
 
     /// Test the validate_output_name function with valid names
     #[test]
@@ -127,27 +121,15 @@ mod test {
     #[test]
     fn test_validate_output_name_invalid() {
         // Empty name should fail
-        assert!(matches!(
-            validate_output_name(""),
-            Err(DerivationError::InvalidOutputName(_))
-        ));
+        assert!(matches!(validate_output_name(""), Err(DerivationError::InvalidOutputName(_))));
 
         // "drv" is reserved and should fail
-        assert!(matches!(
-            validate_output_name("drv"),
-            Err(DerivationError::InvalidOutputName(_))
-        ));
+        assert!(matches!(validate_output_name("drv"), Err(DerivationError::InvalidOutputName(_))));
 
         // Invalid characters should fail
-        assert!(matches!(
-            validate_output_name("invalid/name"),
-            Err(DerivationError::InvalidOutputName(_))
-        ));
+        assert!(matches!(validate_output_name("invalid/name"), Err(DerivationError::InvalidOutputName(_))));
 
-        assert!(matches!(
-            validate_output_name("invalid name"),
-            Err(DerivationError::InvalidOutputName(_))
-        ));
+        assert!(matches!(validate_output_name("invalid name"), Err(DerivationError::InvalidOutputName(_))));
     }
 
     /// Regression test: produce a Derivation that's almost valid, except its
@@ -155,13 +137,10 @@ mod test {
     #[test]
     fn output_validate() {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            Output {
-                path: None,
-                ca_hash: Some(CAHash::Text([0; 32])), // This is disallowed
-            },
-        );
+        outputs.insert("out".to_string(), Output {
+            path: None,
+            ca_hash: Some(CAHash::Text([0; 32])), // This is disallowed
+        });
 
         let drv = Derivation {
             arguments: vec![],

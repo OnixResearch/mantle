@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::Criterion;
+use criterion::black_box;
+use criterion::criterion_group;
+use criterion::criterion_main;
 use mimalloc::MiMalloc;
 use nix_compat::derivation::Derivation;
 
@@ -25,9 +28,7 @@ fn bench_aterm_parser(c: &mut Criterion) {
         let drv_path = Path::new(RESOURCES_PATHS).join(drv);
         let drv_bytes = &std::fs::read(drv_path).unwrap();
 
-        c.bench_function(drv, |b| {
-            b.iter(|| Derivation::from_aterm_bytes(black_box(drv_bytes)))
-        });
+        c.bench_function(drv, |b| b.iter(|| Derivation::from_aterm_bytes(black_box(drv_bytes))));
     }
 }
 

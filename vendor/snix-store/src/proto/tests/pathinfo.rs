@@ -1,27 +1,30 @@
 use std::sync::LazyLock;
 
-use crate::fixtures::{DUMMY_PATH, DUMMY_PATH_DIGEST, DUMMY_PATH_STR};
-use crate::pathinfoservice::PathInfo;
-use crate::proto::{self, ValidatePathInfoError};
 use bytes::Bytes;
 use nix_compat::store_path;
 use rstest::rstest;
+use snix_castore::DirectoryError;
+use snix_castore::ValidateNodeError;
 use snix_castore::fixtures::DUMMY_DIGEST;
 use snix_castore::proto as castorepb;
-use snix_castore::{DirectoryError, ValidateNodeError};
+
+use crate::fixtures::DUMMY_PATH;
+use crate::fixtures::DUMMY_PATH_DIGEST;
+use crate::fixtures::DUMMY_PATH_STR;
+use crate::pathinfoservice::PathInfo;
+use crate::proto::ValidatePathInfoError;
+use crate::proto::{self};
 
 /// A valid PathInfo message
 /// The references in `narinfo.reference_names` aligns with what's in
 /// `references`.
 static PROTO_PATH_INFO: LazyLock<proto::PathInfo> = LazyLock::new(|| proto::PathInfo {
     entry: Some(castorepb::Entry {
-        entry: Some(castorepb::entry::Entry::Directory(
-            castorepb::DirectoryEntry {
-                name: DUMMY_PATH_STR.into(),
-                digest: (*DUMMY_DIGEST).into(),
-                size: 0,
-            },
-        )),
+        entry: Some(castorepb::entry::Entry::Directory(castorepb::DirectoryEntry {
+            name: DUMMY_PATH_STR.into(),
+            digest: (*DUMMY_DIGEST).into(),
+            size: 0,
+        })),
     }),
     references: vec![DUMMY_PATH_DIGEST.as_slice().into()],
     narinfo: Some(proto::NarInfo {
@@ -62,18 +65,12 @@ fn convert_valid_deriver() {
 #[rstest]
 #[case::no_entry(None, ValidatePathInfoError::NoEntryPresent)]
 #[case::no_entry_2(Some(castorepb::Entry { entry: None}), ValidatePathInfoError::InvalidRootNode(DirectoryError::NoEntrySet))]
-fn convert_pathinfo_wrong_entries(
-    #[case] entry: Option<castorepb::Entry>,
-    #[case] exp_err: ValidatePathInfoError,
-) {
+fn convert_pathinfo_wrong_entries(#[case] entry: Option<castorepb::Entry>, #[case] exp_err: ValidatePathInfoError) {
     // construct the PathInfo object
     let mut path_info = PROTO_PATH_INFO.clone();
     path_info.entry = entry;
 
-    assert_eq!(
-        exp_err,
-        PathInfo::try_from(path_info).expect_err("must fail")
-    );
+    assert_eq!(exp_err, PathInfo::try_from(path_info).expect_err("must fail"));
 }
 
 /// Constructs a [proto::PathInfo] with an entry that has wrong data in various
@@ -124,10 +121,7 @@ fn convert_pathinfo_wrong_entries(
         store_path::Error::InvalidLength
     )
 )]
-fn convert_fail_entry(
-    #[case] entry: castorepb::entry::Entry,
-    #[case] exp_err: ValidatePathInfoError,
-) {
+fn convert_fail_entry(#[case] entry: castorepb::entry::Entry, #[case] exp_err: ValidatePathInfoError) {
     // construct the proto::PathInfo object
     let mut p = PROTO_PATH_INFO.clone();
     p.entry = Some(castorepb::Entry { entry: Some(entry) });
@@ -141,10 +135,7 @@ fn convert_without_narinfo_fail() {
     let mut path_info = PROTO_PATH_INFO.clone();
     path_info.narinfo = None;
 
-    assert_eq!(
-        ValidatePathInfoError::NarInfoFieldMissing,
-        PathInfo::try_from(path_info).expect_err("must fail"),
-    );
+    assert_eq!(ValidatePathInfoError::NarInfoFieldMissing, PathInfo::try_from(path_info).expect_err("must fail"),);
 }
 
 /// Create a PathInfo with a wrong digest length in narinfo.nar_sha256, and

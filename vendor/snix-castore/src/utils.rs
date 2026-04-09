@@ -1,21 +1,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use url::Url;
 
 use crate::blobservice::BlobService;
-use crate::composition::{
-    Composition, DeserializeWithRegistry, REG, ServiceBuilder, with_registry,
-};
-use crate::directoryservice::{DirectoryService, RedbDirectoryServiceConfig};
+use crate::composition::Composition;
+use crate::composition::DeserializeWithRegistry;
+use crate::composition::REG;
+use crate::composition::ServiceBuilder;
+use crate::composition::with_registry;
+use crate::directoryservice::DirectoryService;
+use crate::directoryservice::RedbDirectoryServiceConfig;
 
 #[derive(serde::Deserialize, Default)]
 pub struct CompositionConfigs {
-    pub blobservices:
-        HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn BlobService>>>>,
-    pub directoryservices: HashMap<
-        String,
-        DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>,
-    >,
+    pub blobservices: HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn BlobService>>>>,
+    pub directoryservices:
+        HashMap<String, DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>>,
 }
 
 /// Provides a set of clap arguments to configure snix-castore services.
@@ -25,18 +26,10 @@ pub struct CompositionConfigs {
 #[derive(clap::Parser, Clone)]
 #[group(id = "CastoreServiceUrls")]
 pub struct ServiceUrls {
-    #[arg(
-        long,
-        env,
-        default_value = "objectstore+file:/var/lib/snix-castore/blobs"
-    )]
+    #[arg(long, env, default_value = "objectstore+file:/var/lib/snix-castore/blobs")]
     pub blob_service_addr: String,
 
-    #[arg(
-        long,
-        env,
-        default_value = "redb:/var/lib/snix-castore/directories.redb"
-    )]
+    #[arg(long, env, default_value = "redb:/var/lib/snix-castore/directories.redb")]
     pub directory_service_addr: String,
 
     /// Path to a TOML file describing the way the services should be composed
@@ -127,24 +120,17 @@ pub async fn addrs_to_configs(
 
     let blob_service_url = Url::parse(&urls.blob_service_addr)?;
     let directory_service_url = Url::parse(&urls.directory_service_addr)?;
-    configs.blobservices.insert(
-        "root".into(),
-        with_registry(&REG, || blob_service_url.try_into())?,
-    );
-    configs.directoryservices.insert(
-        "root".into(),
-        with_registry(&REG, || directory_service_url.try_into())?,
-    );
+    configs.blobservices.insert("root".into(), with_registry(&REG, || blob_service_url.try_into())?);
+    configs
+        .directoryservices
+        .insert("root".into(), with_registry(&REG, || directory_service_url.try_into())?);
     Ok(configs)
 }
 
 /// Construct the castore handles from their addrs.
 pub async fn construct_services(
     urls: impl Into<ServiceUrls>,
-) -> Result<
-    (Arc<dyn BlobService>, Arc<dyn DirectoryService>),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
+) -> Result<(Arc<dyn BlobService>, Arc<dyn DirectoryService>), Box<dyn std::error::Error + Send + Sync>> {
     let configs = addrs_to_configs(urls).await?;
     construct_services_from_configs(configs).await
 }
@@ -152,10 +138,7 @@ pub async fn construct_services(
 /// Construct the castore handles from their addrs.
 pub async fn construct_services_from_configs(
     configs: CompositionConfigs,
-) -> Result<
-    (Arc<dyn BlobService>, Arc<dyn DirectoryService>),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
+) -> Result<(Arc<dyn BlobService>, Arc<dyn DirectoryService>), Box<dyn std::error::Error + Send + Sync>> {
     let mut comp = Composition::new(&REG);
 
     comp.extend(configs.blobservices);

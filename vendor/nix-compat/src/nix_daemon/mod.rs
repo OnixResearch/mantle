@@ -4,7 +4,9 @@ use std::io::Result;
 
 use tokio::io::AsyncRead;
 use tracing::warn;
-use types::{AddToStoreNarRequest, QueryValidPaths, UnkeyedValidPathInfo};
+use types::AddToStoreNarRequest;
+use types::QueryValidPaths;
+use types::UnkeyedValidPathInfo;
 
 use crate::store_path::StorePath;
 
@@ -18,10 +20,7 @@ use mockall::automock;
 /// Represents all possible operations over the nix-daemon protocol.
 #[cfg_attr(test, automock)]
 pub trait NixDaemonIO: Sync {
-    fn is_valid_path(
-        &self,
-        path: &StorePath<String>,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send {
+    fn is_valid_path(&self, path: &StorePath<String>) -> impl std::future::Future<Output = Result<bool>> + Send {
         async move { Ok(self.query_path_info(path).await?.is_some()) }
     }
 
@@ -80,9 +79,10 @@ pub trait NixDaemonIO: Sync {
 #[cfg(test)]
 mod tests {
 
-    use crate::{nix_daemon::types::QueryValidPaths, store_path::StorePath};
-
-    use super::{NixDaemonIO, types::UnkeyedValidPathInfo};
+    use super::NixDaemonIO;
+    use super::types::UnkeyedValidPathInfo;
+    use crate::nix_daemon::types::QueryValidPaths;
+    use crate::store_path::StorePath;
 
     // Very simple mock
     // Unable to use mockall as it does not support unboxed async traits.
@@ -91,17 +91,11 @@ mod tests {
     }
 
     impl NixDaemonIO for MockNixDaemonIO {
-        async fn query_path_info(
-            &self,
-            _path: &StorePath<String>,
-        ) -> std::io::Result<Option<UnkeyedValidPathInfo>> {
+        async fn query_path_info(&self, _path: &StorePath<String>) -> std::io::Result<Option<UnkeyedValidPathInfo>> {
             Ok(self.query_path_info_result.clone())
         }
 
-        async fn query_path_from_hash_part(
-            &self,
-            _hash: &[u8],
-        ) -> std::io::Result<Option<UnkeyedValidPathInfo>> {
+        async fn query_path_from_hash_part(&self, _hash: &[u8]) -> std::io::Result<Option<UnkeyedValidPathInfo>> {
             Ok(None)
         }
 
@@ -119,41 +113,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_valid_path_returns_true() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: Some(UnkeyedValidPathInfo::default()),
         };
 
-        let result = io
-            .is_valid_path(&path)
-            .await
-            .expect("expected to get a non-empty response");
+        let result = io.is_valid_path(&path).await.expect("expected to get a non-empty response");
         assert!(result, "expected to get true");
     }
 
     #[tokio::test]
     async fn test_is_valid_path_returns_false() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: None,
         };
 
-        let result = io
-            .is_valid_path(&path)
-            .await
-            .expect("expected to get a non-empty response");
+        let result = io.is_valid_path(&path).await.expect("expected to get a non-empty response");
         assert!(!result, "expected to get false");
     }
 
     #[tokio::test]
     async fn test_query_valid_paths_returns_empty_response() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: None,
         };
@@ -170,9 +152,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_valid_paths_returns_non_empty_response() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: Some(UnkeyedValidPathInfo::default()),
         };
@@ -189,29 +169,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_valid_derivers_returns_empty_response() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: None,
         };
 
-        let result = io
-            .query_valid_derivers(&path)
-            .await
-            .expect("expected to get a non-empty response");
+        let result = io.query_valid_derivers(&path).await.expect("expected to get a non-empty response");
         assert_eq!(result, vec![], "expected to get empty response");
     }
 
     #[tokio::test]
     async fn test_query_valid_derivers_returns_non_empty_response() {
-        let path =
-            StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes())
-                .unwrap();
-        let deriver = StorePath::<String>::from_bytes(
-            "z6r3bn5l51679pwkvh9nalp6c317z34m-hello.drv".as_bytes(),
-        )
-        .unwrap();
+        let path = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello".as_bytes()).unwrap();
+        let deriver = StorePath::<String>::from_bytes("z6r3bn5l51679pwkvh9nalp6c317z34m-hello.drv".as_bytes()).unwrap();
         let io = MockNixDaemonIO {
             query_path_info_result: Some(UnkeyedValidPathInfo {
                 deriver: Some(deriver.clone()),
@@ -225,10 +195,7 @@ mod tests {
             }),
         };
 
-        let result = io
-            .query_valid_derivers(&path)
-            .await
-            .expect("expected to get a non-empty response");
+        let result = io.query_valid_derivers(&path).await.expect("expected to get a non-empty response");
         assert_eq!(result, vec![deriver], "expected to get non empty response");
     }
 }

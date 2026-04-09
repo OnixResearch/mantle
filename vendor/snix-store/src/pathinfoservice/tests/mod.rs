@@ -4,11 +4,15 @@
 
 use futures::TryStreamExt;
 use rstest::*;
-use rstest_reuse::{self, *};
+use rstest_reuse::*;
+use rstest_reuse::{self};
 
-use super::{PathInfo, PathInfoService};
-use crate::fixtures::{DUMMY_PATH_DIGEST, PATH_INFO};
-use crate::pathinfoservice::redb::{RedbPathInfoService, RedbPathInfoServiceConfig};
+use super::PathInfo;
+use super::PathInfoService;
+use crate::fixtures::DUMMY_PATH_DIGEST;
+use crate::fixtures::PATH_INFO;
+use crate::pathinfoservice::redb::RedbPathInfoService;
+use crate::pathinfoservice::redb::RedbPathInfoServiceConfig;
 use crate::pathinfoservice::test_signing_service;
 
 #[cfg(test)]
@@ -35,12 +39,7 @@ pub fn path_info_services(#[case] svc: impl PathInfoService) {}
 #[apply(path_info_services)]
 #[tokio::test]
 async fn not_found(svc: impl PathInfoService) {
-    assert!(
-        svc.get(DUMMY_PATH_DIGEST)
-            .await
-            .expect("must succeed")
-            .is_none()
-    );
+    assert!(svc.get(DUMMY_PATH_DIGEST).await.expect("must succeed").is_none());
 }
 
 /// Put a PathInfo into the store, get it back.
@@ -64,13 +63,7 @@ async fn put_get(svc: impl PathInfoService) {
     let pathinfos: Vec<PathInfo> = svc.list().try_collect().await.expect("must succeed");
 
     // We should get a single pathinfo back, the one we inserted.
-    assert_eq!(
-        vec![PATH_INFO.clone()],
-        pathinfos
-            .into_iter()
-            .map(strip_signatures)
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(vec![PATH_INFO.clone()], pathinfos.into_iter().map(strip_signatures).collect::<Vec<_>>());
 }
 
 fn strip_signatures(path_info: PathInfo) -> PathInfo {

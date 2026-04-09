@@ -1,15 +1,16 @@
-use crate::wire::de::Error;
-use crate::{
-    narinfo::Signature,
-    nixhash::CAHash,
-    store_path::StorePath,
-    wire::{
-        de::{NixDeserialize, NixRead},
-        ser::{NixSerialize, NixWrite},
-    },
-};
-use nix_compat_derive::{NixDeserialize, NixSerialize};
 use std::future::Future;
+
+use nix_compat_derive::NixDeserialize;
+use nix_compat_derive::NixSerialize;
+
+use crate::narinfo::Signature;
+use crate::nixhash::CAHash;
+use crate::store_path::StorePath;
+use crate::wire::de::Error;
+use crate::wire::de::NixDeserialize;
+use crate::wire::de::NixRead;
+use crate::wire::ser::NixSerialize;
+use crate::wire::ser::NixWrite;
 
 /// Marker type that consumes/sends and ignores a u64.
 #[derive(Clone, Debug, NixDeserialize, NixSerialize)]
@@ -76,14 +77,10 @@ nix_compat_derive::nix_serialize_remote!(#[nix(display)] Signature<String>);
 
 impl NixDeserialize for Signature<String> {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         let value: Option<String> = reader.try_read_value().await?;
         match value {
-            Some(value) => Ok(Some(
-                Signature::<String>::parse(&value).map_err(R::Error::invalid_data)?,
-            )),
+            Some(value) => Ok(Some(Signature::<String>::parse(&value).map_err(R::Error::invalid_data)?)),
             None => Ok(None),
         }
     }
@@ -91,18 +88,14 @@ impl NixDeserialize for Signature<String> {
 
 impl NixSerialize for CAHash {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         writer.write_value(&self.to_nix_nixbase32_string()).await
     }
 }
 
 impl NixSerialize for Option<CAHash> {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         match self {
             Some(value) => writer.write_value(value).await,
             None => writer.write_value("").await,
@@ -112,14 +105,13 @@ impl NixSerialize for Option<CAHash> {
 
 impl NixDeserialize for CAHash {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         let value: Option<String> = reader.try_read_value().await?;
         match value {
-            Some(value) => Ok(Some(CAHash::from_nix_hex_str(&value).ok_or_else(|| {
-                R::Error::invalid_data(format!("Invalid cahash {value}"))
-            })?)),
+            Some(value) => Ok(Some(
+                CAHash::from_nix_hex_str(&value)
+                    .ok_or_else(|| R::Error::invalid_data(format!("Invalid cahash {value}")))?,
+            )),
             None => Ok(None),
         }
     }
@@ -127,18 +119,17 @@ impl NixDeserialize for CAHash {
 
 impl NixDeserialize for Option<CAHash> {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         let value: Option<String> = reader.try_read_value().await?;
         match value {
             Some(value) => {
                 if value.is_empty() {
                     Ok(None)
                 } else {
-                    Ok(Some(Some(CAHash::from_nix_hex_str(&value).ok_or_else(
-                        || R::Error::invalid_data(format!("Invalid cahash {value}")),
-                    )?)))
+                    Ok(Some(Some(
+                        CAHash::from_nix_hex_str(&value)
+                            .ok_or_else(|| R::Error::invalid_data(format!("Invalid cahash {value}")))?,
+                    )))
                 }
             }
             None => Ok(None),
@@ -148,9 +139,7 @@ impl NixDeserialize for Option<CAHash> {
 
 impl NixSerialize for Option<UnkeyedValidPathInfo> {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         match self {
             Some(value) => {
                 writer.write_value(&true).await?;
@@ -164,9 +153,7 @@ impl NixSerialize for Option<UnkeyedValidPathInfo> {
 // Custom implementation since FromStr does not use from_absolute_path
 impl NixDeserialize for StorePath<String> {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         use crate::wire::de::Error;
         if let Some(buf) = reader.try_read_bytes().await? {
             let result = StorePath::<String>::from_absolute_path(&buf);
@@ -179,18 +166,14 @@ impl NixDeserialize for StorePath<String> {
 
 impl NixDeserialize for Option<StorePath<String>> {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         use crate::wire::de::Error;
         if let Some(buf) = reader.try_read_bytes().await? {
             if buf.is_empty() {
                 Ok(Some(None))
             } else {
                 let result = StorePath::<String>::from_absolute_path(&buf);
-                result
-                    .map(|r| Some(Some(r)))
-                    .map_err(R::Error::invalid_data)
+                result.map(|r| Some(Some(r))).map_err(R::Error::invalid_data)
             }
         } else {
             Ok(Some(None))
@@ -200,13 +183,10 @@ impl NixDeserialize for Option<StorePath<String>> {
 
 // Custom implementation since Display does not use absolute paths.
 impl<S> NixSerialize for StorePath<S>
-where
-    S: AsRef<str>,
+where S: AsRef<str>
 {
     fn serialize<W>(&self, writer: &mut W) -> impl Future<Output = Result<(), W::Error>> + Send
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         let sp = self.to_absolute_path();
         async move { writer.write_value(&sp).await }
     }
@@ -215,9 +195,7 @@ where
 // Writes StorePath or an empty string.
 impl NixSerialize for Option<StorePath<String>> {
     async fn serialize<W>(&self, writer: &mut W) -> Result<(), W::Error>
-    where
-        W: NixWrite,
-    {
+    where W: NixWrite {
         match self {
             Some(value) => writer.write_value(value).await,
             None => writer.write_value("").await,
@@ -262,16 +240,10 @@ impl std::ops::Deref for NarHash {
 
 impl NixDeserialize for NarHash {
     async fn try_deserialize<R>(reader: &mut R) -> Result<Option<Self>, R::Error>
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         if let Some(bytes) = reader.try_read_bytes().await? {
-            let result = data_encoding::HEXLOWER
-                .decode(bytes.as_ref())
-                .map_err(R::Error::invalid_data)?;
-            Ok(Some(NarHash(result.try_into().map_err(|_| {
-                R::Error::invalid_data("incorrect length")
-            })?)))
+            let result = data_encoding::HEXLOWER.decode(bytes.as_ref()).map_err(R::Error::invalid_data)?;
+            Ok(Some(NarHash(result.try_into().map_err(|_| R::Error::invalid_data("incorrect length"))?)))
         } else {
             Ok(None)
         }

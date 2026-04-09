@@ -9,17 +9,24 @@
 //!   search is used when searching for child inodes.
 //! - Inodes managed by the PseudoFs is readonly, even for the permission bits.
 
-use arc_swap::ArcSwap;
 use std::collections::HashMap;
 use std::ffi::CStr;
-use std::io::{Error, Result};
+use std::io::Error;
+use std::io::Result;
 use std::ops::Deref;
-use std::path::{Component, Path};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::path::Component;
+use std::path::Path;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::SystemTime;
 
-use crate::abi::fuse_abi::{stat64, Attr};
+use arc_swap::ArcSwap;
+
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::Attr;
 use crate::api::filesystem::*;
 
 // ID 0 is reserved for invalid entry, and ID 1 is used for ROOT_ID.
@@ -59,11 +66,7 @@ impl PseudoInode {
     fn remove_child(&self, child: Arc<PseudoInode>) {
         let mut children = self.children.load().deref().deref().clone();
 
-        children
-            .iter()
-            .position(|x| x.name == child.name)
-            .map(|pos| children.remove(pos))
-            .unwrap();
+        children.iter().position(|x| x.name == child.name).map(|pos| children.remove(pos)).unwrap();
 
         self.children.store(Arc::new(children));
     }
@@ -260,9 +263,7 @@ impl PseudoFs {
     }
 
     fn get_entry(&self, ino: u64) -> Entry {
-        let mut attr = Attr {
-            ..Default::default()
-        };
+        let mut attr = Attr { ..Default::default() };
         attr.ino = ino;
         #[cfg(target_os = "linux")]
         {
@@ -273,10 +274,7 @@ impl PseudoFs {
             attr.mode = (libc::S_IFDIR | libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO) as u32;
         }
         let now = SystemTime::now();
-        attr.ctime = now
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        attr.ctime = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
         attr.mtime = attr.ctime;
         attr.atime = attr.ctime;
         attr.blksize = 4096;
@@ -302,9 +300,7 @@ impl PseudoFs {
         }
 
         let inodes = self.inodes.load();
-        let inode = inodes
-            .get(&parent)
-            .ok_or_else(|| Error::from_raw_os_error(libc::ENOENT))?;
+        let inode = inodes.get(&parent).ok_or_else(|| Error::from_raw_os_error(libc::ENOENT))?;
         let mut next = offset + 1;
         let children = inode.children.load();
 
@@ -341,12 +337,8 @@ impl FileSystem for PseudoFs {
 
     fn lookup(&self, _: &Context, parent: u64, name: &CStr) -> Result<Entry> {
         let inodes = self.inodes.load();
-        let pinode = inodes
-            .get(&parent)
-            .ok_or_else(|| Error::from_raw_os_error(libc::ENOENT))?;
-        let child_name = name
-            .to_str()
-            .map_err(|_| Error::from_raw_os_error(libc::EINVAL))?;
+        let pinode = inodes.get(&parent).ok_or_else(|| Error::from_raw_os_error(libc::ENOENT))?;
+        let child_name = name.to_str().map_err(|_| Error::from_raw_os_error(libc::EINVAL))?;
         let mut ino: u64 = 0;
         if child_name == "." {
             ino = pinode.ino;
@@ -417,15 +409,20 @@ impl FileSystem for PseudoFs {
 #[cfg(feature = "persist")]
 pub mod persist {
     use std::collections::HashMap;
-    use std::io::{Error as IoError, ErrorKind, Result};
+    use std::io::Error as IoError;
+    use std::io::ErrorKind;
+    use std::io::Result;
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
 
     use dbs_snapshot::Snapshot;
-    use versionize::{VersionMap, Versionize, VersionizeResult};
+    use versionize::VersionMap;
+    use versionize::Versionize;
+    use versionize::VersionizeResult;
     use versionize_derive::Versionize;
 
-    use super::{PseudoFs, PseudoInode};
+    use super::PseudoFs;
+    use super::PseudoInode;
     use crate::api::filesystem::ROOT_ID;
 
     #[derive(Versionize, PartialEq, Debug, Default, Clone)]
@@ -477,27 +474,17 @@ pub mod persist {
             let target_version = vm.latest_version();
             let mut s = Snapshot::new(vm, target_version);
             let mut buf = Vec::new();
-            s.save(&mut buf, &state).map_err(|e| {
-                IoError::new(
-                    ErrorKind::Other,
-                    format!("Failed to save PseudoFs to bytes: {:?}", e),
-                )
-            })?;
+            s.save(&mut buf, &state)
+                .map_err(|e| IoError::new(ErrorKind::Other, format!("Failed to save PseudoFs to bytes: {:?}", e)))?;
 
             Ok(buf)
         }
 
         /// Restores the PseudoFs from a byte array.
         pub fn restore_from_bytes(&self, buf: &mut Vec<u8>) -> Result<()> {
-            let state: PseudoFsState =
-                Snapshot::load(&mut buf.as_slice(), buf.len(), PseudoFs::get_version_map())
-                    .map_err(|e| {
-                        IoError::new(
-                            ErrorKind::Other,
-                            format!("Failed to load PseudoFs from bytes: {:?}", e),
-                        )
-                    })?
-                    .0;
+            let state: PseudoFsState = Snapshot::load(&mut buf.as_slice(), buf.len(), PseudoFs::get_version_map())
+                .map_err(|e| IoError::new(ErrorKind::Other, format!("Failed to load PseudoFs from bytes: {:?}", e)))?
+                .0;
             self.restore_from_state(&state)
         }
 
@@ -506,11 +493,7 @@ pub mod persist {
             let mut inode_map = HashMap::new();
             let mut state_inodes = state.inodes.clone();
             for inode in state_inodes.iter() {
-                let inode = Arc::new(PseudoInode::new(
-                    inode.ino,
-                    inode.parent,
-                    inode.name.clone(),
-                ));
+                let inode = Arc::new(PseudoInode::new(inode.ino, inode.parent, inode.name.clone()));
                 inode_map.insert(inode.ino, inode);
             }
 
@@ -522,20 +505,12 @@ pub mod persist {
             for inode in state_inodes.iter() {
                 let inode = inode_map
                     .get(&inode.ino)
-                    .ok_or_else(|| {
-                        IoError::new(
-                            ErrorKind::InvalidData,
-                            format!("invalid inode {}", inode.ino),
-                        )
-                    })?
+                    .ok_or_else(|| IoError::new(ErrorKind::InvalidData, format!("invalid inode {}", inode.ino)))?
                     .clone();
                 let parent = inode_map.get_mut(&inode.parent).ok_or_else(|| {
                     IoError::new(
                         ErrorKind::InvalidData,
-                        format!(
-                            "invalid parent inode {} for inode {}",
-                            inode.parent, inode.ino
-                        ),
+                        format!("invalid parent inode {} for inode {}", inode.parent, inode.ino),
                     )
                 })?;
                 parent.insert_child(inode);
@@ -571,9 +546,7 @@ pub mod persist {
 
             // check fs and restored_fs
             let next_inode = fs.next_inode.load(std::sync::atomic::Ordering::Relaxed);
-            let restored_next_inode = restored_fs
-                .next_inode
-                .load(std::sync::atomic::Ordering::Relaxed);
+            let restored_next_inode = restored_fs.next_inode.load(std::sync::atomic::Ordering::Relaxed);
             assert_eq!(next_inode, restored_next_inode);
 
             for path in paths.iter() {
@@ -587,8 +560,9 @@ pub mod persist {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::ffi::CString;
+
+    use super::*;
 
     fn create_fuse_context() -> Context {
         Context::new()
@@ -608,10 +582,7 @@ mod tests {
     fn test_pseudofs_mount() {
         let fs = PseudoFs::new();
 
-        assert_eq!(
-            fs.mount("test").unwrap_err().raw_os_error().unwrap(),
-            libc::EINVAL
-        );
+        assert_eq!(fs.mount("test").unwrap_err().raw_os_error().unwrap(), libc::EINVAL);
 
         let a1 = fs.mount("/a").unwrap();
         let a2 = fs.mount("/a").unwrap();
@@ -639,60 +610,15 @@ mod tests {
         let b1 = fs.mount("/a/b").unwrap();
         let c1 = fs.mount("/a/b/c").unwrap();
 
-        assert!(fs
-            .lookup(
-                &create_fuse_context(),
-                0x1000_0000,
-                &CString::new(".").unwrap()
-            )
-            .is_err());
-        assert_eq!(
-            fs.lookup(
-                &create_fuse_context(),
-                ROOT_ID,
-                &CString::new("..").unwrap()
-            )
-            .unwrap()
-            .inode,
-            ROOT_ID
-        );
-        assert_eq!(
-            fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new(".").unwrap())
-                .unwrap()
-                .inode,
-            ROOT_ID
-        );
-        assert_eq!(
-            fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new("a").unwrap())
-                .unwrap()
-                .inode,
-            a1
-        );
-        assert!(fs
-            .lookup(
-                &create_fuse_context(),
-                ROOT_ID,
-                &CString::new("a_no").unwrap()
-            )
-            .is_err());
-        assert_eq!(
-            fs.lookup(&create_fuse_context(), a1, &CString::new("b").unwrap())
-                .unwrap()
-                .inode,
-            b1
-        );
-        assert!(fs
-            .lookup(&create_fuse_context(), a1, &CString::new("b_no").unwrap())
-            .is_err());
-        assert_eq!(
-            fs.lookup(&create_fuse_context(), b1, &CString::new("c").unwrap())
-                .unwrap()
-                .inode,
-            c1
-        );
-        assert!(fs
-            .lookup(&create_fuse_context(), b1, &CString::new("c_no").unwrap())
-            .is_err());
+        assert!(fs.lookup(&create_fuse_context(), 0x1000_0000, &CString::new(".").unwrap()).is_err());
+        assert_eq!(fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new("..").unwrap()).unwrap().inode, ROOT_ID);
+        assert_eq!(fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new(".").unwrap()).unwrap().inode, ROOT_ID);
+        assert_eq!(fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new("a").unwrap()).unwrap().inode, a1);
+        assert!(fs.lookup(&create_fuse_context(), ROOT_ID, &CString::new("a_no").unwrap()).is_err());
+        assert_eq!(fs.lookup(&create_fuse_context(), a1, &CString::new("b").unwrap()).unwrap().inode, b1);
+        assert!(fs.lookup(&create_fuse_context(), a1, &CString::new("b_no").unwrap()).is_err());
+        assert_eq!(fs.lookup(&create_fuse_context(), b1, &CString::new("c").unwrap()).unwrap().inode, c1);
+        assert!(fs.lookup(&create_fuse_context(), b1, &CString::new("c_no").unwrap()).is_err());
 
         assert_eq!(fs.path_walk("/a").unwrap(), Some(a1));
         assert_eq!(fs.path_walk("/a/b").unwrap(), Some(b1));
@@ -723,21 +649,13 @@ mod tests {
         let _ = fs.mount("/a").unwrap();
         let _ = fs.mount("/b").unwrap();
 
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 0, 0, &mut |_| Ok(1))
-            .unwrap();
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 1, 0, &mut |_| Ok(1))
-            .unwrap();
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 1, 1, &mut |_| Ok(1))
-            .unwrap();
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 2, 0, &mut |_| Ok(1))
-            .unwrap();
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 3, 0, &mut |_| Ok(1))
-            .unwrap();
-        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 3, 3, &mut |_| Ok(1))
-            .unwrap();
-        assert!(fs
-            .readdir(&create_fuse_context(), 0x1000, 0, 3, 0, &mut |_| Ok(1))
-            .is_err());
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 0, 0, &mut |_| Ok(1)).unwrap();
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 1, 0, &mut |_| Ok(1)).unwrap();
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 1, 1, &mut |_| Ok(1)).unwrap();
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 2, 0, &mut |_| Ok(1)).unwrap();
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 3, 0, &mut |_| Ok(1)).unwrap();
+        fs.readdir(&create_fuse_context(), ROOT_ID, 0, 3, 3, &mut |_| Ok(1)).unwrap();
+        assert!(fs.readdir(&create_fuse_context(), 0x1000, 0, 3, 0, &mut |_| Ok(1)).is_err());
     }
 
     #[test]
@@ -746,21 +664,13 @@ mod tests {
         let _ = fs.mount("/a").unwrap();
         let _ = fs.mount("/b").unwrap();
 
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 0, 0, &mut |_, _| Ok(1))
-            .unwrap();
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 1, 0, &mut |_, _| Ok(1))
-            .unwrap();
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 1, 1, &mut |_, _| Ok(1))
-            .unwrap();
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 2, 0, &mut |_, _| Ok(1))
-            .unwrap();
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 3, 0, &mut |_, _| Ok(1))
-            .unwrap();
-        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 3, 3, &mut |_, _| Ok(1))
-            .unwrap();
-        assert!(fs
-            .readdirplus(&create_fuse_context(), 0x1000, 0, 3, 0, &mut |_, _| Ok(1))
-            .is_err());
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 0, 0, &mut |_, _| Ok(1)).unwrap();
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 1, 0, &mut |_, _| Ok(1)).unwrap();
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 1, 1, &mut |_, _| Ok(1)).unwrap();
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 2, 0, &mut |_, _| Ok(1)).unwrap();
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 3, 0, &mut |_, _| Ok(1)).unwrap();
+        fs.readdirplus(&create_fuse_context(), ROOT_ID, 0, 3, 3, &mut |_, _| Ok(1)).unwrap();
+        assert!(fs.readdirplus(&create_fuse_context(), 0x1000, 0, 3, 0, &mut |_, _| Ok(1)).is_err());
     }
 
     #[test]

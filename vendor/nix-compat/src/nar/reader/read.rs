@@ -1,9 +1,9 @@
 //! Helpers for reading [crate::nar::wire] format.
 
-use std::io::{
-    self,
-    ErrorKind::{Interrupted, InvalidData, UnexpectedEof},
-};
+use std::io::ErrorKind::Interrupted;
+use std::io::ErrorKind::InvalidData;
+use std::io::ErrorKind::UnexpectedEof;
+use std::io::{self};
 
 use super::Reader;
 use crate::nar::wire::Tag;

@@ -75,7 +75,8 @@ impl RunError {
     pub fn format_json(&self) -> String {
         // Manual formatting to avoid pulling serde into this module for
         // a three-field object. The message is escaped for JSON safety.
-        let escaped = self.message()
+        let escaped = self
+            .message()
             .replace('\\', "\\\\")
             .replace('"', "\\\"")
             .replace('\n', "\\n")
@@ -86,10 +87,7 @@ impl RunError {
             RunError::Build(_) => 1,
             RunError::Internal(_) => 3,
         };
-        format!(
-            r#"{{"error":"{}","code":{},"kind":"{}"}}"#,
-            escaped, code, self.kind()
-        )
+        format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind())
     }
 }
 
@@ -129,66 +127,36 @@ fn build_suggestions(msg: &str) -> String {
     let lower = msg.to_lowercase();
 
     if lower.contains("nonzero exit code") {
-        suggestions.push(
-            "  - Check the build log: ls $XDG_STATE_HOME/crunch/logs/ (or ~/.local/state/crunch/logs/)"
-        );
-        suggestions.push(
-            "  - Run with --verbose / --log-level=debug to see sandbox details"
-        );
+        suggestions.push("  - Check the build log: ls $XDG_STATE_HOME/crunch/logs/ (or ~/.local/state/crunch/logs/)");
+        suggestions.push("  - Run with --verbose / --log-level=debug to see sandbox details");
     }
 
     if lower.contains("bwrap") && lower.contains("can't") {
-        suggestions.push(
-            "  - bwrap namespace setup failed. Check that unprivileged user namespaces are enabled:"
-        );
-        suggestions.push(
-            "    sysctl kernel.unprivileged_userns_clone  (should be 1)"
-        );
+        suggestions.push("  - bwrap namespace setup failed. Check that unprivileged user namespaces are enabled:");
+        suggestions.push("    sysctl kernel.unprivileged_userns_clone  (should be 1)");
     }
 
     if lower.contains("source input not found in store") || lower.contains("sourcenotfound") {
-        suggestions.push(
-            "  - A store path referenced by your derivation doesn't exist on disk"
-        );
-        suggestions.push(
-            "  - Re-run `crunch bootstrap` to regenerate seed.ncl with current store paths"
-        );
-        suggestions.push(
-            "  - If using Nix seeds, pin paths as GC roots to prevent collection"
-        );
-        suggestions.push(
-            "  - Or use `crunch bootstrap --fetch` to avoid Nix store dependencies entirely"
-        );
+        suggestions.push("  - A store path referenced by your derivation doesn't exist on disk");
+        suggestions.push("  - Re-run `crunch bootstrap` to regenerate seed.ncl with current store paths");
+        suggestions.push("  - If using Nix seeds, pin paths as GC roots to prevent collection");
+        suggestions.push("  - Or use `crunch bootstrap --fetch` to avoid Nix store dependencies entirely");
     }
 
     if lower.contains("fod hash mismatch") {
-        suggestions.push(
-            "  - The fixed-output derivation produced content with a different hash than declared"
-        );
-        suggestions.push(
-            "  - Update the hash in your .ncl file, or check that the fetcher is deterministic"
-        );
+        suggestions.push("  - The fixed-output derivation produced content with a different hash than declared");
+        suggestions.push("  - Update the hash in your .ncl file, or check that the fetcher is deterministic");
     }
 
     if lower.contains("builds are not supported") || lower.contains("only supported on linux") {
-        suggestions.push(
-            "  - Building requires Linux with bubblewrap (bwrap) installed"
-        );
-        suggestions.push(
-            "  - Install bwrap: https://github.com/containers/bubblewrap"
-        );
-        suggestions.push(
-            "  - Or run `crunch self-build` to bootstrap bwrap from source"
-        );
+        suggestions.push("  - Building requires Linux with bubblewrap (bwrap) installed");
+        suggestions.push("  - Install bwrap: https://github.com/containers/bubblewrap");
+        suggestions.push("  - Or run `crunch self-build` to bootstrap bwrap from source");
     }
 
     if lower.contains("output not produced by build") {
-        suggestions.push(
-            "  - The builder script didn't write to all declared output paths"
-        );
-        suggestions.push(
-            "  - Make sure your build script creates $out (and any other declared outputs)"
-        );
+        suggestions.push("  - The builder script didn't write to all declared output paths");
+        suggestions.push("  - Make sure your build script creates $out (and any other declared outputs)");
     }
 
     suggestions.join("\n")
@@ -200,21 +168,15 @@ fn internal_suggestions(msg: &str) -> String {
     let lower = msg.to_lowercase();
 
     if lower.contains("store directory") && lower.contains("does not exist") {
-        suggestions.push(
-            "  - The default store is /nix/store. Create it or pass --store <path>"
-        );
+        suggestions.push("  - The default store is /nix/store. Create it or pass --store <path>");
     }
 
     if lower.contains("stdlib") {
-        suggestions.push(
-            "  - crunch can't find its stdlib. Check your installation or set CRUNCH_STDLIB_DIR"
-        );
+        suggestions.push("  - crunch can't find its stdlib. Check your installation or set CRUNCH_STDLIB_DIR");
     }
 
     if lower.contains("failed to run nix") || lower.contains("failed to resolve") {
-        suggestions.push(
-            "  - Make sure nix or nix-build is on your PATH, or use `crunch bootstrap --fetch` instead"
-        );
+        suggestions.push("  - Make sure nix or nix-build is on your PATH, or use `crunch bootstrap --fetch` instead");
     }
 
     suggestions.join("\n")

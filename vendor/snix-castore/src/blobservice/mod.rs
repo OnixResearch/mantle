@@ -1,11 +1,11 @@
-use async_trait::async_trait;
 use std::io;
 
+use async_trait::async_trait;
 use auto_impl::auto_impl;
 
-
 use crate::B3Digest;
-use crate::composition::{Registry, ServiceBuilder};
+use crate::composition::Registry;
+use crate::composition::ServiceBuilder;
 use crate::proto::stat_blob_response::ChunkMeta;
 
 mod chunked_reader;
@@ -18,10 +18,13 @@ mod object_store;
 pub mod tests;
 
 pub use self::chunked_reader::ChunkedReader;
-pub use self::combinator::{CombinedBlobService, CombinedBlobServiceConfig};
+pub use self::combinator::CombinedBlobService;
+pub use self::combinator::CombinedBlobServiceConfig;
 pub use self::from_addr::from_addr;
-pub use self::memory::{MemoryBlobService, MemoryBlobServiceConfig};
-pub use self::object_store::{ObjectStoreBlobService, ObjectStoreBlobServiceConfig};
+pub use self::memory::MemoryBlobService;
+pub use self::memory::MemoryBlobServiceConfig;
+pub use self::object_store::ObjectStoreBlobService;
+pub use self::object_store::ObjectStoreBlobServiceConfig;
 
 /// The base trait all BlobService services need to implement.
 /// It provides functions to check whether a given blob exists,
@@ -87,6 +90,10 @@ impl BlobReader for tokio::fs::File {}
 /// Registers the builtin BlobService implementations with the registry
 pub(crate) fn register_blob_services(reg: &mut Registry) {
     reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::ObjectStoreBlobServiceConfig>("objectstore");
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::MemoryBlobServiceConfig>("memory");
-    reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::CombinedBlobServiceConfig>("combined");
+    reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::MemoryBlobServiceConfig>(
+        "memory",
+    );
+    reg.register::<Box<dyn ServiceBuilder<Output = dyn BlobService>>, super::blobservice::CombinedBlobServiceConfig>(
+        "combined",
+    );
 }

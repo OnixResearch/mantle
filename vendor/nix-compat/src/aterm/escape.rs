@@ -15,8 +15,9 @@ pub fn escape_bytes<P: AsRef<[u8]>>(s: P) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_bytes;
     use rstest::rstest;
+
+    use super::escape_bytes;
 
     #[rstest]
     #[case::empty(b"", b"")]

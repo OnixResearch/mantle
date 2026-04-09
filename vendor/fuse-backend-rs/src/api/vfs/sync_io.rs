@@ -4,7 +4,8 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::abi::fuse_abi::{stat64, statvfs64};
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::statvfs64;
 #[cfg(any(feature = "vhost-user-fs", feature = "virtiofs"))]
 use crate::abi::virtio_fs;
 #[cfg(any(feature = "vhost-user-fs", feature = "virtiofs"))]
@@ -109,22 +110,14 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn getattr(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        handle: Option<VfsHandle>,
-    ) -> Result<(stat64, Duration)> {
+    fn getattr(&self, ctx: &Context, inode: VfsInode, handle: Option<VfsHandle>) -> Result<(stat64, Duration)> {
         match self.get_real_rootfs(inode)? {
             (Left(fs), idata) => fs.getattr(ctx, idata.ino(), handle),
-            (Right(fs), idata) => {
-                fs.getattr(ctx, idata.ino(), handle)
-                    .map(|(mut attr, duration)| {
-                        attr.st_ino = idata.into();
-                        self.remap_attr_id(true, &mut attr);
-                        (attr, duration)
-                    })
-            }
+            (Right(fs), idata) => fs.getattr(ctx, idata.ino(), handle).map(|(mut attr, duration)| {
+                attr.st_ino = idata.into();
+                self.remap_attr_id(true, &mut attr);
+                (attr, duration)
+            }),
         }
     }
 
@@ -141,12 +134,11 @@ impl FileSystem for Vfs {
             (Right(fs), idata) => {
                 let mut attr = attr;
                 self.remap_attr_id(false, &mut attr);
-                fs.setattr(ctx, idata.ino(), attr, handle, valid)
-                    .map(|(mut attr, duration)| {
-                        attr.st_ino = idata.into();
-                        self.remap_attr_id(true, &mut attr);
-                        (attr, duration)
-                    })
+                fs.setattr(ctx, idata.ino(), attr, handle, valid).map(|(mut attr, duration)| {
+                    attr.st_ino = idata.into();
+                    self.remap_attr_id(true, &mut attr);
+                    (attr, duration)
+                })
             }
         }
     }
@@ -158,13 +150,7 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn symlink(
-        &self,
-        ctx: &Context,
-        linkname: &CStr,
-        parent: VfsInode,
-        name: &CStr,
-    ) -> Result<Entry> {
+    fn symlink(&self, ctx: &Context, linkname: &CStr, parent: VfsInode, name: &CStr) -> Result<Entry> {
         validate_path_component(name)?;
 
         match self.get_real_rootfs(parent)? {
@@ -175,15 +161,7 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn mknod(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        name: &CStr,
-        mode: u32,
-        rdev: u32,
-        umask: u32,
-    ) -> Result<Entry> {
+    fn mknod(&self, ctx: &Context, inode: VfsInode, name: &CStr, mode: u32, rdev: u32, umask: u32) -> Result<Entry> {
         validate_path_component(name)?;
 
         match self.get_real_rootfs(inode)? {
@@ -194,14 +172,7 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn mkdir(
-        &self,
-        ctx: &Context,
-        parent: VfsInode,
-        name: &CStr,
-        mode: u32,
-        umask: u32,
-    ) -> Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: VfsInode, name: &CStr, mode: u32, umask: u32) -> Result<Entry> {
         validate_path_component(name)?;
 
         match self.get_real_rootfs(parent)? {
@@ -250,32 +221,12 @@ impl FileSystem for Vfs {
         }
 
         match root {
-            Left(fs) => fs.rename(
-                ctx,
-                idata_old.ino(),
-                oldname,
-                idata_new.ino(),
-                newname,
-                flags,
-            ),
-            Right(fs) => fs.rename(
-                ctx,
-                idata_old.ino(),
-                oldname,
-                idata_new.ino(),
-                newname,
-                flags,
-            ),
+            Left(fs) => fs.rename(ctx, idata_old.ino(), oldname, idata_new.ino(), newname, flags),
+            Right(fs) => fs.rename(ctx, idata_old.ino(), oldname, idata_new.ino(), newname, flags),
         }
     }
 
-    fn link(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        newparent: VfsInode,
-        newname: &CStr,
-    ) -> Result<Entry> {
+    fn link(&self, ctx: &Context, inode: VfsInode, newparent: VfsInode, newname: &CStr) -> Result<Entry> {
         validate_path_component(newname)?;
 
         let (root, idata_old) = self.get_real_rootfs(inode)?;
@@ -323,13 +274,10 @@ impl FileSystem for Vfs {
 
         match self.get_real_rootfs(parent)? {
             (Left(fs), idata) => fs.create(ctx, idata.ino(), name, args),
-            (Right(fs), idata) => {
-                fs.create(ctx, idata.ino(), name, args)
-                    .map(|(mut a, b, c, d)| {
-                        self.convert_entry(idata.fs_idx(), a.inode, &mut a)?;
-                        Ok((a, b, c, d))
-                    })?
-            }
+            (Right(fs), idata) => fs.create(ctx, idata.ino(), name, args).map(|(mut a, b, c, d)| {
+                self.convert_entry(idata.fs_idx(), a.inode, &mut a)?;
+                Ok((a, b, c, d))
+            })?,
         }
     }
 
@@ -345,12 +293,8 @@ impl FileSystem for Vfs {
         flags: u32,
     ) -> Result<usize> {
         match self.get_real_rootfs(inode)? {
-            (Left(fs), idata) => {
-                fs.read(ctx, idata.ino(), handle, w, size, offset, lock_owner, flags)
-            }
-            (Right(fs), idata) => {
-                fs.read(ctx, idata.ino(), handle, w, size, offset, lock_owner, flags)
-            }
+            (Left(fs), idata) => fs.read(ctx, idata.ino(), handle, w, size, offset, lock_owner, flags),
+            (Right(fs), idata) => fs.read(ctx, idata.ino(), handle, w, size, offset, lock_owner, flags),
         }
     }
 
@@ -368,30 +312,12 @@ impl FileSystem for Vfs {
         fuse_flags: u32,
     ) -> Result<usize> {
         match self.get_real_rootfs(inode)? {
-            (Left(fs), idata) => fs.write(
-                ctx,
-                idata.ino(),
-                handle,
-                r,
-                size,
-                offset,
-                lock_owner,
-                delayed_write,
-                flags,
-                fuse_flags,
-            ),
-            (Right(fs), idata) => fs.write(
-                ctx,
-                idata.ino(),
-                handle,
-                r,
-                size,
-                offset,
-                lock_owner,
-                delayed_write,
-                flags,
-                fuse_flags,
-            ),
+            (Left(fs), idata) => {
+                fs.write(ctx, idata.ino(), handle, r, size, offset, lock_owner, delayed_write, flags, fuse_flags)
+            }
+            (Right(fs), idata) => {
+                fs.write(ctx, idata.ino(), handle, r, size, offset, lock_owner, delayed_write, flags, fuse_flags)
+            }
         }
     }
 
@@ -435,24 +361,8 @@ impl FileSystem for Vfs {
         lock_owner: Option<u64>,
     ) -> Result<()> {
         match self.get_real_rootfs(inode)? {
-            (Left(fs), idata) => fs.release(
-                ctx,
-                idata.ino(),
-                flags,
-                handle,
-                flush,
-                flock_release,
-                lock_owner,
-            ),
-            (Right(fs), idata) => fs.release(
-                ctx,
-                idata.ino(),
-                flags,
-                handle,
-                flush,
-                flock_release,
-                lock_owner,
-            ),
+            (Left(fs), idata) => fs.release(ctx, idata.ino(), flags, handle, flush, flock_release, lock_owner),
+            (Right(fs), idata) => fs.release(ctx, idata.ino(), flags, handle, flush, flock_release, lock_owner),
         }
     }
 
@@ -463,14 +373,7 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn setxattr(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> Result<()> {
+    fn setxattr(&self, ctx: &Context, inode: VfsInode, name: &CStr, value: &[u8], flags: u32) -> Result<()> {
         validate_path_component(name)?;
 
         match self.get_real_rootfs(inode)? {
@@ -479,13 +382,7 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn getxattr(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        name: &CStr,
-        size: u32,
-    ) -> Result<GetxattrReply> {
+    fn getxattr(&self, ctx: &Context, inode: VfsInode, name: &CStr, size: u32) -> Result<GetxattrReply> {
         validate_path_component(name)?;
 
         match self.get_real_rootfs(inode)? {
@@ -510,21 +407,14 @@ impl FileSystem for Vfs {
         }
     }
 
-    fn opendir(
-        &self,
-        ctx: &Context,
-        inode: VfsInode,
-        flags: u32,
-    ) -> Result<(Option<VfsHandle>, OpenOptions)> {
+    fn opendir(&self, ctx: &Context, inode: VfsInode, flags: u32) -> Result<(Option<VfsHandle>, OpenOptions)> {
         #[cfg(target_os = "linux")]
         if self.opts.load().no_opendir {
             return Err(Error::from_raw_os_error(libc::ENOSYS));
         }
         match self.get_real_rootfs(inode)? {
             (Left(fs), idata) => fs.opendir(ctx, idata.ino(), flags),
-            (Right(fs), idata) => fs
-                .opendir(ctx, idata.ino(), flags)
-                .map(|(h, opt)| (h.map(Into::into), opt)),
+            (Right(fs), idata) => fs.opendir(ctx, idata.ino(), flags).map(|(h, opt)| (h.map(Into::into), opt)),
         }
     }
 
@@ -539,40 +429,25 @@ impl FileSystem for Vfs {
     ) -> Result<()> {
         match self.get_real_rootfs(inode)? {
             (Left(fs), idata) => {
-                fs.readdir(
-                    ctx,
-                    idata.ino(),
-                    handle,
-                    size,
-                    offset,
-                    &mut |mut dir_entry| {
-                        match self.mountpoints.load().get(&dir_entry.ino) {
-                            // cross mountpoint, return mount root entry
-                            Some(mnt) => {
-                                dir_entry.ino = self.convert_inode(mnt.fs_idx, mnt.ino)?;
-                            }
-                            None => {
-                                dir_entry.ino =
-                                    self.convert_inode(idata.fs_idx(), dir_entry.ino)?;
-                            }
+                fs.readdir(ctx, idata.ino(), handle, size, offset, &mut |mut dir_entry| {
+                    match self.mountpoints.load().get(&dir_entry.ino) {
+                        // cross mountpoint, return mount root entry
+                        Some(mnt) => {
+                            dir_entry.ino = self.convert_inode(mnt.fs_idx, mnt.ino)?;
                         }
-                        add_entry(dir_entry)
-                    },
-                )
+                        None => {
+                            dir_entry.ino = self.convert_inode(idata.fs_idx(), dir_entry.ino)?;
+                        }
+                    }
+                    add_entry(dir_entry)
+                })
             }
 
-            (Right(fs), idata) => fs.readdir(
-                ctx,
-                idata.ino(),
-                handle,
-                size,
-                offset,
-                &mut |mut dir_entry| {
-                    let new_ino = self.convert_inode(idata.fs_idx(), dir_entry.ino)?;
-                    dir_entry.ino = new_ino;
-                    add_entry(dir_entry)
-                },
-            ),
+            (Right(fs), idata) => fs.readdir(ctx, idata.ino(), handle, size, offset, &mut |mut dir_entry| {
+                let new_ino = self.convert_inode(idata.fs_idx(), dir_entry.ino)?;
+                dir_entry.ino = new_ino;
+                add_entry(dir_entry)
+            }),
         }
     }
 
@@ -586,13 +461,8 @@ impl FileSystem for Vfs {
         add_entry: &mut dyn FnMut(DirEntry, Entry) -> Result<usize>,
     ) -> Result<()> {
         match self.get_real_rootfs(inode)? {
-            (Left(fs), idata) => fs.readdirplus(
-                ctx,
-                idata.ino(),
-                handle,
-                size,
-                offset,
-                &mut |mut dir_entry, mut entry| {
+            (Left(fs), idata) => {
+                fs.readdirplus(ctx, idata.ino(), handle, size, offset, &mut |mut dir_entry, mut entry| {
                     match self.mountpoints.load().get(&dir_entry.ino) {
                         Some(mnt) => {
                             // cross mountpoint, return mount root entry
@@ -606,23 +476,18 @@ impl FileSystem for Vfs {
                     }
                     entry.attr.st_ino = entry.inode;
                     add_entry(dir_entry, entry)
-                },
-            ),
+                })
+            }
 
-            (Right(fs), idata) => fs.readdirplus(
-                ctx,
-                idata.ino(),
-                handle,
-                size,
-                offset,
-                &mut |mut dir_entry, mut entry| {
+            (Right(fs), idata) => {
+                fs.readdirplus(ctx, idata.ino(), handle, size, offset, &mut |mut dir_entry, mut entry| {
                     dir_entry.ino = self.convert_inode(idata.fs_idx(), entry.inode)?;
                     entry.inode = dir_entry.ino;
                     entry.attr.st_ino = entry.inode;
                     self.remap_attr_id(true, &mut entry.attr);
                     add_entry(dir_entry, entry)
-                },
-            ),
+                })
+            }
         }
     }
 
@@ -675,12 +540,8 @@ impl FileSystem for Vfs {
         req: &mut dyn FsCacheReqHandler,
     ) -> Result<()> {
         match self.get_real_rootfs(inode)? {
-            (Left(fs), idata) => {
-                fs.setupmapping(ctx, idata.ino(), handle, foffset, len, flags, moffset, req)
-            }
-            (Right(fs), idata) => {
-                fs.setupmapping(ctx, idata.ino(), handle, foffset, len, flags, moffset, req)
-            }
+            (Left(fs), idata) => fs.setupmapping(ctx, idata.ino(), handle, foffset, len, flags, moffset, req),
+            (Right(fs), idata) => fs.setupmapping(ctx, idata.ino(), handle, foffset, len, flags, moffset, req),
         }
     }
 

@@ -1,8 +1,7 @@
-use nix_compat::{
-    narinfo::{Flags, Signature},
-    nixhash::CAHash,
-    store_path::StorePath,
-};
+use nix_compat::narinfo::Flags;
+use nix_compat::narinfo::Signature;
+use nix_compat::nixhash::CAHash;
+use nix_compat::store_path::StorePath;
 
 /// Holds metadata about a store path, but not its contents.
 ///
@@ -30,19 +29,18 @@ pub struct PathInfo {
     /// The CA field in the .narinfo.
     /// Its textual representations seen in the wild are one of the following:
     ///
-    /// * `fixed:r:sha256:1gcky5hlf5vqfzpyhihydmm54grhc94mcs8w7xr8613qsqb1v2j6`
-    ///   fixed-output derivations using "recursive" `outputHashMode`.
-    /// * `fixed:sha256:19xqkh72crbcba7flwxyi3n293vav6d7qkzkh2v4zfyi4iia8vj8 fixed-output derivations using "flat" `outputHashMode\`
-    /// * `text:sha256:19xqkh72crbcba7flwxyi3n293vav6d7qkzkh2v4zfyi4iia8vj8`
-    ///   Text hashing, used for uploaded .drv files and outputs produced by
-    ///   builtins.toFile.
+    /// * `fixed:r:sha256:1gcky5hlf5vqfzpyhihydmm54grhc94mcs8w7xr8613qsqb1v2j6` fixed-output
+    ///   derivations using "recursive" `outputHashMode`.
+    /// * `fixed:sha256:19xqkh72crbcba7flwxyi3n293vav6d7qkzkh2v4zfyi4iia8vj8 fixed-output
+    ///   derivations using "flat" `outputHashMode\`
+    /// * `text:sha256:19xqkh72crbcba7flwxyi3n293vav6d7qkzkh2v4zfyi4iia8vj8` Text hashing, used for
+    ///   uploaded .drv files and outputs produced by builtins.toFile.
     ///
     /// Semantically, they can be split into the following components:
     ///
     /// * "content address prefix". Currently, "fixed" and "text" are supported.
     /// * "hash mode". Currently, "flat" and "recursive" are supported.
-    /// * "hash type". The underlying hash function used.
-    ///   Currently, sha1, md5, sha256, sha512.
+    /// * "hash type". The underlying hash function used. Currently, sha1, md5, sha256, sha512.
     /// * "digest". The digest itself.
     ///
     /// There are some restrictions on the possible combinations.

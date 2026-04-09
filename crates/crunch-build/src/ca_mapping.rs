@@ -2,4 +2,5 @@
 //!
 //! The canonical implementation lives in `crunch_store::ca_mapping`.
 
-pub use crunch_store::{CaMappings, OutputMap};
+pub use crunch_store::CaMappings;
+pub use crunch_store::OutputMap;

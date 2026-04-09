@@ -1,15 +1,23 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use super::{PathInfo, PathInfoService};
-use crate::{pathinfoservice, proto};
 use data_encoding::BASE64;
-use futures::{StreamExt, TryStreamExt, stream::BoxStream};
-
-use redb::{ReadableDatabase, ReadableTable, TableDefinition};
-use snix_castore::composition::{CompositionContext, ServiceBuilder};
-use std::{path::PathBuf, sync::Arc};
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use redb::ReadableDatabase;
+use redb::ReadableTable;
+use redb::TableDefinition;
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::ServiceBuilder;
 use tokio_stream::wrappers::ReceiverStream;
-
 use tracing::instrument;
+
+use super::PathInfo;
+use super::PathInfoService;
+use crate::pathinfoservice;
+use crate::proto;
 
 const PATHINFO_TABLE: TableDefinition<[u8; 20], Vec<u8>> = TableDefinition::new("pathinfo");
 
@@ -47,10 +55,7 @@ pub struct RedbPathInfoService {
 
 impl RedbPathInfoService {
     /// Constructs a new instance using the specified config.
-    pub async fn new(
-        instance_name: String,
-        config: RedbPathInfoServiceConfig,
-    ) -> Result<Self, Error> {
+    pub async fn new(instance_name: String, config: RedbPathInfoServiceConfig) -> Result<Self, Error> {
         if let Some(path) = config.path.clone() {
             if &path == "" {
                 return Err(Error::WrongConfig("empty path is disallowed"));
@@ -60,9 +65,7 @@ impl RedbPathInfoService {
             }
 
             if config.read_only {
-                let db =
-                    tokio::task::spawn_blocking(|| redb::Database::builder().open_read_only(path))
-                        .await??;
+                let db = tokio::task::spawn_blocking(|| redb::Database::builder().open_read_only(path)).await??;
 
                 return Ok(Self {
                     instance_name,
@@ -95,14 +98,8 @@ impl RedbPathInfoService {
 
     /// Constructs a new instance using the in-memory backend.
     /// Sync, as there's no real IO happening.
-    pub fn new_temporary(
-        instance_name: String,
-        config: RedbPathInfoServiceConfig,
-    ) -> Result<Self, Error> {
-        debug_assert!(
-            config.path.is_none(),
-            "Snix bug: config.path is not None, but new_temporary requested"
-        );
+    pub fn new_temporary(instance_name: String, config: RedbPathInfoServiceConfig) -> Result<Self, Error> {
+        debug_assert!(config.path.is_none(), "Snix bug: config.path is not None, but new_temporary requested");
 
         if config.read_only {
             return Err(Error::WrongConfig("in-memory database cannot be read-only"));
@@ -140,7 +137,6 @@ fn create_schema(db: &redb::Database) -> Result<(), Error> {
 
     Ok(())
 }
-
 
 #[async_trait]
 impl PathInfoService for RedbPathInfoService {
@@ -206,7 +202,9 @@ impl PathInfoService for RedbPathInfoService {
                 let table_iter = table.iter()?;
 
                 for elem in table_iter {
-                    let path_info_proto: proto::PathInfo = postcard::from_bytes::<proto::PathInfo>(elem?.1.value().as_slice()).map_err(|e| Error::PostcardDecode(e))?;
+                    let path_info_proto: proto::PathInfo =
+                        postcard::from_bytes::<proto::PathInfo>(elem?.1.value().as_slice())
+                            .map_err(|e| Error::PostcardDecode(e))?;
 
                     let path_info = PathInfo::try_from(path_info_proto)?;
 
@@ -283,12 +281,8 @@ impl TryFrom<url::Url> for RedbPathInfoServiceConfig {
 
         let path: Option<PathBuf> = match (url.scheme(), url.has_authority(), url.path()) {
             ("redb+memory", false, "") => None,
-            ("redb+memory", false, _) => Err(Box::new(Error::WrongConfig(
-                "redb+memory with path is disallowed",
-            )))?,
-            ("redb+memory", true, _) => Err(Box::new(Error::WrongConfig(
-                "redb+memory may not have authority",
-            )))?,
+            ("redb+memory", false, _) => Err(Box::new(Error::WrongConfig("redb+memory with path is disallowed")))?,
+            ("redb+memory", true, _) => Err(Box::new(Error::WrongConfig("redb+memory may not have authority")))?,
             ("redb", _, "") => Err(Box::new(Error::WrongConfig(
                 "redb without path is disallowed, use redb+memory if you want in-memory",
             )))?,
@@ -297,15 +291,13 @@ impl TryFrom<url::Url> for RedbPathInfoServiceConfig {
             (_scheme, _, _) => Err(Box::new(Error::WrongConfig("unrecognized scheme")))?,
         };
 
-        let mut config: RedbPathInfoServiceConfig =
-            serde_qs::from_str(url.query().unwrap_or_default())?;
+        let mut config: RedbPathInfoServiceConfig = serde_qs::from_str(url.query().unwrap_or_default())?;
 
         config.path = path;
 
         Ok(config)
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for RedbPathInfoServiceConfig {
@@ -315,8 +307,6 @@ impl ServiceBuilder for RedbPathInfoServiceConfig {
         instance_name: &str,
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Arc::new(
-            RedbPathInfoService::new(instance_name.to_string(), self.to_owned()).await?,
-        ))
+        Ok(Arc::new(RedbPathInfoService::new(instance_name.to_string(), self.to_owned()).await?))
     }
 }

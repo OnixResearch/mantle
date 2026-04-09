@@ -13,9 +13,8 @@ use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
 use snix_castore::Node;
 
-use crate::registry::DerivationRegistry;
-
 use crate::Error;
+use crate::registry::DerivationRegistry;
 
 /// Maximum size in bytes for a `.drv` file we'll attempt to parse.
 /// Derivation files are small text — anything over 4 MiB is suspicious.
@@ -41,10 +40,7 @@ pub struct DynamicDrv {
 /// 1. The output store path name ends with `.drv`
 /// 2. The node is a regular file (not directory/symlink)
 /// 3. The file is under `MAX_DRV_SIZE_BYTES`
-pub fn is_drv_output(
-    output_path: &StorePath<String>,
-    node: &Node,
-) -> bool {
+pub fn is_drv_output(output_path: &StorePath<String>, node: &Node) -> bool {
     let name_ends_drv = output_path.name().ends_with(".drv");
     if !name_ends_drv {
         return false;
@@ -74,14 +70,11 @@ pub fn parse_drv_bytes(content: &[u8]) -> Result<Option<Derivation>, Error> {
         return Ok(None);
     }
 
-    let drv = Derivation::from_aterm_bytes(content)
-        .map_err(|e| Error::Store(format!("parsing dynamic .drv: {e:?}")))?;
+    let drv =
+        Derivation::from_aterm_bytes(content).map_err(|e| Error::Store(format!("parsing dynamic .drv: {e:?}")))?;
 
     // Tiger Style: assert the parsed derivation has at least one output.
-    debug_assert!(
-        !drv.outputs.is_empty(),
-        "parsed derivation must have at least one output"
-    );
+    debug_assert!(!drv.outputs.is_empty(), "parsed derivation must have at least one output");
 
     Ok(Some(drv))
 }
@@ -102,15 +95,15 @@ pub fn register_dynamic_drv(
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
     // Check if already registered (dedup).
-    let drv_name = drv.environment.get("name")
+    let drv_name = drv
+        .environment
+        .get("name")
         .map(|v| String::from_utf8_lossy(v).to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
-    let drv_path = drv.calculate_derivation_path_with_store_dir(&drv_name, store_dir)
-        .map_err(|e| Error::Store(format!(
-            "computing derivation path for dynamic drv '{}': {e}",
-            drv_name,
-        )))?;
+    let drv_path = drv
+        .calculate_derivation_path_with_store_dir(&drv_name, store_dir)
+        .map_err(|e| Error::Store(format!("computing derivation path for dynamic drv '{}': {e}", drv_name,)))?;
 
     let drv_abs = drv_path.to_absolute_path_with_prefix(store_dir);
     if known_paths.get_by_drv_path(&drv_abs).is_some() {
@@ -136,8 +129,7 @@ pub fn register_dynamic_drv(
     });
 
     // Detect CA: all outputs have no path and no ca_hash.
-    let is_ca = drv.outputs.values()
-        .all(|o| o.path.is_none() && o.ca_hash.is_none());
+    let is_ca = drv.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
 
     known_paths.insert(drv_path.clone(), hdm, drv.clone(), is_ca);
 
@@ -146,10 +138,13 @@ pub fn register_dynamic_drv(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
+
     use nix_compat::derivation::Output;
     use snix_castore::B3Digest;
-    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::*;
 
     fn simple_drv() -> Derivation {
         let mut outputs = BTreeMap::new();
@@ -302,9 +297,7 @@ mod tests {
         let mut kp = DerivationRegistry::default();
         let drv_path = register_dynamic_drv(&parsed, &mut kp, "/nix/store").unwrap();
 
-        let entry = kp.get_by_drv_path(
-            &drv_path.to_absolute_path()
-        ).unwrap();
+        let entry = kp.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
         assert_eq!(entry.derivation.system, "x86_64-linux");
         assert!(entry.derivation.outputs.contains_key("out"));
     }

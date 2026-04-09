@@ -1,30 +1,39 @@
-use async_trait::async_trait;
-use std::{
-    collections::{HashMap, hash_map},
-    io::{self, Cursor},
-    pin::pin,
-    sync::Arc,
-    task::Poll,
-};
+use std::collections::HashMap;
+use std::collections::hash_map;
+use std::io::Cursor;
+use std::io::{self};
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::Poll;
 
+use async_trait::async_trait;
 use data_encoding::HEXLOWER;
 use fastcdc::v2020::AsyncStreamCDC;
-use futures::{Future, TryStreamExt};
-use object_store::{ObjectStore, ObjectStoreExt, path::Path};
+use futures::Future;
+use futures::TryStreamExt;
+use object_store::ObjectStore;
+use object_store::ObjectStoreExt;
+use object_store::path::Path;
 use pin_project_lite::pin_project;
-
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-
-use tracing::{Level, debug, instrument, trace};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+use tracing::Level;
+use tracing::debug;
+use tracing::instrument;
+use tracing::trace;
 use url::Url;
 
-use crate::{
-    B3Digest, B3HashingReader,
-    composition::{CompositionContext, ServiceBuilder},
-    proto::{StatBlobResponse, stat_blob_response::ChunkMeta},
-};
-
-use super::{BlobReader, BlobService, BlobWriter, ChunkedReader};
+use super::BlobReader;
+use super::BlobService;
+use super::BlobWriter;
+use super::ChunkedReader;
+use crate::B3Digest;
+use crate::B3HashingReader;
+use crate::composition::CompositionContext;
+use crate::composition::ServiceBuilder;
+use crate::proto::StatBlobResponse;
+use crate::proto::stat_blob_response::ChunkMeta;
 
 /// The number of chunks that will be uploaded in parallel, per blob.
 const COCURRENT_CHUNK_UPLOADS: usize = 64;
@@ -111,7 +120,6 @@ fn derive_chunk_path(base_path: &Path, digest: &B3Digest) -> Path {
         .child(HEXLOWER.encode(&digest[..]))
 }
 
-
 #[async_trait]
 impl BlobService for ObjectStoreBlobService {
     #[instrument(skip_all, ret(level = Level::TRACE), err, fields(blob.digest=%digest, instance_name=%self.instance_name))]
@@ -140,11 +148,7 @@ impl BlobService for ObjectStoreBlobService {
         if digest.as_slice() == blake3::hash(b"").as_bytes() {
             return Ok(Some(Box::new(Cursor::new(b"")) as Box<dyn BlobReader>));
         }
-        match self
-            .object_store
-            .get(&derive_chunk_path(&self.base_path, digest))
-            .await
-        {
+        match self.object_store.get(&derive_chunk_path(&self.base_path, digest)).await {
             Ok(res) => {
                 // handle reading blobs that are small enough to fit inside a single chunk:
                 // fetch the entire chunk into memory, decompress, ensure the b3 digest matches,
@@ -172,12 +176,9 @@ impl BlobService for ObjectStoreBlobService {
                 // proto docs)
                 if let Some(chunks) = self.chunks(digest).await? {
                     let chunked_reader = ChunkedReader::from_chunks(
-                        chunks.into_iter().map(|chunk| {
-                            (
-                                chunk.digest.try_into().expect("invalid b3 digest"),
-                                chunk.size,
-                            )
-                        }),
+                        chunks
+                            .into_iter()
+                            .map(|chunk| (chunk.digest.try_into().expect("invalid b3 digest"), chunk.size)),
                         Arc::new(self.clone()) as Arc<dyn BlobService>,
                     );
 
@@ -216,24 +217,17 @@ impl BlobService for ObjectStoreBlobService {
 
     #[instrument(skip_all, err, fields(blob.digest=%digest, instance_name=%self.instance_name))]
     async fn chunks(&self, digest: &B3Digest) -> io::Result<Option<Vec<ChunkMeta>>> {
-        match self
-            .object_store
-            .get(&derive_blob_path(&self.base_path, digest))
-            .await
-        {
+        match self.object_store.get(&derive_blob_path(&self.base_path, digest)).await {
             Ok(get_result) => {
                 // fetch the data at the blob path
                 let blob_data = get_result.bytes().await?;
                 // parse into StatBlobResponse
-                let stat_blob_response: StatBlobResponse = postcard::from_bytes(&blob_data).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                let stat_blob_response: StatBlobResponse = postcard::from_bytes(&blob_data)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
                 debug!(
                     chunk.count = stat_blob_response.chunks.len(),
-                    blob.size = stat_blob_response
-                        .chunks
-                        .iter()
-                        .map(|x| x.size)
-                        .sum::<u64>(),
+                    blob.size = stat_blob_response.chunks.iter().map(|x| x.size).sum::<u64>(),
                     "found more granular chunks"
                 );
 
@@ -241,11 +235,7 @@ impl BlobService for ObjectStoreBlobService {
             }
             Err(object_store::Error::NotFound { .. }) => {
                 // If there's only a chunk, we must return the empty vec here, rather than None.
-                match self
-                    .object_store
-                    .head(&derive_chunk_path(&self.base_path, digest))
-                    .await
-                {
+                match self.object_store.head(&derive_chunk_path(&self.base_path, digest)).await {
                     Ok(_) => {
                         // present, but no more chunks available
                         debug!("found a single chunk");
@@ -291,26 +281,19 @@ impl TryFrom<url::Url> for ObjectStoreBlobServiceConfig {
         // parse it back as url, as Url::set_scheme() rejects some of the transitions we want to do.
         let trimmed_url = {
             let s = url.to_string();
-            let mut url = Url::parse(
-                s.strip_prefix("objectstore+")
-                    .ok_or("Missing objectstore uri")?,
-            )?;
-            // trim the query pairs, they might contain credentials or local settings we don't want to send as-is.
+            let mut url = Url::parse(s.strip_prefix("objectstore+").ok_or("Missing objectstore uri")?)?;
+            // trim the query pairs, they might contain credentials or local settings we don't want to send
+            // as-is.
             url.set_query(None);
             url
         };
         Ok(ObjectStoreBlobServiceConfig {
             object_store_url: trimmed_url.into(),
-            object_store_options: url
-                .query_pairs()
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
+            object_store_options: url.query_pairs().into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
             avg_chunk_size: 256 * 1024,
         })
     }
 }
-
 
 #[async_trait]
 impl ServiceBuilder for ObjectStoreBlobServiceConfig {
@@ -321,23 +304,17 @@ impl ServiceBuilder for ObjectStoreBlobServiceConfig {
         _context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
         let opts = {
-            let mut opts: HashMap<&str, _> = self
-                .object_store_options
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .collect();
+            let mut opts: HashMap<&str, _> =
+                self.object_store_options.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
 
-            if let hash_map::Entry::Vacant(e) =
-                opts.entry(object_store::ClientConfigKey::UserAgent.as_ref())
-            {
+            if let hash_map::Entry::Vacant(e) = opts.entry(object_store::ClientConfigKey::UserAgent.as_ref()) {
                 e.insert(crate::USER_AGENT);
             }
 
             opts
         };
 
-        let (object_store, path) =
-            object_store::parse_url_opts(&self.object_store_url.parse()?, opts)?;
+        let (object_store, path) = object_store::parse_url_opts(&self.object_store_url.parse()?, opts)?;
         Ok(Arc::new(ObjectStoreBlobService {
             instance_name: instance_name.to_string(),
             object_store: Arc::new(object_store),
@@ -361,8 +338,7 @@ async fn chunk_and_upload<R: AsyncRead + Unpin>(
     // wrap reader with something calculating the blake3 hash of all data read.
     let mut b3_r = B3HashingReader::from(r);
     // set up a fastcdc chunker
-    let mut chunker =
-        AsyncStreamCDC::new(&mut b3_r, min_chunk_size, avg_chunk_size, max_chunk_size);
+    let mut chunker = AsyncStreamCDC::new(&mut b3_r, min_chunk_size, avg_chunk_size, max_chunk_size);
 
     // Use the fastcdc chunker to produce a stream of chunks, and upload these
     // that don't exist to the backend.
@@ -443,15 +419,11 @@ async fn upload_chunk(
 
         // chunk does not yet exist, compress and upload.
         Err(object_store::Error::NotFound { .. }) => {
-            let chunk_data_compressed =
-                zstd::encode_all(Cursor::new(chunk_data), zstd::DEFAULT_COMPRESSION_LEVEL)?;
+            let chunk_data_compressed = zstd::encode_all(Cursor::new(chunk_data), zstd::DEFAULT_COMPRESSION_LEVEL)?;
 
             debug!(chunk.compressed_size=%chunk_data_compressed.len(), "uploading chunk");
 
-            object_store
-                .as_ref()
-                .put(&chunk_path, chunk_data_compressed.into())
-                .await?;
+            object_store.as_ref().put(&chunk_path, chunk_data_compressed.into()).await?;
         }
         // other error
         Err(err) => Err(err)?,
@@ -508,10 +480,7 @@ where
         }
 
         // write to the underlying writer
-        this.writer
-            .as_pin_mut()
-            .expect("writer must be some")
-            .poll_write(cx, buf)
+        this.writer.as_pin_mut().expect("writer must be some").poll_write(cx, buf)
     }
 
     fn poll_flush(
@@ -530,10 +499,7 @@ where
         }
 
         // Call poll_flush on the writer
-        this.writer
-            .as_pin_mut()
-            .expect("writer must be some")
-            .poll_flush(cx)
+        this.writer.as_pin_mut().expect("writer must be some").poll_flush(cx)
     }
 
     fn poll_shutdown(
@@ -545,7 +511,6 @@ where
         std::task::Poll::Ready(Ok(()))
     }
 }
-
 
 #[async_trait]
 impl<W, Fut> BlobWriter for ObjectStoreBlobWriter<W, Fut>
@@ -592,14 +557,21 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::{chunk_and_upload, default_avg_chunk_size};
-    use crate::{
-        blobservice::{BlobService, BlobWriter as _, ObjectStoreBlobService},
-        fixtures::{BLOB_A, BLOB_A_DIGEST, BLOB_B, BLOB_B_DIGEST},
-    };
-    use std::{io::Cursor, sync::Arc};
+    use std::io::Cursor;
+    use std::sync::Arc;
+
     use tokio::io::AsyncWriteExt;
     use url::Url;
+
+    use super::chunk_and_upload;
+    use super::default_avg_chunk_size;
+    use crate::blobservice::BlobService;
+    use crate::blobservice::BlobWriter as _;
+    use crate::blobservice::ObjectStoreBlobService;
+    use crate::fixtures::BLOB_A;
+    use crate::fixtures::BLOB_A_DIGEST;
+    use crate::fixtures::BLOB_B;
+    use crate::fixtures::BLOB_B_DIGEST;
 
     #[tokio::test]
     async fn new_local_roundtrip() {
@@ -617,8 +589,7 @@ mod test {
         assert!(svc.has(&digest).await.unwrap());
 
         // Read back
-        let mut reader = svc.open_read(&digest).await.unwrap()
-            .expect("blob should exist");
+        let mut reader = svc.open_read(&digest).await.unwrap().expect("blob should exist");
         let mut buf = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut buf).await.unwrap();
         assert_eq!(buf, data);
@@ -643,8 +614,7 @@ mod test {
             let svc = ObjectStoreBlobService::new_local(tmp.path()).unwrap();
             assert!(svc.has(&digest).await.unwrap(), "blob should persist");
 
-            let mut reader = svc.open_read(&digest).await.unwrap()
-                .expect("blob should exist in second instance");
+            let mut reader = svc.open_read(&digest).await.unwrap().expect("blob should exist in second instance");
             let mut buf = Vec::new();
             tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut buf).await.unwrap();
             assert_eq!(buf, data);
@@ -656,12 +626,8 @@ mod test {
     #[case::a(&BLOB_A, &BLOB_A_DIGEST)]
     #[case::b(&BLOB_B, &BLOB_B_DIGEST)]
     #[tokio::test]
-    async fn test_chunk_and_upload(
-        #[case] blob: &bytes::Bytes,
-        #[case] blob_digest: &crate::B3Digest,
-    ) {
-        let (object_store, base_path) =
-            object_store::parse_url(&Url::parse("memory:///").unwrap()).unwrap();
+    async fn test_chunk_and_upload(#[case] blob: &bytes::Bytes, #[case] blob_digest: &crate::B3Digest) {
+        let (object_store, base_path) = object_store::parse_url(&Url::parse("memory:///").unwrap()).unwrap();
         let object_store: Arc<dyn object_store::ObjectStore> = Arc::from(object_store);
         let blobsvc = Arc::new(ObjectStoreBlobService {
             instance_name: "test".into(),

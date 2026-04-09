@@ -60,18 +60,19 @@ fn migrate_one_step(lock: Lockfile) -> Result<Lockfile, Error> {
             version: SchemaVersion::CURRENT,
             ..lock
         }),
-        (major, minor, patch) => Err(Error::Upgrade(format!(
-            "no migration defined from version {major}.{minor}.{patch}"
-        ))),
+        (major, minor, patch) => {
+            Err(Error::Upgrade(format!("no migration defined from version {major}.{minor}.{patch}")))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::lock::*;
     use crate::manifest::HashAlgo;
-    use std::collections::BTreeMap;
 
     #[test]
     fn upgrade_current_is_noop() {
@@ -104,20 +105,17 @@ mod tests {
     #[test]
     fn upgrade_0_9_0_to_1_0_0() {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "example".into(),
-            LockEntry {
-                kind: LockedKind::File {
-                    url: "https://example.com/file".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-abc=".into(),
-                },
-                patches: vec![],
-                mirrors: vec![],
+        inputs.insert("example".into(), LockEntry {
+            kind: LockedKind::File {
+                url: "https://example.com/file".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-abc=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+        });
 
         let lock = Lockfile {
             version: SchemaVersion::new(0, 9, 0),
@@ -135,36 +133,30 @@ mod tests {
     #[test]
     fn upgrade_preserves_all_data() {
         let mut inputs = BTreeMap::new();
-        inputs.insert(
-            "pkg".into(),
-            LockEntry {
-                kind: LockedKind::Git {
-                    repository: "https://github.com/user/repo.git".into(),
-                    rev: "abc123".into(),
-                    ref_name: Some("main".into()),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Blake3,
-                    value: "blake3-xyz=".into(),
-                },
-                patches: vec!["fix1".into()],
-                mirrors: vec!["https://mirror.example.com/repo.git".into()],
+        inputs.insert("pkg".into(), LockEntry {
+            kind: LockedKind::Git {
+                repository: "https://github.com/user/repo.git".into(),
+                rev: "abc123".into(),
+                ref_name: Some("main".into()),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-xyz=".into(),
+            },
+            patches: vec!["fix1".into()],
+            mirrors: vec!["https://mirror.example.com/repo.git".into()],
+        });
 
         let mut patches = BTreeMap::new();
-        patches.insert(
-            "fix1".into(),
-            LockedPatch {
-                source: LockedPatchSource::Local {
-                    path: "patches/fix1.patch".into(),
-                },
-                hash: LockedHash {
-                    algo: HashAlgo::Sha256,
-                    value: "sha256-patchhash=".into(),
-                },
+        patches.insert("fix1".into(), LockedPatch {
+            source: LockedPatchSource::Local {
+                path: "patches/fix1.patch".into(),
             },
-        );
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: "sha256-patchhash=".into(),
+            },
+        });
 
         let lock = Lockfile {
             version: SchemaVersion::new(0, 9, 0),

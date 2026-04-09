@@ -8,16 +8,25 @@
 //! buffer and the whole reply message must be written all at once.
 
 use std::collections::VecDeque;
-use std::io::{self, IoSlice, Write};
+use std::io::IoSlice;
+use std::io::Write;
+use std::io::{self};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::os::unix::io::RawFd;
 
 use nix::sys::uio::writev;
 use nix::unistd::write;
-use vm_memory::{ByteValued, VolatileMemory, VolatileSlice};
+use vm_memory::ByteValued;
+use vm_memory::VolatileMemory;
+use vm_memory::VolatileSlice;
 
-use super::{Error, FileReadWriteVolatile, IoBuffers, Reader, Result, Writer};
+use super::Error;
+use super::FileReadWriteVolatile;
+use super::IoBuffers;
+use super::Reader;
+use super::Result;
+use super::Writer;
 use crate::file_buf::FileVolatileSlice;
 use crate::BitmapSlice;
 
@@ -62,9 +71,7 @@ impl<'a, S: BitmapSlice + Default> Reader<'a, S> {
     pub fn from_fuse_buffer(buf: FuseBuf<'a>) -> Result<Reader<'a, S>> {
         let mut buffers: VecDeque<VolatileSlice<'a, S>> = VecDeque::new();
         // Safe because Reader has the same lifetime with buf.
-        buffers.push_back(unsafe {
-            VolatileSlice::with_bitmap(buf.mem.as_mut_ptr(), buf.mem.len(), S::default())
-        });
+        buffers.push_back(unsafe { VolatileSlice::with_bitmap(buf.mem.as_mut_ptr(), buf.mem.len(), S::default()) });
 
         Ok(Reader {
             buffers: IoBuffers {
@@ -79,8 +86,7 @@ impl<'a, S: BitmapSlice + Default> Reader<'a, S> {
 ///
 /// There are a few special properties to follow:
 /// 1. A fuse device request MUST be written to the fuse device in one shot.
-/// 2. If the writer is split, a final commit() MUST be called to issue the
-///    device write operation.
+/// 2. If the writer is split, a final commit() MUST be called to issue the device write operation.
 /// 3. Concurrency, caller should not write to the writer concurrently.
 #[derive(Debug, PartialEq, Eq)]
 pub struct FuseDevWriter<'a, S: BitmapSlice = ()> {
@@ -185,11 +191,7 @@ impl<'a, S: BitmapSlice> FuseDevWriter<'a, S> {
     /// Write data to the writer from a file descriptor.
     ///
     /// Return the number of bytes written to the writer.
-    pub fn write_from<F: FileReadWriteVolatile>(
-        &mut self,
-        mut src: F,
-        count: usize,
-    ) -> io::Result<usize> {
+    pub fn write_from<F: FileReadWriteVolatile>(&mut self, mut src: F, count: usize) -> io::Result<usize> {
         self.check_available_space(count)?;
 
         let cnt = src.read_vectored_volatile(
@@ -212,12 +214,7 @@ impl<'a, S: BitmapSlice> FuseDevWriter<'a, S> {
 
     /// Write data to the writer from a File at offset `off`.
     /// Return the number of bytes written to the writer.
-    pub fn write_from_at<F: FileReadWriteVolatile>(
-        &mut self,
-        mut src: F,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    pub fn write_from_at<F: FileReadWriteVolatile>(&mut self, mut src: F, count: usize, off: u64) -> io::Result<usize> {
         self.check_available_space(count)?;
 
         let cnt = src.read_vectored_at_volatile(
@@ -240,21 +237,12 @@ impl<'a, S: BitmapSlice> FuseDevWriter<'a, S> {
     }
 
     /// Write all data to the writer from a file descriptor.
-    pub fn write_all_from<F: FileReadWriteVolatile>(
-        &mut self,
-        mut src: F,
-        mut count: usize,
-    ) -> io::Result<()> {
+    pub fn write_all_from<F: FileReadWriteVolatile>(&mut self, mut src: F, mut count: usize) -> io::Result<()> {
         self.check_available_space(count)?;
 
         while count > 0 {
             match self.write_from(&mut src, count) {
-                Ok(0) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::WriteZero,
-                        "failed to write whole buffer",
-                    ))
-                }
+                Ok(0) => return Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write whole buffer")),
                 Ok(n) => count -= n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e) => return Err(e),
@@ -269,11 +257,7 @@ impl<'a, S: BitmapSlice> FuseDevWriter<'a, S> {
         if sz > self.available_bytes() {
             Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!(
-                    "data out of range, available {} requested {}",
-                    self.available_bytes(),
-                    sz
-                ),
+                format!("data out of range, available {} requested {}", self.available_bytes(), sz),
             ))
         } else {
             Ok(())
@@ -332,10 +316,7 @@ impl<'a, S: BitmapSlice> Write for FuseDevWriter<'a, S> {
     /// As this writer can associate multiple writers by splitting, `flush()` can't
     /// flush them all. Disable it!
     fn flush(&mut self) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Writer does not support flush buffer.",
-        ))
+        Err(io::Error::new(io::ErrorKind::Other, "Writer does not support flush buffer."))
     }
 }
 
@@ -398,12 +379,7 @@ mod async_io {
         /// Write data from two buffers into this writer in asynchronous mode.
         ///
         /// Return the number of bytes written to the writer.
-        pub async fn async_write3(
-            &mut self,
-            data: &[u8],
-            data2: &[u8],
-            data3: &[u8],
-        ) -> io::Result<usize> {
+        pub async fn async_write3(&mut self, data: &[u8], data2: &[u8], data3: &[u8]) -> io::Result<usize> {
             let len = data.len() + data2.len() + data3.len();
             self.check_available_space(len)?;
 
@@ -432,10 +408,7 @@ mod async_io {
             while !buf.is_empty() {
                 match self.async_write(buf).await {
                     Ok(0) => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::WriteZero,
-                            "failed to write whole buffer",
-                        ));
+                        return Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write whole buffer"));
                     }
                     Ok(n) => buf = &buf[n..],
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
@@ -514,10 +487,15 @@ mod async_io {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io::{Read, Seek, SeekFrom, Write};
+    use std::io::Read;
+    use std::io::Seek;
+    use std::io::SeekFrom;
+    use std::io::Write;
     use std::os::unix::io::AsRawFd;
+
     use vmm_sys_util::tempfile::TempFile;
+
+    use super::*;
 
     #[test]
     fn reader_test_simple_chain() {
@@ -611,10 +589,7 @@ mod tests {
         buf2.resize(1024, 0);
 
         assert_eq!(
-            reader
-                .read_exact(&mut buf2[..])
-                .expect_err("read more bytes than available")
-                .kind(),
+            reader.read_exact(&mut buf2[..]).expect_err("read more bytes than available").kind(),
             io::ErrorKind::UnexpectedEof
         );
     }
@@ -658,12 +633,7 @@ mod tests {
             IoSlice::new(&buf[32..48]),
             IoSlice::new(&buf[48..]),
         ];
-        assert_eq!(
-            writer
-                .write_vectored(&slices)
-                .expect("failed to write from buffer"),
-            64
-        );
+        assert_eq!(writer.write_vectored(&slices).expect("failed to write from buffer"), 64);
         assert!(writer.flush().is_err());
 
         writer.commit(None).unwrap();
@@ -689,12 +659,7 @@ mod tests {
             IoSlice::new(&buf[32..48]),
             IoSlice::new(&buf[48..]),
         ];
-        assert_eq!(
-            other
-                .write_vectored(&slices)
-                .expect("failed to write from buffer"),
-            64
-        );
+        assert_eq!(other.write_vectored(&slices).expect("failed to write from buffer"), 64);
         assert!(writer.flush().is_err());
 
         writer.commit(None).unwrap();
@@ -720,12 +685,7 @@ mod tests {
             IoSlice::new(&buf[32..48]),
             IoSlice::new(&buf[48..]),
         ];
-        assert_eq!(
-            other
-                .write_vectored(&slices)
-                .expect("failed to write from buffer"),
-            64
-        );
+        assert_eq!(other.write_vectored(&slices).expect("failed to write from buffer"), 64);
 
         writer.commit(Some(&other.into())).unwrap();
     }
@@ -736,10 +696,7 @@ mod tests {
         let mut reader = Reader::<()>::from_fuse_buffer(FuseBuf::new(&mut buf2)).unwrap();
         let mut buf = vec![0u8; 64];
 
-        assert_eq!(
-            reader.read(&mut buf[..]).expect("failed to read to buffer"),
-            48
-        );
+        assert_eq!(reader.read(&mut buf[..]).expect("failed to read to buffer"), 48);
     }
 
     #[test]
@@ -752,10 +709,7 @@ mod tests {
         writer.write(&buf[..]).unwrap_err();
 
         let buf = vec![0xdeu8; 48];
-        assert_eq!(
-            writer.write(&buf[..]).expect("failed to write from buffer"),
-            48
-        );
+        assert_eq!(writer.write(&buf[..]).expect("failed to write from buffer"), 48);
     }
 
     #[test]
@@ -770,12 +724,7 @@ mod tests {
             IoSlice::new(&buf[32..40]),
             IoSlice::new(&buf[40..]),
         ];
-        assert_eq!(
-            writer
-                .write_vectored(&slices)
-                .expect("failed to write from buffer"),
-            48
-        );
+        assert_eq!(writer.write_vectored(&slices).expect("failed to write from buffer"), 48);
     }
 
     #[test]
@@ -796,9 +745,7 @@ mod tests {
         let mut reader = Reader::<()>::from_fuse_buffer(FuseBuf::new(&mut buf2)).unwrap();
         let mut file = TempFile::new().unwrap().into_file();
 
-        reader
-            .read_exact_to(&mut file, 47)
-            .expect("failed to read to file");
+        reader.read_exact_to(&mut file, 47).expect("failed to read to file");
 
         assert_eq!(reader.available_bytes(), 1);
         assert_eq!(reader.bytes_read(), 47);
@@ -810,12 +757,7 @@ mod tests {
         let mut reader = Reader::<()>::from_fuse_buffer(FuseBuf::new(&mut buf2)).unwrap();
         let mut file = TempFile::new().unwrap().into_file();
 
-        assert_eq!(
-            reader
-                .read_to_at(&mut file, 48, 16)
-                .expect("failed to read to file"),
-            48
-        );
+        assert_eq!(reader.read_to_at(&mut file, 48, 16).expect("failed to read to file"), 48);
         assert_eq!(reader.available_bytes(), 0);
         assert_eq!(reader.bytes_read(), 48);
     }
@@ -844,9 +786,7 @@ mod tests {
 
         file.write_all(&buf).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        writer
-            .write_all_from(&mut file, 47)
-            .expect("failed to write from buffer");
+        writer.write_all_from(&mut file, 47).expect("failed to write from buffer");
         assert_eq!(writer.available_bytes(), 1);
         assert_eq!(writer.bytes_written(), 47);
 
@@ -867,9 +807,7 @@ mod tests {
 
         file.write_all(&buf).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        writer
-            .write_all_from(&mut file, 47)
-            .expect("failed to write from buffer");
+        writer.write_all_from(&mut file, 47).expect("failed to write from buffer");
         assert_eq!(writer.available_bytes(), 1);
         assert_eq!(writer.bytes_written(), 47);
 
@@ -891,12 +829,7 @@ mod tests {
 
         file.write_all(&buf).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        assert_eq!(
-            writer
-                .write_from_at(&mut file, 40, 16)
-                .expect("failed to write from buffer"),
-            40
-        );
+        assert_eq!(writer.write_from_at(&mut file, 40, 16).expect("failed to write from buffer"), 40);
         assert_eq!(writer.available_bytes(), 8);
         assert_eq!(writer.bytes_written(), 40);
 
@@ -917,12 +850,7 @@ mod tests {
 
         file.write_all(&buf).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
-        assert_eq!(
-            writer
-                .write_from_at(&mut file, 40, 16)
-                .expect("failed to write from buffer"),
-            40
-        );
+        assert_eq!(writer.write_from_at(&mut file, 40, 16).expect("failed to write from buffer"), 40);
         assert_eq!(writer.available_bytes(), 8);
         assert_eq!(writer.bytes_written(), 40);
 
@@ -936,10 +864,9 @@ mod tests {
     mod async_io {
         use vmm_sys_util::tempdir::TempDir;
 
+        use super::*;
         use crate::async_file::File;
         use crate::async_runtime;
-
-        use super::*;
 
         #[test]
         fn async_read_to_at() {
@@ -986,9 +913,7 @@ mod tests {
             let mut buf = vec![0x0u8; 48];
             let mut writer = FuseDevWriter::<()>::new(fd, &mut buf).unwrap();
             let buf = vec![0xdeu8; 48];
-            let res = async_runtime::block_on(async {
-                writer.async_write2(&buf[..32], &buf[32..]).await
-            });
+            let res = async_runtime::block_on(async { writer.async_write2(&buf[..32], &buf[32..]).await });
             assert_eq!(res.unwrap(), 48);
         }
 
@@ -999,11 +924,8 @@ mod tests {
             let mut buf = vec![0x0u8; 48];
             let mut writer = FuseDevWriter::<()>::new(fd, &mut buf).unwrap();
             let buf = vec![0xdeu8; 48];
-            let res = async_runtime::block_on(async {
-                writer
-                    .async_write3(&buf[..32], &buf[32..40], &buf[40..])
-                    .await
-            });
+            let res =
+                async_runtime::block_on(async { writer.async_write3(&buf[..32], &buf[32..40], &buf[40..]).await });
             assert_eq!(res.unwrap(), 48);
         }
 
@@ -1049,15 +971,9 @@ mod tests {
                 IoSlice::new(&buf[32..48]),
                 IoSlice::new(&buf[48..]),
             ];
-            assert_eq!(
-                other
-                    .write_vectored(&slices)
-                    .expect("failed to write from buffer"),
-                64
-            );
+            assert_eq!(other.write_vectored(&slices).expect("failed to write from buffer"), 64);
 
-            let res =
-                async_runtime::block_on(async { writer.async_commit(Some(&other.into())).await });
+            let res = async_runtime::block_on(async { writer.async_commit(Some(&other.into())).await });
             let _ = res.unwrap();
         }
     }

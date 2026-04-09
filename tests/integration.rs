@@ -3,14 +3,13 @@
 //! These tests invoke the compiled `crunch` binary via `assert_cmd` and
 //! check stdout, stderr, and exit codes.
 
-use assert_cmd::Command;
-use predicates::prelude::*;
 use std::path::PathBuf;
 
+use assert_cmd::Command;
+use predicates::prelude::*;
+
 fn fixture(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
 }
 
 fn crunch_cmd() -> Command {
@@ -47,11 +46,7 @@ fn eval_multi_derivation_prints_both() {
 
 #[test]
 fn eval_output_is_valid_json() {
-    let output = crunch_cmd()
-        .arg("eval")
-        .arg(fixture("simple.ncl"))
-        .output()
-        .expect("should run");
+    let output = crunch_cmd().arg("eval").arg(fixture("simple.ncl")).output().expect("should run");
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -81,12 +76,7 @@ fn eval_nonexistent_file_exits_2() {
 
 #[test]
 fn eval_json_flag_emits_json_error() {
-    let output = crunch_cmd()
-        .arg("--json")
-        .arg("eval")
-        .arg(fixture("invalid.ncl"))
-        .output()
-        .expect("should run");
+    let output = crunch_cmd().arg("--json").arg("eval").arg(fixture("invalid.ncl")).output().expect("should run");
 
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -102,11 +92,7 @@ fn eval_json_flag_emits_json_error() {
 #[test]
 fn eval_with_import_path_flag() {
     let lib_dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        lib_dir.path().join("extra.ncl"),
-        r#"{ val = 42 }"#,
-    )
-    .unwrap();
+    std::fs::write(lib_dir.path().join("extra.ncl"), r#"{ val = 42 }"#).unwrap();
 
     let main_dir = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -140,13 +126,7 @@ fn bootstrap_creates_seed_file() {
     let dir = tempfile::tempdir().unwrap();
     let seed = dir.path().join("seed.ncl");
 
-    let result = crunch_cmd()
-        .arg("bootstrap")
-        .arg("-o")
-        .arg(&seed)
-        .arg("bash")
-        .output()
-        .expect("should run");
+    let result = crunch_cmd().arg("bootstrap").arg("-o").arg(&seed).arg("bash").output().expect("should run");
 
     // Bootstrap might fail if nix isn't installed — skip gracefully
     if !result.status.success() {
@@ -155,10 +135,7 @@ fn bootstrap_creates_seed_file() {
             eprintln!("skipping bootstrap test: nix not available");
             return;
         }
-        panic!(
-            "bootstrap failed unexpectedly: {}",
-            String::from_utf8_lossy(&result.stderr)
-        );
+        panic!("bootstrap failed unexpectedly: {}", String::from_utf8_lossy(&result.stderr));
     }
 
     assert!(seed.exists(), "seed.ncl should be created");
@@ -172,13 +149,7 @@ fn bootstrap_seed_is_importable() {
     let dir = tempfile::tempdir().unwrap();
     let seed = dir.path().join("seed.ncl");
 
-    let result = crunch_cmd()
-        .arg("bootstrap")
-        .arg("-o")
-        .arg(&seed)
-        .arg("bash")
-        .output()
-        .expect("should run");
+    let result = crunch_cmd().arg("bootstrap").arg("-o").arg(&seed).arg("bash").output().expect("should run");
 
     if !result.status.success() {
         eprintln!("skipping: bootstrap failed (nix not available?)");
@@ -219,10 +190,7 @@ mod build_tests {
     fn can_build() -> bool {
         // Quick check: does /nix/store exist and is bwrap available?
         std::path::Path::new("/nix/store").exists()
-            && std::process::Command::new("bwrap")
-                .arg("--version")
-                .output()
-                .is_ok()
+            && std::process::Command::new("bwrap").arg("--version").output().is_ok()
     }
 
     #[test]
@@ -342,7 +310,9 @@ mod build_tests {
     #[test]
     fn build_persists_signed_pathinfo() {
         use futures::StreamExt;
-        use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
+        use snix_store::pathinfoservice::PathInfoService;
+        use snix_store::pathinfoservice::RedbPathInfoService;
+        use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
         if !can_build() {
             eprintln!("skipping build test: bwrap or /nix/store not available");
@@ -416,9 +386,12 @@ mod build_tests {
 fn store_sign_all_signs_existing_unsigned_entries() {
     use futures::StreamExt;
     use nix_compat::store_path::StorePath;
-    use snix_castore::{Node, SymlinkTarget};
+    use snix_castore::Node;
+    use snix_castore::SymlinkTarget;
     use snix_store::path_info::PathInfo;
-    use snix_store::pathinfoservice::{PathInfoService, RedbPathInfoService, RedbPathInfoServiceConfig};
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
     let state = tempfile::tempdir().unwrap();
     let key_file = state.path().join("cache.key");
@@ -430,14 +403,11 @@ fn store_sign_all_signs_existing_unsigned_entries() {
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let svc = RedbPathInfoService::new(
-            "seed".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(state.path().join("pathinfo.redb")),
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let svc = RedbPathInfoService::new("seed".to_string(), RedbPathInfoServiceConfig {
+            path: Some(state.path().join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
         .await
         .unwrap();
 
@@ -487,14 +457,11 @@ fn store_sign_all_signs_existing_unsigned_entries() {
         .stderr(predicate::str::contains("2 signed, 0 appended, 0 replaced, 2 total"));
 
     rt.block_on(async {
-        let svc = RedbPathInfoService::new(
-            "verify".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(state.path().join("pathinfo.redb")),
-                read_only: true,
-                cache_size: None,
-            },
-        )
+        let svc = RedbPathInfoService::new("verify".to_string(), RedbPathInfoServiceConfig {
+            path: Some(state.path().join("pathinfo.redb")),
+            read_only: true,
+            cache_size: None,
+        })
         .await
         .unwrap();
 
@@ -517,7 +484,6 @@ fn store_sign_all_signs_existing_unsigned_entries() {
     });
 }
 
-
 // ── Phase 5: Error and edge cases ───────────────────────────────
 
 #[test]
@@ -534,12 +500,7 @@ fn build_missing_store_exits_3() {
 
 #[test]
 fn verbose_flag_produces_debug_output() {
-    let output = crunch_cmd()
-        .arg("--verbose")
-        .arg("eval")
-        .arg(fixture("simple.ncl"))
-        .output()
-        .expect("should run");
+    let output = crunch_cmd().arg("--verbose").arg("eval").arg(fixture("simple.ncl")).output().expect("should run");
 
     assert!(output.status.success());
 }
@@ -550,12 +511,7 @@ fn verbose_flag_produces_debug_output() {
 fn log_subcommand_no_logs() {
     // Point to an empty log dir
     let dir = tempfile::tempdir().unwrap();
-    crunch_cmd()
-        .env("CRUNCH_LOG_DIR", dir.path())
-        .arg("log")
-        .arg("--list")
-        .assert()
-        .success();
+    crunch_cmd().env("CRUNCH_LOG_DIR", dir.path()).arg("log").arg("--list").assert().success();
 }
 
 #[test]
@@ -584,7 +540,8 @@ fn log_subcommand_shows_log_by_query() {
     std::fs::write(
         &log_file,
         "# crunch build log\n# derivation: mytest\n# status: success\n# timestamp: 0\n\nbuild output here\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     crunch_cmd()
         .env("CRUNCH_LOG_DIR", dir.path())
@@ -620,10 +577,7 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                content.len()
-            );
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", content.len());
             let _ = stream.write_all(resp.as_bytes());
             let _ = stream.write_all(content);
         }
@@ -645,35 +599,20 @@ fn fetchurl_wrong_hash_shows_correct_hash() {
     )
     .unwrap();
 
-    let output = crunch_cmd()
-        .arg("--store")
-        .arg(store_dir.path())
-        .arg("build")
-        .arg(&ncl_file)
-        .output()
-        .unwrap();
+    let output = crunch_cmd().arg("--store").arg(store_dir.path()).arg("build").arg(&ncl_file).output().unwrap();
 
     handle.join().unwrap();
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Should contain both the wrong and correct hash
-    assert!(
-        stderr.contains("hash mismatch"),
-        "stderr should mention hash mismatch: {stderr}"
-    );
-    assert!(
-        stderr.contains("sha256-"),
-        "stderr should contain SRI hash: {stderr}"
-    );
+    assert!(stderr.contains("hash mismatch"), "stderr should mention hash mismatch: {stderr}");
+    assert!(stderr.contains("sha256-"), "stderr should contain SRI hash: {stderr}");
     // Should suggest the update
     assert!(
         stderr.contains("update") || stderr.contains("got:") || stderr.contains("got sha256-"),
         "stderr should suggest the correct hash: {stderr}"
     );
-    assert!(
-        !output.status.success(),
-        "build should fail on hash mismatch"
-    );
+    assert!(!output.status.success(), "build should fail on hash mismatch");
 }
 
 #[test]
@@ -687,10 +626,7 @@ fn fix_flag_rewrites_hash() {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buf = [0u8; 4096];
             let _ = std::io::Read::read(&mut stream, &mut buf);
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                content.len()
-            );
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", content.len());
             let _ = stream.write_all(resp.as_bytes());
             let _ = stream.write_all(content);
         }
@@ -724,21 +660,12 @@ fn fix_flag_rewrites_hash() {
     handle.join().unwrap();
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("fixed:"),
-        "stderr should confirm the fix: {stderr}"
-    );
+    assert!(stderr.contains("fixed:"), "stderr should confirm the fix: {stderr}");
 
     // The .ncl file should have been rewritten
     let updated = std::fs::read_to_string(&ncl_file).unwrap();
-    assert!(
-        !updated.contains(wrong_hash),
-        "old hash should be gone from the file"
-    );
-    assert!(
-        updated.contains("sha256-"),
-        "new SRI hash should be in the file: {updated}"
-    );
+    assert!(!updated.contains(wrong_hash), "old hash should be gone from the file");
+    assert!(updated.contains("sha256-"), "new SRI hash should be in the file: {updated}");
 }
 
 // ── CLI flag tests ────────────────────────────────────────────────
@@ -812,8 +739,7 @@ stdenv.mkDerivation {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "eval should succeed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Default phases should appear in the build script.
     assert!(stdout.contains("make install"), "should have default installPhase: {stdout}");
@@ -921,8 +847,7 @@ builders.mkShell {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "mkShell eval should succeed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "mkShell eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("test-shell"), "name: {stdout}");
     assert!(stdout.contains("not meant to be built"), "fail message: {stdout}");
@@ -961,8 +886,7 @@ stdenv.mkDerivation {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "eval should succeed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     // src should be in env
@@ -973,10 +897,7 @@ stdenv.mkDerivation {
     );
     // src should be in inputs
     let inputs = parsed["inputs"].as_array().unwrap();
-    assert!(
-        inputs.iter().any(|v| v.as_str().unwrap().contains("source")),
-        "src should be in inputs: {stdout}"
-    );
+    assert!(inputs.iter().any(|v| v.as_str().unwrap().contains("source")), "src should be in inputs: {stdout}");
 }
 
 #[test]
@@ -1003,8 +924,7 @@ fn eval_multi_output_derivation() {
         .expect("should run");
 
     assert!(output.status.success());
-    let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
     let outputs = parsed["outputs"].as_array().unwrap();
     assert_eq!(outputs.len(), 2);
     assert_eq!(outputs[0], "out");
@@ -1040,10 +960,8 @@ let lib = {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "select eval: {}",
-        String::from_utf8_lossy(&output.stderr));
-    let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    assert!(output.status.success(), "select eval: {}", String::from_utf8_lossy(&output.stderr));
+    let parsed: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
     // inputs should contain the output selection record
     let inputs = parsed["inputs"].as_array().unwrap();
     assert!(

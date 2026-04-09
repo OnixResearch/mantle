@@ -2,39 +2,32 @@ use std::sync::Arc;
 
 use url::Url;
 
-use crate::composition::{
-    CompositionContext, DeserializeWithRegistry, REG, ServiceBuilder, with_registry,
-};
-
 use super::DirectoryService;
+use crate::composition::CompositionContext;
+use crate::composition::DeserializeWithRegistry;
+use crate::composition::REG;
+use crate::composition::ServiceBuilder;
+use crate::composition::with_registry;
 
 /// Constructs a new instance of a [DirectoryService] from an URI.
 ///
 /// The following URIs are supported:
-/// - `redb+memory:`
-///   Uses a in-memory implementation.
-/// - `redb:///absolute/path/to/somewhere`
-///   Uses redb, using a path on the disk for persistency. Can be only opened
-///   from one process at the same time.
-/// - `grpc+unix:///absolute/path/to/somewhere`
-///   Connects to a local snix-store gRPC service via Unix socket.
-/// - `grpc+http://host:port`, `grpc+https://host:port`
-///   Connects to a (remote) snix-store gRPC service.
-pub async fn from_addr(
-    uri: &str,
-) -> Result<Arc<dyn DirectoryService>, Box<dyn std::error::Error + Send + Sync>> {
+/// - `redb+memory:` Uses a in-memory implementation.
+/// - `redb:///absolute/path/to/somewhere` Uses redb, using a path on the disk for persistency. Can
+///   be only opened from one process at the same time.
+/// - `grpc+unix:///absolute/path/to/somewhere` Connects to a local snix-store gRPC service via Unix
+///   socket.
+/// - `grpc+http://host:port`, `grpc+https://host:port` Connects to a (remote) snix-store gRPC
+///   service.
+pub async fn from_addr(uri: &str) -> Result<Arc<dyn DirectoryService>, Box<dyn std::error::Error + Send + Sync>> {
     #[allow(unused_mut)]
     let mut url = Url::parse(uri).map_err(|e| format!("unable to parse url: {e}"))?;
 
     let directory_service_config = with_registry(&REG, || {
-        <DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>>::try_from(
-            url,
-        )
+        <DeserializeWithRegistry<Box<dyn ServiceBuilder<Output = dyn DirectoryService>>>>::try_from(url)
     })?
     .0;
-    let directory_service = directory_service_config
-        .build("anonymous", &CompositionContext::blank(&REG))
-        .await?;
+    let directory_service = directory_service_config.build("anonymous", &CompositionContext::blank(&REG)).await?;
 
     Ok(directory_service)
 }
@@ -43,9 +36,10 @@ pub async fn from_addr(
 mod tests {
     use std::sync::LazyLock;
 
-    use super::from_addr;
     use rstest::rstest;
     use tempfile::TempDir;
+
+    use super::from_addr;
 
     static TMPDIR_REDB_1: LazyLock<TempDir> = LazyLock::new(|| TempDir::new().unwrap());
 

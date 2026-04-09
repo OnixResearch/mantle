@@ -15,16 +15,22 @@
 //! - virtiofs: communicate with the virtiofsd on host side by using virtio descriptors.
 
 use std::any::Any;
+use std::cmp;
 use std::collections::VecDeque;
-use std::io::{self, IoSlice, Read};
+use std::fmt;
+use std::io::IoSlice;
+use std::io::Read;
+use std::io::{self};
 use std::marker::PhantomData;
-use std::mem::{size_of, MaybeUninit};
+use std::mem::size_of;
+use std::mem::MaybeUninit;
 use std::ptr::copy_nonoverlapping;
-use std::{cmp, fmt};
 
 use lazy_static::lazy_static;
-use libc::{sysconf, _SC_PAGESIZE};
-use vm_memory::{ByteValued, VolatileSlice};
+use libc::sysconf;
+use libc::_SC_PAGESIZE;
+use vm_memory::ByteValued;
+use vm_memory::VolatileSlice;
 
 #[cfg(feature = "async-io")]
 use crate::file_buf::FileVolatileBuf;
@@ -42,7 +48,13 @@ mod virtiofs;
 
 pub use self::fs_cache_req_handler::FsCacheReqHandler;
 #[cfg(feature = "fusedev")]
-pub use self::fusedev::{FuseBuf, FuseChannel, FuseDevWriter, FuseSession};
+pub use self::fusedev::FuseBuf;
+#[cfg(feature = "fusedev")]
+pub use self::fusedev::FuseChannel;
+#[cfg(feature = "fusedev")]
+pub use self::fusedev::FuseDevWriter;
+#[cfg(feature = "fusedev")]
+pub use self::fusedev::FuseSession;
 #[cfg(feature = "virtiofs")]
 pub use self::virtiofs::VirtioFsWriter;
 
@@ -79,10 +91,9 @@ impl fmt::Display for Error {
         use self::Error::*;
 
         match self {
-            DescriptorChainOverflow => write!(
-                f,
-                "the combined length of all the buffers in a `DescriptorChain` would overflow"
-            ),
+            DescriptorChainOverflow => {
+                write!(f, "the combined length of all the buffers in a `DescriptorChain` would overflow")
+            }
             FindMemoryRegion => write!(f, "no memory region for this address range"),
             InvalidChain => write!(f, "invalid descriptor chain"),
             InvalidParameter => write!(f, "invalid parameter"),
@@ -133,9 +144,7 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
         // This is guaranteed not to overflow because the total length of the chain
         // is checked during all creations of `IoBuffers` (see
         // `Reader::new()` and `Writer::new()`).
-        self.buffers
-            .iter()
-            .fold(0usize, |count, buf| count + buf.len())
+        self.buffers.iter().fold(0usize, |count, buf| count + buf.len())
     }
 
     fn bytes_consumed(&self) -> usize {
@@ -187,11 +196,7 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
                 buf.clone()
             };
             // Safe because we just change the interface to access underlying buffers.
-            bufs.push(FileVolatileBuf::from_raw_ptr(
-                local_buf.as_ptr(),
-                local_buf.len(),
-                local_buf.len(),
-            ));
+            bufs.push(FileVolatileBuf::from_raw_ptr(local_buf.as_ptr(), local_buf.len(), local_buf.len()));
 
             // Don't need check_sub() as we just made sure rem >= local_buf.len()
             rem -= local_buf.len() as usize;
@@ -218,11 +223,7 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
             } else {
                 buf.clone()
             };
-            bufs.push(FileVolatileBuf::from_raw_ptr(
-                local_buf.as_ptr(),
-                0,
-                local_buf.len(),
-            ));
+            bufs.push(FileVolatileBuf::from_raw_ptr(local_buf.as_ptr(), 0, local_buf.len()));
 
             // Don't need check_sub() as we just made sure rem >= local_buf.len()
             rem -= local_buf.len() as usize;
@@ -257,12 +258,10 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
     fn mark_used(&mut self, bytes_consumed: usize) -> io::Result<()> {
         // This can happen if a driver tricks a device into reading/writing more data than
         // fits in a `usize`.
-        let total_bytes_consumed =
-            self.bytes_consumed
-                .checked_add(bytes_consumed)
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, Error::DescriptorChainOverflow)
-                })?;
+        let total_bytes_consumed = self
+            .bytes_consumed
+            .checked_add(bytes_consumed)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, Error::DescriptorChainOverflow))?;
 
         let mut rem = bytes_consumed;
         while let Some(buf) = self.buffers.pop_front() {
@@ -285,17 +284,15 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
 
     /// Consumes at most `count` bytes from the `DescriptorChain`. Callers must provide a function
     /// that takes a `&[FileVolatileSlice]` and returns the total number of bytes consumed. This
-    /// function guarantees that the combined length of all the slices in the `&[FileVolatileSlice]` is
-    /// less than or equal to `count`. `mark_dirty` is used for tracing dirty pages.
+    /// function guarantees that the combined length of all the slices in the `&[FileVolatileSlice]`
+    /// is less than or equal to `count`. `mark_dirty` is used for tracing dirty pages.
     ///
     /// # Errors
     ///
     /// If the provided function returns any error then no bytes are consumed from the buffer and
     /// the error is returned to the caller.
     fn consume<F>(&mut self, mark_dirty: bool, count: usize, f: F) -> io::Result<usize>
-    where
-        F: FnOnce(&[FileVolatileSlice]) -> io::Result<usize>,
-    {
+    where F: FnOnce(&[FileVolatileSlice]) -> io::Result<usize> {
         let bufs = self.allocate_file_volatile_slice(count);
         if bufs.is_empty() {
             Ok(0)
@@ -310,9 +307,7 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
     }
 
     fn consume_for_read<F>(&mut self, count: usize, f: F) -> io::Result<usize>
-    where
-        F: FnOnce(&[FileVolatileSlice]) -> io::Result<usize>,
-    {
+    where F: FnOnce(&[FileVolatileSlice]) -> io::Result<usize> {
         self.consume(false, count, f)
     }
 
@@ -334,8 +329,7 @@ impl<S: BitmapSlice> IoBuffers<'_, S> {
                 // There must be at least one element in `other` because we checked
                 // its `size` value in the call to `position` above.
                 let front = other.pop_front().expect("empty VecDeque after split");
-                self.buffers
-                    .push_back(front.subslice(0, rem).map_err(Error::VolatileMemoryError)?);
+                self.buffers.push_back(front.subslice(0, rem).map_err(Error::VolatileMemoryError)?);
                 other.push_front(front.offset(rem).map_err(Error::VolatileMemoryError)?);
             }
 
@@ -380,9 +374,7 @@ impl<S: BitmapSlice> Reader<'_, S> {
 
         // Safe because `MaybeUninit` guarantees that the pointer is valid for
         // `size_of::<T>()` bytes.
-        let buf = unsafe {
-            ::std::slice::from_raw_parts_mut(obj.as_mut_ptr() as *mut u8, size_of::<T>())
-        };
+        let buf = unsafe { ::std::slice::from_raw_parts_mut(obj.as_mut_ptr() as *mut u8, size_of::<T>()) };
 
         self.read_exact(buf)?;
 
@@ -395,43 +387,23 @@ impl<S: BitmapSlice> Reader<'_, S> {
     /// Returns the number of bytes read from the descriptor chain buffer.
     /// The number of bytes read can be less than `count` if there isn't
     /// enough data in the descriptor chain buffer.
-    pub fn read_to<F: FileReadWriteVolatile>(
-        &mut self,
-        mut dst: F,
-        count: usize,
-    ) -> io::Result<usize> {
-        self.buffers
-            .consume_for_read(count, |bufs| dst.write_vectored_volatile(bufs))
+    pub fn read_to<F: FileReadWriteVolatile>(&mut self, mut dst: F, count: usize) -> io::Result<usize> {
+        self.buffers.consume_for_read(count, |bufs| dst.write_vectored_volatile(bufs))
     }
 
     /// Reads data from the descriptor chain buffer into a File at offset `off`.
     /// Returns the number of bytes read from the descriptor chain buffer.
     /// The number of bytes read can be less than `count` if there isn't
     /// enough data in the descriptor chain buffer.
-    pub fn read_to_at<F: FileReadWriteVolatile>(
-        &mut self,
-        mut dst: F,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
-        self.buffers
-            .consume_for_read(count, |bufs| dst.write_vectored_at_volatile(bufs, off))
+    pub fn read_to_at<F: FileReadWriteVolatile>(&mut self, mut dst: F, count: usize, off: u64) -> io::Result<usize> {
+        self.buffers.consume_for_read(count, |bufs| dst.write_vectored_at_volatile(bufs, off))
     }
 
     /// Reads exactly size of data from the descriptor chain buffer into a file descriptor.
-    pub fn read_exact_to<F: FileReadWriteVolatile>(
-        &mut self,
-        mut dst: F,
-        mut count: usize,
-    ) -> io::Result<()> {
+    pub fn read_exact_to<F: FileReadWriteVolatile>(&mut self, mut dst: F, mut count: usize) -> io::Result<()> {
         while count > 0 {
             match self.read_to(&mut dst, count) {
-                Ok(0) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "failed to fill whole buffer",
-                    ))
-                }
+                Ok(0) => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer")),
                 Ok(n) => count -= n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e) => return Err(e),
@@ -459,9 +431,7 @@ impl<S: BitmapSlice> Reader<'_, S> {
     /// `Reader` can read up to `available_bytes() - offset` bytes.  Returns an error if
     /// `offset > self.available_bytes()`.
     pub fn split_at(&mut self, offset: usize) -> Result<Self> {
-        self.buffers
-            .split_at(offset)
-            .map(|buffers| Reader { buffers })
+        self.buffers.split_at(offset).map(|buffers| Reader { buffers })
     }
 }
 
@@ -534,12 +504,7 @@ impl<'a, S: BitmapSlice> Writer<'a, S> {
     /// Write data to the descriptor chain buffer from a File at offset `off`.
     ///
     /// Return the number of bytes written to the descriptor chain buffer.
-    pub fn write_from_at<F: FileReadWriteVolatile>(
-        &mut self,
-        src: F,
-        count: usize,
-        off: u64,
-    ) -> io::Result<usize> {
+    pub fn write_from_at<F: FileReadWriteVolatile>(&mut self, src: F, count: usize, off: u64) -> io::Result<usize> {
         match self {
             #[cfg(feature = "fusedev")]
             Writer::FuseDev(w) => w.write_from_at(src, count, off),
@@ -658,12 +623,7 @@ impl<'a, S: BitmapSlice> Writer<'a, S> {
     }
 
     /// Write data from three buffers into this writer in asynchronous mode.
-    pub async fn async_write3(
-        &mut self,
-        data: &[u8],
-        data2: &[u8],
-        data3: &[u8],
-    ) -> io::Result<usize> {
+    pub async fn async_write3(&mut self, data: &[u8], data2: &[u8], data3: &[u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "fusedev")]
             Writer::FuseDev(w) => w.async_write3(data, data2, data3).await,
@@ -740,12 +700,13 @@ pub fn pagesize() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::transport::IoBuffers;
     use std::collections::VecDeque;
-    use vm_memory::{
-        bitmap::{AtomicBitmap, Bitmap},
-        VolatileSlice,
-    };
+
+    use vm_memory::bitmap::AtomicBitmap;
+    use vm_memory::bitmap::Bitmap;
+    use vm_memory::VolatileSlice;
+
+    use crate::transport::IoBuffers;
 
     #[test]
     fn test_io_buffers() {
@@ -764,10 +725,7 @@ mod tests {
         assert_eq!(buffers.available_bytes(), 32);
         assert_eq!(buffers.bytes_consumed(), 0);
 
-        assert_eq!(
-            buffers.consume_for_read(2, |buf| Ok(buf[0].len())).unwrap(),
-            2
-        );
+        assert_eq!(buffers.consume_for_read(2, |buf| Ok(buf[0].len())).unwrap(), 2);
         assert_eq!(buffers.available_bytes(), 30);
         assert_eq!(buffers.bytes_consumed(), 2);
 
@@ -777,18 +735,8 @@ mod tests {
         assert_eq!(buffers2.available_bytes(), 20);
         assert_eq!(buffers2.bytes_consumed(), 0);
 
-        assert_eq!(
-            buffers2
-                .consume_for_read(10, |buf| Ok(buf[0].len() + buf[1].len()))
-                .unwrap(),
-            10
-        );
-        assert_eq!(
-            buffers2
-                .consume_for_read(20, |buf| Ok(buf[0].len()))
-                .unwrap(),
-            10
-        );
+        assert_eq!(buffers2.consume_for_read(10, |buf| Ok(buf[0].len() + buf[1].len())).unwrap(), 10);
+        assert_eq!(buffers2.consume_for_read(20, |buf| Ok(buf[0].len())).unwrap(), 10);
 
         let _buffers3 = buffers2.split_at(0).unwrap();
         assert!(buffers2.split_at(1).is_err());
@@ -809,16 +757,8 @@ mod tests {
         let mut bufs = VecDeque::new();
 
         unsafe {
-            bufs.push_back(VolatileSlice::with_bitmap(
-                buf1.as_mut_ptr(),
-                buf1.len(),
-                bitmap1.slice_at(0),
-            ));
-            bufs.push_back(VolatileSlice::with_bitmap(
-                buf2.as_mut_ptr(),
-                buf2.len(),
-                bitmap2.slice_at(0),
-            ));
+            bufs.push_back(VolatileSlice::with_bitmap(buf1.as_mut_ptr(), buf1.len(), bitmap1.slice_at(0)));
+            bufs.push_back(VolatileSlice::with_bitmap(buf2.as_mut_ptr(), buf2.len(), bitmap2.slice_at(0)));
         }
         let mut buffers = IoBuffers {
             buffers: bufs,
@@ -828,10 +768,7 @@ mod tests {
         assert_eq!(buffers.available_bytes(), 32);
         assert_eq!(buffers.bytes_consumed(), 0);
 
-        assert_eq!(
-            buffers.consume_for_read(8, |buf| Ok(buf[0].len())).unwrap(),
-            8
-        );
+        assert_eq!(buffers.consume_for_read(8, |buf| Ok(buf[0].len())).unwrap(), 8);
 
         assert_eq!(buffers.available_bytes(), 24);
         assert_eq!(buffers.bytes_consumed(), 8);
@@ -840,12 +777,7 @@ mod tests {
             assert_eq!(bitmap1.is_bit_set(i), false);
         }
 
-        assert_eq!(
-            buffers
-                .consume(true, 16, |buf| Ok(buf[0].len() + buf[1].len()))
-                .unwrap(),
-            16
-        );
+        assert_eq!(buffers.consume(true, 16, |buf| Ok(buf[0].len() + buf[1].len())).unwrap(), 16);
         assert_eq!(buffers.available_bytes(), 8);
         assert_eq!(buffers.bytes_consumed(), 24);
         for i in 0..8 {

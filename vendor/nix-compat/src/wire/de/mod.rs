@@ -1,7 +1,8 @@
 use std::error::Error as StdError;
+use std::fmt;
 use std::future::Future;
+use std::io;
 use std::ops::RangeInclusive;
-use std::{fmt, io};
 
 use ::bytes::Bytes;
 
@@ -14,7 +15,8 @@ mod int;
 pub mod mock;
 mod reader;
 
-pub use reader::{NixReader, NixReaderBuilder};
+pub use reader::NixReader;
+pub use reader::NixReaderBuilder;
 
 /// Like serde the `Error` trait allows `NixRead` implementations to add
 /// custom error handling for `NixDeserialize`.
@@ -70,9 +72,7 @@ pub trait NixRead: Send {
 
     /// Read a single u64 from the protocol.
     /// This returns an Option to support graceful shutdown.
-    fn try_read_number(
-        &mut self,
-    ) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_;
+    fn try_read_number(&mut self) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_;
 
     /// Read bytes from the protocol.
     /// A size limit on the returned bytes has to be specified.
@@ -87,9 +87,7 @@ pub trait NixRead: Send {
     /// limit of `0..=usize::MAX` but other implementations are free to have a
     /// reader wide limit.
     /// This returns an Option to support graceful shutdown.
-    fn try_read_bytes(
-        &mut self,
-    ) -> impl Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
+    fn try_read_bytes(&mut self) -> impl Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
         self.try_read_bytes_limited(0..=usize::MAX)
     }
 
@@ -130,9 +128,7 @@ pub trait NixRead: Send {
 
     /// Read a value from the protocol.
     /// Uses `NixDeserialize::deserialize` to read a value.
-    fn read_value<V: NixDeserialize>(
-        &mut self,
-    ) -> impl Future<Output = Result<V, Self::Error>> + Send + '_ {
+    fn read_value<V: NixDeserialize>(&mut self) -> impl Future<Output = Result<V, Self::Error>> + Send + '_ {
         V::deserialize(self)
     }
 
@@ -153,9 +149,7 @@ impl<T: ?Sized + NixRead> NixRead for &mut T {
         (**self).version()
     }
 
-    fn try_read_number(
-        &mut self,
-    ) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_ {
+    fn try_read_number(&mut self) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_ {
         (**self).try_read_number()
     }
 
@@ -166,9 +160,7 @@ impl<T: ?Sized + NixRead> NixRead for &mut T {
         (**self).try_read_bytes_limited(limit)
     }
 
-    fn try_read_bytes(
-        &mut self,
-    ) -> impl Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
+    fn try_read_bytes(&mut self) -> impl Future<Output = Result<Option<Bytes>, Self::Error>> + Send + '_ {
         (**self).try_read_bytes()
     }
 
@@ -193,9 +185,7 @@ impl<T: ?Sized + NixRead> NixRead for &mut T {
         (**self).try_read_value()
     }
 
-    fn read_value<V: NixDeserialize>(
-        &mut self,
-    ) -> impl Future<Output = Result<V, Self::Error>> + Send + '_ {
+    fn read_value<V: NixDeserialize>(&mut self) -> impl Future<Output = Result<V, Self::Error>> + Send + '_ {
         (**self).read_value()
     }
 }
@@ -205,16 +195,11 @@ impl<T: ?Sized + NixRead> NixRead for &mut T {
 pub trait NixDeserialize: Sized {
     /// Read a value from the reader.
     /// This returns an Option to support gracefull shutdown.
-    fn try_deserialize<R>(
-        reader: &mut R,
-    ) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
-    where
-        R: ?Sized + NixRead + Send;
+    fn try_deserialize<R>(reader: &mut R) -> impl Future<Output = Result<Option<Self>, R::Error>> + Send + '_
+    where R: ?Sized + NixRead + Send;
 
     fn deserialize<R>(reader: &mut R) -> impl Future<Output = Result<Self, R::Error>> + Send + '_
-    where
-        R: ?Sized + NixRead + Send,
-    {
+    where R: ?Sized + NixRead + Send {
         async move {
             match Self::try_deserialize(reader).await? {
                 Some(v) => Ok(v),

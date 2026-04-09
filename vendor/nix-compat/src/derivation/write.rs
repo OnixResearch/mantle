@@ -3,12 +3,15 @@
 //!
 //! [ATerm]: http://program-transformation.org/Tools/ATermFormat.html
 
-use crate::aterm::escape_bytes;
-use crate::derivation::{ca_kind_prefix, output::Output};
-use crate::nixbase32;
-use crate::store_path::{STORE_DIR_WITH_SLASH, StorePath};
 use bstr::BString;
 use data_encoding::HEXLOWER;
+
+use crate::aterm::escape_bytes;
+use crate::derivation::ca_kind_prefix;
+use crate::derivation::output::Output;
+use crate::nixbase32;
+use crate::store_path::STORE_DIR_WITH_SLASH;
+use crate::store_path::StorePath;
 
 /// Write a [StorePath] to the writer in ATerm quoted format using a custom
 /// store directory prefix. Same as [AtermWriteable] for StorePath but
@@ -28,12 +31,11 @@ pub(crate) fn write_store_path_with_prefix<S: AsRef<str>>(
     Ok(())
 }
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io,
-    io::Error,
-    io::Write,
-};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::io;
+use std::io::Error;
+use std::io::Write;
 
 pub const DERIVATION_PREFIX: &str = "Derive";
 pub const PAREN_OPEN: char = '(';
@@ -53,8 +55,7 @@ pub(crate) trait AtermWriteable {
 }
 
 impl<S> AtermWriteable for StorePath<S>
-where
-    S: AsRef<str>,
+where S: AsRef<str>
 {
     fn aterm_write(&self, writer: &mut impl Write) -> std::io::Result<()> {
         write_char(writer, QUOTE)?;
@@ -90,11 +91,7 @@ pub(crate) fn write_char(writer: &mut impl Write, c: char) -> io::Result<()> {
 // The `escape` argument controls whether escaping will be skipped.
 // This is the case if `s` is known to only contain characters that need no
 // escaping.
-pub(crate) fn write_field<S: AsRef<[u8]>>(
-    writer: &mut impl Write,
-    s: S,
-    escape: bool,
-) -> io::Result<()> {
+pub(crate) fn write_field<S: AsRef<[u8]>>(writer: &mut impl Write, s: S, escape: bool) -> io::Result<()> {
     write_char(writer, QUOTE)?;
 
     if !escape {
@@ -108,10 +105,7 @@ pub(crate) fn write_field<S: AsRef<[u8]>>(
     Ok(())
 }
 
-fn write_array_elements<S: AsRef<[u8]>>(
-    writer: &mut impl Write,
-    elements: &[S],
-) -> Result<(), io::Error> {
+fn write_array_elements<S: AsRef<[u8]>>(writer: &mut impl Write, elements: &[S]) -> Result<(), io::Error> {
     for (index, element) in elements.iter().enumerate() {
         if index > 0 {
             write_char(writer, COMMA)?;
@@ -123,10 +117,7 @@ fn write_array_elements<S: AsRef<[u8]>>(
     Ok(())
 }
 
-pub(crate) fn write_outputs(
-    writer: &mut impl Write,
-    outputs: &BTreeMap<String, Output>,
-) -> Result<(), io::Error> {
+pub(crate) fn write_outputs(writer: &mut impl Write, outputs: &BTreeMap<String, Output>) -> Result<(), io::Error> {
     write_outputs_with_prefix(writer, outputs, STORE_DIR_WITH_SLASH)
 }
 
@@ -145,9 +136,8 @@ pub(crate) fn write_outputs_with_prefix(
 
         write_char(writer, PAREN_OPEN)?;
 
-        let path_str = output.path_str_with_prefix(
-            &store_dir_with_slash[..store_dir_with_slash.len().saturating_sub(1)],
-        );
+        let path_str =
+            output.path_str_with_prefix(&store_dir_with_slash[..store_dir_with_slash.len().saturating_sub(1)]);
         let mut elements: Vec<&str> = vec![output_name, &path_str];
 
         let (mode_and_algo, digest) = match &output.ca_hash {
@@ -186,13 +176,7 @@ pub(crate) fn write_input_derivations(
         write_char(writer, COMMA)?;
 
         write_char(writer, BRACKET_OPEN)?;
-        write_array_elements(
-            writer,
-            &output_names
-                .iter()
-                .map(String::as_bytes)
-                .collect::<Vec<_>>(),
-        )?;
+        write_array_elements(writer, &output_names.iter().map(String::as_bytes).collect::<Vec<_>>())?;
         write_char(writer, BRACKET_CLOSE)?;
 
         write_char(writer, PAREN_CLOSE)?;
@@ -223,13 +207,7 @@ pub(crate) fn write_input_derivations_with_prefix(
         write_char(writer, COMMA)?;
 
         write_char(writer, BRACKET_OPEN)?;
-        write_array_elements(
-            writer,
-            &output_names
-                .iter()
-                .map(String::as_bytes)
-                .collect::<Vec<_>>(),
-        )?;
+        write_array_elements(writer, &output_names.iter().map(String::as_bytes).collect::<Vec<_>>())?;
         write_char(writer, BRACKET_CLOSE)?;
 
         write_char(writer, PAREN_CLOSE)?;
@@ -256,10 +234,7 @@ pub(crate) fn write_input_sources_with_prefix(
     write_char(writer, BRACKET_OPEN)?;
     write_array_elements(
         writer,
-        &input_sources
-            .iter()
-            .map(|sp| sp.to_absolute_path_with_prefix(store_dir))
-            .collect::<Vec<_>>(),
+        &input_sources.iter().map(|sp| sp.to_absolute_path_with_prefix(store_dir)).collect::<Vec<_>>(),
     )?;
     write_char(writer, BRACKET_CLOSE)?;
 
@@ -276,27 +251,15 @@ pub(crate) fn write_builder(writer: &mut impl Write, builder: &str) -> Result<()
     Ok(())
 }
 
-pub(crate) fn write_arguments(
-    writer: &mut impl Write,
-    arguments: &[String],
-) -> Result<(), io::Error> {
+pub(crate) fn write_arguments(writer: &mut impl Write, arguments: &[String]) -> Result<(), io::Error> {
     write_char(writer, BRACKET_OPEN)?;
-    write_array_elements(
-        writer,
-        &arguments
-            .iter()
-            .map(|s| s.as_bytes().to_vec().into())
-            .collect::<Vec<BString>>(),
-    )?;
+    write_array_elements(writer, &arguments.iter().map(|s| s.as_bytes().to_vec().into()).collect::<Vec<BString>>())?;
     write_char(writer, BRACKET_CLOSE)?;
 
     Ok(())
 }
 
-pub(crate) fn write_environment<E, K, V>(
-    writer: &mut impl Write,
-    environment: E,
-) -> Result<(), io::Error>
+pub(crate) fn write_environment<E, K, V>(writer: &mut impl Write, environment: E) -> Result<(), io::Error>
 where
     E: IntoIterator<Item = (K, V)>,
     K: AsRef<[u8]>,

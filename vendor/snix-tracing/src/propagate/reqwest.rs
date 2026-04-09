@@ -1,4 +1,5 @@
-use reqwest_tracing::{SpanBackendWithUrl, TracingMiddleware};
+use reqwest_tracing::SpanBackendWithUrl;
+use reqwest_tracing::TracingMiddleware;
 
 /// Returns a new tracing middleware which can be used with reqwest_middleware.
 /// It will then write the `traceparent` in the header on the request and additionally records the

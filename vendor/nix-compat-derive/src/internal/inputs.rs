@@ -31,20 +31,17 @@ impl quote::ToTokens for RemoteInput {
 #[cfg(test)]
 mod test {
     use syn::parse_quote;
-    //use syn::parse::Parse;
 
+    //use syn::parse::Parse;
     use super::*;
 
     #[test]
     fn test_input() {
         let p: RemoteInput = parse_quote!(u64);
-        assert_eq!(
-            p,
-            RemoteInput {
-                attrs: vec![],
-                ident: parse_quote!(u64),
-            }
-        );
+        assert_eq!(p, RemoteInput {
+            attrs: vec![],
+            ident: parse_quote!(u64),
+        });
     }
 
     #[test]
@@ -53,13 +50,10 @@ mod test {
             #[nix]
             u64
         );
-        assert_eq!(
-            p,
-            RemoteInput {
-                attrs: vec![parse_quote!(#[nix])],
-                ident: parse_quote!(u64),
-            }
-        );
+        assert_eq!(p, RemoteInput {
+            attrs: vec![parse_quote!(#[nix])],
+            ident: parse_quote!(u64),
+        });
     }
 
     #[test]
@@ -69,13 +63,10 @@ mod test {
             #[hello]
             u64
         );
-        assert_eq!(
-            p,
-            RemoteInput {
-                attrs: vec![parse_quote!(#[nix]), parse_quote!(#[hello])],
-                ident: parse_quote!(u64),
-            }
-        );
+        assert_eq!(p, RemoteInput {
+            attrs: vec![parse_quote!(#[nix]), parse_quote!(#[hello])],
+            ident: parse_quote!(u64),
+        });
     }
 
     #[test]
@@ -84,13 +75,10 @@ mod test {
             #[nix(try_from = "u64")]
             usize
         );
-        assert_eq!(
-            p,
-            RemoteInput {
-                attrs: vec![parse_quote!(#[nix(try_from="u64")])],
-                ident: parse_quote!(usize),
-            }
-        );
+        assert_eq!(p, RemoteInput {
+            attrs: vec![parse_quote!(#[nix(try_from="u64")])],
+            ident: parse_quote!(usize),
+        });
     }
 
     #[test]
@@ -99,12 +87,9 @@ mod test {
             #[muh]
             u64
         );
-        assert_eq!(
-            p,
-            RemoteInput {
-                attrs: vec![parse_quote!(#[muh])],
-                ident: parse_quote!(u64),
-            }
-        );
+        assert_eq!(p, RemoteInput {
+            attrs: vec![parse_quote!(#[muh])],
+            ident: parse_quote!(u64),
+        });
     }
 }

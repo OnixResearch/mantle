@@ -11,8 +11,15 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use super::{Context, Entry, FileSystem, ZeroCopyReader, ZeroCopyWriter};
-use crate::abi::fuse_abi::{stat64, CreateIn, OpenOptions, SetattrValid};
+use super::Context;
+use super::Entry;
+use super::FileSystem;
+use super::ZeroCopyReader;
+use super::ZeroCopyWriter;
+use crate::abi::fuse_abi::stat64;
+use crate::abi::fuse_abi::CreateIn;
+use crate::abi::fuse_abi::OpenOptions;
+use crate::abi::fuse_abi::SetattrValid;
 use crate::file_traits::AsyncFileReadWriteVolatile;
 
 /// A trait for directly copying data from the fuse transport into a `File` without first storing it
@@ -73,12 +80,7 @@ pub trait AsyncFileSystem: FileSystem {
     ///
     /// If this call is successful then the lookup count of the `Inode` associated with the returned
     /// `Entry` must be increased by 1.
-    async fn async_lookup(
-        &self,
-        ctx: &Context,
-        parent: Self::Inode,
-        name: &CStr,
-    ) -> io::Result<Entry>;
+    async fn async_lookup(&self, ctx: &Context, parent: Self::Inode, name: &CStr) -> io::Result<Entry>;
 
     /*
     /// Forget about an inode.
@@ -834,10 +836,8 @@ pub trait AsyncFileSystem: FileSystem {
     */
 }
 
-type AttrFuture<'async_trait> =
-    Box<dyn Future<Output = io::Result<(stat64, Duration)>> + Send + 'async_trait>;
-type OpenFuture<'async_trait, H> =
-    Box<dyn Future<Output = io::Result<(Option<H>, OpenOptions)>> + Send + 'async_trait>;
+type AttrFuture<'async_trait> = Box<dyn Future<Output = io::Result<(stat64, Duration)>> + Send + 'async_trait>;
+type OpenFuture<'async_trait, H> = Box<dyn Future<Output = io::Result<(Option<H>, OpenOptions)>> + Send + 'async_trait>;
 type CreateFuture<'async_trait, H> =
     Box<dyn Future<Output = io::Result<(Entry, Option<H>, OpenOptions)>> + Send + 'async_trait>;
 
@@ -935,8 +935,7 @@ impl<FS: AsyncFileSystem> AsyncFileSystem for Arc<FS> {
         'c: 'async_trait,
         Self: 'async_trait,
     {
-        self.deref()
-            .async_read(ctx, inode, handle, w, size, offset, lock_owner, flags)
+        self.deref().async_read(ctx, inode, handle, w, size, offset, lock_owner, flags)
     }
 
     fn async_write<'a, 'b, 'c, 'async_trait>(
@@ -958,18 +957,8 @@ impl<FS: AsyncFileSystem> AsyncFileSystem for Arc<FS> {
         'c: 'async_trait,
         Self: 'async_trait,
     {
-        self.deref().async_write(
-            ctx,
-            inode,
-            handle,
-            r,
-            size,
-            offset,
-            lock_owner,
-            delayed_write,
-            flags,
-            fuse_flags,
-        )
+        self.deref()
+            .async_write(ctx, inode, handle, r, size, offset, lock_owner, delayed_write, flags, fuse_flags)
     }
 
     fn async_fsync<'a, 'b, 'async_trait>(
@@ -1001,8 +990,7 @@ impl<FS: AsyncFileSystem> AsyncFileSystem for Arc<FS> {
         'b: 'async_trait,
         Self: 'async_trait,
     {
-        self.deref()
-            .async_fallocate(ctx, inode, handle, mode, offset, length)
+        self.deref().async_fallocate(ctx, inode, handle, mode, offset, length)
     }
 
     fn async_fsyncdir<'a, 'b, 'async_trait>(

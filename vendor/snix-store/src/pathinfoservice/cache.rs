@@ -1,15 +1,17 @@
-use async_trait::async_trait;
 use std::sync::Arc;
 
-use futures::{TryStreamExt, stream::BoxStream};
+use async_trait::async_trait;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
 use nix_compat::nixbase32;
-use snix_castore::composition::{CompositionContext, ServiceBuilder};
+use snix_castore::composition::CompositionContext;
+use snix_castore::composition::ServiceBuilder;
+use tracing::debug;
+use tracing::instrument;
 
-use tracing::{debug, instrument};
-
+use super::PathInfo;
+use super::PathInfoService;
 use crate::pathinfoservice;
-
-use super::{PathInfo, PathInfoService};
 
 /// Asks near first, if not found, asks far.
 /// If found in there, returns it, and *inserts* it into
@@ -32,7 +34,6 @@ impl<PS1, PS2> Cache<PS1, PS2> {
     }
 }
 
-
 #[async_trait]
 impl<PS1, PS2> PathInfoService for Cache<PS1, PS2>
 where
@@ -52,10 +53,7 @@ where
                     None => Ok(None),
                     Some(path_info) => {
                         debug!("found in remote, adding to cache");
-                        self.near
-                            .put(path_info.clone())
-                            .await
-                            .map_err(Error::NearPut)?;
+                        self.near.put(path_info.clone()).await.map_err(Error::NearPut)?;
                         Ok(Some(path_info))
                     }
                 }
@@ -66,8 +64,10 @@ where
     #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
     async fn has(&self, digest: [u8; 20]) -> Result<bool, pathinfoservice::Error> {
         // FUTUREWORK: queue background tasks if ! self.near.has && self.far.has ? (configurable)
-        Ok(self.near.has(digest).await.map_err(Error::NearGet)?
-            || self.far.has(digest).await.map_err(Error::FarGet)?)
+        Ok(
+            self.near.has(digest).await.map_err(Error::NearGet)?
+                || self.far.has(digest).await.map_err(Error::FarGet)?,
+        )
     }
 
     async fn put(&self, _path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
@@ -109,7 +109,6 @@ impl TryFrom<url::Url> for CacheConfig {
     }
 }
 
-
 #[async_trait]
 impl ServiceBuilder for CacheConfig {
     type Output = dyn PathInfoService;
@@ -118,10 +117,8 @@ impl ServiceBuilder for CacheConfig {
         instance_name: &str,
         context: &CompositionContext,
     ) -> Result<Arc<Self::Output>, Box<dyn std::error::Error + Send + Sync>> {
-        let (near, far) = futures::join!(
-            context.resolve::<Self::Output>(&self.near),
-            context.resolve::<Self::Output>(&self.far)
-        );
+        let (near, far) =
+            futures::join!(context.resolve::<Self::Output>(&self.near), context.resolve::<Self::Output>(&self.far));
         Ok(Arc::new(Cache {
             instance_name: instance_name.to_string(),
             near: near?,
@@ -134,11 +131,10 @@ impl ServiceBuilder for CacheConfig {
 mod test {
     use std::num::NonZeroUsize;
 
-    use crate::{
-        fixtures::PATH_INFO,
-        pathinfoservice::{LruPathInfoService, PathInfoService},
-        utils::gen_test_pathinfo_service,
-    };
+    use crate::fixtures::PATH_INFO;
+    use crate::pathinfoservice::LruPathInfoService;
+    use crate::pathinfoservice::PathInfoService;
+    use crate::utils::gen_test_pathinfo_service;
 
     /// Helper function setting up an instance of a Cache PathInfoService.
     async fn create_pathinfoservice() -> super::Cache<LruPathInfoService, impl PathInfoService> {
@@ -158,26 +154,15 @@ mod test {
         let svc = create_pathinfoservice().await;
 
         // query the PathInfo, things should not be there.
-        assert!(
-            svc.get(*PATH_INFO.store_path.digest())
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(svc.get(*PATH_INFO.store_path.digest()).await.unwrap().is_none());
 
         // insert it into the far one.
         svc.far.put(PATH_INFO.clone()).await.unwrap();
 
         // now try getting it again, it should succeed.
-        assert_eq!(
-            Some(PATH_INFO.clone()),
-            svc.get(*PATH_INFO.store_path.digest()).await.unwrap()
-        );
+        assert_eq!(Some(PATH_INFO.clone()), svc.get(*PATH_INFO.store_path.digest()).await.unwrap());
 
         // peek near, it should now be there.
-        assert_eq!(
-            Some(PATH_INFO.clone()),
-            svc.near.get(*PATH_INFO.store_path.digest()).await.unwrap()
-        );
+        assert_eq!(Some(PATH_INFO.clone()), svc.near.get(*PATH_INFO.store_path.digest()).await.unwrap());
     }
 }

@@ -10,7 +10,9 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-pub use nickel_lang::{Context, Error as NickelError, Expr};
+pub use nickel_lang::Context;
+pub use nickel_lang::Error as NickelError;
+pub use nickel_lang::Expr;
 
 pub mod stdlib;
 
@@ -52,9 +54,7 @@ pub fn evaluate(path: &Path, import_paths: &[OsString]) -> Result<Expr, Error> {
     }
     paths.extend_from_slice(import_paths);
 
-    let mut ctx = Context::new()
-        .with_added_import_paths(paths)
-        .with_source_name(path.display().to_string());
+    let mut ctx = Context::new().with_added_import_paths(paths).with_source_name(path.display().to_string());
 
     let expr = ctx.eval_deep_for_export(&source)?;
     Ok(expr)
@@ -115,9 +115,7 @@ pub fn evaluate_to_json(path: &Path, import_paths: &[OsString]) -> Result<String
     }
     paths.extend_from_slice(import_paths);
 
-    let mut ctx = Context::new()
-        .with_added_import_paths(paths)
-        .with_source_name(path.display().to_string());
+    let mut ctx = Context::new().with_added_import_paths(paths).with_source_name(path.display().to_string());
 
     let expr = ctx.eval_deep_for_export(&source)?;
     let json = ctx.expr_to_json(&expr)?;
@@ -146,14 +144,8 @@ mod tests {
     #[test]
     fn eval_file_resolves_import_from_parent_dir() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("dep.ncl"),
-            r#"{ greeting = "hi" }"#,
-        ).unwrap();
-        std::fs::write(
-            dir.path().join("main.ncl"),
-            r#"let dep = import "dep.ncl" in { msg = dep.greeting }"#,
-        ).unwrap();
+        std::fs::write(dir.path().join("dep.ncl"), r#"{ greeting = "hi" }"#).unwrap();
+        std::fs::write(dir.path().join("main.ncl"), r#"let dep = import "dep.ncl" in { msg = dep.greeting }"#).unwrap();
 
         let expr = evaluate(&dir.path().join("main.ncl"), &[]).unwrap();
         let record = expr.as_record().unwrap();
@@ -165,14 +157,8 @@ mod tests {
         let main_dir = tempfile::tempdir().unwrap();
         let lib_dir = tempfile::tempdir().unwrap();
 
-        std::fs::write(
-            lib_dir.path().join("util.ncl"),
-            r#"{ version = 42 }"#,
-        ).unwrap();
-        std::fs::write(
-            main_dir.path().join("app.ncl"),
-            r#"let u = import "util.ncl" in { v = u.version }"#,
-        ).unwrap();
+        std::fs::write(lib_dir.path().join("util.ncl"), r#"{ version = 42 }"#).unwrap();
+        std::fs::write(main_dir.path().join("app.ncl"), r#"let u = import "util.ncl" in { v = u.version }"#).unwrap();
 
         let import_paths = vec![lib_dir.path().as_os_str().to_owned()];
         let expr = evaluate(&main_dir.path().join("app.ncl"), &import_paths).unwrap();
@@ -204,11 +190,12 @@ mod tests {
     #[test]
     fn eval_str_and_deserialize_flat_record() {
         #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct Item { name: String, count: i64 }
+        struct Item {
+            name: String,
+            count: i64,
+        }
 
-        let item: Item = evaluate_str_and_deserialize(
-            r#"{ name = "widget", count = 5 }"#, &[],
-        ).unwrap();
+        let item: Item = evaluate_str_and_deserialize(r#"{ name = "widget", count = 5 }"#, &[]).unwrap();
         assert_eq!(item.name, "widget");
         assert_eq!(item.count, 5);
     }
@@ -216,25 +203,28 @@ mod tests {
     #[test]
     fn eval_str_and_deserialize_enum_tags() {
         #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct Tagged { status: String }
+        struct Tagged {
+            status: String,
+        }
 
         // Nickel enum tags become strings through the JSON export path
-        let t: Tagged = evaluate_str_and_deserialize(
-            r#"{ status = 'active }"#, &[],
-        ).unwrap();
+        let t: Tagged = evaluate_str_and_deserialize(r#"{ status = 'active }"#, &[]).unwrap();
         assert_eq!(t.status, "active");
     }
 
     #[test]
     fn eval_str_and_deserialize_nested_records() {
         #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct Inner { value: i64 }
+        struct Inner {
+            value: i64,
+        }
         #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct Outer { name: String, inner: Inner }
+        struct Outer {
+            name: String,
+            inner: Inner,
+        }
 
-        let o: Outer = evaluate_str_and_deserialize(
-            r#"{ name = "pkg", inner = { value = 99 } }"#, &[],
-        ).unwrap();
+        let o: Outer = evaluate_str_and_deserialize(r#"{ name = "pkg", inner = { value = 99 } }"#, &[]).unwrap();
         assert_eq!(o.name, "pkg");
         assert_eq!(o.inner.value, 99);
     }
@@ -242,11 +232,11 @@ mod tests {
     #[test]
     fn eval_str_and_deserialize_type_mismatch_returns_serde_error() {
         #[derive(serde::Deserialize, Debug)]
-        struct NeedsNumber { x: i64 }
+        struct NeedsNumber {
+            x: i64,
+        }
 
-        let result = evaluate_str_and_deserialize::<NeedsNumber>(
-            r#"{ x = "not a number" }"#, &[],
-        );
+        let result = evaluate_str_and_deserialize::<NeedsNumber>(r#"{ x = "not a number" }"#, &[]);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::Serde(_)));
     }
@@ -262,10 +252,7 @@ mod tests {
 
     #[test]
     fn eval_str_typecheck_failure_returns_eval() {
-        let result = evaluate_str(
-            r#"let f : Number -> Number = fun x => x in f "hello""#,
-            &[],
-        );
+        let result = evaluate_str(r#"let f : Number -> Number = fun x => x in f "hello""#, &[]);
         let err = result.err().expect("should be Err");
         assert!(matches!(err, Error::Eval(_)), "expected Eval, got: {err}");
     }
@@ -274,7 +261,9 @@ mod tests {
     fn eval_and_deserialize_non_record_returns_serde() {
         // Evaluating a number and trying to deserialize as a struct
         #[derive(serde::Deserialize, Debug)]
-        struct Rec { field: String }
+        struct Rec {
+            field: String,
+        }
 
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("num.ncl");
@@ -287,8 +276,7 @@ mod tests {
 
     #[test]
     fn eval_error_display_has_context() {
-        let err = evaluate_str("{ x | Number = \"bad\" }", &[])
-            .err().expect("should be Err");
+        let err = evaluate_str("{ x | Number = \"bad\" }", &[]).err().expect("should be Err");
         let msg = format!("{err}");
         // The display should say more than just "Nickel evaluation error"
         // — it wraps NickelError which has diagnostic info.
@@ -309,11 +297,7 @@ mod tests {
 
     #[test]
     fn eval_not_exported_stripped() {
-        let expr = evaluate_str(
-            "{ visible = 1, hidden | not_exported = 2 }",
-            &[],
-        )
-        .unwrap();
+        let expr = evaluate_str("{ visible = 1, hidden | not_exported = 2 }", &[]).unwrap();
 
         let record = expr.as_record().unwrap();
         assert!(record.value_by_name("visible").is_some());
@@ -335,11 +319,7 @@ mod tests {
             debug: bool,
         }
 
-        let expr = evaluate_str(
-            "{ name = \"myapp\", port = 3000, debug = true }",
-            &[],
-        )
-        .unwrap();
+        let expr = evaluate_str("{ name = \"myapp\", port = 3000, debug = true }", &[]).unwrap();
 
         let config: Config = expr.to_serde().unwrap();
         assert_eq!(config, Config {
@@ -351,17 +331,10 @@ mod tests {
 
     #[test]
     fn eval_recursive_record() {
-        let expr = evaluate_str(
-            "{ name = \"app\", greeting = \"Hello, %{name}!\" }",
-            &[],
-        )
-        .unwrap();
+        let expr = evaluate_str("{ name = \"app\", greeting = \"Hello, %{name}!\" }", &[]).unwrap();
 
         let record = expr.as_record().unwrap();
-        assert_eq!(
-            record.value_by_name("greeting").unwrap().as_str(),
-            Some("Hello, app!")
-        );
+        assert_eq!(record.value_by_name("greeting").unwrap().as_str(), Some("Hello, app!"));
     }
 
     #[test]
@@ -372,11 +345,7 @@ mod tests {
 
     #[test]
     fn eval_merge() {
-        let expr = evaluate_str(
-            "{ port | default = 8080 } & { port = 3000 }",
-            &[],
-        )
-        .unwrap();
+        let expr = evaluate_str("{ port | default = 8080 } & { port = 3000 }", &[]).unwrap();
 
         let record = expr.as_record().unwrap();
         assert_eq!(record.value_by_name("port").unwrap().as_i64(), Some(3000));
@@ -384,11 +353,7 @@ mod tests {
 
     #[test]
     fn eval_defaults_applied() {
-        let expr = evaluate_str(
-            "{ port | default = 8080, name = \"svc\" }",
-            &[],
-        )
-        .unwrap();
+        let expr = evaluate_str("{ port | default = 8080, name = \"svc\" }", &[]).unwrap();
 
         let record = expr.as_record().unwrap();
         assert_eq!(record.value_by_name("port").unwrap().as_i64(), Some(8080));
