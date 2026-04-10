@@ -27,6 +27,7 @@
 - `crunch attest` is simpler if show/closure/project print an envelope JSON around the canonical attestation body. That gives the operator a digest + stored sidecar path while still letting `diff` reload saved outputs later.
 - For mixed selector/file CLI inputs, resolve artifact selectors before `path.exists()` checks. Exported store paths are real filesystem entries, and a naive file-first check makes `diff` try to parse built artifacts as JSON.
 - `verify project` needs an explicit comparison target. Recomputing a digest and printing `OK` is not verification; require either `--file <saved-envelope.json>` or `--digest <hex>` and compare against the fresh canonical reconstruction.
+- For a real substitution e2e, don't fake the remote cache with an in-memory `PathInfoService` if the CLI path is what matters. Build once, reopen the signed `PathInfo` from `state_dir/pathinfo.redb`, render the NAR from `state_dir/blobs`, serve both over a tiny local HTTP server, and rebuild in a fresh `state_dir` with the first build's verifying key.
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.

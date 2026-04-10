@@ -307,6 +307,7 @@ Building derivations (not just compiling crunch) requires:
 - `src/attest_cmd.rs` owns the CLI surface for `crunch attest show|closure|verify|diff|project`. It prints envelope JSON (`kind`, `digest`, optional `stored_path`, `attestation`) for show/closure/project, verifies persisted artifact/closure sidecars by byte-for-byte comparison with canonical reconstruction, resolves `diff` inputs as artifact selectors before falling back to JSON files (so existing exported store paths don't get misread as JSON), and requires `crunch attest verify project` to compare the fresh reconstruction against either `--file <saved-envelope.json>` or `--digest <hex>`.
 - `src/build_report.rs` uses the artifact path helper so JSON build outputs now carry a separate `artifact_attestation { logical_path, path }` reference block.
 - `StoreHandle::get_artifact_attestation()` and `StoreHandle::runtime_closure_attestation()` are the retrieval entry points.
+- The cheapest real substitution e2e for attestations is: build once locally, reopen the signed `PathInfo` from `state_dir/pathinfo.redb`, render a NAR from `state_dir/blobs`, serve that `.narinfo` + NAR from a tiny local HTTP server, then rebuild in a fresh `state_dir` with `--substituters <url>` and the first build's verifying key. That exercises `NixHTTPPathInfoService`, remote sidecar persistence, and `crunch attest verify artifact|closure` without an external cache.
 
 ## Verification Evidence Rules
 
