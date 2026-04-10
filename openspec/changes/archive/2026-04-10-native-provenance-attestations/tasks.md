@@ -20,4 +20,4 @@
 
 - [x] Add `crunch attest` commands for show, closure, verify, diff, and project views
 - [x] Extend `crunch --json build` with references to generated attestations
-- [ ] Add end-to-end tests for build, substitution, project, and verification workflows
+- [x] Add end-to-end tests for build, substitution, project, and verification workflows
