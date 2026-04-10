@@ -15,6 +15,8 @@ mod query;
 pub use attestation::ArtifactProvenance;
 pub use attestation::StoredArtifactAttestation;
 pub use attestation::StoredClosureAttestation;
+pub use attestation::artifact_attestation_file_path;
+pub use attestation::closure_attestation_file_path;
 pub use ca_mapping::CaMappings;
 pub use ca_mapping::OutputMap;
 pub use closure::MAX_CLOSURE_DEPTH;

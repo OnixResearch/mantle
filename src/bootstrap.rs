@@ -139,7 +139,7 @@ fn make_fetch_derivation(seed: &FetchSeed) -> crunch_glue::CrunchDerivation {
             mode: "recursive".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
-    provenance: None,
+        provenance: None,
     }
 }
 

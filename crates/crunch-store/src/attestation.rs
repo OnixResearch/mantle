@@ -311,6 +311,20 @@ async fn load_pathinfo(
     Err(Error::Attestation(format!("missing PathInfo for closure member {store_path}")))
 }
 
+pub fn artifact_attestation_file_path(state_dir: &Path, store_dir: &str, store_path: &StorePath<String>) -> PathBuf {
+    let logical_path = logical_path(store_path, store_dir);
+    artifact_attestation_path(state_dir, &logical_path)
+}
+
+pub fn closure_attestation_file_path(
+    state_dir: &Path,
+    store_dir: &str,
+    roots: &[StorePath<String>],
+    semantics: ClosureSemantics,
+) -> PathBuf {
+    closure_attestation_path(state_dir, store_dir, roots, semantics)
+}
+
 fn artifact_attestation_path(state_dir: &Path, logical_path: &str) -> PathBuf {
     let file_name = format!("{}.json", selection_hash(logical_path.as_bytes()));
     state_dir.join("attestations").join("artifacts").join(file_name)

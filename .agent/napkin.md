@@ -22,6 +22,11 @@
 - For attestation work, "persisted object" means canonical bytes on disk, not a pretty-printed wrapper around a canonical digest. If closure assembly can derive data from PathInfo, do that instead of failing on a missing sidecar file.
 - Rooted closure caches can go stale if member artifact attestations are rewritten in place (for example `_unknown` synthesized members later replaced by real output metadata). Recompute closure attestations on lookup and rewrite the cached file when member digests change.
 - Closed core contracts can fail with generic Nickel evaluation errors instead of a field-specific message. For regression tests, assert the failure status unless you have an exact diagnostic in hand.
+- Project attestations fit cleanly as a pure `crunch-project` transform: digest the manifest/lock text, then emit source/patch/project/artifact nodes and typed edges. No store I/O is needed until a future CLI renders or verifies them.
+- For build JSON attestation references, a pure path helper is enough. The report can surface persisted sidecar locations without async store reads if it can deterministically map `(state_dir, store_dir, StorePath)` to the artifact sidecar path.
+- `crunch attest` is simpler if show/closure/project print an envelope JSON around the canonical attestation body. That gives the operator a digest + stored sidecar path while still letting `diff` reload saved outputs later.
+- For mixed selector/file CLI inputs, resolve artifact selectors before `path.exists()` checks. Exported store paths are real filesystem entries, and a naive file-first check makes `diff` try to parse built artifacts as JSON.
+- `verify project` needs an explicit comparison target. Recomputing a digest and printing `OK` is not verification; require either `--file <saved-envelope.json>` or `--digest <hex>` and compare against the fresh canonical reconstruction.
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.

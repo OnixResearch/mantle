@@ -1024,6 +1024,7 @@ dependencies = [
  "base64",
  "blake3",
  "clap",
+ "crunch-attestation",
  "crunch-build",
  "crunch-eval",
  "crunch-glue",
@@ -1153,6 +1154,8 @@ dependencies = [
 name = "crunch-project"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "crunch-attestation",
  "crunch-eval",
  "pretty_assertions",
  "serde",

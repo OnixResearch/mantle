@@ -43,6 +43,13 @@ pub struct BuildJsonOutcome {
 pub struct BuildJsonOutput {
     pub name: String,
     pub path: String,
+    pub artifact_attestation: BuildJsonAttestationReference,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonAttestationReference {
+    pub logical_path: String,
+    pub path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -120,9 +127,21 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
             let mut outputs: Vec<BuildJsonOutput> = outcome
                 .outputs
                 .iter()
-                .map(|(name, path_info)| BuildJsonOutput {
-                    name: name.clone(),
-                    path: path_info.store_path.to_absolute_path_with_prefix(output_dir_str),
+                .map(|(name, path_info)| {
+                    let logical_path = path_info.store_path.to_absolute_path_with_prefix(&config.store_dir);
+                    let attestation_path = crunch_store::artifact_attestation_file_path(
+                        &config.state_dir,
+                        &config.store_dir,
+                        &path_info.store_path,
+                    );
+                    BuildJsonOutput {
+                        name: name.clone(),
+                        path: path_info.store_path.to_absolute_path_with_prefix(output_dir_str),
+                        artifact_attestation: BuildJsonAttestationReference {
+                            logical_path,
+                            path: attestation_path.display().to_string(),
+                        },
+                    }
                 })
                 .collect();
             outputs.sort_by(|left, right| left.name.cmp(&right.name));
@@ -234,5 +253,62 @@ mod tests {
         };
         let log_path = success_log_file(logs_dir.path(), &outcome);
         assert!(log_path.is_none());
+    }
+
+    #[test]
+    fn build_json_report_includes_artifact_attestation_reference() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 1,
+            substituter_url: None,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
+        let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [2u8; 20]).unwrap();
+        let path_info = snix_store::path_info::PathInfo {
+            store_path: output_path.clone(),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [0x11; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: HashMap::from([("out".to_string(), path_info)]),
+            cached: false,
+            log: None,
+        };
+        let result = PipelineResult {
+            outcomes: vec![outcome],
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
+        };
+
+        let report = build_json_report(&config, &result, logs_dir.path());
+        let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
+
+        assert_eq!(report.outcomes.len(), 1);
+        assert_eq!(report.outcomes[0].outputs.len(), 1);
+        assert_eq!(report.outcomes[0].outputs[0].artifact_attestation.logical_path, logical_path);
+        assert!(report.outcomes[0].outputs[0].artifact_attestation.path.contains("attestations/artifacts/"));
     }
 }

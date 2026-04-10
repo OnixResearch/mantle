@@ -6,6 +6,7 @@
 //! Consumers use this crate for project-level operations; fetch
 //! execution stays in the build pipeline.
 
+mod attestation;
 mod drift;
 mod error;
 mod generate;
@@ -17,6 +18,7 @@ mod refresh;
 mod upgrade;
 mod version;
 
+pub use attestation::synthesize_project_attestation;
 pub use drift::DriftStatus;
 pub use drift::check_drift;
 pub use error::Error;

@@ -323,6 +323,14 @@ mod build_tests {
         assert_eq!(report["outcomes"][0]["outputs"][0]["name"], "out");
         assert!(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap().contains("json-success"));
         assert!(
+            report["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
+                .as_str()
+                .unwrap()
+                .contains("json-success")
+        );
+        let attestation_path = report["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"].as_str().unwrap();
+        assert!(std::path::Path::new(attestation_path).exists(), "attestation should exist: {attestation_path}");
+        assert!(
             String::from_utf8_lossy(&output.stderr).trim().is_empty(),
             "stderr should stay empty on JSON success"
         );

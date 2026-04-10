@@ -1,3 +1,4 @@
+mod attest_cmd;
 mod bootstrap;
 mod build_cmd;
 mod build_log;
@@ -155,6 +156,12 @@ enum Command {
         action: StoreAction,
     },
 
+    /// Attestation inspection and verification commands
+    Attest {
+        #[command(subcommand)]
+        action: AttestAction,
+    },
+
     /// Initialize a new crunch project (manifest, lockfile, .crunch/)
     Init,
 
@@ -205,6 +212,53 @@ enum Command {
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
         source_store_path: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AttestAction {
+    /// Show an artifact attestation for a store path
+    Show {
+        /// Logical store path, exported store path, or store path string
+        path: String,
+    },
+    /// Assemble and print a runtime closure attestation for one or more roots
+    Closure {
+        /// Root logical store paths or exported store paths
+        roots: Vec<String>,
+    },
+    /// Verify attestation bytes against canonical reconstruction
+    Verify {
+        #[command(subcommand)]
+        target: AttestVerifyAction,
+    },
+    /// Diff two attestation documents or artifact selectors
+    Diff { left: String, right: String },
+    /// Render a project attestation from crunch-project.ncl, crunch.lock, and selected roots
+    Project {
+        /// Selected built roots for the project view
+        roots: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AttestVerifyAction {
+    /// Verify a persisted artifact attestation
+    Artifact { path: String },
+    /// Verify a persisted runtime closure attestation
+    Closure { roots: Vec<String> },
+    /// Verify a synthesized project attestation against a saved envelope/file or expected digest
+    Project {
+        /// Saved project attestation JSON or envelope to compare against
+        #[arg(long, conflicts_with = "digest")]
+        file: Option<PathBuf>,
+
+        /// Expected canonical digest hex to compare against
+        #[arg(long, conflicts_with = "file")]
+        digest: Option<String>,
+
+        /// Selected built roots used to reconstruct the project attestation
+        roots: Vec<String>,
     },
 }
 
@@ -356,6 +410,13 @@ fn run(args: Args) -> Result<(), RunError> {
         }
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), list),
         Command::Store { action } => store_cmd::cmd_store(action),
+        Command::Attest { action } => attest_cmd::cmd_attest(
+            action,
+            &std::env::current_dir().unwrap(),
+            &args.store,
+            &resolved_state_dir,
+            &store_prefix,
+        ),
         Command::Init => project_cmd::cmd_init(&std::env::current_dir().unwrap()),
         Command::Check => project_cmd::cmd_check(&std::env::current_dir().unwrap()),
         Command::Show => project_cmd::cmd_show(&std::env::current_dir().unwrap()),

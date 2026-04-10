@@ -13,11 +13,11 @@
 ## Phase 3: Nickel and project claims
 
 - [x] Extend builder-layer Nickel contracts with optional provenance claims metadata
-- [ ] Fold `crunch.lock`, mirrors, and patch records into source and project attestations
+- [x] Fold `crunch.lock`, mirrors, and patch records into source and project attestations
 - [x] Add tests showing claim changes do not affect derivation hashes by default
 
 ## Phase 4: CLI and verification
 
-- [ ] Add `crunch attest` commands for show, closure, verify, diff, and project views
-- [ ] Extend `crunch --json build` with references to generated attestations
+- [x] Add `crunch attest` commands for show, closure, verify, diff, and project views
+- [x] Extend `crunch --json build` with references to generated attestations
 - [ ] Add end-to-end tests for build, substitution, project, and verification workflows
