@@ -6,3 +6,4 @@
 | [0002](0002-dynamic-derivations.md) | Dynamic derivations | Accepted |
 | [0003](0003-configurable-store-prefix.md) | Configurable store prefix | Accepted |
 | [0004](0004-native-provenance-attestations.md) | Native attestations | Proposed |
+| [0005](0005-project-outputs-schema.md) | Project outputs schema | Proposed |

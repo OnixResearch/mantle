@@ -6,6 +6,7 @@ mod build_report;
 mod errors;
 mod fix;
 mod log_cmd;
+mod project_build;
 mod project_cmd;
 mod project_resolve;
 mod self_build;
@@ -66,10 +67,14 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Evaluate a .ncl file and build the derivation(s)
+    /// Evaluate and build derivation(s).
+    ///
+    /// With no arguments: builds default package from crunch.ncl.
+    /// With a .ncl file: builds derivations from that file.
+    /// With .#name: builds a named output from crunch.ncl.
     Build {
-        /// Path to the .ncl file
-        file: PathBuf,
+        /// Path to a .ncl file, or .#name selector, or omit for project default
+        file: Option<PathBuf>,
 
         /// Additional import paths for Nickel
         #[arg(long = "import-path", short = 'I')]
@@ -212,6 +217,62 @@ enum Command {
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
         source_store_path: Option<PathBuf>,
+    },
+
+    /// Enter a development shell from crunch.ncl devShells
+    Develop {
+        /// Shell name or .#name selector (default: default.shell or only shell)
+        name: Option<String>,
+
+        /// Additional import paths for Nickel
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Maximum number of concurrent builds
+        #[arg(short, long)]
+        jobs: Option<u32>,
+
+        /// Disable remote binary cache substitution
+        #[arg(long)]
+        no_substitute: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+        /// Accept unsigned/unverified PathInfo on cache hits
+        #[arg(long)]
+        trust_unsigned: bool,
+    },
+
+    /// Build and run an executable from crunch.ncl packages
+    Run {
+        /// Package name or .#name selector
+        name: Option<String>,
+
+        /// Additional import paths for Nickel
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Maximum number of concurrent builds
+        #[arg(short, long)]
+        jobs: Option<u32>,
+
+        /// Disable remote binary cache substitution
+        #[arg(long)]
+        no_substitute: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+        /// Accept unsigned/unverified PathInfo on cache hits
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Arguments to pass to the executable (after --)
+        #[arg(last = true)]
+        run_args: Vec<String>,
     },
 }
 
@@ -361,41 +422,57 @@ fn run(args: Args) -> Result<(), RunError> {
             trusted_public_keys,
             trust_unsigned,
         } => {
-            let import_paths = build_import_paths(&import_paths)?;
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
             let sub_url = if no_substitute { None } else { Some(substituters) };
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = if trusted_public_keys.is_empty() {
-                None
-            } else {
-                let mut keys = Vec::new();
-                for key_str in &trusted_public_keys {
-                    keys.push(
-                        nix_compat::narinfo::VerifyingKey::parse(key_str)
-                            .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
-                    );
-                }
-                Some(keys)
-            };
+            let parsed_trusted = parse_trusted_keys(&trusted_public_keys)?;
             let output_mode = if args.json {
                 BuildOutputMode::Json
             } else {
                 BuildOutputMode::Human
             };
-            cmd_build(
-                &file,
-                &import_paths,
-                &args.store,
-                &resolved_state_dir,
-                &store_prefix,
-                args.verbose,
-                fix,
-                max_jobs,
-                sub_url.as_deref(),
-                signing_key.as_deref(),
-                parsed_trusted.as_deref(),
-                trust_unsigned,
-                output_mode,
-            )
+
+            let target = project_build::parse_build_target(file.as_deref());
+            match target {
+                project_build::BuildTarget::File(ref path) => {
+                    let import_paths = build_import_paths(&import_paths)?;
+                    cmd_build(
+                        path,
+                        &import_paths,
+                        &args.store,
+                        &resolved_state_dir,
+                        &store_prefix,
+                        args.verbose,
+                        fix,
+                        max_jobs,
+                        sub_url.as_deref(),
+                        signing_key.as_deref(),
+                        parsed_trusted.as_deref(),
+                        trust_unsigned,
+                        output_mode,
+                    )
+                }
+                project_build::BuildTarget::ProjectDefault
+                | project_build::BuildTarget::Selector(_) => {
+                    let cwd = std::env::current_dir().unwrap();
+                    let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
+                    let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+                    build_from_expr(
+                        &expr,
+                        &resolved.import_paths,
+                        &args.store,
+                        &resolved_state_dir,
+                        &store_prefix,
+                        args.verbose,
+                        fix,
+                        max_jobs,
+                        sub_url.as_deref(),
+                        signing_key.as_deref(),
+                        parsed_trusted.as_deref(),
+                        trust_unsigned,
+                        output_mode,
+                    )
+                }
+            }
         }
         Command::Bootstrap {
             output,
@@ -460,6 +537,101 @@ fn run(args: Args) -> Result<(), RunError> {
             )
             .map(|_report| ())
         }
+        Command::Develop {
+            name,
+            import_paths,
+            jobs,
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+        } => {
+            let cwd = std::env::current_dir().unwrap();
+            let target = match name.as_deref() {
+                None => project_build::BuildTarget::ProjectDefault,
+                Some(s) if s.starts_with(".#") => {
+                    project_build::parse_build_target(Some(std::path::Path::new(s)))
+                }
+                Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
+                    segments: vec![s.to_string()],
+                }),
+            };
+            let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
+            let shell_target = match &resolved.target {
+                project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
+                project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
+                    project_build::ProjectTarget::NamedShell(segs[0].clone())
+                }
+                other => other.clone(),
+            };
+            let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
+            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+            let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
+
+            // Build the shell derivation
+            let result = build_from_expr_raw(
+                &expr,
+                &resolved.import_paths,
+                &args.store,
+                &resolved_state_dir,
+                &store_prefix,
+                args.verbose,
+                max_jobs,
+                sub_url.as_deref(),
+                signing_key.as_deref(),
+                parsed_trusted.as_deref(),
+                trust_unsigned,
+            )?;
+
+            // Find the first successful output path and exec a shell in it
+            let out_path = first_output_path(&result, &args.store, &store_prefix)
+                .ok_or_else(|| RunError::Internal("no outputs built for dev shell".into()))?;
+            exec_shell(&out_path)
+        }
+        Command::Run {
+            name,
+            import_paths,
+            jobs,
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+            run_args,
+        } => {
+            let cwd = std::env::current_dir().unwrap();
+            let target = match name.as_deref() {
+                None => project_build::BuildTarget::ProjectDefault,
+                Some(s) if s.starts_with(".#") => {
+                    project_build::parse_build_target(Some(std::path::Path::new(s)))
+                }
+                Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
+                    segments: vec![s.to_string()],
+                }),
+            };
+            let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
+            let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+            let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
+            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
+
+            // Build the package
+            let result = build_from_expr_raw(
+                &expr,
+                &resolved.import_paths,
+                &args.store,
+                &resolved_state_dir,
+                &store_prefix,
+                args.verbose,
+                max_jobs,
+                sub_url.as_deref(),
+                signing_key.as_deref(),
+                parsed_trusted.as_deref(),
+                trust_unsigned,
+            )?;
+
+            let out_path = first_output_path(&result, &args.store, &store_prefix)
+                .ok_or_else(|| RunError::Internal("no outputs built".into()))?;
+            exec_run(&out_path, &run_args)
+        }
     }
 }
 
@@ -469,6 +641,185 @@ fn resolve_store_prefix(args: &Args) -> String {
     } else {
         args.store_prefix.clone()
     }
+}
+
+fn parse_trusted_keys(keys: &[String]) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
+    if keys.is_empty() {
+        return Ok(None);
+    }
+    let mut parsed = Vec::new();
+    for key_str in keys {
+        parsed.push(
+            nix_compat::narinfo::VerifyingKey::parse(key_str)
+                .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
+        );
+    }
+    Ok(Some(parsed))
+}
+
+/// Build from an inline Nickel expression string (for project selectors).
+#[allow(clippy::too_many_arguments)]
+fn build_from_expr(
+    expr: &str,
+    import_paths: &[std::ffi::OsString],
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_dir: &str,
+    verbose: bool,
+    fix: bool,
+    max_jobs: u32,
+    substituter_url: Option<&str>,
+    signing_key_path: Option<&std::path::Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    // Write the expr to a temp file so the pipeline can import it.
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr)
+        .map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+
+    cmd_build(
+        tmp.path(),
+        import_paths,
+        output_dir,
+        state_dir,
+        store_dir,
+        verbose,
+        fix,
+        max_jobs,
+        substituter_url,
+        signing_key_path,
+        trusted_public_keys,
+        trust_unsigned,
+        output_mode,
+    )
+}
+
+/// Build from an inline Nickel expression and return the pipeline result.
+#[allow(clippy::too_many_arguments)]
+fn build_from_expr_raw(
+    expr: &str,
+    import_paths: &[std::ffi::OsString],
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    substituter_url: Option<&str>,
+    signing_key_path: Option<&std::path::Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
+) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr)
+        .map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+
+    let keypair = build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+    let configured_trusted_keys = build_cmd::load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
+    let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
+
+    let config = crunch_pipeline::BuildConfig {
+        file: tmp.path().to_path_buf(),
+        import_paths: import_paths.to_vec(),
+        output_dir: output_dir.to_path_buf(),
+        state_dir: state_dir.to_path_buf(),
+        store_dir: store_dir.to_string(),
+        verbose,
+        max_jobs,
+        substituter_url: substituter_url.map(str::to_owned),
+        keypair,
+        trusted_keys,
+        trust_unsigned,
+    };
+
+    build_cmd::run_build(&config)
+}
+
+/// Extract the first successful "out" output path from a pipeline result.
+fn first_output_path(
+    result: &crunch_pipeline::PipelineResult,
+    output_dir: &std::path::Path,
+    store_dir: &str,
+) -> Option<PathBuf> {
+    for outcome in &result.outcomes {
+        // Prefer the "out" output, fall back to first alphabetically.
+        let path_info = outcome.outputs.get("out")
+            .or_else(|| outcome.outputs.values().next())?;
+        let abs = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+        let host_path = if output_dir == std::path::Path::new(store_dir) {
+            PathBuf::from(&abs)
+        } else {
+            let rel = abs.strip_prefix(store_dir).unwrap_or(&abs);
+            output_dir.join(rel)
+        };
+        if host_path.exists() {
+            return Some(host_path);
+        }
+    }
+    None
+}
+
+/// Exec into a shell with the build output on PATH.
+fn exec_shell(out_path: &std::path::Path) -> Result<(), RunError> {
+    let bin_dir = out_path.join("bin");
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let new_path = if bin_dir.is_dir() {
+        format!("{}:{current_path}", bin_dir.display())
+    } else {
+        current_path
+    };
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    eprintln!("entering dev shell ({})", out_path.display());
+    if bin_dir.is_dir() {
+        eprintln!("  PATH += {}", bin_dir.display());
+    }
+
+    let status = std::process::Command::new(&shell)
+        .env("PATH", &new_path)
+        .env("CRUNCH_DEV_SHELL", out_path.as_os_str())
+        .status()
+        .map_err(|e| RunError::Internal(format!("exec {shell}: {e}")))?;
+
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Find the first executable in out_path/bin and exec it with args.
+fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError> {
+    let bin_dir = out_path.join("bin");
+    if !bin_dir.is_dir() {
+        return Err(RunError::Internal(format!(
+            "no bin/ directory in {}",
+            out_path.display()
+        )));
+    }
+
+    let mut entries: Vec<_> = std::fs::read_dir(&bin_dir)
+        .map_err(|e| RunError::Internal(format!("reading {}: {e}", bin_dir.display())))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file() || t.is_symlink()).unwrap_or(false))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let exe = entries.first().ok_or_else(|| {
+        RunError::Internal(format!("no executables in {}", bin_dir.display()))
+    })?;
+
+    let exe_path = exe.path();
+    eprintln!("running: {}", exe_path.display());
+
+    let mut cmd_args: Vec<String> = vec![exe_path.to_string_lossy().to_string()];
+    cmd_args.extend(args.iter().cloned());
+
+    let status = std::process::Command::new(&exe_path)
+        .args(args)
+        .status()
+        .map_err(|e| RunError::Internal(format!("exec {}: {e}", exe_path.display())))?;
+
+    std::process::exit(status.code().unwrap_or(1));
 }
 
 fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, verbose: bool) -> Result<(), RunError> {

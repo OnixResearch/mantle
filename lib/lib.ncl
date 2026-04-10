@@ -39,6 +39,9 @@ let fetch = import "fetch.ncl" in
   Url = fetch.Url,
   Hash = fetch.Hash,
 
+  # Project outputs contract. Apply with: record | crunch.Project
+  Project = import "project_outputs.ncl",
+
   # Output selection
   select
     | doc "Select a single output from a multi-output derivation. Returns a record suitable for the `inputs` array."
