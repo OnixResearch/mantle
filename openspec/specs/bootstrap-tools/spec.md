@@ -55,6 +55,17 @@ it compiles bwrap's C sources directly with gcc.
 The self-build pipeline MUST use the crunch-bootstrapped busybox and bwrap
 instead of externally-provided binaries, after the initial bootstrap.
 
+Once step 2 has exported `bwrap` and `busybox` as root outputs, step 3 MUST
+bind the final self-build derivation to those exact exported store entries.
+It MUST NOT rediscover those tools later by scanning the proof store for the
+first matching sibling output.
+
+The self-build pipeline MUST keep using an executable sandbox shell while it
+bootstraps the crunch-built busybox and bwrap roots. A host-prerequisite
+preflight alone is not enough; the full proof path MUST still get through the
+stage0 `busybox.ncl` bootstrap without falling back to an unusable `/bin/sh`
+inside bwrap.
+
 #### Scenario: Self-build with crunch tools
 
 - GIVEN `crunch self-build` runs and the bootstrap chain completes
@@ -69,14 +80,31 @@ instead of externally-provided binaries, after the initial bootstrap.
 - THEN an external bwrap MUST be on PATH (chicken-and-egg)
 - THEN after completion, subsequent self-builds use the crunch-built bwrap
 
-#### Scenario: Proof records crunch-built tool selection
+#### Scenario: Proof records exact crunch-built tool selection
 
 - GIVEN a proof store that already contains crunch-built `*-bwrap` and
-  `*-busybox` outputs (from a prior self-build's bootstrap-tool step)
+  `*-busybox` outputs from the bootstrap-tool step
 - WHEN the stage1 binary runs the second self-build stage
 - THEN the proof output records that bwrap source was `crunch-built`
 - AND it records the selected busybox path used for
   `SNIX_BUILD_SANDBOX_SHELL`
+- AND the stage2 build log reports those same exact crunch-built tool paths
+
+#### Scenario: Final derivation uses exported tool roots directly
+
+- GIVEN step 2 built root outputs `X-bwrap` and `Y-busybox`
+- WHEN step 3 generates the final self-build derivation
+- THEN the derivation input list includes `/.../X-bwrap` and `/.../Y-busybox`
+- AND the shell script uses those exact paths for `bwrap` and `busybox`
+- AND the shell script does not scan `$NIX_STORE/*-bwrap` or `$NIX_STORE/*-busybox`
+
+#### Scenario: Stage0 busybox bootstrap keeps a usable shell
+
+- GIVEN `./scripts/prove-self-hosting.sh --check` succeeds on the host
+- AND the self-hosting proof starts stage0 from a checkout-built `crunch`
+- WHEN stage0 builds `bootstrap/busybox.ncl`
+- THEN the sandbox shell path used by bwrap is executable inside the sandbox
+- AND the build does not fail with `bwrap: execvp /bin/sh: No such file or directory`
 
 #### Scenario: First-stage host fallback stays visible
 

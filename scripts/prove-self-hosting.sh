@@ -203,9 +203,55 @@ configure_c_compiler() {
   export CC="${CC:-$clang_path}"
 }
 
-configure_sandbox_shell() {
-  local shell_path="${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
+discover_static_sandbox_shell() {
+  local candidate
+  local nix_build_path
+  local realized_path
 
+  for candidate in \
+    "/run/current-system/sw/bin/busybox-static" \
+    "/bin/busybox.static" \
+    /nix/store/*-busybox-static-*/bin/busybox \
+    /nix/store/*-bash-static-*/bin/bash
+  do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  nix_build_path="$(resolve_tool_path nix-build 2>/dev/null || true)"
+  if [[ -z "$nix_build_path" ]]; then
+    return 1
+  fi
+
+  note "realizing pkgsStatic.busybox for SNIX_BUILD_SANDBOX_SHELL"
+  realized_path="$("$nix_build_path" '<nixpkgs>' -A pkgsStatic.busybox --no-out-link 2>/dev/null || true)"
+  if [[ -z "$realized_path" ]]; then
+    return 1
+  fi
+
+  candidate="$realized_path/bin/busybox"
+  if [[ ! -x "$candidate" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$candidate"
+}
+
+configure_sandbox_shell() {
+  local requested_shell="${SNIX_BUILD_SANDBOX_SHELL:-}"
+  local shell_path=""
+
+  if [[ -n "$requested_shell" && "$requested_shell" != "/bin/sh" ]]; then
+    shell_path="$requested_shell"
+  else
+    shell_path="$(discover_static_sandbox_shell 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$shell_path" ]]; then
+    die "static sandbox shell not found. Set SNIX_BUILD_SANDBOX_SHELL to a static shell or make pkgsStatic.busybox available"
+  fi
   if [[ ! -x "$shell_path" ]]; then
     die "SNIX_BUILD_SANDBOX_SHELL must be executable: $shell_path"
   fi
