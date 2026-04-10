@@ -201,6 +201,10 @@ enum Command {
         /// Accept unsigned/unverified PathInfo on cache hits
         #[arg(long)]
         trust_unsigned: bool,
+
+        /// Internal: reuse an exact staged source tree from a prior self-build.
+        #[arg(long, hide = true)]
+        source_store_path: Option<PathBuf>,
     },
 }
 
@@ -365,6 +369,7 @@ fn run(args: Args) -> Result<(), RunError> {
             signing_key,
             trusted_public_keys,
             trust_unsigned,
+            source_store_path,
         } => {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
             let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = if trusted_public_keys.is_empty() {
@@ -390,6 +395,7 @@ fn run(args: Args) -> Result<(), RunError> {
                 signing_key.as_deref(),
                 parsed_trusted.as_deref(),
                 trust_unsigned,
+                source_store_path.as_deref(),
             )
             .map(|_report| ())
         }

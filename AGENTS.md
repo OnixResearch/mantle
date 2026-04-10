@@ -323,14 +323,19 @@ When claiming test results in commit messages or completion summaries:
   are not exported). Missing bwrap.ncl or busybox.ncl is a hard error.
 - After step [2/4], self-build must use the exact bwrap/busybox output
   paths returned by the bootstrap-tool root builds, not a fresh `read_dir`
-  scan of the output store. Scanning can pick a stale `*-bwrap` /
-  `*-busybox` when the output dir already contains older runs.
+  scan of the output store or a `$NIX_STORE/*-bwrap` / `*-busybox` scan in the
+  generated build script. Shared proof stores can contain older siblings, and
+  globbing can make the proof report one tool path while the crunch build uses
+  another.
 - `stage_source()` must package the current tracked worktree, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed
   behavior even though the checkout binary passed stage0. Its staged
   source fingerprint must include file contents, not just `path:size`
   pairs, or same-size edits silently reuse a stale `*-crunch-src` tree.
+  Any reused `--source-store-path` validation must also require `lib/`
+  alongside `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`,
+  because `cmd_self_build()` always builds import paths from `src_dir/lib`.
 - A stage1 binary can inherit a compile-time `SNIX_BUILD_SANDBOX_SHELL`
   pointing at a busybox in the stage0 temp store. `vendor/snix-build`
   must treat a non-placeholder compile default as usable only when that
@@ -343,6 +348,12 @@ When claiming test results in commit messages or completion summaries:
   bootstrap-environment drift (notably different busybox outputs across
   stages), so the current proof remains “stage1 binary can rebuild a
   working crunch” rather than “stage1 and stage2 are identical”.
+- Stage2 now proves a stronger bootstrap boundary: `cmd_self_build`
+  accepts a hidden `self-build --source-store-path <...-crunch-src>`
+  override, and the ignored proof passes the exact stage0 staged source,
+  runs stage2 from outside the repo, and clears PATH first. If stage2
+  regresses to host `git`/`cargo`/`tar`/`cp` source staging, the proof
+  now fails instead of silently using host tools.
 - `tests/self_hosting.rs` now writes a stage audit bundle and a
   `<stage>-diagnostics.txt` file immediately after each stage command,
   before any success assertions. If stage0/stage2 fails or expected

@@ -21,6 +21,7 @@
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.
+- If an implementation change is unrelated to the active proposal-only OpenSpec change in the same branch, split it into its own active change before asking for review. Done review treats mixed self-build/code work and attestation-spec work as a mismatch even when both are valid on their own.
 - For OpenSpec-only turns, validate the new change directory before the final reply and include explicit evidence for any non-OpenSpec file you mention.
 - `openspec archive` validates rebuilt main specs, not just the change. A main spec file with delta-style headers (`## ADDED Requirements`) fails archive until it has the normal `## Purpose` / `## Requirements` structure.
 
@@ -41,6 +42,8 @@
 - A staged-source fingerprint based only on `path:size` is wrong. Same-size edits can silently reuse an old `*-crunch-src` tree and make self-build prove the wrong code. Hash file contents too.
 - After a root build, do not rediscover "the" result by scanning `read_dir()` for the first matching `*-crunch` / `*-bwrap` / `*-busybox`. Use the exact root output path from `PipelineResult`, or an older sibling output can be selected nondeterministically.
 - Stage1 can embed a compile-time `SNIX_BUILD_SANDBOX_SHELL` path that only exists in the stage0 temp store. `vendor/snix-build::choose_sandbox_shell()` must ignore a non-placeholder compile default if the file is missing, then fall back to a discovered static busybox or `/bin/sh`.
+- Thread exact bootstrap tool outputs into the generated self-build derivation. If the NCL shell script scans `$NIX_STORE/*-bwrap` or `*-busybox` inside a shared proof store, it can pick stale siblings and make the proof report one tool path while the actual crunch build uses another.
+- Reused staged-source validation must include `lib/`, not just `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`; `cmd_self_build()` always constructs import paths from `src_dir/lib`.
 
 ## Tooling Gotchas
 - The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.
@@ -51,6 +54,7 @@
 - `openspec validate <change>` expects change spec files to contain delta headers like `## ADDED Requirements` / `## MODIFIED Requirements`. A title-and-purpose-only spec file fails validation even if the requirements below are well-formed.
 - `openspec new change <name>` only scaffolds `.openspec.yaml` in this repo/tool version. Proposal, design, tasks, and delta spec files still need to be written by hand.
 - `openspec status` does not take a positional change name. Use `openspec status --change <name>` if you want artifact status for one change.
+- `openspec validate` on this host does not support `--no-interactive`. Re-run with supported flags only, and do not claim validation success unless the tool output includes the success line in the same turn.
 
 ## Nickel Gotchas
 - **Recursive record scoping kills inline contracts in returned records.** If `fetch.ncl` defines `let Hash = ...` and a function returns a record like `{ hash = the_hash, ... }` where `the_hash` was bound via `params.hash | Hash`, the record's recursive scoping creates infinite recursion: the record field `hash` resolves to itself. Fix: extract ALL values into `let` bindings BEFORE the record literal — `let the_hash = params.hash in let the_fixed_output = { hash = the_hash, ... } in { ... fixed_output = the_fixed_output ... }`. Also: `args` is a common field name in Derivation records, so a function parameter named `args` conflicts. Use `params` instead.
@@ -279,6 +283,7 @@
 - The ignored self-hosting proof used to look hung because stage0/stage2 were launched with `.output()`, buffering all child progress until exit. The test now runs both stages with piped stdout/stderr, tees them live to the parent test output, and mirrors them into `<proof_dir>/<stage>-stdout.txt` / `<stage>-stderr.txt` while the command runs.
 - If an ignored proof test is explicitly requested, missing prerequisites should panic with a clear message (ideally pointing at `./scripts/prove-self-hosting.sh --check`), not `return`. A raw `return` turns a failed proof run into a false green.
 - A self-hosting proof that checks only "stage2 runs" is weaker than a real fixed point, but this repo is not at stage1==stage2 yet: an attempted byte-for-byte comparison showed stage0 and stage2 produce different busybox and crunch binaries. Treat fixed-point identity as a follow-up investigation, not an invariant the current proof can honestly claim.
+- Full post-stage0 bootstrap now depends on passing the exact stage0 `*-crunch-src` path into stage2. `cmd_self_build` has a hidden `--source-store-path` override for that staged tree, and the ignored proof should launch stage2 from outside the repo with `PATH=""` so any accidental fallback to host `git`/`cargo`/`tar`/`cp` fails immediately.
 - When summarizing verification, only claim commands whose output you have in-hand from this turn. A prior proof success and a stale memory of file edits are not enough.
 - For better self-hosting proof observability, the stage commands now pass `--verbose --log-level info`, and `src/self_build.rs` emits stable `self-build-proof: progress=...` markers (`bootstrap-tool-start/done`, `crunch-build-start/done`). Keep `--verbose` so finished derivation logs still print, but clamp tracing to `info` or `snix_castore` DEBUG output will balloon stage stderr into hundreds of MiB.
 - `stage_context()` for the self-hosting proof must show the saved diagnostics snapshot from `<stage>-diagnostics.txt`, not re-render diagnostics from the current filesystem. Otherwise later assertions can drift away from the state captured right after the stage command.

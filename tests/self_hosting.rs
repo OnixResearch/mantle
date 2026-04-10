@@ -319,6 +319,52 @@ fn extract_bwrap_binary_path(stderr: &str) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
+fn extract_store_entry_name(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_string_lossy();
+    if file_name == "bin" {
+        return path.parent()?.file_name().map(|name| name.to_string_lossy().into_owned());
+    }
+
+    let parent = path.parent()?;
+    if parent.file_name()?.to_string_lossy() == "bin" {
+        return parent.parent()?.file_name().map(|name| name.to_string_lossy().into_owned());
+    }
+
+    parent.file_name().map(|name| name.to_string_lossy().into_owned())
+}
+
+fn expected_store_prefix(command: &[String]) -> String {
+    assert!(!command.is_empty(), "command must not be empty");
+
+    let mut store_prefix = "/crunch/store".to_string();
+    let mut nix_compat = false;
+    let mut index: usize = 0;
+    while index < command.len() {
+        let arg = &command[index];
+        if arg == "--nix-compat" {
+            nix_compat = true;
+            index = index.saturating_add(1);
+            continue;
+        }
+        if arg == "--store-prefix" {
+            let value = command
+                .get(index.saturating_add(1))
+                .unwrap_or_else(|| panic!("--store-prefix must be followed by a value: {}", command.join(" ")));
+            assert!(!value.is_empty(), "--store-prefix value must not be empty");
+            store_prefix = value.clone();
+            index = index.saturating_add(2);
+            continue;
+        }
+        index = index.saturating_add(1);
+    }
+
+    if nix_compat {
+        "/nix/store".to_string()
+    } else {
+        store_prefix
+    }
+}
+
 fn append_section(out: &mut String, title: &str, lines: &[String]) {
     assert!(!title.is_empty(), "section title must not be empty");
     assert!(!lines.is_empty(), "section {title} must have at least one line");
@@ -518,18 +564,10 @@ fn record_stage_evidence(
             pre_stage_context(stage_name, &command, store_dir, state_dir),
         )
     });
-    let audit_dir = write_command_audit(
-        "self-hosting",
-        stage_name,
-        &cwd,
-        &command,
-        &output,
-        &audit_artifacts,
-        &[
-            ("CRUNCH_STATE_DIR", state_dir.display().to_string()),
-            ("CRUNCH_STORE_DIR", store_dir.display().to_string()),
-        ],
-    )
+    let audit_dir = write_command_audit("self-hosting", stage_name, &cwd, &command, &output, &audit_artifacts, &[
+        ("CRUNCH_STATE_DIR", state_dir.display().to_string()),
+        ("CRUNCH_STORE_DIR", store_dir.display().to_string()),
+    ])
     .unwrap_or_else(|err| {
         panic!(
             "{stage_name} audit bundle write failed: {err}\n\
@@ -755,11 +793,7 @@ fn audit_hashing_rejects_excessively_deep_trees() {
     std::fs::create_dir_all(&deep_path).unwrap();
     std::fs::write(deep_path.join("leaf.txt"), b"deep").unwrap();
 
-    let dummy_output = std::process::Command::new("/bin/sh")
-        .arg("-c")
-        .arg("true")
-        .output()
-        .unwrap();
+    let dummy_output = std::process::Command::new("/bin/sh").arg("-c").arg("true").output().unwrap();
 
     let result = std::panic::catch_unwind(|| {
         write_command_audit(
@@ -836,6 +870,24 @@ fn panic_with_controlled_breadcrumbs() -> ! {
     );
 
     panic!("controlled failure for breadcrumb verification\n{}", stage_context(&evidence));
+}
+
+#[test]
+fn expected_store_prefix_defaults_to_crunch_store() {
+    let command = vec!["crunch".to_string(), "self-build".to_string()];
+    assert_eq!(expected_store_prefix(&command), "/crunch/store");
+}
+
+#[test]
+fn expected_store_prefix_matches_nix_compat_precedence() {
+    let command = vec![
+        "crunch".to_string(),
+        "--store-prefix".to_string(),
+        "/tmp/custom-store".to_string(),
+        "--nix-compat".to_string(),
+        "self-build".to_string(),
+    ];
+    assert_eq!(expected_store_prefix(&command), "/nix/store");
 }
 
 #[test]
@@ -1008,6 +1060,21 @@ fn self_hosting_stage0_stage1_stage2() {
     }
     let stage1_binary = stage1_copy;
 
+    let staged_source = extract_proof_field(&stage0_evidence.stderr, "staged-source");
+    assert!(
+        staged_source.is_some(),
+        "stage0 should emit staged-source proof line.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    let staged_source = staged_source.unwrap();
+    let staged_source_path = PathBuf::from(&staged_source);
+    assert!(
+        staged_source_path.exists(),
+        "stage0 staged source must exist on disk: {}\n{}",
+        staged_source_path.display(),
+        stage_context(&stage0_evidence),
+    );
+
     // Remove *-crunch so stage2 must rebuild the final binary.
     // Stage2 reuses the castore/PathInfo cache for intermediate deps.
     let removed = remove_crunch_outputs(&store);
@@ -1034,13 +1101,18 @@ fn self_hosting_stage0_stage1_stage2() {
         stage2_state.display().to_string(),
         "--nix-compat".to_string(),
         "self-build".to_string(),
+        "--source-store-path".to_string(),
+        staged_source.to_string(),
         "--no-substitute".to_string(),
         "-j".to_string(),
         "4".to_string(),
     ];
     eprintln!("stage2 store: {}", store.display());
     eprintln!("stage2 state: {}", stage2_state.display());
+    let stage2_store_prefix = expected_store_prefix(&stage2_command);
     let mut stage2_process = std::process::Command::new(&stage1_binary);
+    stage2_process.current_dir(proof_dir.path());
+    stage2_process.env("PATH", "");
     stage2_process.args(&stage2_command[1..]);
     let stage2 = run_command_live(proof_dir.path(), "stage2", &mut stage2_process).unwrap_or_else(|err| {
         panic!(
@@ -1118,6 +1190,19 @@ fn self_hosting_stage0_stage1_stage2() {
     // Stage2 MUST use crunch-built bwrap. The self-build pipeline
     // now exports bwrap and busybox as separate root builds (step 2/4)
     // so they land on disk in the --store directory.
+    let s2_source = extract_proof_field(&stage2_evidence.stderr, "staged-source");
+    assert!(
+        s2_source.is_some(),
+        "stage2 should emit staged-source proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    assert_eq!(
+        PathBuf::from(s2_source.unwrap()),
+        staged_source_path,
+        "stage2 must reuse the exact staged source from stage0.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
     let s2_bwrap = extract_proof_field(&stage2_evidence.stderr, "bwrap-source");
     assert!(
         s2_bwrap.is_some(),
@@ -1130,18 +1215,38 @@ fn self_hosting_stage0_stage1_stage2() {
         "stage2 bwrap must be crunch-built, got: {bwrap_val}.\n{}",
         stage_context(&stage2_evidence),
     );
+    let bwrap_report_path = extract_bwrap_binary_path(&stage2_evidence.stderr).expect("checked proof line above");
+    let bwrap_store_name =
+        extract_store_entry_name(&bwrap_report_path).expect("bwrap report path must include store entry");
+    let expected_bwrap_log = format!("Using crunch-built bwrap: {stage2_store_prefix}/{bwrap_store_name}/bin");
+    assert!(
+        stage2_evidence.stderr.contains(&expected_bwrap_log),
+        "stage2 build log must use the exact reported crunch-built bwrap.\nexpected: {expected_bwrap_log}\n{}",
+        stage_context(&stage2_evidence),
+    );
 
-    // Stage2 MUST find crunch-built busybox on disk.
+    // Stage2 MUST find crunch-built busybox on disk and use the exact same one inside the crunch build.
     let s2_busybox = extract_proof_field(&stage2_evidence.stderr, "busybox-path");
     assert!(
         s2_busybox.is_some(),
         "stage2 should emit busybox-path proof line.\n{}",
         stage_context(&stage2_evidence),
     );
+    let busybox_val = s2_busybox.unwrap();
     assert_ne!(
-        s2_busybox.unwrap(),
+        busybox_val,
         "none",
         "stage2 must have a crunch-built busybox, not none.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    let busybox_report_path = PathBuf::from(busybox_val);
+    let busybox_store_name =
+        extract_store_entry_name(&busybox_report_path).expect("busybox report path must include store entry");
+    let expected_busybox_log =
+        format!("Using crunch-built busybox: {stage2_store_prefix}/{busybox_store_name}/bin/busybox");
+    assert!(
+        stage2_evidence.stderr.contains(&expected_busybox_log),
+        "stage2 build log must use the exact reported crunch-built busybox.\nexpected: {expected_busybox_log}\n{}",
         stage_context(&stage2_evidence),
     );
 
@@ -1157,5 +1262,5 @@ fn self_hosting_stage0_stage1_stage2() {
     eprintln!("stage1: {}", stage1_binary.display());
     eprintln!("stage2: {}", stage2_binary.display());
     eprintln!("bwrap:  {bwrap_val}");
-    eprintln!("busybox: {}", s2_busybox.unwrap());
+    eprintln!("busybox: {}", busybox_val);
 }
