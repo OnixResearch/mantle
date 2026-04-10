@@ -26,6 +26,7 @@ use crate::resolve_closure;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ArtifactProvenance {
+    pub claims: Option<Claims>,
     pub input_sources: Vec<StorePath<String>>,
     pub input_artifacts: Vec<StorePath<String>>,
 }
@@ -171,7 +172,7 @@ fn synthesize_artifact_attestation(
 
     ArtifactAttestation {
         schema_version: SchemaVersion::V1,
-        claims: Claims::default(),
+        claims: provenance.and_then(|value| value.claims.clone()).unwrap_or_default(),
         facts: ArtifactFacts {
             logical_path: subject_path,
             output_name: output_name.to_string(),
@@ -531,6 +532,11 @@ mod tests {
             "out",
             &path_info(store_path.clone(), vec![input_artifact.clone()], Some(deriver)),
             Some(&ArtifactProvenance {
+                claims: Some(Claims {
+                    supplier: Some("Example Supplier".to_string()),
+                    homepage: Some("https://example.invalid/hello".to_string()),
+                    ..Default::default()
+                }),
                 input_sources: vec![source],
                 input_artifacts: vec![input_artifact.clone()],
             }),

@@ -274,7 +274,7 @@ mod tests {
         }
         let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
         let drv_path = drv.calculate_derivation_path(name).unwrap();
-        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
         (drv_path, drv)
     }
 
@@ -522,6 +522,7 @@ mod tests {
             inputs: vec![],
             fixed_output: None,
             addressing_mode: "input-addressed".to_string(),
+            provenance: None,
         }
     }
 

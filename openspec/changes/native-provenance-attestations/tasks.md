@@ -12,9 +12,9 @@
 
 ## Phase 3: Nickel and project claims
 
-- [ ] Extend builder-layer Nickel contracts with optional provenance claims metadata
+- [x] Extend builder-layer Nickel contracts with optional provenance claims metadata
 - [ ] Fold `crunch.lock`, mirrors, and patch records into source and project attestations
-- [ ] Add tests showing claim changes do not affect derivation hashes by default
+- [x] Add tests showing claim changes do not affect derivation hashes by default
 
 ## Phase 4: CLI and verification
 

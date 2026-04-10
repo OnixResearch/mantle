@@ -144,7 +144,7 @@ pub fn build_and_register(
     for (i, b) in name.bytes().enumerate().take(32) {
         fake_hash[i] = b;
     }
-    kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+    kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
     (drv_path, drv)
 }
@@ -201,7 +201,7 @@ pub fn build_and_register_multi(
     for (i, b) in name.bytes().enumerate().take(32) {
         fake_hash[i] = b;
     }
-    kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+    kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
     (drv_path, drv)
 }

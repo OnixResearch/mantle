@@ -300,6 +300,8 @@ Building derivations (not just compiling crunch) requires:
 - `StoreHandle::persist_and_export_signed_output()` now takes `output_name` so the stored artifact attestation records the correct output label.
 - `StoreHandle` synthesizes artifact attestations from `PathInfo` on successful build persistence, local cache hits, and remote substitution hits. Closure assembly must also synthesize a missing member artifact attestation from `PathInfo` instead of failing on a missing file.
 - `crates/crunch-build/src/orchestrate.rs` now threads declared source inputs and input-artifact outputs into artifact attestation generation via `ArtifactProvenance`, so successful local builds record `build-input` and `fetched-from` edges.
+- Builder-layer provenance claims now flow from `builders/mk_derivation.ncl` through `CrunchDerivation.provenance` into registry entries and final artifact attestations. Those claims are ignored by `crunch-glue::convert()` when constructing the hashed `nix_compat::Derivation`, so changing claims does not change derivation hashes by default.
+- The closed core derivation contract in `lib/derivation.ncl` still rejects a `provenance` field; only the builder layer exports it.
 - `StoreHandle::get_artifact_attestation()` and `StoreHandle::runtime_closure_attestation()` are the retrieval entry points.
 
 ## Verification Evidence Rules

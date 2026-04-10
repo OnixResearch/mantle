@@ -68,6 +68,7 @@ fn cache_hit_skips_build() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+    provenance: None,
     };
 
     let mut cc = ConversionCache::default();
@@ -152,6 +153,7 @@ fn fod_hash_mismatch_error() {
             mode: "recursive".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
+    provenance: None,
     };
 
     let mut cc = ConversionCache::default();
@@ -199,6 +201,7 @@ fn end_to_end_trivial_build() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+    provenance: None,
     };
 
     let mut cc = ConversionCache::default();
@@ -309,6 +312,7 @@ fn end_to_end_ca_build() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "content-addressed".to_string(),
+    provenance: None,
     };
 
     let mut cc = ConversionCache::default();
@@ -509,6 +513,7 @@ fn fetchurl_downloads_and_verifies_hash() {
             mode: "flat".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
+    provenance: None,
     };
 
     // KnownPaths uses /nix/store (logical prefix), output_dir is
@@ -630,6 +635,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
             mode: "recursive".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
+    provenance: None,
     };
 
     let mut cc = ConversionCache::default();

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crunch_store::ArtifactProvenance;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -23,7 +24,6 @@ use tracing::info;
 use crate::Error;
 use crate::build_request::collect_input_paths;
 use crate::build_request::derivation_to_build_request;
-use crunch_store::ArtifactProvenance;
 use crate::fod::verify_fod_hash;
 use crate::references::resolve_references;
 use crate::registry::DerivationRegistry;
@@ -352,9 +352,8 @@ where BServ: BuildService + 'static
         let artifact_provenance = self.build_artifact_provenance(&prepared.derivation, known_paths)?;
 
         if is_multi_ca {
-            output_infos = self
-                .finish_build_multi_ca(prepared, &build_result, known_paths, &artifact_provenance)
-                .await?;
+            output_infos =
+                self.finish_build_multi_ca(prepared, &build_result, known_paths, &artifact_provenance).await?;
         } else {
             for (i, (output_name, output)) in prepared.derivation.outputs.iter().enumerate() {
                 let build_output = build_result.outputs.get(i).ok_or_else(|| Error::OutputMissing {
@@ -1076,6 +1075,8 @@ where BServ: BuildService + 'static
         known_paths: &DerivationRegistry,
     ) -> Result<ArtifactProvenance, Error> {
         let declared_inputs = collect_input_paths(derivation, known_paths)?;
+        let drv_abs = self.derivation_path_from_nix_derivation(derivation, known_paths.store_dir())?;
+        let claims = known_paths.get_by_drv_path(&drv_abs).and_then(|entry| entry.provenance_claims.clone());
         let mut input_sources = Vec::new();
         let mut input_artifacts = Vec::new();
 
@@ -1088,9 +1089,22 @@ where BServ: BuildService + 'static
         }
 
         Ok(ArtifactProvenance {
+            claims,
             input_sources,
             input_artifacts,
         })
+    }
+
+    fn derivation_path_from_nix_derivation(&self, derivation: &Derivation, store_dir: &str) -> Result<String, Error> {
+        let name = derivation
+            .environment
+            .get("name")
+            .map(|value| String::from_utf8_lossy(value.as_ref()).to_string())
+            .ok_or_else(|| Error::Store("claims lookup requires derivation.environment.name".to_string()))?;
+        let drv_path = derivation
+            .calculate_derivation_path_with_store_dir(&name, store_dir)
+            .map_err(|e| Error::Store(format!("calculating derivation path for claims lookup: {e}")))?;
+        Ok(drv_path.to_absolute_path_with_prefix(store_dir))
     }
 
     /// Resolve a store path to its host filesystem location.
@@ -1291,7 +1305,7 @@ mod tests {
         for (i, b) in name.bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
         (drv_path, drv)
     }
@@ -1508,9 +1522,8 @@ mod tests {
         let mut kp = DerivationRegistry::default();
         let (dep_drv_path, dep_drv) = build_and_register("attestation-dep", &[], &mut kp);
         let source_path = StorePath::from_name_and_digest_fixed("attestation-src", [42u8; 20]).unwrap();
-        let source_disk_path = PathBuf::from(
-            source_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()),
-        );
+        let source_disk_path =
+            PathBuf::from(source_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
         std::fs::create_dir_all(source_disk_path.parent().unwrap()).unwrap();
         std::fs::write(&source_disk_path, b"source input").unwrap();
 
@@ -1543,7 +1556,17 @@ mod tests {
             });
             drv.calculate_output_paths("attestation-root", &hdm).unwrap();
             let drv_path = drv.calculate_derivation_path("attestation-root").unwrap();
-            kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+            kp.insert(
+                drv_path.clone(),
+                hdm,
+                drv.clone(),
+                false,
+                Some(crunch_attestation::Claims {
+                    supplier: Some("Example Supplier".to_string()),
+                    homepage: Some("https://example.invalid/root".to_string()),
+                    ..Default::default()
+                }),
+            );
             (drv_path, drv)
         };
 
@@ -1551,12 +1574,7 @@ mod tests {
         assert!(!outcome.cached, "root should build locally");
 
         let root_output_path = root_drv.1.outputs["out"].path.as_ref().unwrap();
-        let attestation = builder
-            .store
-            .get_artifact_attestation(root_output_path)
-            .await
-            .unwrap()
-            .unwrap();
+        let attestation = builder.store.get_artifact_attestation(root_output_path).await.unwrap().unwrap();
         let dep_output_path = dep_drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
         let source_logical_path = source_path.to_absolute_path();
 
@@ -1568,6 +1586,8 @@ mod tests {
             edge.kind == crunch_attestation::EdgeKind::FetchedFrom
                 && edge.from_node_id == format!("source:{source_logical_path}")
         }));
+        assert_eq!(attestation.attestation.claims.supplier.as_deref(), Some("Example Supplier"));
+        assert_eq!(attestation.attestation.claims.homepage.as_deref(), Some("https://example.invalid/root"));
     }
 
     #[tokio::test]
@@ -1740,7 +1760,7 @@ mod tests {
         for (i, b) in name.bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(drv_path.clone(), hdm, drv.clone(), true);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), true, None);
 
         (drv_path, drv)
     }
@@ -2352,7 +2372,7 @@ mod tests {
         for (i, b) in "consumer".bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(parent_drv_path.clone(), hdm, parent_drv.clone(), false);
+        kp.insert(parent_drv_path.clone(), hdm, parent_drv.clone(), false, None);
 
         let outcome = builder.build(&parent_drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
@@ -2721,7 +2741,7 @@ mod tests {
         for (i, b) in "fod-test".bytes().enumerate().take(32) {
             fake_hash[i] = b;
         }
-        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
         // Put PathInfo in remote for the FOD output path.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
@@ -2943,7 +2963,7 @@ mod tests {
         let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
         drv.calculate_output_paths(name, &hdm).unwrap();
         let drv_path = drv.calculate_derivation_path(name).unwrap();
-        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
         (drv_path, drv)
     }
 
@@ -2977,7 +2997,7 @@ mod tests {
         let hdm = drv.hash_derivation_modulo(|_| panic!("no parent"));
         drv.calculate_output_paths(name, &hdm).unwrap();
         let drv_path = drv.calculate_derivation_path(name).unwrap();
-        kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
         (drv_path, drv)
     }
 

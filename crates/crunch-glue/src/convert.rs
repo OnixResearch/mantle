@@ -207,7 +207,7 @@ fn finalize_and_register(
     let aterm_bytes = nix_drv.to_aterm_bytes();
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
-    known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, nix_drv.clone(), is_ca);
+    known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, nix_drv.clone(), is_ca, drv.provenance.clone());
 
     // Tiger Style: assert postconditions.
     debug_assert!(
@@ -277,6 +277,7 @@ mod tests {
             inputs: vec![],
             fixed_output: None,
             addressing_mode: "input-addressed".to_string(),
+            provenance: None,
         }
     }
 

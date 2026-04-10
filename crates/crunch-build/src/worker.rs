@@ -46,11 +46,17 @@ pub struct EvalMessage {
     /// The root derivation's store path.
     pub drv_path: StorePath<String>,
     /// Derivation entries discovered during this root's conversion.
-    /// Each tuple: (drv_path, hash_derivation_modulo, Derivation, is_ca).
+    /// Each tuple: (drv_path, hash_derivation_modulo, Derivation, is_ca, provenance_claims).
     /// Inserted into `DerivationRegistry` before `want()` so deps
     /// are known. Diamond deps already in the registry are skipped
     /// (insert is idempotent by drv path).
-    pub new_entries: Vec<(StorePath<String>, [u8; 32], nix_compat::derivation::Derivation, bool)>,
+    pub new_entries: Vec<(
+        StorePath<String>,
+        [u8; 32],
+        nix_compat::derivation::Derivation,
+        bool,
+        Option<crunch_attestation::Claims>,
+    )>,
 }
 
 /// Maximum concurrent in-flight builds. Clamped by the semaphore but
@@ -453,8 +459,8 @@ impl Worker {
             "received derivation from eval",
         );
 
-        for (drv_path, hdm, derivation, content_addressed) in msg.new_entries {
-            known_paths.insert(drv_path, hdm, derivation, content_addressed);
+        for (drv_path, hdm, derivation, content_addressed, provenance_claims) in msg.new_entries {
+            known_paths.insert(drv_path, hdm, derivation, content_addressed, provenance_claims);
         }
 
         self.want(&msg.drv_path, known_paths, true)
@@ -918,7 +924,7 @@ mod tests {
             hash
         };
         let hdm = aterm_hash; // Use same for simplicity in tests.
-        kp.insert(sp.clone(), hdm, drv.clone(), false);
+        kp.insert(sp.clone(), hdm, drv.clone(), false, None);
         sp
     }
 
@@ -1723,7 +1729,7 @@ mod tests {
         tx.send(EvalMessage {
             label: "via-msg".into(),
             drv_path: sp.clone(),
-            new_entries: vec![(sp.clone(), hdm, drv, false)],
+            new_entries: vec![(sp.clone(), hdm, drv, false, None)],
         })
         .await
         .unwrap();
@@ -1781,8 +1787,8 @@ mod tests {
             label: "root-a".into(),
             drv_path: a_sp.clone(),
             new_entries: vec![
-                (shared_sp.clone(), shared_hdm, shared_drv, false),
-                (a_sp.clone(), a_hdm, a_drv, false),
+                (shared_sp.clone(), shared_hdm, shared_drv, false, None),
+                (a_sp.clone(), a_hdm, a_drv, false, None),
             ],
         })
         .await
@@ -1791,7 +1797,7 @@ mod tests {
         tx.send(EvalMessage {
             label: "root-b".into(),
             drv_path: b_sp.clone(),
-            new_entries: vec![(b_sp.clone(), b_hdm, b_drv, false)],
+            new_entries: vec![(b_sp.clone(), b_hdm, b_drv, false, None)],
         })
         .await
         .unwrap();

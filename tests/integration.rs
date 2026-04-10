@@ -960,6 +960,74 @@ builders.mkShell {
 }
 
 #[test]
+fn eval_mkderivation_provenance_exported_from_builder_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let builders = import "builders/lib.ncl" in
+let stdenv = builders.mkStdenv {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  coreutils = "/nix/store/00000000000000000000000000000001-coreutils",
+} in
+stdenv.mkDerivation {
+  pname = "prov-test",
+  version = "1",
+  provenance = {
+    supplier = "Example Supplier",
+    homepage = "https://example.invalid/prov",
+    source_aliases = ["origin", "mirror"],
+  },
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    let parsed: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    assert_eq!(parsed["provenance"]["supplier"].as_str(), Some("Example Supplier"));
+    assert_eq!(parsed["provenance"]["homepage"].as_str(), Some("https://example.invalid/prov"));
+    assert_eq!(parsed["provenance"]["source_aliases"][0].as_str(), Some("origin"));
+}
+
+#[test]
+fn eval_core_derivation_rejects_builder_only_provenance() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "core-provenance",
+  builder = "/bin/sh",
+  provenance = { supplier = "nope" },
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(
+        !output.status.success(),
+        "core contract should reject provenance field: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn eval_mkderivation_src_wired_to_env() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(

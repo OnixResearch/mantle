@@ -131,7 +131,7 @@ pub fn register_dynamic_drv(
     // Detect CA: all outputs have no path and no ca_hash.
     let is_ca = drv.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
 
-    known_paths.insert(drv_path.clone(), hdm, drv.clone(), is_ca);
+    known_paths.insert(drv_path.clone(), hdm, drv.clone(), is_ca, None);
 
     Ok(drv_path)
 }

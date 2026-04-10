@@ -84,6 +84,18 @@ let MkDerivationArgs = {
     | doc "Package metadata (description, license, homepage)."
     | default = {},
 
+  provenance | {
+    component_name | String | optional,
+    version_claim | String | optional,
+    supplier | String | optional,
+    homepage | String | optional,
+    license | String | optional,
+    source_aliases | Array String | default = [],
+    ..
+  }
+    | doc "Optional provenance claims recorded in attestations without affecting derivation hashes by default."
+    | optional,
+
   passthru | { .. }
     | doc "Arbitrary data for downstream consumers."
     | default = {},
@@ -227,6 +239,10 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     else {}
   in
   let build_env = { NIX_BUILD_CORES = "4" } in
+  let provenance_field =
+    if std.record.has_field "provenance" resolved then { provenance = resolved.provenance }
+    else {}
+  in
   let drv = {
     name = the_name,
     builder = the_builder,
@@ -240,7 +256,7 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     passthru | not_exported = resolved.passthru,
     overrideAttrs | not_exported = fun f =>
       mk_derivation_with_shell shell (apply_patches resolved (f resolved)),
-  } in
+  } & provenance_field in
   drv
 in
 

@@ -3,6 +3,7 @@
 //! via JSON export. Fields that can be Nickel enum tags use
 //! `NickelString` deserialization to accept both strings and tags.
 
+use crunch_attestation::Claims;
 use serde::Deserialize;
 
 use crate::nickel_string::NickelString;
@@ -35,6 +36,8 @@ pub struct CrunchDerivation {
     pub fixed_output: Option<FixedOutput>,
     #[serde(default = "default_addressing_mode", deserialize_with = "deserialize_nickel_string")]
     pub addressing_mode: String,
+    #[serde(default)]
+    pub provenance: Option<Claims>,
 }
 
 fn default_addressing_mode() -> String {

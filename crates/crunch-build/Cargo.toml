@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 async-trait = "0.1"
+crunch-attestation = { path = "../crunch-attestation" }
 crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
 snix-build = { path = "../../vendor/snix-build" }

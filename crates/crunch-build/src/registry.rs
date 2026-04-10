@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use crunch_attestation::Claims;
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
 
@@ -24,6 +25,7 @@ pub struct RegistryEntry {
     /// Whether this is a content-addressed derivation (output paths
     /// resolved after build).
     pub content_addressed: bool,
+    pub provenance_claims: Option<Claims>,
     /// Resolved output paths for CA derivations. Populated by
     /// `resolve_output()` after the build completes.
     /// Key: output name, Value: final store path.
@@ -81,6 +83,7 @@ impl DerivationRegistry {
         hdm: [u8; 32],
         derivation: Derivation,
         content_addressed: bool,
+        provenance_claims: Option<Claims>,
     ) {
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(self.entries.len() < MAX_ENTRIES as usize, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
@@ -92,6 +95,7 @@ impl DerivationRegistry {
             hash_derivation_modulo: hdm,
             derivation,
             content_addressed,
+            provenance_claims,
             resolved_outputs: HashMap::new(),
         });
     }
@@ -163,9 +167,9 @@ impl Default for DerivationRegistry {
 /// The caller iterates the cache and feeds entries here. The registry
 /// and cache never see each other directly.
 pub fn populate_registry<I>(registry: &mut DerivationRegistry, entries: I)
-where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool)> {
-    for (drv_path, hdm, derivation, content_addressed) in entries {
-        registry.insert(drv_path, hdm, derivation, content_addressed);
+where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>)> {
+    for (drv_path, hdm, derivation, content_addressed, provenance_claims) in entries {
+        registry.insert(drv_path, hdm, derivation, content_addressed, provenance_claims);
     }
 }
 
@@ -209,7 +213,7 @@ mod tests {
         let sp = fake_sp("foo.drv");
         let hdm = [1u8; 32];
 
-        reg.insert(sp.clone(), hdm, dummy_derivation(), false);
+        reg.insert(sp.clone(), hdm, dummy_derivation(), false, None);
 
         let abs = sp.to_absolute_path();
         let entry = reg.get_by_drv_path(&abs).unwrap();
@@ -224,7 +228,7 @@ mod tests {
         let sp = fake_sp("bar.drv");
         let hdm = [2u8; 32];
 
-        reg.insert(sp.clone(), hdm, dummy_derivation(), false);
+        reg.insert(sp.clone(), hdm, dummy_derivation(), false, None);
 
         let abs = sp.to_absolute_path();
         assert_eq!(reg.get_hdm_by_drv_path(&abs), Some(hdm));
@@ -249,7 +253,7 @@ mod tests {
             ca_hash: None,
         });
 
-        reg.insert(sp.clone(), [3u8; 32], drv, false);
+        reg.insert(sp.clone(), [3u8; 32], drv, false, None);
 
         let abs = sp.to_absolute_path();
         assert_eq!(reg.get_output_path(&abs, "out"), Some(out_sp));
@@ -262,7 +266,7 @@ mod tests {
         let sp = fake_sp("ca.drv");
         let final_sp = fake_sp("ca-resolved");
 
-        reg.insert(sp.clone(), [4u8; 32], dummy_derivation(), true);
+        reg.insert(sp.clone(), [4u8; 32], dummy_derivation(), true, None);
 
         let abs = sp.to_absolute_path();
         // Before resolve: no output path (outputs have path: None).
@@ -282,8 +286,8 @@ mod tests {
         let hdm_a = [10u8; 32];
         let hdm_b = [20u8; 32];
 
-        reg.insert(sp_a.clone(), hdm_a, dummy_derivation(), false);
-        reg.insert(sp_b.clone(), hdm_b, dummy_derivation(), true);
+        reg.insert(sp_a.clone(), hdm_a, dummy_derivation(), false, None);
+        reg.insert(sp_b.clone(), hdm_b, dummy_derivation(), true, None);
 
         assert_eq!(reg.len(), 2);
 
@@ -307,8 +311,8 @@ mod tests {
         let mut reg = DerivationRegistry::default();
         let sp = fake_sp("reuse.drv");
 
-        reg.insert(sp.clone(), [30u8; 32], dummy_derivation(), false);
-        reg.insert(sp.clone(), [40u8; 32], dummy_derivation(), true);
+        reg.insert(sp.clone(), [30u8; 32], dummy_derivation(), false, None);
+        reg.insert(sp.clone(), [40u8; 32], dummy_derivation(), true, None);
 
         let entry = reg.get_by_drv_path(&sp.to_absolute_path()).unwrap();
         assert_eq!(entry.hash_derivation_modulo, [40u8; 32]);
@@ -320,8 +324,8 @@ mod tests {
         let mut reg = DerivationRegistry::default();
 
         let entries = vec![
-            (fake_sp("a.drv"), [1u8; 32], dummy_derivation(), false),
-            (fake_sp("b.drv"), [2u8; 32], dummy_derivation(), true),
+            (fake_sp("a.drv"), [1u8; 32], dummy_derivation(), false, None),
+            (fake_sp("b.drv"), [2u8; 32], dummy_derivation(), true, None),
         ];
 
         populate_registry(&mut reg, entries);
@@ -343,7 +347,7 @@ mod tests {
         assert!(reg.is_empty());
         assert_eq!(reg.len(), 0);
 
-        reg.insert(fake_sp("x.drv"), [0u8; 32], dummy_derivation(), false);
+        reg.insert(fake_sp("x.drv"), [0u8; 32], dummy_derivation(), false, None);
         assert!(!reg.is_empty());
         assert_eq!(reg.len(), 1);
     }
@@ -353,7 +357,7 @@ mod tests {
         let mut reg = DerivationRegistry::default();
         let sp = fake_sp("mut.drv");
 
-        reg.insert(sp.clone(), [5u8; 32], dummy_derivation(), false);
+        reg.insert(sp.clone(), [5u8; 32], dummy_derivation(), false, None);
 
         let abs = sp.to_absolute_path();
         let entry = reg.get_by_drv_path_mut(&abs).unwrap();
@@ -378,7 +382,7 @@ mod tests {
     fn resolve_output_non_ca_returns_error() {
         let mut reg = DerivationRegistry::default();
         let sp = fake_sp("ia.drv");
-        reg.insert(sp.clone(), [6u8; 32], dummy_derivation(), false);
+        reg.insert(sp.clone(), [6u8; 32], dummy_derivation(), false, None);
 
         let abs = sp.to_absolute_path();
         let result = reg.resolve_output(&abs, "out", fake_sp("resolved"));

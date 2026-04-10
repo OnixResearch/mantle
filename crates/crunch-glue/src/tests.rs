@@ -14,6 +14,7 @@ fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     }
 }
 
@@ -68,6 +69,29 @@ fn convert_different_names_different_paths() {
 }
 
 #[test]
+fn provenance_claims_do_not_change_derivation_hash_by_default() {
+    let plain = minimal_drv("claims-test", "/bin/sh");
+    let mut claimed = minimal_drv("claims-test", "/bin/sh");
+    claimed.provenance = Some(crunch_attestation::Claims {
+        supplier: Some("Example Supplier".to_string()),
+        homepage: Some("https://example.invalid/claims".to_string()),
+        license: Some("MIT".to_string()),
+        source_aliases: vec!["origin".to_string(), "mirror".to_string()],
+        ..Default::default()
+    });
+
+    let mut kp_plain = ConversionCache::default();
+    let (plain_path, plain_drv) = convert(&plain, &mut kp_plain).unwrap();
+
+    let mut kp_claimed = ConversionCache::default();
+    let (claimed_path, claimed_drv) = convert(&claimed, &mut kp_claimed).unwrap();
+
+    assert_eq!(plain_path, claimed_path, "claims should not change drv path by default");
+    assert_eq!(plain_drv, claimed_drv, "claims should not affect nix derivation hashing inputs");
+    assert!(!claimed_drv.environment.contains_key("provenance"));
+}
+
+#[test]
 fn convert_with_source_input() {
     let drv = CrunchDerivation {
         name: "hello".to_string(),
@@ -81,6 +105,7 @@ fn convert_with_source_input() {
         )],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -103,6 +128,7 @@ fn convert_with_derivation_input() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let drv = CrunchDerivation {
@@ -115,6 +141,7 @@ fn convert_with_derivation_input() {
         inputs: vec![Input::Derivation(Box::new(dep))],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -143,6 +170,7 @@ fn convert_fixed_output_sha256() {
             mode: "recursive".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -165,6 +193,7 @@ fn convert_multiple_outputs() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -196,6 +225,7 @@ fn convert_diamond_dependency() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let b = CrunchDerivation {
@@ -208,6 +238,7 @@ fn convert_diamond_dependency() {
         inputs: vec![Input::Derivation(Box::new(d.clone()))],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let c = CrunchDerivation {
@@ -220,6 +251,7 @@ fn convert_diamond_dependency() {
         inputs: vec![Input::Derivation(Box::new(d))],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let a = CrunchDerivation {
@@ -232,6 +264,7 @@ fn convert_diamond_dependency() {
         inputs: vec![Input::Derivation(Box::new(b)), Input::Derivation(Box::new(c))],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -259,6 +292,7 @@ fn convert_circular_dependency_detected() {
         inputs: vec![], // can't nest itself due to ownership, but identity match triggers
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     // Outer has same identity as inner
@@ -272,6 +306,7 @@ fn convert_circular_dependency_detected() {
         inputs: vec![Input::Derivation(Box::new(inner))],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -297,6 +332,7 @@ fn convert_user_env_preserved() {
         inputs: vec![],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -321,6 +357,7 @@ fn convert_invalid_source_path() {
         inputs: vec![Input::Source("/tmp/not-a-store-path".to_string())],
         fixed_output: None,
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
@@ -344,6 +381,7 @@ fn convert_invalid_hash_algo() {
             mode: "flat".to_string(),
         }),
         addressing_mode: "input-addressed".to_string(),
+        provenance: None,
     };
 
     let mut kp = ConversionCache::default();
