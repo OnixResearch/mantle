@@ -338,6 +338,7 @@ When claiming test results in commit messages or completion summaries:
 ## Self-Build and Self-Hosting Proof
 
 - `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.
+- `./scripts/prove-self-hosting.sh --check` is only a host-prereq preflight, not proof evidence. On 2026-04-10 the full proof still failed in stage0 while building `busybox.drv` with `bwrap: execvp /bin/sh: No such file or directory`; use the reported audit bundle + `stage0-diagnostics.txt` when triaging, and do not archive proof-related changes from `--check` alone.
 - The helper does not require a rich login shell PATH: it falls back to `~/.rustup/toolchains/` for nightly cargo/rustc and scans common NixOS locations (`/run/wrappers/bin`, `/run/current-system/sw/bin`, `/nix/store/*-clang-wrapper-*`, `/nix/store/*-mold-*`, `/nix/store/*-pkg-config-wrapper-*`, `/nix/store/*-openssl-*-dev/lib/pkgconfig`).
 - `df -Pk "$TMPDIR"` can hang on this host even in `--check` mode. `scripts/prove-self-hosting.sh` now uses `stat -f -c '%a %S'` for the free-space probe instead.
 - `cmd_self_build` has 4 steps: [1/4] stage source, [2/4] build
