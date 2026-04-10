@@ -19,4 +19,7 @@ pub enum Error {
 
     #[error("cache: {0}")]
     Cache(String),
+
+    #[error("attestation: {0}")]
+    Attestation(String),
 }

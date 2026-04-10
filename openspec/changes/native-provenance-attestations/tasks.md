@@ -1,14 +1,14 @@
 ## Phase 1: Native model and hashing
 
-- [ ] Define the native attestation schema, canonical ordering rules, and schema versioning
-- [ ] Implement a pure canonicalization + digest core for artifact, closure, and project attestations
-- [ ] Add deterministic tests proving traversal-order independence and stable digests
+- [x] Define the native attestation schema, canonical ordering rules, and schema versioning
+- [x] Implement a pure canonicalization + digest core for artifact, closure, and project attestations
+- [x] Add deterministic tests proving traversal-order independence and stable digests
 
 ## Phase 2: Build/store integration
 
-- [ ] Persist per-output artifact attestations as part of successful build finalization
-- [ ] Attach substitution results to the same artifact-attestation model
-- [ ] Add store APIs for retrieving artifact attestations by logical store path and aggregate attestations by rooted selection
+- [x] Persist per-output artifact attestations as part of successful build finalization
+- [x] Attach substitution results to the same artifact-attestation model
+- [x] Add store APIs for retrieving artifact attestations by logical store path and aggregate attestations by rooted selection
 
 ## Phase 3: Nickel and project claims
 

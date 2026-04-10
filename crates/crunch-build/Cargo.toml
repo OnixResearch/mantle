@@ -38,6 +38,7 @@ tempfile = "3"
 url = "2"
 
 [dev-dependencies]
+crunch-attestation = { path = "../crunch-attestation" }
 crunch-glue = { path = "../crunch-glue" }
 pretty_assertions = "1.0"
 tempfile = "3"

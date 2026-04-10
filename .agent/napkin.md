@@ -18,6 +18,9 @@
 - Generated shell scripts in Rust format strings can have ordering bugs that unit tests miss because the tests check for substring presence, not execution order. The `BWRAP_BIN` variable was used before being set in `generate_self_build_ncl()`.
 - If you manually edit main specs while an OpenSpec change is still active, keep the modified requirement set exactly aligned with the delta file. Reverting unrelated main-spec edits is safer than widening the delta late.
 - Do not claim OpenSpec verification from an earlier tool call. Re-run `openspec validate ...` and any proof/check commands in the same turn you summarize.
+- When claiming a validation core rejects invalid roots/subjects, add explicit tests for each advertised case. The attestation Phase-1 pass initially missed closure-root kind validation and overclaimed coverage.
+- For attestation work, "persisted object" means canonical bytes on disk, not a pretty-printed wrapper around a canonical digest. If closure assembly can derive data from PathInfo, do that instead of failing on a missing sidecar file.
+- Rooted closure caches can go stale if member artifact attestations are rewritten in place (for example `_unknown` synthesized members later replaced by real output metadata). Recompute closure attestations on lookup and rewrite the cached file when member digests change.
 - `nix_compat::store_path::STORE_DIR` hardcoded at a call site defeats the purpose of a configurable prefix. Grep for the constant after wiring a new parameter through.
 - OpenSpec task annotations like "(none found — already clean)" can be wrong. Always verify with `rg` rather than trusting a previous session's claim.
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.

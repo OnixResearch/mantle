@@ -24,8 +24,14 @@ use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 use tracing::info;
 use tracing::info as trace_info;
 
+use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
+use crate::StoredArtifactAttestation;
+use crate::StoredClosureAttestation;
+use crate::attestation::load_artifact_attestation;
+use crate::attestation::load_or_create_runtime_closure_attestation;
+use crate::attestation::persist_artifact_attestation;
 use crate::export::export_castore_to_disk;
 
 /// Configuration for opening a store.
@@ -315,6 +321,8 @@ impl StoreHandle {
             match stored {
                 Some(path_info) => {
                     if self.castore_has_content(&path_info.node).await? {
+                        persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &path_info, None)
+                            .await?;
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                         self.built_outputs
                             .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
@@ -369,6 +377,7 @@ impl StoreHandle {
                     .put(remote_pi.clone())
                     .await
                     .map_err(|e| Error::Cache(format!("persisting substituted PathInfo: {e}")))?;
+                persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &remote_pi, None).await?;
 
                 self.output_nodes.insert(output_path.clone(), remote_pi.node.clone());
                 self.built_outputs
@@ -397,20 +406,25 @@ impl StoreHandle {
     /// even if a caller constructs the PathInfo itself.
     pub async fn persist_and_export_signed_output(
         &mut self,
+        output_name: &str,
         output_path: &StorePath<String>,
         path_info: PathInfo,
         final_node: Node,
+        provenance: Option<ArtifactProvenance>,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
-        self.persist_pathinfo_and_export(output_path, path_info, final_node, is_root).await
+        self.persist_pathinfo_and_export(output_name, output_path, path_info, final_node, provenance, is_root)
+            .await
     }
 
     /// Common persistence + export logic.
     async fn persist_pathinfo_and_export(
         &mut self,
+        output_name: &str,
         output_path: &StorePath<String>,
         path_info: PathInfo,
         final_node: Node,
+        provenance: Option<ArtifactProvenance>,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
         if path_info.store_path != *output_path {
@@ -428,6 +442,8 @@ impl StoreHandle {
             .put(path_info.clone())
             .await
             .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
+        persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &path_info, provenance.as_ref())
+            .await?;
 
         let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
         self.built_outputs.insert(abs_path.clone(), path_info.clone());
@@ -450,6 +466,28 @@ impl StoreHandle {
         }
 
         Ok(path_info)
+    }
+
+    pub async fn get_artifact_attestation(
+        &self,
+        store_path: &StorePath<String>,
+    ) -> Result<Option<StoredArtifactAttestation>, Error> {
+        load_artifact_attestation(&self.state_dir, store_path, &self.store_dir).await
+    }
+
+    pub async fn runtime_closure_attestation(
+        &self,
+        roots: &[StorePath<String>],
+    ) -> Result<StoredClosureAttestation, Error> {
+        let remote: Option<&dyn PathInfoService> = self.remote_pathinfo.as_ref().map(|svc| svc.as_ref());
+        load_or_create_runtime_closure_attestation(
+            &self.state_dir,
+            &self.store_dir,
+            self.pathinfo_service.as_ref(),
+            remote,
+            roots,
+        )
+        .await
     }
 }
 
@@ -556,6 +594,34 @@ mod tests {
         )
     }
 
+    fn test_handle_with_remote(state_dir: &Path) -> (StoreHandle, Arc<dyn PathInfoService>) {
+        let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        let directory_service = Arc::new(
+            RedbDirectoryService::new_temporary(
+                "handle-remote-test".to_string(),
+                RedbDirectoryServiceConfig::default(),
+            )
+            .unwrap(),
+        ) as Arc<dyn DirectoryService>;
+        let local =
+            Arc::new(LruPathInfoService::with_capacity("handle-local".to_string(), NonZeroUsize::new(32).unwrap()))
+                as Arc<dyn PathInfoService>;
+        let remote =
+            Arc::new(LruPathInfoService::with_capacity("handle-remote".to_string(), NonZeroUsize::new(32).unwrap()))
+                as Arc<dyn PathInfoService>;
+
+        let handle = StoreHandle::from_services_with_store_dir(
+            blob_service,
+            directory_service,
+            local,
+            Some(remote.clone()),
+            state_dir.to_path_buf(),
+            state_dir.display().to_string(),
+            "/nix/store".to_string(),
+        );
+        (handle, remote)
+    }
+
     fn test_output(name: &str, digest_byte: u8) -> StorePath<String> {
         StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
     }
@@ -601,11 +667,13 @@ mod tests {
 
         let err = handle
             .persist_and_export_signed_output(
+                "out",
                 &output_path,
                 path_info,
                 Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
+                None,
                 false,
             )
             .await
@@ -624,16 +692,60 @@ mod tests {
 
         let err = handle
             .persist_and_export_signed_output(
+                "out",
                 &expected,
                 path_info,
                 Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
+                None,
                 false,
             )
             .await
             .unwrap_err();
 
         assert!(matches!(err, Error::Store(msg) if msg.contains("store path mismatch")));
+    }
+
+    #[tokio::test]
+    async fn persist_signed_output_writes_artifact_attestation() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("built-path", 10);
+
+        handle
+            .persist_and_export_signed_output(
+                "dev",
+                &output_path,
+                signed_pathinfo(output_path.clone()),
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+
+        let stored = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        assert_eq!(stored.attestation.facts.output_name, "dev");
+        assert_eq!(stored.attestation.facts.logical_path, output_path.to_absolute_path());
+    }
+
+    #[tokio::test]
+    async fn remote_substitution_writes_artifact_attestation() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, remote) = test_handle_with_remote(state_dir.path());
+        let output_path = test_output("substituted-path", 11);
+        let path_info = signed_pathinfo(output_path.clone());
+
+        remote.put(path_info).await.unwrap();
+
+        let substituted = handle.try_substitute_remote(*output_path.digest(), &output_path, "out").await.unwrap();
+        assert!(substituted.is_some(), "remote substitution should hit");
+
+        let stored = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        assert_eq!(stored.attestation.facts.output_name, "out");
+        assert_eq!(stored.attestation.facts.logical_path, output_path.to_absolute_path());
     }
 }

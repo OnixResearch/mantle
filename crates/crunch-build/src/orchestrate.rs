@@ -23,6 +23,7 @@ use tracing::info;
 use crate::Error;
 use crate::build_request::collect_input_paths;
 use crate::build_request::derivation_to_build_request;
+use crunch_store::ArtifactProvenance;
 use crate::fod::verify_fod_hash;
 use crate::references::resolve_references;
 use crate::registry::DerivationRegistry;
@@ -348,9 +349,12 @@ where BServ: BuildService + 'static
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
         let is_multi_ca = prepared.is_ca && prepared.derivation.outputs.len() > 1;
+        let artifact_provenance = self.build_artifact_provenance(&prepared.derivation, known_paths)?;
 
         if is_multi_ca {
-            output_infos = self.finish_build_multi_ca(prepared, &build_result, known_paths).await?;
+            output_infos = self
+                .finish_build_multi_ca(prepared, &build_result, known_paths, &artifact_provenance)
+                .await?;
         } else {
             for (i, (output_name, output)) in prepared.derivation.outputs.iter().enumerate() {
                 let build_output = build_result.outputs.get(i).ok_or_else(|| Error::OutputMissing {
@@ -370,6 +374,7 @@ where BServ: BuildService + 'static
                         &prepared.derivation,
                         known_paths,
                         prepared.is_ca,
+                        &artifact_provenance,
                         prepared.is_root,
                     )
                     .await?;
@@ -410,6 +415,7 @@ where BServ: BuildService + 'static
         prepared: &PreparedBuild,
         build_result: &snix_build::buildservice::BuildResult,
         known_paths: &mut DerivationRegistry,
+        artifact_provenance: &ArtifactProvenance,
     ) -> Result<HashMap<String, PathInfo>, Error> {
         let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
 
@@ -588,12 +594,14 @@ where BServ: BuildService + 'static
             let path_info = self
                 .persist_and_export_output(
                     &prepared.drv_path,
+                    &intermediate.name,
                     &intermediate.ca_path,
                     final_node,
                     references,
                     intermediate.nar_size,
                     intermediate.nar_sha256,
                     ca_field,
+                    Some(artifact_provenance.clone()),
                     prepared.is_root,
                 )
                 .await?;
@@ -790,6 +798,7 @@ where BServ: BuildService + 'static
         derivation: &Derivation,
         known_paths: &mut DerivationRegistry,
         is_ca: bool,
+        artifact_provenance: &ArtifactProvenance,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
         let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
@@ -870,12 +879,14 @@ where BServ: BuildService + 'static
         // Persist and export.
         self.persist_and_export_output(
             drv_path,
+            output_name,
             &output_path,
             final_node,
             references,
             nar_size,
             nar_sha256,
             ca_field,
+            Some(artifact_provenance.clone()),
             is_root,
         )
         .await
@@ -984,12 +995,14 @@ where BServ: BuildService + 'static
     async fn persist_and_export_output(
         &mut self,
         drv_path: &StorePath<String>,
+        output_name: &str,
         output_path: &StorePath<String>,
         final_node: Node,
         references: Vec<StorePath<String>>,
         nar_size: u64,
         nar_sha256: [u8; 32],
         ca: Option<nix_compat::nixhash::CAHash>,
+        provenance: Option<ArtifactProvenance>,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
         // Build the PathInfo locally so we can sign it before handing
@@ -1008,7 +1021,7 @@ where BServ: BuildService + 'static
         signing::sign_pathinfo(&mut path_info, &self.keypair.signing_key);
 
         self.store
-            .persist_and_export_signed_output(output_path, path_info, final_node, is_root)
+            .persist_and_export_signed_output(output_name, output_path, path_info, final_node, provenance, is_root)
             .await
             .map_err(|e| Error::Store(format!("{e}")))
     }
@@ -1054,6 +1067,30 @@ where BServ: BuildService + 'static
         }
 
         Ok(Some(infos))
+    }
+
+    /// Collect build-input provenance for native attestations.
+    fn build_artifact_provenance(
+        &self,
+        derivation: &Derivation,
+        known_paths: &DerivationRegistry,
+    ) -> Result<ArtifactProvenance, Error> {
+        let declared_inputs = collect_input_paths(derivation, known_paths)?;
+        let mut input_sources = Vec::new();
+        let mut input_artifacts = Vec::new();
+
+        for input_path in declared_inputs {
+            if derivation.input_sources.contains(&input_path) {
+                input_sources.push(input_path);
+                continue;
+            }
+            input_artifacts.push(input_path);
+        }
+
+        Ok(ArtifactProvenance {
+            input_sources,
+            input_artifacts,
+        })
     }
 
     /// Resolve a store path to its host filesystem location.
@@ -1442,6 +1479,95 @@ mod tests {
         let verify = crate::signing::verify_pathinfo_signatures(&reread, &test_trusted_keys());
         assert!(verify.is_trusted(), "persisted signature should verify on reread");
         assert_eq!(verify.trusted_count, 1);
+    }
+
+    #[tokio::test]
+    async fn build_persists_attestation_with_declared_inputs() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let pis = Arc::new(test_pis()) as Arc<dyn snix_store::pathinfoservice::PathInfoService>;
+        let output_dir = tempfile::tempdir().unwrap();
+        let state_dir = tempfile::tempdir().unwrap();
+
+        let mut builder = Builder::with_state_dir(
+            Arc::new(bs) as Arc<dyn BlobService>,
+            Arc::new(ds) as Arc<dyn DirectoryService>,
+            mock,
+            pis,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (dep_drv_path, dep_drv) = build_and_register("attestation-dep", &[], &mut kp);
+        let source_path = StorePath::from_name_and_digest_fixed("attestation-src", [42u8; 20]).unwrap();
+        let source_disk_path = PathBuf::from(
+            source_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()),
+        );
+        std::fs::create_dir_all(source_disk_path.parent().unwrap()).unwrap();
+        std::fs::write(&source_disk_path, b"source input").unwrap();
+
+        let root_drv = {
+            let mut outputs = BTreeMap::new();
+            outputs.insert("out".to_string(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            });
+            let mut environment = BTreeMap::new();
+            environment.insert("name".to_string(), "attestation-root".into());
+            environment.insert("system".to_string(), "x86_64-linux".into());
+            environment.insert("builder".to_string(), "/bin/sh".into());
+            environment.insert("out".to_string(), "".into());
+            let mut input_derivations = BTreeMap::new();
+            input_derivations.insert(dep_drv_path.clone(), BTreeSet::from(["out".to_string()]));
+            let mut input_sources = BTreeSet::new();
+            input_sources.insert(source_path.clone());
+            let mut drv = Derivation {
+                arguments: vec!["-c".into(), "echo root > $out".into()],
+                builder: "/bin/sh".to_string(),
+                environment,
+                input_derivations,
+                input_sources,
+                outputs,
+                system: "x86_64-linux".to_string(),
+            };
+            let hdm = drv.hash_derivation_modulo(|parent_path| {
+                kp.get_hdm_by_drv_path(&parent_path.to_absolute_path()).expect("parent should be in known_paths")
+            });
+            drv.calculate_output_paths("attestation-root", &hdm).unwrap();
+            let drv_path = drv.calculate_derivation_path("attestation-root").unwrap();
+            kp.insert(drv_path.clone(), hdm, drv.clone(), false);
+            (drv_path, drv)
+        };
+
+        let outcome = builder.build(&root_drv.0, &mut kp).await.unwrap();
+        assert!(!outcome.cached, "root should build locally");
+
+        let root_output_path = root_drv.1.outputs["out"].path.as_ref().unwrap();
+        let attestation = builder
+            .store
+            .get_artifact_attestation(root_output_path)
+            .await
+            .unwrap()
+            .unwrap();
+        let dep_output_path = dep_drv.outputs["out"].path.as_ref().unwrap().to_absolute_path();
+        let source_logical_path = source_path.to_absolute_path();
+
+        assert!(attestation.attestation.edges.iter().any(|edge| {
+            edge.kind == crunch_attestation::EdgeKind::BuildInput
+                && edge.to_node_id == format!("artifact:{dep_output_path}")
+        }));
+        assert!(attestation.attestation.edges.iter().any(|edge| {
+            edge.kind == crunch_attestation::EdgeKind::FetchedFrom
+                && edge.from_node_id == format!("source:{source_logical_path}")
+        }));
     }
 
     #[tokio::test]

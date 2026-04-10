@@ -4,6 +4,7 @@
 //! export), CA mapping persistence, and store queries. Consumers receive a
 //! `StoreHandle` — they do not construct or own individual services.
 
+mod attestation;
 mod ca_mapping;
 mod closure;
 mod error;
@@ -11,6 +12,9 @@ mod export;
 mod handle;
 mod query;
 
+pub use attestation::ArtifactProvenance;
+pub use attestation::StoredArtifactAttestation;
+pub use attestation::StoredClosureAttestation;
 pub use ca_mapping::CaMappings;
 pub use ca_mapping::OutputMap;
 pub use closure::MAX_CLOSURE_DEPTH;

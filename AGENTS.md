@@ -284,6 +284,24 @@ Building derivations (not just compiling crunch) requires:
 - Tarball and git lock hashes must be recursive/NAR hashes of the unpacked tree / checked-out work tree. Plain files and local/remote patches use flat content hashes. There is no fallback to manifest `expected` values during refresh.
 - Test count: 70 (65 unit + 5 integration using crunch-eval for Nickel validation).
 
+## crunch-attestation Crate (2026-04-10)
+- `crates/crunch-attestation/` now holds the pure Phase-1 native attestation core: schema types, canonicalization, and BLAKE3 digesting only. No store/build/CLI I/O belongs here.
+- The crate models claims and observed facts separately for artifact, closure, and project attestations.
+- Canonical bytes are stable JSON over normalized structs: nodes, edges, roots, aliases, and referenced artifact digests are sorted before serialization, so insertion order and closure discovery order do not affect the digest.
+- `Canonicalize` provides both `canonical_bytes()` and `canonical_digest()`. Digest fields use a dedicated `AttestationDigest` type serialized as 64-char lowercase hex.
+- `SchemaVersion` is a nonzero `u32` newtype with `V1` as the default.
+- Closure canonicalization must validate root node kind against the node set, not just membership in the members list. Tests now cover duplicate nodes, invalid artifact/closure/project roots, empty required fields, and collection limits.
+
+## Provenance Storage (2026-04-10)
+- `crates/crunch-store/` now persists artifact attestations under `<state>/attestations/artifacts/*.json`, keyed by a BLAKE3 hash of the logical store path string.
+- Runtime closure attestations are cached under `<state>/attestations/closures/*.json`, keyed by sorted root logical paths plus closure semantics.
+- Persisted attestation files must be the canonical attestation bytes themselves, not pretty JSON wrappers. `crates/crunch-store/src/attestation.rs` writes `canonical_bytes()` and recomputes digests on load.
+- Closure attestation lookup must not trust the cached closure file blindly. Member artifact attestations can be rewritten in place (for example `_unknown` synthesized members later replaced by real output metadata), so `load_or_create_runtime_closure_attestation()` recomputes the fresh closure and rewrites the cached file when member digests change.
+- `StoreHandle::persist_and_export_signed_output()` now takes `output_name` so the stored artifact attestation records the correct output label.
+- `StoreHandle` synthesizes artifact attestations from `PathInfo` on successful build persistence, local cache hits, and remote substitution hits. Closure assembly must also synthesize a missing member artifact attestation from `PathInfo` instead of failing on a missing file.
+- `crates/crunch-build/src/orchestrate.rs` now threads declared source inputs and input-artifact outputs into artifact attestation generation via `ArtifactProvenance`, so successful local builds record `build-input` and `fetched-from` edges.
+- `StoreHandle::get_artifact_attestation()` and `StoreHandle::runtime_closure_attestation()` are the retrieval entry points.
+
 ## Verification Evidence Rules
 
 When claiming test results in commit messages or completion summaries:
