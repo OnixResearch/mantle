@@ -5,3 +5,4 @@
 | [0001](0001-lazy-goals-vs-eager-dag.md) | Lazy goals vs eager DAG | Proposed |
 | [0002](0002-dynamic-derivations.md) | Dynamic derivations | Accepted |
 | [0003](0003-configurable-store-prefix.md) | Configurable store prefix | Accepted |
+| [0004](0004-native-provenance-attestations.md) | Native attestations | Proposed |
