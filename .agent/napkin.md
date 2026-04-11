@@ -1,5 +1,12 @@
 # Napkin
 
+## Sandbox Shell Lessons (2026-04-10)
+- The static busybox at `/nix/store/7mc37j...` is an ash-only build — no coreutils applets (mkdir, chmod, etc). Tests needing directory outputs fail with `mkdir: applet not found`.
+- `pkgsStatic.busybox` gives a full-featured static busybox with all applets: `/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox`
+- The bwrap sandbox mounts the sandbox shell at BOTH `/bin/sh` AND `/bin/busybox` (see `vendor/snix-build/src/bwrap/mod.rs:194`).
+- For tests with flat outputs (`echo x > $out`), any busybox ash works. For directory outputs, need the full static busybox.
+- `sandbox_has_coreutils()` check in tests gates on whether the sandbox shell supports `mkdir`.
+
 ## Done-Review Lessons (2026-04-07)
 - Before claiming scope or changed files, run `git status --short` in the same turn and separate your edits from pre-existing worktree changes. A dirty tree can make a “docs only” summary false.
 - `apply_outcomes()` must take the manifest and resolver, not just the lock and outcomes. Patch names in lock entries are useless without the corresponding LockedPatch in `Lockfile.patches` -- lock validation catches this, but it's easy to miss in tests that don't call `validate()` on the result.
