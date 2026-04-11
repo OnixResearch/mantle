@@ -16,11 +16,10 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
 
 let make_src = crunch.fetchTarball {
   url = "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
@@ -52,13 +51,13 @@ let dash_src = crunch.fetchTarball {
       done
       export PATH="/tmp/tools"
 
-      # Find the musl-gcc toolchain.
+      # Find the bootstrap seed toolchain.
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d" ]; then TOOLCHAIN="$d"; break; fi
       done
       if [ -z "$TOOLCHAIN" ]; then
-        echo "ERROR: musl-gcc not found" >&2; exit 1
+        echo "ERROR: bootstrap seed toolchain not found" >&2; exit 1
       fi
 
       # Find GNU Make.
@@ -79,8 +78,8 @@ let dash_src = crunch.fetchTarball {
         echo "ERROR: dash-src not found" >&2; exit 1
       fi
 
-      export CC="$TOOLCHAIN/bin/x86_64-linux-musl-gcc"
-      export AR="$TOOLCHAIN/bin/x86_64-linux-musl-ar"
+      export CC="$TOOLCHAIN/bin/%{seed_target}-gcc"
+      export AR="$TOOLCHAIN/bin/%{seed_target}-ar"
       export CFLAGS="-static -O2 -D_GNU_SOURCE"
       export LDFLAGS="-static"
 

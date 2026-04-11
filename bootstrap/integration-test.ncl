@@ -13,11 +13,10 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
@@ -39,7 +38,7 @@ let dash = (import "dash.ncl") in
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
@@ -58,7 +57,7 @@ let dash = (import "dash.ncl") in
       done
 
       export SHELL="$DASH"
-      export CC="$TOOLCHAIN/bin/x86_64-linux-musl-gcc"
+      export CC="$TOOLCHAIN/bin/%{seed_target}-gcc"
 
       mkdir -p /tmp/build
       cd /tmp/build
@@ -177,7 +176,7 @@ SRCEOF
 
       cd /tmp/build
 
-      echo "=== Compiling with musl-gcc ==="
+      echo "=== Compiling with bootstrap seed compiler ==="
       CFLAGS="-Wall -Wextra -O2 -static"
       for f in main.c vec.c hash.c; do
         echo "CC $f"

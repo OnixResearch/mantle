@@ -355,6 +355,14 @@ When claiming test results in commit messages or completion summaries:
   generated build script. Shared proof stores can contain older siblings, and
   globbing can make the proof report one tool path while the crunch build uses
   another.
+- The stage0 seed provider is centralized in `bootstrap/seed.ncl`.
+  Checked-in bootstrap derivations and `src/self_build.rs::generate_self_build_ncl()`
+  must both import that module; don't re-inline the fetched seed in one path
+  or seed swaps drift between normal bootstrap and self-build.
+- `bootstrap/seed.ncl` now exposes a normalized wrapper toolchain
+  (`musl-seed-toolchain`) around the raw musl.cc tarball. Bootstrap stages
+  should consume the normalized contract: target-prefixed binutils in `bin/`,
+  headers at `<target>/include`, and `libgcc_s.so*` under `<target>/lib`.
 - `stage_source()` must package the current tracked worktree, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed

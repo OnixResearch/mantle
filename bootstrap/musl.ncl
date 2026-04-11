@@ -11,11 +11,11 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
+let seed_dynamic_linker = seed.dynamic_linker in
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
@@ -44,7 +44,7 @@ let musl_src = crunch.fetchTarball {
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
@@ -104,25 +104,25 @@ let musl_src = crunch.fetchTarball {
       "$DASH" $MUSL_SRC/configure \
         --prefix=$out \
         --syslibdir=$out/lib \
-        --target=x86_64-linux-musl \
-        CC="$TOOLCHAIN/bin/x86_64-linux-musl-gcc" \
-        AR="$TOOLCHAIN/bin/ar" \
-        RANLIB="$TOOLCHAIN/bin/ranlib" \
+        --target=%{seed_target} \
+        CC="$TOOLCHAIN/bin/%{seed_target}-gcc" \
+        AR="$TOOLCHAIN/bin/%{seed_target}-ar" \
+        RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib" \
         CFLAGS="-O2 -pipe" \
         2>&1 || exit 1
 
       echo "=== Building musl ==="
-      "$MAKE" -j4 AR="$TOOLCHAIN/bin/ar" RANLIB="$TOOLCHAIN/bin/ranlib" \
+      "$MAKE" -j4 AR="$TOOLCHAIN/bin/%{seed_target}-ar" RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib" \
         2>&1 || exit 1
 
       echo "=== Installing musl ==="
-      "$MAKE" install AR="$TOOLCHAIN/bin/ar" RANLIB="$TOOLCHAIN/bin/ranlib" \
+      "$MAKE" install AR="$TOOLCHAIN/bin/%{seed_target}-ar" RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib" \
         2>&1 || exit 1
 
       echo "=== Verify ==="
       ls $out/lib/libc.a
       ls $out/lib/libc.so
-      ls $out/lib/ld-musl-x86_64.so.1
+      ls $out/lib/%{seed_dynamic_linker}
       ls $out/include/stdio.h
       echo "musl installed: $(ls $out/lib/*.a | wc -l) static libs, $(ls $out/include/*.h | wc -l) headers"
     "%,

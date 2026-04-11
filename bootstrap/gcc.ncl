@@ -16,11 +16,10 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
@@ -70,7 +69,7 @@ let mpc_src = crunch.fetchTarball {
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
@@ -131,10 +130,10 @@ let mpc_src = crunch.fetchTarball {
       done
 
       # Create prefixed symlinks for the unprefixed binutils tools.
-      # libtool and sub-configures look for x86_64-linux-musl-ar etc.
+      # libtool and sub-configures look for target-prefixed binutils names.
       for tool in ar as ld ld.bfd nm objcopy objdump ranlib readelf strip size strings; do
         if [ -x "$TOOLCHAIN/bin/$tool" ]; then
-          $BB ln -sf "$TOOLCHAIN/bin/$tool" /tmp/tools/x86_64-linux-musl-$tool
+          $BB ln -sf "$TOOLCHAIN/bin/$tool" /tmp/tools/%{seed_target}-$tool
         fi
       done
 
@@ -182,24 +181,24 @@ let mpc_src = crunch.fetchTarball {
       # Create a CC wrapper that always passes -static. Inside the
       # bwrap sandbox, there's no dynamic linker at /lib/ so all
       # configure test binaries and build tools must be static.
-      cat > /tmp/tools/musl-gcc-static << WRAPEOF
+      cat > /tmp/tools/seed-cc-static << WRAPEOF
 #!/bin/sh
-exec $TOOLCHAIN/bin/x86_64-linux-musl-gcc -static "\$@"
+exec $TOOLCHAIN/bin/%{seed_target}-gcc -static "\$@"
 WRAPEOF
-      chmod +x /tmp/tools/musl-gcc-static
+      chmod +x /tmp/tools/seed-cc-static
 
-      cat > /tmp/tools/musl-g++-static << WRAPEOF
+      cat > /tmp/tools/seed-cxx-static << WRAPEOF
 #!/bin/sh
-exec $TOOLCHAIN/bin/x86_64-linux-musl-g++ -static "\$@"
+exec $TOOLCHAIN/bin/%{seed_target}-g++ -static "\$@"
 WRAPEOF
-      chmod +x /tmp/tools/musl-g++-static
+      chmod +x /tmp/tools/seed-cxx-static
 
       echo "=== Configuring gcc ==="
       "$DASH" "$GSRC/configure" \
         --prefix=$out \
-        --build=x86_64-linux-musl \
-        --host=x86_64-linux-musl \
-        --target=x86_64-linux-musl \
+        --build=%{seed_target} \
+        --host=%{seed_target} \
+        --target=%{seed_target} \
         --enable-languages=c \
         --disable-bootstrap \
         --disable-multilib \
@@ -221,14 +220,14 @@ WRAPEOF
         --with-sysroot="$MUSL" \
         --with-native-system-header-dir=/include \
         --with-build-sysroot="$MUSL" \
-        CC="/tmp/tools/musl-gcc-static" \
+        CC="/tmp/tools/seed-cc-static" \
         CXX="/tmp/tools/musl-g++-static" \
 
-        AR="$TOOLCHAIN/bin/ar" \
-        RANLIB="$TOOLCHAIN/bin/ranlib" \
-        AS="$BINUTILS/bin/x86_64-linux-musl-as" \
-        LD="$BINUTILS/bin/x86_64-linux-musl-ld" \
-        NM="$TOOLCHAIN/bin/nm" \
+        AR="$TOOLCHAIN/bin/%{seed_target}-ar" \
+        RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib" \
+        AS="$BINUTILS/bin/%{seed_target}-as" \
+        LD="$BINUTILS/bin/%{seed_target}-ld" \
+        NM="$TOOLCHAIN/bin/%{seed_target}-nm" \
         CFLAGS="-O2" \
         CXXFLAGS="-O2" \
         LDFLAGS="-static" \
@@ -249,7 +248,7 @@ WRAPEOF
         2>&1 || exit 1
 
       echo "=== Verify ==="
-      $out/bin/x86_64-linux-musl-gcc --version | head -1
+      $out/bin/%{seed_target}-gcc --version | head -1
       ls $out/bin/
     "%,
   ],

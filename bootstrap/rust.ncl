@@ -2,7 +2,7 @@
 #
 # Uses the official standalone installer for x86_64-unknown-linux-musl.
 # The resulting binaries are dynamically linked against musl, so they
-# need /lib/ld-musl-x86_64.so.1 — provided by the from-source musl.
+# need the musl dynamic linker from the bootstrap seed target.
 #
 # Part of the self-build chain:
 #   musl-gcc (fetched) -> make -> dash -> binutils -> musl -> gcc
@@ -14,11 +14,11 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
+let seed_dynamic_linker = seed.dynamic_linker in
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
@@ -68,17 +68,17 @@ let rust_src = crunch.fetchTarball {
         echo "$tool=$val"
       done
 
-      # The Rust binaries need /lib/ld-musl-x86_64.so.1.
+      # The Rust binaries need the musl dynamic linker.
       $BB mkdir -p /lib 2>/dev/null || true
-      $BB ln -sf $MUSL/lib/libc.so /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+      $BB ln -sf $MUSL/lib/libc.so /lib/%{seed_dynamic_linker} 2>/dev/null || true
 
       # Also need libgcc_s.so.1 for unwinding.
       MUSL_GCC=""
-      for d in $NIX_STORE/*-musl-gcc; do
-        if [ -f "$d/lib/libgcc_s.so.1" ]; then MUSL_GCC="$d"; break; fi
+      for d in $NIX_STORE/*-%{seed_name}; do
+        if [ -f "$d/%{seed_target}/lib/libgcc_s.so.1" ]; then MUSL_GCC="$d/%{seed_target}/lib"; break; fi
       done
       if [ -n "$MUSL_GCC" ]; then
-        export LD_LIBRARY_PATH="$MUSL_GCC/lib"
+        export LD_LIBRARY_PATH="$MUSL_GCC"
       fi
 
       # The install.sh script needs a real shell (not busybox sh).
@@ -108,7 +108,7 @@ let rust_src = crunch.fetchTarball {
       echo "std lib count: $(ls $out/lib/rustlib/x86_64-unknown-linux-musl/lib/ | wc -l)"
 
       echo "=== Verify ==="
-      ls -la /lib/ld-musl-x86_64.so.1
+      ls -la /lib/%{seed_dynamic_linker}
       "$out/bin/rustc" --version
       "$out/bin/cargo" --version
 

@@ -13,11 +13,10 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
 
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
@@ -47,7 +46,7 @@ let binutils_src = crunch.fetchTarball {
 
       # Find bootstrap tools.
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d/bin" ]; then TOOLCHAIN="$d"; break; fi
       done
       MAKE=""
@@ -104,14 +103,14 @@ let binutils_src = crunch.fetchTarball {
       export CONFIG_SHELL="$DASH"
       # The musl.cc native toolchain has prefixed names for gcc/g++
       # but unprefixed for binutils tools (ar, ld, as, etc.).
-      export CC="$TOOLCHAIN/bin/x86_64-linux-musl-gcc"
-      export CXX="$TOOLCHAIN/bin/x86_64-linux-musl-g++"
-      export AR="$TOOLCHAIN/bin/ar"
-      export RANLIB="$TOOLCHAIN/bin/ranlib"
-      export NM="$TOOLCHAIN/bin/nm"
-      export STRIP="$TOOLCHAIN/bin/strip"
-      export AS="$TOOLCHAIN/bin/as"
-      export LD="$TOOLCHAIN/bin/ld"
+      export CC="$TOOLCHAIN/bin/%{seed_target}-gcc"
+      export CXX="$TOOLCHAIN/bin/%{seed_target}-g++"
+      export AR="$TOOLCHAIN/bin/%{seed_target}-ar"
+      export RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib"
+      export NM="$TOOLCHAIN/bin/%{seed_target}-nm"
+      export STRIP="$TOOLCHAIN/bin/%{seed_target}-strip"
+      export AS="$TOOLCHAIN/bin/%{seed_target}-as"
+      export LD="$TOOLCHAIN/bin/%{seed_target}-ld"
       export CFLAGS="-O2 -static"
       export CXXFLAGS="-O2 -static"
       export LDFLAGS="-static"
@@ -145,7 +144,7 @@ let binutils_src = crunch.fetchTarball {
       echo "=== Configuring binutils ==="
       "$DASH" /tmp/binutils-src/configure \
         --prefix=$out \
-        --target=x86_64-linux-musl \
+        --target=%{seed_target} \
         --disable-nls \
         --disable-werror \
         --disable-gdb \
@@ -169,9 +168,9 @@ let binutils_src = crunch.fetchTarball {
       "$MAKE" install SHELL="$DASH" MAKEINFO=true 2>&1 || exit 1
 
       echo "=== Verify ==="
-      $out/bin/x86_64-linux-musl-as --version | head -1
-      $out/bin/x86_64-linux-musl-ld --version | head -1
-      $out/bin/x86_64-linux-musl-ar --version | head -1
+      $out/bin/%{seed_target}-as --version | head -1
+      $out/bin/%{seed_target}-ld --version | head -1
+      $out/bin/%{seed_target}-ar --version | head -1
       ls $out/bin/
     "%,
   ],

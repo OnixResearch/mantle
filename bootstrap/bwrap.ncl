@@ -12,11 +12,11 @@
 
 let crunch = import "lib.ncl" in
 
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
+let seed = import "seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
+let seed_dynamic_linker = seed.dynamic_linker in
 
 let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
@@ -61,8 +61,8 @@ let bwrap_src = crunch.fetchTarball {
       # Symlink unprefixed binutils tools.
       if [ -n "$BINUTILS" ]; then
         for tool in as ld ar nm objcopy objdump ranlib readelf strip; do
-          if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
-            $BB ln -sf "$BINUTILS/bin/x86_64-linux-musl-$tool" /tmp/tools/$tool
+          if [ -x "$BINUTILS/bin/%{seed_target}-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
+            $BB ln -sf "$BINUTILS/bin/%{seed_target}-$tool" /tmp/tools/$tool
           fi
         done
       fi
@@ -72,16 +72,16 @@ let bwrap_src = crunch.fetchTarball {
       # Create musl dynamic linker symlink.
       MUSL=""
       for d in $NIX_STORE/*-musl; do
-        if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+        if [ -f "$d/lib/libc.so" ]; then MUSL="$d/lib"; break; fi
       done
       if [ -z "$MUSL" ]; then
-        for d in $NIX_STORE/*-musl-gcc; do
-          if [ -f "$d/lib/libc.so" ]; then MUSL="$d"; break; fi
+        for d in $NIX_STORE/*-%{seed_name}; do
+          if [ -f "$d/%{seed_target}/lib/libc.so" ]; then MUSL="$d/%{seed_target}/lib"; break; fi
         done
       fi
       if [ -n "$MUSL" ]; then
         $BB mkdir -p /lib 2>/dev/null || true
-        $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+        $BB ln -sf "$MUSL/libc.so" /lib/%{seed_dynamic_linker} 2>/dev/null || true
       fi
 
       # Find bwrap source.
@@ -138,8 +138,8 @@ CAPEOF
 
       # Find the seed musl-gcc toolchain for extra kernel headers.
       SEED=""
-      for d in $NIX_STORE/*-musl-gcc; do
-        if [ -d "$d/include/linux" ]; then SEED="$d"; break; fi
+      for d in $NIX_STORE/*-%{seed_name}; do
+        if [ -d "$d/%{seed_target}/include/linux" ]; then SEED="$d/%{seed_target}"; break; fi
       done
       SEED_INC=""
       if [ -n "$SEED" ]; then SEED_INC="-I$SEED/include"; fi

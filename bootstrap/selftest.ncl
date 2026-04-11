@@ -15,6 +15,10 @@
 
 let crunch = import "lib.ncl" in
 
+let seed = import "seed.ncl" in
+let seed_target = seed.target in
+let seed_dynamic_linker = seed.dynamic_linker in
+
 let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
 let binutils = (import "binutils.ncl") in
@@ -69,22 +73,22 @@ let gcc = (import "gcc.ncl") in
 
       export PATH="/tmp/tools:$GCC/bin:$BINUTILS/bin"
 
-      # The from-source binutils are dynamically linked, needing
-      # /lib/ld-musl-x86_64.so.1. Create this symlink pointing at
-      # the from-source musl's libc.so (which IS the dynamic linker).
+      # The from-source binutils are dynamically linked, needing the
+      # musl dynamic linker. Create this symlink pointing at the
+      # from-source musl's libc.so (which IS the dynamic linker).
       $BB mkdir -p /lib 2>/dev/null || true
-      $BB ln -sf $MUSL/lib/libc.so /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+      $BB ln -sf $MUSL/lib/libc.so /lib/%{seed_dynamic_linker} 2>/dev/null || true
 
       # Create unprefixed symlinks for binutils tools.
-      # collect2 looks for plain 'ld', not 'x86_64-linux-musl-ld'.
+      # collect2 looks for plain 'ld', not the target-prefixed linker.
       for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip; do
-        if [ -x "$BINUTILS/bin/x86_64-linux-musl-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
-          $BB ln -sf "$BINUTILS/bin/x86_64-linux-musl-$tool" /tmp/tools/$tool
+        if [ -x "$BINUTILS/bin/%{seed_target}-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
+          $BB ln -sf "$BINUTILS/bin/%{seed_target}-$tool" /tmp/tools/$tool
         fi
       done
 
       echo "=== Dynamic linker ==="
-      ls -la /lib/ld-musl-x86_64.so.1 2>/dev/null || echo "/lib/ld-musl not available"
+      ls -la /lib/%{seed_dynamic_linker} 2>/dev/null || echo "/lib/ld-musl not available"
 
       # Verify: the gcc we're using is the FROM-SOURCE one, not the fetched seed.
       echo "=== GCC version ==="
@@ -183,7 +187,7 @@ int main(void) {
 SRCEOF
 
       echo "=== Testing as ==="
-      $BINUTILS/bin/x86_64-linux-musl-as --version 2>&1 | head -1 || echo "as not working"
+      $BINUTILS/bin/%{seed_target}-as --version 2>&1 | head -1 || echo "as not working"
 
       echo "=== Compiling with from-source gcc ==="
       # Use explicit paths to ensure we're using from-source tools.
@@ -191,7 +195,7 @@ SRCEOF
       $GCC/bin/gcc \
         -static \
         -B$BINUTILS/bin/ \
-        -B$BINUTILS/bin/x86_64-linux-musl- \
+        -B$BINUTILS/bin/%{seed_target}- \
         -B$MUSL/lib/ \
         --sysroot=$MUSL \
         -isystem $MUSL/include \
