@@ -7,16 +7,21 @@ readonly DEFAULT_TOOLCHAIN="nightly"
 readonly PROOF_COMMAND=(cargo test -p crunch --test self_hosting -- --ignored --nocapture)
 readonly MIN_TMP_FREE_KIB=4194304
 readonly MIN_TMP_FREE_MIB=4096
+readonly DEFAULT_BUNDLE_ROOT="$REPO_ROOT/target/self-hosting-proof"
+readonly PROOF_BUNDLE_ENV="CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
 
 path_prefix=""
 tmp_dir=""
 tmp_free_kib="0"
+proof_bundle_dir=""
+mode="run"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/prove-self-hosting.sh [--check]
+Usage: ./scripts/prove-self-hosting.sh [--check] [--bundle-dir DIR]
 
-  --check  validate prerequisites, print the proof command, and exit
+  --check            validate prerequisites, print the proof command, and exit
+  --bundle-dir DIR   write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
 
@@ -211,8 +216,7 @@ discover_static_sandbox_shell() {
   for candidate in \
     "/run/current-system/sw/bin/busybox-static" \
     "/bin/busybox.static" \
-    /nix/store/*-busybox-static-*/bin/busybox \
-    /nix/store/*-bash-static-*/bin/bash
+    /nix/store/*-busybox-static-*/bin/busybox
   do
     if [[ -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
@@ -250,7 +254,7 @@ configure_sandbox_shell() {
   fi
 
   if [[ -z "$shell_path" ]]; then
-    die "static sandbox shell not found. Set SNIX_BUILD_SANDBOX_SHELL to a static shell or make pkgsStatic.busybox available"
+    die "static busybox shell not found. Set SNIX_BUILD_SANDBOX_SHELL to a static busybox or make pkgsStatic.busybox available"
   fi
   if [[ ! -x "$shell_path" ]]; then
     die "SNIX_BUILD_SANDBOX_SHELL must be executable: $shell_path"
@@ -362,7 +366,37 @@ require_tmp_space() {
   fi
 }
 
+default_proof_bundle_dir() {
+  local timestamp
+
+  printf -v timestamp '%(%Y%m%dT%H%M%SZ)T' -1
+  printf '%s/run-%s-%s\n' "$DEFAULT_BUNDLE_ROOT" "$timestamp" "$$"
+}
+
+normalize_bundle_dir() {
+  local bundle_dir_raw="${1:?bundle dir is required}"
+
+  if [[ "$bundle_dir_raw" == /* ]]; then
+    printf '%s\n' "$bundle_dir_raw"
+    return
+  fi
+
+  printf '%s/%s\n' "$REPO_ROOT" "$bundle_dir_raw"
+}
+
+resolve_proof_bundle_dir() {
+  if [[ -n "$proof_bundle_dir" ]]; then
+    normalize_bundle_dir "$proof_bundle_dir"
+    return
+  fi
+
+  default_proof_bundle_dir
+}
+
 show_check_summary() {
+  local bundle_dir
+  bundle_dir="$(resolve_proof_bundle_dir)"
+
   note "self-hosting proof check passed"
   note "repo: $REPO_ROOT"
   note "cargo: $(command -v cargo)"
@@ -375,29 +409,50 @@ show_check_summary() {
   note "SNIX_BUILD_SANDBOX_SHELL: $SNIX_BUILD_SANDBOX_SHELL"
   note "tmpdir: $tmp_dir"
   note "tmp free: $(( tmp_free_kib / 1024 )) MiB"
+  note "proof bundle dir: $bundle_dir"
   note "proof command: ${PROOF_COMMAND[*]}"
 }
 
-parse_mode() {
-  case "${1:-run}" in
-    run)
-      printf 'run\n'
-      ;;
-    --check)
-      printf 'check\n'
-      ;;
-    -h|--help)
-      printf 'help\n'
-      ;;
-    *)
-      die "unknown argument: $1"
-      ;;
-  esac
+parse_args() {
+  mode="run"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --check)
+        mode="check"
+        shift
+        ;;
+      --bundle-dir)
+        shift
+        [[ $# -gt 0 ]] || die "--bundle-dir requires a directory"
+        [[ "$1" != -* ]] || die "--bundle-dir requires a directory, got option-like value: $1"
+        proof_bundle_dir="$1"
+        shift
+        ;;
+      -h|--help)
+        mode="help"
+        return
+        ;;
+      *)
+        die "unknown argument: $1"
+        ;;
+    esac
+  done
+}
+
+update_latest_bundle_link() {
+  local bundle_dir="${1:?bundle_dir is required}"
+  local latest_link="$DEFAULT_BUNDLE_ROOT/latest"
+
+  mkdir -p "$DEFAULT_BUNDLE_ROOT"
+  ln -sfn "$bundle_dir" "$latest_link"
 }
 
 main() {
-  local mode
-  mode="$(parse_mode "${1:-run}")"
+  local bundle_dir
+  local proof_status
+
+  parse_args "$@"
 
   if [[ "$mode" == "help" ]]; then
     usage
@@ -420,7 +475,24 @@ main() {
     exit 0
   fi
 
-  exec "${PROOF_COMMAND[@]}"
+  bundle_dir="$(resolve_proof_bundle_dir)"
+  mkdir -p "$(dirname -- "$bundle_dir")"
+  export "$PROOF_BUNDLE_ENV=$bundle_dir"
+
+  if "${PROOF_COMMAND[@]}"; then
+    proof_status=0
+  else
+    proof_status=$?
+  fi
+  if (( proof_status != 0 )); then
+    exit "$proof_status"
+  fi
+
+  update_latest_bundle_link "$bundle_dir"
+  note "proof bundle: $bundle_dir"
+  note "proof manifest: $bundle_dir/manifest.json"
+  note "proof summary: $bundle_dir/summary.txt"
+  note "latest bundle: $DEFAULT_BUNDLE_ROOT/latest"
 }
 
 main "$@"

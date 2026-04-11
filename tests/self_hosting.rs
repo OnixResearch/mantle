@@ -30,16 +30,24 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use std::process::Stdio;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::OnceLock;
 use std::thread;
 use std::thread::JoinHandle;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
+use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
 const MAX_DIAGNOSTIC_ENTRIES: u32 = 64;
 const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
+const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
+const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v1";
 
 struct StageEvidence {
     stage_name: String,
@@ -55,6 +63,72 @@ struct CapturedStageOutput {
     output: Output,
     stdout_file: PathBuf,
     stderr_file: PathBuf,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofBundleManifest {
+    schema: &'static str,
+    generated_unix_s: u64,
+    repo_root: String,
+    bundle_dir: String,
+    store_dir: String,
+    staged_source: String,
+    state_dirs: ProofStateDirs,
+    binaries: ProofBinarySet,
+    tools: ProofToolSet,
+    stage0: ProofStageManifest,
+    stage2: ProofStageManifest,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofStateDirs {
+    stage0: String,
+    stage2: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofBinarySet {
+    checkout: ProofHashedPath,
+    stage1: ProofHashedPath,
+    stage2: ProofHashedPath,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofToolSet {
+    stage2_bwrap: ProofHashedPath,
+    stage2_busybox: ProofHashedPath,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofStageManifest {
+    name: String,
+    original_audit_dir: String,
+    report: ProofReportManifest,
+    files: ProofStageFiles,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofStageFiles {
+    audit_meta: ProofHashedPath,
+    stdout: ProofHashedPath,
+    stderr: ProofHashedPath,
+    diagnostics: ProofHashedPath,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProofReportManifest {
+    invoking_binary: String,
+    staged_source: String,
+    bwrap_source: String,
+    busybox_path: Option<String>,
+    output_binary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProofHashedPath {
+    path: String,
+    size_bytes: u64,
+    digest_blake3: String,
 }
 
 fn stage_stream_file(proof_dir: &Path, stage_name: &str, stream_name: &str) -> PathBuf {
@@ -621,6 +695,243 @@ fn assert_stage_success(stage: &StageEvidence) {
     );
 }
 
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn proof_bundle_root() -> PathBuf {
+    repo_root().join("target/self-hosting-proof")
+}
+
+fn now_unix_s() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0)
+}
+
+fn now_unix_ns() -> u128 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_nanos()).unwrap_or(0)
+}
+
+fn default_proof_bundle_dir() -> PathBuf {
+    let unique = format!("run-{}-{}", std::process::id(), now_unix_ns());
+    proof_bundle_root().join(unique)
+}
+
+fn normalize_proof_bundle_dir(path: PathBuf) -> PathBuf {
+    assert!(!path.as_os_str().is_empty(), "proof bundle path must not be empty");
+
+    if path.is_absolute() {
+        return path;
+    }
+
+    repo_root().join(path)
+}
+
+fn resolve_proof_bundle_dir() -> PathBuf {
+    match std::env::var_os(PROOF_BUNDLE_ENV) {
+        Some(value) => {
+            let path = PathBuf::from(value);
+            normalize_proof_bundle_dir(path)
+        }
+        None => default_proof_bundle_dir(),
+    }
+}
+
+fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
+    assert!(!stage.stage_name.is_empty(), "stage name must not be empty");
+    assert!(!stage.stderr.is_empty(), "stage stderr must not be empty");
+
+    let invoking_binary = extract_proof_field(&stage.stderr, "invoking-binary").unwrap_or_else(|| {
+        panic!("{} missing invoking-binary proof line.\n{}", stage.stage_name, stage_context(stage),)
+    });
+    let staged_source = extract_proof_field(&stage.stderr, "staged-source")
+        .unwrap_or_else(|| panic!("{} missing staged-source proof line.\n{}", stage.stage_name, stage_context(stage),));
+    let bwrap_source = extract_proof_field(&stage.stderr, "bwrap-source")
+        .unwrap_or_else(|| panic!("{} missing bwrap-source proof line.\n{}", stage.stage_name, stage_context(stage),));
+    let output_binary = extract_proof_field(&stage.stderr, "output-binary")
+        .unwrap_or_else(|| panic!("{} missing output-binary proof line.\n{}", stage.stage_name, stage_context(stage),));
+
+    ProofReportManifest {
+        invoking_binary: invoking_binary.to_string(),
+        staged_source: staged_source.to_string(),
+        bwrap_source: bwrap_source.to_string(),
+        busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
+        output_binary: output_binary.to_string(),
+    }
+}
+
+fn hash_file_record(path: &Path, display_path: String) -> ProofHashedPath {
+    assert!(path.exists(), "path to hash must exist: {}", path.display());
+    assert!(path.is_file(), "path to hash must be a file: {}", path.display());
+
+    let bytes = std::fs::read(path).unwrap_or_else(|err| panic!("read {} for digest: {err}", path.display()));
+    let size_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    let digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
+    ProofHashedPath {
+        path: display_path,
+        size_bytes,
+        digest_blake3,
+    }
+}
+
+fn copy_bundle_file(src: &Path, bundle_dir: &Path, relative_path: &str) -> ProofHashedPath {
+    assert!(src.exists(), "bundle source must exist: {}", src.display());
+    assert!(!relative_path.is_empty(), "bundle relative path must not be empty");
+
+    let dest = bundle_dir.join(relative_path);
+    let parent = dest.parent().unwrap_or_else(|| panic!("bundle file has no parent: {}", dest.display()));
+    std::fs::create_dir_all(parent).unwrap_or_else(|err| panic!("create bundle parent {}: {err}", parent.display()));
+    std::fs::copy(src, &dest).unwrap_or_else(|err| panic!("copy {} -> {}: {err}", src.display(), dest.display()));
+    hash_file_record(&dest, relative_path.to_string())
+}
+
+fn normalize_bwrap_binary_path(bwrap_report_path: &Path) -> PathBuf {
+    assert!(bwrap_report_path.exists(), "reported bwrap path must exist: {}", bwrap_report_path.display(),);
+
+    if bwrap_report_path.file_name().map(|name| name == "bin").unwrap_or(false) {
+        return bwrap_report_path.join("bwrap");
+    }
+    bwrap_report_path.to_path_buf()
+}
+
+fn copy_stage_bundle_files(bundle_dir: &Path, stage: &StageEvidence) -> ProofStageFiles {
+    let stage_dir = bundle_dir.join(&stage.stage_name);
+    std::fs::create_dir_all(&stage_dir)
+        .unwrap_or_else(|err| panic!("create stage bundle dir {}: {err}", stage_dir.display()));
+
+    ProofStageFiles {
+        audit_meta: copy_bundle_file(
+            &stage.audit_dir.join("meta.json"),
+            bundle_dir,
+            &format!("{}/meta.json", stage.stage_name),
+        ),
+        stdout: copy_bundle_file(&stage.stdout_file, bundle_dir, &format!("{}/stdout.txt", stage.stage_name)),
+        stderr: copy_bundle_file(&stage.stderr_file, bundle_dir, &format!("{}/stderr.txt", stage.stage_name)),
+        diagnostics: copy_bundle_file(
+            &stage.diagnostics_file,
+            bundle_dir,
+            &format!("{}/diagnostics.txt", stage.stage_name),
+        ),
+    }
+}
+
+fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
+    assert_eq!(manifest.schema, PROOF_BUNDLE_SCHEMA, "unexpected proof bundle schema");
+    assert!(!manifest.bundle_dir.is_empty(), "bundle dir must not be empty");
+
+    let mut out = String::with_capacity(2048);
+    out.push_str(&format!("schema: {}\n", manifest.schema));
+    out.push_str(&format!("generated_unix_s: {}\n", manifest.generated_unix_s));
+    out.push_str(&format!("repo_root: {}\n", manifest.repo_root));
+    out.push_str(&format!("bundle_dir: {}\n", manifest.bundle_dir));
+    out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
+    out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
+    out.push_str(&format!("stage0_state: {}\n", manifest.state_dirs.stage0));
+    out.push_str(&format!("stage2_state: {}\n", manifest.state_dirs.stage2));
+    out.push_str(&format!(
+        "checkout_binary: {} {}\n",
+        manifest.binaries.checkout.digest_blake3, manifest.binaries.checkout.path
+    ));
+    out.push_str(&format!(
+        "stage1_binary: {} {}\n",
+        manifest.binaries.stage1.digest_blake3, manifest.binaries.stage1.path
+    ));
+    out.push_str(&format!(
+        "stage2_binary: {} {}\n",
+        manifest.binaries.stage2.digest_blake3, manifest.binaries.stage2.path
+    ));
+    out.push_str(&format!(
+        "stage2_bwrap: {} {}\n",
+        manifest.tools.stage2_bwrap.digest_blake3, manifest.tools.stage2_bwrap.path
+    ));
+    out.push_str(&format!(
+        "stage2_busybox: {} {}\n",
+        manifest.tools.stage2_busybox.digest_blake3, manifest.tools.stage2_busybox.path
+    ));
+    out.push_str(&format!("stage0_report: {}\n", manifest.stage0.report.bwrap_source));
+    out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
+    out
+}
+
+fn write_proof_bundle(
+    bundle_dir: &Path,
+    stage0: &StageEvidence,
+    stage2: &StageEvidence,
+    store_dir: &Path,
+    stage0_state_dir: &Path,
+    stage2_state_dir: &Path,
+    stage1_binary: &Path,
+    stage2_binary: &Path,
+) -> PathBuf {
+    assert!(!bundle_dir.as_os_str().is_empty(), "bundle dir must not be empty");
+    assert!(store_dir.exists(), "store dir must exist: {}", store_dir.display());
+    assert!(stage0_state_dir.exists(), "stage0 state dir must exist: {}", stage0_state_dir.display());
+    assert!(stage2_state_dir.exists(), "stage2 state dir must exist: {}", stage2_state_dir.display());
+    assert!(stage1_binary.exists(), "stage1 binary must exist: {}", stage1_binary.display());
+    assert!(stage2_binary.exists(), "stage2 binary must exist: {}", stage2_binary.display());
+
+    std::fs::create_dir_all(bundle_dir)
+        .unwrap_or_else(|err| panic!("create proof bundle dir {}: {err}", bundle_dir.display()));
+
+    let stage0_report = parse_stage_report(stage0);
+    let stage2_report = parse_stage_report(stage2);
+    assert_eq!(
+        stage0_report.staged_source, stage2_report.staged_source,
+        "proof bundle expects stage0 and stage2 to use the same staged source",
+    );
+
+    let checkout_binary_path = PathBuf::from(&stage0_report.invoking_binary);
+    let stage2_bwrap_report_path = extract_bwrap_binary_path(&stage2.stderr)
+        .unwrap_or_else(|| panic!("stage2 missing bwrap report path.\n{}", stage_context(stage2),));
+    let stage2_bwrap_binary = normalize_bwrap_binary_path(&stage2_bwrap_report_path);
+    let stage2_busybox_binary = extract_optional_path_field(&stage2.stderr, "busybox-path")
+        .unwrap_or_else(|| panic!("stage2 missing busybox-path proof line.\n{}", stage_context(stage2),));
+
+    let manifest = ProofBundleManifest {
+        schema: PROOF_BUNDLE_SCHEMA,
+        generated_unix_s: now_unix_s(),
+        repo_root: env!("CARGO_MANIFEST_DIR").to_string(),
+        bundle_dir: bundle_dir.display().to_string(),
+        store_dir: store_dir.display().to_string(),
+        staged_source: stage2_report.staged_source.clone(),
+        state_dirs: ProofStateDirs {
+            stage0: stage0_state_dir.display().to_string(),
+            stage2: stage2_state_dir.display().to_string(),
+        },
+        binaries: ProofBinarySet {
+            checkout: hash_file_record(&checkout_binary_path, checkout_binary_path.display().to_string()),
+            stage1: hash_file_record(stage1_binary, stage1_binary.display().to_string()),
+            stage2: hash_file_record(stage2_binary, stage2_binary.display().to_string()),
+        },
+        tools: ProofToolSet {
+            stage2_bwrap: hash_file_record(&stage2_bwrap_binary, stage2_bwrap_binary.display().to_string()),
+            stage2_busybox: hash_file_record(&stage2_busybox_binary, stage2_busybox_binary.display().to_string()),
+        },
+        stage0: ProofStageManifest {
+            name: stage0.stage_name.clone(),
+            original_audit_dir: stage0.audit_dir.display().to_string(),
+            report: stage0_report,
+            files: copy_stage_bundle_files(bundle_dir, stage0),
+        },
+        stage2: ProofStageManifest {
+            name: stage2.stage_name.clone(),
+            original_audit_dir: stage2.audit_dir.display().to_string(),
+            report: stage2_report,
+            files: copy_stage_bundle_files(bundle_dir, stage2),
+        },
+    };
+
+    let manifest_path = bundle_dir.join("manifest.json");
+    let summary_path = bundle_dir.join("summary.txt");
+    let manifest_json =
+        serde_json::to_vec_pretty(&manifest).unwrap_or_else(|err| panic!("serialize proof manifest: {err}"));
+    std::fs::write(&manifest_path, manifest_json)
+        .unwrap_or_else(|err| panic!("write proof manifest {}: {err}", manifest_path.display()));
+    let summary = render_proof_bundle_summary(&manifest);
+    std::fs::write(&summary_path, summary)
+        .unwrap_or_else(|err| panic!("write proof summary {}: {err}", summary_path.display()));
+    manifest_path
+}
+
 #[test]
 fn render_stage_diagnostics_includes_proof_lines_and_paths() {
     let tmp = tempfile::tempdir().unwrap();
@@ -776,6 +1087,334 @@ fn record_stage_evidence_with_populated_store_avoids_audit_limit() {
     assert!(meta_json.contains("\"diagnostics\""));
     assert!(meta_json.contains("\"stdout-capture\""));
     assert!(meta_json.contains("\"stderr-capture\""));
+}
+
+#[test]
+fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
+    let proof_dir = tempfile::tempdir().unwrap();
+    let store = proof_dir.path().join("store");
+    let stage0_state = proof_dir.path().join("state0");
+    let stage2_state = proof_dir.path().join("state2");
+    let staged_source = store.join("abc-crunch-src");
+    let checkout_binary = proof_dir.path().join("checkout-crunch");
+    let stage1_binary = proof_dir.path().join("stage1-crunch");
+    let stage2_binary = proof_dir.path().join("stage2-crunch");
+    let bwrap_bin_dir = store.join("abc-bwrap").join("bin");
+    let busybox_bin = store.join("xyz-busybox").join("bin").join("busybox");
+    let bwrap_bin = bwrap_bin_dir.join("bwrap");
+
+    std::fs::create_dir_all(&staged_source).unwrap();
+    std::fs::create_dir_all(stage0_state.join("logs")).unwrap();
+    std::fs::create_dir_all(stage2_state.join("logs")).unwrap();
+    std::fs::create_dir_all(&bwrap_bin_dir).unwrap();
+    std::fs::create_dir_all(busybox_bin.parent().unwrap()).unwrap();
+    std::fs::write(&checkout_binary, b"checkout-binary").unwrap();
+    std::fs::write(&stage1_binary, b"stage1-binary").unwrap();
+    std::fs::write(&stage2_binary, b"stage2-binary").unwrap();
+    std::fs::write(&bwrap_bin, b"bwrap-binary").unwrap();
+    std::fs::write(&busybox_bin, b"busybox-binary").unwrap();
+    std::fs::write(staged_source.join("Cargo.toml"), b"[package]\nname='proof'\n").unwrap();
+
+    let stage0_output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(format!(
+            "printf 'self-build-proof: invoking-binary={}\\n' >&2; \
+             printf 'self-build-proof: staged-source={}\\n' >&2; \
+             printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: busybox-path={}\\n' >&2; \
+             printf 'self-build-proof: output-binary={}\\n' >&2",
+            checkout_binary.display(),
+            staged_source.display(),
+            bwrap_bin_dir.display(),
+            busybox_bin.display(),
+            stage1_binary.display(),
+        ))
+        .output()
+        .unwrap();
+    let stage2_output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(format!(
+            "printf 'self-build-proof: invoking-binary={}\\n' >&2; \
+             printf 'self-build-proof: staged-source={}\\n' >&2; \
+             printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: busybox-path={}\\n' >&2; \
+             printf 'self-build-proof: output-binary={}\\n' >&2",
+            stage1_binary.display(),
+            staged_source.display(),
+            bwrap_bin_dir.display(),
+            busybox_bin.display(),
+            stage2_binary.display(),
+        ))
+        .output()
+        .unwrap();
+    assert!(stage0_output.status.success());
+    assert!(stage2_output.status.success());
+
+    let stage0_evidence = record_stage_evidence(
+        proof_dir.path(),
+        "stage0",
+        vec!["crunch".to_string(), "self-build".to_string()],
+        stage0_output,
+        &store,
+        &stage0_state,
+    );
+    let stage2_evidence = record_stage_evidence(
+        proof_dir.path(),
+        "stage2",
+        vec![stage1_binary.display().to_string(), "self-build".to_string()],
+        stage2_output,
+        &store,
+        &stage2_state,
+    );
+
+    let bundle_dir = proof_dir.path().join("proof-bundle");
+    let manifest_path = write_proof_bundle(
+        &bundle_dir,
+        &stage0_evidence,
+        &stage2_evidence,
+        &store,
+        &stage0_state,
+        &stage2_state,
+        &stage1_binary,
+        &stage2_binary,
+    );
+    let summary_path = bundle_dir.join("summary.txt");
+    let manifest_json = std::fs::read_to_string(&manifest_path).unwrap();
+    let summary = std::fs::read_to_string(&summary_path).unwrap();
+
+    assert!(manifest_path.exists(), "proof manifest should exist");
+    assert!(summary_path.exists(), "proof summary should exist");
+    assert!(bundle_dir.join("stage0/meta.json").exists(), "stage0 meta should be copied");
+    assert!(bundle_dir.join("stage0/stderr.txt").exists(), "stage0 stderr should be copied");
+    assert!(bundle_dir.join("stage2/stdout.txt").exists(), "stage2 stdout should be copied");
+    assert!(bundle_dir.join("stage2/diagnostics.txt").exists(), "stage2 diagnostics should be copied");
+    assert!(manifest_json.contains(PROOF_BUNDLE_SCHEMA));
+    assert!(manifest_json.contains(&stage1_binary.display().to_string()));
+    assert!(manifest_json.contains(&stage2_binary.display().to_string()));
+    assert!(manifest_json.contains(&busybox_bin.display().to_string()));
+    assert!(manifest_json.contains(&bwrap_bin.display().to_string()));
+    assert!(summary.contains("stage2_bwrap:"));
+    assert!(summary.contains(&stage2_binary.display().to_string()));
+}
+
+struct EnvVarGuard {
+    key: &'static str,
+    old_value: Option<std::ffi::OsString>,
+}
+
+fn proof_env_mutex() -> &'static Mutex<()> {
+    static PROOF_ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+    PROOF_ENV_MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+fn lock_proof_env() -> MutexGuard<'static, ()> {
+    proof_env_mutex().lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let old_value = std::env::var_os(key);
+        unsafe {
+            std::env::set_var(key, value);
+        }
+        Self { key, old_value }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.old_value.as_ref() {
+            Some(value) => unsafe {
+                std::env::set_var(self.key, value);
+            },
+            None => unsafe {
+                std::env::remove_var(self.key);
+            },
+        }
+    }
+}
+
+#[cfg(unix)]
+fn chmod_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = std::fs::metadata(path).unwrap_or_else(|err| panic!("stat {}: {err}", path.display()));
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions).unwrap_or_else(|err| panic!("chmod {}: {err}", path.display()));
+}
+
+#[cfg(unix)]
+fn write_executable_script(path: &Path, body: &str) {
+    let parent = path.parent().unwrap_or_else(|| panic!("script path has no parent: {}", path.display()));
+    std::fs::create_dir_all(parent).unwrap_or_else(|err| panic!("mkdir {}: {err}", parent.display()));
+    std::fs::write(path, body).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+    chmod_executable(path);
+}
+
+#[cfg(unix)]
+struct ProofScriptFixture {
+    _temp: tempfile::TempDir,
+    repo_dir: PathBuf,
+    tool_dir: PathBuf,
+}
+
+#[cfg(unix)]
+impl ProofScriptFixture {
+    fn new() -> Self {
+        let temp = tempfile::tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let tool_dir = temp.path().join("tools");
+        let script_dir = repo_dir.join("scripts");
+        std::fs::create_dir_all(&script_dir).unwrap();
+        std::fs::create_dir_all(repo_dir.join("bootstrap")).unwrap();
+        std::fs::write(repo_dir.join("Cargo.toml"), "[package]\nname='proof-fixture'\nversion='0.0.0'\n").unwrap();
+
+        let src_script = repo_root().join("scripts/prove-self-hosting.sh");
+        let dst_script = script_dir.join("prove-self-hosting.sh");
+        std::fs::copy(&src_script, &dst_script).unwrap();
+        chmod_executable(&dst_script);
+
+        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\n";
+        write_executable_script(&tool_dir.join("cargo"), cargo_body);
+        write_executable_script(
+            &tool_dir.join("rustc"),
+            "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = \"--version\" ]; then\n  printf 'rustc 1.99.0-nightly (fake)\\n'\n  exit 0\nfi\nexit 0\n",
+        );
+        let rustup_body = format!(
+            "#!/bin/sh\nset -eu\nif [ \"${{1:-}}\" = \"which\" ] && [ \"${{2:-}}\" = \"--toolchain\" ] && [ \"${{3:-}}\" = \"nightly\" ]; then\n  case \"${{4:-}}\" in\n    cargo) printf '%s\\n' \"{}\" ;;\n    rustc) printf '%s\\n' \"{}\" ;;\n    *) exit 1 ;;\n  esac\n  exit 0\nfi\nexit 1\n",
+            tool_dir.join("cargo").display(),
+            tool_dir.join("rustc").display(),
+        );
+        write_executable_script(&tool_dir.join("rustup"), &rustup_body);
+        write_executable_script(
+            &tool_dir.join("pkg-config"),
+            "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = \"--exists\" ] && [ \"${2:-}\" = \"openssl\" ]; then\n  exit 0\nfi\nif [ \"${1:-}\" = \"--modversion\" ] && [ \"${2:-}\" = \"openssl\" ]; then\n  printf '3.6.1\\n'\n  exit 0\nfi\nexit 1\n",
+        );
+        write_executable_script(&tool_dir.join("stat"), "#!/bin/sh\nset -eu\nprintf '5000000 1024\\n'\n");
+        for tool in ["clang", "mold", "git", "tar", "xz", "cp", "bwrap"] {
+            write_executable_script(&tool_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
+        }
+        write_executable_script(&tool_dir.join("bash"), "#!/bin/sh\nexec /bin/sh \"$@\"\n");
+        write_executable_script(&tool_dir.join("static-sh"), "#!/bin/sh\nset -eu\nexit 0\n");
+
+        Self {
+            _temp: temp,
+            repo_dir,
+            tool_dir,
+        }
+    }
+
+    fn script_path(&self) -> PathBuf {
+        self.repo_dir.join("scripts/prove-self-hosting.sh")
+    }
+
+    fn run_args(&self, args: &[&str]) -> std::process::Output {
+        let host_path = std::env::var("PATH").unwrap_or_default();
+        let fake_path = if host_path.is_empty() {
+            self.tool_dir.display().to_string()
+        } else {
+            format!("{}:{host_path}", self.tool_dir.display())
+        };
+        let mut command = std::process::Command::new(self.script_path());
+        command
+            .current_dir(&self.repo_dir)
+            .env("PATH", fake_path)
+            .env("HOME", self.repo_dir.join("home"))
+            .env("TMPDIR", self.repo_dir.join("tmp"))
+            .env("SNIX_BUILD_SANDBOX_SHELL", self.tool_dir.join("static-sh"));
+        for arg in args {
+            command.arg(arg);
+        }
+        command.output().unwrap()
+    }
+
+    fn run(&self, bundle_arg: &Path) -> std::process::Output {
+        let bundle_arg_owned = bundle_arg.to_string_lossy().into_owned();
+        self.run_args(&["--bundle-dir", &bundle_arg_owned])
+    }
+}
+
+#[test]
+fn resolve_proof_bundle_dir_anchors_relative_env_to_repo_root() {
+    let _lock = lock_proof_env();
+    let _guard = EnvVarGuard::set(PROOF_BUNDLE_ENV, "target/custom-proof");
+    let resolved = resolve_proof_bundle_dir();
+
+    assert_eq!(resolved, repo_root().join("target/custom-proof"));
+}
+
+#[test]
+fn resolve_proof_bundle_dir_preserves_absolute_env_path() {
+    let _lock = lock_proof_env();
+    let tmp = tempfile::tempdir().unwrap();
+    let absolute = tmp.path().join("proof-bundle");
+    let _guard = EnvVarGuard::set(PROOF_BUNDLE_ENV, &absolute.display().to_string());
+    let resolved = resolve_proof_bundle_dir();
+
+    assert_eq!(resolved, absolute);
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_anchors_relative_bundle_dir_and_updates_latest() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let bundle_arg = Path::new("target/custom-relative-bundle");
+    let expected_bundle = fixture.repo_dir.join(bundle_arg);
+    let output = fixture.run(bundle_arg);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let latest_link = fixture.repo_dir.join("target/self-hosting-proof/latest");
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert!(expected_bundle.join("manifest.json").exists(), "manifest should exist in anchored bundle dir");
+    assert!(expected_bundle.join("summary.txt").exists(), "summary should exist in anchored bundle dir");
+    assert_eq!(std::fs::read_link(&latest_link).unwrap(), expected_bundle);
+    assert_eq!(
+        std::fs::read_to_string(expected_bundle.join("env-path.txt")).unwrap().trim(),
+        expected_bundle.display().to_string()
+    );
+    assert_eq!(
+        std::fs::read_to_string(expected_bundle.join("cwd.txt")).unwrap().trim(),
+        fixture.repo_dir.display().to_string()
+    );
+    assert!(stderr.contains(&format!("proof bundle: {}", expected_bundle.display())));
+    assert!(
+        stderr.contains(&format!("latest bundle: {}/target/self-hosting-proof/latest", fixture.repo_dir.display()))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_preserves_absolute_bundle_dir_and_updates_latest() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let absolute_bundle = fixture.repo_dir.join("outside-bundle");
+    let output = fixture.run(&absolute_bundle);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let latest_link = fixture.repo_dir.join("target/self-hosting-proof/latest");
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert!(absolute_bundle.join("manifest.json").exists(), "manifest should exist in absolute bundle dir");
+    assert!(absolute_bundle.join("summary.txt").exists(), "summary should exist in absolute bundle dir");
+    assert_eq!(std::fs::read_link(&latest_link).unwrap(), absolute_bundle);
+    assert_eq!(
+        std::fs::read_to_string(absolute_bundle.join("env-path.txt")).unwrap().trim(),
+        absolute_bundle.display().to_string()
+    );
+    assert!(stderr.contains(&format!("proof bundle: {}", absolute_bundle.display())));
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_rejects_option_like_bundle_dir_value() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let output = fixture.run_args(&["--bundle-dir", "--check"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "script should reject malformed bundle-dir usage");
+    assert!(stderr.contains("--bundle-dir requires a directory, got option-like value: --check"));
 }
 
 /// Regression: audit bundle hashing enforces MAX_AUDIT_DEPTH (64).
@@ -1258,9 +1897,27 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage2_evidence),
     );
 
+    let proof_bundle_dir = resolve_proof_bundle_dir();
+    let proof_manifest = write_proof_bundle(
+        &proof_bundle_dir,
+        &stage0_evidence,
+        &stage2_evidence,
+        &store,
+        &stage0_state,
+        &stage2_state,
+        &stage1_binary,
+        &stage2_binary,
+    );
+    let proof_summary = proof_bundle_dir.join("summary.txt");
+    assert!(proof_manifest.exists(), "proof manifest must exist: {}", proof_manifest.display());
+    assert!(proof_summary.exists(), "proof summary must exist: {}", proof_summary.display());
+
     eprintln!("\n=== PROOF PASSED ===");
     eprintln!("stage1: {}", stage1_binary.display());
     eprintln!("stage2: {}", stage2_binary.display());
     eprintln!("bwrap:  {bwrap_val}");
     eprintln!("busybox: {}", busybox_val);
+    eprintln!("proof bundle: {}", proof_bundle_dir.display());
+    eprintln!("proof manifest: {}", proof_manifest.display());
+    eprintln!("proof summary: {}", proof_summary.display());
 }

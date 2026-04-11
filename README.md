@@ -377,7 +377,7 @@ reproducible release outputs.
 | Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a fetched seed |
 | Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` pins the fetched `musl-gcc` URL and hash in `src/bootstrap.rs` | The repo still trusts those seeds; it does not yet reduce them to a smaller audited root |
 | Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the fetched seed | The fetched `musl-gcc` seed itself is not yet rebuilt from a smaller source bootstrap inside crunch |
-| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof and `--check` verifies prerequisites first | The proof does not yet provide independent reproducibility evidence for release outputs |
+| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, and successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/` | The proof does not yet provide independent reproducibility evidence for release outputs |
 
 ## Self-Build
 
@@ -417,6 +417,12 @@ Use `./scripts/prove-self-hosting.sh --check` to validate prerequisites,
 including temporary-disk headroom, and print the proof command without
 starting the full build.
 
+Successful runs write a proof bundle to `target/self-hosting-proof/run-...`
+and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
+`--bundle-dir <dir>` to choose a different destination. Relative bundle paths
+are anchored to the repo root before the helper exports them to the proof test
+or updates `latest`.
+
 Host prerequisites:
 - Linux
 - `rustup` with the repo's `nightly` toolchain installed
@@ -434,9 +440,18 @@ binary rebuilds crunch as stage2 from the same staged source tree. The test
 asserts that stage2 selected crunch-built `bwrap` and `busybox`, not host
 fallbacks. Expect about 30 minutes and about 4 GiB free in `/tmp`.
 
+Each proof bundle contains:
+- `manifest.json` — stable machine-readable digests for the checkout, stage1,
+  and stage2 binaries, plus the stage2 `bwrap` and `busybox` paths and digests,
+  store or state locations, and copied stage metadata
+- `summary.txt` — a short human-readable digest summary
+- `stage0/` and `stage2/` — copied `meta.json`, `stdout.txt`, `stderr.txt`, and
+  `diagnostics.txt` files from the stage audit bundles
+
 The proof does not demonstrate bit-for-bit reproducibility, stage1 == stage2
 identity, or freedom from all host tools. It proves that a crunch-built
-`crunch` can drive another self-build to completion.
+`crunch` can drive another self-build to completion and leave behind a bundle
+that another machine can compare later.
 
 ### Bootstrap roadmap
 
