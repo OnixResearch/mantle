@@ -22,6 +22,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use super::BuildService;
+use super::ephemeral_dir::create_ephemeral_dir;
 use crate::buildservice::BuildConstraints;
 use crate::buildservice::BuildOutput;
 use crate::buildservice::BuildRequest;
@@ -270,17 +271,18 @@ where
         let _permit = self.concurrent_builds.acquire().await.unwrap();
 
         let build_name = Uuid::new_v4();
-        let sandbox_path = self.workdir.join(build_name.to_string());
-        info!(%build_name, "Starting bwrap build");
+        let build_name_str = build_name.to_string();
+        let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))?;
+        info!(build_name = %build_name_str, sandbox_path = %sandbox_dir.path().display(), "Starting bwrap build");
 
         let span = Span::current();
-        span.record("build_name", build_name.to_string());
+        span.record("build_name", build_name_str.clone());
 
         let blob_service = self.blob_service.clone();
         let directory_service = self.directory_service.clone();
 
         let spec = SandboxSpec::builder()
-            .host_workdir(sandbox_path)
+            .host_workdir(sandbox_dir.path().to_path_buf())
             .sandbox_workdir(request.working_dir)
             .scratches(request.scratch_paths)
             .command(request.command_args)

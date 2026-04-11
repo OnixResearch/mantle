@@ -3,6 +3,7 @@ use async_trait::async_trait;
 pub mod build_request;
 pub use crate::buildservice::build_request::*;
 mod dummy;
+mod ephemeral_dir;
 mod from_addr;
 
 #[cfg(target_os = "linux")]

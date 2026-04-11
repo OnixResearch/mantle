@@ -20,6 +20,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use super::BuildService;
+use super::ephemeral_dir::create_ephemeral_dir;
 use crate::buildservice::BuildOutput;
 use crate::buildservice::BuildRequest;
 use crate::buildservice::BuildResult;
@@ -76,10 +77,12 @@ where
         let _permit = self.concurrent_builds.acquire().await.unwrap();
 
         let bundle_name = Uuid::new_v4();
-        let bundle_path = self.bundle_root.join(bundle_name.to_string());
+        let bundle_name_str = bundle_name.to_string();
+        let bundle_dir = create_ephemeral_dir(&self.bundle_root, &format!("{bundle_name_str}-"))?;
+        let bundle_path = bundle_dir.path().to_path_buf();
 
         let span = Span::current();
-        span.record("bundle_name", bundle_name.to_string());
+        span.record("bundle_name", bundle_name_str.clone());
 
         let mut runtime_spec = make_spec(&request, true, &sandbox_shell())
             .context("failed to create spec")
@@ -134,7 +137,7 @@ where
         debug!(bundle.path=?bundle_path, bundle.name=%bundle_name, "about to spawn bundle");
 
         // start the bundle as another process.
-        let child = spawn_bundle(bundle_path, &bundle_name.to_string())?;
+        let child = spawn_bundle(&bundle_path, &bundle_name_str)?;
 
         // wait for the process to exit
         // FUTUREWORK: change the trait to allow reporting progress / logs…
