@@ -7,32 +7,6 @@ labels, from-source bootstrap chain, and checked-in self-hosting proof.
 
 ## Requirements
 
-### Requirement: Seed import mechanism
-
-The CLI `crunch bootstrap` subcommand MUST support two modes:
-
-- `crunch bootstrap` resolves package names from an existing Nix installation
-  into `/nix/store` paths and writes `seed.ncl`.
-- `crunch bootstrap --fetch` downloads pinned seed tarballs, persists them as
-  fixed-output derivations, and writes `seed.ncl` without requiring Nix.
-
-The default `crunch bootstrap` path MUST make the Nix dependency explicit.
-The `--fetch` path MUST make the fetched seed dependency explicit.
-
-#### Scenario: Contributor generates a Nix-backed seed file
-
-- GIVEN a machine with Nix installed
-- WHEN `crunch bootstrap -o seed.ncl bash coreutils gcc gnumake binutils` is run
-- THEN `seed.ncl` contains validated `/nix/store` paths for those packages
-- AND the generated file makes clear that the paths came from an existing Nix installation
-
-#### Scenario: Contributor generates a fetch-backed seed file
-
-- GIVEN a machine with crunch installed but no Nix
-- WHEN `crunch bootstrap --fetch -o seed.ncl` is run
-- THEN `seed.ncl` contains validated store paths for the fetched seed packages
-- AND the generated file makes clear that the paths came from pinned fetched tarballs
-
 ### Requirement: Fetch-based bootstrap
 
 The system MUST support `crunch bootstrap --fetch` which downloads a static
@@ -49,13 +23,6 @@ itself.
 - WHEN `crunch bootstrap --fetch --store ~/crunch-store -o seed.ncl` is run
 - THEN a `seed.ncl` is generated with a valid store path to the fetched toolchain
 - AND `crunch build hello-world.ncl -I seed.ncl --store ~/crunch-store` succeeds
-
-#### Scenario: Reproducible fetch identity
-
-- GIVEN the same pinned musl-gcc tarball URL and recursive hash
-- WHEN `crunch bootstrap --fetch` is run on two different machines
-- THEN both runs compute the same logical output store path
-- AND both generated `seed.ncl` files contain the same logical seed path
 
 ### Requirement: Explicit bootstrap trust inventory
 
