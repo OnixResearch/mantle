@@ -48,6 +48,16 @@ write outputs elsewhere, or `--nix-compat` to switch the logical
 prefix to `/nix/store` for interop testing. See
 [Store Paths and Prefixes](#store-paths-and-prefixes) for details.
 
+## Examples
+
+The repo ships runnable examples under [`examples/`](examples/):
+
+- [`examples/fetch-crate-crc64.ncl`](examples/fetch-crate-crc64.ncl) — fetch a real crates.io source tarball (`crc64` 2.0.0)
+- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with crunch's bootstrap Rust toolchain
+- [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
+- [`examples/project/`](examples/project/) — project-aware `crunch build .#name` layout
+- [`examples/README.md`](examples/README.md) — short index of the full example set
+
 ## Fetchers
 
 Download files, tarballs, and git repos as fixed-output derivations:

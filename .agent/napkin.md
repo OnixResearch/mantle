@@ -69,6 +69,9 @@
 - Reused staged-source validation must include `lib/`, not just `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`; `cmd_self_build()` always constructs import paths from `src_dir/lib`.
 
 ## Tooling Gotchas
+- Real-crate Cargo examples inside crunch sandboxes should `set -eu` explicitly. A plain derivation script does not get mkDerivation's safety shell prologue, so `cp target/...` failures can still yield a misleading successful build if the script never enables `-e`.
+- For reproducible Rust binary examples, pass `cargo build --bin <name> --target x86_64-unknown-linux-musl`. If the derivation sets `CARGO_TARGET_DIR`, copy from `$CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/<name>`, not `target/...`.
+- `crunch build --fix ... --store <dir>` still requires the physical store dir to exist up front, even for fetcher-only examples. `--store /tmp/foo` is not enough by itself; create `/tmp/foo` first.
 - The `rg` tool wrapper shell-interprets alternation characters like `|` in patterns. For multi-term searches, either run `bash` with a quoted `rg` command or avoid alternation in the `rg` tool call.
 - Local pueue groups are preconfigured; arbitrary names fail (`Group tests doesn't exists`). Use `default` unless you first confirm the group exists with `pueue_status`.
 - The `rg` tool wrapper also lets the shell see a leading `#`, so patterns like `#\[ignore\]` get treated as comments. Quote those searches in `bash` instead of calling the `rg` tool directly.
