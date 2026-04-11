@@ -1,6 +1,7 @@
 # Napkin
 
 ## Done-Review Lessons (2026-04-07)
+- Before claiming scope or changed files, run `git status --short` in the same turn and separate your edits from pre-existing worktree changes. A dirty tree can make a “docs only” summary false.
 - `apply_outcomes()` must take the manifest and resolver, not just the lock and outcomes. Patch names in lock entries are useless without the corresponding LockedPatch in `Lockfile.patches` -- lock validation catches this, but it's easy to miss in tests that don't call `validate()` on the result.
 - `crunch-project` tarball lock hashes must match `crunch.fetchTarball` semantics: recursive/NAR hash of the unpacked tree, not a flat hash of the downloaded archive bytes. `lib/fetch.ncl` and `crunch-build::fetcher` are the source of truth.
 - A "real" `RefreshResolver` is incomplete if it only implements git + URL hashing. Local patch locking goes through `RefreshResolver::hash_local_file()` during `apply_outcomes()`, so leaving the default `Ok(None)` keeps patch locks broken.

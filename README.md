@@ -377,6 +377,14 @@ The proof does not demonstrate bit-for-bit reproducibility or freedom
 from all host tools. It proves that a crunch-built crunch can drive
 another self-build to completion.
 
+### Background reading
+
+Related bootstrap work worth keeping handy:
+
+- [Bootstrappable Builds](https://www.bootstrappable.org/) — broader reference material on reducing bootstrap seeds and building from source all the way down.
+- [Guix blog: The full-source bootstrap: building from source all the way down](https://guix.gnu.org/en/blog/2023/the-full-source-bootstrap-building-from-source-all-the-way-down/) — a concrete walkthrough of Guix's bootstrap story and trust reduction work.
+- [Stagex](https://codeberg.org/stagex/stagex) — a stage-by-stage bootstrap project with packaging and build recipes relevant to self-hosting discussions.
+
 **Troubleshooting the proof:**
 
 | Symptom | Cause | Fix |

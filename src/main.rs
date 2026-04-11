@@ -456,9 +456,11 @@ fn run(args: Args) -> Result<(), RunError> {
                     let cwd = std::env::current_dir().unwrap();
                     let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
                     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+                    let mut full_import_paths = build_import_paths(&[])?;
+                    full_import_paths.extend(resolved.import_paths);
                     build_from_expr(
                         &expr,
-                        &resolved.import_paths,
+                        &full_import_paths,
                         &args.store,
                         &resolved_state_dir,
                         &store_prefix,
@@ -567,11 +569,13 @@ fn run(args: Args) -> Result<(), RunError> {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
             let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
             let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
+            let mut full_import_paths = build_import_paths(&[])?;
+            full_import_paths.extend(resolved.import_paths);
 
             // Build the shell derivation
             let result = build_from_expr_raw(
                 &expr,
-                &resolved.import_paths,
+                &full_import_paths,
                 &args.store,
                 &resolved_state_dir,
                 &store_prefix,
@@ -612,11 +616,13 @@ fn run(args: Args) -> Result<(), RunError> {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
             let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
             let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
+            let mut full_import_paths = build_import_paths(&[])?;
+            full_import_paths.extend(resolved.import_paths);
 
             // Build the package
             let result = build_from_expr_raw(
                 &expr,
-                &resolved.import_paths,
+                &full_import_paths,
                 &args.store,
                 &resolved_state_dir,
                 &store_prefix,
@@ -753,6 +759,7 @@ fn first_output_path(
             PathBuf::from(&abs)
         } else {
             let rel = abs.strip_prefix(store_dir).unwrap_or(&abs);
+            let rel = rel.strip_prefix('/').unwrap_or(rel);
             output_dir.join(rel)
         };
         if host_path.exists() {
