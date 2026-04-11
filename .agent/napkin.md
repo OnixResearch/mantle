@@ -76,6 +76,7 @@
 - `openspec new change <name>` only scaffolds `.openspec.yaml` in this repo/tool version. Proposal, design, tasks, and delta spec files still need to be written by hand.
 - `openspec status` does not take a positional change name. Use `openspec status --change <name>` if you want artifact status for one change.
 - `openspec validate` on this host does not support `--no-interactive`. Re-run with supported flags only, and do not claim validation success unless the tool output includes the success line in the same turn.
+- `openspec validate` takes a spec or change name, not a file path. `openspec validate bootstrap` works; `openspec validate openspec/specs/bootstrap/spec.md` fails with "Unknown item".
 
 ## Nickel Gotchas
 - **Recursive record scoping kills inline contracts in returned records.** If `fetch.ncl` defines `let Hash = ...` and a function returns a record like `{ hash = the_hash, ... }` where `the_hash` was bound via `params.hash | Hash`, the record's recursive scoping creates infinite recursion: the record field `hash` resolves to itself. Fix: extract ALL values into `let` bindings BEFORE the record literal — `let the_hash = params.hash in let the_fixed_output = { hash = the_hash, ... } in { ... fixed_output = the_fixed_output ... }`. Also: `args` is a common field name in Derivation records, so a function parameter named `args` conflicts. Use `params` instead.
