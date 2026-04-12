@@ -402,6 +402,8 @@ fn run(args: Args) -> Result<(), RunError> {
 
     let resolved_state_dir = state_dir();
     let store_prefix = resolve_store_prefix(&args);
+    debug_assert!(!store_prefix.is_empty(), "store_prefix must not be empty");
+    debug_assert!(store_prefix.starts_with('/'), "store_prefix must be absolute");
 
     match args.command {
         Command::Eval { file, import_paths } => {
@@ -453,7 +455,7 @@ fn run(args: Args) -> Result<(), RunError> {
                 }
                 project_build::BuildTarget::ProjectDefault
                 | project_build::BuildTarget::Selector(_) => {
-                    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
+                    let cwd = current_dir_or_error()?;
                     let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
                     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
                     let mut full_import_paths = build_import_paths(&[])?;
@@ -491,17 +493,17 @@ fn run(args: Args) -> Result<(), RunError> {
         Command::Store { action } => store_cmd::cmd_store(action),
         Command::Attest { action } => attest_cmd::cmd_attest(
             action,
-            &std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?,
+            &current_dir_or_error()?,
             &args.store,
             &resolved_state_dir,
             &store_prefix,
         ),
-        Command::Init => project_cmd::cmd_init(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
-        Command::Check => project_cmd::cmd_check(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
-        Command::Show => project_cmd::cmd_show(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
-        Command::Refresh { names } => project_cmd::cmd_refresh(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?, &names),
-        Command::ListStale => project_cmd::cmd_list_stale(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
-        Command::Upgrade => project_cmd::cmd_upgrade(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
+        Command::Init => project_cmd::cmd_init(&current_dir_or_error()?),
+        Command::Check => project_cmd::cmd_check(&current_dir_or_error()?),
+        Command::Show => project_cmd::cmd_show(&current_dir_or_error()?),
+        Command::Refresh { names } => project_cmd::cmd_refresh(&current_dir_or_error()?, &names),
+        Command::ListStale => project_cmd::cmd_list_stale(&current_dir_or_error()?),
+        Command::Upgrade => project_cmd::cmd_upgrade(&current_dir_or_error()?),
         Command::SelfBuild {
             jobs,
             no_substitute,
@@ -579,6 +581,10 @@ fn resolve_store_prefix(args: &Args) -> String {
     }
 }
 
+fn current_dir_or_error() -> Result<PathBuf, RunError> {
+    std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))
+}
+
 fn parse_trusted_keys(keys: &[String]) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
     if keys.is_empty() {
         return Ok(None);
@@ -610,7 +616,8 @@ fn build_from_expr(
     trust_unsigned: bool,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
-    // Write the expr to a temp file so the pipeline can import it.
+    debug_assert!(max_jobs > 0, "max_jobs must be positive");
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
     std::fs::write(tmp.path(), expr)
@@ -648,6 +655,8 @@ fn build_from_expr_raw(
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    debug_assert!(max_jobs > 0, "max_jobs must be positive");
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
     std::fs::write(tmp.path(), expr)
@@ -817,7 +826,7 @@ fn cmd_develop(
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
-    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
+    let cwd = current_dir_or_error()?;
     let target = name_to_build_target(name);
     let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
     let shell_target = match &resolved.target {
@@ -860,7 +869,7 @@ fn cmd_run(
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
-    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
+    let cwd = current_dir_or_error()?;
     let target = name_to_build_target(name);
     let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
