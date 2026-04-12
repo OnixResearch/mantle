@@ -43,6 +43,7 @@ pub struct ResolvedProject {
 }
 
 /// What to extract from the project output.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectTarget {
     /// Build the default package(s).

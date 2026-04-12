@@ -2292,7 +2292,7 @@ mod tests {
         );
 
         let mut kp = DerivationRegistry::default();
-        let (drv_path, drv) = build_and_register_multi("multi-out", &["out", "dev", "lib"], &[], &mut kp);
+        let (drv_path, _drv) = build_and_register_multi("multi-out", &["out", "dev", "lib"], &[], &mut kp);
 
         let outcome = builder.build(&drv_path, &mut kp).await.unwrap();
         assert!(!outcome.cached);
@@ -3051,8 +3051,6 @@ mod tests {
 
     /// Create a gzipped tarball with a single file, return the path.
     fn create_test_tarball(file_name: &str, content: &[u8]) -> tempfile::NamedTempFile {
-        use std::io::Write;
-
         let tmp_src = tempfile::tempdir().unwrap();
         let inner = tmp_src.path().join("project-v1");
         std::fs::create_dir(&inner).unwrap();

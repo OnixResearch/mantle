@@ -47,10 +47,11 @@ pub struct ObjectStoreDirectoryService {
 #[instrument(level=Level::TRACE, skip_all,fields(base_path=%base_path,blob.digest=%digest),ret(Display))]
 fn derive_dirs_path(base_path: &Path, digest: &B3Digest) -> Path {
     base_path
-        .child("dirs")
-        .child("b3")
-        .child(HEXLOWER.encode(&digest.as_slice()[..2]))
-        .child(HEXLOWER.encode(digest.as_slice()))
+        .clone()
+        .join("dirs")
+        .join("b3")
+        .join(HEXLOWER.encode(&digest.as_slice()[..2]))
+        .join(HEXLOWER.encode(digest.as_slice()))
 }
 
 /// Helper function, parsing protobuf-encoded Directories into [crate::Directory],

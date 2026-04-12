@@ -30,6 +30,7 @@ use crate::errors::RunError;
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Maximum number of `*-crunch` output directories to scan before giving up.
+#[cfg_attr(not(test), allow(dead_code))]
 const MAX_CRUNCH_OUTPUTS: u32 = 4096;
 
 /// Bootstrap tool NCL files that MUST be built as separate roots before
@@ -70,6 +71,7 @@ impl fmt::Display for BwrapSource {
 
 impl BwrapSource {
     /// Parse from the stable string format produced by `Display`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn parse(s: &str) -> Option<Self> {
         if let Some(rest) = s.strip_prefix("crunch-built:") {
             Some(BwrapSource::CrunchBuilt(PathBuf::from(rest)))
@@ -81,6 +83,7 @@ impl BwrapSource {
     }
 
     /// True when this stage used a crunch-built bwrap.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn is_crunch_built(&self) -> bool {
         matches!(self, BwrapSource::CrunchBuilt(_))
     }
@@ -151,6 +154,7 @@ impl SelfBuildReport {
     /// Parse a report from lines previously produced by
     /// `format_proof_lines`. Returns `None` when any required field
     /// is missing.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn parse_proof_lines(text: &str) -> Option<Self> {
         let mut invoking_binary: Option<PathBuf> = None;
         let mut staged_source: Option<PathBuf> = None;
@@ -784,6 +788,7 @@ fn find_crunch_bwrap(output_dir: &Path) -> Option<PathBuf> {
 ///
 /// Looks for `<output_dir>/*-busybox/bin/busybox` — the naming convention
 /// used by `bootstrap/busybox.ncl`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
     let entries = std::fs::read_dir(output_dir).ok()?;
     for entry in entries.flatten() {
@@ -803,6 +808,7 @@ pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
 ///
 /// Returns a list of `(dir_name, binary_path)` pairs where the binary
 /// exists at `<dir>/bin/crunch`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
     let entries = match std::fs::read_dir(output_dir) {
         Ok(e) => e,
@@ -831,6 +837,7 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
 ///
 /// Returns the number of directories removed. Errors from individual
 /// removals are collected but do not abort the loop.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn invalidate_crunch_outputs(output_dir: &Path) -> Result<u32, RunError> {
     let outputs = find_crunch_outputs(output_dir);
     let mut removed: u32 = 0;
@@ -918,6 +925,7 @@ fn validate_bootstrap_tools(bootstrap_dir: &Path) -> Result<(), RunError> {
 /// Verify that crunch-built bwrap and busybox are on disk after building.
 ///
 /// Returns `Err` if either tool is missing from the output store.
+#[cfg_attr(not(test), allow(dead_code))]
 fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), RunError> {
     let bwrap_source = resolve_bwrap_source(output_dir)?;
     if !bwrap_source.is_crunch_built() {

@@ -117,6 +117,7 @@ fn recursive_record_self_reference() {
     .unwrap();
 
     let drv: Drv = expr.to_serde().unwrap();
+    assert_eq!(drv.name, "myapp");
     assert_eq!(drv.env.get("APP_NAME").unwrap(), "myapp");
 }
 
@@ -147,6 +148,7 @@ fn fixed_output_contract() {
     .unwrap();
 
     let fo = drv.fixed_output.unwrap();
+    assert_eq!(fo.hash, "sha256-abc123");
     assert_eq!(fo.algo, "sha256");
     assert_eq!(fo.mode, "flat"); // default
 }

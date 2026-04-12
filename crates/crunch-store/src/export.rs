@@ -410,7 +410,7 @@ mod tests {
         };
 
         let mut current = leaf;
-        for i in (0..depth).rev() {
+        for _depth_index in (0..depth).rev() {
             // Use a fixed name so we don't need dynamic PathComponent.
             let mut dir = Directory::new();
             dir.add("d".try_into().unwrap(), current).unwrap();

@@ -327,7 +327,7 @@ impl FuseChannel {
     /// - Ok(None): signal has pending on the exiting event channel
     /// - Ok(Some((reader, writer))): reader to receive request and writer to send reply
     /// - Err(e): error message
-    pub fn get_request(&mut self) -> Result<Option<(Reader, FuseDevWriter)>> {
+    pub fn get_request(&mut self) -> Result<Option<(Reader<'_>, FuseDevWriter<'_>)>> {
         let mut events = Events::with_capacity(POLL_EVENTS_CAPACITY);
         let mut need_exit = false;
         loop {
@@ -672,10 +672,10 @@ mod tests {
     }
 }
 
-#[cfg(feature = "async_io")]
+#[cfg(feature = "async-io")]
 pub use asyncio::FuseDevTask;
 
-#[cfg(feature = "async_io")]
+#[cfg(feature = "async-io")]
 /// Task context to handle fuse request in asynchronous mode.
 mod asyncio {
     use std::os::unix::io::RawFd;

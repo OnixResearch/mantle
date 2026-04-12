@@ -648,8 +648,6 @@ mod tests {
     /// Build a fetchurl derivation with the given env, similar to what
     /// crunch.fetchurl produces after convert().
     fn make_fetcher_drv(url: &str, hash: Option<nix_compat::nixhash::CAHash>) -> Derivation {
-        use nix_compat::nixhash::CAHash;
-
         let mut outputs = BTreeMap::new();
         outputs.insert("out".to_string(), Output {
             path: None,

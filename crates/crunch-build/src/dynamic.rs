@@ -92,7 +92,7 @@ pub fn register_dynamic_drv(
     store_dir: &str,
 ) -> Result<StorePath<String>, Error> {
     let aterm_bytes = drv.to_aterm_bytes();
-    let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
+    let _aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
     // Check if already registered (dedup).
     let drv_name = drv

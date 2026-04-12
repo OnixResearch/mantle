@@ -1,5 +1,3 @@
-use hex_literal::hex;
-
 use crate::ValidateNodeError;
 use crate::proto::Directory;
 use crate::proto::DirectoryEntry;
