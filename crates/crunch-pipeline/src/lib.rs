@@ -139,63 +139,7 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 
     #[cfg(target_os = "linux")]
     {
-        use snix_build::buildservice::BubblewrapBuildService;
-
-        let blob_service = store.blob_service();
-        let directory_service = store.directory_service();
-        let pathinfo_service = store.pathinfo_service();
-        let remote_pathinfo = store.remote_pathinfo();
-
-        let workdir = std::env::temp_dir().join("crunch-builds");
-        std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
-
-        let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
-        let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone());
-        let build_service = DispatchBuildService::new(fetch_service, bwrap_service);
-
-        let mut builder = Builder::with_state_dir(
-            blob_service,
-            directory_service,
-            build_service,
-            pathinfo_service,
-            config.output_dir.clone(),
-            Some(store.state_dir().to_path_buf()),
-            remote_pathinfo,
-            &config.store_dir,
-            config.keypair.clone(),
-            config.trusted_keys.clone(),
-            config.trust_unsigned,
-            config.verbose,
-        );
-
-        let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-        let store_dir = config.store_dir.clone();
-        let convert_handle = tokio::task::spawn_blocking(move || convert_all(derivations, &store_dir, tx));
-
-        let mut known_paths = DerivationRegistry::new(&config.store_dir);
-        let mut worker = Worker::new(config.max_jobs);
-        let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx).await;
-
-        let root_drv_paths =
-            convert_handle.await.map_err(|e| Error::Internal(format!("convert thread panicked: {e}")))??;
-
-        // Per-root build failures, including FOD mismatches, are recorded in
-        // WorkerResult.failed. Reaching Err(...) here means the scheduler
-        // itself broke, not that one root produced a normal build failure.
-        let mut worker_result = match worker_run {
-            Ok(result) => result,
-            Err(err) => return Err(Error::Build(format!("{err}"))),
-        };
-        normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
-        let root_labels = build_root_labels(&root_drv_paths, &config.store_dir);
-        let fod_mismatches = collect_fod_mismatches(&worker_result.failed);
-
-        Ok(PipelineResult {
-            outcomes: worker_result.outcomes,
-            failed: worker_result.failed,
-            fod_mismatches,
-            root_labels,
-        })
+        return build_linux(config, store, derivations).await;
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -203,6 +147,60 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
         let _ = store;
         Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
+}
+
+#[cfg(target_os = "linux")]
+async fn build_linux(
+    config: &BuildConfig,
+    store: crunch_store::StoreHandle,
+    derivations: Vec<(String, CrunchDerivation)>,
+) -> Result<PipelineResult, Error> {
+    use snix_build::buildservice::BubblewrapBuildService;
+
+    let blob_service = store.blob_service();
+    let directory_service = store.directory_service();
+    let pathinfo_service = store.pathinfo_service();
+    let remote_pathinfo = store.remote_pathinfo();
+    let workdir = std::env::temp_dir().join("crunch-builds");
+    std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
+
+    let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let build_service = DispatchBuildService::new(fetch_service, bwrap_service);
+    let mut builder = Builder::with_state_dir(
+        blob_service,
+        directory_service,
+        build_service,
+        pathinfo_service,
+        config.output_dir.clone(),
+        Some(store.state_dir().to_path_buf()),
+        remote_pathinfo,
+        &config.store_dir,
+        config.keypair.clone(),
+        config.trusted_keys.clone(),
+        config.trust_unsigned,
+        config.verbose,
+    );
+
+    let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
+    let store_dir = config.store_dir.clone();
+    let convert_handle = tokio::task::spawn_blocking(move || convert_all(derivations, &store_dir, tx));
+    let mut known_paths = DerivationRegistry::new(&config.store_dir);
+    let mut worker = Worker::new(config.max_jobs);
+    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx).await;
+    let root_drv_paths =
+        convert_handle.await.map_err(|e| Error::Internal(format!("convert thread panicked: {e}")))??;
+    let mut worker_result = match worker_run {
+        Ok(result) => result,
+        Err(err) => return Err(Error::Build(format!("{err}"))),
+    };
+    normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
+    Ok(PipelineResult {
+        root_labels: build_root_labels(&root_drv_paths, &config.store_dir),
+        fod_mismatches: collect_fod_mismatches(&worker_result.failed),
+        outcomes: worker_result.outcomes,
+        failed: worker_result.failed,
+    })
 }
 
 fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
