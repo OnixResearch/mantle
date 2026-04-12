@@ -64,6 +64,11 @@
 - `stage_source()` must export tracked files from the current worktree, not `git archive HEAD`. Otherwise `tests/self_hosting.rs` stage0 builds a stale stage1 binary that silently drops local fixes, and stage2 reintroduces already-fixed failures.
 - Bootstrap seed details now live in `bootstrap/seed.ncl`. If you change the stage0 provider, update that module first and keep `src/self_build.rs::generate_self_build_ncl()` importing `seed.ncl` too, or the self-build path drifts from checked-in bootstrap derivations.
 - The public seed contract is now a normalized wrapper derivation (`musl-seed-toolchain`), not the raw musl.cc tarball. Consumers should expect target-prefixed binutils plus `<target>/include` and `<target>/lib`, not raw musl.cc layout quirks.
+- musl.cc raw tarball has unprefixed binutils in `bin/` and `x86_64-linux-musl/bin/`, but no `bin/x86_64-linux-musl-ar`. If stage0 musl fails with `make: .../x86_64-linux-musl-ar: No such file or directory`, fix `bootstrap/seed.ncl` first. Materialized copies are safer than self-referential symlinks for those prefixed tools.
+- `bootstrap/gcc.ncl` creates `/tmp/tools/seed-cxx-static`; configure must use that exact path for `CXX`. A stale `CXX="/tmp/tools/musl-g++-static"` makes GCC configure say `A compiler with support for C++11 language features is required.` even though the seed toolchain has `x86_64-linux-musl-g++`.
+- `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` need raw kernel headers from the seed toolchain, not just the rebuilt musl sysroot. If bwrap fails on `<linux/capability.h>` / `<linux/loop.h>` or busybox misses `linux/*.h`, pass both `-I$SEED_ROOT/%{seed_target}/include` and `-I$SEED_ROOT/include`.
+- `bootstrap/seed.ncl` should materialize `%{seed_target}/include` and `%{seed_target}/lib/libgcc_s.so*` / `libc.so` as real files, not self-referential symlinks back into `$out`. Same export/render hazard as prefixed binutils: later sandbox consumers can miss `.../include/linux` or `.../lib/libgcc_s.so.1` even though the source tree had them.
+- Stage3 self-build NCL must not say plain `import "seed.ncl"` / `import "lib.ncl"` from a temp file. `lib/seed.ncl` shadows `bootstrap/seed.ncl`, so self-build got `FieldMissing toolchain` at eval time. Use rooted imports (`bootstrap/...`, `lib/lib.ncl`) and pass both the repo root and `lib/` as import paths, otherwise `lib/lib.ncl` can't find its plain `import "fetch.ncl"`.
 - A staged-source fingerprint based only on `path:size` is wrong. Same-size edits can silently reuse an old `*-crunch-src` tree and make self-build prove the wrong code. Hash file contents too.
 - After a root build, do not rediscover "the" result by scanning `read_dir()` for the first matching `*-crunch` / `*-bwrap` / `*-busybox`. Use the exact root output path from `PipelineResult`, or an older sibling output can be selected nondeterministically.
 - Stage1 can embed a compile-time `SNIX_BUILD_SANDBOX_SHELL` path that only exists in the stage0 temp store. `vendor/snix-build::choose_sandbox_shell()` must ignore a non-placeholder compile default if the file is missing, then fall back to a discovered static busybox or `/bin/sh`.
@@ -292,6 +297,12 @@
 - `convert_inner` (115→15): split into `resolve_inputs`, `build_nix_derivation` (pure, no KnownPaths), `finalize_and_register`.
 - `build_fetcher` (136→~110): reused `persist_and_export_output` eliminating 20 lines of duplicated persist+register code.
 - Remaining >70: execute_builds (77, shell), parse_fetch (76, pure match), extract_tar (106, tar dispatch).
+
+### Tiger Style Audit Snapshot (2026-04-12)
+- Current repo-wide scan over `src/` + `crates/` found 17 production functions still over 70 nonblank lines. Biggest hotspots: `src/main.rs::run` (238), `crates/crunch-build/src/orchestrate.rs::finish_build_multi_ca` (179), `src/self_build.rs::generate_self_build_ncl` (162), `src/self_build.rs::cmd_self_build` (146).
+- Compile-time assertion coverage is still tiny: only `crates/crunch-build/src/build_request.rs` has a `const _: () = assert!(...)` check.
+- Explicit recursion still remains in two production helpers via `Box::pin(...)`: `crates/crunch-build/src/rewrite.rs::rewrite_node` and `crates/crunch-store/src/export.rs::export_castore_inner`.
+- Time injection looks mostly clean in production code. Current `SystemTime::now()` grep under `src/` + `crates/` only hit `src/build_log.rs`, which is shell-side log formatting.
 
 ## Multi-Output Derivations (2026-04-05)
 - `outputs` env var now set in `build_nix_derivation` (space-separated list). Changes the ATerm hash of every derivation — all hardcoded store path assertions in tests needed updating.

@@ -79,6 +79,7 @@ let rust_src = crunch.fetchTarball {
       done
       if [ -n "$MUSL_GCC" ]; then
         export LD_LIBRARY_PATH="$MUSL_GCC"
+        export LIBRARY_PATH="$MUSL_GCC"
       fi
 
       # The install.sh script needs a real shell (not busybox sh).
@@ -105,10 +106,25 @@ let rust_src = crunch.fetchTarball {
       cp -r $RUST_SRC/rust-std-x86_64-unknown-linux-musl/lib/rustlib/x86_64-unknown-linux-musl/lib \
         $out/lib/rustlib/x86_64-unknown-linux-musl/
 
+      # Keep libgcc_s next to librustc_driver so later sandboxes do not rely
+      # on external loader search paths for Rust unwinding support.
+      if [ -n "$MUSL_GCC" ]; then
+        for lib in libgcc_s.so libgcc_s.so.1; do
+          if [ -f "$MUSL_GCC/$lib" ]; then
+            cp "$MUSL_GCC/$lib" $out/lib/
+          fi
+        done
+      fi
+
       echo "std lib count: $(ls $out/lib/rustlib/x86_64-unknown-linux-musl/lib/ | wc -l)"
 
       echo "=== Verify ==="
       ls -la /lib/%{seed_dynamic_linker}
+      if [ -n "$MUSL_GCC" ]; then
+        export LD_LIBRARY_PATH="$out/lib:$MUSL_GCC"
+      else
+        export LD_LIBRARY_PATH="$out/lib"
+      fi
       "$out/bin/rustc" --version
       "$out/bin/cargo" --version
 

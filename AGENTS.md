@@ -363,6 +363,32 @@ When claiming test results in commit messages or completion summaries:
   (`musl-seed-toolchain`) around the raw musl.cc tarball. Bootstrap stages
   should consume the normalized contract: target-prefixed binutils in `bin/`,
   headers at `<target>/include`, and `libgcc_s.so*` under `<target>/lib`.
+- musl.cc's raw tarball has unprefixed binutils (`bin/ar`, `bin/ld`,
+  `bin/ranlib`, ...) but no `bin/x86_64-linux-musl-ar`. The normalized
+  seed must materialize target-prefixed copies explicitly; do not rely on
+  self-referential symlinks there. A failed stage0 self-hosting run showed
+  musl invoking `/nix/store/...-musl-seed-toolchain/bin/x86_64-linux-musl-ar`
+  and getting `No such file or directory`.
+- `bootstrap/gcc.ncl`'s C++ wrapper path must stay aligned: the script writes
+  `/tmp/tools/seed-cxx-static`, so `configure` must use that exact path for
+  `CXX`. If it points at a stale name like `/tmp/tools/musl-g++-static`, GCC
+  configure fails with `A compiler with support for C++11 language features is required.`
+- `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` need raw kernel headers
+  from the seed toolchain in addition to musl libc headers. If stage0 bwrap
+  fails on `<linux/capability.h>` / `<linux/loop.h>` or busybox misses
+  `linux/*.h`, pass both `-I$SEED_ROOT/<target>/include` and
+  `-I$SEED_ROOT/include`.
+- `bootstrap/seed.ncl` should materialize `<target>/include` and
+  `<target>/lib/libgcc_s.so*` / `libc.so` as real files, not self-referential
+  symlinks back into `$out`. A later stage0 run showed downstream bootstrap
+  builds missing `.../<target>/include/linux` and `.../<target>/lib/libgcc_s.so.1`
+  even though the raw toolchain had them.
+- Stage3 self-build NCL must use rooted imports (`bootstrap/seed.ncl`,
+  `bootstrap/make.ncl`, ..., `lib/lib.ncl`) and resolve them from the repo
+  root import path plus `lib/`. A temp-file self-build NCL with plain
+  `import "seed.ncl"` picked up `lib/seed.ncl` instead of
+  `bootstrap/seed.ncl` (`FieldMissing toolchain`), and a root-only import path
+  later made `lib/lib.ncl` fail to find its plain `import "fetch.ncl"`.
 - `stage_source()` must package the current tracked worktree, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed

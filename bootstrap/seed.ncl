@@ -42,18 +42,34 @@ let seed_toolchain = {
       $BB chmod -R u+w "$out"
 
       $BB mkdir -p "$out/%{seed_target}/lib"
-      $BB ln -sfn "$out/include" "$out/%{seed_target}/include"
+      if [ -d "$out/include" ]; then
+        $BB rm -rf "$out/%{seed_target}/include"
+        $BB cp -r "$out/include" "$out/%{seed_target}/include"
+      fi
 
+      # musl.cc ships binutils as unprefixed tools (`bin/ar`, `bin/ld`, ...).
+      # Materialize target-prefixed copies explicitly instead of symlinks.
+      # That keeps the normalized seed contract stable even if later store
+      # export/render paths mishandle self-referential symlinks.
       for tool in addr2line ar as c++filt dwp elfedit gprof ld ld.bfd ld.gold \
                   nm objcopy objdump ranlib readelf size strings strip; do
+        src_tool=""
         if [ -x "$out/bin/$tool" ]; then
-          $BB ln -sfn "$out/bin/$tool" "$out/bin/%{seed_target}-$tool"
+          src_tool="$out/bin/$tool"
+        elif [ -x "$out/%{seed_target}/bin/$tool" ]; then
+          src_tool="$out/%{seed_target}/bin/$tool"
+        fi
+
+        if [ -n "$src_tool" ]; then
+          $BB cp -f "$src_tool" "$out/bin/%{seed_target}-$tool"
+          $BB chmod 0555 "$out/bin/%{seed_target}-$tool"
         fi
       done
 
       for lib in libgcc_s.so libgcc_s.so.1 libc.so; do
         if [ -f "$out/lib/$lib" ]; then
-          $BB ln -sfn "$out/lib/$lib" "$out/%{seed_target}/lib/$lib"
+          $BB cp -f "$out/lib/$lib" "$out/%{seed_target}/lib/$lib"
+          $BB chmod 0555 "$out/%{seed_target}/lib/$lib"
         fi
       done
 

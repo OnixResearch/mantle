@@ -21,7 +21,7 @@ pub mod stdlib;
 pub enum Error {
     /// nickel_lang::Error doesn't implement std::error::Error,
     /// so we wrap it manually rather than using #[from].
-    #[error("Nickel evaluation error")]
+    #[error("Nickel evaluation error: {0:?}")]
     Eval(NickelError),
 
     #[error("reading source file: {0}")]

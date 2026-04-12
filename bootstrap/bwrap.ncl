@@ -136,13 +136,17 @@ static inline int cap_from_name(const char *name __attribute__((unused)),
 #endif
 CAPEOF
 
-      # Find the seed musl-gcc toolchain for extra kernel headers.
-      SEED=""
+      # Find the seed musl-gcc toolchain for kernel headers.
+      # The rebuilt musl sysroot has libc headers, but bwrap also needs
+      # raw kernel headers like <linux/capability.h> and <linux/loop.h>.
+      SEED_ROOT=""
       for d in $NIX_STORE/*-%{seed_name}; do
-        if [ -d "$d/%{seed_target}/include/linux" ]; then SEED="$d/%{seed_target}"; break; fi
+        if [ -d "$d/include" ]; then SEED_ROOT="$d"; break; fi
       done
       SEED_INC=""
-      if [ -n "$SEED" ]; then SEED_INC="-I$SEED/include"; fi
+      if [ -n "$SEED_ROOT" ]; then
+        SEED_INC="-I$SEED_ROOT/%{seed_target}/include -I$SEED_ROOT/include"
+      fi
 
       echo "Compiling bubblewrap..."
       gcc -static -Os -pipe \

@@ -221,7 +221,7 @@ WRAPEOF
         --with-native-system-header-dir=/include \
         --with-build-sysroot="$MUSL" \
         CC="/tmp/tools/seed-cc-static" \
-        CXX="/tmp/tools/musl-g++-static" \
+        CXX="/tmp/tools/seed-cxx-static" \
 
         AR="$TOOLCHAIN/bin/%{seed_target}-ar" \
         RANLIB="$TOOLCHAIN/bin/%{seed_target}-ranlib" \
