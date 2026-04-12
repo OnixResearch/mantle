@@ -409,7 +409,12 @@ When claiming test results in commit messages or completion summaries:
   from the current proof: an attempted byte-for-byte comparison showed
   bootstrap-environment drift (notably different busybox outputs across
   stages), so the current proof remains “stage1 binary can rebuild a
-  working crunch” rather than “stage1 and stage2 are identical”.
+  working crunch” rather than “stage1 and stage2 are identical”. A real
+  run on 2026-04-12 passed with stage1 digest
+  `b08778b9224958937ba3a4fc7c2116a779e8ef16790c51dc32d905a8ef5b581f`
+  and stage2 digest
+  `32358249ff54fa28b546963f53759b2bdae2a6a6fb52dc2b84c926b381e6618d`,
+  same size but different bytes.
 - Stage2 now proves a stronger bootstrap boundary: `cmd_self_build`
   accepts a hidden `self-build --source-store-path <...-crunch-src>`
   override, and the ignored proof passes the exact stage0 staged source,
@@ -426,7 +431,11 @@ When claiming test results in commit messages or completion summaries:
   `tests/audit_support.rs`'s `MAX_AUDIT_ENTRIES` and panic after a successful
   self-build, before stage2 even starts. Audit selected artifacts instead
   (`logs-dir`, `pathinfo.redb`, diagnostics, captured streams, proof-reported
-  output binaries).
+  output binaries). `tests/audit_support.rs::write_command_audit()` still
+  records `started_unix_s`/`finished_unix_s` at audit-write time after the
+  subprocess exits, so long runs can show identical start/finish seconds;
+  do not treat those fields as elapsed-runtime evidence until that helper
+  is fixed.
 - Stage-specific launch/help/copy failures in `tests/self_hosting.rs`
   should use `pre_stage_context(...)` or `stage_context(...)`, not raw
   `expect(...)`, so the ignored proof keeps the same breadcrumbs even
@@ -452,6 +461,12 @@ When claiming test results in commit messages or completion summaries:
   `...bootstrap-tool-done:<tool>`, `...crunch-build-start`, and
   `...crunch-build-done`. `SelfBuildReport::parse_proof_lines()` ignores these
   extra proof lines, so parsers that only need the final report stay compatible.
+- The generated self-build derivation still prints a misleading non-fatal
+  verify line: `src/self_build.rs` runs `$out/bin/crunch --version 2>&1 | head -3 || ... --help`,
+  but `crunch` has no `--version`. The pipeline succeeds because `head`
+  exits 0, so the fallback `--help` branch never runs. Real proof logs can
+  contain `error: unexpected argument '--version' found` immediately before
+  the final verifier reports `binary OK`.
 - Run with: `cargo test -p crunch --test self_hosting -- --ignored --nocapture`
 - Needs: bwrap, git, cargo, tar on PATH; static busybox as
   `SNIX_BUILD_SANDBOX_SHELL`; `/run/wrappers/bin` before
