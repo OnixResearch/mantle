@@ -283,7 +283,7 @@ Building derivations (not just compiling crunch) requires:
 - Live refresh I/O stays in the binary crate (`src/project_resolve.rs`), not in `crunch-project`. `RefreshResolver` now distinguishes flat vs recursive URL hashing and has a separate git-checkout hash hook.
 - `crunch refresh` writes successful lock/input updates even when sibling inputs fail, but exits non-zero on any input or patch resolution failure. `crunch list-stale` prints stale inputs on stdout, failed checks on stderr, and exits non-zero if any check failed.
 - Tarball and git lock hashes must be recursive/NAR hashes of the unpacked tree / checked-out work tree. Plain files and local/remote patches use flat content hashes. There is no fallback to manifest `expected` values during refresh.
-- Test count: 90 (85 unit + 5 integration using crunch-eval for Nickel validation).
+- Verified on 2026-04-12 with `cargo test -p crunch-project`: 85 unit + 5 integration tests passed.
 
 ## crunch-attestation Crate (2026-04-10)
 - `crates/crunch-attestation/` now holds the pure Phase-1 native attestation core: schema types, canonicalization, and BLAKE3 digesting only. No store/build/CLI I/O belongs here.
