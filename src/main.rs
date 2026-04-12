@@ -453,7 +453,7 @@ fn run(args: Args) -> Result<(), RunError> {
                 }
                 project_build::BuildTarget::ProjectDefault
                 | project_build::BuildTarget::Selector(_) => {
-                    let cwd = std::env::current_dir().unwrap();
+                    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
                     let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
                     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
                     let mut full_import_paths = build_import_paths(&[])?;
@@ -491,17 +491,17 @@ fn run(args: Args) -> Result<(), RunError> {
         Command::Store { action } => store_cmd::cmd_store(action),
         Command::Attest { action } => attest_cmd::cmd_attest(
             action,
-            &std::env::current_dir().unwrap(),
+            &std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?,
             &args.store,
             &resolved_state_dir,
             &store_prefix,
         ),
-        Command::Init => project_cmd::cmd_init(&std::env::current_dir().unwrap()),
-        Command::Check => project_cmd::cmd_check(&std::env::current_dir().unwrap()),
-        Command::Show => project_cmd::cmd_show(&std::env::current_dir().unwrap()),
-        Command::Refresh { names } => project_cmd::cmd_refresh(&std::env::current_dir().unwrap(), &names),
-        Command::ListStale => project_cmd::cmd_list_stale(&std::env::current_dir().unwrap()),
-        Command::Upgrade => project_cmd::cmd_upgrade(&std::env::current_dir().unwrap()),
+        Command::Init => project_cmd::cmd_init(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
+        Command::Check => project_cmd::cmd_check(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
+        Command::Show => project_cmd::cmd_show(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
+        Command::Refresh { names } => project_cmd::cmd_refresh(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?, &names),
+        Command::ListStale => project_cmd::cmd_list_stale(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
+        Command::Upgrade => project_cmd::cmd_upgrade(&std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?),
         Command::SelfBuild {
             jobs,
             no_substitute,
@@ -817,7 +817,7 @@ fn cmd_develop(
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
-    let cwd = std::env::current_dir().unwrap();
+    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
     let target = name_to_build_target(name);
     let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
     let shell_target = match &resolved.target {
@@ -860,7 +860,7 @@ fn cmd_run(
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
-    let cwd = std::env::current_dir().unwrap();
+    let cwd = std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))?;
     let target = name_to_build_target(name);
     let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);

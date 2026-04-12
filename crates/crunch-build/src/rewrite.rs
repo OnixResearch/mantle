@@ -80,13 +80,16 @@ pub const MAX_REWRITE_DEPTH: u32 = 256;
 /// Bounds memory usage against pathological tree structures.
 const MAX_REWRITE_NODES: usize = 1_000_000;
 
+/// Flattened tree node with parent linkage for worklist-based traversal.
+struct WorkItem {
+    node: Node,
+    name: Option<snix_castore::PathComponent>,
+    parent_idx: Option<u32>,
+}
+
 /// Rewrite all file blobs in a castore `Node` tree, replacing `old_bytes`
 /// with `new_bytes` (must be same length). Returns the new root Node and
 /// whether any replacements were made.
-///
-/// Uses an explicit bounded worklist instead of recursion. The tree is
-/// flattened depth-first, then processed leaf-to-root so child rewrites
-/// are available when rebuilding parent directories.
 pub async fn rewrite_node(
     node: &Node,
     old_bytes: &[u8],
@@ -97,19 +100,18 @@ pub async fn rewrite_node(
     assert_eq!(old_bytes.len(), new_bytes.len(), "old and new must be same length");
     assert!(!old_bytes.is_empty(), "replacement needle must not be empty");
 
-    // Work items: flattened tree nodes with their path context.
-    // `parent_idx` links a child back to its parent in the worklist.
-    struct WorkItem {
-        node: Node,
-        name: Option<snix_castore::PathComponent>,
-        parent_idx: Option<u32>,
-        depth: u32,
-    }
+    let worklist = flatten_tree(node, directory_service).await?;
+    rewrite_leaf_to_root(&worklist, old_bytes, new_bytes, blob_service, directory_service).await
+}
 
-    // Phase 1: Flatten the tree depth-first into a worklist.
+/// Phase 1: Flatten the tree depth-first into a bounded worklist.
+async fn flatten_tree(
+    root: &Node,
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<Vec<WorkItem>, crate::Error> {
     let mut worklist: Vec<WorkItem> = Vec::new();
     let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::new();
-    expand_stack.push((node.clone(), None, None, 0));
+    expand_stack.push((root.clone(), None, None, 0));
 
     while let Some((current, name, parent_idx, depth)) = expand_stack.pop() {
         if depth >= MAX_REWRITE_DEPTH {
@@ -129,7 +131,6 @@ pub async fn rewrite_node(
             node: current.clone(),
             name,
             parent_idx,
-            depth,
         });
 
         if let Node::Directory { ref digest, .. } = current {
@@ -140,7 +141,6 @@ pub async fn rewrite_node(
             let dir = dir.ok_or_else(|| {
                 crate::Error::Store(format!("directory {digest} not found for rewrite"))
             })?;
-            // Push children in reverse order so they pop in forward order.
             let children: Vec<_> = dir.nodes().collect();
             for (child_name, child_node) in children.into_iter().rev() {
                 expand_stack.push((
@@ -153,7 +153,18 @@ pub async fn rewrite_node(
         }
     }
 
-    // Phase 2: Process leaf-to-root. Store rewritten nodes by index.
+    Ok(worklist)
+}
+
+/// Phase 2: Process the worklist leaf-to-root, rewriting file blobs
+/// and rebuilding directories whose children changed.
+async fn rewrite_leaf_to_root(
+    worklist: &[WorkItem],
+    old_bytes: &[u8],
+    new_bytes: &[u8],
+    blob_service: &(impl BlobService + Clone),
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<(Node, bool), crate::Error> {
     let len = worklist.len();
     let mut results: Vec<Option<(Node, bool)>> = vec![None; len];
 
@@ -165,7 +176,6 @@ pub async fn rewrite_node(
             }
             Node::Symlink { .. } => (item.node.clone(), false),
             Node::Directory { .. } => {
-                // Collect already-rewritten children for this directory.
                 let mut any_found = false;
                 let mut new_dir = snix_castore::Directory::new();
                 for (j, child_item) in worklist.iter().enumerate() {

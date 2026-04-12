@@ -63,15 +63,50 @@ pub fn derivation_to_build_request(
     debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
-    // command_args = [builder] ++ arguments, with placeholders replaced
+    let command_args = build_command_args(derivation);
+    let env = build_environment(derivation, store_dir);
+    let constraints = build_constraints(derivation);
+    let refscan_needles = build_refscan_needles(derivation, inputs);
+
+    // Tiger Style: assert command_args has at least the builder.
+    debug_assert!(!command_args.is_empty());
+    debug_assert!(!env.is_empty(), "environment must include sandbox vars");
+
+    let sandbox_outputs = map_outputs_to_sandbox_paths(derivation, store_dir);
+    let input_map = map_inputs_to_components(inputs)?;
+
+    Ok(BuildRequest {
+        command_args,
+        outputs: sandbox_outputs,
+        environment_vars: env
+            .into_iter()
+            .map(|(key, value)| EnvVar {
+                key,
+                value: Bytes::from(value),
+            })
+            .collect(),
+        inputs: input_map,
+        inputs_dir: store_dir[1..].into(),
+        constraints,
+        working_dir: "build".into(),
+        scratch_paths: vec!["build".into(), store_dir[1..].into()],
+        additional_files: vec![],
+        refscan_needles,
+    })
+}
+
+/// Build command args with placeholders expanded.
+fn build_command_args(derivation: &Derivation) -> Vec<String> {
     let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len() + 1);
     command_args.push(derivation.builder.clone());
     for arg in &derivation.arguments {
         command_args.push(replace_placeholders(arg, &derivation.outputs));
     }
+    command_args
+}
 
-    // Environment: start with sandbox defaults, then add derivation env.
-    // NIX_STORE uses the configured store dir.
+/// Build sandbox environment, overlaying derivation env on defaults.
+fn build_environment(derivation: &Derivation, store_dir: &str) -> BTreeMap<String, Vec<u8>> {
     let mut env: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     for (k, v) in &SANDBOX_ENV_VARS {
         if *k == "NIX_STORE" {
@@ -84,84 +119,80 @@ pub fn derivation_to_build_request(
         let replaced = replace_placeholders_bstr(v, &derivation.outputs);
         env.insert(k.clone(), Vec::from(replaced));
     }
+    env
+}
 
-    // Constraints
+/// Build sandbox constraints from derivation properties.
+fn build_constraints(derivation: &Derivation) -> HashSet<BuildConstraints> {
     let mut constraints = HashSet::from([
         BuildConstraints::System(derivation.system.clone()),
         BuildConstraints::ProvideBinSh,
     ]);
-
-    // FODs get network access
     let is_fod = derivation.outputs.len() == 1 && derivation.outputs.get("out").is_some_and(|o| o.is_fixed());
     if is_fod {
         constraints.insert(BuildConstraints::NetworkAccess);
     }
+    constraints
+}
 
-    // Refscan needles: output digests first, then input digests
-    let refscan_needles: Vec<String> = derivation
+/// Build refscan needles from output and input store path digests.
+fn build_refscan_needles(
+    derivation: &Derivation,
+    inputs: &BTreeMap<StorePath<String>, Node>,
+) -> Vec<String> {
+    derivation
         .outputs
         .values()
         .filter_map(|o| o.path.as_ref())
         .map(|p| nixbase32::encode(p.digest()))
         .chain(inputs.keys().map(|p| nixbase32::encode(p.digest())))
-        .collect();
+        .collect()
+}
 
-    // Tiger Style: assert command_args has at least the builder.
-    debug_assert!(!command_args.is_empty());
-    debug_assert!(!env.is_empty(), "environment must include sandbox vars");
-
-    Ok(BuildRequest {
-        command_args,
-        outputs: derivation
-            .outputs
-            .iter()
-            .map(|(output_name, o)| {
-                let path_str = o.path_str_with_prefix(store_dir);
-                if path_str.is_empty() {
-                    // CA derivation: use the placeholder path (from env)
-                    // as the sandbox output location.
-                    let placeholder = derivation
-                        .environment
-                        .get(output_name)
-                        .map(|v| String::from_utf8_lossy(v).to_string())
-                        .unwrap_or_default();
-                    if placeholder.starts_with('/') {
-                        PathBuf::from(&placeholder[1..])
-                    } else {
-                        PathBuf::from(&placeholder)
-                    }
+/// Map derivation outputs to sandbox-relative paths.
+/// CA outputs use the placeholder from the environment; input-addressed
+/// outputs use the pre-computed store path.
+fn map_outputs_to_sandbox_paths(
+    derivation: &Derivation,
+    store_dir: &str,
+) -> Vec<PathBuf> {
+    derivation
+        .outputs
+        .iter()
+        .map(|(output_name, o)| {
+            let path_str = o.path_str_with_prefix(store_dir);
+            if path_str.is_empty() {
+                let placeholder = derivation
+                    .environment
+                    .get(output_name)
+                    .map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_default();
+                if placeholder.starts_with('/') {
+                    PathBuf::from(&placeholder[1..])
                 } else {
-                    // Strip leading '/' — BuildRequest wants relative paths
-                    PathBuf::from(&path_str[1..])
+                    PathBuf::from(&placeholder)
                 }
-            })
-            .collect(),
-        environment_vars: env
-            .into_iter()
-            .map(|(key, value)| EnvVar {
-                key,
-                value: Bytes::from(value),
-            })
-            .collect(),
-        inputs: {
-            let mut input_map = BTreeMap::new();
-            for (path, node) in inputs {
-                let component = path
-                    .to_string()
-                    .as_str()
-                    .try_into()
-                    .map_err(|e| crate::Error::Store(format!("invalid store path component '{}': {e}", path,)))?;
-                input_map.insert(component, node.clone());
+            } else {
+                PathBuf::from(&path_str[1..])
             }
-            input_map
-        },
-        inputs_dir: store_dir[1..].into(),
-        constraints,
-        working_dir: "build".into(),
-        scratch_paths: vec!["build".into(), store_dir[1..].into()],
-        additional_files: vec![],
-        refscan_needles,
-    })
+        })
+        .collect()
+}
+
+/// Convert input store paths to castore PathComponent keys.
+fn map_inputs_to_components(
+    inputs: &BTreeMap<StorePath<String>, Node>,
+) -> Result<BTreeMap<snix_castore::PathComponent, Node>, crate::Error> {
+    let mut input_map = BTreeMap::new();
+    for (path, node) in inputs {
+        let component = path
+            .to_string()
+            .as_str()
+            .try_into()
+            .map_err(|e| crate::Error::Store(format!("invalid store path component '{}': {e}", path)))?;
+        input_map.insert(component, node.clone());
+    }
+    Ok(input_map)
 }
 
 /// Collect all store paths that must be visible in the sandbox.
