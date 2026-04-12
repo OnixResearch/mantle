@@ -1,4 +1,5 @@
-// `tonic` propagation support was removed from this crate's feature set.
+#[cfg(feature = "tonic")]
+pub mod tonic;
 
 #[cfg(feature = "reqwest")]
 pub mod reqwest;

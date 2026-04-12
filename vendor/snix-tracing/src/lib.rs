@@ -167,6 +167,7 @@ pub enum Tracer {
 }
 
 /// Encodes the verbosity level chosen by the user through CLI arguments.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ChosenLevel {
     /// Not set. We still store the default level passed as a type argument in Verbosity
