@@ -17,24 +17,61 @@ pub use nickel_lang::Expr;
 pub mod stdlib;
 
 /// Errors from crunch-eval.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
     /// nickel_lang::Error doesn't implement std::error::Error,
     /// so we wrap it manually rather than using #[from].
-    #[error("Nickel evaluation error: {0:?}")]
     Eval(NickelError),
 
-    #[error("reading source file: {0}")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
 
-    #[error("deserialization error: {0}")]
     Serde(String),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Eval(err) => f.write_str(&format_nickel_error(err)),
+            Error::Io(err) => write!(f, "reading source file: {err}"),
+            Error::Serde(err) => write!(f, "deserialization error: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Eval(_) => None,
+            Error::Io(err) => Some(err),
+            Error::Serde(_) => None,
+        }
+    }
 }
 
 impl From<NickelError> for Error {
     fn from(e: NickelError) -> Self {
         Error::Eval(e)
     }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::Io(e)
+    }
+}
+
+fn format_nickel_error(err: &NickelError) -> String {
+    let mut rendered = Vec::new();
+    if err.format(&mut rendered, nickel_lang::ErrorFormat::Text).is_err() {
+        return "Nickel evaluation error".to_string();
+    }
+
+    let text = String::from_utf8_lossy(&rendered).trim().to_string();
+    if text.is_empty() {
+        return "Nickel evaluation error".to_string();
+    }
+
+    format!("Nickel evaluation error:\n{text}")
 }
 
 /// Evaluate a `.ncl` file, returning the fully-reduced `Expr`.
@@ -231,6 +268,7 @@ mod tests {
 
     #[test]
     fn eval_str_and_deserialize_type_mismatch_returns_serde_error() {
+        #[allow(dead_code)]
         #[derive(serde::Deserialize, Debug)]
         struct NeedsNumber {
             x: i64,
@@ -260,6 +298,7 @@ mod tests {
     #[test]
     fn eval_and_deserialize_non_record_returns_serde() {
         // Evaluating a number and trying to deserialize as a struct
+        #[allow(dead_code)]
         #[derive(serde::Deserialize, Debug)]
         struct Rec {
             field: String,

@@ -102,6 +102,8 @@
 
 ## Code Gotchas
 - Rust raw strings already preserve quotes. For JSON test fixtures, use `r#"{ "k": "v" }"#` with plain quotes inside — don't double-escape them as `\"` or serde_json will fail with `key must be a string`.
+- `tests/integration_build.rs` fetcher e2e tests must use `DispatchBuildService<FetchBuildService, ...>` plus `file://` inputs. Using a plain `DummyBuildService` and a local HTTP server can hang forever: the build never reaches the server, then `server.join()` blocks.
+- `crates/crunch-eval::Error` must not format `NickelError` with `{:?}` in its `Display` impl/derive. `format!("{err}")` on some Nickel contract errors can stack overflow; render diagnostics via `NickelError::format(..., ErrorFormat::Text)` instead.
 - `crunch-build::Worker` goal keys are still built with `StorePath::to_absolute_path()` (hardcoded `/nix/store`). If a caller exposes `FailedGoal.drv_key` to higher layers while using a custom `store_dir`, normalize it back to `to_absolute_path_with_prefix(store_dir)` first or `--fix` / label lookups will miss.
 - `vendor/fuse-backend-rs` test `test_new_channel` is environment-sensitive if it uses stdout; a pipe read-end is epollable and works reliably here, but `nix::unistd::pipe()` returns two owned raw fds, so the write end must be closed/dropped explicitly or the test leaks it. `vendor/snix-castore`'s `ServiceBuilder` doctest needs `#[async_trait::async_trait]` on the example impl.
 - Done-review only sees what is in scope for the current turn. If a checked OpenSpec task needs proof, add in-repo evidence for that turn (command output excerpts, file-path/function evidence) instead of future-dated status notes or claims in AGENTS.md.

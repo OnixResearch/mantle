@@ -130,12 +130,6 @@ fn fod_hash_mismatch_error() {
     use nix_compat::nixhash::CAHash;
     use nix_compat::nixhash::NixHash;
 
-    // Expected sha256 hash
-    let expected = [0xAA_u8; 32];
-    let actual = [0xBB_u8; 32];
-
-    let ca = CAHash::Nar(NixHash::Sha256(expected));
-
     // verify_fod_hash is not pub, so test through the types directly.
     // The error path: if expected != actual, we get FodHashMismatch.
     // Build a derivation with fixed_output and wrong content.
@@ -157,7 +151,7 @@ fn fod_hash_mismatch_error() {
     };
 
     let mut cc = ConversionCache::default();
-    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
+    let (_drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
 
     let mut kp = DerivationRegistry::default();
     populate_registry(&mut kp, cc.iter_entries());
@@ -461,25 +455,48 @@ fn eval_hello_world_with_seed() {
 
 // ── Fetcher integration tests ──────────────────────────────────────────
 
-/// Spawn a tiny HTTP server that serves `body` at any path.
-/// Returns (addr, join_handle). The server stops after one request.
-fn spawn_http_server(body: Vec<u8>) -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    let handle = std::thread::spawn(move || {
-        use std::io::Write;
-        if let Ok((mut stream, _)) = listener.accept() {
-            // Read request (drain it so the client doesn't get ECONNRESET)
-            let mut buf = [0u8; 4096];
-            let _ = std::io::Read::read(&mut stream, &mut buf);
+fn make_fetch_builder(
+    output_dir: &std::path::Path,
+) -> crunch_build::Builder<
+    crunch_build::DispatchBuildService<
+        crunch_build::FetchBuildService<
+            snix_castore::blobservice::MemoryBlobService,
+            snix_castore::directoryservice::RedbDirectoryService,
+        >,
+        snix_build::buildservice::DummyBuildService,
+    >,
+> {
+    use snix_build::buildservice::DummyBuildService;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
-            let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-            let _ = stream.write_all(response.as_bytes());
-            let _ = stream.write_all(&body);
-            let _ = stream.flush();
-        }
-    });
-    (addr, handle)
+    let blob_service = MemoryBlobService::default();
+    let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        read_only: false,
+        cache_size: None,
+    })
+    .unwrap();
+    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let dispatch = crunch_build::DispatchBuildService::new(fetch_service, DummyBuildService::default());
+    let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+        "test".to_string(),
+        NonZeroUsize::new(128).unwrap(),
+    );
+
+    crunch_build::Builder::new(
+        blob_service,
+        directory_service,
+        dispatch,
+        pis,
+        output_dir.to_path_buf(),
+        nix_compat::store_path::STORE_DIR,
+        test_keypair(),
+        test_trusted_keys(),
+        true,
+        true,
+    )
 }
 
 #[test]
@@ -493,7 +510,9 @@ fn fetchurl_downloads_and_verifies_hash() {
     let sha256_digest: [u8; 32] = sha2::Sha256::digest(content).into();
     let sri_hash = format!("sha256-{}", data_encoding::BASE64.encode(&sha256_digest));
 
-    let (addr, server) = spawn_http_server(content.to_vec());
+    let source = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(source.path(), content).unwrap();
+    let source_url = format!("file://{}", source.path().display());
 
     let drv = CrunchDerivation {
         name: "fetched-file".to_string(),
@@ -503,7 +522,7 @@ fn fetchurl_downloads_and_verifies_hash() {
         outputs: vec!["out".to_string()],
         env: {
             let mut e = HashMap::new();
-            e.insert("url".to_string(), format!("http://{addr}/test.txt"));
+            e.insert("url".to_string(), source_url);
             e
         },
         inputs: vec![],
@@ -534,42 +553,9 @@ fn fetchurl_downloads_and_verifies_hash() {
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
-        use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::RedbDirectoryService;
-        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-
-        let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        })
-        .unwrap();
-
-        let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
-            "test".to_string(),
-            NonZeroUsize::new(128).unwrap(),
-        );
-
-        let build_service = snix_build::buildservice::DummyBuildService::default();
-
-        let mut builder = crunch_build::Builder::new(
-            blob_service,
-            directory_service,
-            build_service,
-            pis,
-            output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
-            true,
-        );
-
+        let mut builder = make_fetch_builder(output_dir.path());
         builder.build(&drv_path, &mut kp).await
     });
-
-    server.join().unwrap();
 
     match result {
         Ok(outcome) => {
@@ -610,7 +596,9 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
     encoder.write_all(&tar_data).unwrap();
     let gz_data = encoder.finish().unwrap();
 
-    let (addr, server) = spawn_http_server(gz_data);
+    let tarball = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(tarball.path(), &gz_data).unwrap();
+    let tarball_url = format!("file://{}", tarball.path().display());
 
     // Use a dummy hash — the pipeline should download, unpack, NAR-hash,
     // then fail with a hash mismatch. That proves extraction worked.
@@ -624,7 +612,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         outputs: vec!["out".to_string()],
         env: {
             let mut e = HashMap::new();
-            e.insert("url".to_string(), format!("http://{addr}/project.tar.gz"));
+            e.insert("url".to_string(), tarball_url);
             e.insert("unpack".to_string(), "1".to_string());
             e
         },
@@ -643,7 +631,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
 
     let mut kp = DerivationRegistry::default();
     populate_registry(&mut kp, cc.iter_entries());
-    let out_path = nix_drv
+    let _out_path = nix_drv
         .outputs
         .get("out")
         .unwrap()
@@ -654,42 +642,9 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let result = rt.block_on(async {
-        use snix_castore::blobservice::MemoryBlobService;
-        use snix_castore::directoryservice::RedbDirectoryService;
-        use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-
-        let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        })
-        .unwrap();
-
-        let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
-            "test".to_string(),
-            NonZeroUsize::new(128).unwrap(),
-        );
-
-        let build_service = snix_build::buildservice::DummyBuildService::default();
-
-        let mut builder = crunch_build::Builder::new(
-            blob_service,
-            directory_service,
-            build_service,
-            pis,
-            output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
-            true,
-        );
-
+        let mut builder = make_fetch_builder(output_dir.path());
         builder.build(&drv_path, &mut kp).await
     });
-
-    server.join().unwrap();
 
     // Dummy hash → hash mismatch. Proves fetch + unpack + NAR hash ran.
     match result {
