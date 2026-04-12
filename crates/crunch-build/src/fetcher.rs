@@ -137,27 +137,12 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
         }),
         Some(CAHash::Nar(hash)) if unpack => Ok(Fetch::Tarball {
             url,
-            exp_nar_sha256: match hash {
-                NixHash::Sha256(d) => Some(*d),
-                _ => None,
-            },
+            exp_nar_sha256: expected_nar_sha256(hash),
         }),
-        Some(CAHash::Nar(hash)) => {
-            if unpack {
-                Ok(Fetch::Tarball {
-                    url,
-                    exp_nar_sha256: match hash {
-                        NixHash::Sha256(d) => Some(*d),
-                        _ => None,
-                    },
-                })
-            } else {
-                Ok(Fetch::Nar {
-                    url,
-                    hash: hash.clone(),
-                })
-            }
-        }
+        Some(CAHash::Nar(hash)) => Ok(Fetch::Nar {
+            url,
+            hash: hash.clone(),
+        }),
         None => {
             // No ca_hash — treat as plain URL fetch without hash verification.
             if unpack {
@@ -175,6 +160,13 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
 
 fn env_str(env: &std::collections::BTreeMap<String, bstr::BString>, key: &str) -> Option<String> {
     env.get(key).and_then(|v| String::from_utf8(Vec::from(v.clone())).ok())
+}
+
+fn expected_nar_sha256(hash: &NixHash) -> Option<[u8; 32]> {
+    match hash {
+        NixHash::Sha256(d) => Some(*d),
+        _ => None,
+    }
 }
 
 fn extract_expected_hash(derivation: &Derivation) -> Option<NixHash> {
