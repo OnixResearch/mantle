@@ -111,64 +111,34 @@ fn synthesize_artifact_attestation(
     let mut edge_keys = BTreeSet::new();
 
     push_unique_node(&mut nodes, &mut node_ids, artifact_node(&subject_path));
-
-    let maybe_recipe_node_id = path_info.deriver.as_ref().map(|deriver| {
-        let deriver_path = logical_path(deriver, store_dir);
-        let recipe_node = recipe_node(&deriver_path);
-        let recipe_node_id = recipe_node.node_id.clone();
-        push_unique_node(&mut nodes, &mut node_ids, recipe_node);
-        push_unique_edge(&mut edges, &mut edge_keys, Edge {
-            from_node_id: subject_node_id.clone(),
-            kind: EdgeKind::ProducedBy,
-            to_node_id: recipe_node_id.clone(),
-        });
-        recipe_node_id
-    });
-
-    if let Some(recipe_node_id) = maybe_recipe_node_id {
-        if let Some(provenance) = provenance {
-            for source in &provenance.input_sources {
-                let source_path = logical_path(source, store_dir);
-                let source_node = source_node(&source_path);
-                let source_node_id = source_node.node_id.clone();
-                push_unique_node(&mut nodes, &mut node_ids, source_node);
-                push_unique_edge(&mut edges, &mut edge_keys, Edge {
-                    from_node_id: recipe_node_id.clone(),
-                    kind: EdgeKind::BuildInput,
-                    to_node_id: source_node_id.clone(),
-                });
-                push_unique_edge(&mut edges, &mut edge_keys, Edge {
-                    from_node_id: source_node_id,
-                    kind: EdgeKind::FetchedFrom,
-                    to_node_id: subject_node_id.clone(),
-                });
-            }
-
-            for input_artifact in &provenance.input_artifacts {
-                let input_path = logical_path(input_artifact, store_dir);
-                let input_node = artifact_node(&input_path);
-                let input_node_id = input_node.node_id.clone();
-                push_unique_node(&mut nodes, &mut node_ids, input_node);
-                push_unique_edge(&mut edges, &mut edge_keys, Edge {
-                    from_node_id: recipe_node_id.clone(),
-                    kind: EdgeKind::BuildInput,
-                    to_node_id: input_node_id,
-                });
-            }
-        }
-    }
-
-    for reference in &path_info.references {
-        let reference_path = logical_path(reference, store_dir);
-        let reference_node = artifact_node(&reference_path);
-        let reference_node_id = reference_node.node_id.clone();
-        push_unique_node(&mut nodes, &mut node_ids, reference_node);
-        push_unique_edge(&mut edges, &mut edge_keys, Edge {
-            from_node_id: subject_node_id.clone(),
-            kind: EdgeKind::RuntimeReference,
-            to_node_id: reference_node_id,
-        });
-    }
+    let recipe_node_id = add_recipe_node(
+        store_dir,
+        path_info,
+        &subject_node_id,
+        &mut nodes,
+        &mut edges,
+        &mut node_ids,
+        &mut edge_keys,
+    );
+    add_provenance_edges(
+        store_dir,
+        provenance,
+        recipe_node_id.as_ref(),
+        &subject_node_id,
+        &mut nodes,
+        &mut edges,
+        &mut node_ids,
+        &mut edge_keys,
+    );
+    add_runtime_reference_edges(
+        store_dir,
+        &path_info.references,
+        &subject_node_id,
+        &mut nodes,
+        &mut edges,
+        &mut node_ids,
+        &mut edge_keys,
+    );
 
     ArtifactAttestation {
         schema_version: SchemaVersion::V1,
@@ -181,6 +151,96 @@ fn synthesize_artifact_attestation(
         subject_node_id,
         nodes,
         edges,
+    }
+}
+
+fn add_recipe_node(
+    store_dir: &str,
+    path_info: &PathInfo,
+    subject_node_id: &str,
+    nodes: &mut Vec<Node>,
+    edges: &mut Vec<Edge>,
+    node_ids: &mut BTreeSet<String>,
+    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+) -> Option<String> {
+    path_info.deriver.as_ref().map(|deriver| {
+        let deriver_path = logical_path(deriver, store_dir);
+        let recipe_node = recipe_node(&deriver_path);
+        let recipe_node_id = recipe_node.node_id.clone();
+        push_unique_node(nodes, node_ids, recipe_node);
+        push_unique_edge(edges, edge_keys, Edge {
+            from_node_id: subject_node_id.to_string(),
+            kind: EdgeKind::ProducedBy,
+            to_node_id: recipe_node_id.clone(),
+        });
+        recipe_node_id
+    })
+}
+
+fn add_provenance_edges(
+    store_dir: &str,
+    provenance: Option<&ArtifactProvenance>,
+    recipe_node_id: Option<&String>,
+    subject_node_id: &str,
+    nodes: &mut Vec<Node>,
+    edges: &mut Vec<Edge>,
+    node_ids: &mut BTreeSet<String>,
+    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+) {
+    let Some(recipe_node_id) = recipe_node_id else {
+        return;
+    };
+    let Some(provenance) = provenance else {
+        return;
+    };
+    for source in &provenance.input_sources {
+        let source_path = logical_path(source, store_dir);
+        let source_node = source_node(&source_path);
+        let source_node_id = source_node.node_id.clone();
+        push_unique_node(nodes, node_ids, source_node);
+        push_unique_edge(edges, edge_keys, Edge {
+            from_node_id: recipe_node_id.clone(),
+            kind: EdgeKind::BuildInput,
+            to_node_id: source_node_id.clone(),
+        });
+        push_unique_edge(edges, edge_keys, Edge {
+            from_node_id: source_node_id,
+            kind: EdgeKind::FetchedFrom,
+            to_node_id: subject_node_id.to_string(),
+        });
+    }
+    for input_artifact in &provenance.input_artifacts {
+        let input_path = logical_path(input_artifact, store_dir);
+        let input_node = artifact_node(&input_path);
+        let input_node_id = input_node.node_id.clone();
+        push_unique_node(nodes, node_ids, input_node);
+        push_unique_edge(edges, edge_keys, Edge {
+            from_node_id: recipe_node_id.clone(),
+            kind: EdgeKind::BuildInput,
+            to_node_id: input_node_id,
+        });
+    }
+}
+
+fn add_runtime_reference_edges(
+    store_dir: &str,
+    references: &[StorePath<String>],
+    subject_node_id: &str,
+    nodes: &mut Vec<Node>,
+    edges: &mut Vec<Edge>,
+    node_ids: &mut BTreeSet<String>,
+    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+) {
+    for reference in references {
+        let reference_path = logical_path(reference, store_dir);
+        let reference_node = artifact_node(&reference_path);
+        let reference_node_id = reference_node.node_id.clone();
+        push_unique_node(nodes, node_ids, reference_node);
+        push_unique_edge(edges, edge_keys, Edge {
+            from_node_id: subject_node_id.to_string(),
+            kind: EdgeKind::RuntimeReference,
+            to_node_id: reference_node_id,
+        });
     }
 }
 
