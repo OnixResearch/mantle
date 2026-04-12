@@ -549,9 +549,6 @@ impl Worker {
 
     /// Inspect build outputs for `.drv` files. If found, parse and
     /// register them as new goals (dynamic derivations).
-    ///
-    /// Any goals in `AwaitingDerivation` state that reference this
-    /// build as their producer are activated.
     async fn detect_dynamic_derivations<BServ>(
         &mut self,
         producer_key: &str,
@@ -562,28 +559,39 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        // 1. Scan outputs for .drv files.
-        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::new();
+        let discovered = self.scan_dynamic_derivations(outcome, builder, known_paths).await?;
+        if discovered.is_empty() {
+            return Ok(());
+        }
+        self.activate_awaiting_dynamic_goals(producer_key, &discovered, known_paths)?;
+        self.enqueue_discovered_dynamic_roots(&discovered, known_paths)?;
+        Ok(())
+    }
 
+    async fn scan_dynamic_derivations<BServ>(
+        &self,
+        outcome: &BuildOutcome,
+        builder: &Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<Vec<crate::dynamic::DynamicDrv>, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::new();
         for (output_name, path_info) in &outcome.outputs {
             if !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node) {
                 continue;
             }
-
-            // Read the blob content from castore.
             let content = builder.read_blob(&path_info.node).await?;
-
             if let Some(drv) = crate::dynamic::parse_drv_bytes(&content)? {
                 let sd = known_paths.store_dir().to_string();
                 let drv_path = crate::dynamic::register_dynamic_drv(&drv, known_paths, &sd)?;
-
                 info!(
                     producer = %outcome.drv_path.name(),
                     dynamic_drv = %drv_path.name(),
                     output = %output_name,
                     "detected dynamic derivation in build output"
                 );
-
                 discovered.push(crate::dynamic::DynamicDrv {
                     output_name: output_name.clone(),
                     drv_store_path: drv_path,
@@ -591,54 +599,53 @@ impl Worker {
                 });
             }
         }
+        Ok(discovered)
+    }
 
-        if discovered.is_empty() {
-            return Ok(());
-        }
-
-        // 2. Activate any AwaitingDerivation goals for this producer.
+    fn activate_awaiting_dynamic_goals(
+        &mut self,
+        producer_key: &str,
+        discovered: &[crate::dynamic::DynamicDrv],
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
         let awaiting = self.registry.awaiting_producer(producer_key);
+        let Some(dyn_drv) = discovered.first() else {
+            return Ok(());
+        };
         for awaiting_key in &awaiting {
-            // Pick the first discovered drv for each awaiting goal.
-            // (Multiple dynamic outputs from one producer is rare;
-            // first match is the simplest correct behavior.)
-            if let Some(dyn_drv) = discovered.first() {
-                let goal = self
-                    .registry
-                    .get_mut(awaiting_key)
-                    .ok_or_else(|| Error::Store(format!("worker: awaiting goal not found: {awaiting_key}")))?;
-                goal.set_derivation(dyn_drv.derivation.clone())?;
-
-                // Now inspect deps and wire waiters (same as want()).
-                let dep_drv_paths: Vec<StorePath<String>> =
-                    dyn_drv.derivation.input_derivations.keys().cloned().collect();
-                // Create sub-goals for deps we haven't seen.
-                for dep_sp in &dep_drv_paths {
-                    let dep_key = dep_sp.to_absolute_path();
-                    if !self.registry.contains(&dep_key) {
-                        // Dep must be in DerivationRegistry (registered above).
-                        let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
-                        if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
-                            let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
-                            self.registry.insert(dep_key.clone(), dep_goal)?;
-                        }
+            let goal = self
+                .registry
+                .get_mut(awaiting_key)
+                .ok_or_else(|| Error::Store(format!("worker: awaiting goal not found: {awaiting_key}")))?;
+            goal.set_derivation(dyn_drv.derivation.clone())?;
+            let dep_drv_paths: Vec<StorePath<String>> = dyn_drv.derivation.input_derivations.keys().cloned().collect();
+            for dep_sp in &dep_drv_paths {
+                let dep_key = dep_sp.to_absolute_path();
+                if !self.registry.contains(&dep_key) {
+                    let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+                    if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
+                        let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
+                        self.registry.insert(dep_key.clone(), dep_goal)?;
                     }
                 }
-                // Wire deps and inspect.
-                self.wire_deps_and_inspect(awaiting_key, &dep_drv_paths)?;
             }
+            self.wire_deps_and_inspect(awaiting_key, &dep_drv_paths)?;
         }
+        Ok(())
+    }
 
-        // 3. Create new root goals for discovered dynamic derivations that don't have awaiting goals.
-        for dyn_drv in &discovered {
+    fn enqueue_discovered_dynamic_roots(
+        &mut self,
+        discovered: &[crate::dynamic::DynamicDrv],
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<(), Error> {
+        for dyn_drv in discovered {
             let key = dyn_drv.drv_store_path.to_absolute_path();
             if self.registry.contains(&key) {
-                continue; // already handled by an awaiting goal or dedup
+                continue;
             }
-            // Create as a root goal so its outcome is reported.
             self.want(&dyn_drv.drv_store_path, known_paths, true)?;
         }
-
         Ok(())
     }
 
