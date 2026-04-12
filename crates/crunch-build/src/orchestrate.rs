@@ -418,37 +418,17 @@ where BServ: BuildService + 'static
     ) -> Result<HashMap<String, PathInfo>, Error> {
         let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
 
-        // Collect all provisionals for this derivation's outputs.
-        let provisionals: Vec<(String, String)> = prepared
-            .derivation
-            .outputs
-            .keys()
-            .map(|name| {
-                let prov = prepared
-                    .derivation
-                    .environment
-                    .get(name)
-                    .map(|v| String::from_utf8_lossy(v).to_string())
-                    .unwrap_or_default();
-                (name.clone(), prov)
-            })
-            .collect();
-
-        // Generate distinct markers per output. Use the output name's
-        // SHA-256 hash truncated to the provisional length. This gives
-        // unique markers even when provisionals have the same length.
-        let markers: Vec<(String, Vec<u8>, usize)> = provisionals
-            .iter()
-            .map(|(name, prov)| {
-                let prov_len = prov.len();
-                let hash = *blake3::hash(format!("crunch-ca-marker:{name}").as_bytes()).as_bytes();
-                let mut marker = vec![0u8; prov_len];
-                for (i, b) in hash.iter().cycle().enumerate().take(prov_len) {
-                    marker[i] = *b;
-                }
-                (name.clone(), marker, prov_len)
-            })
-            .collect();
+        // Plan CA markers and path names for all outputs (pure).
+        let ca_plans = crate::ca_plan::plan_ca_outputs(
+            &prepared.drv_name,
+            &prepared.derivation.outputs,
+            &prepared.derivation.environment,
+        );
+        assert_eq!(
+            ca_plans.len(),
+            prepared.derivation.outputs.len(),
+            "CA plan count must match output count",
+        );
 
         // Pass 1: Apply input rewrites, replace all provisionals with
         // markers, compute CA paths.
@@ -461,8 +441,6 @@ where BServ: BuildService + 'static
         }
 
         let mut intermediates: Vec<CaOutputIntermediate> = Vec::new();
-        let drv_name = &prepared.drv_name;
-        let base_name = drv_name.strip_suffix(".drv").unwrap_or(drv_name);
 
         for (i, (output_name, _output)) in prepared.derivation.outputs.iter().enumerate() {
             let build_output = build_result.outputs.get(i).ok_or_else(|| Error::OutputMissing {
@@ -483,12 +461,15 @@ where BServ: BuildService + 'static
                 node = rewritten;
             }
 
-            // Replace ALL provisionals with their markers.
-            for ((_prov_name, prov), (_marker_name, marker, _len)) in provisionals.iter().zip(markers.iter()) {
+            // Replace ALL provisionals with their markers (from plan).
+            for plan in &ca_plans {
+                if plan.provisional.is_empty() {
+                    continue;
+                }
                 let (rewritten, _) = crate::rewrite::rewrite_node(
                     &node,
-                    prov.as_bytes(),
-                    marker,
+                    plan.provisional.as_bytes(),
+                    &plan.marker,
                     &self.store.blob_service(),
                     &self.store.directory_service(),
                 )
@@ -500,21 +481,15 @@ where BServ: BuildService + 'static
             let (nar_size, nar_sha256) =
                 nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
 
-            // Compute CA store path.
-            let ca_hash = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(nar_sha256));
-            let path_name = if output_name == "out" {
-                base_name.to_string()
-            } else {
-                format!("{base_name}-{output_name}")
-            };
-            let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
-                &path_name,
-                &ca_hash,
-                Vec::<&str>::new(),
-                false,
+            // Compute CA store path using the planned path name.
+            let plan = ca_plans.iter().find(|p| p.output_name == *output_name).ok_or_else(|| {
+                Error::Store(format!("no CA plan for output '{output_name}'"))
+            })?;
+            let ca_path = crate::ca_plan::compute_ca_store_path(
+                &plan.path_name,
+                nar_sha256,
                 self.store.store_dir(),
-            )
-            .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
+            )?;
 
             intermediates.push(CaOutputIntermediate {
                 name: output_name.clone(),
@@ -526,12 +501,12 @@ where BServ: BuildService + 'static
         }
 
         // Build marker → final path replacement map.
-        let final_rewrites: Vec<(&[u8], Vec<u8>)> = markers
+        let final_rewrites: Vec<(&[u8], Vec<u8>)> = ca_plans
             .iter()
-            .zip(intermediates.iter())
-            .map(|((_name, marker, _len), intermediate)| {
+            .filter_map(|plan| {
+                let intermediate = intermediates.iter().find(|i| i.name == plan.output_name)?;
                 let final_abs = intermediate.ca_path.to_absolute_path_with_prefix(self.store.store_dir());
-                (marker.as_slice(), final_abs.into_bytes())
+                Some((plan.marker.as_slice(), final_abs.into_bytes()))
             })
             .collect();
 
@@ -564,7 +539,7 @@ where BServ: BuildService + 'static
 
             let display_abs = intermediate.ca_path.to_absolute_path_with_prefix(&self.store.output_dir_str());
             info!(
-                drv = %drv_name,
+                drv = %prepared.drv_name,
                 output = %intermediate.name,
                 ca_path = %display_abs,
                 "CA output path resolved"
@@ -915,14 +890,7 @@ where BServ: BuildService + 'static
             .map(|v| String::from_utf8_lossy(v).to_string())
             .unwrap_or_default();
         let provisional_bytes = provisional.as_bytes();
-        // Use a blake3-derived marker instead of all-zeros to avoid
-        // false matches against zero-padded ELF sections, alignment
-        // padding, BSS regions, etc.
-        let marker_hash = *blake3::hash(format!("crunch-ca-marker:{output_name}").as_bytes()).as_bytes();
-        let mut marker = vec![0u8; provisional_bytes.len()];
-        for (i, b) in marker_hash.iter().cycle().enumerate().take(marker.len()) {
-            marker[i] = *b;
-        }
+        let marker = crate::ca_plan::generate_ca_marker(output_name, provisional_bytes.len());
 
         // 2. Replace provisional with zero marker.
         let (marked_node, _has_self_refs) = crate::rewrite::rewrite_node(
@@ -939,21 +907,12 @@ where BServ: BuildService + 'static
             nar_renderer.calculate_nar(&marked_node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
 
         // 4. Compute CA store path from marker-replaced hash.
-        let ca_hash = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(marker_nar_sha256));
-        let base_name = drv_name.strip_suffix(".drv").unwrap_or(drv_name);
-        let path_name = if output_name == "out" {
-            base_name.to_string()
-        } else {
-            format!("{base_name}-{output_name}")
-        };
-        let ca_path: StorePath<String> = nix_compat::store_path::build_ca_path_with_store_dir(
+        let path_name = crate::ca_plan::ca_output_path_name(drv_name, output_name);
+        let ca_path = crate::ca_plan::compute_ca_store_path(
             &path_name,
-            &ca_hash,
-            Vec::<&str>::new(),
-            false,
+            marker_nar_sha256,
             self.store.store_dir(),
-        )
-        .map_err(|e| Error::Store(format!("computing CA path: {e}")))?;
+        )?;
 
         // 5. Replace zero markers with the final CA path (in sandbox/logical space).
         let final_abs = ca_path.to_absolute_path_with_prefix(self.store.store_dir());

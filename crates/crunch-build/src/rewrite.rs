@@ -72,13 +72,21 @@ use snix_castore::directoryservice::DirectoryService;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
+/// Maximum directory tree depth for rewrite traversal.
+/// Prevents runaway iteration from malformed castore data.
+pub const MAX_REWRITE_DEPTH: u32 = 256;
+
+/// Maximum number of nodes in the rewrite worklist.
+/// Bounds memory usage against pathological tree structures.
+const MAX_REWRITE_NODES: usize = 1_000_000;
+
 /// Rewrite all file blobs in a castore `Node` tree, replacing `old_bytes`
 /// with `new_bytes` (must be same length). Returns the new root Node and
 /// whether any replacements were made.
 ///
-/// For File nodes: reads the blob, does byte replacement, writes back.
-/// For Directory nodes: recurses into children.
-/// For Symlink nodes: no-op (symlink targets are not store-path-bearing).
+/// Uses an explicit bounded worklist instead of recursion. The tree is
+/// flattened depth-first, then processed leaf-to-root so child rewrites
+/// are available when rebuilding parent directories.
 pub async fn rewrite_node(
     node: &Node,
     old_bytes: &[u8],
@@ -87,92 +95,147 @@ pub async fn rewrite_node(
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<(Node, bool), crate::Error> {
     assert_eq!(old_bytes.len(), new_bytes.len(), "old and new must be same length");
+    assert!(!old_bytes.is_empty(), "replacement needle must not be empty");
 
-    match node {
-        Node::File {
-            digest,
-            size,
-            executable,
-        } => {
-            let mut reader = blob_service
-                .open_read(digest)
-                .await
-                .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
-            let reader =
-                reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
+    // Work items: flattened tree nodes with their path context.
+    // `parent_idx` links a child back to its parent in the worklist.
+    struct WorkItem {
+        node: Node,
+        name: Option<snix_castore::PathComponent>,
+        parent_idx: Option<u32>,
+        depth: u32,
+    }
 
-            let mut data = Vec::with_capacity(*size as usize);
-            reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
+    // Phase 1: Flatten the tree depth-first into a worklist.
+    let mut worklist: Vec<WorkItem> = Vec::new();
+    let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::new();
+    expand_stack.push((node.clone(), None, None, 0));
 
-            let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);
-
-            if !found {
-                return Ok((node.clone(), false));
-            }
-
-            let mut writer = blob_service.open_write().await;
-            writer
-                .write_all(&rewritten)
-                .await
-                .map_err(|e| crate::Error::Store(format!("writing rewritten blob: {e}")))?;
-            let new_digest =
-                writer.close().await.map_err(|e| crate::Error::Store(format!("closing rewritten blob: {e}")))?;
-
-            Ok((
-                Node::File {
-                    digest: new_digest,
-                    size: *size,
-                    executable: *executable,
-                },
-                true,
-            ))
+    while let Some((current, name, parent_idx, depth)) = expand_stack.pop() {
+        if depth >= MAX_REWRITE_DEPTH {
+            return Err(crate::Error::Store(format!(
+                "rewrite depth limit ({MAX_REWRITE_DEPTH}) exceeded"
+            )));
         }
-        Node::Directory { digest, size: _ } => {
+        if worklist.len() >= MAX_REWRITE_NODES {
+            return Err(crate::Error::Store(format!(
+                "rewrite node count limit ({MAX_REWRITE_NODES}) exceeded"
+            )));
+        }
+        let idx = u32::try_from(worklist.len()).map_err(|_| {
+            crate::Error::Store("rewrite worklist overflow".to_string())
+        })?;
+        worklist.push(WorkItem {
+            node: current.clone(),
+            name,
+            parent_idx,
+            depth,
+        });
+
+        if let Node::Directory { ref digest, .. } = current {
             let dir = directory_service
                 .get(digest)
                 .await
                 .map_err(|e| crate::Error::Store(format!("directory read for rewrite: {e}")))?;
-            let dir = dir.ok_or_else(|| crate::Error::Store(format!("directory {digest} not found for rewrite")))?;
-
-            let mut any_found = false;
-            let mut new_dir = snix_castore::Directory::new();
-
-            for (name, child_node) in dir.nodes() {
-                let (new_child, found) =
-                    Box::pin(rewrite_node(child_node, old_bytes, new_bytes, blob_service, directory_service)).await?;
-                if found {
-                    any_found = true;
-                }
-                new_dir
-                    .add(name.clone(), new_child)
-                    .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;
+            let dir = dir.ok_or_else(|| {
+                crate::Error::Store(format!("directory {digest} not found for rewrite"))
+            })?;
+            // Push children in reverse order so they pop in forward order.
+            let children: Vec<_> = dir.nodes().collect();
+            for (child_name, child_node) in children.into_iter().rev() {
+                expand_stack.push((
+                    child_node.clone(),
+                    Some(child_name.clone()),
+                    Some(idx),
+                    depth.saturating_add(1),
+                ));
             }
-
-            if !any_found {
-                return Ok((node.clone(), false));
-            }
-
-            let new_digest = new_dir.digest();
-            let new_size = new_dir.size();
-            directory_service
-                .put(new_dir)
-                .await
-                .map_err(|e| crate::Error::Store(format!("storing rewritten directory: {e}")))?;
-
-            Ok((
-                Node::Directory {
-                    digest: new_digest,
-                    size: new_size,
-                },
-                true,
-            ))
-        }
-        Node::Symlink { .. } => {
-            // Symlinks don't contain store paths in their targets
-            // (and if they did, they'd need different handling)
-            Ok((node.clone(), false))
         }
     }
+
+    // Phase 2: Process leaf-to-root. Store rewritten nodes by index.
+    let len = worklist.len();
+    let mut results: Vec<Option<(Node, bool)>> = vec![None; len];
+
+    for i in (0..len).rev() {
+        let item = &worklist[i];
+        let (new_node, found) = match &item.node {
+            Node::File { digest, size, executable } => {
+                rewrite_file_node(digest, *size, *executable, old_bytes, new_bytes, blob_service).await?
+            }
+            Node::Symlink { .. } => (item.node.clone(), false),
+            Node::Directory { .. } => {
+                // Collect already-rewritten children for this directory.
+                let mut any_found = false;
+                let mut new_dir = snix_castore::Directory::new();
+                for (j, child_item) in worklist.iter().enumerate() {
+                    if child_item.parent_idx == Some(i as u32) {
+                        let (child_node, child_found) = results[j]
+                            .take()
+                            .expect("child must be processed before parent");
+                        if child_found {
+                            any_found = true;
+                        }
+                        let child_name = child_item.name.clone().expect("directory child must have a name");
+                        new_dir
+                            .add(child_name, child_node)
+                            .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;
+                    }
+                }
+
+                if !any_found {
+                    (item.node.clone(), false)
+                } else {
+                    let new_digest = new_dir.digest();
+                    let new_size = new_dir.size();
+                    directory_service
+                        .put(new_dir)
+                        .await
+                        .map_err(|e| crate::Error::Store(format!("storing rewritten directory: {e}")))?;
+                    (Node::Directory { digest: new_digest, size: new_size }, true)
+                }
+            }
+        };
+        results[i] = Some((new_node, found));
+    }
+
+    results[0].take().ok_or_else(|| crate::Error::Store("rewrite produced no result".to_string()))
+}
+
+/// Rewrite a single file blob. Extracted to keep the worklist loop readable.
+async fn rewrite_file_node(
+    digest: &snix_castore::B3Digest,
+    size: u64,
+    executable: bool,
+    old_bytes: &[u8],
+    new_bytes: &[u8],
+    blob_service: &(impl BlobService + Clone),
+) -> Result<(Node, bool), crate::Error> {
+    let mut reader = blob_service
+        .open_read(digest)
+        .await
+        .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
+    let reader =
+        reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
+
+    let mut data = Vec::with_capacity(size as usize);
+    reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
+
+    let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);
+
+    if !found {
+        return Ok((Node::File { digest: digest.clone(), size, executable }, false));
+    }
+
+    let mut writer = blob_service.open_write().await;
+    writer
+        .write_all(&rewritten)
+        .await
+        .map_err(|e| crate::Error::Store(format!("writing rewritten blob: {e}")))?;
+    let new_digest =
+        writer.close().await.map_err(|e| crate::Error::Store(format!("closing rewritten blob: {e}")))?;
+
+    Ok((Node::File { digest: new_digest, size, executable }, true))
 }
 
 #[cfg(test)]
@@ -270,5 +333,11 @@ mod tests {
     #[should_panic(expected = "same byte length")]
     fn replace_input_different_lengths_panics() {
         replace_input_provisional(b"data", "/short", "/much-longer-path");
+    }
+
+    #[test]
+    fn max_rewrite_depth_is_positive() {
+        assert!(MAX_REWRITE_DEPTH >= 32, "rewrite depth limit must be reasonable");
+        assert!(MAX_REWRITE_DEPTH <= 1024, "rewrite depth limit must not be unbounded");
     }
 }

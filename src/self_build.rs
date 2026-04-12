@@ -937,6 +937,157 @@ fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), Run
     Ok((bwrap_source, busybox_path))
 }
 
+/// Resolved bootstrap tool paths from step 2.
+struct BootstrapTools {
+    bwrap_source: BwrapSource,
+    bwrap_store_name: String,
+    busybox_path: Option<PathBuf>,
+    busybox_store_name: String,
+}
+
+/// Build all required bootstrap tools and return their resolved paths.
+///
+/// Each tool is built as a separate root derivation and exported to disk.
+/// After all tools are built, the crunch-built bwrap is activated on PATH.
+#[allow(clippy::too_many_arguments)]
+fn build_all_bootstrap_tools(
+    bootstrap_dir: &Path,
+    import_paths: &[std::ffi::OsString],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    keypair: &crunch_build::KeyPair,
+    trusted_keys: &[nix_compat::narinfo::VerifyingKey],
+    trust_unsigned: bool,
+) -> Result<BootstrapTools, RunError> {
+    validate_bootstrap_tools(bootstrap_dir)?;
+    let mut built_bwrap_output_dir: Option<PathBuf> = None;
+    let mut built_busybox_output_dir: Option<PathBuf> = None;
+
+    for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
+        let tool_path = bootstrap_dir.join(tool_name);
+        emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
+        eprintln!("  building {tool_name}...");
+        let tool_output_dir = build_bootstrap_tool(
+            &tool_path,
+            import_paths,
+            output_dir,
+            state_dir,
+            store_dir,
+            verbose,
+            max_jobs,
+            no_substitute,
+            keypair,
+            trusted_keys,
+            trust_unsigned,
+        )?;
+        if *tool_name == "bwrap.ncl" {
+            let bwrap_path = tool_output_dir.join("bin").join("bwrap");
+            ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+            built_bwrap_output_dir = Some(tool_output_dir.clone());
+        }
+        if *tool_name == "busybox.ncl" {
+            let busybox_path = tool_output_dir.join("bin").join("busybox");
+            ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+            built_busybox_output_dir = Some(tool_output_dir.clone());
+        }
+        emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
+    }
+
+    let bwrap_output_dir = built_bwrap_output_dir.ok_or_else(|| {
+        RunError::Internal(
+            "bwrap was not found on disk after building bwrap.ncl. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        )
+    })?;
+    let busybox_output_dir = built_busybox_output_dir.ok_or_else(|| {
+        RunError::Internal(
+            "busybox was not found on disk after building busybox.ncl. \
+             The bootstrap tool build may have failed silently."
+                .to_string(),
+        )
+    })?;
+
+    let bwrap_path = bwrap_output_dir.join("bin").join("bwrap");
+    ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+    let bwrap_dir = bwrap_path
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("bwrap binary has no parent directory: {}", bwrap_path.display())))?;
+    let busybox_path = busybox_output_dir.join("bin").join("busybox");
+    ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+
+    let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, output_dir, "bwrap")?;
+    let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, output_dir, "busybox")?;
+    let bwrap_source = BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf());
+    activate_bwrap_source(&bwrap_source)?;
+
+    Ok(BootstrapTools {
+        bwrap_source,
+        bwrap_store_name,
+        busybox_path: Some(busybox_path),
+        busybox_store_name,
+    })
+}
+
+/// Build crunch from source using the bootstrap toolchain.
+///
+/// Generates the self-build NCL, runs the build pipeline, and returns
+/// the output binary path.
+#[allow(clippy::too_many_arguments)]
+fn build_crunch_binary(
+    src_dir: &Path,
+    src_store_name: &str,
+    bwrap_store_name: &str,
+    busybox_store_name: &str,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    keypair: crunch_build::KeyPair,
+    trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
+    trust_unsigned: bool,
+) -> Result<PathBuf, RunError> {
+    let ncl_content = generate_self_build_ncl(src_store_name, bwrap_store_name, busybox_store_name, store_dir);
+
+    let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
+    let ncl_path = tmp_dir.path().join("self-build.ncl");
+    std::fs::write(&ncl_path, &ncl_content).map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
+
+    let stage3_import_paths = build_import_paths(&[src_dir.to_path_buf(), src_dir.join("lib")])?;
+    let config = crunch_pipeline::BuildConfig {
+        file: ncl_path.clone(),
+        import_paths: stage3_import_paths,
+        output_dir: output_dir.to_path_buf(),
+        state_dir: state_dir.to_path_buf(),
+        store_dir: store_dir.to_string(),
+        verbose,
+        max_jobs,
+        substituter_url: if no_substitute {
+            None
+        } else {
+            Some("https://cache.nixos.org".to_string())
+        },
+        keypair,
+        trusted_keys,
+        trust_unsigned,
+    };
+
+    let result = run_build(&config)?;
+    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
+    emit_progress_marker("crunch-build-done");
+
+    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, output_dir, "crunch")?;
+    let output_binary = output_root_dir.join("bin").join("crunch");
+    ensure_executable_file(&output_binary, "self-built crunch binary")?;
+    Ok(output_binary)
+}
+
 /// Build a single bootstrap tool (.ncl file) as a root derivation.
 ///
 /// This exports the tool's output to the `--store` directory on disk,
@@ -1200,106 +1351,43 @@ pub fn cmd_self_build(
     let self_build_trusted = crunch_build::build_trusted_keys(&self_build_keypair, configured_trusted_keys.as_deref());
 
     // ── Step 2: Build bootstrap tools as separate roots ──────────
-    //
-    // bwrap and busybox are built as their own root derivations so
-    // their outputs get exported to the --store directory on disk.
-    // Without this, they only exist in castore/PathInfo (intermediates
-    // are not exported). Stage 3 threads the exact root output paths
-    // into the generated derivation instead of rediscovering them by
-    // scanning the shared store.
 
     eprintln!("\n[2/{SELF_BUILD_STEP_COUNT}] Building bootstrap tools...");
-    validate_bootstrap_tools(&bootstrap_dir)?;
-    let mut built_bwrap_output_dir: Option<PathBuf> = None;
-    let mut built_busybox_output_dir: Option<PathBuf> = None;
-    for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
-        let tool_path = bootstrap_dir.join(tool_name);
-        emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
-        eprintln!("  building {tool_name}...");
-        let tool_output_dir = build_bootstrap_tool(
-            &tool_path,
-            &import_paths,
-            &output_dir,
-            state_dir,
-            store_dir,
-            verbose,
-            max_jobs,
-            no_substitute,
-            &self_build_keypair,
-            &self_build_trusted,
-            trust_unsigned,
-        )?;
-        if *tool_name == "bwrap.ncl" {
-            let bwrap_path = tool_output_dir.join("bin").join("bwrap");
-            ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
-            built_bwrap_output_dir = Some(tool_output_dir.clone());
-        }
-        if *tool_name == "busybox.ncl" {
-            let busybox_path = tool_output_dir.join("bin").join("busybox");
-            ensure_executable_file(&busybox_path, "crunch-built busybox")?;
-            built_busybox_output_dir = Some(tool_output_dir.clone());
-        }
-        emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
-    }
-
-    let bwrap_output_dir = built_bwrap_output_dir.ok_or_else(|| {
-        RunError::Internal(
-            "bwrap was not found on disk after building bwrap.ncl. The bootstrap tool build may have failed silently."
-                .to_string(),
-        )
-    })?;
-    let busybox_output_dir = built_busybox_output_dir.ok_or_else(|| {
-        RunError::Internal("busybox was not found on disk after building busybox.ncl. The bootstrap tool build may have failed silently.".to_string())
-    })?;
-    let bwrap_path = bwrap_output_dir.join("bin").join("bwrap");
-    ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
-    let bwrap_dir = bwrap_path
-        .parent()
-        .ok_or_else(|| RunError::Internal(format!("bwrap binary has no parent directory: {}", bwrap_path.display())))?;
-    let busybox_path = busybox_output_dir.join("bin").join("busybox");
-    ensure_executable_file(&busybox_path, "crunch-built busybox")?;
-    let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, &output_dir, "bwrap")?;
-    let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, &output_dir, "busybox")?;
-    let bwrap_source = BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf());
-    activate_bwrap_source(&bwrap_source)?;
-    let busybox_path = Some(busybox_path);
+    let tools = build_all_bootstrap_tools(
+        &bootstrap_dir,
+        &import_paths,
+        &output_dir,
+        state_dir,
+        store_dir,
+        verbose,
+        max_jobs,
+        no_substitute,
+        &self_build_keypair,
+        &self_build_trusted,
+        trust_unsigned,
+    )?;
+    let bwrap_source = tools.bwrap_source;
+    let busybox_path = tools.busybox_path;
 
     // ── Step 3: Build crunch ────────────────────────────────────
 
     eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
     emit_progress_marker("crunch-build-start");
-    let ncl_content = generate_self_build_ncl(&store_name, &bwrap_store_name, &busybox_store_name, store_dir);
-
-    let tmp_dir = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
-    let ncl_path = tmp_dir.path().join("self-build.ncl");
-    std::fs::write(&ncl_path, &ncl_content).map_err(|e| RunError::Internal(format!("writing ncl: {e}")))?;
-
-    let stage3_import_paths = build_import_paths(&[src_dir.clone(), src_dir.join("lib")])?;
-    let config = crunch_pipeline::BuildConfig {
-        file: ncl_path.clone(),
-        import_paths: stage3_import_paths,
-        output_dir: output_dir.to_path_buf(),
-        state_dir: state_dir.to_path_buf(),
-        store_dir: store_dir.to_string(),
+    let output_binary = build_crunch_binary(
+        &src_dir,
+        &store_name,
+        &tools.bwrap_store_name,
+        &tools.busybox_store_name,
+        &output_dir,
+        state_dir,
+        store_dir,
         verbose,
         max_jobs,
-        substituter_url: if no_substitute {
-            None
-        } else {
-            Some("https://cache.nixos.org".to_string())
-        },
-        keypair: self_build_keypair,
-        trusted_keys: self_build_trusted,
+        no_substitute,
+        self_build_keypair,
+        self_build_trusted,
         trust_unsigned,
-    };
-
-    let result = run_build(&config)?;
-    report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
-    emit_progress_marker("crunch-build-done");
-
-    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, &output_dir, "crunch")?;
-    let output_binary = output_root_dir.join("bin").join("crunch");
-    ensure_executable_file(&output_binary, "self-built crunch binary")?;
+    )?;
 
     // ── Step 4: Verify ──────────────────────────────────────────
 

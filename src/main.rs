@@ -512,18 +512,7 @@ fn run(args: Args) -> Result<(), RunError> {
             source_store_path,
         } => {
             let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = if trusted_public_keys.is_empty() {
-                None
-            } else {
-                let mut keys = Vec::new();
-                for key_str in &trusted_public_keys {
-                    keys.push(
-                        nix_compat::narinfo::VerifyingKey::parse(key_str)
-                            .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
-                    );
-                }
-                Some(keys)
-            };
+            let parsed_trusted = parse_trusted_keys(&trusted_public_keys)?;
             self_build::cmd_self_build(
                 &args.store,
                 &resolved_state_dir,
@@ -546,52 +535,18 @@ fn run(args: Args) -> Result<(), RunError> {
             no_substitute,
             signing_key,
             trust_unsigned,
-        } => {
-            let cwd = std::env::current_dir().unwrap();
-            let target = match name.as_deref() {
-                None => project_build::BuildTarget::ProjectDefault,
-                Some(s) if s.starts_with(".#") => {
-                    project_build::parse_build_target(Some(std::path::Path::new(s)))
-                }
-                Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
-                    segments: vec![s.to_string()],
-                }),
-            };
-            let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
-            let shell_target = match &resolved.target {
-                project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
-                project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
-                    project_build::ProjectTarget::NamedShell(segs[0].clone())
-                }
-                other => other.clone(),
-            };
-            let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
-            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
-            let mut full_import_paths = build_import_paths(&[])?;
-            full_import_paths.extend(resolved.import_paths);
-
-            // Build the shell derivation
-            let result = build_from_expr_raw(
-                &expr,
-                &full_import_paths,
-                &args.store,
-                &resolved_state_dir,
-                &store_prefix,
-                args.verbose,
-                max_jobs,
-                sub_url.as_deref(),
-                signing_key.as_deref(),
-                parsed_trusted.as_deref(),
-                trust_unsigned,
-            )?;
-
-            // Find the first successful output path and exec a shell in it
-            let out_path = first_output_path(&result, &args.store, &store_prefix)
-                .ok_or_else(|| RunError::Internal("no outputs built for dev shell".into()))?;
-            exec_shell(&out_path)
-        }
+        } => cmd_develop(
+            name.as_deref(),
+            &import_paths,
+            jobs,
+            no_substitute,
+            signing_key.as_deref(),
+            trust_unsigned,
+            &args.store,
+            &resolved_state_dir,
+            &store_prefix,
+            args.verbose,
+        ),
         Command::Run {
             name,
             import_paths,
@@ -600,44 +555,19 @@ fn run(args: Args) -> Result<(), RunError> {
             signing_key,
             trust_unsigned,
             run_args,
-        } => {
-            let cwd = std::env::current_dir().unwrap();
-            let target = match name.as_deref() {
-                None => project_build::BuildTarget::ProjectDefault,
-                Some(s) if s.starts_with(".#") => {
-                    project_build::parse_build_target(Some(std::path::Path::new(s)))
-                }
-                Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
-                    segments: vec![s.to_string()],
-                }),
-            };
-            let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
-            let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
-            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
-            let parsed_trusted: Option<Vec<nix_compat::narinfo::VerifyingKey>> = None;
-            let mut full_import_paths = build_import_paths(&[])?;
-            full_import_paths.extend(resolved.import_paths);
-
-            // Build the package
-            let result = build_from_expr_raw(
-                &expr,
-                &full_import_paths,
-                &args.store,
-                &resolved_state_dir,
-                &store_prefix,
-                args.verbose,
-                max_jobs,
-                sub_url.as_deref(),
-                signing_key.as_deref(),
-                parsed_trusted.as_deref(),
-                trust_unsigned,
-            )?;
-
-            let out_path = first_output_path(&result, &args.store, &store_prefix)
-                .ok_or_else(|| RunError::Internal("no outputs built".into()))?;
-            exec_run(&out_path, &run_args)
-        }
+        } => cmd_run(
+            name.as_deref(),
+            &import_paths,
+            jobs,
+            no_substitute,
+            signing_key.as_deref(),
+            trust_unsigned,
+            &run_args,
+            &args.store,
+            &resolved_state_dir,
+            &store_prefix,
+            args.verbose,
+        )
     }
 }
 
@@ -827,6 +757,129 @@ fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError>
         .map_err(|e| RunError::Internal(format!("exec {}: {e}", exe_path.display())))?;
 
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Resolve a CLI name argument into a project build target.
+fn name_to_build_target(name: Option<&str>) -> project_build::BuildTarget {
+    match name {
+        None => project_build::BuildTarget::ProjectDefault,
+        Some(s) if s.starts_with(".#") => {
+            project_build::parse_build_target(Some(std::path::Path::new(s)))
+        }
+        Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
+            segments: vec![s.to_string()],
+        }),
+    }
+}
+
+/// Build a project expression and return the raw pipeline result.
+#[allow(clippy::too_many_arguments)]
+fn build_project_expr(
+    expr: &str,
+    resolved_import_paths: Vec<std::ffi::OsString>,
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    signing_key_path: Option<&std::path::Path>,
+    trust_unsigned: bool,
+) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
+    let mut full_import_paths = build_import_paths(&[])?;
+    full_import_paths.extend(resolved_import_paths);
+    build_from_expr_raw(
+        expr,
+        &full_import_paths,
+        output_dir,
+        state_dir,
+        store_dir,
+        verbose,
+        max_jobs,
+        sub_url.as_deref(),
+        signing_key_path,
+        None, // trusted keys — project commands don't accept custom keys yet
+        trust_unsigned,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_develop(
+    name: Option<&str>,
+    import_paths: &[PathBuf],
+    jobs: Option<u32>,
+    no_substitute: bool,
+    signing_key: Option<&std::path::Path>,
+    trust_unsigned: bool,
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_prefix: &str,
+    verbose: bool,
+) -> Result<(), RunError> {
+    let cwd = std::env::current_dir().unwrap();
+    let target = name_to_build_target(name);
+    let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
+    let shell_target = match &resolved.target {
+        project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
+        project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
+            project_build::ProjectTarget::NamedShell(segs[0].clone())
+        }
+        other => other.clone(),
+    };
+    let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
+    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let result = build_project_expr(
+        &expr,
+        resolved.import_paths,
+        output_dir,
+        state_dir,
+        store_prefix,
+        verbose,
+        max_jobs,
+        no_substitute,
+        signing_key,
+        trust_unsigned,
+    )?;
+    let out_path = first_output_path(&result, output_dir, store_prefix)
+        .ok_or_else(|| RunError::Internal("no outputs built for dev shell".into()))?;
+    exec_shell(&out_path)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_run(
+    name: Option<&str>,
+    import_paths: &[PathBuf],
+    jobs: Option<u32>,
+    no_substitute: bool,
+    signing_key: Option<&std::path::Path>,
+    trust_unsigned: bool,
+    run_args: &[String],
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_prefix: &str,
+    verbose: bool,
+) -> Result<(), RunError> {
+    let cwd = std::env::current_dir().unwrap();
+    let target = name_to_build_target(name);
+    let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
+    let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let result = build_project_expr(
+        &expr,
+        resolved.import_paths,
+        output_dir,
+        state_dir,
+        store_prefix,
+        verbose,
+        max_jobs,
+        no_substitute,
+        signing_key,
+        trust_unsigned,
+    )?;
+    let out_path = first_output_path(&result, output_dir, store_prefix)
+        .ok_or_else(|| RunError::Internal("no outputs built".into()))?;
+    exec_run(&out_path, run_args)
 }
 
 fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, verbose: bool) -> Result<(), RunError> {
