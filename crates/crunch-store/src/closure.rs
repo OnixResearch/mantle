@@ -3,7 +3,6 @@
 //! out to `nix-store -qR`.
 use std::collections::BTreeSet;
 
-use async_trait::async_trait;
 use nix_compat::store_path::StorePath;
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::warn;
@@ -36,77 +35,80 @@ pub async fn resolve_closure(
 
     while let Some((path, depth)) = stack.pop() {
         let digest = *path.digest();
-
         if !visited.insert(digest) {
-            // Already visited — cycle or diamond dep. Skip.
             continue;
         }
-
         result.push(path.clone());
-
         if depth >= MAX_CLOSURE_DEPTH {
-            warn!(
-                path = %path,
-                depth = depth,
-                "closure depth limit ({MAX_CLOSURE_DEPTH}) reached, skipping deeper refs"
-            );
+            warn!(path = %path, depth = depth, "closure depth limit ({MAX_CLOSURE_DEPTH}) reached, skipping deeper refs");
             continue;
         }
-
-        // Try local PathInfo, then remote.
-        let refs = match local.get(digest).await {
-            Ok(Some(pi)) => pi.references,
-            Ok(None) => {
-                if let Some(r) = remote {
-                    match r.get(digest).await {
-                        Ok(Some(pi)) => pi.references,
-                        Ok(None) => {
-                            if depth > 0 {
-                                warn!(
-                                    path = %path,
-                                    "no closure data (local or remote), mounting without further refs"
-                                );
-                            }
-                            continue;
-                        }
-                        Err(e) => {
-                            warn!(
-                                path = %path,
-                                err = %e,
-                                "remote PathInfo query failed, skipping refs"
-                            );
-                            continue;
-                        }
-                    }
-                } else {
-                    if depth > 0 {
-                        warn!(
-                            path = %path,
-                            "no local PathInfo and no remote configured, mounting without further refs"
-                        );
-                    }
-                    continue;
-                }
-            }
-            Err(e) => {
-                warn!(
-                    path = %path,
-                    err = %e,
-                    "local PathInfo query failed, skipping refs"
-                );
-                continue;
-            }
+        let refs = match lookup_references(local, remote, &path, digest, depth).await {
+            Some(refs) => refs,
+            None => continue,
         };
-
-        for r in refs {
-            if !visited.contains(r.digest()) {
-                stack.push((r, depth.saturating_add(1)));
-            }
-        }
+        push_unvisited_refs(&mut stack, &visited, refs, depth);
     }
 
     debug_assert!(!result.is_empty(), "closure must contain at least the root");
     Ok(result)
+}
+
+async fn lookup_references(
+    local: &dyn PathInfoService,
+    remote: Option<&dyn PathInfoService>,
+    path: &StorePath<String>,
+    digest: [u8; 20],
+    depth: u32,
+) -> Option<Vec<StorePath<String>>> {
+    match local.get(digest).await {
+        Ok(Some(pi)) => Some(pi.references),
+        Ok(None) => lookup_remote_references(remote, path, digest, depth).await,
+        Err(e) => {
+            warn!(path = %path, err = %e, "local PathInfo query failed, skipping refs");
+            None
+        }
+    }
+}
+
+async fn lookup_remote_references(
+    remote: Option<&dyn PathInfoService>,
+    path: &StorePath<String>,
+    digest: [u8; 20],
+    depth: u32,
+) -> Option<Vec<StorePath<String>>> {
+    let Some(remote) = remote else {
+        if depth > 0 {
+            warn!(path = %path, "no local PathInfo and no remote configured, mounting without further refs");
+        }
+        return None;
+    };
+    match remote.get(digest).await {
+        Ok(Some(pi)) => Some(pi.references),
+        Ok(None) => {
+            if depth > 0 {
+                warn!(path = %path, "no closure data (local or remote), mounting without further refs");
+            }
+            None
+        }
+        Err(e) => {
+            warn!(path = %path, err = %e, "remote PathInfo query failed, skipping refs");
+            None
+        }
+    }
+}
+
+fn push_unvisited_refs(
+    stack: &mut Vec<(StorePath<String>, u32)>,
+    visited: &BTreeSet<[u8; 20]>,
+    refs: Vec<StorePath<String>>,
+    depth: u32,
+) {
+    for r in refs {
+        if !visited.contains(r.digest()) {
+            stack.push((r, depth.saturating_add(1)));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -117,6 +119,7 @@ mod tests {
     use snix_store::pathinfoservice::PathInfoService;
     use snix_store::pathinfoservice::{self};
 
+    use async_trait::async_trait;
     use super::*;
 
     // -- Mock PathInfoService --------------------------------------------------
