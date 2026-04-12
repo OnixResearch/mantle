@@ -80,68 +80,59 @@ pub(crate) async fn hash_blob(
         .ok_or_else(|| Error::Store(format!("blob {digest} not found for FOD verification")))?;
 
     let mut buf = vec![0u8; 64 * 1024];
-
     match algo {
         HashAlgo::Md5 => {
             let mut hasher = md5::Md5::new();
-            loop {
-                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
-            let hash: [u8; 16] = hasher.finalize().into();
-            Ok(NixHash::Md5(hash))
+            update_blob_hasher(&mut reader, &mut buf, |chunk| {
+                hasher.update(chunk);
+            }).await?;
+            Ok(NixHash::Md5(hasher.finalize().into()))
         }
         HashAlgo::Sha1 => {
             let mut hasher = sha1::Sha1::new();
-            loop {
-                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
-            let hash: [u8; 20] = hasher.finalize().into();
-            Ok(NixHash::Sha1(hash))
+            update_blob_hasher(&mut reader, &mut buf, |chunk| {
+                hasher.update(chunk);
+            }).await?;
+            Ok(NixHash::Sha1(hasher.finalize().into()))
         }
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
-            loop {
-                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
-            let hash: [u8; 32] = hasher.finalize().into();
-            Ok(NixHash::Sha256(hash))
+            update_blob_hasher(&mut reader, &mut buf, |chunk| {
+                hasher.update(chunk);
+            }).await?;
+            Ok(NixHash::Sha256(hasher.finalize().into()))
         }
         HashAlgo::Sha512 => {
             let mut hasher = sha2::Sha512::new();
-            loop {
-                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
+            update_blob_hasher(&mut reader, &mut buf, |chunk| {
+                hasher.update(chunk);
+            }).await?;
             let hash: [u8; 64] = hasher.finalize().into();
             Ok(NixHash::Sha512(Box::new(hash)))
         }
         HashAlgo::Blake3 => {
             let mut hasher = blake3::Hasher::new();
-            loop {
-                let n = reader.read(&mut buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
+            update_blob_hasher(&mut reader, &mut buf, |chunk| {
+                hasher.update(chunk);
+            }).await?;
             let hash = blake3::Hasher::finalize(&hasher);
             Ok(NixHash::Blake3(*hash.as_bytes()))
         }
+    }
+}
+
+/// Stream a blob into a caller-provided hasher update closure.
+async fn update_blob_hasher(
+    reader: &mut (impl tokio::io::AsyncRead + Unpin),
+    buf: &mut [u8],
+    mut update: impl FnMut(&[u8]),
+) -> Result<(), Error> {
+    loop {
+        let n = reader.read(buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
+        if n == 0 {
+            return Ok(());
+        }
+        update(&buf[..n]);
     }
 }
 
