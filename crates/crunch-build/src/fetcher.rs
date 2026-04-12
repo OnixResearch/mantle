@@ -380,95 +380,123 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
 
     let mut archive = tar::Archive::new(reader);
     archive.set_preserve_mtime(false);
-
     let mut prefix_to_strip: Option<std::path::PathBuf> = None;
     let mut entry_count: u32 = 0;
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
         entry_count = entry_count.saturating_add(1);
-        if entry_count > MAX_TAR_ENTRIES {
-            return Err(FetchError::TarError(format!("tar archive exceeds {MAX_TAR_ENTRIES} entries")));
-        }
+        validate_tar_entry_count(entry_count)?;
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
+        record_tar_prefix(&mut prefix_to_strip, &entry_path);
+        extract_tar_entry(&mut entry, &entry_path, out_path, &prefix_to_strip)?;
+    }
+    Ok(())
+}
 
-        if prefix_to_strip.is_none() {
-            if let Some(first_component) = entry_path.components().next() {
-                prefix_to_strip = Some(std::path::PathBuf::from(first_component.as_os_str()));
-            }
+fn validate_tar_entry_count(entry_count: u32) -> Result<(), FetchError> {
+    if entry_count > MAX_TAR_ENTRIES {
+        return Err(FetchError::TarError(format!("tar archive exceeds {MAX_TAR_ENTRIES} entries")));
+    }
+    Ok(())
+}
+
+fn record_tar_prefix(prefix_to_strip: &mut Option<std::path::PathBuf>, entry_path: &Path) {
+    if prefix_to_strip.is_some() {
+        return;
+    }
+    if let Some(first_component) = entry_path.components().next() {
+        *prefix_to_strip = Some(std::path::PathBuf::from(first_component.as_os_str()));
+    }
+}
+
+fn extract_tar_entry<R: Read>(
+    entry: &mut tar::Entry<'_, R>,
+    entry_path: &Path,
+    out_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+) -> Result<(), FetchError> {
+    let relative = strip_tar_prefix(entry_path, prefix_to_strip);
+    if relative.as_os_str().is_empty() || relative == Path::new(".") {
+        return Ok(());
+    }
+    validate_no_path_traversal(&relative)?;
+
+    let dest = out_path.join(&relative);
+    debug_assert!(dest.starts_with(out_path), "dest {dest:?} escapes out_path {out_path:?}");
+    match entry.header().entry_type() {
+        tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &dest),
+        tar::EntryType::Directory => {
+            std::fs::create_dir_all(&dest)?;
+            Ok(())
         }
+        tar::EntryType::Symlink => create_tar_symlink(entry, &dest, out_path, prefix_to_strip, &relative),
+        tar::EntryType::Link => copy_tar_hardlink(entry, &dest, out_path, prefix_to_strip),
+        _ => Ok(()),
+    }
+}
 
-        let relative = strip_tar_prefix(&entry_path, &prefix_to_strip);
+fn write_regular_tar_entry<R: Read>(entry: &mut tar::Entry<'_, R>, dest: &Path) -> Result<(), FetchError> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut file = std::fs::File::create(dest)?;
+    io::copy(entry, &mut file)?;
 
-        if relative.as_os_str().is_empty() || relative == Path::new(".") {
-            continue;
-        }
-
-        validate_no_path_traversal(&relative)?;
-
-        let dest = out_path.join(&relative);
-        debug_assert!(dest.starts_with(out_path), "dest {dest:?} escapes out_path {out_path:?}");
-
-        match entry.header().entry_type() {
-            tar::EntryType::Regular | tar::EntryType::GNUSparse => {
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                let mut file = std::fs::File::create(&dest)?;
-                io::copy(&mut entry, &mut file)?;
-
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    if let Ok(mode) = entry.header().mode() {
-                        let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(mode));
-                    }
-                }
-            }
-            tar::EntryType::Directory => {
-                std::fs::create_dir_all(&dest)?;
-            }
-            tar::EntryType::Symlink => {
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                #[cfg(unix)]
-                if let Some(target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
-                    let target_path = target.as_ref();
-                    let effective_target = rewrite_symlink_target(target_path, &prefix_to_strip);
-                    validate_symlink_depth(&dest, out_path, &effective_target, &relative, target_path)?;
-                    std::os::unix::fs::symlink(&effective_target, &dest)?;
-                }
-            }
-            tar::EntryType::Link => {
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                if let Some(link_target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
-                    let stripped_target = match &prefix_to_strip {
-                        Some(pfx) => {
-                            link_target.strip_prefix(pfx.as_path()).unwrap_or(link_target.as_ref()).to_path_buf()
-                        }
-                        None => link_target.into_owned(),
-                    };
-                    let target_path = out_path.join(&stripped_target);
-                    if target_path.exists() {
-                        std::fs::copy(&target_path, &dest)?;
-                    }
-                }
-            }
-            _ => {}
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(mode) = entry.header().mode() {
+            let _ = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode));
         }
     }
+    Ok(())
+}
 
+fn create_tar_symlink<R: Read>(
+    entry: &mut tar::Entry<'_, R>,
+    dest: &Path,
+    out_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+    relative: &Path,
+) -> Result<(), FetchError> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    #[cfg(unix)]
+    if let Some(target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
+        let target_path = target.as_ref();
+        let effective_target = rewrite_symlink_target(target_path, prefix_to_strip);
+        validate_symlink_depth(dest, out_path, &effective_target, relative, target_path)?;
+        std::os::unix::fs::symlink(&effective_target, dest)?;
+    }
+    Ok(())
+}
+
+fn copy_tar_hardlink<R: Read>(
+    entry: &mut tar::Entry<'_, R>,
+    dest: &Path,
+    out_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+) -> Result<(), FetchError> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if let Some(link_target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
+        let stripped_target = match prefix_to_strip {
+            Some(pfx) => link_target.strip_prefix(pfx.as_path()).unwrap_or(link_target.as_ref()).to_path_buf(),
+            None => link_target.into_owned(),
+        };
+        let target_path = out_path.join(&stripped_target);
+        if target_path.exists() {
+            std::fs::copy(&target_path, dest)?;
+        }
+    }
     Ok(())
 }
 
 /// Strip the top-level directory prefix from a tar entry path.
-fn strip_tar_prefix(
-    entry_path: &Path,
-    prefix: &Option<std::path::PathBuf>,
-) -> std::path::PathBuf {
+fn strip_tar_prefix(entry_path: &Path, prefix: &Option<std::path::PathBuf>) -> std::path::PathBuf {
     match prefix {
         Some(pfx) => match entry_path.strip_prefix(pfx) {
             Ok(stripped) => stripped.to_path_buf(),
@@ -493,10 +521,7 @@ fn validate_no_path_traversal(relative: &Path) -> Result<(), FetchError> {
 
 /// Rewrite an absolute symlink target to be relative to the output dir,
 /// stripping the tarball's top-level prefix.
-fn rewrite_symlink_target(
-    target_path: &Path,
-    prefix_to_strip: &Option<std::path::PathBuf>,
-) -> std::path::PathBuf {
+fn rewrite_symlink_target(target_path: &Path, prefix_to_strip: &Option<std::path::PathBuf>) -> std::path::PathBuf {
     if !target_path.is_absolute() {
         return target_path.to_path_buf();
     }

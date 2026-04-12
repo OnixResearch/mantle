@@ -669,67 +669,102 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         let mut dispatched: u32 = 0;
-
         while let Some(drv_key) = self.ready_queue.pop_front() {
-            let goal = self
-                .registry
-                .get(&drv_key)
-                .ok_or_else(|| Error::Store(format!("ready goal missing from registry: {drv_key}")))?;
-
-            // Tiger Style: assert state precondition.
-            debug_assert_eq!(goal.state, GoalState::Ready, "goal in ready queue but state is {:?}", goal.state);
-
-            let drv_path = goal.drv_path.clone();
-            let is_root = goal.is_root;
-            let derivation = goal
-                .derivation
-                .as_ref()
-                .ok_or_else(|| Error::Store(format!("goal {drv_key} in Ready state but has no derivation")))?
-                .clone();
-
-            match builder.prepare_build(&drv_path, &derivation, known_paths, is_root).await {
-                Ok(PrepareResult::Done(outcome)) => {
-                    // Cache hit or fetcher — complete synchronously.
-                    self.complete_goal(&drv_key, outcome, outcomes, failed)?;
-                }
-                Err(e) => {
-                    // prepare_build failed (source not found, etc.)
-                    let err_msg = format!("{e}");
-                    tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
-                    self.fail_goal(&drv_key, &err_msg, failed)?;
-                    dispatched = dispatched.saturating_add(1);
-                    continue;
-                }
-                Ok(PrepareResult::NeedsBuild(prepared)) => {
-                    // Mark Building before spawning.
-                    let goal = self
-                        .registry
-                        .get_mut(&drv_key)
-                        .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
-                    goal.mark_building()?;
-
-                    let build_request = prepared.build_request.clone();
-                    pending_meta.insert(drv_key.clone(), prepared);
-
-                    let bs = builder.build_service();
-                    let sem = sem.clone();
-                    let key = drv_key.clone();
-
-                    join_set.spawn(async move {
-                        let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
-                        let build_result = match _permit {
-                            Ok(_p) => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
-                            Err(e) => Err(e),
-                        };
-                        (key, build_result)
-                    });
-                }
-            }
-
+            let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
+            let prepare_result = builder.prepare_build(&drv_path, &derivation, known_paths, is_root).await;
+            self.handle_prepare_result(
+                &drv_key,
+                prepare_result,
+                builder,
+                sem,
+                join_set,
+                pending_meta,
+                outcomes,
+                failed,
+            )?;
             dispatched = dispatched.saturating_add(1);
         }
-
         Ok(dispatched)
+    }
+
+    fn ready_goal_inputs(
+        &self,
+        drv_key: &str,
+    ) -> Result<(StorePath<String>, bool, nix_compat::derivation::Derivation), Error> {
+        let goal = self
+            .registry
+            .get(drv_key)
+            .ok_or_else(|| Error::Store(format!("ready goal missing from registry: {drv_key}")))?;
+        debug_assert_eq!(goal.state, GoalState::Ready, "goal in ready queue but state is {:?}", goal.state);
+        let derivation = goal
+            .derivation
+            .as_ref()
+            .ok_or_else(|| Error::Store(format!("goal {drv_key} in Ready state but has no derivation")))?
+            .clone();
+        Ok((goal.drv_path.clone(), goal.is_root, derivation))
+    }
+
+    fn handle_prepare_result<BServ>(
+        &mut self,
+        drv_key: &str,
+        prepare_result: Result<PrepareResult, Error>,
+        builder: &Builder<BServ>,
+        sem: &Arc<Semaphore>,
+        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
+        pending_meta: &mut HashMap<String, PreparedBuild>,
+        outcomes: &mut Vec<BuildOutcome>,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        match prepare_result {
+            Ok(PrepareResult::Done(outcome)) => self.complete_goal(drv_key, outcome, outcomes, failed),
+            Err(err) => {
+                let err_msg = format!("{err}");
+                tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
+                self.fail_goal(drv_key, &err_msg, failed)
+            }
+            Ok(PrepareResult::NeedsBuild(prepared)) => {
+                self.spawn_prepared_build(drv_key, prepared, builder, sem, join_set, pending_meta)
+            }
+        }
+    }
+
+    fn spawn_prepared_build<BServ>(
+        &mut self,
+        drv_key: &str,
+        prepared: PreparedBuild,
+        builder: &Builder<BServ>,
+        sem: &Arc<Semaphore>,
+        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
+        pending_meta: &mut HashMap<String, PreparedBuild>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let goal = self
+            .registry
+            .get_mut(drv_key)
+            .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
+        goal.mark_building()?;
+
+        let build_request = prepared.build_request.clone();
+        let replaced = pending_meta.insert(drv_key.to_string(), prepared);
+        debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
+
+        let bs = builder.build_service();
+        let sem = sem.clone();
+        let key = drv_key.to_string();
+        join_set.spawn(async move {
+            let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
+            let build_result = match _permit {
+                Ok(_p) => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
+                Err(e) => Err(e),
+            };
+            (key, build_result)
+        });
+        Ok(())
     }
 
     /// Mark a goal as Done, collect its outcome, and notify waiters.
