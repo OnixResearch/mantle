@@ -39,36 +39,40 @@ pub fn generate_inputs_ncl(lock: &Lockfile) -> String {
         generate_entry(&mut out, name, entry);
     }
 
-    // Emit locked patches with source and hash data.
-    if !lock.patches.is_empty() {
-        out.push('\n');
-        out.push_str("  _patches = {\n");
-        for (name, patch) in &lock.patches {
-            let field_name = if needs_quoting(name) {
-                format!("\"{name}\"")
-            } else {
-                name.to_string()
-            };
-            out.push_str(&format!("    {field_name} = {{\n"));
-            match &patch.source {
-                LockedPatchSource::Local { path } => {
-                    out.push_str("      type = \"local\",\n");
-                    out.push_str(&format!("      path = \"{}\",\n", escape_nickel(path)));
-                }
-                LockedPatchSource::Remote { url } => {
-                    out.push_str("      type = \"remote\",\n");
-                    out.push_str(&format!("      url = \"{}\",\n", escape_nickel(url)));
-                }
-            }
-            out.push_str(&format!("      hash = \"{}\",\n", escape_nickel(&patch.hash.value)));
-            out.push_str(&format!("      algo = \"{}\",\n", patch.hash.algo));
-            out.push_str("    },\n");
-        }
-        out.push_str("  },\n");
-    }
-
+    generate_locked_patches(&mut out, lock);
     out.push_str("}\n");
     out
+}
+
+/// Emit the `_patches` record for locked patch sources and hashes.
+fn generate_locked_patches(out: &mut String, lock: &Lockfile) {
+    if lock.patches.is_empty() {
+        return;
+    }
+    out.push('\n');
+    out.push_str("  _patches = {\n");
+    for (name, patch) in &lock.patches {
+        let field_name = if needs_quoting(name) {
+            format!("\"{name}\"")
+        } else {
+            name.to_string()
+        };
+        out.push_str(&format!("    {field_name} = {{\n"));
+        match &patch.source {
+            LockedPatchSource::Local { path } => {
+                out.push_str("      type = \"local\",\n");
+                out.push_str(&format!("      path = \"{}\",\n", escape_nickel(path)));
+            }
+            LockedPatchSource::Remote { url } => {
+                out.push_str("      type = \"remote\",\n");
+                out.push_str(&format!("      url = \"{}\",\n", escape_nickel(url)));
+            }
+        }
+        out.push_str(&format!("      hash = \"{}\",\n", escape_nickel(&patch.hash.value)));
+        out.push_str(&format!("      algo = \"{}\",\n", patch.hash.algo));
+        out.push_str("    },\n");
+    }
+    out.push_str("  },\n");
 }
 
 /// Generate a single input entry as a Nickel record field.
