@@ -44,6 +44,16 @@ pub struct BuildOutcome {
 }
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
+/// Intermediate state for a single CA output during multi-output
+/// CA derivation finalization (between pass 1 and pass 2).
+struct CaOutputIntermediate {
+    name: String,
+    marked_node: Node,
+    ca_path: StorePath<String>,
+    nar_size: u64,
+    nar_sha256: [u8; 32],
+}
+
 pub(crate) struct PreparedBuild {
     pub(crate) drv_path: StorePath<String>,
     pub(crate) drv_name: String,
@@ -416,9 +426,6 @@ where BServ: BuildService + 'static
         known_paths: &mut DerivationRegistry,
         artifact_provenance: &ArtifactProvenance,
     ) -> Result<HashMap<String, PathInfo>, Error> {
-        let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
-
-        // Plan CA markers and path names for all outputs (pure).
         let ca_plans = crate::ca_plan::plan_ca_outputs(
             &prepared.drv_name,
             &prepared.derivation.outputs,
@@ -430,16 +437,37 @@ where BServ: BuildService + 'static
             "CA plan count must match output count",
         );
 
-        // Pass 1: Apply input rewrites, replace all provisionals with
-        // markers, compute CA paths.
-        struct CaOutputIntermediate {
-            name: String,
-            marked_node: Node,
-            ca_path: StorePath<String>,
-            nar_size: u64,
-            nar_sha256: [u8; 32],
-        }
+        // Pass 1: marker replacement + CA path computation.
+        let intermediates = self
+            .compute_ca_intermediates(prepared, build_result, &ca_plans)
+            .await?;
+        assert_eq!(
+            intermediates.len(),
+            prepared.derivation.outputs.len(),
+            "intermediate count must match output count",
+        );
 
+        // Pass 2: replace markers with final paths, persist.
+        self.finalize_ca_outputs(
+            prepared,
+            build_result,
+            known_paths,
+            artifact_provenance,
+            &ca_plans,
+            &intermediates,
+        )
+        .await
+    }
+
+    /// Pass 1: apply input rewrites, replace provisionals with markers,
+    /// compute NAR hashes, and derive CA store paths.
+    async fn compute_ca_intermediates(
+        &self,
+        prepared: &PreparedBuild,
+        build_result: &snix_build::buildservice::BuildResult,
+        ca_plans: &[crate::ca_plan::CaOutputPlan],
+    ) -> Result<Vec<CaOutputIntermediate>, Error> {
+        let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
         let mut intermediates: Vec<CaOutputIntermediate> = Vec::new();
 
         for (i, (output_name, _output)) in prepared.derivation.outputs.iter().enumerate() {
@@ -447,7 +475,6 @@ where BServ: BuildService + 'static
                 output: output_name.clone(),
             })?;
 
-            // Apply transitive CA input rewrites.
             let mut node = build_output.node.clone();
             for (old_placeholder, new_path) in &prepared.input_rewrites {
                 let (rewritten, _) = crate::rewrite::rewrite_node(
@@ -461,8 +488,7 @@ where BServ: BuildService + 'static
                 node = rewritten;
             }
 
-            // Replace ALL provisionals with their markers (from plan).
-            for plan in &ca_plans {
+            for plan in ca_plans {
                 if plan.provisional.is_empty() {
                     continue;
                 }
@@ -477,11 +503,9 @@ where BServ: BuildService + 'static
                 node = rewritten;
             }
 
-            // Compute NAR hash of the marker-replaced content.
             let (nar_size, nar_sha256) =
                 nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
 
-            // Compute CA store path using the planned path name.
             let plan = ca_plans.iter().find(|p| p.output_name == *output_name).ok_or_else(|| {
                 Error::Store(format!("no CA plan for output '{output_name}'"))
             })?;
@@ -500,7 +524,20 @@ where BServ: BuildService + 'static
             });
         }
 
-        // Build marker → final path replacement map.
+        Ok(intermediates)
+    }
+
+    /// Pass 2: replace markers with final CA paths, register outputs,
+    /// persist PathInfo.
+    async fn finalize_ca_outputs(
+        &mut self,
+        prepared: &PreparedBuild,
+        build_result: &snix_build::buildservice::BuildResult,
+        known_paths: &mut DerivationRegistry,
+        artifact_provenance: &ArtifactProvenance,
+        ca_plans: &[crate::ca_plan::CaOutputPlan],
+        intermediates: &[CaOutputIntermediate],
+    ) -> Result<HashMap<String, PathInfo>, Error> {
         let final_rewrites: Vec<(&[u8], Vec<u8>)> = ca_plans
             .iter()
             .filter_map(|plan| {
@@ -510,11 +547,10 @@ where BServ: BuildService + 'static
             })
             .collect();
 
-        // Pass 2: Replace all markers with final CA paths, persist.
         let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
 
-        for intermediate in &intermediates {
+        for (idx, intermediate) in intermediates.iter().enumerate() {
             let mut final_node = intermediate.marked_node.clone();
 
             for (marker, final_bytes) in &final_rewrites {
@@ -531,7 +567,6 @@ where BServ: BuildService + 'static
                 }
             }
 
-            // Register resolved output.
             known_paths.resolve_output(&drv_abs, &intermediate.name, intermediate.ca_path.clone())?;
 
             let final_abs = intermediate.ca_path.to_absolute_path_with_prefix(self.store.store_dir());
@@ -545,14 +580,7 @@ where BServ: BuildService + 'static
                 "CA output path resolved"
             );
 
-            // Resolve references.
-            let output_idx = intermediates.iter().position(|x| x.name == intermediate.name).ok_or_else(|| {
-                Error::Store(format!(
-                    "multi-output CA: intermediate '{}' not found in intermediates list",
-                    intermediate.name
-                ))
-            })?;
-            let build_output = build_result.outputs.get(output_idx).ok_or_else(|| Error::OutputMissing {
+            let build_output = build_result.outputs.get(idx).ok_or_else(|| Error::OutputMissing {
                 output: intermediate.name.clone(),
             })?;
             let references = resolve_references(

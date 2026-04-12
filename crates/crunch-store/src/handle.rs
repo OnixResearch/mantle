@@ -89,6 +89,9 @@ impl StoreHandle {
     /// state directory. Optionally configures a remote binary cache for
     /// substitution.
     pub async fn open(config: StoreConfig) -> Result<Self, Error> {
+        assert!(!config.store_dir.is_empty(), "store_dir must not be empty");
+        assert!(config.store_dir.starts_with('/'), "store_dir must be an absolute path");
+
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
@@ -227,6 +230,9 @@ impl StoreHandle {
     /// Files: probe blob_service. Directories: probe directory_service.
     /// Symlinks: always present (target is inline in the Node).
     pub async fn castore_has_content(&self, node: &Node) -> Result<bool, Error> {
+        // Tiger Style: verify node structural invariant.
+        debug_assert!(!matches!(node, Node::Directory { size, .. } if *size == u64::MAX),
+            "directory size must not be sentinel value");
         match node {
             Node::File { digest, .. } => {
                 self.blob_service.has(digest).await.map_err(|e| Error::BlobService(format!("existence check: {e}")))
@@ -298,6 +304,8 @@ impl StoreHandle {
         drv_path: &StorePath<String>,
         derivation: &Derivation,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
+        assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
+
         let mut infos = HashMap::new();
         let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
 
@@ -360,6 +368,8 @@ impl StoreHandle {
         output_path: &StorePath<String>,
         output_name: &str,
     ) -> Result<Option<PathInfo>, Error> {
+        assert!(!output_name.is_empty(), "output_name must not be empty");
+
         let remote = match &self.remote_pathinfo {
             Some(r) => r.clone(),
             None => return Ok(None),
@@ -413,6 +423,7 @@ impl StoreHandle {
         provenance: Option<ArtifactProvenance>,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
+        assert!(!output_name.is_empty(), "output_name must not be empty");
         self.persist_pathinfo_and_export(output_name, output_path, path_info, final_node, provenance, is_root)
             .await
     }

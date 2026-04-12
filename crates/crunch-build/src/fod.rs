@@ -25,8 +25,10 @@ pub(crate) async fn verify_fod_hash(
     blob_service: &(impl BlobService + Clone),
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<(), Error> {
-    // Tiger Style: assert the drv name is not empty (caller error).
+    // Tiger Style: assert preconditions.
     debug_assert!(!drv_name.is_empty(), "drv_name must not be empty for FOD verification");
+    debug_assert!(!_output_name.is_empty(), "output_name must not be empty for FOD verification");
+
     match expected_ca {
         CAHash::Flat(expected_hash) => {
             let digest = match node {

@@ -44,6 +44,8 @@ where
     S: BuildService + 'static,
 {
     async fn do_build(&self, request: BuildRequest) -> io::Result<BuildResult> {
+        assert!(!request.command_args.is_empty(), "BuildRequest must have at least one command arg (the builder)");
+
         if is_fetch_request(&request) {
             let builder = request.command_args.first().cloned().unwrap_or_default();
             debug!(builder = %builder, "dispatching to fetch service");

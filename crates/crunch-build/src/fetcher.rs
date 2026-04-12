@@ -393,7 +393,6 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
     let mut entry_count: u32 = 0;
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
-        // Tiger Style: fixed limit on tar entries.
         entry_count = entry_count.saturating_add(1);
         if entry_count > MAX_TAR_ENTRIES {
             return Err(FetchError::TarError(format!("tar archive exceeds {MAX_TAR_ENTRIES} entries")));
@@ -401,42 +400,21 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
 
-        // Determine prefix from first non-empty entry.
         if prefix_to_strip.is_none() {
             if let Some(first_component) = entry_path.components().next() {
                 prefix_to_strip = Some(std::path::PathBuf::from(first_component.as_os_str()));
             }
         }
 
-        // Strip the top-level prefix.
-        let relative = match &prefix_to_strip {
-            Some(pfx) => match entry_path.strip_prefix(pfx) {
-                Ok(stripped) => stripped.to_path_buf(),
-                Err(_) => entry_path.clone(),
-            },
-            None => entry_path.clone(),
-        };
+        let relative = strip_tar_prefix(&entry_path, &prefix_to_strip);
 
-        // Skip the top-level directory entry itself.
         if relative.as_os_str().is_empty() || relative == Path::new(".") {
             continue;
         }
 
-        // Reject path traversal: no `..` components allowed.
-        for component in relative.components() {
-            if matches!(component, std::path::Component::ParentDir) {
-                return Err(FetchError::TarError(format!(
-                    "tar entry contains '..' path traversal: {}",
-                    relative.display()
-                )));
-            }
-        }
+        validate_no_path_traversal(&relative)?;
 
         let dest = out_path.join(&relative);
-
-        // Belt-and-suspenders: verify dest is inside out_path.
-        // canonicalize isn't usable (dest doesn't exist yet), so check
-        // the prefix after join. Components() already rejected '..'.
         debug_assert!(dest.starts_with(out_path), "dest {dest:?} escapes out_path {out_path:?}");
 
         match entry.header().entry_type() {
@@ -464,44 +442,9 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                 }
                 #[cfg(unix)]
                 if let Some(target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
-                    // Validate symlink target doesn't escape the output dir.
                     let target_path = target.as_ref();
-                    let effective_target = if target_path.is_absolute() {
-                        // Absolute symlinks in tarballs are self-referential
-                        // (e.g., /lib/libc.so inside a toolchain tarball).
-                        // Strip the tarball prefix and rewrite as relative
-                        // to the output directory.
-                        match &prefix_to_strip {
-                            Some(pfx) => {
-                                let stripped = target_path
-                                    .strip_prefix("/")
-                                    .unwrap_or(target_path)
-                                    .strip_prefix(pfx)
-                                    .unwrap_or(target_path.strip_prefix("/").unwrap_or(target_path));
-                                stripped.to_path_buf()
-                            }
-                            None => target_path.strip_prefix("/").unwrap_or(target_path).to_path_buf(),
-                        }
-                    } else {
-                        target_path.to_path_buf()
-                    };
-                    // Check the effective target doesn't escape via '..'.
-                    let resolved = dest.parent().unwrap_or(out_path).join(&effective_target);
-                    let mut depth: i32 = 0;
-                    for comp in resolved.components() {
-                        match comp {
-                            std::path::Component::ParentDir => depth -= 1,
-                            std::path::Component::Normal(_) => depth += 1,
-                            _ => {}
-                        }
-                        if depth < 0 {
-                            return Err(FetchError::TarError(format!(
-                                "tar symlink escapes output dir: {} -> {}",
-                                relative.display(),
-                                target_path.display()
-                            )));
-                        }
-                    }
+                    let effective_target = rewrite_symlink_target(target_path, &prefix_to_strip);
+                    validate_symlink_depth(&dest, out_path, &effective_target, &relative, target_path)?;
                     std::os::unix::fs::symlink(&effective_target, &dest)?;
                 }
             }
@@ -522,12 +465,80 @@ pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
                     }
                 }
             }
-            _ => {
-                // Skip pax headers, etc.
-            }
+            _ => {}
         }
     }
 
+    Ok(())
+}
+
+/// Strip the top-level directory prefix from a tar entry path.
+fn strip_tar_prefix(
+    entry_path: &Path,
+    prefix: &Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    match prefix {
+        Some(pfx) => match entry_path.strip_prefix(pfx) {
+            Ok(stripped) => stripped.to_path_buf(),
+            Err(_) => entry_path.to_path_buf(),
+        },
+        None => entry_path.to_path_buf(),
+    }
+}
+
+/// Reject tar entries with `..` path components.
+fn validate_no_path_traversal(relative: &Path) -> Result<(), FetchError> {
+    for component in relative.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(FetchError::TarError(format!(
+                "tar entry contains '..' path traversal: {}",
+                relative.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Rewrite an absolute symlink target to be relative to the output dir,
+/// stripping the tarball's top-level prefix.
+fn rewrite_symlink_target(
+    target_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    if !target_path.is_absolute() {
+        return target_path.to_path_buf();
+    }
+    let without_root = target_path.strip_prefix("/").unwrap_or(target_path);
+    match prefix_to_strip {
+        Some(pfx) => without_root.strip_prefix(pfx).unwrap_or(without_root).to_path_buf(),
+        None => without_root.to_path_buf(),
+    }
+}
+
+/// Validate that a symlink target does not escape the output directory.
+fn validate_symlink_depth(
+    dest: &Path,
+    out_path: &Path,
+    effective_target: &Path,
+    relative: &Path,
+    target_path: &Path,
+) -> Result<(), FetchError> {
+    let resolved = dest.parent().unwrap_or(out_path).join(effective_target);
+    let mut depth: i32 = 0;
+    for comp in resolved.components() {
+        match comp {
+            std::path::Component::ParentDir => depth -= 1,
+            std::path::Component::Normal(_) => depth += 1,
+            _ => {}
+        }
+        if depth < 0 {
+            return Err(FetchError::TarError(format!(
+                "tar symlink escapes output dir: {} -> {}",
+                relative.display(),
+                target_path.display()
+            )));
+        }
+    }
     Ok(())
 }
 
