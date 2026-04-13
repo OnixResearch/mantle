@@ -3,14 +3,16 @@
 # Validators for store paths and derivation names.
 # Enum types for categorical fields.
 
+let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
+
 {
   StorePath
-    | doc "Validates a Nix store path string: /nix/store/<32 chars>-<name>"
+    | doc "Validates an absolute store path string: <store-prefix>/<32 chars>-<name>"
     = std.contract.from_validator (fun value =>
       if std.is_string value
-        && std.string.is_match "^/nix/store/[a-z0-9]{32}-.+$" value
+        && std.string.is_match store_path_regex value
       then 'Ok
-      else 'Error { message = "expected a /nix/store/<hash>-<name> path, got: %{std.serialize 'Json value}" }
+      else 'Error { message = "expected an absolute <store-prefix>/<hash>-<name> path, got: %{std.serialize 'Json value}" }
     ),
 
   Name
@@ -51,9 +53,9 @@
     "%
     = std.contract.from_validator (fun value =>
       if std.is_string value then
-        if std.string.is_match "^/nix/store/[a-z0-9]{32}-.+$" value
+        if std.string.is_match store_path_regex value
         then 'Ok
-        else 'Error { message = "input string must be a valid store path, got: %{value}" }
+        else 'Error { message = "input string must be a valid absolute store path, got: %{value}" }
       else if std.is_record value then
         if std.record.has_field "drv" value && std.record.has_field "output" value then
           # Output selection: { drv = <Derivation>, output = "dev" }

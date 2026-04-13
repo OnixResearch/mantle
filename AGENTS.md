@@ -191,17 +191,17 @@ crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
 ```
 
 This command:
-1. Creates a source tarball (git archive + cargo vendor)
-2. Computes the NAR hash via crunch's own castore pipeline
+1. Copies a fixed allowlist of checkout entries into a staged `*-crunch-src` tree (pure Rust filesystem copy, no host `git archive` / `cargo vendor` / `cp` glue)
+2. Computes a deterministic content fingerprint for that staged source tree
 3. Builds the full bootstrap chain (musl-gcc → make → dash → binutils → musl → gcc → busybox → bwrap → rust)
 4. Compiles crunch from source inside a bwrap sandbox
 5. Bakes the crunch-built busybox path into the binary as the sandbox shell
 6. Verifies the output binary
 
-First bootstrap requires: `git`, `cargo`, `tar`, `xz`, `cp`, `sh` on PATH,
-plus `bwrap` on PATH for the initial build. After the first successful
-self-build, the crunch-built bwrap and busybox are used for subsequent
-builds — no external sandbox tools needed.
+First bootstrap requires the checked-in source tree with `vendor-deps/` and
+`.cargo/vendor-config.toml`, plus `bwrap` on PATH and a static sandbox shell.
+After the first successful self-build, the crunch-built bwrap and busybox are
+used for subsequent builds — no external sandbox tools needed.
 Needs ~2 GiB free in /tmp for staging + hash computation.
 
 Output: ~31 MiB static-pie musl-linked ELF binary.
@@ -342,9 +342,13 @@ When claiming test results in commit messages or completion summaries:
 ## Self-Build and Self-Hosting Proof
 
 - `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.
+- `docs/bootstrap-stage0-inventory.md` is the stricter first-bootstrap trust inventory. README/self-hosting docs must treat the checked-in proof as fixed-point evidence only; the stronger non-Nix-host proof claim stays separate until a PATH-without-Nix proof path lands.
+- `src/self_build.rs` stage0 source staging is now pure Rust: it copies a fixed allowlist of top-level repo entries (`.cargo`, `Cargo.{toml,lock}`, `bootstrap`, `builders`, `crates`, `lib`, `rust-toolchain.toml`, `src`, `vendor`, `vendor-deps`) and requires the checked-in `.cargo/vendor-config.toml` to point at `vendor-deps`. No non-test self-build path shells out to `git`, `tar`, `sh`, `cp`, or `cargo vendor` anymore. Keep NixOS-specific path probes labeled as host convenience, not proof evidence.
+- On this host Cargo still builds to the shared `~/.cargo-target/` by default. For real self-build validation, run `/home/brittonr/.cargo-target/debug/crunch ...`, not the stale repo-local `target/debug/crunch`, unless you explicitly set `CARGO_TARGET_DIR=target`.
+- Real end-to-end self-build now exercises the rewritten stage0 staging path, but the default `/crunch/store` stage3 path is still broken deeper in validation/parsing. After fixing `crates/crunch-store/src/handle.rs` CA-mapping parsing and broadening `lib/contracts.ncl` store-path contracts, task 210 still failed in `[3/4] Building crunch...` with `crunch: invalid store path: /crunch/store/...-busybox`. Follow-up tracked in `openspec/changes/fix-self-build-custom-store-prefix/`.
 - Successful proof runs now write a shareable bundle under `target/self-hosting-proof/run-*` and refresh `target/self-hosting-proof/latest`. The ignored proof test honors `CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR` when the helper needs a custom destination, and relative `--bundle-dir` values are anchored to the repo root before export or `latest` updates.
 - `./scripts/prove-self-hosting.sh --check` is only a host-prereq preflight, not proof evidence. On 2026-04-10 the full proof initially still failed in stage0 while building `busybox.drv` with `bwrap: execvp /bin/sh: No such file or directory`; use the reported audit bundle + `stage0-diagnostics.txt` when triaging, and do not archive proof-related changes from `--check` alone.
-- `scripts/prove-self-hosting.sh` must resolve a real `busybox-static` for `SNIX_BUILD_SANDBOX_SHELL` when the env is unset or `/bin/sh`. A `bash-static` fallback is not enough for the proof because the sandbox also bind-mounts the shell at `/bin/busybox`, and bootstrap scripts expect busybox applets like `mkdir`, `ln`, and `chmod`. The helper now scans installed `busybox-static` paths first and can realize `pkgsStatic.busybox` with `nix-build '<nixpkgs>' -A pkgsStatic.busybox --no-out-link`.
+- `scripts/prove-self-hosting.sh` must resolve a real `busybox-static` for `SNIX_BUILD_SANDBOX_SHELL` when the env is unset or `/bin/sh`. A `bash-static` fallback is not enough for the proof because the sandbox also bind-mounts the shell at `/bin/busybox`, and bootstrap scripts expect busybox applets like `mkdir`, `ln`, and `chmod`. The helper scans installed `busybox-static` paths first and now FAILS fast if none is available; it no longer realizes `pkgsStatic.busybox` through `nix-build`.
 - The helper does not require a rich login shell PATH: it falls back to `~/.rustup/toolchains/` for nightly cargo/rustc and scans common NixOS locations (`/run/wrappers/bin`, `/run/current-system/sw/bin`, `/nix/store/*-clang-wrapper-*`, `/nix/store/*-mold-*`, `/nix/store/*-pkg-config-wrapper-*`, `/nix/store/*-openssl-*-dev/lib/pkgconfig`).
 - `df -Pk "$TMPDIR"` can hang on this host even in `--check` mode. `scripts/prove-self-hosting.sh` now uses `stat -f -c '%a %S'` for the free-space probe instead.
 - `cmd_self_build` has 4 steps: [1/4] stage source, [2/4] build
@@ -393,15 +397,18 @@ When claiming test results in commit messages or completion summaries:
   `import "seed.ncl"` picked up `lib/seed.ncl` instead of
   `bootstrap/seed.ncl` (`FieldMissing toolchain`), and a root-only import path
   later made `lib/lib.ncl` fail to find its plain `import "fetch.ncl"`.
-- `stage_source()` must package the current tracked worktree, not
+- `stage_source()` must package the current worktree contents, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed
-  behavior even though the checkout binary passed stage0. Its staged
-  source fingerprint must include file contents, not just `path:size`
-  pairs, or same-size edits silently reuse a stale `*-crunch-src` tree.
-  Any reused `--source-store-path` validation must also require `lib/`
-  alongside `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`,
-  because `cmd_self_build()` always builds import paths from `src_dir/lib`.
+  behavior even though the checkout binary passed stage0. The current
+  implementation does this by Rust-copying a fixed allowlist of top-level
+  repo entries; if a build-relevant top-level entry moves, update
+  `STAGED_SOURCE_TOP_LEVEL_ENTRIES` and its tests. Its staged source
+  fingerprint must include file contents, not just `path:size` pairs, or
+  same-size edits silently reuse a stale `*-crunch-src` tree. Any reused
+  `--source-store-path` validation must also require `lib/` alongside
+  `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`, because
+  `cmd_self_build()` always builds import paths from `src_dir/lib`.
 - A stage1 binary can inherit a compile-time `SNIX_BUILD_SANDBOX_SHELL`
   pointing at a busybox in the stage0 temp store. `vendor/snix-build`
   must treat a non-placeholder compile default as usable only when that

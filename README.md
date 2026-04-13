@@ -325,6 +325,10 @@ reproducible release outputs.
 
 ### Trust inventory by entry point
 
+For the stricter stage0 view, see [`docs/bootstrap-stage0-inventory.md`](docs/bootstrap-stage0-inventory.md).
+That inventory groups first-bootstrap dependencies into host prerequisites,
+pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
+
 #### `crunch bootstrap`
 
 - **Current claim**: seed-assisted bootstrap from an existing Nix installation.
@@ -354,11 +358,11 @@ reproducible release outputs.
 #### `crunch self-build`
 
 - **Current claim**: seed-assisted self-build from the current checkout.
-- **Trusted inputs today**: the current source tree, vendored Cargo deps, the
-  fetched `musl-gcc` seed, and host tools used to stage and launch the first
-  build.
-- **Host prerequisites**: `git`, `cargo`, `tar`, `xz`, `cp`, `bwrap`, and a
-  static sandbox shell for the first bootstrap stage.
+- **Trusted inputs today**: the current source tree, the checked-in
+  `vendor-deps/` tree and `.cargo/vendor-config.toml`, the fetched `musl-gcc`
+  seed, and the host sandbox entry points used for the first bootstrap stage.
+- **Host prerequisites**: `bwrap` and a static sandbox shell for the first
+  bootstrap stage.
 - **Evidence today**: `crunch self-build --store /tmp/crunch-store -j 4 --no-substitute`
   builds the bootstrap chain `musl-gcc -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`.
 - **Not yet proven**: this first build still relies on host tooling and the
@@ -372,8 +376,7 @@ reproducible release outputs.
   staged source tree recorded by stage0.
 - **Host prerequisites**: Linux, the repo's nightly Rust toolchain, `clang`,
   `mold`, `pkg-config`, OpenSSL development files, `bwrap`, `git`, `cargo`,
-  `tar`, `xz`, `cp`, a static sandbox shell, and about 4 GiB free in
-  `${TMPDIR:-/tmp}`.
+  a static sandbox shell, and about 4 GiB free in `${TMPDIR:-/tmp}`.
 - **Evidence today**: the helper prepares the environment and runs
   `cargo test -p crunch --test self_hosting -- --ignored --nocapture`, which
   drives the stage0 -> stage1 -> stage2 proof path.
@@ -391,7 +394,7 @@ reproducible release outputs.
 
 ## Self-Build
 
-crunch can build itself from source with zero Nix runtime dependency:
+crunch can rebuild itself from source once the stage0 prerequisites are already present:
 
 ```bash
 crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
@@ -401,15 +404,19 @@ This builds the full bootstrap chain (`musl-gcc -> make -> dash ->
 binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`) inside a
 bwrap sandbox. Output is a statically linked musl binary.
 
-First bootstrap requires `git`, `cargo`, `tar`, `xz`, `cp`, `bwrap`, and a
-static sandbox shell on `PATH`.
+This is still seed-assisted bootstrap. It does not yet prove that the first
+bootstrap works on a host with Nix commands absent from `PATH`.
+
+First bootstrap requires the checked-in source tree with `vendor-deps/` and
+`.cargo/vendor-config.toml`, plus `bwrap` and a static sandbox shell on
+`PATH`.
 After the first self-build, the crunch-built `bwrap` and `busybox` are used
 for subsequent builds.
 
 ### Proving self-hosting
 
-To verify that a crunch-built binary can rebuild crunch, run the checked-in
-helper from the repo root:
+To verify the fixed-point self-hosting claim, run the checked-in helper from
+the repo root:
 
 ```bash
 ./scripts/prove-self-hosting.sh
@@ -427,6 +434,11 @@ Use `./scripts/prove-self-hosting.sh --check` to validate prerequisites,
 including temporary-disk headroom, and print the proof command without
 starting the full build.
 
+This helper is not yet the planned non-Nix-host proof. Today it still proves
+self-hosting from explicit stage0 prerequisites on a NixOS-like development
+host, not that the first bootstrap path is already free of every hidden Nix
+fallback.
+
 Successful runs write a proof bundle to `target/self-hosting-proof/run-...`
 and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
 `--bundle-dir <dir>` to choose a different destination. Relative bundle paths
@@ -437,13 +449,17 @@ Host prerequisites:
 - Linux
 - `rustup` with the repo's `nightly` toolchain installed
 - `clang`, `mold`, `pkg-config`, and OpenSSL development files visible to `pkg-config`
-- `bwrap`, `git`, `cargo`, `tar`, `xz`, and `cp`
+- `bwrap`, `git`, and `cargo`
 - a static `SNIX_BUILD_SANDBOX_SHELL`
 - about 4 GiB free in `${TMPDIR:-/tmp}`
 
 If `pkg-config --exists openssl` does not work in your current shell, export
 `CRUNCH_PROOF_OPENSSL_PKGCONFIG=/path/to/openssl/lib/pkgconfig` before running
 the helper.
+
+If no installed static busybox is discoverable, set `SNIX_BUILD_SANDBOX_SHELL`
+explicitly before running the helper. The helper no longer realizes one through
+hidden `nix-build` fallback.
 
 This runs two stages: the checkout binary builds stage1, then the stage1
 binary rebuilds crunch as stage2 from the same staged source tree. The test
@@ -458,10 +474,11 @@ Each proof bundle contains:
 - `stage0/` and `stage2/` — copied `meta.json`, `stdout.txt`, `stderr.txt`, and
   `diagnostics.txt` files from the stage audit bundles
 
-The proof does not demonstrate bit-for-bit reproducibility, stage1 == stage2
-identity, or freedom from all host tools. It proves that a crunch-built
-`crunch` can drive another self-build to completion and leave behind a bundle
-that another machine can compare later.
+The proof does demonstrate a fixed point: stage1 and stage2 must match
+byte-for-byte, and the stage0 and stage2 crunch-built `busybox` and `bwrap`
+outputs must match too. It does not yet demonstrate bit-for-bit reproducible
+release artifacts, a full-source bootstrap root, or a first-bootstrap path
+proven with Nix commands absent from `PATH`.
 
 ### Bootstrap roadmap
 

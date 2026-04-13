@@ -78,12 +78,21 @@ fn enum_tags_deserialize_direct_serde() {
 }
 
 #[test]
-fn store_path_validator_accepts_valid() {
+fn store_path_validator_accepts_nix_store_path() {
     let expr = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash" | crunch.StorePath"#,
         &stdlib_import_path(),
     );
-    assert!(expr.is_ok(), "valid store path should pass");
+    assert!(expr.is_ok(), "valid /nix/store path should pass");
+}
+
+#[test]
+fn store_path_validator_accepts_custom_store_prefix() {
+    let expr = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash" | crunch.StorePath"#,
+        &stdlib_import_path(),
+    );
+    assert!(expr.is_ok(), "valid custom store-prefix path should pass");
 }
 
 #[test]
@@ -323,7 +332,7 @@ fn mixed_inputs_array_validates() {
              name = "consumer",
              builder = "/bin/sh",
              inputs = [
-               "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash",
+               "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash",
                dep,
                crunch.select dep "dev",
              ],

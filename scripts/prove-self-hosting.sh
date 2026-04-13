@@ -68,6 +68,9 @@ resolve_tool_path() {
   local candidate
   local -a candidates
 
+  # These path probes are host-convenience discovery only. They help the
+  # checked-in self-hosting helper find already-installed tools on NixOS-like
+  # machines, but they are not evidence that first bootstrap is Nix-free.
   candidate="$(command -v -- "$tool" 2>/dev/null || true)"
   if [[ -n "$candidate" ]]; then
     printf '%s\n' "$candidate"
@@ -188,9 +191,6 @@ configure_path() {
   prepend_tool_dir mold
   prepend_tool_dir pkg-config
   prepend_tool_dir git
-  prepend_tool_dir tar
-  prepend_tool_dir xz
-  prepend_tool_dir cp
   prepend_tool_dir stat
   prepend_tool_dir bwrap
 
@@ -210,9 +210,10 @@ configure_c_compiler() {
 
 discover_static_sandbox_shell() {
   local candidate
-  local nix_build_path
-  local realized_path
 
+  # Host-convenience discovery only. This helper may use an already-installed
+  # static busybox from common NixOS/Nix locations, but it must not realize one
+  # through `nix-build` or any other hidden fallback.
   for candidate in \
     "/run/current-system/sw/bin/busybox-static" \
     "/bin/busybox.static" \
@@ -224,23 +225,7 @@ discover_static_sandbox_shell() {
     fi
   done
 
-  nix_build_path="$(resolve_tool_path nix-build 2>/dev/null || true)"
-  if [[ -z "$nix_build_path" ]]; then
-    return 1
-  fi
-
-  note "realizing pkgsStatic.busybox for SNIX_BUILD_SANDBOX_SHELL"
-  realized_path="$("$nix_build_path" '<nixpkgs>' -A pkgsStatic.busybox --no-out-link 2>/dev/null || true)"
-  if [[ -z "$realized_path" ]]; then
-    return 1
-  fi
-
-  candidate="$realized_path/bin/busybox"
-  if [[ ! -x "$candidate" ]]; then
-    return 1
-  fi
-
-  printf '%s\n' "$candidate"
+  return 1
 }
 
 configure_sandbox_shell() {
@@ -254,7 +239,7 @@ configure_sandbox_shell() {
   fi
 
   if [[ -z "$shell_path" ]]; then
-    die "static busybox shell not found. Set SNIX_BUILD_SANDBOX_SHELL to a static busybox or make pkgsStatic.busybox available"
+    die "static busybox shell not found. Set SNIX_BUILD_SANDBOX_SHELL to an installed static busybox before running the proof helper"
   fi
   if [[ ! -x "$shell_path" ]]; then
     die "SNIX_BUILD_SANDBOX_SHELL must be executable: $shell_path"

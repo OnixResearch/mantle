@@ -318,7 +318,7 @@ impl StoreHandle {
             let output_path: StorePath<String> = match output.path.as_ref() {
                 Some(p) => p.clone(),
                 None => match self.ca_mappings.get(&drv_abs, output_name) {
-                    Some(ca_abs) => StorePath::from_absolute_path(ca_abs.as_bytes())
+                    Some(ca_abs) => StorePath::from_absolute_path_with_prefix(ca_abs.as_bytes(), &self.store_dir)
                         .map_err(|_| Error::Cache(format!("invalid CA mapping path: {ca_abs}")))?,
                     None => return Ok(None),
                 },
@@ -607,6 +607,10 @@ mod tests {
     use super::*;
 
     fn test_handle(state_dir: &Path) -> StoreHandle {
+        test_handle_with_store_dir(state_dir, "/nix/store")
+    }
+
+    fn test_handle_with_store_dir(state_dir: &Path, store_dir: &str) -> StoreHandle {
         let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
         let directory_service = Arc::new(
             RedbDirectoryService::new_temporary("handle-test".to_string(), RedbDirectoryServiceConfig::default())
@@ -623,7 +627,7 @@ mod tests {
             None,
             state_dir.to_path_buf(),
             state_dir.display().to_string(),
-            "/nix/store".to_string(),
+            store_dir.to_string(),
         )
     }
 
@@ -678,6 +682,39 @@ mod tests {
             deriver: None,
             ca: None,
         }
+    }
+
+    #[tokio::test]
+    async fn check_cache_accepts_ca_mapping_with_custom_store_prefix() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle_with_store_dir(state_dir.path(), "/crunch/store");
+        let drv_path = test_output("ca-demo.drv", 4);
+        let output_path = test_output("ca-demo", 5);
+        let path_info = signed_pathinfo(output_path.clone());
+        handle.pathinfo_service().put(path_info.clone()).await.unwrap();
+
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None,
+            ca_hash: None,
+        });
+        let derivation = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: std::collections::BTreeMap::new(),
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let drv_abs = drv_path.to_absolute_path_with_prefix("/crunch/store");
+        let out_abs = output_path.to_absolute_path_with_prefix("/crunch/store");
+        handle.insert_ca_mapping(&drv_abs, "out", &out_abs);
+
+        let cached = handle.check_cache(&drv_path, &derivation, false).await.unwrap();
+        let outputs = cached.expect("CA mapping with matching custom prefix should cache-hit");
+        assert_eq!(outputs.get("out").unwrap().store_path, output_path);
     }
 
     #[tokio::test]

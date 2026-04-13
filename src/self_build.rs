@@ -29,6 +29,27 @@ use crate::errors::RunError;
 /// Maximum source tree size: 2 GiB.
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
+/// Maximum number of source-tree entries copied during stage0 source staging.
+const MAX_STAGE_SOURCE_ENTRIES: u32 = 200_000;
+
+/// Maximum recursion depth during stage0 source staging.
+const MAX_STAGE_SOURCE_DEPTH: u32 = 64;
+
+/// Top-level repo entries included in the staged source tree.
+const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
+    ".cargo",
+    "Cargo.lock",
+    "Cargo.toml",
+    "bootstrap",
+    "builders",
+    "crates",
+    "lib",
+    "rust-toolchain.toml",
+    "src",
+    "vendor",
+    "vendor-deps",
+];
+
 /// Maximum number of `*-crunch` output directories to scan before giving up.
 #[cfg_attr(not(test), allow(dead_code))]
 const MAX_CRUNCH_OUTPUTS: u32 = 4096;
@@ -197,10 +218,10 @@ impl SelfBuildReport {
 
 /// Stage the crunch source tree into the output store.
 ///
-/// 1. `cargo vendor --locked vendor-deps`
-/// 2. Export tracked worktree files into staging
-/// 3. Copy vendor-deps/ and the generated vendor config into staging
-/// 4. Move staging into `$store_dir/$hash-crunch-src/`
+/// 1. Check the checked-in vendored Cargo inputs are present and targeted
+/// 2. Copy the selected source tree into staging with Rust filesystem calls
+/// 3. Compute the staged-tree fingerprint
+/// 4. Copy the staged tree into `$store_dir/$hash-crunch-src/`
 ///
 /// Returns the store path name (e.g., "abcdef...-crunch-src").
 pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError> {
@@ -208,26 +229,14 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     let stage_root = staging.path().join("crunch-src");
     std::fs::create_dir_all(&stage_root).map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
 
-    // 1. Vendor dependencies.
-    eprintln!("  vendoring cargo dependencies...");
-    let vendor_config = cargo_vendor_config(src_dir)?;
+    eprintln!("  checking vendored cargo inputs...");
+    require_checked_vendor_inputs(src_dir)?;
 
-    // 2. Tracked worktree files → staging.
-    eprintln!("  exporting tracked worktree files...");
-    export_tracked_worktree(src_dir, &stage_root)?;
-
-    // 3. Copy vendor-deps and the generated cargo config.
-    eprintln!("  copying vendored deps...");
-    assert!(src_dir.join("vendor-deps").exists(), "vendor-deps/ must exist after cargo vendor");
-    run_cmd(
-        Command::new("cp").args(["-a"]).arg(src_dir.join("vendor-deps")).arg(stage_root.join("vendor-deps")),
-        "cp vendor-deps",
-    )?;
-    write_vendor_config(&stage_root, &vendor_config)?;
+    eprintln!("  copying selected source tree...");
+    copy_selected_source_tree(src_dir, &stage_root)?;
     assert!(stage_root.join("Cargo.toml").exists(), "staged source must contain Cargo.toml");
     assert!(!stage_root.join(".git").exists(), "staged source must not contain .git");
 
-    // Size check.
     let size = dir_size(&stage_root);
     assert!(
         size <= MAX_SOURCE_BYTES,
@@ -237,10 +246,6 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     );
     eprintln!("  source tree: {} MiB", size / (1024 * 1024));
 
-    // 4. Compute a content fingerprint for the store path name.
-    //
-    // Not a NAR hash — just a deterministic tree fingerprint so same-content
-    // source trees reuse the staged path while same-size edits do not.
     let fingerprint = tree_fingerprint(&stage_root)?;
     let store_name = staged_source_store_name_from_fingerprint(&fingerprint)?;
     let dest = store_dir.join(&store_name);
@@ -250,9 +255,9 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
         return Ok(store_name);
     }
 
-    // Move staging into store. Use cp + rm since rename() doesn't
-    // work across filesystems (tmpfs → disk).
-    run_cmd(Command::new("cp").args(["-a"]).arg(&stage_root).arg(&dest), "cp to store")?;
+    let mut copied_entry_count: u32 = 0;
+    copy_tree_entry(&stage_root, &dest, 0, &mut copied_entry_count)?;
+    assert!(copied_entry_count > 0, "staged source copy must copy at least one entry");
 
     eprintln!("  staged: {}", dest.display());
     Ok(store_name)
@@ -482,6 +487,7 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
 // ── helpers ────────────────────────────────────────────────────────────
 
 /// Run a command, returning an error with stderr on failure.
+#[cfg_attr(not(test), allow(dead_code))]
 fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
     let out = cmd.output().map_err(|e| RunError::Internal(format!("failed to run `{label}`: {e}")))?;
 
@@ -496,15 +502,129 @@ fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
     Ok(())
 }
 
-fn export_tracked_worktree(src_dir: &Path, stage_root: &Path) -> Result<(), RunError> {
+/// Require the checked-in vendored Cargo inputs to be present.
+///
+/// This is a shallow stage0 guard: it checks that `vendor-deps/` exists and
+/// that `.cargo/vendor-config.toml` points at that checked-in directory. It
+/// does not yet prove that the vendor tree is fresh relative to `Cargo.lock`.
+fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunError> {
+    let vendor_dir = src_dir.join("vendor-deps");
+    let vendor_config = src_dir.join(".cargo").join("vendor-config.toml");
+    if !vendor_dir.is_dir() {
+        return Err(RunError::Internal(format!("checked-in vendor-deps/ missing: {}", vendor_dir.display(),)));
+    }
+    let vendor_config_text = std::fs::read_to_string(&vendor_config)
+        .map_err(|e| RunError::Internal(format!("read {}: {e}", vendor_config.display())))?;
+    if !vendor_config_text.contains("directory = \"vendor-deps\"") {
+        return Err(RunError::Internal(format!(
+            "vendor config must point at checked-in vendor-deps/: {}",
+            vendor_config.display(),
+        )));
+    }
+    Ok(())
+}
+
+fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), RunError> {
     assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
     assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
-    let export_script = "set -eu\ncd \"$SRC_DIR\"\ngit ls-files -z | tar --null --files-from=- --create --file - | tar --extract --file - --directory \"$DST_DIR\"\n";
-    run_cmd(
-        Command::new("sh").arg("-c").arg(export_script).env("SRC_DIR", src_dir).env("DST_DIR", stage_root),
-        "git ls-files | tar extract",
-    )?;
+    let mut copied_entry_count: u32 = 0;
+    for entry_name in STAGED_SOURCE_TOP_LEVEL_ENTRIES {
+        let source_path = src_dir.join(entry_name);
+        let dest_path = stage_root.join(entry_name);
+        if !source_path.exists() {
+            return Err(RunError::Internal(
+                format!("required staged source entry missing: {}", source_path.display(),),
+            ));
+        }
+        copy_tree_entry(&source_path, &dest_path, 0, &mut copied_entry_count)?;
+    }
+    assert!(copied_entry_count > 0, "source staging must copy at least one entry");
+    assert!(copied_entry_count <= MAX_STAGE_SOURCE_ENTRIES, "source staging copied too many entries");
     Ok(())
+}
+
+fn copy_tree_entry(source: &Path, dest: &Path, depth: u32, copied_entry_count: &mut u32) -> Result<(), RunError> {
+    assert!(source.exists(), "source entry must exist: {}", source.display());
+    assert!(depth <= MAX_STAGE_SOURCE_DEPTH, "stage source recursion depth exceeded {MAX_STAGE_SOURCE_DEPTH}");
+    *copied_entry_count = copied_entry_count.saturating_add(1);
+    if *copied_entry_count > MAX_STAGE_SOURCE_ENTRIES {
+        return Err(RunError::Internal(format!(
+            "stage source entry count exceeded {} while copying {}",
+            MAX_STAGE_SOURCE_ENTRIES,
+            source.display(),
+        )));
+    }
+
+    let metadata = std::fs::symlink_metadata(source)
+        .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", source.display())))?;
+    if metadata.file_type().is_symlink() {
+        return copy_symlink_entry(source, dest);
+    }
+    if metadata.is_file() {
+        return copy_file_entry(source, dest, metadata.permissions());
+    }
+    if metadata.is_dir() {
+        return copy_dir_entry(source, dest, depth, copied_entry_count, metadata.permissions());
+    }
+
+    Err(RunError::Internal(format!("unsupported source entry type while staging {}", source.display(),)))
+}
+
+fn copy_file_entry(source: &Path, dest: &Path, permissions: std::fs::Permissions) -> Result<(), RunError> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("staged file destination has no parent: {}", dest.display())))?;
+    std::fs::create_dir_all(parent).map_err(|e| RunError::Internal(format!("mkdir {}: {e}", parent.display())))?;
+    std::fs::copy(source, dest)
+        .map_err(|e| RunError::Internal(format!("copy {} -> {}: {e}", source.display(), dest.display())))?;
+    std::fs::set_permissions(dest, permissions)
+        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dest.display())))?;
+    Ok(())
+}
+
+fn copy_dir_entry(
+    source: &Path,
+    dest: &Path,
+    depth: u32,
+    copied_entry_count: &mut u32,
+    permissions: std::fs::Permissions,
+) -> Result<(), RunError> {
+    std::fs::create_dir_all(dest).map_err(|e| RunError::Internal(format!("mkdir {}: {e}", dest.display())))?;
+    let mut children: Vec<PathBuf> = Vec::new();
+    let entries =
+        std::fs::read_dir(source).map_err(|e| RunError::Internal(format!("read_dir {}: {e}", source.display())))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", source.display())))?;
+        children.push(entry.path());
+    }
+    children.sort();
+    for child in &children {
+        let child_name = child
+            .file_name()
+            .ok_or_else(|| RunError::Internal(format!("staged child has no file name: {}", child.display())))?;
+        copy_tree_entry(child, &dest.join(child_name), depth.saturating_add(1), copied_entry_count)?;
+    }
+    std::fs::set_permissions(dest, permissions)
+        .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dest.display())))?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink_entry(source: &Path, dest: &Path) -> Result<(), RunError> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("staged symlink destination has no parent: {}", dest.display())))?;
+    std::fs::create_dir_all(parent).map_err(|e| RunError::Internal(format!("mkdir {}: {e}", parent.display())))?;
+    let target =
+        std::fs::read_link(source).map_err(|e| RunError::Internal(format!("read_link {}: {e}", source.display())))?;
+    std::os::unix::fs::symlink(&target, dest)
+        .map_err(|e| RunError::Internal(format!("symlink {} -> {}: {e}", dest.display(), target.display())))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn copy_symlink_entry(source: &Path, _dest: &Path) -> Result<(), RunError> {
+    Err(RunError::Internal(format!("symlink staging is only supported on Unix: {}", source.display(),)))
 }
 
 /// Quick blake3 fingerprint of a directory tree.
@@ -603,40 +723,6 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
     0
 }
 
-fn cargo_vendor_config(src_dir: &Path) -> Result<String, RunError> {
-    let out = Command::new("cargo")
-        .args(["vendor", "--locked", "vendor-deps"])
-        .current_dir(src_dir)
-        .output()
-        .map_err(|e| RunError::Internal(format!("failed to run `cargo vendor`: {e}")))?;
-
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(RunError::Internal(format!(
-            "cargo vendor failed (exit {}):\n{stderr}",
-            out.status.code().unwrap_or(-1),
-        )));
-    }
-
-    let stdout = String::from_utf8(out.stdout)
-        .map_err(|e| RunError::Internal(format!("cargo vendor stdout was not UTF-8: {e}")))?;
-    assert!(!stdout.trim().is_empty(), "cargo vendor must print a config snippet");
-    Ok(stdout)
-}
-
-fn write_vendor_config(stage_root: &Path, vendor_config: &str) -> Result<(), RunError> {
-    assert!(stage_root.is_dir(), "stage root must exist: {}", stage_root.display());
-    assert!(!vendor_config.trim().is_empty(), "vendor config must not be empty");
-
-    let cargo_dir = stage_root.join(".cargo");
-    std::fs::create_dir_all(&cargo_dir)
-        .map_err(|e| RunError::Internal(format!("mkdir {}: {e}", cargo_dir.display())))?;
-    let config_path = cargo_dir.join("vendor-config.toml");
-    std::fs::write(&config_path, vendor_config)
-        .map_err(|e| RunError::Internal(format!("write {}: {e}", config_path.display())))?;
-    Ok(())
-}
-
 fn collect_paths_strict(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), RunError> {
     let entries = std::fs::read_dir(dir).map_err(|e| RunError::Internal(format!("read_dir {}: {e}", dir.display())))?;
     for entry in entries {
@@ -702,6 +788,8 @@ fn resolve_bwrap_source(output_dir: &Path) -> Result<BwrapSource, RunError> {
 
     // 2. Fall back to a host bwrap. On NixOS, prefer the wrapper dir
     // so fusermount3 is also resolved from /run/wrappers/bin.
+    // These NixOS-specific probes are host-convenience only, not part of any
+    // stronger non-Nix-host bootstrap claim.
     match find_host_bwrap() {
         Some(path) => {
             eprintln!(
@@ -726,6 +814,11 @@ fn choose_host_bwrap_path(wrapper_bwrap_path: Option<PathBuf>, path_bwrap_path: 
     path_bwrap_path
 }
 
+/// Prefer the NixOS wrapper-installed bwrap when present.
+///
+/// This is host-convenience discovery only. It does not shell out to any Nix
+/// command and should not be read as proof that first bootstrap is already
+/// independent of Nix-shaped host layouts.
 fn find_nixos_wrapper_bwrap() -> Option<PathBuf> {
     let wrapper_path = Path::new("/run/wrappers/bin/bwrap");
     if wrapper_path.is_file() && is_executable(wrapper_path) {
@@ -1508,7 +1601,38 @@ mod tests {
         std::fs::write(dir.join("Cargo.toml"), "[package]\nname = \"crunch\"\nversion = \"0.0.0\"\n").unwrap();
         std::fs::write(
             dir.join(".cargo").join("vendor-config.toml"),
-            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n",
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n",
+        )
+        .unwrap();
+    }
+
+    fn write_stageable_checkout(dir: &Path) {
+        std::fs::create_dir_all(dir.join(".cargo")).unwrap();
+        std::fs::create_dir_all(dir.join("bootstrap")).unwrap();
+        std::fs::create_dir_all(dir.join("builders")).unwrap();
+        std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
+        std::fs::create_dir_all(dir.join("lib")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("vendor").join("patched")).unwrap();
+        std::fs::create_dir_all(dir.join("vendor-deps").join("dep-a")).unwrap();
+        std::fs::write(dir.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(dir.join("Cargo.lock"), "# lock\n").unwrap();
+        std::fs::write(dir.join("rust-toolchain.toml"), "[toolchain]\nchannel = \"nightly\"\n").unwrap();
+        std::fs::write(
+            dir.join(".cargo").join("vendor-config.toml"),
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join(".cargo").join("config.toml"), "[build]\n").unwrap();
+        std::fs::write(dir.join("bootstrap").join("seed.ncl"), "{}").unwrap();
+        std::fs::write(dir.join("builders").join("mk.ncl"), "{}").unwrap();
+        std::fs::write(dir.join("crates").join("crate-a").join("lib.rs"), "pub fn x() {}\n").unwrap();
+        std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
+        std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.join("vendor").join("patched").join("README"), "vendor patch\n").unwrap();
+        std::fs::write(
+            dir.join("vendor-deps").join("dep-a").join("Cargo.toml"),
+            "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n",
         )
         .unwrap();
     }
@@ -1731,32 +1855,45 @@ mod tests {
     }
 
     #[test]
-    fn export_tracked_worktree_uses_worktree_and_skips_untracked() {
+    fn copy_selected_source_tree_copies_only_allowlisted_entries() {
         let repo = tempfile::tempdir().unwrap();
-        run_cmd(Command::new("git").arg("init").arg("-q").current_dir(repo.path()), "git init").unwrap();
-        run_cmd(
-            Command::new("git").args(["config", "user.email", "pi@example.test"]).current_dir(repo.path()),
-            "git config email",
-        )
-        .unwrap();
-        run_cmd(
-            Command::new("git").args(["config", "user.name", "Pi Test"]).current_dir(repo.path()),
-            "git config name",
-        )
-        .unwrap();
-        std::fs::write(repo.path().join("tracked.txt"), "committed\n").unwrap();
-        run_cmd(Command::new("git").args(["add", "tracked.txt"]).current_dir(repo.path()), "git add tracked").unwrap();
-        run_cmd(Command::new("git").args(["commit", "-qm", "init"]).current_dir(repo.path()), "git commit").unwrap();
-
-        std::fs::write(repo.path().join("tracked.txt"), "worktree\n").unwrap();
-        std::fs::write(repo.path().join("untracked.txt"), "skip me\n").unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::create_dir_all(repo.path().join("target").join("debug")).unwrap();
+        std::fs::write(repo.path().join("target").join("debug").join("junk"), "skip me\n").unwrap();
+        std::fs::write(repo.path().join("scratch.txt"), "skip me too\n").unwrap();
 
         let stage = tempfile::tempdir().unwrap();
-        export_tracked_worktree(repo.path(), stage.path()).unwrap();
+        copy_selected_source_tree(repo.path(), stage.path()).unwrap();
 
-        let tracked = std::fs::read_to_string(stage.path().join("tracked.txt")).unwrap();
-        assert_eq!(tracked, "worktree\n");
-        assert!(!stage.path().join("untracked.txt").exists());
+        assert!(stage.path().join("Cargo.toml").is_file());
+        assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
+        assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
+        assert!(!stage.path().join("target").exists());
+        assert!(!stage.path().join("scratch.txt").exists());
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_missing_vendor_config() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::remove_file(repo.path().join(".cargo").join("vendor-config.toml")).unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("vendor-config.toml"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_non_vendored_directory_target() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::write(
+            repo.path().join(".cargo").join("vendor-config.toml"),
+            "[source.vendored-sources]\ndirectory = \"/tmp/not-vendor-deps\"\n",
+        )
+        .unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("must point at checked-in vendor-deps"), "unexpected error: {err}");
     }
 
     #[test]
