@@ -1,13 +1,13 @@
-# Build dash (Debian Almquist Shell) from source using musl-gcc + make.
+# Build dash (Debian Almquist Shell) from source using the bootstrap seed + make.
 #
 # Part of the Nix-free bootstrap chain:
-#   musl-gcc (fetched) → make (from source) → dash (this file) → ...
+#   seed → make (from source) → dash (this file) → ...
 #
 # Usage:
 #   crunch build bootstrap/dash.ncl -I lib --store /tmp/crunch-store
 #
 # Dash is a minimal POSIX shell (~28 source files + code generators).
-# It needs: musl-gcc, GNU Make, and busybox for shell scripts.
+# It needs: the bootstrap seed toolchain, GNU Make, and busybox for shell scripts.
 #
 # The build has two phases:
 #   Phase A: run code generators (shell scripts + compiled tools)

@@ -128,9 +128,9 @@ enum Command {
         #[arg(short, long, default_value = "seed.ncl")]
         output: PathBuf,
 
-        /// Fetch static toolchain tarballs instead of querying Nix.
-        /// Downloads a statically-linked musl-gcc, persists it as a
-        /// FOD in --store, and writes seed.ncl. No Nix required.
+        /// Fetch the shared bootstrap seed provider instead of querying Nix.
+        /// Builds the reduced normalized seed from the pinned musl.cc tarball,
+        /// persists it in --store, and writes seed.ncl. No Nix required.
         #[arg(long)]
         fetch: bool,
 

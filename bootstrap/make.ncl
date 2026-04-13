@@ -1,7 +1,7 @@
-# Build GNU Make from source using the fetched musl-gcc toolchain.
+# Build GNU Make from source using the bootstrap seed toolchain.
 #
 # Part of the Nix-free bootstrap chain:
-#   musl-gcc (fetched) → make (this file) → bash → coreutils → ...
+#   seed → make (this file) → bash → coreutils → ...
 #
 # Usage:
 #   crunch build bootstrap/make.ncl -I lib --store /tmp/crunch-store

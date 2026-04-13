@@ -3,7 +3,7 @@
 # This is an example of the self-hosting derivation structure.
 # The actual self-build uses `crunch self-build`, which generates
 # a complete Nickel derivation with the full bootstrap chain
-# (musl-gcc -> make -> dash -> binutils -> musl -> gcc -> busybox
+# (seed -> make -> dash -> binutils -> musl -> gcc -> busybox
 # -> bwrap -> rust -> crunch). See src/self_build.rs.
 #
 # To prove self-hosting works:

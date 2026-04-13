@@ -1,11 +1,11 @@
 # Self-test: compile a C program using ONLY from-source tools.
 #
-# This is the proof that the fetched musl-gcc seed can be removed.
+# This is the proof that the reduced bootstrap seed can be removed.
 # The dependency tree is:
 #   gcc (from source) + binutils (from source) + musl (from source)
 #   → selftest binary
 #
-# The fetched musl-gcc is still an *indirect* dependency (it was used
+# The reduced bootstrap seed is still an *indirect* dependency (it was used
 # to build gcc/binutils/musl), but this derivation's direct inputs
 # are all from-source. A 3-stage bootstrap would eliminate even the
 # indirect dependency.
@@ -39,7 +39,7 @@ let gcc = (import "gcc.ncl") in
         $BB ln -sf $BB /tmp/tools/$cmd
       done
 
-      # Find from-source tools (NOT the fetched musl-gcc).
+      # Find from-source tools (NOT the reduced bootstrap seed).
       GCC=""
       for d in $NIX_STORE/*-gcc; do
         if [ -x "$d/bin/gcc" ]; then GCC="$d"; break; fi

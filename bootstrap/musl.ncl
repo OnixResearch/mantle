@@ -1,7 +1,7 @@
 # Build musl libc from source using the bootstrap toolchain.
 #
 # Part of the Nix-free bootstrap chain (Phase 4):
-#   musl-gcc (fetched) → make → dash → binutils → musl (this file) → ...
+#   seed → make → dash → binutils → musl (this file) → ...
 #
 # musl has a hand-written configure (not autoconf) — 843 lines,
 # no long-line probes, no bison/flex. The cleanest build in the chain.

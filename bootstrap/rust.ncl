@@ -5,7 +5,7 @@
 # need the musl dynamic linker from the bootstrap seed target.
 #
 # Part of the self-build chain:
-#   musl-gcc (fetched) -> make -> dash -> binutils -> musl -> gcc
+#   seed -> make -> dash -> binutils -> musl -> gcc
 #   rust (this file, fetched pre-built)
 #   -> crunch (self-build)
 #

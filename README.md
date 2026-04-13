@@ -53,8 +53,9 @@ prefix to `/nix/store` for interop testing. See
 The repo ships runnable examples under [`examples/`](examples/):
 
 - [`examples/fetch-crate-crc64.ncl`](examples/fetch-crate-crc64.ncl) — fetch a real crates.io source tarball (`crc64` 2.0.0)
-- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with crunch's bootstrap Rust toolchain
+- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with crunch's bootstrap Rust toolchain and shared reduced seed provider
 - [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
+- [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
 - [`examples/project/`](examples/project/) — project-aware `crunch build .#name` layout
 - [`examples/README.md`](examples/README.md) — short index of the full example set
 
@@ -345,35 +346,37 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 #### `crunch bootstrap --fetch`
 
 - **Current claim**: seed-assisted bootstrap without Nix.
-- **Trusted inputs today**: the pinned `musl-gcc` tarball listed in
-  `src/bootstrap.rs` (`FETCH_SEEDS`), plus its recursive hash.
-- **Host prerequisites**: Linux, network access to fetch the seed tarball,
+- **Trusted inputs today**: the pinned musl.cc native tarball declared in
+  `bootstrap/seed.ncl`, plus the checked-in reducer that turns it into the
+  normalized `musl-seed-toolchain` provider.
+- **Host prerequisites**: Linux, network access to fetch the raw tarball,
   and a working crunch binary with enough local disk for fetched outputs.
-- **Evidence today**: the fetch path persists the tarball as a fixed-output
-  derivation, writes `seed.ncl`, and the checked-in `bootstrap/*.ncl` chain
-  consumes that seed.
-- **Not yet proven**: the fetched `musl-gcc` seed is still a trusted binary
-  bootstrap input, not a source-built root.
+- **Evidence today**: the fetch path evaluates `bootstrap/seed.ncl`, builds
+  the reduced provider, writes `seed.ncl`, and installs provider provenance at
+  `<seed>/share/crunch-bootstrap/provider.json`.
+- **Not yet proven**: the reduced provider is still derived from a trusted
+  binary tarball, not a source-built root.
 
 #### `crunch self-build`
 
 - **Current claim**: seed-assisted self-build from the current checkout.
 - **Trusted inputs today**: the current source tree, the checked-in
-  `vendor-deps/` tree and `.cargo/vendor-config.toml`, the fetched `musl-gcc`
-  seed, and the host sandbox entry points used for the first bootstrap stage.
+  `vendor-deps/` tree and `.cargo/vendor-config.toml`, the reduced
+  `musl-seed-toolchain` provider derived from the pinned musl.cc tarball, and
+  the host sandbox entry points used for the first bootstrap stage.
 - **Host prerequisites**: `bwrap` and a static sandbox shell for the first
   bootstrap stage.
 - **Evidence today**: `crunch self-build --store /tmp/crunch-store -j 4 --no-substitute`
-  builds the bootstrap chain `musl-gcc -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`.
+  builds the bootstrap chain `seed -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`.
 - **Not yet proven**: this first build still relies on host tooling and the
-  fetched seed, so it is not a host-tool-free or full-source bootstrap.
+  reduced seed provider, so it is not a host-tool-free or full-source bootstrap.
 
 #### `./scripts/prove-self-hosting.sh`
 
 - **Current claim**: checked-in self-hosting proof.
 - **Trusted inputs today**: a checkout-built stage0 `crunch` binary, the same
-  fetched seed and host-tool assumptions as `crunch self-build`, and the
-  staged source tree recorded by stage0.
+  reduced seed provider and host-tool assumptions as `crunch self-build`, and
+  the staged source tree recorded by stage0.
 - **Host prerequisites**: Linux, the repo's nightly Rust toolchain, `clang`,
   `mold`, `pkg-config`, OpenSSL development files, `bwrap`, `git`, `cargo`,
   a static sandbox shell, and about 4 GiB free in `${TMPDIR:-/tmp}`.
@@ -387,9 +390,9 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 
 | Best-practice item | Status | Evidence today | Gap that remains |
 |---|---|---|---|
-| Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a fetched seed |
-| Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` pins the fetched `musl-gcc` URL and hash in `src/bootstrap.rs` | The repo still trusts those seeds; it does not yet reduce them to a smaller audited root |
-| Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the fetched seed | The fetched `musl-gcc` seed itself is not yet rebuilt from a smaller source bootstrap inside crunch |
+| Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
+| Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
+| Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
 | Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, and successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/` | The proof does not yet provide independent reproducibility evidence for release outputs |
 
 ## Self-Build
@@ -400,7 +403,7 @@ crunch can rebuild itself from source once the stage0 prerequisites are already 
 crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
 ```
 
-This builds the full bootstrap chain (`musl-gcc -> make -> dash ->
+This builds the full bootstrap chain (`seed -> make -> dash ->
 binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`) inside a
 bwrap sandbox. Output is a statically linked musl binary.
 
@@ -493,8 +496,8 @@ release artifacts or a full-source bootstrap root.
 
 The next trust-reduction steps are straightforward:
 
-1. Replace the fetched `musl-gcc` seed with a smaller and more auditable
-   bootstrap root.
+1. Replace the reduced musl.cc-derived provider with a smaller and more
+   auditable bootstrap root.
 2. Reduce or encapsulate the host-tool prerequisites still needed to stage the
    first self-build.
 3. Add independent rebuild evidence for release outputs instead of stopping at

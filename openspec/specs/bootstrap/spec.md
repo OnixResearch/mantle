@@ -7,20 +7,23 @@ labels, from-source bootstrap chain, and checked-in self-hosting proof.
 ## Requirements
 ### Requirement: Fetch-based bootstrap
 
-The system MUST support `crunch bootstrap --fetch` which downloads a static
-C toolchain from a pinned URL, persists it as a fixed-output derivation in the
-crunch store, and generates `seed.ncl`.
+The system MUST support `crunch bootstrap --fetch` by resolving a pinned
+bootstrap seed provider that satisfies the normalized `bootstrap/seed.ncl`
+contract, persisting it in the crunch store, and generating `seed.ncl`.
 
-The fetched seed MUST NOT require Nix to be installed. The toolchain MUST be
-statically linked so that no runtime closure walk is needed for the seed
-itself.
+The fetched seed path MUST NOT require Nix to be installed. The provider
+metadata MUST record explicit provenance for the trusted external seed
+artifacts, and the public stage0 contract consumed by later bootstrap stages
+MUST stay provider-independent.
 
 #### Scenario: Bootstrap from fetch on a machine without Nix
 
 - GIVEN a machine with crunch installed but no Nix
 - WHEN `crunch bootstrap --fetch --store ~/crunch-store -o seed.ncl` is run
-- THEN a `seed.ncl` is generated with a valid store path to the fetched toolchain
-- AND `crunch build hello-world.ncl -I seed.ncl --store ~/crunch-store` succeeds
+- THEN a `seed.ncl` is generated with a valid store path to the fetched seed
+  provider output
+- AND `crunch build hello-world.ncl -I seed.ncl --store ~/crunch-store`
+  succeeds
 
 ### Requirement: Explicit bootstrap trust inventory
 
@@ -44,7 +47,8 @@ For each path, the repo MUST name:
 
 - GIVEN a contributor wants to understand `crunch bootstrap --fetch`
 - WHEN they read the bootstrap docs
-- THEN they can see that the flow currently trusts a pinned fetched musl-gcc seed
+- THEN they can see that the flow currently trusts a pinned fetched bootstrap
+  seed provider derived from the musl.cc native tarball
 - AND they can see which host tools are still required around that flow
 - AND they can see that this is not yet the same as a full-source bootstrap
 
@@ -160,6 +164,36 @@ The stricter proof path MUST:
 - THEN the proof fails
 - AND the failure makes the hidden dependency visible to the reviewer
 
+### Requirement: Bootstrap seed reduction is explicit and staged
+
+The repo MUST treat replacement of the current fetched bootstrap seed as named,
+reviewable work instead of an implied future cleanup.
+
+That staged work MUST define:
+- the current trusted seed provider and its provenance,
+- the acceptance criteria for a reduced seed provider,
+- the migration path for swapping providers behind the normalized seed
+  contract,
+- the evidence needed to update docs and bootstrap claims once the new seed
+  lands.
+
+#### Scenario: Contributor can see the seed-reduction plan
+
+- GIVEN a contributor reads the active bootstrap work or roadmap
+- WHEN they look for the next trust-reduction step after the current proof
+- THEN they can find explicit work for replacing the current fetched seed
+- AND they can see the acceptance criteria for the replacement seed
+- AND they can see that later bootstrap stages are expected to remain bound to
+  the normalized contract
+
+#### Scenario: Provider swap does not force bootstrap-stage rewrites
+
+- GIVEN a future reduced seed provider is introduced
+- WHEN it satisfies the normalized `bootstrap/seed.ncl` contract
+- THEN later bootstrap derivations continue to consume that contract
+- AND the migration does not require every bootstrap stage to learn raw
+  provider-specific layout details
+
 ### Requirement: Bootstrap roadmap names remaining trust-reduction work
 
 The repo MUST track the major milestones and blockers between the current
@@ -220,21 +254,24 @@ busybox applets such as `mkdir`, `cp`, and `cat` on `PATH`.
 ### Requirement: Source-built toolchain
 
 The system MUST support building core tools from fetched source tarballs using
-the static musl-gcc seed.
+one normalized bootstrap seed contract, not one provider-specific filesystem
+layout.
 
 These derivations MUST live in the `bootstrap/` directory as regular `.ncl`
-files, not as Rust-only special cases.
+files, not as Rust-only special cases. Later bootstrap stages MUST consume the
+normalized seed contract exposed through `bootstrap/seed.ncl`.
 
-#### Scenario: Build make from source
+#### Scenario: Build make from normalized seed contract
 
-- GIVEN the fetched musl-gcc seed
+- GIVEN a fetched bootstrap seed provider that satisfies the normalized seed
+  contract
 - WHEN `crunch build bootstrap/make.ncl` is run
 - THEN a working `make` binary is produced in the crunch store
 - AND it can be used as an input to subsequent derivations
 
-#### Scenario: Build dash from source
+#### Scenario: Build dash from normalized seed contract
 
-- GIVEN the fetched musl-gcc seed and from-source `make`
+- GIVEN the normalized bootstrap seed contract and from-source `make`
 - WHEN `crunch build bootstrap/dash.ncl` is run
 - THEN a working POSIX shell is produced
 - AND the output is usable by later bootstrap stages
@@ -245,18 +282,19 @@ The system MUST support building a complete C compiler toolchain from source:
 `binutils`, `musl`, and `gcc`.
 
 Each tool MUST be represented as a `.ncl` derivation that chains off earlier
-bootstrap stages.
+bootstrap stages rooted in the normalized bootstrap seed contract.
 
-#### Scenario: Build complete toolchain from source
+#### Scenario: Build complete toolchain from normalized seed contract
 
-- GIVEN the bootstrap chain `musl-gcc -> make -> dash`
+- GIVEN the bootstrap chain `seed -> make -> dash`
 - WHEN `crunch build bootstrap/gcc.ncl` is run
 - THEN `gcc`, `binutils`, and `musl` are all built from source
 - AND the from-source `gcc` can compile C programs
 
 #### Scenario: Self-test with from-source toolchain
 
-- GIVEN from-source `gcc`, `binutils`, and `musl` with no fetched musl-gcc in direct inputs
+- GIVEN from-source `gcc`, `binutils`, and `musl` with no direct dependency on
+  the previous provider-specific seed layout
 - WHEN `crunch build bootstrap/selftest.ncl` is run
 - THEN a C test program compiles and passes its bootstrap self-test assertions
 - AND the binary is statically linked against the from-source `musl`

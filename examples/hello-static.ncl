@@ -6,15 +6,25 @@ let seed = import "seed.ncl" in
 
 {
   name = "hello-static",
-  builder = "%{seed.bash}/bin/bash",
+  builder = "/bin/sh",
   args = [
     "-c",
     m%"
-      set -e
-      export PATH="%{seed.coreutils}/bin:%{seed.gcc}/bin"
-      mkdir -p $out/bin
+      set -eu
+      BB=/bin/busybox
+      CC=""
+      if [ -x "%{seed.gcc}/bin/gcc" ]; then
+        CC="%{seed.gcc}/bin/gcc"
+      elif [ -x "%{seed.gcc}/bin/x86_64-linux-musl-gcc" ]; then
+        CC="%{seed.gcc}/bin/x86_64-linux-musl-gcc"
+      fi
+      if [ -z "$CC" ]; then
+        echo "ERROR: no usable C compiler in %{seed.gcc}" >&2
+        exit 1
+      fi
 
-      cat > hello.c << 'EOF'
+      $BB mkdir -p "$out/bin"
+      $BB cat > hello.c << 'EOF'
       #include <stdio.h>
       int main() {
           printf("Hello from crunch (static)!\n");
@@ -22,12 +32,8 @@ let seed = import "seed.ncl" in
       }
       EOF
 
-      gcc -static -o $out/bin/hello hello.c
+      "$CC" -static -o "$out/bin/hello" hello.c
     "%,
   ],
-  inputs = [
-    seed.bash,
-    seed.coreutils,
-    seed.gcc,
-  ],
+  inputs = [seed.gcc],
 } | crunch.Derivation

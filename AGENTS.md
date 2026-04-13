@@ -374,6 +374,17 @@ When claiming test results in commit messages or completion summaries:
   (`musl-seed-toolchain`) around the raw musl.cc tarball. Bootstrap stages
   should consume the normalized contract: target-prefixed binutils in `bin/`,
   headers at `<target>/include`, and `libgcc_s.so*` under `<target>/lib`.
+- Seed reduction milestone: `bootstrap/seed.ncl` now drops locale catalogs,
+  Fortran payload, gcov/LTO helpers, and gold/profile extras from the public
+  provider output, and writes provenance to
+  `share/crunch-bootstrap/provider.json` inside the store path.
+- `crunch bootstrap --fetch` must stay host-shell-free: fetch the raw musl.cc
+  tarball through `FetchBuildService`, then reduce it on the host in Rust.
+  If fetch bootstrap starts trying to build `musl-seed-toolchain` through bwrap,
+  it regresses to needing a static sandbox shell before bootstrap even starts.
+- `bootstrap/seed.ncl` runs under `/bin/sh` with only `/bin/busybox` mounted.
+  Use `$BB cat` / `$BB cp` / `$BB rm` etc. A plain `cat > ...` in the seed
+  derivation fails during self-build with `/bin/sh: cat: not found`.
 - musl.cc's raw tarball has unprefixed binutils (`bin/ar`, `bin/ld`,
   `bin/ranlib`, ...) but no `bin/x86_64-linux-musl-ar`. The normalized
   seed must materialize target-prefixed copies explicitly; do not rely on

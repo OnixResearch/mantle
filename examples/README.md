@@ -12,8 +12,8 @@ Small gallery for `examples/`.
 | `fetch-tarball.ncl` | fixed-output tarball fetch |
 | `fetch-git.ncl` | fixed-output git checkout |
 | `fetch-crate-crc64.ncl` | fetch published `crc64` crate source from crates.io |
-| `build-crate-crc64.ncl` | build published `crc64` crate with crunch bootstrap Rust toolchain |
-| `bootstrap-no-nix.ncl` | zero-Nix bootstrap with fetched musl toolchain |
+| `build-crate-crc64.ncl` | build published `crc64` crate with crunch bootstrap Rust toolchain and shared reduced seed provider |
+| `bootstrap-no-nix.ncl` | zero-Nix bootstrap with the shared reduced seed provider |
 | `project/` | project-aware `crunch build .#name` example |
 
 Useful commands:

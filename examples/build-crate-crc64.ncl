@@ -16,14 +16,13 @@
 # dependencies, so the build stays offline inside the sandbox.
 
 let crunch = import "lib.ncl" in
+let seed = import "../bootstrap/seed.ncl" in
+let toolchain = seed.toolchain in
+let seed_name = seed.name in
+let seed_target = seed.target in
+let seed_dynamic_linker = seed.dynamic_linker in
 let rust = import "../bootstrap/rust.ncl" in
 let musl = import "../bootstrap/musl.ncl" in
-
-let toolchain = crunch.fetchTarball {
-  url = "https://musl.cc/x86_64-linux-musl-native.tgz",
-  hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=",
-  name = "musl-gcc",
-} in
 
 let src = crunch.fetchTarball {
   url = "https://static.crates.io/crates/crc64/crc64-2.0.0.crate",
@@ -51,8 +50,8 @@ let src = crunch.fetchTarball {
       export CARGO_TARGET_DIR=/tmp/cargo-target
 
       TOOLCHAIN=""
-      for d in $NIX_STORE/*-musl-gcc; do
-        if [ -x "$d/bin/x86_64-linux-musl-gcc" ]; then TOOLCHAIN="$d"; break; fi
+      for d in $NIX_STORE/*-%{seed_name}; do
+        if [ -x "$d/bin/%{seed_target}-gcc" ]; then TOOLCHAIN="$d"; break; fi
       done
       MUSL=""
       for d in $NIX_STORE/*-musl; do
@@ -77,12 +76,12 @@ let src = crunch.fetchTarball {
       done
 
       $BB mkdir -p /lib 2>/dev/null || true
-      $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
+      $BB ln -sf "$MUSL/lib/libc.so" /lib/%{seed_dynamic_linker} 2>/dev/null || true
 
       export PATH="/tmp/tools:$RUST/bin:$TOOLCHAIN/bin"
-      export LD_LIBRARY_PATH="$TOOLCHAIN/lib"
-      export LIBRARY_PATH="$TOOLCHAIN/lib"
-      export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/lib"
+      export LD_LIBRARY_PATH="$TOOLCHAIN/%{seed_target}/lib"
+      export LIBRARY_PATH="$TOOLCHAIN/%{seed_target}/lib"
+      export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/%{seed_target}/lib"
 
       cp -r "$SRC/." /tmp/build/
       chmod -R u+w /tmp/build
@@ -91,7 +90,7 @@ let src = crunch.fetchTarball {
       mkdir -p .cargo
       cat > .cargo/config.toml << CARGOEOF
 [target.x86_64-unknown-linux-musl]
-linker = "x86_64-linux-musl-gcc"
+linker = "%{seed_target}-gcc"
 
 [net]
 offline = true

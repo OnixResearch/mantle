@@ -1,23 +1,35 @@
-# Build a C hello world program using the seed toolchain.
+# Build a C hello world program with either bootstrap seed mode.
 #
 # Usage:
-#   1. Generate seed: crunch bootstrap -o examples/seed.ncl
-#   2. Build: crunch build examples/hello-world.ncl -I examples
+#   1. Generate seed: crunch bootstrap -o seed.ncl
+#      or: crunch bootstrap --fetch --store /tmp/crunch-store -o seed.ncl
+#   2. Build from a directory containing both files:
+#      crunch build hello-world.ncl -I . --store /tmp/crunch-store
 
 let crunch = import "lib.ncl" in
 let seed = import "seed.ncl" in
 
 {
   name = "hello-world",
-  builder = "%{seed.bash}/bin/bash",
+  builder = "/bin/sh",
   args = [
     "-c",
     m%"
-      set -e
-      export PATH="%{seed.coreutils}/bin:%{seed.gcc}/bin"
-      mkdir -p $out/bin
+      set -eu
+      BB=/bin/busybox
+      CC=""
+      if [ -x "%{seed.gcc}/bin/gcc" ]; then
+        CC="%{seed.gcc}/bin/gcc"
+      elif [ -x "%{seed.gcc}/bin/x86_64-linux-musl-gcc" ]; then
+        CC="%{seed.gcc}/bin/x86_64-linux-musl-gcc"
+      fi
+      if [ -z "$CC" ]; then
+        echo "ERROR: no usable C compiler in %{seed.gcc}" >&2
+        exit 1
+      fi
 
-      cat > hello.c << 'EOF'
+      $BB mkdir -p "$out/bin"
+      $BB cat > hello.c << 'EOF'
       #include <stdio.h>
       int main() {
           printf("Hello from crunch!\n");
@@ -25,12 +37,8 @@ let seed = import "seed.ncl" in
       }
       EOF
 
-      gcc -o $out/bin/hello hello.c
+      "$CC" -o "$out/bin/hello" hello.c
     "%,
   ],
-  inputs = [
-    seed.bash,
-    seed.coreutils,
-    seed.gcc,
-  ],
+  inputs = [seed.gcc],
 } | crunch.Derivation

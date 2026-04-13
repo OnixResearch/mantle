@@ -1,7 +1,7 @@
 # Build bubblewrap (bwrap) from source using the bootstrap GCC + musl.
 #
 # Part of the Nix-free bootstrap chain:
-#   musl-gcc (fetched) -> make -> dash -> binutils -> musl -> gcc
+#   seed -> make -> dash -> binutils -> musl -> gcc
 #     -> bwrap (this file)
 #
 # Compiles bwrap directly with gcc — bypasses meson entirely.
@@ -136,7 +136,7 @@ static inline int cap_from_name(const char *name __attribute__((unused)),
 #endif
 CAPEOF
 
-      # Find the seed musl-gcc toolchain for kernel headers.
+      # Find the bootstrap seed toolchain for kernel headers.
       # The rebuilt musl sysroot has libc headers, but bwrap also needs
       # raw kernel headers like <linux/capability.h> and <linux/loop.h>.
       SEED_ROOT=""

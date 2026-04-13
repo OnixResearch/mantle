@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crunch_glue::CrunchDerivation;
 use crunch_glue::Input;
+use serde::Deserialize;
 
 const BOOTSTRAP_ENTRYPOINTS: &[&str] = &[
     "make.ncl",
@@ -31,6 +32,35 @@ fn bootstrap_path(name: &str) -> PathBuf {
 
 fn eval_bootstrap(name: &str) -> CrunchDerivation {
     crunch_eval::evaluate_and_deserialize(&bootstrap_path(name), &bootstrap_import_paths()).unwrap()
+}
+
+#[derive(Debug, Deserialize)]
+struct SeedRawArtifact {
+    name: String,
+    url: String,
+    hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SeedProviderMetadata {
+    id: String,
+    summary: String,
+    raw: SeedRawArtifact,
+    retained_tools: Vec<String>,
+    dropped_components: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SeedModule {
+    name: String,
+    target: String,
+    dynamic_linker: String,
+    toolchain: CrunchDerivation,
+    provider: SeedProviderMetadata,
+}
+
+fn eval_seed_module() -> SeedModule {
+    crunch_eval::evaluate_and_deserialize(&bootstrap_path("seed.ncl"), &bootstrap_import_paths()).unwrap()
 }
 
 fn input_derivation_names(drv: &CrunchDerivation) -> Vec<String> {
@@ -62,6 +92,33 @@ fn eval_crunch_bootstrap_imports_shared_seed() {
     assert!(input_names.contains(&"musl-seed-toolchain".to_string()));
     assert!(input_names.contains(&"gcc".to_string()));
     assert!(input_names.contains(&"rust".to_string()));
+}
+
+#[test]
+fn eval_seed_module_exposes_reduced_provider_metadata() {
+    let seed = eval_seed_module();
+
+    assert_eq!(seed.name, "musl-seed-toolchain");
+    assert_eq!(seed.toolchain.name, "musl-seed-toolchain");
+    assert_eq!(seed.target, "x86_64-linux-musl");
+    assert_eq!(seed.dynamic_linker, "ld-musl-x86_64.so.1");
+    assert_eq!(seed.provider.id, "musl.cc-native-reduced-v1");
+    assert!(seed.provider.summary.contains("Reduced C/C++ bootstrap seed"));
+    assert_eq!(seed.provider.raw.name, "musl-gcc-raw");
+    assert!(seed.provider.raw.url.contains("musl.cc"));
+    assert!(seed.provider.raw.hash.starts_with("sha256-"));
+    assert!(seed.provider.retained_tools.contains(&"x86_64-linux-musl-gcc".to_string()));
+    assert!(seed.provider.dropped_components.iter().any(|item| item.contains("Fortran")));
+}
+
+#[test]
+fn bootstrap_entrypoints_do_not_inline_raw_seed_provider_details() {
+    for entrypoint in BOOTSTRAP_ENTRYPOINTS {
+        let text = std::fs::read_to_string(bootstrap_path(entrypoint)).unwrap();
+        assert!(!text.contains("https://musl.cc/"), "raw seed URL leaked into {entrypoint}");
+        assert!(!text.contains("musl-gcc-raw"), "raw seed name leaked into {entrypoint}");
+        assert!(text.contains("import \"seed.ncl\""), "shared seed import missing in {entrypoint}");
+    }
 }
 
 #[test]

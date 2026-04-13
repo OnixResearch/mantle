@@ -42,8 +42,40 @@ fn eval_build_crate_crc64_example() {
         "example should build from derivation inputs only"
     );
 
+    let input_names: Vec<String> = drv
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            Input::Derivation(dep) => Some(dep.name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        input_names.contains(&"musl-seed-toolchain".to_string()),
+        "example should use shared reduced seed provider: {input_names:?}"
+    );
+
     let mut cache = ConversionCache::default();
     let (_drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cache).unwrap();
     assert!(!nix_drv.input_derivations.is_empty(), "build example should depend on fetched/built derivations");
     assert!(nix_drv.input_sources.is_empty(), "build example should stay self-contained");
+}
+
+#[test]
+fn eval_bootstrap_no_nix_example_uses_shared_seed() {
+    let drv = eval_example("bootstrap-no-nix.ncl");
+    assert_eq!(drv.name, "hello-no-nix");
+
+    let input_names: Vec<String> = drv
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            Input::Derivation(dep) => Some(dep.name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        input_names.contains(&"musl-seed-toolchain".to_string()),
+        "example should use shared reduced seed provider: {input_names:?}"
+    );
 }

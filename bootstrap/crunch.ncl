@@ -105,7 +105,7 @@ let crunch_src = crunch.fetchTarball {
       $BB ln -sf $MUSL/lib/libc.so /lib/%{seed_dynamic_linker} 2>/dev/null || true
 
       # Rust binaries need libgcc_s.so.1 for unwinding.
-      # The fetched musl-gcc toolchain provides it.
+      # The bootstrap seed toolchain provides it.
       MUSL_GCC=""
       for d in $NIX_STORE/*-%{seed_name}; do
         if [ -f "$d/%{seed_sysroot_lib}/libgcc_s.so.1" ]; then MUSL_GCC="$d/%{seed_sysroot_lib}"; break; fi

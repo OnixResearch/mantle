@@ -42,7 +42,7 @@ Anything outside those buckets is a hidden trust edge.
 
 | Item | Used by | Why it is trusted today | Notes |
 |---|---|---|---|
-| `musl-gcc` seed tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | fetched by crunch as a fixed-output derivation with recursive hash `sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=` | still a trusted binary bootstrap seed, not yet a smaller source-built root |
+| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | fetched by crunch with recursive hash `sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/crunch-bootstrap/provider.json` for provenance and dropped payload |
 
 ### Crunch-built outputs
 
@@ -84,6 +84,6 @@ What the checked-in self-hosting proof demonstrates today:
 
 What it does not demonstrate yet:
 
-- a full-source bootstrap root smaller than the fetched `musl-gcc` seed
+- a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
 - bit-for-bit reproducible release artifacts from independent rebuilders
 - removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`

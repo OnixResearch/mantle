@@ -1,11 +1,11 @@
 # Build GCC from source using the bootstrap toolchain.
 #
 # Part of the Nix-free bootstrap chain (Phase 4):
-#   musl-gcc (fetched) → make → dash → binutils → musl → gcc (this file)
+#   seed → make → dash → binutils → musl → gcc (this file)
 #
 # This builds a minimal C-only GCC targeting musl libc. Combined with
 # the from-source binutils and musl, this gives a fully from-source
-# toolchain — the fetched musl-gcc seed is no longer needed for
+# toolchain — the reduced bootstrap seed is no longer needed for
 # subsequent builds.
 #
 # GCC needs three math libraries (GMP, MPFR, MPC) which are fetched

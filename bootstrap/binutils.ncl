@@ -1,7 +1,7 @@
 # Build GNU Binutils from source using the bootstrap toolchain.
 #
 # Part of the Nix-free bootstrap chain (Phase 4):
-#   musl-gcc (fetched) → make → dash → binutils (this file) → ...
+#   seed → make → dash → binutils (this file) → ...
 #
 # Unlike make/dash, binutils is large enough that we use its
 # autoconf configure script instead of hand-writing config.h.
@@ -101,8 +101,8 @@ let binutils_src = crunch.fetchTarball {
       export PATH="/tmp/tools:$TOOLCHAIN/bin"
       export SHELL="$DASH"
       export CONFIG_SHELL="$DASH"
-      # The musl.cc native toolchain has prefixed names for gcc/g++
-      # but unprefixed for binutils tools (ar, ld, as, etc.).
+      # The reduced seed provider exposes prefixed gcc/g++ frontends,
+      # but the raw binutils payload underneath is still unprefixed.
       export CC="$TOOLCHAIN/bin/%{seed_target}-gcc"
       export CXX="$TOOLCHAIN/bin/%{seed_target}-g++"
       export AR="$TOOLCHAIN/bin/%{seed_target}-ar"

@@ -2,7 +2,7 @@
 # bootstrap chain. No Nix-provided tools in the build.
 #
 # Bootstrap chain exercised:
-#   musl-gcc (fetched seed) → make (from source) → dash (from source)
+#   seed (reduced provider) → make (from source) → dash (from source)
 #   All three are inputs; dash is the builder shell.
 #
 # The test project has 3 source files, 2 headers, and a Makefile.
