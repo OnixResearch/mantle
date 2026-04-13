@@ -46,6 +46,13 @@
 //!   ever is suitable. A default ["passthrough"](passthrough/index.html) filesystem driver is
 //!   implemented as a sample.
 
+#[cfg(feature = "async-io")]
+compile_error!(
+    "vendored fuse-backend-rs disables feature `async-io` in this workspace: \
+     upstream async trait/object-safety path does not compile on the pinned toolchain. \
+     Build without `--features async-io` until that upstream port is fixed."
+);
+
 extern crate bitflags;
 extern crate libc;
 #[macro_use]

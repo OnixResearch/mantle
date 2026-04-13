@@ -276,7 +276,7 @@ enum Command {
     },
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum AttestAction {
     /// Show an artifact attestation for a store path
     Show {
@@ -302,7 +302,7 @@ pub enum AttestAction {
     },
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum AttestVerifyAction {
     /// Verify a persisted artifact attestation
     Artifact { path: String },
@@ -323,7 +323,7 @@ pub enum AttestVerifyAction {
     },
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum StoreAction {
     /// List all known store paths
     List,
@@ -395,24 +395,79 @@ fn main() -> ExitCode {
     }
 }
 
+#[derive(Debug, Clone)]
+struct RunContext {
+    store: PathBuf,
+    resolved_state_dir: PathBuf,
+    store_prefix: String,
+    verbose: bool,
+    json: bool,
+}
+
+impl RunContext {
+    fn output_mode(&self) -> BuildOutputMode {
+        if self.json {
+            BuildOutputMode::Json
+        } else {
+            BuildOutputMode::Human
+        }
+    }
+}
+
 fn run(args: Args) -> Result<(), RunError> {
-    if let Some(ref state_dir) = args.state_dir {
+    apply_state_dir_override(&args);
+    let ctx = build_run_context(&args);
+    dispatch_command(&args, &ctx)
+}
+
+fn apply_state_dir_override(args: &Args) {
+    if let Some(state_dir) = &args.state_dir {
         unsafe { std::env::set_var("CRUNCH_STATE_DIR", state_dir) };
     }
+}
 
-    let resolved_state_dir = state_dir();
-    let store_prefix = resolve_store_prefix(&args);
+fn build_run_context(args: &Args) -> RunContext {
+    let store_prefix = resolve_store_prefix(args);
     debug_assert!(!store_prefix.is_empty(), "store_prefix must not be empty");
     debug_assert!(store_prefix.starts_with('/'), "store_prefix must be absolute");
+    RunContext {
+        store: args.store.clone(),
+        resolved_state_dir: state_dir(),
+        store_prefix,
+        verbose: args.verbose,
+        json: args.json,
+    }
+}
 
-    match args.command {
-        Command::Eval { file, import_paths } => {
-            let import_paths = build_import_paths(&import_paths)?;
-            let json =
-                crunch_eval::evaluate_to_json(&file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
-            println!("{json}");
-            Ok(())
-        }
+fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
+    match &args.command {
+        Command::Eval { file, import_paths } => run_eval(file, import_paths),
+        Command::Build { .. } => run_build_from_command(ctx, &args.command),
+        Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
+        Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
+        Command::Store { action } => store_cmd::cmd_store(action.clone()),
+        Command::Attest { action } => run_attest_command(ctx, action.clone()),
+        Command::Init
+        | Command::Check
+        | Command::Show
+        | Command::Refresh { .. }
+        | Command::ListStale
+        | Command::Upgrade => run_project_command(&args.command),
+        Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
+        Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
+        Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_eval(file: &PathBuf, import_paths: &[PathBuf]) -> Result<(), RunError> {
+    let import_paths = build_import_paths(import_paths)?;
+    let json = crunch_eval::evaluate_to_json(file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
+    println!("{json}");
+    Ok(())
+}
+
+fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
         Command::Build {
             file,
             import_paths,
@@ -423,113 +478,121 @@ fn run(args: Args) -> Result<(), RunError> {
             signing_key,
             trusted_public_keys,
             trust_unsigned,
-        } => {
-            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let sub_url = if no_substitute { None } else { Some(substituters) };
-            let parsed_trusted = parse_trusted_keys(&trusted_public_keys)?;
-            let output_mode = if args.json {
-                BuildOutputMode::Json
-            } else {
-                BuildOutputMode::Human
-            };
+        } => run_build_command(
+            ctx,
+            file.as_ref(),
+            import_paths,
+            *fix,
+            *jobs,
+            substituters,
+            *no_substitute,
+            signing_key.as_deref(),
+            trusted_public_keys,
+            *trust_unsigned,
+        ),
+        _ => unreachable!("build helper called with non-build command"),
+    }
+}
 
-            let target = project_build::parse_build_target(file.as_deref());
-            match target {
-                project_build::BuildTarget::File(ref path) => {
-                    let import_paths = build_import_paths(&import_paths)?;
-                    cmd_build(
-                        path,
-                        &import_paths,
-                        &args.store,
-                        &resolved_state_dir,
-                        &store_prefix,
-                        args.verbose,
-                        fix,
-                        max_jobs,
-                        sub_url.as_deref(),
-                        signing_key.as_deref(),
-                        parsed_trusted.as_deref(),
-                        trust_unsigned,
-                        output_mode,
-                    )
-                }
-                project_build::BuildTarget::ProjectDefault
-                | project_build::BuildTarget::Selector(_) => {
-                    let cwd = current_dir_or_error()?;
-                    let resolved = project_build::resolve_project_target(&target, &cwd, &import_paths)?;
-                    let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
-                    let mut full_import_paths = build_import_paths(&[])?;
-                    full_import_paths.extend(resolved.import_paths);
-                    build_from_expr(
-                        &expr,
-                        &full_import_paths,
-                        &args.store,
-                        &resolved_state_dir,
-                        &store_prefix,
-                        args.verbose,
-                        fix,
-                        max_jobs,
-                        sub_url.as_deref(),
-                        signing_key.as_deref(),
-                        parsed_trusted.as_deref(),
-                        trust_unsigned,
-                        output_mode,
-                    )
-                }
-            }
+#[allow(clippy::too_many_arguments)]
+fn run_build_command(
+    ctx: &RunContext,
+    file: Option<&PathBuf>,
+    import_paths: &[PathBuf],
+    fix: bool,
+    jobs: Option<u32>,
+    substituters: &str,
+    no_substitute: bool,
+    signing_key: Option<&std::path::Path>,
+    trusted_public_keys: &[String],
+    trust_unsigned: bool,
+) -> Result<(), RunError> {
+    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let substituter_url = (!no_substitute).then_some(substituters);
+    let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
+    let target = project_build::parse_build_target(file.map(PathBuf::as_path));
+    match target {
+        project_build::BuildTarget::File(path) => {
+            let import_paths = build_import_paths(import_paths)?;
+            cmd_build(
+                &path,
+                &import_paths,
+                &ctx.store,
+                &ctx.resolved_state_dir,
+                &ctx.store_prefix,
+                ctx.verbose,
+                fix,
+                max_jobs,
+                substituter_url,
+                signing_key,
+                parsed_trusted.as_deref(),
+                trust_unsigned,
+                ctx.output_mode(),
+            )
         }
+        project_build::BuildTarget::ProjectDefault | project_build::BuildTarget::Selector(_) => {
+            let cwd = current_dir_or_error()?;
+            let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
+            let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+            let mut full_import_paths = build_import_paths(&[])?;
+            full_import_paths.extend(resolved.import_paths);
+            build_from_expr(
+                &expr,
+                &full_import_paths,
+                &ctx.store,
+                &ctx.resolved_state_dir,
+                &ctx.store_prefix,
+                ctx.verbose,
+                fix,
+                max_jobs,
+                substituter_url,
+                signing_key,
+                parsed_trusted.as_deref(),
+                trust_unsigned,
+                ctx.output_mode(),
+            )
+        }
+    }
+}
+
+fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
         Command::Bootstrap {
             output,
             fetch,
             packages,
-        } => {
-            if fetch {
-                cmd_bootstrap_fetch(&output, &args.store, args.verbose)
-            } else {
-                cmd_bootstrap(&output, &packages)
-            }
-        }
-        Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), list),
-        Command::Store { action } => store_cmd::cmd_store(action),
-        Command::Attest { action } => attest_cmd::cmd_attest(
-            action,
-            &current_dir_or_error()?,
-            &args.store,
-            &resolved_state_dir,
-            &store_prefix,
-        ),
-        Command::Init => project_cmd::cmd_init(&current_dir_or_error()?),
-        Command::Check => project_cmd::cmd_check(&current_dir_or_error()?),
-        Command::Show => project_cmd::cmd_show(&current_dir_or_error()?),
-        Command::Refresh { names } => project_cmd::cmd_refresh(&current_dir_or_error()?, &names),
-        Command::ListStale => project_cmd::cmd_list_stale(&current_dir_or_error()?),
-        Command::Upgrade => project_cmd::cmd_upgrade(&current_dir_or_error()?),
-        Command::SelfBuild {
-            jobs,
-            no_substitute,
-            no_verify,
-            signing_key,
-            trusted_public_keys,
-            trust_unsigned,
-            source_store_path,
-        } => {
-            let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-            let parsed_trusted = parse_trusted_keys(&trusted_public_keys)?;
-            self_build::cmd_self_build(
-                &args.store,
-                &resolved_state_dir,
-                &store_prefix,
-                args.verbose,
-                max_jobs,
-                no_substitute,
-                no_verify,
-                signing_key.as_deref(),
-                parsed_trusted.as_deref(),
-                trust_unsigned,
-                source_store_path.as_deref(),
-            )
-            .map(|_report| ())
-        }
+        } => run_bootstrap_command(ctx, output, *fetch, packages),
+        _ => unreachable!("bootstrap helper called with non-bootstrap command"),
+    }
+}
+
+fn run_bootstrap_command(ctx: &RunContext, output: &PathBuf, fetch: bool, packages: &[String]) -> Result<(), RunError> {
+    if fetch {
+        cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose)
+    } else {
+        cmd_bootstrap(output, packages)
+    }
+}
+
+fn run_project_command(command: &Command) -> Result<(), RunError> {
+    let cwd = current_dir_or_error()?;
+    match command {
+        Command::Init => project_cmd::cmd_init(&cwd),
+        Command::Check => project_cmd::cmd_check(&cwd),
+        Command::Show => project_cmd::cmd_show(&cwd),
+        Command::Refresh { names } => project_cmd::cmd_refresh(&cwd, names),
+        Command::ListStale => project_cmd::cmd_list_stale(&cwd),
+        Command::Upgrade => project_cmd::cmd_upgrade(&cwd),
+        _ => unreachable!("project command helper called with non-project command"),
+    }
+}
+
+fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunError> {
+    attest_cmd::cmd_attest(action, &current_dir_or_error()?, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
+}
+
+fn run_develop_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
         Command::Develop {
             name,
             import_paths,
@@ -537,18 +600,44 @@ fn run(args: Args) -> Result<(), RunError> {
             no_substitute,
             signing_key,
             trust_unsigned,
-        } => cmd_develop(
+        } => run_develop_command(
+            ctx,
             name.as_deref(),
-            &import_paths,
-            jobs,
-            no_substitute,
+            import_paths,
+            *jobs,
+            *no_substitute,
             signing_key.as_deref(),
-            trust_unsigned,
-            &args.store,
-            &resolved_state_dir,
-            &store_prefix,
-            args.verbose,
+            *trust_unsigned,
         ),
+        _ => unreachable!("develop helper called with non-develop command"),
+    }
+}
+
+fn run_develop_command(
+    ctx: &RunContext,
+    name: Option<&str>,
+    import_paths: &[PathBuf],
+    jobs: Option<u32>,
+    no_substitute: bool,
+    signing_key: Option<&std::path::Path>,
+    trust_unsigned: bool,
+) -> Result<(), RunError> {
+    cmd_develop(
+        name,
+        import_paths,
+        jobs,
+        no_substitute,
+        signing_key,
+        trust_unsigned,
+        &ctx.store,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+        ctx.verbose,
+    )
+}
+
+fn run_run_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
         Command::Run {
             name,
             import_paths,
@@ -557,20 +646,96 @@ fn run(args: Args) -> Result<(), RunError> {
             signing_key,
             trust_unsigned,
             run_args,
-        } => cmd_run(
+        } => run_package_command(
+            ctx,
             name.as_deref(),
-            &import_paths,
+            import_paths,
+            *jobs,
+            *no_substitute,
+            signing_key.as_deref(),
+            *trust_unsigned,
+            run_args,
+        ),
+        _ => unreachable!("run helper called with non-run command"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_package_command(
+    ctx: &RunContext,
+    name: Option<&str>,
+    import_paths: &[PathBuf],
+    jobs: Option<u32>,
+    no_substitute: bool,
+    signing_key: Option<&std::path::Path>,
+    trust_unsigned: bool,
+    run_args: &[String],
+) -> Result<(), RunError> {
+    cmd_run(
+        name,
+        import_paths,
+        jobs,
+        no_substitute,
+        signing_key,
+        trust_unsigned,
+        run_args,
+        &ctx.store,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+        ctx.verbose,
+    )
+}
+
+fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
+        Command::SelfBuild {
             jobs,
             no_substitute,
-            signing_key.as_deref(),
+            no_verify,
+            signing_key,
+            trusted_public_keys,
             trust_unsigned,
-            &run_args,
-            &args.store,
-            &resolved_state_dir,
-            &store_prefix,
-            args.verbose,
-        )
+            source_store_path,
+        } => run_self_build_command(
+            ctx,
+            *jobs,
+            *no_substitute,
+            *no_verify,
+            signing_key.as_deref(),
+            trusted_public_keys,
+            *trust_unsigned,
+            source_store_path.as_deref(),
+        ),
+        _ => unreachable!("self-build helper called with non-self-build command"),
     }
+}
+
+fn run_self_build_command(
+    ctx: &RunContext,
+    jobs: Option<u32>,
+    no_substitute: bool,
+    no_verify: bool,
+    signing_key: Option<&std::path::Path>,
+    trusted_public_keys: &[String],
+    trust_unsigned: bool,
+    source_store_path: Option<&std::path::Path>,
+) -> Result<(), RunError> {
+    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
+    self_build::cmd_self_build(
+        &ctx.store,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+        ctx.verbose,
+        max_jobs,
+        no_substitute,
+        no_verify,
+        signing_key,
+        parsed_trusted.as_deref(),
+        trust_unsigned,
+        source_store_path,
+    )
+    .map(|_report| ())
 }
 
 fn resolve_store_prefix(args: &Args) -> String {
@@ -620,8 +785,7 @@ fn build_from_expr(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), expr)
-        .map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
 
     cmd_build(
         tmp.path(),
@@ -659,8 +823,7 @@ fn build_from_expr_raw(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), expr)
-        .map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
 
     let keypair = build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
     let configured_trusted_keys = build_cmd::load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
@@ -691,8 +854,7 @@ fn first_output_path(
 ) -> Option<PathBuf> {
     for outcome in &result.outcomes {
         // Prefer the "out" output, fall back to first alphabetically.
-        let path_info = outcome.outputs.get("out")
-            .or_else(|| outcome.outputs.values().next())?;
+        let path_info = outcome.outputs.get("out").or_else(|| outcome.outputs.values().next())?;
         let abs = path_info.store_path.to_absolute_path_with_prefix(store_dir);
         let host_path = if output_dir == std::path::Path::new(store_dir) {
             PathBuf::from(&abs)
@@ -737,10 +899,7 @@ fn exec_shell(out_path: &std::path::Path) -> Result<(), RunError> {
 fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError> {
     let bin_dir = out_path.join("bin");
     if !bin_dir.is_dir() {
-        return Err(RunError::Internal(format!(
-            "no bin/ directory in {}",
-            out_path.display()
-        )));
+        return Err(RunError::Internal(format!("no bin/ directory in {}", out_path.display())));
     }
 
     let mut entries: Vec<_> = std::fs::read_dir(&bin_dir)
@@ -750,9 +909,9 @@ fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError>
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
-    let exe = entries.first().ok_or_else(|| {
-        RunError::Internal(format!("no executables in {}", bin_dir.display()))
-    })?;
+    let exe = entries
+        .first()
+        .ok_or_else(|| RunError::Internal(format!("no executables in {}", bin_dir.display())))?;
 
     let exe_path = exe.path();
     eprintln!("running: {}", exe_path.display());
@@ -772,9 +931,7 @@ fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError>
 fn name_to_build_target(name: Option<&str>) -> project_build::BuildTarget {
     match name {
         None => project_build::BuildTarget::ProjectDefault,
-        Some(s) if s.starts_with(".#") => {
-            project_build::parse_build_target(Some(std::path::Path::new(s)))
-        }
+        Some(s) if s.starts_with(".#") => project_build::parse_build_target(Some(std::path::Path::new(s))),
         Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
             segments: vec![s.to_string()],
         }),
@@ -795,7 +952,11 @@ fn build_project_expr(
     signing_key_path: Option<&std::path::Path>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
-    let sub_url = if no_substitute { None } else { Some("https://cache.nixos.org".to_string()) };
+    let sub_url = if no_substitute {
+        None
+    } else {
+        Some("https://cache.nixos.org".to_string())
+    };
     let mut full_import_paths = build_import_paths(&[])?;
     full_import_paths.extend(resolved_import_paths);
     build_from_expr_raw(

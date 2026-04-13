@@ -115,11 +115,11 @@ fn push_unvisited_refs(
 mod tests {
     use std::collections::BTreeMap;
 
+    use async_trait::async_trait;
     use snix_store::path_info::PathInfo;
     use snix_store::pathinfoservice::PathInfoService;
     use snix_store::pathinfoservice::{self};
 
-    use async_trait::async_trait;
     use super::*;
 
     // -- Mock PathInfoService --------------------------------------------------

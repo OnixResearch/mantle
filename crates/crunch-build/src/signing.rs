@@ -132,8 +132,9 @@ pub fn build_trusted_keys(local: &KeyPair, user_keys: Option<&[VerifyingKey]>) -
             let mut keys = Vec::with_capacity(explicit.len().saturating_add(1));
             keys.push(local.verifying_key.clone());
             for k in explicit {
-                // Skip if already present (e.g. user listed their own key).
-                if !keys.iter().any(|existing| existing.name() == k.name()) {
+                // Skip only exact duplicates. Different key material may
+                // legitimately reuse the same display name across stores.
+                if !keys.iter().any(|existing| existing == k) {
                     keys.push(k.clone());
                 }
             }
@@ -388,5 +389,18 @@ mod tests {
         let keys = build_trusted_keys(&kp, Some(&[kp.verifying_key.clone()]));
         let local_count = keys.iter().filter(|k| k.name() == "cache.example.com-1").count();
         assert_eq!(local_count, 1, "local key must appear exactly once");
+    }
+
+    #[test]
+    fn user_keys_keep_same_name_with_different_material() {
+        let kp = test_keypair();
+        let distinct_same_name =
+            VerifyingKey::parse("cache.example.com-1:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=").unwrap();
+
+        let keys = build_trusted_keys(&kp, Some(&[distinct_same_name.clone()]));
+        let local_count = keys.iter().filter(|k| k.name() == "cache.example.com-1").count();
+        assert_eq!(local_count, 2, "same-name keys with different bytes must both be kept");
+        assert!(keys.iter().any(|k| k == &kp.verifying_key));
+        assert!(keys.iter().any(|k| k == &distinct_same_name));
     }
 }

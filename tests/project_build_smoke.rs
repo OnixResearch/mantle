@@ -21,17 +21,13 @@ fn crunch_cmd() -> Command {
 
 fn can_build() -> bool {
     Path::new("/nix/store").exists()
-        && std::process::Command::new("bwrap")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success())
+        && std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
 /// Check if the sandbox shell has coreutils applets (mkdir, chmod).
 /// Some static busybox builds are ash-only and lack these.
 fn sandbox_has_coreutils() -> bool {
-    let shell = std::env::var("SNIX_BUILD_SANDBOX_SHELL")
-        .unwrap_or_else(|_| "/bin/sh".to_string());
+    let shell = std::env::var("SNIX_BUILD_SANDBOX_SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
     // Run the shell as busybox and try mkdir --help
     std::process::Command::new(&shell)
         .args(["mkdir", "--help"])
@@ -243,10 +239,7 @@ impl BuildResult {
     }
 }
 
-fn build_command_strings(
-    store: &Path,
-    state: &Path,
-) -> Vec<String> {
+fn build_command_strings(store: &Path, state: &Path) -> Vec<String> {
     // assert_cmd doesn't expose the full argv easily; reconstruct
     vec![
         "crunch".into(),
@@ -388,10 +381,7 @@ fn project_build_invalid_selector_fails() {
     let fixture = ProjectFixture::new(PROJECT_NCL);
     let result = fixture.build(&[".#nonexistent"]);
 
-    assert!(
-        !result.output.status.success(),
-        "build with nonexistent selector should fail"
-    );
+    assert!(!result.output.status.success(), "build with nonexistent selector should fail");
 }
 
 #[test]
@@ -454,14 +444,8 @@ fn project_run_default() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    assert!(
-        output.status.success(),
-        "crunch run (default) should succeed, stderr:\n{stderr}",
-    );
-    assert!(
-        stdout.contains("Hello from crunch project!"),
-        "default run should execute hello, got:\n{stdout}",
-    );
+    assert!(output.status.success(), "crunch run (default) should succeed, stderr:\n{stderr}",);
+    assert!(stdout.contains("Hello from crunch project!"), "default run should execute hello, got:\n{stdout}",);
 }
 
 #[test]
@@ -505,14 +489,8 @@ fn project_run_with_args() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    assert!(
-        output.status.success(),
-        "crunch run with args should succeed, stderr:\n{stderr}",
-    );
-    assert!(
-        stdout.contains("args: foo bar"),
-        "should pass through args, got:\n{stdout}",
-    );
+    assert!(output.status.success(), "crunch run with args should succeed, stderr:\n{stderr}",);
+    assert!(stdout.contains("args: foo bar"), "should pass through args, got:\n{stdout}",);
 }
 
 #[test]
@@ -609,13 +587,9 @@ fn project_build_from_subdirectory() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    assert!(
-        output.status.success(),
-        "build from subdirectory should succeed, stderr:\n{stderr}",
-    );
+    assert!(output.status.success(), "build from subdirectory should succeed, stderr:\n{stderr}",);
 
-    let report: BuildJsonReport = serde_json::from_str(&stdout).unwrap_or_else(|e| {
-        panic!("should parse JSON report: {e}\nstdout:\n{stdout}")
-    });
+    let report: BuildJsonReport =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("should parse JSON report: {e}\nstdout:\n{stdout}"));
     assert_eq!(report.outcomes[0].label, "hello", "should find default package");
 }

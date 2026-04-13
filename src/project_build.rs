@@ -4,7 +4,8 @@
 //! derivations from the Project output schema.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use crate::errors::RunError;
 
@@ -150,10 +151,7 @@ fn resolve_selector_to_target(sel: &Selector) -> ProjectTarget {
 ///
 /// Returns a Nickel snippet that, when evaluated, produces either a single
 /// derivation or a record of derivations suitable for the build pipeline.
-pub fn generate_extraction_expr(
-    root_file: &Path,
-    target: &ProjectTarget,
-) -> String {
+pub fn generate_extraction_expr(root_file: &Path, target: &ProjectTarget) -> String {
     let root_path = root_file.to_string_lossy();
 
     match target {
@@ -220,9 +218,7 @@ else
             )
         }
         ProjectTarget::NamedShell(name) => {
-            format!(
-                r#"(import "{root_path}").devShells."{name}""#
-            )
+            format!(r#"(import "{root_path}").devShells."{name}""#)
         }
     }
 }
@@ -285,10 +281,7 @@ mod tests {
 
     #[test]
     fn generate_extraction_attribute_single() {
-        let expr = generate_extraction_expr(
-            Path::new("crunch.ncl"),
-            &ProjectTarget::Attribute(vec!["hello".into()]),
-        );
+        let expr = generate_extraction_expr(Path::new("crunch.ncl"), &ProjectTarget::Attribute(vec!["hello".into()]));
         assert!(expr.contains("packages"));
         assert!(expr.contains("checks"));
         assert!(expr.contains("hello"));

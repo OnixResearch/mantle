@@ -45,6 +45,8 @@ use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
 const MAX_DIAGNOSTIC_ENTRIES: u32 = 64;
+const MAX_PROOF_STORE_ENTRIES: usize = 32;
+const MAX_EMBEDDED_STORE_PATHS: usize = 32;
 const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
 const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v1";
@@ -74,8 +76,10 @@ struct ProofBundleManifest {
     store_dir: String,
     staged_source: String,
     state_dirs: ProofStateDirs,
+    store_inventory: ProofStoreInventory,
     binaries: ProofBinarySet,
     tools: ProofToolSet,
+    fixed_point: ProofFixedPointAnalysis,
     stage0: ProofStageManifest,
     stage2: ProofStageManifest,
 }
@@ -95,8 +99,34 @@ struct ProofBinarySet {
 
 #[derive(Debug, Serialize)]
 struct ProofToolSet {
+    stage0_bwrap: ProofHashedPath,
+    stage0_busybox: ProofHashedPath,
     stage2_bwrap: ProofHashedPath,
     stage2_busybox: ProofHashedPath,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofStoreInventory {
+    crunch_entries: Vec<String>,
+    bwrap_entries: Vec<String>,
+    busybox_entries: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofFixedPointAnalysis {
+    stage1_equals_stage2: bool,
+    stage1_vs_stage2: ProofBinaryDiff,
+    stage0_bwrap_equals_stage2_bwrap: bool,
+    stage0_busybox_equals_stage2_busybox: bool,
+    stage1_embedded_store_paths: Vec<String>,
+    stage2_embedded_store_paths: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofBinaryDiff {
+    same_size: bool,
+    size_delta_bytes: i64,
+    first_diff_offset: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -773,6 +803,103 @@ fn hash_file_record(path: &Path, display_path: String) -> ProofHashedPath {
     }
 }
 
+fn hashed_paths_match(left: &ProofHashedPath, right: &ProofHashedPath) -> bool {
+    left.size_bytes == right.size_bytes && left.digest_blake3 == right.digest_blake3
+}
+
+fn diff_binary_bytes(left: &Path, right: &Path) -> ProofBinaryDiff {
+    let left_bytes = std::fs::read(left).unwrap_or_else(|err| panic!("read {} for diff: {err}", left.display()));
+    let right_bytes = std::fs::read(right).unwrap_or_else(|err| panic!("read {} for diff: {err}", right.display()));
+    let same_size = left_bytes.len() == right_bytes.len();
+    let size_delta_bytes =
+        i64::try_from(right_bytes.len()).unwrap_or(i64::MAX) - i64::try_from(left_bytes.len()).unwrap_or(i64::MAX);
+    let first_diff_offset = left_bytes
+        .iter()
+        .zip(right_bytes.iter())
+        .position(|(left_byte, right_byte)| left_byte != right_byte)
+        .map(|offset| u64::try_from(offset).unwrap_or(u64::MAX))
+        .or_else(|| {
+            if same_size {
+                None
+            } else {
+                Some(u64::try_from(left_bytes.len().min(right_bytes.len())).unwrap_or(u64::MAX))
+            }
+        });
+    ProofBinaryDiff {
+        same_size,
+        size_delta_bytes,
+        first_diff_offset,
+    }
+}
+
+fn find_embedded_store_path_end(candidate: &str) -> Option<usize> {
+    for marker in ["-busybox/bin/busybox", "-bwrap/bin/bwrap", "-crunch-src"] {
+        if let Some(offset) = candidate.find(marker) {
+            return Some(offset + marker.len());
+        }
+    }
+    None
+}
+
+fn collect_embedded_store_paths(binary_path: &Path) -> Vec<String> {
+    let bytes = std::fs::read(binary_path)
+        .unwrap_or_else(|err| panic!("read {} for embedded store path scan: {err}", binary_path.display()));
+    let needle = b"/nix/store/";
+    let mut paths = std::collections::BTreeSet::new();
+    let mut offset: usize = 0;
+
+    while offset + needle.len() <= bytes.len() {
+        if &bytes[offset..offset + needle.len()] != needle {
+            offset = offset.saturating_add(1);
+            continue;
+        }
+
+        let remaining = bytes.len().saturating_sub(offset);
+        let window_len = remaining.min(256);
+        let window = &bytes[offset..offset + window_len];
+        let candidate_len = window.iter().position(|byte| *byte == 0).unwrap_or(window_len);
+        let candidate = String::from_utf8_lossy(&window[..candidate_len]);
+        let Some(relative_end) = find_embedded_store_path_end(&candidate) else {
+            offset = offset.saturating_add(needle.len());
+            continue;
+        };
+        paths.insert(candidate[..relative_end].to_string());
+        if paths.len() >= MAX_EMBEDDED_STORE_PATHS {
+            break;
+        }
+        offset = offset.saturating_add(relative_end);
+    }
+
+    paths.into_iter().collect()
+}
+
+fn collect_store_entries(store_dir: &Path, suffix: &str) -> Vec<String> {
+    let entries =
+        std::fs::read_dir(store_dir).unwrap_or_else(|err| panic!("read store dir {}: {err}", store_dir.display()));
+    let mut names = Vec::new();
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|err| panic!("read store entry in {}: {err}", store_dir.display()));
+        let name = entry.file_name();
+        let name = name.to_string_lossy().to_string();
+        if name.ends_with(suffix) {
+            names.push(name);
+            if names.len() >= MAX_PROOF_STORE_ENTRIES {
+                break;
+            }
+        }
+    }
+    names.sort();
+    names
+}
+
+fn collect_store_inventory(store_dir: &Path) -> ProofStoreInventory {
+    ProofStoreInventory {
+        crunch_entries: collect_store_entries(store_dir, "-crunch"),
+        bwrap_entries: collect_store_entries(store_dir, "-bwrap"),
+        busybox_entries: collect_store_entries(store_dir, "-busybox"),
+    }
+}
+
 fn copy_bundle_file(src: &Path, bundle_dir: &Path, relative_path: &str) -> ProofHashedPath {
     assert!(src.exists(), "bundle source must exist: {}", src.display());
     assert!(!relative_path.is_empty(), "bundle relative path must not be empty");
@@ -818,7 +945,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     assert_eq!(manifest.schema, PROOF_BUNDLE_SCHEMA, "unexpected proof bundle schema");
     assert!(!manifest.bundle_dir.is_empty(), "bundle dir must not be empty");
 
-    let mut out = String::with_capacity(2048);
+    let mut out = String::with_capacity(4096);
     out.push_str(&format!("schema: {}\n", manifest.schema));
     out.push_str(&format!("generated_unix_s: {}\n", manifest.generated_unix_s));
     out.push_str(&format!("repo_root: {}\n", manifest.repo_root));
@@ -827,6 +954,9 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("stage0_state: {}\n", manifest.state_dirs.stage0));
     out.push_str(&format!("stage2_state: {}\n", manifest.state_dirs.stage2));
+    out.push_str(&format!("store_crunch_entries: {:?}\n", manifest.store_inventory.crunch_entries));
+    out.push_str(&format!("store_bwrap_entries: {:?}\n", manifest.store_inventory.bwrap_entries));
+    out.push_str(&format!("store_busybox_entries: {:?}\n", manifest.store_inventory.busybox_entries));
     out.push_str(&format!(
         "checkout_binary: {} {}\n",
         manifest.binaries.checkout.digest_blake3, manifest.binaries.checkout.path
@@ -840,6 +970,14 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
         manifest.binaries.stage2.digest_blake3, manifest.binaries.stage2.path
     ));
     out.push_str(&format!(
+        "stage0_bwrap: {} {}\n",
+        manifest.tools.stage0_bwrap.digest_blake3, manifest.tools.stage0_bwrap.path
+    ));
+    out.push_str(&format!(
+        "stage0_busybox: {} {}\n",
+        manifest.tools.stage0_busybox.digest_blake3, manifest.tools.stage0_busybox.path
+    ));
+    out.push_str(&format!(
         "stage2_bwrap: {} {}\n",
         manifest.tools.stage2_bwrap.digest_blake3, manifest.tools.stage2_bwrap.path
     ));
@@ -847,6 +985,23 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
         "stage2_busybox: {} {}\n",
         manifest.tools.stage2_busybox.digest_blake3, manifest.tools.stage2_busybox.path
     ));
+    out.push_str(&format!("stage1_equals_stage2: {}\n", manifest.fixed_point.stage1_equals_stage2));
+    out.push_str(&format!(
+        "stage1_vs_stage2: same_size={} size_delta_bytes={} first_diff_offset={:?}\n",
+        manifest.fixed_point.stage1_vs_stage2.same_size,
+        manifest.fixed_point.stage1_vs_stage2.size_delta_bytes,
+        manifest.fixed_point.stage1_vs_stage2.first_diff_offset,
+    ));
+    out.push_str(&format!(
+        "stage0_bwrap_equals_stage2_bwrap: {}\n",
+        manifest.fixed_point.stage0_bwrap_equals_stage2_bwrap
+    ));
+    out.push_str(&format!(
+        "stage0_busybox_equals_stage2_busybox: {}\n",
+        manifest.fixed_point.stage0_busybox_equals_stage2_busybox
+    ));
+    out.push_str(&format!("stage1_embedded_store_paths: {:?}\n", manifest.fixed_point.stage1_embedded_store_paths));
+    out.push_str(&format!("stage2_embedded_store_paths: {:?}\n", manifest.fixed_point.stage2_embedded_store_paths));
     out.push_str(&format!("stage0_report: {}\n", manifest.stage0.report.bwrap_source));
     out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
     out
@@ -880,11 +1035,36 @@ fn write_proof_bundle(
     );
 
     let checkout_binary_path = PathBuf::from(&stage0_report.invoking_binary);
+    let stage0_bwrap_report_path = extract_bwrap_binary_path(&stage0.stderr)
+        .unwrap_or_else(|| panic!("stage0 missing bwrap report path.\n{}", stage_context(stage0),));
+    let stage0_bwrap_binary = normalize_bwrap_binary_path(&stage0_bwrap_report_path);
+    let stage0_busybox_binary = extract_optional_path_field(&stage0.stderr, "busybox-path")
+        .unwrap_or_else(|| panic!("stage0 missing busybox-path proof line.\n{}", stage_context(stage0),));
     let stage2_bwrap_report_path = extract_bwrap_binary_path(&stage2.stderr)
         .unwrap_or_else(|| panic!("stage2 missing bwrap report path.\n{}", stage_context(stage2),));
     let stage2_bwrap_binary = normalize_bwrap_binary_path(&stage2_bwrap_report_path);
     let stage2_busybox_binary = extract_optional_path_field(&stage2.stderr, "busybox-path")
         .unwrap_or_else(|| panic!("stage2 missing busybox-path proof line.\n{}", stage_context(stage2),));
+
+    let binaries = ProofBinarySet {
+        checkout: hash_file_record(&checkout_binary_path, checkout_binary_path.display().to_string()),
+        stage1: hash_file_record(stage1_binary, stage1_binary.display().to_string()),
+        stage2: hash_file_record(stage2_binary, stage2_binary.display().to_string()),
+    };
+    let tools = ProofToolSet {
+        stage0_bwrap: hash_file_record(&stage0_bwrap_binary, stage0_bwrap_binary.display().to_string()),
+        stage0_busybox: hash_file_record(&stage0_busybox_binary, stage0_busybox_binary.display().to_string()),
+        stage2_bwrap: hash_file_record(&stage2_bwrap_binary, stage2_bwrap_binary.display().to_string()),
+        stage2_busybox: hash_file_record(&stage2_busybox_binary, stage2_busybox_binary.display().to_string()),
+    };
+    let fixed_point = ProofFixedPointAnalysis {
+        stage1_equals_stage2: hashed_paths_match(&binaries.stage1, &binaries.stage2),
+        stage1_vs_stage2: diff_binary_bytes(stage1_binary, stage2_binary),
+        stage0_bwrap_equals_stage2_bwrap: hashed_paths_match(&tools.stage0_bwrap, &tools.stage2_bwrap),
+        stage0_busybox_equals_stage2_busybox: hashed_paths_match(&tools.stage0_busybox, &tools.stage2_busybox),
+        stage1_embedded_store_paths: collect_embedded_store_paths(stage1_binary),
+        stage2_embedded_store_paths: collect_embedded_store_paths(stage2_binary),
+    };
 
     let manifest = ProofBundleManifest {
         schema: PROOF_BUNDLE_SCHEMA,
@@ -897,15 +1077,10 @@ fn write_proof_bundle(
             stage0: stage0_state_dir.display().to_string(),
             stage2: stage2_state_dir.display().to_string(),
         },
-        binaries: ProofBinarySet {
-            checkout: hash_file_record(&checkout_binary_path, checkout_binary_path.display().to_string()),
-            stage1: hash_file_record(stage1_binary, stage1_binary.display().to_string()),
-            stage2: hash_file_record(stage2_binary, stage2_binary.display().to_string()),
-        },
-        tools: ProofToolSet {
-            stage2_bwrap: hash_file_record(&stage2_bwrap_binary, stage2_bwrap_binary.display().to_string()),
-            stage2_busybox: hash_file_record(&stage2_busybox_binary, stage2_busybox_binary.display().to_string()),
-        },
+        store_inventory: collect_store_inventory(store_dir),
+        binaries,
+        tools,
+        fixed_point,
         stage0: ProofStageManifest {
             name: stage0.stage_name.clone(),
             original_audit_dir: stage0.audit_dir.display().to_string(),
@@ -930,6 +1105,38 @@ fn write_proof_bundle(
     std::fs::write(&summary_path, summary)
         .unwrap_or_else(|err| panic!("write proof summary {}: {err}", summary_path.display()));
     manifest_path
+}
+
+#[test]
+fn diff_binary_bytes_reports_first_mismatch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let left = tmp.path().join("stage1");
+    let right = tmp.path().join("stage2");
+    std::fs::write(&left, b"abc123").unwrap();
+    std::fs::write(&right, b"abcXYZ").unwrap();
+
+    let diff = diff_binary_bytes(&left, &right);
+    assert!(diff.same_size);
+    assert_eq!(diff.size_delta_bytes, 0);
+    assert_eq!(diff.first_diff_offset, Some(3));
+}
+
+#[test]
+fn collect_embedded_store_paths_filters_relevant_entries() {
+    let tmp = tempfile::tempdir().unwrap();
+    let binary = tmp.path().join("binary");
+    let payload = b"prefix /nix/store/aaa-stage0-busybox/bin/busybox\0 \
+                    /nix/store/bbb-stage0-bwrap/bin/bwrap\0 \
+                    /nix/store/ccc-rust/bin/rustc\0 \
+                    /nix/store/ddd-stage0-crunch-src/Cargo.toml\0";
+    std::fs::write(&binary, payload).unwrap();
+
+    let paths = collect_embedded_store_paths(&binary);
+    assert_eq!(paths, vec![
+        "/nix/store/aaa-stage0-busybox/bin/busybox".to_string(),
+        "/nix/store/bbb-stage0-bwrap/bin/bwrap".to_string(),
+        "/nix/store/ddd-stage0-crunch-src".to_string(),
+    ]);
 }
 
 #[test]
@@ -1193,7 +1400,12 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains(&stage2_binary.display().to_string()));
     assert!(manifest_json.contains(&busybox_bin.display().to_string()));
     assert!(manifest_json.contains(&bwrap_bin.display().to_string()));
+    assert!(manifest_json.contains("\"fixed_point\""));
+    assert!(manifest_json.contains("\"store_inventory\""));
+    assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));
+    assert!(summary.contains("stage1_equals_stage2:"));
+    assert!(summary.contains("stage1_embedded_store_paths:"));
     assert!(summary.contains(&stage2_binary.display().to_string()));
 }
 
@@ -1894,6 +2106,35 @@ fn self_hosting_stage0_stage1_stage2() {
     assert!(
         s2_output.is_some(),
         "stage2 should emit output-binary proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
+    let stage1_hash = hash_file_record(&stage1_binary, stage1_binary.display().to_string());
+    let stage2_hash = hash_file_record(&stage2_binary, stage2_binary.display().to_string());
+    assert_eq!(
+        stage1_hash.digest_blake3,
+        stage2_hash.digest_blake3,
+        "stage1 and stage2 binaries must match byte-for-byte.\n{}\n{}",
+        stage_context(&stage0_evidence),
+        stage_context(&stage2_evidence),
+    );
+    let stage0_bwrap_hash = hash_file_record(&bwrap_bin, bwrap_bin.display().to_string());
+    let stage2_bwrap_binary = normalize_bwrap_binary_path(&bwrap_report_path);
+    let stage2_bwrap_hash = hash_file_record(&stage2_bwrap_binary, stage2_bwrap_binary.display().to_string());
+    assert_eq!(
+        stage0_bwrap_hash.digest_blake3,
+        stage2_bwrap_hash.digest_blake3,
+        "stage0 and stage2 bwrap bootstrap outputs must match.\n{}\n{}",
+        stage_context(&stage0_evidence),
+        stage_context(&stage2_evidence),
+    );
+    let stage0_busybox_hash = hash_file_record(&busybox_bin, busybox_bin.display().to_string());
+    let stage2_busybox_hash = hash_file_record(&busybox_report_path, busybox_report_path.display().to_string());
+    assert_eq!(
+        stage0_busybox_hash.digest_blake3,
+        stage2_busybox_hash.digest_blake3,
+        "stage0 and stage2 busybox bootstrap outputs must match.\n{}\n{}",
+        stage_context(&stage0_evidence),
         stage_context(&stage2_evidence),
     );
 

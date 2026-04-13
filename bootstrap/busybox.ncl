@@ -134,6 +134,18 @@ let busybox_src = crunch.fetchTarball {
       JOBS=${NIX_BUILD_CORES:-4}
       if [ "$JOBS" = "0" ] || [ -z "$JOBS" ]; then JOBS=4; fi
 
+      # Pin build metadata so stage0/stage2 bootstrap outputs can reach a
+      # fixed point. Busybox's kbuild machinery otherwise records volatile
+      # host/user/timestamp data in generated headers and .config comments.
+      export LC_ALL=C
+      export TZ=UTC
+      export SOURCE_DATE_EPOCH=1
+      export KCONFIG_NOTIMESTAMP=1
+      export KBUILD_BUILD_TIMESTAMP='Thu, 01 Jan 1970 00:00:01 +0000'
+      export KBUILD_BUILD_USER=crunch
+      export KBUILD_BUILD_HOST=crunch
+      export KBUILD_BUILD_VERSION=1
+
       # Host tools (scripts/basic/fixdep) must be statically linked
       # because the bwrap sandbox has no dynamic linker at /lib/ld-musl-*.
       # Set HOSTCC to include -static so kbuild's single-step compile+link

@@ -40,8 +40,7 @@ pub async fn export_castore_to_disk(
                 export_symlink_to_disk(target.as_ref(), &current_dest)?;
             }
             Node::Directory { digest, .. } => {
-                std::fs::create_dir_all(&current_dest)
-                    .map_err(|e| format!("creating dir {current_dest}: {e}"))?;
+                std::fs::create_dir_all(&current_dest).map_err(|e| format!("creating dir {current_dest}: {e}"))?;
 
                 let dir = directory_service
                     .get(digest)
@@ -56,11 +55,7 @@ pub async fn export_castore_to_disk(
                     let name_str = std::str::from_utf8(name.as_ref())
                         .map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
                     let child_dest = format!("{current_dest}/{name_str}");
-                    worklist.push((
-                        child_node.clone(),
-                        child_dest,
-                        depth.saturating_add(1),
-                    ));
+                    worklist.push((child_node.clone(), child_dest, depth.saturating_add(1)));
                 }
             }
         }
@@ -111,8 +106,7 @@ fn export_symlink_to_disk(target: &[u8], dest: &str) -> Result<(), String> {
     {
         use std::os::unix::ffi::OsStrExt;
         let target_os = std::ffi::OsStr::from_bytes(target);
-        std::os::unix::fs::symlink(target_os, dest)
-            .map_err(|e| format!("creating symlink {dest}: {e}"))?;
+        std::os::unix::fs::symlink(target_os, dest).map_err(|e| format!("creating symlink {dest}: {e}"))?;
     }
     Ok(())
 }
@@ -397,11 +391,7 @@ mod tests {
     // -- Depth limit --
 
     /// Build a chain of nested directories to a given depth, with a file at the leaf.
-    async fn build_deep_chain(
-        bs: &MemoryBlobService,
-        ds: &impl DirectoryService,
-        depth: u32,
-    ) -> Node {
+    async fn build_deep_chain(bs: &MemoryBlobService, ds: &impl DirectoryService, depth: u32) -> Node {
         let (file_digest, _) = insert_blob(bs, b"leaf").await;
         let leaf = Node::File {
             digest: file_digest,

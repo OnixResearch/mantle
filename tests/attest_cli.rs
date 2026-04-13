@@ -58,39 +58,42 @@ fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should build")
 }
 
-fn build_simple_ncl(work_dir: &Path, store_dir: &Path, state_dir: &Path, name: &str) -> serde_json::Value {
+fn build_simple_ncl_with_nix_compat(
+    work_dir: &Path,
+    store_dir: &Path,
+    state_dir: &Path,
+    name: &str,
+    nix_compat: bool,
+) -> serde_json::Value {
     let ncl_file = work_dir.join(format!("{name}.ncl"));
     let ncl = format!(
-        r#"let crunch = import \"lib.ncl\" in
+        r#"let crunch = import "lib.ncl" in
 {{
-  name = \"{name}\",
-  builder = \"/bin/sh\",
-  args = [\"-c\", \"echo workflow > $out\"],
+  name = "{name}",
+  builder = "/bin/sh",
+  args = ["-c", "echo workflow > $out"],
   addressing_mode = 'input-addressed,
 }} | crunch.Derivation"#
     );
     std::fs::write(&ncl_file, ncl).unwrap();
 
-    let output = crunch_cmd()
-        .arg("--json")
-        .arg("--store")
-        .arg(store_dir)
-        .arg("--state-dir")
-        .arg(state_dir)
-        .arg("build")
-        .arg("--no-substitute")
-        .arg("-I")
-        .arg(work_dir)
-        .arg(&ncl_file)
-        .output()
-        .unwrap();
+    let mut command = crunch_cmd();
+    command.arg("--json").arg("--store").arg(store_dir).arg("--state-dir").arg(state_dir);
+    if nix_compat {
+        command.arg("--nix-compat");
+    }
+    let output = command.arg("build").arg("--no-substitute").arg("-I").arg(work_dir).arg(&ncl_file).output().unwrap();
 
     assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn load_signed_output_pathinfo(state_dir: &Path, logical_path: &str) -> PathInfo {
-    let (store_path, suffix) = StorePath::from_absolute_path_full_with_prefix(logical_path, STORE_DIR).unwrap();
+fn build_simple_ncl(work_dir: &Path, store_dir: &Path, state_dir: &Path, name: &str) -> serde_json::Value {
+    build_simple_ncl_with_nix_compat(work_dir, store_dir, state_dir, name, false)
+}
+
+fn load_signed_output_pathinfo(state_dir: &Path, logical_path: &str, store_dir: &str) -> PathInfo {
+    let (store_path, suffix) = StorePath::from_absolute_path_full_with_prefix(logical_path, store_dir).unwrap();
     assert!(suffix.as_os_str().is_empty(), "logical path should not have suffix: {logical_path}");
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -392,13 +395,18 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
     let substitute_store_dir = tempfile::tempdir().unwrap();
     let substitute_state_dir = tempfile::tempdir().unwrap();
 
-    let first =
-        build_simple_ncl(work_dir.path(), local_store_dir.path(), local_state_dir.path(), "attest-remote-subst");
+    let first = build_simple_ncl_with_nix_compat(
+        work_dir.path(),
+        local_store_dir.path(),
+        local_state_dir.path(),
+        "attest-remote-subst",
+        true,
+    );
     let logical_path = first["outcomes"][0]["outputs"][0]["artifact_attestation"]["logical_path"]
         .as_str()
         .unwrap()
         .to_string();
-    let path_info = load_signed_output_pathinfo(local_state_dir.path(), &logical_path);
+    let path_info = load_signed_output_pathinfo(local_state_dir.path(), &logical_path, "/nix/store");
     let nar_bytes = render_nar_bytes(local_state_dir.path(), &path_info);
     let remote_cache = FakeBinaryCache::serve(&path_info, nar_bytes);
     let trusted_key = trusted_public_key_arg(local_state_dir.path());
@@ -410,6 +418,7 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
         .arg(substitute_store_dir.path())
         .arg("--state-dir")
         .arg(substitute_state_dir.path())
+        .arg("--nix-compat")
         .arg("build")
         .arg("--substituters")
         .arg(&remote_cache.url)
@@ -441,6 +450,7 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
         .arg(substitute_store_dir.path())
         .arg("--state-dir")
         .arg(substitute_state_dir.path())
+        .arg("--nix-compat")
         .arg("attest")
         .arg("show")
         .arg(output_path)
@@ -456,6 +466,7 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
         .arg(substitute_store_dir.path())
         .arg("--state-dir")
         .arg(substitute_state_dir.path())
+        .arg("--nix-compat")
         .arg("attest")
         .arg("verify")
         .arg("artifact")
@@ -474,6 +485,7 @@ fn attest_remote_substitution_workflow_persists_sidecars_and_verifies() {
         .arg(substitute_store_dir.path())
         .arg("--state-dir")
         .arg(substitute_state_dir.path())
+        .arg("--nix-compat")
         .arg("attest")
         .arg("verify")
         .arg("closure")

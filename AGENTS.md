@@ -301,6 +301,8 @@ Building derivations (not just compiling crunch) requires:
 - Closure attestation lookup must not trust the cached closure file blindly. Member artifact attestations can be rewritten in place (for example `_unknown` synthesized members later replaced by real output metadata), so `load_or_create_runtime_closure_attestation()` recomputes the fresh closure and rewrites the cached file when member digests change.
 - `StoreHandle::persist_and_export_signed_output()` now takes `output_name` so the stored artifact attestation records the correct output label.
 - `StoreHandle` synthesizes artifact attestations from `PathInfo` on successful build persistence, local cache hits, and remote substitution hits. Closure assembly must also synthesize a missing member artifact attestation from `PathInfo` instead of failing on a missing file.
+- Cache/substitution trust must dedup verifying keys by full key material, not just key name. Fresh local stores reuse the same generated key name (`crunch-<hostname>-1`), and name-only dedup drops an explicitly trusted remote signer so substitution silently falls back to local builds.
+- Remote substitution of a root output must export the substituted castore node to the physical `--store` path when the file is missing, not just persist `PathInfo` and keep the node in memory. Otherwise `--json build`, `crunch attest show`, and CLI follow-up checks see a missing output on disk.
 - `crates/crunch-build/src/orchestrate.rs` now threads declared source inputs and input-artifact outputs into artifact attestation generation via `ArtifactProvenance`, so successful local builds record `build-input` and `fetched-from` edges.
 - Builder-layer provenance claims now flow from `builders/mk_derivation.ncl` through `CrunchDerivation.provenance` into registry entries and final artifact attestations. Those claims are ignored by `crunch-glue::convert()` when constructing the hashed `nix_compat::Derivation`, so changing claims does not change derivation hashes by default.
 - The closed core derivation contract in `lib/derivation.ncl` still rejects a `provenance` field; only the builder layer exports it.
@@ -407,16 +409,21 @@ When claiming test results in commit messages or completion summaries:
   static busybox (or `/bin/sh` as a last resort).
 - The self-hosting proof test (`tests/self_hosting.rs`, `#[ignore]`)
   uses a fresh tempdir store per run. Pre-assertions verify the store
-  is empty before stage0. Do not claim a stage1==stage2 fixed point
-  from the current proof: an attempted byte-for-byte comparison showed
-  bootstrap-environment drift (notably different busybox outputs across
-  stages), so the current proof remains “stage1 binary can rebuild a
-  working crunch” rather than “stage1 and stage2 are identical”. A real
-  run on 2026-04-12 passed with stage1 digest
-  `b08778b9224958937ba3a4fc7c2116a779e8ef16790c51dc32d905a8ef5b581f`
-  and stage2 digest
-  `32358249ff54fa28b546963f53759b2bdae2a6a6fb52dc2b84c926b381e6618d`,
-  same size but different bytes.
+  is empty before stage0. It now enforces the stronger fixed-point claim:
+  stage1 and stage2 crunch binaries must match byte-for-byte, and the
+  stage0/stage2 busybox bootstrap outputs must also match.
+- The proof bundle (`target/self-hosting-proof/run-*/summary.txt`) now
+  records store inventory, stage0/stage2 bootstrap-tool digests,
+  stage1==stage2 status, first differing byte offset, and embedded
+  `/nix/store/...-busybox|...-bwrap|...-crunch-src` references. First
+  rerun on 2026-04-12 showed stage1!=stage2 with busybox drift but bwrap
+  stable; after pinning busybox kbuild metadata in `bootstrap/busybox.ncl`
+  (`KCONFIG_NOTIMESTAMP=1`, `SOURCE_DATE_EPOCH=1`, fixed
+  `KBUILD_BUILD_{TIMESTAMP,USER,HOST,VERSION}`), rerun bundle
+  `target/self-hosting-proof/recheck-after-bwrap-assert-fix/summary.txt`
+  showed `stage1_equals_stage2: true`, `stage0_bwrap_equals_stage2_bwrap: true`,
+  `stage0_busybox_equals_stage2_busybox: true`, and a single shared busybox
+  store path `7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox`.
 - Stage2 now proves a stronger bootstrap boundary: `cmd_self_build`
   accepts a hidden `self-build --source-store-path <...-crunch-src>`
   override, and the ignored proof passes the exact stage0 staged source,

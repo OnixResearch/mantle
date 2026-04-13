@@ -136,10 +136,7 @@ fn build_constraints(derivation: &Derivation) -> HashSet<BuildConstraints> {
 }
 
 /// Build refscan needles from output and input store path digests.
-fn build_refscan_needles(
-    derivation: &Derivation,
-    inputs: &BTreeMap<StorePath<String>, Node>,
-) -> Vec<String> {
+fn build_refscan_needles(derivation: &Derivation, inputs: &BTreeMap<StorePath<String>, Node>) -> Vec<String> {
     derivation
         .outputs
         .values()
@@ -152,10 +149,7 @@ fn build_refscan_needles(
 /// Map derivation outputs to sandbox-relative paths.
 /// CA outputs use the placeholder from the environment; input-addressed
 /// outputs use the pre-computed store path.
-fn map_outputs_to_sandbox_paths(
-    derivation: &Derivation,
-    store_dir: &str,
-) -> Vec<PathBuf> {
+fn map_outputs_to_sandbox_paths(derivation: &Derivation, store_dir: &str) -> Vec<PathBuf> {
     derivation
         .outputs
         .iter()

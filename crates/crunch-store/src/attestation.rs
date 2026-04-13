@@ -111,15 +111,8 @@ fn synthesize_artifact_attestation(
     let mut edge_keys = BTreeSet::new();
 
     push_unique_node(&mut nodes, &mut node_ids, artifact_node(&subject_path));
-    let recipe_node_id = add_recipe_node(
-        store_dir,
-        path_info,
-        &subject_node_id,
-        &mut nodes,
-        &mut edges,
-        &mut node_ids,
-        &mut edge_keys,
-    );
+    let recipe_node_id =
+        add_recipe_node(store_dir, path_info, &subject_node_id, &mut nodes, &mut edges, &mut node_ids, &mut edge_keys);
     add_provenance_edges(
         store_dir,
         provenance,

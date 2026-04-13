@@ -85,28 +85,32 @@ pub(crate) async fn hash_blob(
             let mut hasher = md5::Md5::new();
             update_blob_hasher(&mut reader, &mut buf, |chunk| {
                 hasher.update(chunk);
-            }).await?;
+            })
+            .await?;
             Ok(NixHash::Md5(hasher.finalize().into()))
         }
         HashAlgo::Sha1 => {
             let mut hasher = sha1::Sha1::new();
             update_blob_hasher(&mut reader, &mut buf, |chunk| {
                 hasher.update(chunk);
-            }).await?;
+            })
+            .await?;
             Ok(NixHash::Sha1(hasher.finalize().into()))
         }
         HashAlgo::Sha256 => {
             let mut hasher = sha2::Sha256::new();
             update_blob_hasher(&mut reader, &mut buf, |chunk| {
                 hasher.update(chunk);
-            }).await?;
+            })
+            .await?;
             Ok(NixHash::Sha256(hasher.finalize().into()))
         }
         HashAlgo::Sha512 => {
             let mut hasher = sha2::Sha512::new();
             update_blob_hasher(&mut reader, &mut buf, |chunk| {
                 hasher.update(chunk);
-            }).await?;
+            })
+            .await?;
             let hash: [u8; 64] = hasher.finalize().into();
             Ok(NixHash::Sha512(Box::new(hash)))
         }
@@ -114,7 +118,8 @@ pub(crate) async fn hash_blob(
             let mut hasher = blake3::Hasher::new();
             update_blob_hasher(&mut reader, &mut buf, |chunk| {
                 hasher.update(chunk);
-            }).await?;
+            })
+            .await?;
             let hash = blake3::Hasher::finalize(&hasher);
             Ok(NixHash::Blake3(*hash.as_bytes()))
         }

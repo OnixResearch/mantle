@@ -61,14 +61,8 @@ pub fn compute_ca_store_path(
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
 
     let ca_hash = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(nar_sha256));
-    nix_compat::store_path::build_ca_path_with_store_dir(
-        path_name,
-        &ca_hash,
-        Vec::<&str>::new(),
-        false,
-        store_dir,
-    )
-    .map_err(|e| crate::Error::Store(format!("computing CA path: {e}")))
+    nix_compat::store_path::build_ca_path_with_store_dir(path_name, &ca_hash, Vec::<&str>::new(), false, store_dir)
+        .map_err(|e| crate::Error::Store(format!("computing CA path: {e}")))
 }
 
 /// Planned CA output: the result of pure planning before any I/O.
@@ -98,10 +92,7 @@ pub fn plan_ca_outputs(
     outputs
         .keys()
         .map(|name| {
-            let provisional = environment
-                .get(name)
-                .map(|v| String::from_utf8_lossy(v).to_string())
-                .unwrap_or_default();
+            let provisional = environment.get(name).map(|v| String::from_utf8_lossy(v).to_string()).unwrap_or_default();
             let marker = if provisional.is_empty() {
                 Vec::new()
             } else {

@@ -327,7 +327,7 @@ where BServ: BuildService + 'static
         let drv_name = drv_path.name().to_string();
 
         // 1. Cache check
-        if let Some(cached_outputs) = self.check_cache(drv_path, derivation).await? {
+        if let Some(cached_outputs) = self.check_cache(drv_path, derivation, is_root).await? {
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
@@ -467,16 +467,10 @@ where BServ: BuildService + 'static
             &prepared.derivation.outputs,
             &prepared.derivation.environment,
         );
-        assert_eq!(
-            ca_plans.len(),
-            prepared.derivation.outputs.len(),
-            "CA plan count must match output count",
-        );
+        assert_eq!(ca_plans.len(), prepared.derivation.outputs.len(), "CA plan count must match output count",);
 
         // Pass 1: marker replacement + CA path computation.
-        let intermediates = self
-            .compute_ca_intermediates(prepared, build_result, &ca_plans)
-            .await?;
+        let intermediates = self.compute_ca_intermediates(prepared, build_result, &ca_plans).await?;
         assert_eq!(
             intermediates.len(),
             prepared.derivation.outputs.len(),
@@ -484,15 +478,8 @@ where BServ: BuildService + 'static
         );
 
         // Pass 2: replace markers with final paths, persist.
-        self.finalize_ca_outputs(
-            prepared,
-            build_result,
-            known_paths,
-            artifact_provenance,
-            &ca_plans,
-            &intermediates,
-        )
-        .await
+        self.finalize_ca_outputs(prepared, build_result, known_paths, artifact_provenance, &ca_plans, &intermediates)
+            .await
     }
 
     /// Pass 1: apply input rewrites, replace provisionals with markers,
@@ -537,14 +524,11 @@ where BServ: BuildService + 'static
             let (nar_size, nar_sha256) =
                 nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
 
-            let plan = ca_plans.iter().find(|p| p.output_name == *output_name).ok_or_else(|| {
-                Error::Store(format!("no CA plan for output '{output_name}'"))
-            })?;
-            let ca_path = crate::ca_plan::compute_ca_store_path(
-                &plan.path_name,
-                nar_sha256,
-                self.store.store_dir(),
-            )?;
+            let plan = ca_plans
+                .iter()
+                .find(|p| p.output_name == *output_name)
+                .ok_or_else(|| Error::Store(format!("no CA plan for output '{output_name}'")))?;
+            let ca_path = crate::ca_plan::compute_ca_store_path(&plan.path_name, nar_sha256, self.store.store_dir())?;
 
             intermediates.push(CaOutputIntermediate {
                 name: output_name.clone(),
@@ -582,9 +566,7 @@ where BServ: BuildService + 'static
         let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
 
         for (idx, intermediate) in intermediates.iter().enumerate() {
-            let final_node = self
-                .rewrite_markers_to_final(&intermediate.marked_node, &final_rewrites)
-                .await?;
+            let final_node = self.rewrite_markers_to_final(&intermediate.marked_node, &final_rewrites).await?;
 
             self.register_ca_output(
                 &drv_abs,
@@ -629,11 +611,7 @@ where BServ: BuildService + 'static
     }
 
     /// Rewrite all same-length CA markers to their final absolute paths.
-    async fn rewrite_markers_to_final(
-        &self,
-        node: &Node,
-        final_rewrites: &[(&[u8], Vec<u8>)],
-    ) -> Result<Node, Error> {
+    async fn rewrite_markers_to_final(&self, node: &Node, final_rewrites: &[(&[u8], Vec<u8>)]) -> Result<Node, Error> {
         let mut final_node = node.clone();
         for (marker, final_bytes) in final_rewrites {
             if marker.len() == final_bytes.len() {
@@ -846,20 +824,24 @@ where BServ: BuildService + 'static
             input_rewrites,
             &self.store.blob_service(),
             &self.store.directory_service(),
-        ).await?;
-        let (output_path, final_node, nar_size, nar_sha256) = self.resolve_output_node(
-            drv_path,
-            drv_name,
-            output_name,
-            output,
-            build_output,
-            &working_node,
-            derivation,
-            known_paths,
-            is_ca,
-            &nar_renderer,
-        ).await?;
-        self.verify_output_hash_if_needed(drv_name, output_name, output, nar_size, &nar_sha256, &final_node).await?;
+        )
+        .await?;
+        let (output_path, final_node, nar_size, nar_sha256) = self
+            .resolve_output_node(
+                drv_path,
+                drv_name,
+                output_name,
+                output,
+                build_output,
+                &working_node,
+                derivation,
+                known_paths,
+                is_ca,
+                &nar_renderer,
+            )
+            .await?;
+        self.verify_output_hash_if_needed(drv_name, output_name, output, nar_size, &nar_sha256, &final_node)
+            .await?;
         let references = resolve_references(
             &build_output.output_needles,
             &build_request.refscan_needles,
@@ -877,7 +859,8 @@ where BServ: BuildService + 'static
             output_ca_field(is_ca, output, nar_sha256),
             Some(artifact_provenance.clone()),
             is_root,
-        ).await
+        )
+        .await
     }
 
     /// Resolve the final output path, node, and NAR hash for either a
@@ -897,15 +880,7 @@ where BServ: BuildService + 'static
     ) -> Result<(StorePath<String>, Node, u64, [u8; 32]), Error> {
         if is_ca {
             return self
-                .compute_ca_output(
-                    drv_path,
-                    drv_name,
-                    output_name,
-                    working_node,
-                    derivation,
-                    known_paths,
-                    nar_renderer,
-                )
+                .compute_ca_output(drv_path, drv_name, output_name, working_node, derivation, known_paths, nar_renderer)
                 .await;
         }
 
@@ -992,11 +967,7 @@ where BServ: BuildService + 'static
 
         // 4. Compute CA store path from marker-replaced hash.
         let path_name = crate::ca_plan::ca_output_path_name(drv_name, output_name);
-        let ca_path = crate::ca_plan::compute_ca_store_path(
-            &path_name,
-            marker_nar_sha256,
-            self.store.store_dir(),
-        )?;
+        let ca_path = crate::ca_plan::compute_ca_store_path(&path_name, marker_nar_sha256, self.store.store_dir())?;
 
         // 5. Replace zero markers with the final CA path (in sandbox/logical space).
         let final_abs = ca_path.to_absolute_path_with_prefix(self.store.store_dir());
@@ -1080,8 +1051,13 @@ where BServ: BuildService + 'static
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
+        is_root: bool,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
-        let cached = self.store.check_cache(drv_path, derivation).await.map_err(|e| Error::Store(format!("{e}")))?;
+        let cached = self
+            .store
+            .check_cache(drv_path, derivation, is_root)
+            .await
+            .map_err(|e| Error::Store(format!("{e}")))?;
 
         let Some(infos) = cached else {
             return Ok(None);

@@ -231,8 +231,10 @@ impl StoreHandle {
     /// Symlinks: always present (target is inline in the Node).
     pub async fn castore_has_content(&self, node: &Node) -> Result<bool, Error> {
         // Tiger Style: verify node structural invariant.
-        debug_assert!(!matches!(node, Node::Directory { size, .. } if *size == u64::MAX),
-            "directory size must not be sentinel value");
+        debug_assert!(
+            !matches!(node, Node::Directory { size, .. } if *size == u64::MAX),
+            "directory size must not be sentinel value"
+        );
         match node {
             Node::File { digest, .. } => {
                 self.blob_service.has(digest).await.map_err(|e| Error::BlobService(format!("existence check: {e}")))
@@ -303,6 +305,7 @@ impl StoreHandle {
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
+        is_root: bool,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
 
@@ -334,6 +337,7 @@ impl StoreHandle {
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                         self.built_outputs
                             .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
+                        self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
                         infos.insert(output_name.clone(), path_info);
                     } else {
                         tracing::warn!(
@@ -345,7 +349,9 @@ impl StoreHandle {
                 }
                 None => {
                     if !is_fod {
-                        if let Some(remote_pi) = self.try_substitute_remote(digest, &output_path, output_name).await? {
+                        if let Some(remote_pi) =
+                            self.try_substitute_remote(digest, &output_path, output_name, is_root).await?
+                        {
                             infos.insert(output_name.clone(), remote_pi);
                             continue;
                         }
@@ -367,6 +373,7 @@ impl StoreHandle {
         digest: [u8; 20],
         output_path: &StorePath<String>,
         output_name: &str,
+        is_root: bool,
     ) -> Result<Option<PathInfo>, Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
 
@@ -392,6 +399,7 @@ impl StoreHandle {
                 self.output_nodes.insert(output_path.clone(), remote_pi.node.clone());
                 self.built_outputs
                     .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), remote_pi.clone());
+                self.export_output_if_needed(output_path, &remote_pi.node, is_root).await?;
 
                 Ok(Some(remote_pi))
             }
@@ -428,6 +436,35 @@ impl StoreHandle {
             .await
     }
 
+    async fn export_output_if_needed(
+        &self,
+        output_path: &StorePath<String>,
+        final_node: &Node,
+        is_root: bool,
+    ) -> Result<(), Error> {
+        if !is_root {
+            return Ok(());
+        }
+
+        let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
+        if PathBuf::from(&abs_path).exists() {
+            return Ok(());
+        }
+
+        match export_castore_to_disk(final_node, &abs_path, &self.blob_service, &self.directory_service).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.contains("Read-only file system") || e.contains("Permission denied") => {
+                tracing::warn!(
+                    path = %abs_path,
+                    "could not export output to disk (read-only store), \
+                     output is available in castore"
+                );
+                Ok(())
+            }
+            Err(e) => Err(Error::Export(format!("exporting output {abs_path} to disk: {e}"))),
+        }
+    }
+
     /// Common persistence + export logic.
     async fn persist_pathinfo_and_export(
         &mut self,
@@ -457,24 +494,9 @@ impl StoreHandle {
             .await?;
 
         let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
-        self.built_outputs.insert(abs_path.clone(), path_info.clone());
+        self.built_outputs.insert(abs_path, path_info.clone());
         self.output_nodes.insert(output_path.clone(), final_node.clone());
-
-        if is_root && !PathBuf::from(&abs_path).exists() {
-            match export_castore_to_disk(&final_node, &abs_path, &self.blob_service, &self.directory_service).await {
-                Ok(()) => {}
-                Err(e) if e.contains("Read-only file system") || e.contains("Permission denied") => {
-                    tracing::warn!(
-                        path = %abs_path,
-                        "could not export output to disk (read-only store), \
-                         output is available in castore"
-                    );
-                }
-                Err(e) => {
-                    return Err(Error::Export(format!("exporting output {abs_path} to disk: {e}")));
-                }
-            }
-        }
+        self.export_output_if_needed(output_path, &final_node, is_root).await?;
 
         Ok(path_info)
     }
@@ -752,8 +774,11 @@ mod tests {
 
         remote.put(path_info).await.unwrap();
 
-        let substituted = handle.try_substitute_remote(*output_path.digest(), &output_path, "out").await.unwrap();
+        let substituted = handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true).await.unwrap();
         assert!(substituted.is_some(), "remote substitution should hit");
+
+        let exported = PathBuf::from(output_path.to_absolute_path_with_prefix(state_dir.path().to_str().unwrap()));
+        assert!(exported.exists() || exported.is_symlink(), "remote-substituted root should be exported");
 
         let stored = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
         assert_eq!(stored.attestation.facts.output_name, "out");
