@@ -2,10 +2,14 @@
 
 This file tracks the stricter first-bootstrap view.
 
-It is not the same thing as the checked-in self-hosting proof.
-Today the repo proves a stage1 -> stage2 fixed point. It does not yet prove
-that first bootstrap works with `nix-build`, `nix-store`, `nix-shell`, and
-`nix develop` absent from `PATH`.
+It is not the same thing as the default checked-in self-hosting proof.
+Today the repo has two proof modes:
+- default fixed-point proof: stage1 -> stage2 identity
+- stricter `--non-nix-host` proof: same fixed point, with stage0 `PATH`
+  scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
+
+Neither mode yet proves a full-source bootstrap root or reproducible release
+artifacts.
 
 ## Contract boundary
 
@@ -73,10 +77,13 @@ What the checked-in self-hosting proof demonstrates today:
 - stage1 rebuilds stage2 from that same staged source tree
 - stage1 and stage2 crunch binaries must match byte-for-byte
 - the stage0 and stage2 crunch-built `busybox` and `bwrap` outputs must match
+- in `--non-nix-host` mode, the stage0 command path completes with
+  `nix-build`, `nix-store`, `nix-shell`, and `nix` absent from `PATH`
+- successful proof bundles copy this inventory and record the resolved stage0
+  prerequisite paths they used
 
 What it does not demonstrate yet:
 
-- first bootstrap with Nix commands absent from `PATH`
 - a full-source bootstrap root smaller than the fetched `musl-gcc` seed
 - bit-for-bit reproducible release artifacts from independent rebuilders
 - removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`

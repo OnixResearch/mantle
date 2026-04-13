@@ -18,6 +18,6 @@
 
 ## Phase 4: Add proof for the stronger claim
 
-- [ ] Add a repeatable proof or smoke path that runs with `nix-build`, `nix-store`, `nix-shell`, and `nix develop` absent from `PATH`.
-- [ ] Record the stage0 prerequisite inventory inside the proof bundle so a reviewer can see exactly which external seeds were still used.
-- [ ] Re-run `openspec validate non-nix-stage0-bootstrap` and the new non-Nix-host proof command before closing the change.
+- [x] Add a repeatable proof or smoke path that runs with `nix-build`, `nix-store`, `nix-shell`, and `nix develop` absent from `PATH`.
+- [x] Record the stage0 prerequisite inventory inside the proof bundle so a reviewer can see exactly which external seeds were still used.
+- [x] Re-run `openspec validate non-nix-stage0-bootstrap` and the new non-Nix-host proof command before closing the change.

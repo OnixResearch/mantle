@@ -434,10 +434,14 @@ Use `./scripts/prove-self-hosting.sh --check` to validate prerequisites,
 including temporary-disk headroom, and print the proof command without
 starting the full build.
 
-This helper is not yet the planned non-Nix-host proof. Today it still proves
-self-hosting from explicit stage0 prerequisites on a NixOS-like development
-host, not that the first bootstrap path is already free of every hidden Nix
-fallback.
+Use `./scripts/prove-self-hosting.sh --non-nix-host` for the stricter proof
+mode. That mode keeps the same stage0 -> stage1 -> stage2 fixed-point check,
+but it also scrubs `nix-build`, `nix-store`, `nix-shell`, and `nix` from the
+stage0 `PATH` so hidden Nix-command fallbacks fail loudly.
+
+This helper still does not prove a full-source bootstrap root or reproducible
+release artifacts. It proves either a fixed-point self-hosting rebuild, or the
+same rebuild under the stricter non-Nix-host command-availability contract.
 
 Successful runs write a proof bundle to `target/self-hosting-proof/run-...`
 and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
@@ -469,16 +473,20 @@ fallbacks. Expect about 30 minutes and about 4 GiB free in `/tmp`.
 Each proof bundle contains:
 - `manifest.json` — stable machine-readable digests for the checkout, stage1,
   and stage2 binaries, plus the stage2 `bwrap` and `busybox` paths and digests,
-  store or state locations, and copied stage metadata
+  store or state locations, copied stage metadata, proof mode, and recorded
+  stage0 prerequisite paths
 - `summary.txt` — a short human-readable digest summary
 - `stage0/` and `stage2/` — copied `meta.json`, `stdout.txt`, `stderr.txt`, and
   `diagnostics.txt` files from the stage audit bundles
+- `stage0-prerequisites/inventory.md` — copied stage0 trust inventory used by
+  the proof bundle
 
 The proof does demonstrate a fixed point: stage1 and stage2 must match
 byte-for-byte, and the stage0 and stage2 crunch-built `busybox` and `bwrap`
-outputs must match too. It does not yet demonstrate bit-for-bit reproducible
-release artifacts, a full-source bootstrap root, or a first-bootstrap path
-proven with Nix commands absent from `PATH`.
+outputs must match too. In `--non-nix-host` mode it also proves that the stage0
+command path completed with `nix-build`, `nix-store`, `nix-shell`, and `nix`
+absent from `PATH`. It does not yet demonstrate bit-for-bit reproducible
+release artifacts or a full-source bootstrap root.
 
 ### Bootstrap roadmap
 

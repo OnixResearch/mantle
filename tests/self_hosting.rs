@@ -22,6 +22,7 @@
 
 mod audit_support;
 
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -47,9 +48,31 @@ const MAX_DIAGNOSTIC_LINES: u32 = 60;
 const MAX_DIAGNOSTIC_ENTRIES: u32 = 64;
 const MAX_PROOF_STORE_ENTRIES: usize = 32;
 const MAX_EMBEDDED_STORE_PATHS: usize = 32;
+const MAX_RECORDED_PROOF_TOOLS: usize = 16;
 const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
 const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
-const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v1";
+const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
+const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
+const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
+const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
+const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
+const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
+    "cargo",
+    "rustc",
+    "clang",
+    "mold",
+    "pkg-config",
+    "bwrap",
+    "git",
+    "stat",
+    "tar",
+    "xz",
+    "cp",
+    "chmod",
+    "bash",
+];
+const STAGE0_PROOF_TOOL_NAMES: [&str; 8] = ["bwrap", "git", "cargo", "tar", "xz", "cp", "chmod", "bash"];
+const BLOCKED_NIX_BINARIES: [&str; 4] = ["nix-build", "nix-store", "nix-shell", "nix"];
 
 struct StageEvidence {
     stage_name: String,
@@ -76,6 +99,7 @@ struct ProofBundleManifest {
     store_dir: String,
     staged_source: String,
     state_dirs: ProofStateDirs,
+    prerequisites: ProofPrerequisiteSet,
     store_inventory: ProofStoreInventory,
     binaries: ProofBinarySet,
     tools: ProofToolSet,
@@ -103,6 +127,33 @@ struct ProofToolSet {
     stage0_busybox: ProofHashedPath,
     stage2_bwrap: ProofHashedPath,
     stage2_busybox: ProofHashedPath,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum ProofMode {
+    FixedPoint,
+    NonNixHost,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofPrerequisiteSet {
+    mode: ProofMode,
+    inventory_doc: ProofHashedPath,
+    sandbox_shell: ProofHashedPath,
+    helper_tools: Vec<ProofResolvedTool>,
+    stage0_tools: Vec<ProofResolvedTool>,
+    stage0_path_strategy: String,
+    stage0_path_dir: Option<String>,
+    stage0_nix_binaries_absent: Vec<String>,
+    cc: Option<String>,
+    pkg_config_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofResolvedTool {
+    name: String,
+    executable: ProofHashedPath,
 }
 
 #[derive(Debug, Serialize)]
@@ -766,6 +817,170 @@ fn resolve_proof_bundle_dir() -> PathBuf {
     }
 }
 
+impl ProofMode {
+    fn current() -> Self {
+        match std::env::var(PROOF_MODE_ENV).ok().as_deref() {
+            Some(PROOF_MODE_NON_NIX_HOST) => Self::NonNixHost,
+            Some(PROOF_MODE_FIXED_POINT) | None => Self::FixedPoint,
+            Some(other) => panic!("unexpected {PROOF_MODE_ENV} value: {other}"),
+        }
+    }
+
+    fn stage0_path_is_scrubbed(self) -> bool {
+        matches!(self, Self::NonNixHost)
+    }
+
+    fn stage0_path_strategy(self) -> &'static str {
+        if self.stage0_path_is_scrubbed() {
+            "scrubbed-non-nix-host"
+        } else {
+            "inherited"
+        }
+    }
+}
+
+fn proof_inventory_doc_source() -> PathBuf {
+    let source = std::env::var_os(PROOF_STAGE0_INVENTORY_DOC_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("docs/bootstrap-stage0-inventory.md"));
+    assert!(source.exists(), "stage0 inventory doc must exist: {}", source.display());
+    source
+}
+
+fn canonicalize_or_self(path: &Path) -> PathBuf {
+    assert!(path.exists(), "path must exist before canonicalize: {}", path.display());
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn path_entries(path_var: &OsStr) -> Vec<PathBuf> {
+    std::env::split_paths(path_var).collect()
+}
+
+fn find_executable_in_entries(tool: &str, entries: &[PathBuf]) -> Option<PathBuf> {
+    assert!(!tool.is_empty(), "tool name must not be empty");
+    assert!(!entries.is_empty(), "search PATH entries must not be empty");
+
+    for entry in entries {
+        let candidate = entry.join(tool);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn find_executable_in_path_var(tool: &str, path_var: &OsStr) -> Option<PathBuf> {
+    let entries = path_entries(path_var);
+    find_executable_in_entries(tool, &entries)
+}
+
+#[cfg(unix)]
+fn create_stage0_scrubbed_path(proof_dir: &Path) -> PathBuf {
+    use std::os::unix::fs::symlink;
+
+    assert!(proof_dir.exists(), "proof dir must exist: {}", proof_dir.display());
+    let current_path = std::env::var_os("PATH").expect("PATH must be set before scrubbing stage0");
+    let current_entries = path_entries(&current_path);
+    let stage0_bin_dir = proof_dir.join("stage0-non-nix-path").join("bin");
+    std::fs::create_dir_all(&stage0_bin_dir).unwrap_or_else(|err| panic!("mkdir {}: {err}", stage0_bin_dir.display()));
+
+    for tool in STAGE0_PROOF_TOOL_NAMES {
+        let source = find_executable_in_entries(tool, &current_entries)
+            .unwrap_or_else(|| panic!("required stage0 tool not found on PATH while scrubbing: {tool}"));
+        let target = stage0_bin_dir.join(tool);
+        if target.exists() {
+            std::fs::remove_file(&target).unwrap_or_else(|err| panic!("remove old {}: {err}", target.display()));
+        }
+        symlink(&source, &target)
+            .unwrap_or_else(|err| panic!("symlink {} -> {}: {err}", source.display(), target.display()));
+    }
+
+    let stage0_path = std::env::join_paths([stage0_bin_dir.clone()]).expect("join scrubbed PATH");
+    for blocked in BLOCKED_NIX_BINARIES {
+        assert!(
+            find_executable_in_path_var(blocked, stage0_path.as_os_str()).is_none(),
+            "scrubbed stage0 PATH must block {blocked}",
+        );
+    }
+
+    stage0_bin_dir
+}
+
+fn hash_executable_record(path: &Path) -> ProofHashedPath {
+    let resolved = canonicalize_or_self(path);
+    hash_file_record(&resolved, resolved.display().to_string())
+}
+
+fn collect_resolved_tools(tool_names: &[&str], path_var: &OsStr) -> Vec<ProofResolvedTool> {
+    assert!(!tool_names.is_empty(), "tool_names must not be empty");
+
+    let entries = path_entries(path_var);
+    let mut tools = Vec::with_capacity(tool_names.len());
+    for tool in tool_names {
+        let resolved = find_executable_in_entries(tool, &entries)
+            .unwrap_or_else(|| panic!("required proof tool missing from PATH: {tool}"));
+        tools.push(ProofResolvedTool {
+            name: (*tool).to_string(),
+            executable: hash_executable_record(&resolved),
+        });
+    }
+    assert!(tools.len() <= MAX_RECORDED_PROOF_TOOLS, "recorded tool count exceeded limit");
+    tools
+}
+
+fn collect_absent_binaries(path_var: &OsStr, blocked_binaries: &[&str]) -> Vec<String> {
+    assert!(!blocked_binaries.is_empty(), "blocked_binaries must not be empty");
+
+    let entries = path_entries(path_var);
+    let mut absent = Vec::new();
+    for blocked in blocked_binaries {
+        if find_executable_in_entries(blocked, &entries).is_none() {
+            absent.push((*blocked).to_string());
+        }
+    }
+    absent
+}
+
+fn collect_prerequisites(
+    bundle_dir: &Path,
+    proof_mode: ProofMode,
+    stage0_path_dir: Option<&Path>,
+) -> ProofPrerequisiteSet {
+    assert!(!bundle_dir.as_os_str().is_empty(), "bundle dir must not be empty");
+
+    let inventory_doc_source = proof_inventory_doc_source();
+    let inventory_doc = copy_bundle_file(&inventory_doc_source, bundle_dir, "stage0-prerequisites/inventory.md");
+    let sandbox_shell = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
+        .map(PathBuf::from)
+        .map(|path| hash_executable_record(&path))
+        .unwrap_or_else(|| panic!("SNIX_BUILD_SANDBOX_SHELL must be set for proof bundle"));
+    let helper_path = std::env::var_os("PATH").expect("PATH must be set for proof bundle");
+    let stage0_path = stage0_path_dir
+        .map(|dir| std::env::join_paths([dir.to_path_buf()]).expect("join stage0 PATH"))
+        .unwrap_or_else(|| helper_path.clone());
+    let stage0_nix_binaries_absent = collect_absent_binaries(stage0_path.as_os_str(), &BLOCKED_NIX_BINARIES);
+    if proof_mode.stage0_path_is_scrubbed() {
+        assert_eq!(
+            stage0_nix_binaries_absent.len(),
+            BLOCKED_NIX_BINARIES.len(),
+            "non-nix-host proof must block every Nix binary from stage0 PATH",
+        );
+    }
+
+    ProofPrerequisiteSet {
+        mode: proof_mode,
+        inventory_doc,
+        sandbox_shell,
+        helper_tools: collect_resolved_tools(&HELPER_PROOF_TOOL_NAMES, &helper_path),
+        stage0_tools: collect_resolved_tools(&STAGE0_PROOF_TOOL_NAMES, stage0_path.as_os_str()),
+        stage0_path_strategy: proof_mode.stage0_path_strategy().to_string(),
+        stage0_path_dir: stage0_path_dir.map(|dir| dir.display().to_string()),
+        stage0_nix_binaries_absent,
+        cc: std::env::var("CC").ok(),
+        pkg_config_path: std::env::var("PKG_CONFIG_PATH").ok(),
+    }
+}
+
 fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
     assert!(!stage.stage_name.is_empty(), "stage name must not be empty");
     assert!(!stage.stderr.is_empty(), "stage stderr must not be empty");
@@ -945,13 +1160,28 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     assert_eq!(manifest.schema, PROOF_BUNDLE_SCHEMA, "unexpected proof bundle schema");
     assert!(!manifest.bundle_dir.is_empty(), "bundle dir must not be empty");
 
-    let mut out = String::with_capacity(4096);
+    let mut out = String::with_capacity(6144);
     out.push_str(&format!("schema: {}\n", manifest.schema));
     out.push_str(&format!("generated_unix_s: {}\n", manifest.generated_unix_s));
     out.push_str(&format!("repo_root: {}\n", manifest.repo_root));
     out.push_str(&format!("bundle_dir: {}\n", manifest.bundle_dir));
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
+    out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
+    out.push_str(&format!("stage0_path_strategy: {}\n", manifest.prerequisites.stage0_path_strategy));
+    out.push_str(&format!(
+        "stage0_path_dir: {}\n",
+        manifest.prerequisites.stage0_path_dir.as_deref().unwrap_or("<inherited>")
+    ));
+    out.push_str(&format!("stage0_nix_binaries_absent: {:?}\n", manifest.prerequisites.stage0_nix_binaries_absent));
+    out.push_str(&format!(
+        "stage0_inventory_doc: {} {}\n",
+        manifest.prerequisites.inventory_doc.digest_blake3, manifest.prerequisites.inventory_doc.path
+    ));
+    out.push_str(&format!(
+        "sandbox_shell: {} {}\n",
+        manifest.prerequisites.sandbox_shell.digest_blake3, manifest.prerequisites.sandbox_shell.path
+    ));
     out.push_str(&format!("stage0_state: {}\n", manifest.state_dirs.stage0));
     out.push_str(&format!("stage2_state: {}\n", manifest.state_dirs.stage2));
     out.push_str(&format!("store_crunch_entries: {:?}\n", manifest.store_inventory.crunch_entries));
@@ -1016,6 +1246,8 @@ fn write_proof_bundle(
     stage2_state_dir: &Path,
     stage1_binary: &Path,
     stage2_binary: &Path,
+    proof_mode: ProofMode,
+    stage0_path_dir: Option<&Path>,
 ) -> PathBuf {
     assert!(!bundle_dir.as_os_str().is_empty(), "bundle dir must not be empty");
     assert!(store_dir.exists(), "store dir must exist: {}", store_dir.display());
@@ -1065,6 +1297,7 @@ fn write_proof_bundle(
         stage1_embedded_store_paths: collect_embedded_store_paths(stage1_binary),
         stage2_embedded_store_paths: collect_embedded_store_paths(stage2_binary),
     };
+    let prerequisites = collect_prerequisites(bundle_dir, proof_mode, stage0_path_dir);
 
     let manifest = ProofBundleManifest {
         schema: PROOF_BUNDLE_SCHEMA,
@@ -1077,6 +1310,7 @@ fn write_proof_bundle(
             stage0: stage0_state_dir.display().to_string(),
             stage2: stage2_state_dir.display().to_string(),
         },
+        prerequisites,
         store_inventory: collect_store_inventory(store_dir),
         binaries,
         tools,
@@ -1298,6 +1532,7 @@ fn record_stage_evidence_with_populated_store_avoids_audit_limit() {
 
 #[test]
 fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
+    let _lock = lock_proof_env();
     let proof_dir = tempfile::tempdir().unwrap();
     let store = proof_dir.path().join("store");
     let stage0_state = proof_dir.path().join("state0");
@@ -1321,6 +1556,21 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     std::fs::write(&bwrap_bin, b"bwrap-binary").unwrap();
     std::fs::write(&busybox_bin, b"busybox-binary").unwrap();
     std::fs::write(staged_source.join("Cargo.toml"), b"[package]\nname='proof'\n").unwrap();
+    let inventory_doc = proof_dir.path().join("bootstrap-stage0-inventory.md");
+    std::fs::write(&inventory_doc, b"# inventory\n").unwrap();
+    let sandbox_shell = proof_dir.path().join("static-busybox");
+    std::fs::write(&sandbox_shell, b"busybox-static").unwrap();
+    #[cfg(unix)]
+    chmod_executable(&sandbox_shell);
+    let tool_dir = proof_dir.path().join("tools");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    for tool in HELPER_PROOF_TOOL_NAMES {
+        write_executable_script(&tool_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
+    }
+    let _inventory_guard = EnvVarGuard::set(PROOF_STAGE0_INVENTORY_DOC_ENV, &inventory_doc.display().to_string());
+    let _mode_guard = EnvVarGuard::set(PROOF_MODE_ENV, PROOF_MODE_FIXED_POINT);
+    let _shell_guard = EnvVarGuard::set("SNIX_BUILD_SANDBOX_SHELL", &sandbox_shell.display().to_string());
+    let _path_guard = EnvVarGuard::set("PATH", &tool_dir.display().to_string());
 
     let stage0_output = std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -1384,6 +1634,8 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
         &stage2_state,
         &stage1_binary,
         &stage2_binary,
+        ProofMode::FixedPoint,
+        None,
     );
     let summary_path = bundle_dir.join("summary.txt");
     let manifest_json = std::fs::read_to_string(&manifest_path).unwrap();
@@ -1402,6 +1654,10 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains(&bwrap_bin.display().to_string()));
     assert!(manifest_json.contains("\"fixed_point\""));
     assert!(manifest_json.contains("\"store_inventory\""));
+    assert!(manifest_json.contains("\"prerequisites\""));
+    assert!(manifest_json.contains("\"mode\": "));
+    assert!(bundle_dir.join("stage0-prerequisites/inventory.md").exists());
+    assert!(summary.contains("proof_mode:"));
     assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));
     assert!(summary.contains("stage1_equals_stage2:"));
@@ -1478,16 +1734,19 @@ impl ProofScriptFixture {
         let repo_dir = temp.path().join("repo");
         let tool_dir = temp.path().join("tools");
         let script_dir = repo_dir.join("scripts");
+        let docs_dir = repo_dir.join("docs");
         std::fs::create_dir_all(&script_dir).unwrap();
+        std::fs::create_dir_all(&docs_dir).unwrap();
         std::fs::create_dir_all(repo_dir.join("bootstrap")).unwrap();
         std::fs::write(repo_dir.join("Cargo.toml"), "[package]\nname='proof-fixture'\nversion='0.0.0'\n").unwrap();
+        std::fs::write(docs_dir.join("bootstrap-stage0-inventory.md"), "# fixture inventory\n").unwrap();
 
         let src_script = repo_root().join("scripts/prove-self-hosting.sh");
         let dst_script = script_dir.join("prove-self-hosting.sh");
         std::fs::copy(&src_script, &dst_script).unwrap();
         chmod_executable(&dst_script);
 
-        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\n";
+        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\n";
         write_executable_script(&tool_dir.join("cargo"), cargo_body);
         write_executable_script(
             &tool_dir.join("rustc"),
@@ -1567,6 +1826,42 @@ fn resolve_proof_bundle_dir_preserves_absolute_env_path() {
     assert_eq!(resolved, absolute);
 }
 
+#[test]
+fn proof_mode_defaults_to_fixed_point() {
+    let _lock = lock_proof_env();
+    let _guard = EnvVarGuard::set(PROOF_MODE_ENV, PROOF_MODE_FIXED_POINT);
+    assert_eq!(ProofMode::current(), ProofMode::FixedPoint);
+    assert!(!ProofMode::current().stage0_path_is_scrubbed());
+}
+
+#[cfg(unix)]
+#[test]
+fn create_stage0_scrubbed_path_blocks_nix_binaries() {
+    let _lock = lock_proof_env();
+    let temp = tempfile::tempdir().unwrap();
+    let tool_dir = temp.path().join("tools");
+    let nix_dir = temp.path().join("nix-tools");
+    std::fs::create_dir_all(&tool_dir).unwrap();
+    std::fs::create_dir_all(&nix_dir).unwrap();
+    for tool in STAGE0_PROOF_TOOL_NAMES {
+        write_executable_script(&tool_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
+    }
+    for blocked in BLOCKED_NIX_BINARIES {
+        write_executable_script(&nix_dir.join(blocked), "#!/bin/sh\nset -eu\nexit 0\n");
+    }
+    let joined = std::env::join_paths([tool_dir.clone(), nix_dir.clone()]).unwrap();
+    let _path_guard = EnvVarGuard::set("PATH", &joined.to_string_lossy());
+
+    let scrubbed_dir = create_stage0_scrubbed_path(temp.path());
+    let scrubbed_path = std::env::join_paths([scrubbed_dir.clone()]).unwrap();
+    for blocked in BLOCKED_NIX_BINARIES {
+        assert!(find_executable_in_path_var(blocked, scrubbed_path.as_os_str()).is_none());
+    }
+    for tool in STAGE0_PROOF_TOOL_NAMES {
+        assert!(find_executable_in_path_var(tool, scrubbed_path.as_os_str()).is_some());
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn prove_self_hosting_script_anchors_relative_bundle_dir_and_updates_latest() {
@@ -1615,6 +1910,25 @@ fn prove_self_hosting_script_preserves_absolute_bundle_dir_and_updates_latest() 
         absolute_bundle.display().to_string()
     );
     assert!(stderr.contains(&format!("proof bundle: {}", absolute_bundle.display())));
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let bundle_arg = Path::new("target/non-nix-proof");
+    let bundle_dir = fixture.repo_dir.join(bundle_arg);
+    let output = fixture.run_args(&["--non-nix-host", "--bundle-dir", "target/non-nix-proof"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(std::fs::read_to_string(bundle_dir.join("proof-mode.txt")).unwrap().trim(), PROOF_MODE_NON_NIX_HOST);
+    assert_eq!(
+        std::fs::read_to_string(bundle_dir.join("inventory-doc.txt")).unwrap().trim(),
+        fixture.repo_dir.join("docs/bootstrap-stage0-inventory.md").display().to_string()
+    );
+    assert!(stderr.contains("proof mode: non-nix-host"));
 }
 
 #[cfg(unix)]
@@ -1780,8 +2094,10 @@ fn self_hosting_stage0_stage1_stage2() {
         panic!("self-hosting proof prerequisites not met: {err}");
     }
 
+    let proof_mode = ProofMode::current();
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
     eprintln!("proof dir: {}", proof_dir.path().display());
+    eprintln!("proof mode: {:?}", proof_mode);
     let store = proof_dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
 
@@ -1812,10 +2128,22 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
+    let stage0_path_dir = if proof_mode.stage0_path_is_scrubbed() {
+        Some(create_stage0_scrubbed_path(proof_dir.path()))
+    } else {
+        None
+    };
     eprintln!("stage0 store: {}", store.display());
     eprintln!("stage0 state: {}", stage0_state.display());
+    if let Some(path_dir) = stage0_path_dir.as_ref() {
+        eprintln!("stage0 scrubbed PATH: {}", path_dir.display());
+    }
     let crunch_bin = cargo_bin("crunch");
     let mut stage0_process = std::process::Command::new(&crunch_bin);
+    if let Some(path_dir) = stage0_path_dir.as_ref() {
+        let stage0_path = std::env::join_paths([path_dir.to_path_buf()]).expect("join stage0 PATH");
+        stage0_process.env("PATH", stage0_path);
+    }
     stage0_process.args(&stage0_command[1..]);
     let stage0 = run_command_live(proof_dir.path(), "stage0", &mut stage0_process).unwrap_or_else(|err| {
         panic!(
@@ -2148,6 +2476,8 @@ fn self_hosting_stage0_stage1_stage2() {
         &stage2_state,
         &stage1_binary,
         &stage2_binary,
+        proof_mode,
+        stage0_path_dir.as_deref(),
     );
     let proof_summary = proof_bundle_dir.join("summary.txt");
     assert!(proof_manifest.exists(), "proof manifest must exist: {}", proof_manifest.display());

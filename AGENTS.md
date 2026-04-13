@@ -342,7 +342,7 @@ When claiming test results in commit messages or completion summaries:
 ## Self-Build and Self-Hosting Proof
 
 - `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.
-- `docs/bootstrap-stage0-inventory.md` is the stricter first-bootstrap trust inventory. README/self-hosting docs must treat the checked-in proof as fixed-point evidence only; the stronger non-Nix-host proof claim stays separate until a PATH-without-Nix proof path lands.
+- `docs/bootstrap-stage0-inventory.md` is the stricter first-bootstrap trust inventory. README/self-hosting docs must distinguish the default fixed-point proof from the stricter `./scripts/prove-self-hosting.sh --non-nix-host` mode, which now scrubs `nix-build`, `nix-store`, `nix-shell`, and `nix` from the stage0 `PATH` while keeping the same stage1==stage2 fixed-point check.
 - `src/self_build.rs` stage0 source staging is now pure Rust: it copies a fixed allowlist of top-level repo entries (`.cargo`, `Cargo.{toml,lock}`, `bootstrap`, `builders`, `crates`, `lib`, `rust-toolchain.toml`, `src`, `vendor`, `vendor-deps`) and requires the checked-in `.cargo/vendor-config.toml` to point at `vendor-deps`. No non-test self-build path shells out to `git`, `tar`, `sh`, `cp`, or `cargo vendor` anymore. Keep NixOS-specific path probes labeled as host convenience, not proof evidence.
 - On this host Cargo still builds to the shared `~/.cargo-target/` by default. For real self-build validation, run `/home/brittonr/.cargo-target/debug/crunch ...`, not the stale repo-local `target/debug/crunch`, unless you explicitly set `CARGO_TARGET_DIR=target`.
 - `crates/crunch-glue/src/convert.rs::resolve_inputs()` must parse source inputs with the configured store prefix. Using `StorePath::from_absolute_path(...)` there broke stage3 self-build under the default `/crunch/store` prefix even after earlier CA-mapping and Nickel contract fixes; `StorePath::from_absolute_path_with_prefix(..., known_paths.store_dir())` fixed the remaining `/crunch/store/...-busybox` failure.
@@ -423,8 +423,10 @@ When claiming test results in commit messages or completion summaries:
   stage1 and stage2 crunch binaries must match byte-for-byte, and the
   stage0/stage2 busybox bootstrap outputs must also match.
 - The proof bundle (`target/self-hosting-proof/run-*/summary.txt`) now
-  records store inventory, stage0/stage2 bootstrap-tool digests,
-  stage1==stage2 status, first differing byte offset, and embedded
+  records proof mode, scrubbed-vs-inherited stage0 PATH strategy,
+  blocked Nix binaries for stage0, copied `stage0-prerequisites/inventory.md`,
+  resolved sandbox-shell path, store inventory, stage0/stage2 bootstrap-tool
+  digests, stage1==stage2 status, first differing byte offset, and embedded
   `/nix/store/...-busybox|...-bwrap|...-crunch-src` references. First
   rerun on 2026-04-12 showed stage1!=stage2 with busybox drift but bwrap
   stable; after pinning busybox kbuild metadata in `bootstrap/busybox.ncl`

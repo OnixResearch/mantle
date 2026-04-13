@@ -9,18 +9,24 @@ readonly MIN_TMP_FREE_KIB=4194304
 readonly MIN_TMP_FREE_MIB=4096
 readonly DEFAULT_BUNDLE_ROOT="$REPO_ROOT/target/self-hosting-proof"
 readonly PROOF_BUNDLE_ENV="CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
+readonly PROOF_MODE_ENV="CRUNCH_SELF_HOSTING_PROOF_MODE"
+readonly PROOF_STAGE0_INVENTORY_DOC_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC"
+readonly PROOF_MODE_FIXED_POINT="fixed-point"
+readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
 
 path_prefix=""
 tmp_dir=""
 tmp_free_kib="0"
 proof_bundle_dir=""
 mode="run"
+proof_mode="$PROOF_MODE_FIXED_POINT"
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/prove-self-hosting.sh [--check] [--bundle-dir DIR]
+Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--bundle-dir DIR]
 
   --check            validate prerequisites, print the proof command, and exit
+  --non-nix-host     run proof with stage0 PATH scrubbed of nix-build/nix-store/nix-shell/nix
   --bundle-dir DIR   write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
@@ -178,6 +184,14 @@ require_repo_root() {
 
   if [[ ! -d "$REPO_ROOT/bootstrap" ]]; then
     die "expected bootstrap/ at repo root: $REPO_ROOT"
+  fi
+}
+
+require_stage0_inventory_doc() {
+  local inventory_doc="$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
+
+  if [[ ! -f "$inventory_doc" ]]; then
+    die "missing stage0 inventory doc: $inventory_doc"
   fi
 }
 
@@ -383,6 +397,7 @@ show_check_summary() {
   bundle_dir="$(resolve_proof_bundle_dir)"
 
   note "self-hosting proof check passed"
+  note "proof mode: $proof_mode"
   note "repo: $REPO_ROOT"
   note "cargo: $(command -v cargo)"
   note "rustc: $(command -v rustc)"
@@ -395,16 +410,22 @@ show_check_summary() {
   note "tmpdir: $tmp_dir"
   note "tmp free: $(( tmp_free_kib / 1024 )) MiB"
   note "proof bundle dir: $bundle_dir"
+  note "stage0 inventory doc: $REPO_ROOT/docs/bootstrap-stage0-inventory.md"
   note "proof command: ${PROOF_COMMAND[*]}"
 }
 
 parse_args() {
   mode="run"
+  proof_mode="$PROOF_MODE_FIXED_POINT"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --check)
         mode="check"
+        shift
+        ;;
+      --non-nix-host)
+        proof_mode="$PROOF_MODE_NON_NIX_HOST"
         shift
         ;;
       --bundle-dir)
@@ -446,6 +467,7 @@ main() {
 
   require_linux
   require_repo_root
+  require_stage0_inventory_doc
   configure_path
   configure_c_compiler
   configure_sandbox_shell
@@ -463,6 +485,8 @@ main() {
   bundle_dir="$(resolve_proof_bundle_dir)"
   mkdir -p "$(dirname -- "$bundle_dir")"
   export "$PROOF_BUNDLE_ENV=$bundle_dir"
+  export "$PROOF_MODE_ENV=$proof_mode"
+  export "$PROOF_STAGE0_INVENTORY_DOC_ENV=$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
 
   if "${PROOF_COMMAND[@]}"; then
     proof_status=0
@@ -474,6 +498,7 @@ main() {
   fi
 
   update_latest_bundle_link "$bundle_dir"
+  note "proof mode: $proof_mode"
   note "proof bundle: $bundle_dir"
   note "proof manifest: $bundle_dir/manifest.json"
   note "proof summary: $bundle_dir/summary.txt"
