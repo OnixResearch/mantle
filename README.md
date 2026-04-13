@@ -437,7 +437,8 @@ starting the full build.
 Use `./scripts/prove-self-hosting.sh --non-nix-host` for the stricter proof
 mode. That mode keeps the same stage0 -> stage1 -> stage2 fixed-point check,
 but it also scrubs `nix-build`, `nix-store`, `nix-shell`, and `nix` from the
-stage0 `PATH` so hidden Nix-command fallbacks fail loudly.
+proof runner `PATH` before it invokes `cargo test`, so hidden Nix-command
+fallbacks fail loudly.
 
 This helper still does not prove a full-source bootstrap root or reproducible
 release artifacts. It proves either a fixed-point self-hosting rebuild, or the

@@ -1746,7 +1746,7 @@ impl ProofScriptFixture {
         std::fs::copy(&src_script, &dst_script).unwrap();
         chmod_executable(&dst_script);
 
-        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\n";
+        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
         write_executable_script(&tool_dir.join("cargo"), cargo_body);
         write_executable_script(
             &tool_dir.join("rustc"),
@@ -1765,6 +1765,9 @@ impl ProofScriptFixture {
         write_executable_script(&tool_dir.join("stat"), "#!/bin/sh\nset -eu\nprintf '5000000 1024\\n'\n");
         for tool in ["clang", "mold", "git", "tar", "xz", "cp", "bwrap"] {
             write_executable_script(&tool_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
+        }
+        for blocked in BLOCKED_NIX_BINARIES {
+            write_executable_script(&tool_dir.join(blocked), "#!/bin/sh\nset -eu\nexit 0\n");
         }
         write_executable_script(&tool_dir.join("bash"), "#!/bin/sh\nexec /bin/sh \"$@\"\n");
         write_executable_script(&tool_dir.join("static-sh"), "#!/bin/sh\nset -eu\nexit 0\n");
@@ -1928,6 +1931,7 @@ fn prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc() {
         std::fs::read_to_string(bundle_dir.join("inventory-doc.txt")).unwrap().trim(),
         fixture.repo_dir.join("docs/bootstrap-stage0-inventory.md").display().to_string()
     );
+    assert!(!bundle_dir.join("blocked-tools-found.txt").exists(), "blocked nix tools must stay off helper PATH");
     assert!(stderr.contains("proof mode: non-nix-host"));
 }
 
@@ -2128,22 +2132,19 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    let stage0_path_dir = if proof_mode.stage0_path_is_scrubbed() {
-        Some(create_stage0_scrubbed_path(proof_dir.path()))
-    } else {
-        None
-    };
+    if proof_mode.stage0_path_is_scrubbed() {
+        let helper_path = std::env::var_os("PATH").expect("non-nix-host proof PATH must be set");
+        for blocked in BLOCKED_NIX_BINARIES {
+            assert!(
+                find_executable_in_path_var(blocked, helper_path.as_os_str()).is_none(),
+                "non-nix-host proof PATH must block {blocked}",
+            );
+        }
+    }
     eprintln!("stage0 store: {}", store.display());
     eprintln!("stage0 state: {}", stage0_state.display());
-    if let Some(path_dir) = stage0_path_dir.as_ref() {
-        eprintln!("stage0 scrubbed PATH: {}", path_dir.display());
-    }
     let crunch_bin = cargo_bin("crunch");
     let mut stage0_process = std::process::Command::new(&crunch_bin);
-    if let Some(path_dir) = stage0_path_dir.as_ref() {
-        let stage0_path = std::env::join_paths([path_dir.to_path_buf()]).expect("join stage0 PATH");
-        stage0_process.env("PATH", stage0_path);
-    }
     stage0_process.args(&stage0_command[1..]);
     let stage0 = run_command_live(proof_dir.path(), "stage0", &mut stage0_process).unwrap_or_else(|err| {
         panic!(
@@ -2477,7 +2478,7 @@ fn self_hosting_stage0_stage1_stage2() {
         &stage1_binary,
         &stage2_binary,
         proof_mode,
-        stage0_path_dir.as_deref(),
+        None,
     );
     let proof_summary = proof_bundle_dir.join("summary.txt");
     assert!(proof_manifest.exists(), "proof manifest must exist: {}", proof_manifest.display());

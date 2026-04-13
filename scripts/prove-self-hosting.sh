@@ -13,11 +13,15 @@ readonly PROOF_MODE_ENV="CRUNCH_SELF_HOSTING_PROOF_MODE"
 readonly PROOF_STAGE0_INVENTORY_DOC_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC"
 readonly PROOF_MODE_FIXED_POINT="fixed-point"
 readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
+readonly MAX_PATH_SOURCE_DIRS=128
+readonly MAX_PATH_LINKS=8192
+readonly BLOCKED_NIX_BINARIES=(nix-build nix-store nix-shell nix)
 
 path_prefix=""
 tmp_dir=""
 tmp_free_kib="0"
 proof_bundle_dir=""
+proof_path_dir=""
 mode="run"
 proof_mode="$PROOF_MODE_FIXED_POINT"
 
@@ -26,7 +30,7 @@ usage() {
 Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--bundle-dir DIR]
 
   --check            validate prerequisites, print the proof command, and exit
-  --non-nix-host     run proof with stage0 PATH scrubbed of nix-build/nix-store/nix-shell/nix
+  --non-nix-host     run proof with proof PATH scrubbed of nix-build/nix-store/nix-shell/nix
   --bundle-dir DIR   write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
@@ -38,6 +42,25 @@ die() {
 
 note() {
   printf '%s\n' "$*" >&2
+}
+
+cleanup() {
+  if [[ -n "$proof_path_dir" && -d "$proof_path_dir" ]]; then
+    rm -rf -- "$proof_path_dir"
+  fi
+}
+
+blocked_nix_tool() {
+  local tool_name="${1:?tool name is required}"
+  local blocked
+
+  for blocked in "${BLOCKED_NIX_BINARIES[@]}"; do
+    if [[ "$tool_name" == "$blocked" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 prepend_path_dir() {
@@ -365,6 +388,71 @@ require_tmp_space() {
   fi
 }
 
+configure_non_nix_path() {
+  local dir_count=0
+  local link_count=0
+  local dir
+  local candidate
+  local tool_name
+  local -a source_dirs
+
+  if [[ "$proof_mode" != "$PROOF_MODE_NON_NIX_HOST" ]]; then
+    return
+  fi
+
+  IFS=':' read -r -a source_dirs <<< "${PATH:-}"
+  if (( ${#source_dirs[@]} == 0 )); then
+    die "PATH is empty before non-Nix-host scrubbing"
+  fi
+
+  proof_path_dir="$tmp_dir/crunch-proof-path-$$"
+  rm -rf -- "$proof_path_dir"
+  mkdir -p -- "$proof_path_dir"
+
+  shopt -s nullglob
+  for dir in "${source_dirs[@]}"; do
+    if [[ -z "$dir" ]]; then
+      continue
+    fi
+    dir_count=$(( dir_count + 1 ))
+    if (( dir_count > MAX_PATH_SOURCE_DIRS )); then
+      shopt -u nullglob
+      die "PATH has too many source directories for non-Nix-host proof: $dir_count"
+    fi
+    if [[ ! -d "$dir" ]]; then
+      continue
+    fi
+
+    for candidate in "$dir"/*; do
+      if [[ ! -x "$candidate" || -d "$candidate" ]]; then
+        continue
+      fi
+      tool_name="$(basename -- "$candidate")"
+      if blocked_nix_tool "$tool_name"; then
+        continue
+      fi
+      if [[ -e "$proof_path_dir/$tool_name" ]]; then
+        continue
+      fi
+      ln -s -- "$candidate" "$proof_path_dir/$tool_name"
+      link_count=$(( link_count + 1 ))
+      if (( link_count > MAX_PATH_LINKS )); then
+        shopt -u nullglob
+        die "non-Nix-host proof PATH exceeded link budget: $link_count"
+      fi
+    done
+  done
+  shopt -u nullglob
+
+  export PATH="$proof_path_dir"
+
+  for tool_name in "${BLOCKED_NIX_BINARIES[@]}"; do
+    if command -v -- "$tool_name" >/dev/null 2>&1; then
+      die "non-Nix-host proof PATH still exposes blocked tool: $tool_name"
+    fi
+  done
+}
+
 default_proof_bundle_dir() {
   local timestamp
 
@@ -411,6 +499,9 @@ show_check_summary() {
   note "tmp free: $(( tmp_free_kib / 1024 )) MiB"
   note "proof bundle dir: $bundle_dir"
   note "stage0 inventory doc: $REPO_ROOT/docs/bootstrap-stage0-inventory.md"
+  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]]; then
+    note "proof PATH dir: $proof_path_dir"
+  fi
   note "proof command: ${PROOF_COMMAND[*]}"
 }
 
@@ -474,6 +565,7 @@ main() {
   configure_openssl_lookup
   require_nightly_rustc
   require_tmp_space
+  configure_non_nix_path
 
   cd "$REPO_ROOT"
 
@@ -504,5 +596,7 @@ main() {
   note "proof summary: $bundle_dir/summary.txt"
   note "latest bundle: $DEFAULT_BUNDLE_ROOT/latest"
 }
+
+trap cleanup EXIT
 
 main "$@"

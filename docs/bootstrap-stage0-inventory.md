@@ -5,8 +5,8 @@ This file tracks the stricter first-bootstrap view.
 It is not the same thing as the default checked-in self-hosting proof.
 Today the repo has two proof modes:
 - default fixed-point proof: stage1 -> stage2 identity
-- stricter `--non-nix-host` proof: same fixed point, with stage0 `PATH`
-  scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
+- stricter `--non-nix-host` proof: same fixed point, with the proof runner
+  `PATH` scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
 
 Neither mode yet proves a full-source bootstrap root or reproducible release
 artifacts.
