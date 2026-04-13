@@ -70,7 +70,7 @@ fn convert_inner(
     let store_dir = known_paths.store_dir().to_string();
 
     // 1. Resolve inputs (recursive for derivation deps).
-    let (input_derivations, input_sources) = resolve_inputs(&drv.inputs, known_paths, depth)?;
+    let (input_derivations, input_sources) = resolve_inputs(&drv.inputs, known_paths, depth, &store_dir)?;
 
     // 2. Build the nix_compat::Derivation struct.
     let ca_hash = drv.fixed_output.as_ref().map(parse_fixed_output).transpose()?;
@@ -86,6 +86,7 @@ fn resolve_inputs(
     inputs: &[Input],
     known_paths: &mut ConversionCache,
     depth: u32,
+    store_dir: &str,
 ) -> Result<(BTreeMap<StorePath<String>, BTreeSet<String>>, BTreeSet<StorePath<String>>), Error> {
     let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
     let mut input_sources: BTreeSet<StorePath<String>> = BTreeSet::new();
@@ -93,7 +94,7 @@ fn resolve_inputs(
     for input in inputs {
         match input {
             Input::Source(path_str) => {
-                let store_path = parse_store_path(path_str)?;
+                let store_path = parse_store_path(path_str, store_dir)?;
                 input_sources.insert(store_path);
             }
             Input::OutputSelection(output_ref) => {
@@ -222,9 +223,12 @@ fn finalize_and_register(
     Ok((drv_path, nix_drv.clone()))
 }
 
-/// Parse a store path string into a `StorePath`.
-fn parse_store_path(s: &str) -> Result<StorePath<String>, Error> {
-    StorePath::from_absolute_path(s.as_bytes()).map_err(|_| Error::InvalidStorePath(s.to_string()))
+/// Parse a store path string into a `StorePath` using the configured store prefix.
+fn parse_store_path(s: &str, store_dir: &str) -> Result<StorePath<String>, Error> {
+    assert!(!s.is_empty(), "store path string must not be empty");
+    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
+    StorePath::from_absolute_path_with_prefix(s.as_bytes(), store_dir)
+        .map_err(|_| Error::InvalidStorePath(s.to_string()))
 }
 
 /// Parse a `FixedOutput` into a `CAHash`.
@@ -646,13 +650,19 @@ mod tests {
 
     #[test]
     fn parse_store_path_valid() {
-        let sp = parse_store_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash").unwrap();
+        let sp = parse_store_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash", "/nix/store").unwrap();
         assert!(sp.to_string().contains("bash"));
     }
 
     #[test]
+    fn parse_store_path_accepts_custom_prefix() {
+        let sp = parse_store_path("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-busybox", "/crunch/store").unwrap();
+        assert!(sp.to_string().contains("busybox"));
+    }
+
+    #[test]
     fn parse_store_path_invalid() {
-        assert!(parse_store_path("/tmp/not-a-store-path").is_err());
+        assert!(parse_store_path("/tmp/not-a-store-path", "/nix/store").is_err());
     }
 
     #[test]
@@ -717,6 +727,26 @@ mod tests {
         // Lookup with the wrong prefix must fail
         let wrong = drv_path.to_absolute_path();
         assert!(kp.get_by_drv_path(&wrong).is_none());
+    }
+
+    #[test]
+    fn convert_custom_store_dir_accepts_source_inputs() {
+        let drv = CrunchDerivation {
+            inputs: vec![Input::Source(
+                "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-busybox".to_string(),
+            )],
+            ..minimal_drv("hello", "/bin/sh")
+        };
+        let mut kp = ConversionCache::new("/crunch/store");
+
+        let (_drv_path, nix_drv) = convert(&drv, &mut kp).unwrap();
+
+        assert_eq!(nix_drv.input_sources.len(), 1, "custom-prefix source input should be preserved");
+        let only_source = nix_drv.input_sources.iter().next().unwrap();
+        assert_eq!(
+            only_source.to_absolute_path_with_prefix("/crunch/store"),
+            "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-busybox"
+        );
     }
 
     // ── content-addressed derivation tests ─────────────────────────
