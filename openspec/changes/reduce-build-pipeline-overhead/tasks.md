@@ -14,9 +14,9 @@
 
 ## PR 3: Session source-resolution cache
 
-- [ ] Add per-build-session memoization for source closure expansion
-- [ ] Reuse previously known castore nodes or `PathInfo.node` values before re-ingesting the same on-disk tree
-- [ ] Add regression tests showing repeated source inputs are resolved once per build session
+- [x] Add per-build-session memoization for source closure expansion
+- [x] Reuse previously known castore nodes or `PathInfo.node` values before re-ingesting the same on-disk tree
+- [x] Add regression tests showing repeated source inputs are resolved once per build session
 
 ## PR 4: Metadata-only remote closure lookup
 
@@ -33,5 +33,5 @@
 
 ## Validation
 
-- [ ] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
+- [x] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
 - [x] Run `openspec validate reduce-build-pipeline-overhead`

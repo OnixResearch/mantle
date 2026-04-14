@@ -304,6 +304,41 @@ impl StoreHandle {
         &self.output_dir_str
     }
 
+    /// Reuse a previously known castore node for `path` when possible.
+    ///
+    /// Checks the session cache first, then local PathInfo. Returns `None`
+    /// when no reusable local node is known or when the referenced castore
+    /// content is missing.
+    pub async fn cached_node_for_path(&mut self, path: &StorePath<String>) -> Result<Option<Node>, Error> {
+        assert!(!path.name().is_empty(), "store path name must not be empty");
+        assert!(path.to_string().contains('-'), "store path text must include a digest/name separator");
+
+        if let Some(node) = self.output_nodes.get(path) {
+            return Ok(Some(node.clone()));
+        }
+
+        let maybe_path_info = self
+            .pathinfo_service
+            .get(*path.digest())
+            .await
+            .map_err(|e| Error::Store(format!("PathInfo lookup for {path}: {e}")))?;
+        let Some(path_info) = maybe_path_info else {
+            return Ok(None);
+        };
+        if path_info.store_path != *path {
+            return Err(Error::Store(format!(
+                "PathInfo digest collision for {path}: stored path was {}",
+                path_info.store_path
+            )));
+        }
+        if !self.castore_has_content(&path_info.node).await? {
+            return Ok(None);
+        }
+
+        self.output_nodes.insert(path.clone(), path_info.node.clone());
+        Ok(Some(path_info.node))
+    }
+
     /// Record a CA mapping and persist to disk.
     pub fn insert_ca_mapping(&mut self, drv_abs: &str, output_name: &str, ca_abs: &str) {
         self.ca_mappings.insert(drv_abs, output_name, ca_abs);
@@ -732,6 +767,23 @@ mod tests {
 
         assert!(matches!(err, Error::PathInfoFallbackRejected { .. }));
         assert!(err.to_string().contains("strict mode does not permit in-memory PathInfo fallback"));
+    }
+
+    #[tokio::test]
+    async fn cached_node_for_path_reuses_local_pathinfo_node() {
+        use snix_store::pathinfoservice::PathInfoService;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("cached-node", 6);
+        let path_info = signed_pathinfo(output_path.clone());
+        let expected_node = path_info.node.clone();
+        handle.pathinfo_service().put(path_info).await.unwrap();
+
+        let reused = handle.cached_node_for_path(&output_path).await.unwrap();
+
+        assert_eq!(reused, Some(expected_node.clone()));
+        assert_eq!(handle.output_nodes.get(&output_path), Some(&expected_node));
     }
 
     #[tokio::test]

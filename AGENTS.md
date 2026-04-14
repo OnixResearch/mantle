@@ -269,7 +269,12 @@ Building derivations (not just compiling crunch) requires:
   `crates/crunch-glue/src/types.rs::Input` uses a manual `Deserialize`
   (`deserialize_any` + raw-record dispatch) instead of `#[serde(untagged)]`,
   which Nickel direct deserialization rejected for nested derivation inputs
-  with enum-tag fields. Remaining hot spots: `crates/crunch-build/src/worker.rs`
+  with enum-tag fields. `crates/crunch-build/src/orchestrate.rs`
+  `resolve_and_ingest_sources()` now memoizes source-closure walks per build
+  session and uses `crunch_store::StoreHandle::cached_node_for_path()` before
+  falling back to `ingest_path(...)`, so repeated source inputs and locally
+  known dependency outputs stop re-walking PathInfo and stop re-ingesting the
+  same on-disk tree. Remaining hot spots: `crates/crunch-build/src/worker.rs`
   still clones large `Derivation` / `BuildRequest` values on the hot path and
   clones waiter vectors during completion/failure propagation, and
   `crates/crunch-store/src/closure.rs` remote fallback calls

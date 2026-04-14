@@ -2,6 +2,8 @@
 //! persist outputs.
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -65,6 +67,19 @@ fn output_ca_field(
         Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(nar_sha256)))
     } else {
         output.ca_hash.clone()
+    }
+}
+
+fn push_unique_store_paths(
+    ordered_paths: &mut Vec<StorePath<String>>,
+    seen_paths: &mut HashSet<StorePath<String>>,
+    new_paths: impl IntoIterator<Item = StorePath<String>>,
+) {
+    for path in new_paths {
+        let inserted = seen_paths.insert(path.clone());
+        if inserted {
+            ordered_paths.push(path);
+        }
     }
 }
 
@@ -133,6 +148,7 @@ pub struct Builder<BServ> {
     verbose: bool,
     hermeticity_mode: HermeticityMode,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
 }
 
 impl<BServ> Builder<BServ>
@@ -178,6 +194,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            source_closure_cache: HashMap::new(),
         }
     }
 
@@ -219,6 +236,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            source_closure_cache: HashMap::new(),
         }
     }
 
@@ -648,85 +666,121 @@ where BServ: BuildService + 'static
         Ok(final_node)
     }
 
+    fn closure_fallback_mode(&self) -> crunch_store::StoreFallbackMode {
+        if self.hermeticity_mode.is_strict() {
+            crunch_store::StoreFallbackMode::Strict
+        } else {
+            crunch_store::StoreFallbackMode::Practical
+        }
+    }
+
+    fn ensure_declared_source_exists(&self, source_path: &StorePath<String>) -> Result<(), Error> {
+        assert!(!source_path.name().is_empty(), "source path name must not be empty");
+        assert!(source_path.to_string().contains('-'), "source path text must include a digest/name separator");
+
+        let abs = PathBuf::from(source_path.to_absolute_path());
+        if abs.exists() {
+            return Ok(());
+        }
+        Err(Error::SourceNotFound {
+            path: source_path.clone(),
+        })
+    }
+
+    async fn resolve_source_closure_paths(
+        &mut self,
+        source_path: &StorePath<String>,
+    ) -> Result<Vec<StorePath<String>>, Error> {
+        assert!(!source_path.name().is_empty(), "source path name must not be empty");
+        assert!(source_path.to_string().contains('-'), "source path text must include a digest/name separator");
+
+        if let Some(cached_paths) = self.source_closure_cache.get(source_path) {
+            return Ok(cached_paths.clone());
+        }
+
+        let remote_ref = self.store.remote_pathinfo();
+        let remote_dyn: Option<&dyn snix_store::pathinfoservice::PathInfoService> = remote_ref.as_deref();
+        let closure = crunch_store::resolve_closure(
+            source_path,
+            self.store.pathinfo_service().as_ref(),
+            remote_dyn,
+            self.closure_fallback_mode(),
+            self.store.store_dir(),
+        )
+        .await
+        .map_err(|e| Error::Store(format!("closure resolution failed for {}: {e}", source_path)))?;
+        self.hermeticity_audit_events
+            .extend(closure.audit_events.into_iter().map(HermeticityAuditEvent::from));
+        assert!(!closure.paths.is_empty(), "closure must contain at least the root source path");
+
+        let resolved_paths = closure.paths;
+        self.source_closure_cache.insert(source_path.clone(), resolved_paths.clone());
+        Ok(resolved_paths)
+    }
+
+    fn preferred_source_host_path(&self, source_path: &StorePath<String>) -> PathBuf {
+        let crunch_abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
+        if crunch_abs.exists() {
+            return crunch_abs;
+        }
+        PathBuf::from(source_path.to_absolute_path())
+    }
+
+    async fn cached_or_ingested_node_for_path(
+        &mut self,
+        path: &StorePath<String>,
+        host_path: &Path,
+    ) -> Result<Option<Node>, Error> {
+        assert!(!path.name().is_empty(), "store path name must not be empty");
+        assert!(host_path.is_absolute(), "host path must be absolute");
+
+        if let Some(node) = self
+            .store
+            .cached_node_for_path(path)
+            .await
+            .map_err(|e| Error::Store(format!("reusing cached node for {path}: {e}")))?
+        {
+            return Ok(Some(node));
+        }
+        if !host_path.exists() {
+            return Ok(None);
+        }
+
+        let node =
+            ingest_path::<_, _, _, &[u8]>(self.store.blob_service(), self.store.directory_service(), host_path, None)
+                .await
+                .map_err(|e| Error::Sandbox(std::io::Error::other(format!("failed to ingest input {}: {e}", path))))?;
+        self.store.output_nodes.insert(path.clone(), node.clone());
+        Ok(Some(node))
+    }
+
     /// Validate source inputs, resolve closures via PathInfo/narinfo,
     /// and ingest all paths into castore. Returns the full set of
     /// source paths (declared + transitive closure).
     async fn resolve_and_ingest_sources(&mut self, derivation: &Derivation) -> Result<Vec<StorePath<String>>, Error> {
-        let mut all_source_paths: Vec<StorePath<String>> = derivation.input_sources.iter().cloned().collect();
+        let mut all_source_paths = Vec::new();
+        let mut seen_source_paths = HashSet::new();
+        push_unique_store_paths(
+            &mut all_source_paths,
+            &mut seen_source_paths,
+            derivation.input_sources.iter().cloned(),
+        );
 
         for source_path in &derivation.input_sources {
-            // Crunch-built outputs already have their dependencies
-            // tracked via input_derivations — no closure walk needed.
             if self.is_crunch_built(source_path) {
-                debug!(
-                    path = %source_path,
-                    "skipping closure resolution (crunch-built)"
-                );
+                debug!(path = %source_path, "skipping closure resolution (crunch-built)");
                 continue;
             }
-
-            // Nix-provided source: must exist at /nix/store/.
-            let abs = source_path.to_absolute_path();
-            if !PathBuf::from(&abs).exists() {
-                return Err(Error::SourceNotFound {
-                    path: source_path.clone(),
-                });
-            }
-
-            // Resolve runtime closure via PathInfo (local redb +
-            // optional binary cache narinfo). No subprocess call.
-            let remote_ref = self.store.remote_pathinfo();
-            let remote_dyn: Option<&dyn snix_store::pathinfoservice::PathInfoService> = remote_ref.as_deref();
-            let fallback_mode = if self.hermeticity_mode.is_strict() {
-                crunch_store::StoreFallbackMode::Strict
-            } else {
-                crunch_store::StoreFallbackMode::Practical
-            };
-            let closure = crunch_store::resolve_closure(
-                source_path,
-                self.store.pathinfo_service().as_ref(),
-                remote_dyn,
-                fallback_mode,
-                self.store.store_dir(),
-            )
-            .await
-            .map_err(|e| Error::Store(format!("closure resolution failed for {}: {e}", source_path)))?;
-            self.hermeticity_audit_events
-                .extend(closure.audit_events.into_iter().map(HermeticityAuditEvent::from));
-
-            for sp in closure.paths {
-                if !all_source_paths.contains(&sp) {
-                    all_source_paths.push(sp);
-                }
-            }
+            self.ensure_declared_source_exists(source_path)?;
+            let closure_paths = self.resolve_source_closure_paths(source_path).await?;
+            push_unique_store_paths(&mut all_source_paths, &mut seen_source_paths, closure_paths);
         }
 
-        // Ingest all source paths (declared + closure) into castore.
         for source_path in &all_source_paths {
-            if self.store.output_nodes.contains_key(source_path) {
-                continue;
-            }
-
-            // Try the crunch output dir first, then fall back to
-            // /nix/store/ for Nix-provided sources.
-            let crunch_abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
-            let nix_abs = PathBuf::from(source_path.to_absolute_path());
-            let abs = if crunch_abs.exists() {
-                crunch_abs
-            } else if nix_abs.exists() {
-                nix_abs
-            } else {
+            let host_path = self.preferred_source_host_path(source_path);
+            if self.cached_or_ingested_node_for_path(source_path, &host_path).await?.is_none() {
                 debug!(path = %source_path, "source path not found on disk, skipping");
-                continue;
-            };
-
-            let node =
-                ingest_path::<_, _, _, &[u8]>(self.store.blob_service(), self.store.directory_service(), &abs, None)
-                    .await
-                    .map_err(|e| {
-                        Error::Sandbox(std::io::Error::other(format!("failed to ingest source {}: {e}", source_path)))
-                    })?;
-            self.store.output_nodes.insert(source_path.clone(), node);
+            }
         }
 
         Ok(all_source_paths)
@@ -767,31 +821,13 @@ where BServ: BuildService + 'static
 
         let mut sandbox_inputs: BTreeMap<StorePath<String>, Node> = BTreeMap::new();
         for input_path in &input_paths {
-            if let Some(node) = self.store.output_nodes.get(input_path) {
-                sandbox_inputs.insert(input_path.clone(), node.clone());
-            } else {
-                // Try ingesting from disk as fallback.
-                // Source inputs live at /nix/store/, built outputs at output_dir.
-                let abs = self.resolve_host_path(input_path, derivation);
-                if abs.exists() {
-                    let node = ingest_path::<_, _, _, &[u8]>(
-                        self.store.blob_service(),
-                        self.store.directory_service(),
-                        &abs,
-                        None,
-                    )
-                    .await
-                    .map_err(|e| {
-                        Error::Sandbox(std::io::Error::other(format!("failed to ingest input {}: {e}", input_path)))
-                    })?;
-                    self.store.output_nodes.insert(input_path.clone(), node.clone());
-                    sandbox_inputs.insert(input_path.clone(), node);
-                } else {
-                    return Err(Error::SourceNotFound {
-                        path: input_path.clone(),
-                    });
-                }
-            }
+            let abs = self.resolve_host_path(input_path, derivation);
+            let Some(node) = self.cached_or_ingested_node_for_path(input_path, &abs).await? else {
+                return Err(Error::SourceNotFound {
+                    path: input_path.clone(),
+                });
+            };
+            sandbox_inputs.insert(input_path.clone(), node);
         }
         Ok(sandbox_inputs)
     }
@@ -1178,28 +1214,11 @@ where BServ: BuildService + 'static
     /// (needed for passing as sandbox inputs to downstream builds).
     async fn ensure_input_nodes(&mut self, derivation: &Derivation) -> Result<(), Error> {
         for output in derivation.outputs.values() {
-            if let Some(path) = &output.path {
-                if !self.store.output_nodes.contains_key(path) {
-                    // Built outputs are at the physical output dir.
-                    let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
-                    if abs.exists() {
-                        let node = ingest_path::<_, _, _, &[u8]>(
-                            self.store.blob_service(),
-                            self.store.directory_service(),
-                            &abs,
-                            None,
-                        )
-                        .await
-                        .map_err(|e| {
-                            Error::Sandbox(std::io::Error::other(format!(
-                                "failed to ingest existing output {}: {e}",
-                                path
-                            )))
-                        })?;
-                        self.store.output_nodes.insert(path.clone(), node);
-                    }
-                }
-            }
+            let Some(path) = &output.path else {
+                continue;
+            };
+            let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
+            let _ = self.cached_or_ingested_node_for_path(path, &abs).await?;
         }
         Ok(())
     }
@@ -1212,16 +1231,20 @@ mod tests {
     use std::sync::Mutex;
 
     use async_trait::async_trait;
+    use futures::stream::StreamExt;
     use nix_compat::derivation::Output;
     use nix_compat::store_path::StorePath;
     use snix_build::buildservice::BuildOutput;
     use snix_build::buildservice::BuildRequest;
     use snix_build::buildservice::BuildResult;
+    use snix_castore::SymlinkTarget;
     use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use snix_store::pathinfoservice::LruPathInfoService;
+    use snix_store::pathinfoservice::PathInfoService;
+    use snix_store::pathinfoservice::{self};
     use tokio::io::AsyncWriteExt;
 
     use super::*;
@@ -1318,6 +1341,62 @@ mod tests {
         }
     }
 
+    #[derive(Default, Clone)]
+    struct CountingPathInfoService {
+        entries: Arc<Mutex<HashMap<[u8; 20], PathInfo>>>,
+        get_counts: Arc<Mutex<HashMap<[u8; 20], u32>>>,
+    }
+
+    impl CountingPathInfoService {
+        fn insert(&self, path_info: PathInfo) {
+            self.entries.lock().unwrap().insert(*path_info.store_path.digest(), path_info);
+        }
+
+        fn get_count(&self, path: &StorePath<String>) -> u32 {
+            self.get_counts.lock().unwrap().get(path.digest()).copied().unwrap_or(0)
+        }
+    }
+
+    #[async_trait]
+    impl PathInfoService for CountingPathInfoService {
+        async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+            let mut counts = self.get_counts.lock().unwrap();
+            let next_count = counts.get(&digest).copied().unwrap_or(0).saturating_add(1);
+            counts.insert(digest, next_count);
+            drop(counts);
+            Ok(self.entries.lock().unwrap().get(&digest).cloned())
+        }
+
+        async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+            self.entries.lock().unwrap().insert(*path_info.store_path.digest(), path_info.clone());
+            Ok(path_info)
+        }
+
+        fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
+            let entries: Vec<_> = self.entries.lock().unwrap().values().cloned().collect();
+            futures::stream::iter(entries.into_iter().map(Ok)).boxed()
+        }
+    }
+
+    fn make_source_path(name: &str, digest_byte: u8) -> StorePath<String> {
+        StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
+    }
+
+    fn make_source_path_info(path: &StorePath<String>, references: Vec<StorePath<String>>) -> PathInfo {
+        PathInfo {
+            store_path: path.clone(),
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("source-target").unwrap(),
+            },
+            references,
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        }
+    }
+
     /// Build a nix_compat::Derivation, compute paths, register in DerivationRegistry.
     fn build_and_register(
         name: &str,
@@ -1363,6 +1442,92 @@ mod tests {
         kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
 
         (drv_path, drv)
+    }
+
+    #[tokio::test]
+    async fn source_closure_resolution_is_memoized_per_session() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let pis = CountingPathInfoService::default();
+
+        let root = make_source_path("shared-source", 41);
+        let dep = make_source_path("shared-source-ref", 42);
+        pis.insert(make_source_path_info(&dep, vec![]));
+        pis.insert(make_source_path_info(&root, vec![dep.clone()]));
+
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        let first = builder.resolve_source_closure_paths(&root).await.unwrap();
+        let second = builder.resolve_source_closure_paths(&root).await.unwrap();
+
+        assert_eq!(first, second, "memoized closure must match the first resolution");
+        assert_eq!(pis.get_count(&root), 1, "root closure should be queried once");
+        assert_eq!(pis.get_count(&dep), 1, "transitive reference should be queried once");
+        assert_eq!(builder.source_closure_cache.len(), 1, "session should cache one source root");
+    }
+
+    #[tokio::test]
+    async fn collect_sandbox_inputs_reuses_pathinfo_node_before_disk_ingest() {
+        use snix_store::pathinfoservice::PathInfoService;
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let output_dir = tempfile::tempdir().unwrap();
+        let pis = test_pis();
+
+        let mut kp = DerivationRegistry::default();
+        let (dep_drv_path, dep_drv) = build_and_register("reuse-dep", &[], &mut kp);
+        let (_root_drv_path, root_drv) = build_and_register("reuse-root", &[(dep_drv_path.clone(), "out")], &mut kp);
+        let dep_output_path = dep_drv.outputs["out"].path.as_ref().unwrap().clone();
+
+        let cached_node = put_blob(&bs, b"cached dependency output").await;
+        let path_info = PathInfo {
+            store_path: dep_output_path.clone(),
+            node: cached_node.clone(),
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: Some(dep_drv_path.clone()),
+            ca: None,
+        };
+        pis.put(path_info).await.unwrap();
+
+        let disk_path =
+            PathBuf::from(dep_output_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
+        std::fs::create_dir_all(disk_path.parent().unwrap()).unwrap();
+        std::fs::write(&disk_path, b"disk fallback should stay unused").unwrap();
+
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis,
+            output_dir.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        let sandbox_inputs = builder.collect_sandbox_inputs(&root_drv, &kp, &[]).await.unwrap();
+
+        assert_eq!(sandbox_inputs.get(&dep_output_path), Some(&cached_node));
+        assert_eq!(builder.store.output_nodes.get(&dep_output_path), Some(&cached_node));
     }
 
     #[tokio::test]
