@@ -3,25 +3,25 @@
 //! Two modes:
 //! - `--from-nix` (default): shells out to `nix-build` to resolve package names to `/nix/store`
 //!   paths.
-//! - `--fetch`: evaluates the shared `bootstrap/seed.ncl` provider, builds its normalized
-//!   seed derivation, and writes a generated `seed.ncl`. No Nix required.
+//! - `--fetch`: evaluates the shared `bootstrap/seed.ncl` provider, builds its normalized seed
+//!   derivation, and writes a generated `seed.ncl`. No Nix required.
 //!
 //! The resolution step is parameterized by a closure so tests can
 //! supply a mock resolver instead of shelling out to nix-build.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
+
+use serde::Deserialize;
 
 use crate::errors::RunError;
-use serde::Deserialize;
 
 /// Resolve packages to store paths using the given resolver function.
 ///
 /// `resolve` takes a package name and returns its store path or an error.
 pub fn resolve_packages<F>(packages: &[String], resolve: F) -> Result<Vec<(String, String)>, RunError>
-where
-    F: Fn(&str) -> Result<String, RunError>,
-{
+where F: Fn(&str) -> Result<String, RunError> {
     let mut entries = Vec::new();
     for pkg in packages {
         let store_path = resolve(pkg)?;
@@ -41,17 +41,13 @@ pub fn generate_seed_ncl(entries: &[(String, String)]) -> String {
     ncl.push_str("#\n");
     ncl.push_str("# Pin these paths as GC roots:\n");
     for (_, path) in entries {
-        ncl.push_str(&format!(
-            "#   nix-store --add-root /nix/var/nix/gcroots/crunch-seed -r {path}\n"
-        ));
+        ncl.push_str(&format!("#   nix-store --add-root /nix/var/nix/gcroots/crunch-seed -r {path}\n"));
     }
     ncl.push_str("\nlet { StorePath, .. } = import \"contracts.ncl\" in\n\n{\n");
 
     for (name, path) in entries {
         let field = name.replace('-', "_");
-        ncl.push_str(&format!(
-            "  {field} | StorePath\n    | doc \"Store path for {name}\"\n    = \"{path}\",\n\n"
-        ));
+        ncl.push_str(&format!("  {field} | StorePath\n    | doc \"Store path for {name}\"\n    = \"{path}\",\n\n"));
     }
 
     ncl.push_str("}\n");
@@ -203,9 +199,7 @@ fn validate_fetch_seed_provider(provider: &FetchSeedProvider) -> Result<(), RunE
         return Err(RunError::Internal("bootstrap seed provider target is empty".to_string()));
     }
     if provider.dynamic_linker.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider dynamic linker is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider dynamic linker is empty".to_string()));
     }
     if provider.toolchain.name != provider.name {
         return Err(RunError::Internal(format!(
@@ -222,39 +216,25 @@ fn validate_fetch_seed_provider(provider: &FetchSeedProvider) -> Result<(), RunE
         return Err(RunError::Internal("bootstrap seed provider id is empty".to_string()));
     }
     if provider.provider.summary.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider summary is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider summary is empty".to_string()));
     }
     if provider.provider.raw.name.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider raw artifact name is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider raw artifact name is empty".to_string()));
     }
     if provider.provider.raw.url.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider raw artifact url is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider raw artifact url is empty".to_string()));
     }
     if provider.provider.raw.hash.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider raw artifact hash is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider raw artifact hash is empty".to_string()));
     }
     if provider.provider.retained_tools.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider retained tool list is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider retained tool list is empty".to_string()));
     }
     if provider.provider.dropped_components.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider dropped component list is empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider dropped component list is empty".to_string()));
     }
     if provider.provider.notes.is_empty() {
-        return Err(RunError::Internal(
-            "bootstrap seed provider notes are empty".to_string(),
-        ));
+        return Err(RunError::Internal("bootstrap seed provider notes are empty".to_string()));
     }
     Ok(())
 }
@@ -284,10 +264,7 @@ fn provider_comment_lines(provider: &FetchSeedProvider, metadata_path: &str) -> 
         format!("Generated by `crunch bootstrap --fetch`"),
         format!("Provider: {} — {}", provider.provider.id, provider.provider.summary),
         format!("Target: {} ({})", provider.target, provider.dynamic_linker),
-        format!(
-            "Raw artifact: {} ({})",
-            provider.provider.raw.url, provider.provider.raw.hash
-        ),
+        format!("Raw artifact: {} ({})", provider.provider.raw.url, provider.provider.raw.hash),
         format!("Retained tools: {retained}"),
         format!("Dropped surface: {dropped}"),
         format!("Metadata: {metadata_path}"),
@@ -299,14 +276,8 @@ fn fetch_seed_entries(provider: &FetchSeedProvider, logical_store_path: &str) ->
     assert!(!logical_store_path.is_empty(), "logical store path must not be empty");
     assert!(!provider.provider.summary.is_empty(), "provider summary must not be empty");
 
-    let toolchain_doc = format!(
-        "{} ({})",
-        provider.provider.summary, provider.provider.id
-    );
-    let alias_doc = format!(
-        "Compatibility alias for {} — prefer seed.toolchain in new code",
-        provider.provider.id
-    );
+    let toolchain_doc = format!("{} ({})", provider.provider.summary, provider.provider.id);
+    let alias_doc = format!("Compatibility alias for {} — prefer seed.toolchain in new code", provider.provider.id);
 
     vec![
         ("toolchain".to_string(), logical_store_path.to_string(), toolchain_doc),
@@ -328,9 +299,7 @@ fn generate_fetch_seed_ncl(provider: &FetchSeedProvider, logical_store_path: &st
     ncl.push_str("\nlet { StorePath, .. } = import \"contracts.ncl\" in\n\n{\n");
 
     for (field, path, doc) in entries {
-        ncl.push_str(&format!(
-            "  {field} | StorePath\n    | doc \"{doc}\"\n    = \"{path}\",\n\n"
-        ));
+        ncl.push_str(&format!("  {field} | StorePath\n    | doc \"{doc}\"\n    = \"{path}\",\n\n"));
     }
 
     ncl.push_str("}\n");
@@ -355,8 +324,8 @@ fn reduced_seed_store_name(provider: &FetchSeedProvider) -> Result<String, RunEr
 }
 
 fn copy_symlink(src: &Path, dst: &Path) -> Result<(), RunError> {
-    let target = std::fs::read_link(src)
-        .map_err(|e| RunError::Internal(format!("reading symlink {}: {e}", src.display())))?;
+    let target =
+        std::fs::read_link(src).map_err(|e| RunError::Internal(format!("reading symlink {}: {e}", src.display())))?;
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| RunError::Internal(format!("creating {}: {e}", parent.display())))?;
@@ -368,17 +337,14 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), RunError> {
     }
     #[cfg(not(unix))]
     {
-        return Err(RunError::Internal(format!(
-            "symlink copy is only supported on unix hosts: {}",
-            src.display()
-        )));
+        return Err(RunError::Internal(format!("symlink copy is only supported on unix hosts: {}", src.display())));
     }
     Ok(())
 }
 
 fn copy_path_recursively(src: &Path, dst: &Path) -> Result<(), RunError> {
-    let metadata = std::fs::symlink_metadata(src)
-        .map_err(|e| RunError::Internal(format!("stat {}: {e}", src.display())))?;
+    let metadata =
+        std::fs::symlink_metadata(src).map_err(|e| RunError::Internal(format!("stat {}: {e}", src.display())))?;
     let file_type = metadata.file_type();
 
     if file_type.is_symlink() {
@@ -389,21 +355,17 @@ fn copy_path_recursively(src: &Path, dst: &Path) -> Result<(), RunError> {
             std::fs::create_dir_all(parent)
                 .map_err(|e| RunError::Internal(format!("creating {}: {e}", parent.display())))?;
         }
-        std::fs::copy(src, dst)
-            .map_err(|e| RunError::Internal(format!("copying {}: {e}", src.display())))?;
+        std::fs::copy(src, dst).map_err(|e| RunError::Internal(format!("copying {}: {e}", src.display())))?;
         std::fs::set_permissions(dst, metadata.permissions())
             .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dst.display())))?;
         return Ok(());
     }
 
-    std::fs::create_dir_all(dst)
-        .map_err(|e| RunError::Internal(format!("creating {}: {e}", dst.display())))?;
+    std::fs::create_dir_all(dst).map_err(|e| RunError::Internal(format!("creating {}: {e}", dst.display())))?;
     std::fs::set_permissions(dst, metadata.permissions())
         .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dst.display())))?;
 
-    for entry in std::fs::read_dir(src)
-        .map_err(|e| RunError::Internal(format!("reading {}: {e}", src.display())))?
-    {
+    for entry in std::fs::read_dir(src).map_err(|e| RunError::Internal(format!("reading {}: {e}", src.display())))? {
         let entry = entry.map_err(|e| RunError::Internal(format!("reading {}: {e}", src.display())))?;
         copy_path_recursively(&entry.path(), &dst.join(entry.file_name()))?;
     }
@@ -418,27 +380,23 @@ fn remove_path_if_exists(path: &Path) -> Result<(), RunError> {
     };
 
     if metadata.is_dir() && !metadata.file_type().is_symlink() {
-        std::fs::remove_dir_all(path)
-            .map_err(|e| RunError::Internal(format!("removing {}: {e}", path.display())))?;
+        std::fs::remove_dir_all(path).map_err(|e| RunError::Internal(format!("removing {}: {e}", path.display())))?;
     } else {
-        std::fs::remove_file(path)
-            .map_err(|e| RunError::Internal(format!("removing {}: {e}", path.display())))?;
+        std::fs::remove_file(path).map_err(|e| RunError::Internal(format!("removing {}: {e}", path.display())))?;
     }
     Ok(())
 }
 
 fn directory_size_bytes(path: &Path) -> Result<u64, RunError> {
-    let metadata = std::fs::symlink_metadata(path)
-        .map_err(|e| RunError::Internal(format!("stat {}: {e}", path.display())))?;
+    let metadata =
+        std::fs::symlink_metadata(path).map_err(|e| RunError::Internal(format!("stat {}: {e}", path.display())))?;
     let file_type = metadata.file_type();
     if file_type.is_symlink() || file_type.is_file() {
         return Ok(metadata.len());
     }
 
     let mut total_bytes: u64 = 0;
-    for entry in std::fs::read_dir(path)
-        .map_err(|e| RunError::Internal(format!("reading {}: {e}", path.display())))?
-    {
+    for entry in std::fs::read_dir(path).map_err(|e| RunError::Internal(format!("reading {}: {e}", path.display())))? {
         let entry = entry.map_err(|e| RunError::Internal(format!("reading {}: {e}", path.display())))?;
         total_bytes = total_bytes
             .checked_add(directory_size_bytes(&entry.path())?)
@@ -454,7 +412,11 @@ fn copy_if_exists(src: &Path, dst: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn stage_reduced_seed_provider(raw_root: &Path, stage_root: &Path, provider: &FetchSeedProvider) -> Result<(), RunError> {
+fn stage_reduced_seed_provider(
+    raw_root: &Path,
+    stage_root: &Path,
+    provider: &FetchSeedProvider,
+) -> Result<(), RunError> {
     let target_dir = stage_root.join(&provider.target);
     std::fs::create_dir_all(stage_root)
         .map_err(|e| RunError::Internal(format!("creating {}: {e}", stage_root.display())))?;
@@ -502,10 +464,7 @@ fn stage_reduced_seed_provider(raw_root: &Path, stage_root: &Path, provider: &Fe
         };
         if source.exists() {
             copy_path_recursively(&source, &stage_root.join("bin").join(tool))?;
-            copy_path_recursively(
-                &source,
-                &stage_root.join("bin").join(format!("{}-{}", provider.target, tool)),
-            )?;
+            copy_path_recursively(&source, &stage_root.join("bin").join(format!("{}-{}", provider.target, tool)))?;
         }
     }
 
@@ -517,7 +476,15 @@ fn stage_reduced_seed_provider(raw_root: &Path, stage_root: &Path, provider: &Fe
         copy_path_recursively(&target_dir.join("sys-include"), &normalized_include)?;
     }
 
-    for lib_name in ["libgcc_s.so", "libgcc_s.so.1", "libc.so", "libstdc++.a", "libstdc++.so", "libstdc++.so.6", "libsupc++.a"] {
+    for lib_name in [
+        "libgcc_s.so",
+        "libgcc_s.so.1",
+        "libc.so",
+        "libstdc++.a",
+        "libstdc++.so",
+        "libstdc++.so.6",
+        "libsupc++.a",
+    ] {
         let src = stage_root.join("lib").join(lib_name);
         if src.exists() {
             copy_path_recursively(&src, &target_dir.join("lib").join(lib_name))?;
@@ -537,7 +504,8 @@ fn stage_reduced_seed_provider(raw_root: &Path, stage_root: &Path, provider: &Fe
         for entry in std::fs::read_dir(&gcc_internal_root)
             .map_err(|e| RunError::Internal(format!("reading {}: {e}", gcc_internal_root.display())))?
         {
-            let entry = entry.map_err(|e| RunError::Internal(format!("reading {}: {e}", gcc_internal_root.display())))?;
+            let entry =
+                entry.map_err(|e| RunError::Internal(format!("reading {}: {e}", gcc_internal_root.display())))?;
             let version_dir = entry.path();
             remove_path_if_exists(&version_dir.join("install-tools"))?;
             for name in DROPPED_GCC_INTERNAL_NAMES {
@@ -614,10 +582,7 @@ fn validate_reduced_seed_output(path: &Path, provider: &FetchSeedProvider) -> Re
 
     for check in checks {
         if !check.exists() {
-            return Err(RunError::Internal(format!(
-                "reduced seed provider missing {}",
-                check.display()
-            )));
+            return Err(RunError::Internal(format!("reduced seed provider missing {}", check.display())));
         }
     }
     Ok(())
@@ -653,10 +618,7 @@ fn materialize_reduced_seed_provider(
     validate_reduced_seed_output(&staging_root, provider)?;
 
     std::fs::rename(&staging_root, &physical_path).map_err(|e| {
-        RunError::Internal(format!(
-            "moving reduced seed provider into {}: {e}",
-            physical_path.display()
-        ))
+        RunError::Internal(format!("moving reduced seed provider into {}: {e}", physical_path.display()))
     })?;
 
     Ok((logical_path, physical_path.display().to_string(), false))
@@ -664,17 +626,13 @@ fn materialize_reduced_seed_provider(
 
 /// Resolve the crunch state directory (same logic as main.rs).
 fn resolve_state_dir() -> PathBuf {
-    std::env::var("CRUNCH_STATE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let state = std::env::var("XDG_STATE_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-                    PathBuf::from(home).join(".local/state")
-                });
-            state.join("crunch")
-        })
+    std::env::var("CRUNCH_STATE_DIR").map(PathBuf::from).unwrap_or_else(|_| {
+        let state = std::env::var("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            PathBuf::from(home).join(".local/state")
+        });
+        state.join("crunch")
+    })
 }
 
 /// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
@@ -700,11 +658,7 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
 
     let display_prefix = store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
     if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
-        eprintln!(
-            "  raw {} -> {}",
-            raw_fetch.name,
-            planned_output.to_absolute_path_with_prefix(display_prefix)
-        );
+        eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
     }
 
     // 2. Set up services for the fetch-only Builder.
@@ -714,21 +668,17 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
     let blob_service = {
         use snix_castore::blobservice::ObjectStoreBlobService;
         let blob_dir = state_dir.join("blobs");
-        std::fs::create_dir_all(&blob_dir)
-            .map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
+        std::fs::create_dir_all(&blob_dir).map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
         std::sync::Arc::new(
             ObjectStoreBlobService::new_local(&blob_dir)
                 .map_err(|e| RunError::Internal(format!("blob service: {e}")))?,
         )
     };
-    let directory_service = RedbDirectoryService::new_temporary(
-        "bootstrap".to_string(),
-        RedbDirectoryServiceConfig {
-            path: None,
-            read_only: false,
-            cache_size: None,
-        },
-    )
+    let directory_service = RedbDirectoryService::new_temporary("bootstrap".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        read_only: false,
+        cache_size: None,
+    })
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
@@ -740,11 +690,9 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
 
     let mut builder = crunch_build::Builder::with_state_dir(
         blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
-        std::sync::Arc::new(directory_service)
-            as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+        std::sync::Arc::new(directory_service) as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
         fetch_service,
-        std::sync::Arc::new(pathinfo_service)
-            as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+        std::sync::Arc::new(pathinfo_service) as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
         store_dir.to_path_buf(),
         Some(state_dir),
         None,
@@ -783,25 +731,18 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
     }
 
     // 4. Reduce the raw tree on the host into the normalized provider layout.
-    let (logical_path, physical_path, reduced_cached) = materialize_reduced_seed_provider(
-        &provider,
-        Path::new(&raw_display_path),
-        store_dir,
-    )?;
+    let (logical_path, physical_path, reduced_cached) =
+        materialize_reduced_seed_provider(&provider, Path::new(&raw_display_path), store_dir)?;
     if reduced_cached {
         eprintln!("  {} (reduced provider cached)", physical_path);
     } else {
         eprintln!("  {} (reduced provider built)", physical_path);
     }
-    eprintln!(
-        "  provider metadata -> {}/share/crunch-bootstrap/provider.json",
-        physical_path
-    );
+    eprintln!("  provider metadata -> {}/share/crunch-bootstrap/provider.json", physical_path);
 
     // 5. Generate seed.ncl.
     let ncl = generate_fetch_seed_ncl(&provider, &logical_path);
-    std::fs::write(output, &ncl)
-        .map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
+    std::fs::write(output, &ncl).map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
 
     eprintln!("Wrote {}", output.display());
     Ok(())
@@ -815,14 +756,11 @@ async fn open_bootstrap_pathinfo(
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
     let db_path = state_dir.join("pathinfo.redb");
-    match RedbPathInfoService::new(
-        "crunch".to_string(),
-        RedbPathInfoServiceConfig {
-            path: Some(db_path.clone()),
-            read_only: false,
-            cache_size: None,
-        },
-    )
+    match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
+        path: Some(db_path.clone()),
+        read_only: false,
+        cache_size: None,
+    })
     .await
     {
         Ok(svc) => Ok(svc),
@@ -936,6 +874,18 @@ mod tests {
     }
 
     #[test]
+    fn fetch_seed_provider_loads_with_embedded_stdlib() {
+        let dir = tempfile::tempdir().unwrap();
+        let stdlib_dir = crunch_eval::stdlib::write_stdlib(Some(dir.path())).unwrap();
+        let import_paths = vec![stdlib_dir.into_os_string()];
+        let provider: FetchSeedProvider =
+            crunch_eval::evaluate_and_deserialize(&fetch_seed_provider_path(), &import_paths).unwrap();
+
+        assert_eq!(provider.name, "musl-seed-toolchain");
+        assert_eq!(provider.provider.raw.name, "musl-gcc-raw");
+    }
+
+    #[test]
     fn generate_fetch_seed_ncl_structure() {
         let provider = load_fetch_seed_provider().unwrap();
         let logical_path = "/crunch/store/xxx-musl-seed-toolchain";
@@ -956,5 +906,27 @@ mod tests {
     fn fetch_seed_metadata_logical_path_appends_provider_json() {
         let path = fetch_seed_metadata_logical_path("/crunch/store/abc-seed");
         assert_eq!(path, "/crunch/store/abc-seed/share/crunch-bootstrap/provider.json");
+    }
+
+    #[test]
+    fn write_provider_metadata_records_shared_schema() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw_root = dir.path().join("raw");
+        let reduced_root = dir.path().join("reduced");
+        std::fs::create_dir_all(&raw_root).unwrap();
+        std::fs::create_dir_all(&reduced_root).unwrap();
+        std::fs::write(raw_root.join("payload.bin"), vec![0u8; 16]).unwrap();
+        std::fs::write(reduced_root.join("payload.bin"), vec![0u8; 8]).unwrap();
+
+        let provider = load_fetch_seed_provider().unwrap();
+        let metadata_path = reduced_root.join("share").join("crunch-bootstrap").join("provider.json");
+        write_provider_metadata(&provider, &raw_root, &reduced_root, &metadata_path).unwrap();
+
+        let text = std::fs::read_to_string(&metadata_path).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(json["reduction"]["raw_size_bytes"].as_u64(), Some(16));
+        assert_eq!(json["reduction"]["reduced_size_bytes"].as_u64(), Some(8));
+        assert!(json["reduction"]["retained_tools"].is_array());
+        assert!(json["notes"].is_array());
     }
 }

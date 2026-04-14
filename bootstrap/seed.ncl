@@ -177,14 +177,14 @@ let seed_toolchain = {
         2>/dev/null || true
 
       $BB mkdir -p "$out/share/crunch-bootstrap"
-      set -- $($BB du -sm "$RAW")
-      RAW_SIZE_MB="$1"
-      set -- $($BB du -sm "$out")
-      REDUCED_SIZE_MB="$1"
+      set -- $($BB du -sb "$RAW")
+      RAW_SIZE_BYTES="$1"
+      set -- $($BB du -sb "$out")
+      REDUCED_SIZE_BYTES="$1"
 
-      test "$RAW_SIZE_MB" -gt 0
-      test "$REDUCED_SIZE_MB" -gt 0
-      test "$REDUCED_SIZE_MB" -lt "$RAW_SIZE_MB"
+      test "$RAW_SIZE_BYTES" -gt 0
+      test "$REDUCED_SIZE_BYTES" -gt 0
+      test "$REDUCED_SIZE_BYTES" -lt "$RAW_SIZE_BYTES"
 
       $BB cat > "$out/share/crunch-bootstrap/provider.json" << EOF
 {
@@ -198,16 +198,12 @@ let seed_toolchain = {
     "hash": "%{raw_hash}"
   },
   "reduction": {
-    "raw_size_mb": $RAW_SIZE_MB,
-    "reduced_size_mb": $REDUCED_SIZE_MB,
-    "dropped_components": [
-      "share/locale and translated catalogs",
-      "Fortran frontend and runtime",
-      "coverage helpers",
-      "LTO helpers",
-      "gold and profiling extras"
-    ]
-  }
+    "raw_size_bytes": $RAW_SIZE_BYTES,
+    "reduced_size_bytes": $REDUCED_SIZE_BYTES,
+    "retained_tools": %{std.serialize 'Json provider_retained_tools},
+    "dropped_components": %{std.serialize 'Json provider_dropped_components}
+  },
+  "notes": %{std.serialize 'Json provider_notes_list}
 }
 EOF
       $BB chmod 0444 "$out/share/crunch-bootstrap/provider.json"

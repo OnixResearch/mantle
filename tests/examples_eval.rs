@@ -79,3 +79,11 @@ fn eval_bootstrap_no_nix_example_uses_shared_seed() {
         "example should use shared reduced seed provider: {input_names:?}"
     );
 }
+
+#[test]
+fn bootstrap_no_nix_example_uses_store_env_glob() {
+    let text = std::fs::read_to_string(example_path("bootstrap-no-nix.ncl")).unwrap();
+
+    assert!(text.contains("for d in $NIX_STORE/*-%{seed_name}; do"));
+    assert!(!text.contains("for d in /nix/store/*-%{seed_name}; do"));
+}

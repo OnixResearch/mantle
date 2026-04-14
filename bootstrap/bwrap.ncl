@@ -139,13 +139,14 @@ CAPEOF
       # Find the bootstrap seed toolchain for kernel headers.
       # The rebuilt musl sysroot has libc headers, but bwrap also needs
       # raw kernel headers like <linux/capability.h> and <linux/loop.h>.
+      # The normalized seed contract puts those headers in the target sysroot.
       SEED_ROOT=""
       for d in $NIX_STORE/*-%{seed_name}; do
-        if [ -d "$d/include" ]; then SEED_ROOT="$d"; break; fi
+        if [ -d "$d/%{seed_target}/include" ]; then SEED_ROOT="$d"; break; fi
       done
       SEED_INC=""
       if [ -n "$SEED_ROOT" ]; then
-        SEED_INC="-I$SEED_ROOT/%{seed_target}/include -I$SEED_ROOT/include"
+        SEED_INC="-I$SEED_ROOT/%{seed_target}/include"
       fi
 
       echo "Compiling bubblewrap..."

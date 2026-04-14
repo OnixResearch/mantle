@@ -378,6 +378,10 @@ When claiming test results in commit messages or completion summaries:
   Fortran payload, gcov/LTO helpers, and gold/profile extras from the public
   provider output, and writes provenance to
   `share/crunch-bootstrap/provider.json` inside the store path.
+- Keep the provider metadata schema aligned between `bootstrap/seed.ncl` and
+  `src/bootstrap.rs`: `reduction.raw_size_bytes`,
+  `reduction.reduced_size_bytes`, `reduction.retained_tools`,
+  `reduction.dropped_components`, plus top-level `notes`.
 - `crunch bootstrap --fetch` must stay host-shell-free: fetch the raw musl.cc
   tarball through `FetchBuildService`, then reduce it on the host in Rust.
   If fetch bootstrap starts trying to build `musl-seed-toolchain` through bwrap,
@@ -396,10 +400,10 @@ When claiming test results in commit messages or completion summaries:
   `CXX`. If it points at a stale name like `/tmp/tools/musl-g++-static`, GCC
   configure fails with `A compiler with support for C++11 language features is required.`
 - `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` need raw kernel headers
-  from the seed toolchain in addition to musl libc headers. If stage0 bwrap
-  fails on `<linux/capability.h>` / `<linux/loop.h>` or busybox misses
-  `linux/*.h`, pass both `-I$SEED_ROOT/<target>/include` and
-  `-I$SEED_ROOT/include`.
+  from the normalized seed sysroot in addition to musl libc headers. If stage0
+  bwrap fails on `<linux/capability.h>` / `<linux/loop.h>` or busybox misses
+  `linux/*.h`, fix `bootstrap/seed.ncl` so `<target>/include` has the headers;
+  downstream stages should include only `-I$SEED_ROOT/<target>/include`.
 - `bootstrap/seed.ncl` should materialize `<target>/include` and
   `<target>/lib/libgcc_s.so*` / `libc.so` as real files, not self-referential
   symlinks back into `$out`. A later stage0 run showed downstream bootstrap
@@ -411,6 +415,13 @@ When claiming test results in commit messages or completion summaries:
   `import "seed.ncl"` picked up `lib/seed.ncl` instead of
   `bootstrap/seed.ncl` (`FieldMissing toolchain`), and a root-only import path
   later made `lib/lib.ncl` fail to find its plain `import "fetch.ncl"`.
+- Embedded Nickel stdlib in `crates/crunch-eval/src/stdlib.rs` must mirror the
+  whole checked-in `lib/` directory, not a handpicked subset. Missing
+  `fetch.ncl` / `project_outputs.ncl` only shows up after install, when
+  `crunch bootstrap --fetch` can no longer rely on the source-tree `lib/`.
+- `examples/bootstrap-no-nix.ncl` must discover the seed through `$NIX_STORE`,
+  not a hardcoded `/nix/store`, or the example breaks under the default
+  `/crunch/store` logical prefix.
 - `stage_source()` must package the current worktree contents, not
   `git archive HEAD`. Otherwise the self-hosting proof builds stage1
   from stale committed sources and stage2 can regress to already-fixed

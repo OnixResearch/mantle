@@ -122,6 +122,27 @@ fn bootstrap_entrypoints_do_not_inline_raw_seed_provider_details() {
 }
 
 #[test]
+fn seed_derivation_writes_shared_provider_metadata_schema() {
+    let text = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
+
+    assert!(text.contains("\"raw_size_bytes\": $RAW_SIZE_BYTES"));
+    assert!(text.contains("\"reduced_size_bytes\": $REDUCED_SIZE_BYTES"));
+    assert!(text.contains("\"retained_tools\": %{std.serialize 'Json provider_retained_tools}"));
+    assert!(text.contains("\"notes\": %{std.serialize 'Json provider_notes_list}"));
+    assert!(!text.contains("raw_size_mb"));
+    assert!(!text.contains("reduced_size_mb"));
+}
+
+#[test]
+fn busybox_and_bwrap_use_normalized_seed_sysroot_headers_only() {
+    for entrypoint in ["busybox.ncl", "bwrap.ncl"] {
+        let text = std::fs::read_to_string(bootstrap_path(entrypoint)).unwrap();
+        assert!(text.contains("$SEED_ROOT/%{seed_target}/include"), "missing target include in {entrypoint}");
+        assert!(!text.contains("$SEED_ROOT/include"), "unexpected top-level include fallback in {entrypoint}");
+    }
+}
+
+#[test]
 fn all_bootstrap_entrypoints_evaluate() {
     for entrypoint in BOOTSTRAP_ENTRYPOINTS {
         let drv = eval_bootstrap(entrypoint);

@@ -26,7 +26,7 @@ let seed_target = seed.target in
       export PATH="/tmp/tools"
 
       TOOLCHAIN=""
-      for d in /nix/store/*-%{seed_name}; do
+      for d in $NIX_STORE/*-%{seed_name}; do
         if [ -d "$d" ]; then TOOLCHAIN="$d"; break; fi
       done
       if [ -z "$TOOLCHAIN" ]; then

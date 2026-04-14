@@ -12,8 +12,11 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("lib.ncl", include_str!("../../../lib/lib.ncl")),
     ("contracts.ncl", include_str!("../../../lib/contracts.ncl")),
     ("derivation.ncl", include_str!("../../../lib/derivation.ncl")),
+    ("fetch.ncl", include_str!("../../../lib/fetch.ncl")),
     ("fixed_output.ncl", include_str!("../../../lib/fixed_output.ncl")),
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
+    ("project.ncl", include_str!("../../../lib/project.ncl")),
+    ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
 ];
 
@@ -133,5 +136,31 @@ mod tests {
 
         let expr = crate::evaluate_str(r#"let lib = import "lib.ncl" in "ok""#, &import_paths).unwrap();
         assert_eq!(expr.as_str(), Some("ok"));
+    }
+
+    #[test]
+    fn embedded_stdlib_matches_repo_lib_directory() {
+        let repo_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib");
+        let expected: std::collections::BTreeSet<String> = std::fs::read_dir(&repo_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".ncl"))
+            .collect();
+        let actual: std::collections::BTreeSet<String> =
+            STDLIB_FILES.iter().map(|(name, _)| (*name).to_string()).collect();
+
+        assert_eq!(actual, expected);
+        assert!(actual.contains("fetch.ncl"));
+    }
+
+    #[test]
+    fn written_embedded_stdlib_is_importable() {
+        let dir = tempfile::tempdir().unwrap();
+        let stdlib_dir = write_stdlib(Some(dir.path())).unwrap();
+        let import_paths = vec![stdlib_dir.into_os_string()];
+
+        let expr = crate::evaluate_str(r#"let lib = import "lib.ncl" in "ok""#, &import_paths).unwrap();
+        assert_eq!(expr.as_str(), Some("ok"));
+        assert!(dir.path().join("fetch.ncl").exists());
     }
 }
