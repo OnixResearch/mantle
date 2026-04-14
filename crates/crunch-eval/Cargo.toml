@@ -11,4 +11,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dev-dependencies]
+crunch-glue = { path = "../crunch-glue" }
 tempfile = "3"

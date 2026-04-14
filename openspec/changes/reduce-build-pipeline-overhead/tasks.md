@@ -2,15 +2,15 @@
 
 ## PR 1: Direct derivation extraction helper
 
-- [ ] Add a direct typed derivation-extraction helper in `crunch-eval` for single-derivation and package-set Nickel results
-- [ ] Add regression tests for nested derivation inputs with Nickel enum tags through the direct path
+- [x] Add a direct typed derivation-extraction helper in `crunch-eval` for single-derivation and package-set Nickel results
+- [x] Add regression tests for nested derivation inputs with Nickel enum tags through the direct path
 - [ ] Confirm the current build path still passes unchanged while the helper is staged
 
 ## PR 2: Switch pipeline build path off JSON
 
-- [ ] Switch `crunch-pipeline::build()` from JSON-based derivation extraction to the new direct path
-- [ ] Keep `crunch eval` and other debug/reporting paths on explicit JSON export
-- [ ] Add pipeline tests proving single-root, package-set, and partial-failure behavior stays unchanged
+- [x] Switch `crunch-pipeline::build()` from JSON-based derivation extraction to the new direct path
+- [x] Keep `crunch eval` and other debug/reporting paths on explicit JSON export
+- [x] Add pipeline tests proving single-root, package-set, and partial-failure behavior stays unchanged
 
 ## PR 3: Session source-resolution cache
 
@@ -33,5 +33,5 @@
 
 ## Validation
 
-- [ ] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
+- [x] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
 - [x] Run `openspec validate reduce-build-pipeline-overhead`

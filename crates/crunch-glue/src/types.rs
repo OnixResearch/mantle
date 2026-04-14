@@ -5,6 +5,10 @@
 
 use crunch_attestation::Claims;
 use serde::Deserialize;
+use serde::de;
+use serde::de::MapAccess;
+use serde::de::Visitor;
+use serde::de::value::MapAccessDeserializer;
 
 use crate::nickel_string::NickelString;
 
@@ -55,12 +59,10 @@ fn default_outputs() -> Vec<String> {
 /// An input is either a derivation to be built, a pre-existing store path,
 /// or a selected output of a multi-output derivation.
 ///
-/// Serde untagged: a JSON string → `Source`, a record with `drv` + `output`
-/// → `OutputSelection`, a record with `name` + `builder` → `Derivation`.
-/// Ordering matters: `OutputSelection` must precede `Derivation` because
-/// both are records; the distinguishing field is `drv` vs `name`.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+/// JSON and Nickel direct deserialization both support three shapes:
+/// a string → `Source`, a record with `drv` + `output` → `OutputSelection`,
+/// and a record with `name` + `builder` → `Derivation`.
+#[derive(Debug, Clone)]
 pub enum Input {
     /// A pre-existing store path (e.g., from the seed toolchain).
     Source(String),
@@ -68,6 +70,103 @@ pub enum Input {
     OutputSelection(Box<OutputRef>),
     /// A derivation that must be built first (all outputs).
     Derivation(Box<CrunchDerivation>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawInputRecord {
+    #[serde(default)]
+    drv: Option<CrunchDerivation>,
+    #[serde(default)]
+    output: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    builder: Option<String>,
+    #[serde(default = "default_system", deserialize_with = "deserialize_nickel_string")]
+    system: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default = "default_outputs")]
+    outputs: Vec<String>,
+    #[serde(default)]
+    env: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    inputs: Vec<Input>,
+    #[serde(default)]
+    fixed_output: Option<FixedOutput>,
+    #[serde(default = "default_addressing_mode", deserialize_with = "deserialize_nickel_string")]
+    addressing_mode: String,
+    #[serde(default)]
+    provenance: Option<Claims>,
+}
+
+impl RawInputRecord {
+    fn into_output_selection<E: de::Error>(self) -> Result<Input, E> {
+        let drv = self.drv.ok_or_else(|| E::custom("input output selection is missing 'drv'"))?;
+        let output = self.output.ok_or_else(|| E::custom("input output selection is missing 'output'"))?;
+        Ok(Input::OutputSelection(Box::new(OutputRef { drv, output })))
+    }
+
+    fn into_derivation(self) -> Result<Input, &'static str> {
+        let Some(name) = self.name else {
+            return Err("input derivation is missing 'name'");
+        };
+        let Some(builder) = self.builder else {
+            return Err("input derivation is missing 'builder'");
+        };
+
+        Ok(Input::Derivation(Box::new(CrunchDerivation {
+            name,
+            builder,
+            system: self.system,
+            args: self.args,
+            outputs: self.outputs,
+            env: self.env,
+            inputs: self.inputs,
+            fixed_output: self.fixed_output,
+            addressing_mode: self.addressing_mode,
+            provenance: self.provenance,
+        })))
+    }
+
+    fn into_input<E: de::Error>(self) -> Result<Input, E> {
+        if self.drv.is_some() || self.output.is_some() {
+            return self.into_output_selection();
+        }
+
+        self.into_derivation().map_err(E::custom)
+    }
+}
+
+struct InputVisitor;
+
+impl<'de> Visitor<'de> for InputVisitor {
+    type Value = Input;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("string source path, output selection record, or derivation record")
+    }
+
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Input, E> {
+        Ok(Input::Source(value.to_owned()))
+    }
+
+    fn visit_string<E: de::Error>(self, value: String) -> Result<Input, E> {
+        Ok(Input::Source(value))
+    }
+
+    fn visit_map<A>(self, map: A) -> Result<Input, A::Error>
+    where A: MapAccess<'de> {
+        let record = RawInputRecord::deserialize(MapAccessDeserializer::new(map))?;
+        record.into_input()
+    }
+}
+
+impl<'de> Deserialize<'de> for Input {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        deserializer.deserialize_any(InputVisitor)
+    }
 }
 
 /// Reference to a specific output of a derivation.

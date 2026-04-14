@@ -11,7 +11,6 @@ crunch-glue = { path = "../crunch-glue" }
 crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat" }
 snix-build = { path = "../../vendor/snix-build" }
-serde_json = "1.0"
 thiserror = "2.0"
 tokio = { version = "1", features = ["rt", "sync"] }
 tracing = "0.1"

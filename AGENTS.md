@@ -262,15 +262,17 @@ Building derivations (not just compiling crunch) requires:
   without needing bwrap or network. `parse_fod_mismatch_error()` also strips a
   trailing `.drv` from the reported mismatch name.
 - **Current performance levers**: `crates/crunch-pipeline/src/lib.rs::build()`
-  still goes through `crunch_eval::evaluate_to_json()` + `serde_json` even
-  though `CrunchDerivation` now has direct `Expr::to_serde()` support via the
-  `NickelString` wrappers. `crates/crunch-build/src/worker.rs` still clones
-  large `Derivation` / `BuildRequest` values on the hot path and clones waiter
-  vectors during completion/failure propagation. `crates/crunch-store/src/closure.rs`
-  remote fallback calls `PathInfoService::get()`; with
-  `vendor/snix-store` `NixHTTPPathInfoService`, that downloads and ingests the
-  full NAR just to learn references, so fresh-store closure walks can be much
-  more expensive than they look.
+  now uses `crunch_eval::evaluate_and_extract_named_roots()` instead of a
+  whole-program JSON export. That direct path only works because
+  `crates/crunch-glue/src/types.rs::Input` uses a manual `Deserialize`
+  (`deserialize_any` + raw-record dispatch) instead of `#[serde(untagged)]`,
+  which Nickel direct deserialization rejected for nested derivation inputs
+  with enum-tag fields. Remaining hot spots: `crates/crunch-build/src/worker.rs`
+  still clones large `Derivation` / `BuildRequest` values on the hot path and
+  clones waiter vectors during completion/failure propagation, and
+  `crates/crunch-store/src/closure.rs` remote fallback calls
+  `PathInfoService::get()`; with `vendor/snix-store` `NixHTTPPathInfoService`,
+  that downloads and ingests the full NAR just to learn references.
 - **BLAKE3 everywhere**: `HashAlgo::Blake3` + `NixHash::Blake3` in nix-compat,
   `NAR_BLAKE3`/`FLAT_BLAKE3` in pathinfo.proto, blake3 branches in
   `nar_hash()`/`hash_blob()`/`verify_flat_hash()`/`HashingReader`. The

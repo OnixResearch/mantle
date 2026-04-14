@@ -182,6 +182,33 @@ fn smoke_build_flat_file_and_read_content() {
 }
 
 #[test]
+fn smoke_build_single_derivation_direct_path_regression() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let store = tempfile::tempdir().unwrap();
+    let run = build_ncl(
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "single-direct-path",
+  builder = "/bin/sh",
+  args = ["-c", "echo single-direct-path > $out"],
+  system = 'x86_64-linux,
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        store.path(),
+    );
+
+    assert_eq!(run.report.counts.succeeded_total, 1);
+    assert_eq!(run.report.outcomes.len(), 1);
+    assert_eq!(run.report.outcomes[0].label, "single-direct-path");
+    let out = first_output_path(&run);
+    assert_eq!(std::fs::read_to_string(&out).unwrap().trim(), "single-direct-path");
+}
+
+#[test]
 fn smoke_build_directory_output_with_structure() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");
@@ -471,6 +498,116 @@ fn smoke_build_multi_derivation_file() {
         .collect();
     contents.sort();
     assert_eq!(contents, vec!["alpha-output", "beta-output"]);
+}
+
+#[test]
+fn smoke_build_package_set_record_direct_path_regression() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let store = tempfile::tempdir().unwrap();
+    let run = build_ncl(
+        r#"let crunch = import "lib.ncl" in
+{
+  alpha = {
+    name = "alpha-record",
+    builder = "/bin/sh",
+    args = ["-c", "echo alpha-record > $out"],
+    system = 'x86_64-linux,
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+  beta = {
+    name = "beta-record",
+    builder = "/bin/sh",
+    args = ["-c", "echo beta-record > $out"],
+    system = 'x86_64-linux,
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+}"#,
+        store.path(),
+    );
+
+    assert_eq!(run.report.counts.succeeded_total, 2);
+
+    let mut content_by_label = std::collections::HashMap::new();
+    for outcome in &run.report.outcomes {
+        assert_eq!(outcome.outputs.len(), 1, "each root should expose one output");
+        let output = &outcome.outputs[0];
+        let content = std::fs::read_to_string(&output.path).unwrap();
+        let previous = content_by_label.insert(outcome.label.clone(), content.trim().to_string());
+        assert!(previous.is_none(), "duplicate outcome label: {}", outcome.label);
+    }
+
+    assert_eq!(content_by_label.len(), 2);
+    assert_eq!(content_by_label.get("alpha").map(String::as_str), Some("alpha-record"));
+    assert_eq!(content_by_label.get("beta").map(String::as_str), Some("beta-record"));
+}
+
+#[test]
+fn smoke_build_multi_derivation_partial_failure_keeps_successful_root() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let store = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("partial-failure.ncl");
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+[
+  {
+    name = "alpha",
+    builder = "/bin/sh",
+    args = ["-c", "echo alpha-output > $out"],
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+  {
+    name = "beta",
+    builder = "/bin/sh",
+    args = ["-c", "echo beta-fail >&2; exit 17"],
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+]"#,
+    )
+    .unwrap();
+
+    let state_dir = work.path().join("state");
+    let output = crunch_cmd()
+        .arg("--json")
+        .arg("--store")
+        .arg(store.path())
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("build")
+        .arg("--no-substitute")
+        .arg("-I")
+        .arg(work.path())
+        .arg(&ncl_file)
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let report: BuildJsonReport =
+        serde_json::from_str(&stdout).expect("partial failure should still emit a JSON report");
+
+    assert!(!output.status.success(), "build should fail with one bad root");
+    assert_eq!(report.counts.succeeded_total, 1);
+    assert_eq!(report.counts.failed_total, 1);
+    assert!(report.outcomes.iter().any(|outcome| outcome.label == "alpha"));
+    assert!(report.failed.iter().any(|failure| failure.label == "beta"));
+
+    let alpha_output = report
+        .outcomes
+        .iter()
+        .find(|outcome| outcome.label == "alpha")
+        .and_then(|outcome| outcome.outputs.first())
+        .map(|output| output.path.clone())
+        .expect("successful root should keep its output path");
+    assert!(alpha_output.exists(), "successful root output should exist: {}", alpha_output.display());
 }
 
 #[test]

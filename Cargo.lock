@@ -1109,6 +1109,7 @@ dependencies = [
 name = "crunch-eval"
 version = "0.1.0"
 dependencies = [
+ "crunch-glue",
  "nickel-lang",
  "serde",
  "serde_json",
@@ -1141,7 +1142,6 @@ dependencies = [
  "crunch-store",
  "data-encoding",
  "nix-compat",
- "serde_json",
  "sha2",
  "snix-build",
  "tempfile",

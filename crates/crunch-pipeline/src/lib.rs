@@ -72,42 +72,6 @@ pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
     }
 }
 
-pub fn deserialize_derivations_from_json(json_str: &str) -> Result<Vec<(String, CrunchDerivation)>, Error> {
-    let json_val: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| Error::Deserialize(format!("parsing JSON: {e}")))?;
-
-    if let Some(arr) = json_val.as_array() {
-        let mut derivations = Vec::new();
-        for (i, elem) in arr.iter().enumerate() {
-            let drv: CrunchDerivation = serde_json::from_value(elem.clone())
-                .map_err(|e| Error::Deserialize(format!("deserializing derivation [{i}]: {e}")))?;
-            derivations.push((drv.name.clone(), drv));
-        }
-        return Ok(derivations);
-    }
-
-    let Some(obj) = json_val.as_object() else {
-        return Err(Error::Deserialize(
-            "expected a Derivation record, array of Derivations, or record of Derivations".to_string(),
-        ));
-    };
-
-    if obj.get("name").is_some_and(|v| v.is_string()) {
-        let drv: CrunchDerivation = serde_json::from_value(json_val)
-            .map_err(|e| Error::Deserialize(format!("deserializing derivation: {e}")))?;
-        let name = drv.name.clone();
-        return Ok(vec![(name, drv)]);
-    }
-
-    let mut derivations = Vec::new();
-    for (key, value) in obj {
-        let drv: CrunchDerivation = serde_json::from_value(value.clone())
-            .map_err(|e| Error::Deserialize(format!("deserializing derivation '{key}': {e}")))?;
-        derivations.push((key.clone(), drv));
-    }
-    Ok(derivations)
-}
-
 pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
     let rest = err.strip_prefix("FOD hash mismatch for ")?;
     let (name, rest) = rest.split_once(": expected ")?;
@@ -123,9 +87,13 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
 
-    let json_str =
-        crunch_eval::evaluate_to_json(&config.file, &config.import_paths).map_err(|e| Error::Eval(format!("{e}")))?;
-    let derivations = deserialize_derivations_from_json(&json_str)?;
+    let derivations =
+        crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&config.file, &config.import_paths).map_err(
+            |e| match e {
+                crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
+                crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
+            },
+        )?;
     debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 
     let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
@@ -292,20 +260,6 @@ pub fn label_for_key<'a>(result: &'a PipelineResult, drv_key: &str) -> Option<&'
 mod tests {
     use super::*;
 
-    fn json_single() -> &'static str {
-        r#"{
-            "name": "hello",
-            "builder": "/bin/sh"
-        }"#
-    }
-
-    fn json_package_set() -> &'static str {
-        r#"{
-            "hello": { "name": "hello", "builder": "/bin/sh" },
-            "world": { "name": "world", "builder": "/bin/sh" }
-        }"#
-    }
-
     #[test]
     fn resolve_max_jobs_default_in_range() {
         let jobs = resolve_max_jobs(None);
@@ -318,28 +272,6 @@ mod tests {
         assert_eq!(resolve_max_jobs(Some(0)), 1);
         assert_eq!(resolve_max_jobs(Some(1)), 1);
         assert_eq!(resolve_max_jobs(Some(99)), 16);
-    }
-
-    #[test]
-    fn deserialize_single_derivation() {
-        let derivations = deserialize_derivations_from_json(json_single()).unwrap();
-        assert_eq!(derivations.len(), 1);
-        assert_eq!(derivations[0].0, "hello");
-        assert_eq!(derivations[0].1.name, "hello");
-    }
-
-    #[test]
-    fn deserialize_package_set() {
-        let derivations = deserialize_derivations_from_json(json_package_set()).unwrap();
-        assert_eq!(derivations.len(), 2);
-        assert!(derivations.iter().any(|(k, _)| k == "hello"));
-        assert!(derivations.iter().any(|(k, _)| k == "world"));
-    }
-
-    #[test]
-    fn deserialize_invalid_json_errors() {
-        let err = deserialize_derivations_from_json("[").unwrap_err().to_string();
-        assert!(err.contains("parsing JSON"));
     }
 
     #[test]

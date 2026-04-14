@@ -13,6 +13,7 @@ use std::path::Path;
 pub use nickel_lang::Context;
 pub use nickel_lang::Error as NickelError;
 pub use nickel_lang::Expr;
+use serde::de::DeserializeOwned;
 
 pub mod stdlib;
 
@@ -109,11 +110,82 @@ pub fn evaluate_str(source: &str, import_paths: &[OsString]) -> Result<Expr, Err
     Ok(expr)
 }
 
+fn deserialize_expr<T: DeserializeOwned>(expr: &Expr, context: &str) -> Result<T, Error> {
+    expr.to_serde().map_err(|e| Error::Serde(format!("deserializing {context}: {e}")))
+}
+
+fn record_name(expr: &Expr) -> Option<String> {
+    expr.as_record()?.value_by_name("name")?.as_str().map(str::to_owned)
+}
+
+fn deserialize_array_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(String, T)>, Error> {
+    let array = expr.as_array().expect("array roots require array expression");
+    let mut derivations = Vec::with_capacity(array.len());
+
+    for (index, item) in array.iter().enumerate() {
+        let label = record_name(&item)
+            .ok_or_else(|| Error::Serde(format!("deserializing derivation [{index}]: missing string field 'name'")))?;
+        let drv = deserialize_expr(&item, &format!("derivation [{index}]"))?;
+        derivations.push((label, drv));
+    }
+
+    Ok(derivations)
+}
+
+fn deserialize_record_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(String, T)>, Error> {
+    let record = expr.as_record().expect("record roots require record expression");
+    let mut derivations = Vec::with_capacity(record.len());
+
+    for (key, value) in record.iter() {
+        let value = value.ok_or_else(|| Error::Serde(format!("deserializing derivation '{key}': missing value")))?;
+        let drv = deserialize_expr(&value, &format!("derivation '{key}'"))?;
+        derivations.push((key.to_string(), drv));
+    }
+
+    Ok(derivations)
+}
+
+pub fn extract_named_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(String, T)>, Error> {
+    if expr.is_array() {
+        return deserialize_array_roots(expr);
+    }
+
+    let Some(record) = expr.as_record() else {
+        return Err(Error::Serde(
+            "expected a Derivation record, array of Derivations, or record of Derivations".to_string(),
+        ));
+    };
+
+    if let Some(label) = record.value_by_name("name").and_then(|value| value.as_str().map(str::to_owned)) {
+        let drv = deserialize_expr(expr, "derivation")?;
+        return Ok(vec![(label, drv)]);
+    }
+
+    deserialize_record_roots(expr)
+}
+
+/// Evaluate and extract named derivation roots through direct typed deserialization.
+pub fn evaluate_and_extract_named_roots<T: DeserializeOwned>(
+    path: &Path,
+    import_paths: &[OsString],
+) -> Result<Vec<(String, T)>, Error> {
+    let expr = evaluate(path, import_paths)?;
+    extract_named_roots(&expr)
+}
+
+/// Evaluate a Nickel source string and extract named derivation roots.
+pub fn evaluate_str_and_extract_named_roots<T: DeserializeOwned>(
+    source: &str,
+    import_paths: &[OsString],
+) -> Result<Vec<(String, T)>, Error> {
+    let expr = evaluate_str(source, import_paths)?;
+    extract_named_roots(&expr)
+}
+
 /// Evaluate and deserialize into a typed Rust struct.
 ///
-/// Goes through JSON export to handle Nickel enum tags (which become
-/// strings in JSON but not through direct `to_serde()`). This is the
-/// primary way the build pipeline consumes Nickel output.
+/// Goes through JSON export. Keep this path for callers that want Nickel's
+/// JSON rendering semantics rather than the direct derivation-extraction path.
 pub fn evaluate_and_deserialize<T: serde::de::DeserializeOwned>(
     path: &Path,
     import_paths: &[OsString],
@@ -161,6 +233,10 @@ pub fn evaluate_to_json(path: &Path, import_paths: &[OsString]) -> Result<String
 
 #[cfg(test)]
 mod tests {
+    use crunch_glue::CrunchDerivation;
+    use crunch_glue::Input;
+    use crunch_glue::OutputRef;
+
     use super::*;
 
     // ── Phase 1: File-based evaluation ──────────────────────────
@@ -264,6 +340,163 @@ mod tests {
         let o: Outer = evaluate_str_and_deserialize(r#"{ name = "pkg", inner = { value = 99 } }"#, &[]).unwrap();
         assert_eq!(o.name, "pkg");
         assert_eq!(o.inner.value, 99);
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_single_derivation() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"{
+  name = "hello",
+  builder = "/bin/sh",
+  args = ["-c", "echo hello > $out"],
+  addressing_mode = 'input-addressed,
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].0, "hello");
+        assert_eq!(roots[0].1.name, "hello");
+        assert_eq!(roots[0].1.builder, "/bin/sh");
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_package_set_preserves_keys() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"{
+  hello = {
+    name = "hello",
+    builder = "/bin/sh",
+  },
+  world = {
+    name = "world",
+    builder = "/bin/sh",
+  },
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].0, "hello");
+        assert_eq!(roots[0].1.name, "hello");
+        assert_eq!(roots[1].0, "world");
+        assert_eq!(roots[1].1.name, "world");
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_array_uses_derivation_names() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"[
+  {
+    name = "alpha",
+    builder = "/bin/sh",
+  },
+  {
+    name = "beta",
+    builder = "/bin/sh",
+  },
+]"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].0, "alpha");
+        assert_eq!(roots[1].0, "beta");
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_nested_derivation_enum_tags() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"{
+  app = {
+    name = "app",
+    builder = "/bin/sh",
+    system = 'x86_64-linux,
+    addressing_mode = 'content-addressed,
+    inputs = [
+      {
+        name = "dep",
+        builder = "/bin/sh",
+        system = 'x86_64-linux,
+        addressing_mode = 'input-addressed,
+      },
+    ],
+  },
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].0, "app");
+        assert_eq!(roots[0].1.system, "x86_64-linux");
+        assert_eq!(roots[0].1.addressing_mode, "content-addressed");
+
+        match &roots[0].1.inputs[0] {
+            Input::Derivation(dep) => {
+                assert_eq!(dep.name, "dep");
+                assert_eq!(dep.system, "x86_64-linux");
+                assert_eq!(dep.addressing_mode, "input-addressed");
+            }
+            other => panic!("expected nested derivation input, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_source_input_uses_manual_input_deserializer() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"{
+  name = "uses-source",
+  builder = "/bin/sh",
+  inputs = ["/nix/store/00000000000000000000000000000000-bash"],
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        match &roots[0].1.inputs[0] {
+            Input::Source(path) => {
+                assert_eq!(path, "/nix/store/00000000000000000000000000000000-bash");
+            }
+            other => panic!("expected source input, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_output_selection_uses_manual_input_deserializer() {
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"{
+  name = "uses-output-selection",
+  builder = "/bin/sh",
+  inputs = [
+    {
+      drv = {
+        name = "libfoo",
+        builder = "/bin/sh",
+        outputs = ["out", "dev"],
+      },
+      output = "dev",
+    },
+  ],
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        match &roots[0].1.inputs[0] {
+            Input::OutputSelection(selection) => {
+                let OutputRef { drv, output } = selection.as_ref();
+                assert_eq!(drv.name, "libfoo");
+                assert_eq!(drv.outputs, vec!["out".to_string(), "dev".to_string()]);
+                assert_eq!(output, "dev");
+            }
+            other => panic!("expected output selection input, got {other:?}"),
+        }
     }
 
     #[test]
