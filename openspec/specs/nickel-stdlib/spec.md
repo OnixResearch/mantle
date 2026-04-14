@@ -11,9 +11,7 @@ Builder templates, build phases, mkDerivation patterns, stdenv equivalents,
 and input set helpers are NOT part of this stdlib. They belong in separate
 Nickel packages that import the crunch stdlib and layer convenience on top.
 crunch's core ships the schema; the ecosystem ships the opinions.
-
 ## Requirements
-
 ### Requirement: Scope boundary
 
 The stdlib MUST contain only:
@@ -128,6 +126,9 @@ The Derivation contract MUST allow exactly these fields:
 
 ### Requirement: System enum
 
+The stdlib MUST define a `System` enum contract covering the supported target
+platform identifiers.
+
 ```nickel
 let System = [|
   'x86_64-linux,
@@ -145,10 +146,19 @@ let System = [|
 
 ### Requirement: Hash enums
 
+The stdlib MUST define `HashAlgo` and `HashMode` enum contracts for fixed
+outputs and fetchers.
+
 ```nickel
 let HashAlgo = [| 'md5, 'sha1, 'sha256, 'sha512 |] in
 let HashMode = [| 'flat, 'recursive |] in
 ```
+
+#### Scenario: Hash mode typo caught
+
+- GIVEN `mode = 'recusrive`
+- WHEN the HashMode contract runs
+- THEN Nickel rejects it as a non-matching variant
 
 ### Requirement: Input contract
 
@@ -199,6 +209,8 @@ automatically: string → `Input::Source`, object → `Input::Derivation`.
 
 ### Requirement: Sandbox enum
 
+The stdlib MUST define a `Sandbox` enum contract for build execution backends.
+
 ```nickel
 let Sandbox = [| 'wasm, 'native, 'oci |] in
 ```
@@ -214,7 +226,16 @@ portability spec for the full rationale.
 Once WASI gains subprocess support (on the standards roadmap),
 `'wasm` may become the default.
 
+#### Scenario: Unknown sandbox backend rejected
+
+- GIVEN `sandbox = 'docker`
+- WHEN the Sandbox contract runs
+- THEN Nickel rejects the unsupported sandbox variant
+
 ### Requirement: FixedOutput contract
+
+The stdlib MUST define a `FixedOutput` contract covering the declared content
+hash, algorithm, and hashing mode for fixed-output derivations.
 
 ```nickel
 let FixedOutput = {
@@ -228,7 +249,16 @@ let FixedOutput = {
 } in
 ```
 
+#### Scenario: Fixed output mode defaults to flat
+
+- GIVEN a FixedOutput record with `hash` and `algo` only
+- WHEN the contract runs
+- THEN `mode` defaults to `'flat`
+
 ### Requirement: StorePath validator
+
+The stdlib MUST define a `StorePath` validator for absolute `/nix/store/...`
+paths.
 
 ```nickel
 let StorePath = std.contract.from_validator (fun value =>
@@ -247,6 +277,8 @@ let StorePath = std.contract.from_validator (fun value =>
 
 ### Requirement: Name validator
 
+The stdlib MUST define a `Name` validator for derivation names.
+
 ```nickel
 let Name = std.contract.from_validator (fun value =>
   if std.is_string value
@@ -257,7 +289,16 @@ let Name = std.contract.from_validator (fun value =>
 ) in
 ```
 
+#### Scenario: Invalid derivation name rejected
+
+- GIVEN `name = "bad name with spaces"`
+- WHEN the Name contract runs
+- THEN Nickel rejects the invalid derivation name
+
 ### Requirement: Enum-to-string conversion helpers
+
+The stdlib MUST provide conversion helpers that turn enum values into the
+string forms consumed by JSON export and string interpolation.
 
 ```nickel
 let system_to_string = fun sys => sys |> match {
@@ -283,6 +324,12 @@ let hash_mode_to_string = fun mode => mode |> match {
 These are needed because the glue layer consumes JSON (where enums become
 strings via Nickel's export), but they're also useful for Nickel code that
 needs to interpolate system strings.
+
+#### Scenario: System enum converts to string
+
+- GIVEN `'x86_64-linux`
+- WHEN `system_to_string` runs
+- THEN it returns `"x86_64-linux"`
 
 ### Requirement: Documentation via doc annotations
 
@@ -316,6 +363,13 @@ or MkDerivationArgs.
 
 Users import one file: `let crunch = import "lib.ncl" in`
 
+#### Scenario: Entry point re-exports core contracts only
+
+- GIVEN `lib/lib.ncl`
+- WHEN it is inspected
+- THEN it re-exports the core derivation contracts and helpers
+- AND it does not re-export builder-layer helpers like `mkDerivation` or `mkShell`
+
 ### Requirement: Builder package location
 
 A builder package MUST exist at `builders/lib.ncl` that provides
@@ -326,11 +380,40 @@ This package is separate from the core stdlib.
 `contracts.ncl` from the stdlib via the Nickel import path (not
 relative imports, to avoid circular imports with `builders/lib.ncl`).
 
+`mkShell` MUST build a derivation that materializes shell activation
+metadata as `$out/.crunch-shell.json`.
+
+That sidecar MUST:
+- carry a required `version` field set to `1`
+- carry `env` entries derived from the shell author's declared shell env vars
+- carry `path_entries` derived from the shell author's declared inputs
+- carry an optional `hook` string, represented as null/absent when not set
+
+The sidecar format exists so shell activation metadata is machine-readable and
+independent from the core derivation contract.
+
 #### Scenario: Builder package exists
 
 - GIVEN the crunch source tree
 - WHEN `builders/lib.ncl` is inspected
 - THEN it contains mkStdenv, mkDerivation, mkShell, callPackage
+
+#### Scenario: mkShell writes a sidecar with versioned metadata
+
+- GIVEN a Nickel expression using `builders.mkShell` with env vars and
+  build inputs
+- WHEN that shell derivation is evaluated and built
+- THEN its output contains `.crunch-shell.json`
+- AND the sidecar JSON contains `version = 1`
+- AND the sidecar `env` contains the declared shell env vars
+- AND the sidecar `path_entries` contains the derived shell PATH entries
+
+#### Scenario: mkShell without hook records null or absent hook
+
+- GIVEN a Nickel expression using `builders.mkShell` with no hook field
+- WHEN the shell derivation is built
+- THEN `.crunch-shell.json` exists
+- AND its `hook` field is null or absent
 
 #### Scenario: Bootstrap uses raw Derivation contract
 
@@ -346,6 +429,12 @@ The `.ncl` files MUST be embedded in the crunch binary at compile time
 `--import-path`. The stdlib MUST also be usable directly from the source
 tree during development.
 
+#### Scenario: Binary can resolve stdlib without checkout-relative imports
+
+- GIVEN a built crunch binary outside the source tree
+- WHEN it evaluates a Nickel file importing `lib.ncl`
+- THEN the stdlib resolves successfully
+
 ### Requirement: No Nix string context
 
 The stdlib MUST NOT implement NixString-style context tracking. Inputs are
@@ -354,10 +443,33 @@ is plain string concatenation — no hidden metadata. The sandbox enforces
 hermeticity: if a store path is referenced in a string but not in `inputs`,
 the build fails.
 
+#### Scenario: Undeclared interpolated store path is not implicitly tracked
+
+- GIVEN a build script string that mentions a store path not listed in `inputs`
+- WHEN the build runs
+- THEN crunch does not infer that dependency from string context alone
+- AND the build fails unless the input is declared explicitly
+
 ### Requirement: Extensibility by external packages
 
 The stdlib MUST be designed so that external Nickel packages can build on
-it via merge:
+it via merge.
+
+#### Scenario: External builder package can layer on Derivation
+
+- GIVEN an external Nickel package that imports `lib.ncl`
+- WHEN it merges its own builder helpers on top of `crunch.Derivation`
+- THEN those helpers can produce valid derivation-shaped records without
+  modifying the core stdlib
+
+#### Scenario: Core stdlib stays minimal while external packages extend it
+
+- GIVEN the crunch stdlib and a separate builder package
+- WHEN both are inspected together
+- THEN the stdlib defines the contracts and helpers
+- AND the external package provides higher-level builders without editing the stdlib
+
+Example shape:
 
 ```nickel
 # Hypothetical external package: crunch-builders
@@ -377,3 +489,4 @@ let crunch = import "crunch/lib.ncl" in
 ```
 
 The core stdlib enables this pattern but does not ship these builders itself.
+
