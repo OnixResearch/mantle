@@ -21,25 +21,37 @@ use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::EnvVar;
 use snix_castore::Node;
 
+use crate::HermeticityAuditEvent;
+use crate::HermeticityAuditKind;
+use crate::HermeticityMode;
 use crate::registry::DerivationRegistry;
 
 /// Environment variables that crunch sets in every sandbox build,
 /// matching Nix's sandbox conventions for compatibility with build
 /// scripts that expect them.
-const SANDBOX_ENV_VARS: [(&str, &str); 12] = [
+const SANDBOX_ENV_VARS: [(&str, &str); 19] = [
     ("HOME", "/homeless-shelter"),
+    ("LANG", "C"),
+    ("LC_ALL", "C"),
+    ("LOGNAME", "nixbld"),
     ("NIX_BUILD_CORES", "0"),
     ("NIX_BUILD_TOP", "/build"),
     ("NIX_LOG_FD", "2"),
     ("NIX_STORE", "/nix/store"),
     ("PATH", "/path-not-set"),
     ("PWD", "/build"),
+    ("SHELL", "/bin/sh"),
+    ("SOURCE_DATE_EPOCH", "1"),
     ("TEMP", "/build"),
     ("TEMPDIR", "/build"),
     ("TERM", "xterm-256color"),
     ("TMP", "/build"),
     ("TMPDIR", "/build"),
+    ("TZ", "UTC"),
+    ("USER", "nixbld"),
 ];
+
+const ALLOWED_SANDBOX_ENV_OVERRIDES: [&str; 2] = ["NIX_BUILD_CORES", "SOURCE_DATE_EPOCH"];
 
 /// Translate a `Derivation` into a `BuildRequest`.
 ///
@@ -52,10 +64,57 @@ const SANDBOX_ENV_VARS: [(&str, &str); 12] = [
 /// Compile-time: sandbox env vars must not be empty.
 const _: () = assert!(SANDBOX_ENV_VARS.len() > 0);
 
+#[derive(Debug)]
+pub struct NormalizedBuildEnvironment {
+    pub environment_vars: BTreeMap<String, Vec<u8>>,
+    pub audit_events: Vec<HermeticityAuditEvent>,
+}
+
+#[derive(Debug)]
+pub struct BuildRequestEnvelope {
+    pub build_request: BuildRequest,
+    pub audit_events: Vec<HermeticityAuditEvent>,
+}
+
 pub fn derivation_to_build_request(
     derivation: &Derivation,
     inputs: &BTreeMap<StorePath<String>, Node>,
     store_dir: &str,
+    hermeticity_mode: HermeticityMode,
+) -> Result<BuildRequestEnvelope, crate::Error> {
+    let normalized = normalize_build_environment(derivation, store_dir, hermeticity_mode)?;
+    let build_request = build_request_from_environment(derivation, inputs, store_dir, normalized.environment_vars)?;
+    Ok(BuildRequestEnvelope {
+        build_request,
+        audit_events: normalized.audit_events,
+    })
+}
+
+pub fn normalize_build_environment(
+    derivation: &Derivation,
+    store_dir: &str,
+    hermeticity_mode: HermeticityMode,
+) -> Result<NormalizedBuildEnvironment, crate::Error> {
+    debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
+    debug_assert!(!derivation.outputs.is_empty(), "must have at least one output");
+    debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
+
+    let mut environment_vars = default_sandbox_environment(store_dir);
+    let audit_events = overlay_derivation_environment(derivation, hermeticity_mode, &mut environment_vars)?;
+    debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
+
+    Ok(NormalizedBuildEnvironment {
+        environment_vars,
+        audit_events,
+    })
+}
+
+pub(crate) fn build_request_from_environment(
+    derivation: &Derivation,
+    inputs: &BTreeMap<StorePath<String>, Node>,
+    store_dir: &str,
+    environment_vars: BTreeMap<String, Vec<u8>>,
 ) -> Result<BuildRequest, crate::Error> {
     // Tiger Style: assert preconditions.
     debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
@@ -64,13 +123,12 @@ pub fn derivation_to_build_request(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
     let command_args = build_command_args(derivation);
-    let env = build_environment(derivation, store_dir);
     let constraints = build_constraints(derivation);
     let refscan_needles = build_refscan_needles(derivation, inputs);
 
     // Tiger Style: assert command_args has at least the builder.
     debug_assert!(!command_args.is_empty());
-    debug_assert!(!env.is_empty(), "environment must include sandbox vars");
+    debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
 
     let sandbox_outputs = map_outputs_to_sandbox_paths(derivation, store_dir);
     let input_map = map_inputs_to_components(inputs)?;
@@ -78,7 +136,7 @@ pub fn derivation_to_build_request(
     Ok(BuildRequest {
         command_args,
         outputs: sandbox_outputs,
-        environment_vars: env
+        environment_vars: environment_vars
             .into_iter()
             .map(|(key, value)| EnvVar {
                 key,
@@ -105,21 +163,63 @@ fn build_command_args(derivation: &Derivation) -> Vec<String> {
     command_args
 }
 
-/// Build sandbox environment, overlaying derivation env on defaults.
-fn build_environment(derivation: &Derivation, store_dir: &str) -> BTreeMap<String, Vec<u8>> {
+fn default_sandbox_environment(store_dir: &str) -> BTreeMap<String, Vec<u8>> {
     let mut env: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    for (k, v) in &SANDBOX_ENV_VARS {
-        if *k == "NIX_STORE" {
-            env.insert(k.to_string(), store_dir.as_bytes().to_vec());
+    for (key, value) in &SANDBOX_ENV_VARS {
+        if *key == "NIX_STORE" {
+            env.insert(key.to_string(), store_dir.as_bytes().to_vec());
         } else {
-            env.insert(k.to_string(), v.as_bytes().to_vec());
+            env.insert(key.to_string(), value.as_bytes().to_vec());
         }
     }
-    for (k, v) in &derivation.environment {
-        let replaced = replace_placeholders_bstr(v, &derivation.outputs);
-        env.insert(k.clone(), Vec::from(replaced));
-    }
     env
+}
+
+fn overlay_derivation_environment(
+    derivation: &Derivation,
+    hermeticity_mode: HermeticityMode,
+    environment_vars: &mut BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<HermeticityAuditEvent>, crate::Error> {
+    let mut audit_events = Vec::new();
+    for (key, value) in &derivation.environment {
+        let replaced = replace_placeholders_bstr(value, &derivation.outputs);
+        if let Some(sandbox_value) = environment_vars.get(key) {
+            if sandbox_value.as_slice() != <BString as AsRef<[u8]>>::as_ref(&replaced)
+                && is_protected_sandbox_env_key(key)
+            {
+                let sandbox_value = sandbox_value.clone();
+                if hermeticity_mode.is_strict() {
+                    return Err(crate::Error::UnsafeEnvOverride {
+                        key: key.clone(),
+                        sandbox_value: format_env_value(&sandbox_value),
+                        derivation_value: format_env_value(replaced.as_ref()),
+                    });
+                }
+                audit_events.push(HermeticityAuditEvent::new(
+                    HermeticityAuditKind::EnvironmentOverride,
+                    format_environment_override_detail(key, &sandbox_value, replaced.as_ref()),
+                ));
+            }
+        }
+        environment_vars.insert(key.clone(), Vec::from(replaced));
+    }
+    Ok(audit_events)
+}
+
+fn is_protected_sandbox_env_key(key: &str) -> bool {
+    let is_sandbox_key = SANDBOX_ENV_VARS.iter().any(|(sandbox_key, _)| *sandbox_key == key);
+    if !is_sandbox_key {
+        return false;
+    }
+    !ALLOWED_SANDBOX_ENV_OVERRIDES.iter().any(|allowed_key| *allowed_key == key)
+}
+
+fn format_environment_override_detail(key: &str, sandbox_value: &[u8], derivation_value: &[u8]) -> String {
+    format!("{key}: {:?} -> {:?}", format_env_value(sandbox_value), format_env_value(derivation_value))
+}
+
+fn format_env_value(value: &[u8]) -> String {
+    String::from_utf8_lossy(value).into_owned()
 }
 
 /// Build sandbox constraints from derivation properties.
@@ -335,10 +435,23 @@ mod tests {
         drv
     }
 
+    fn normalize_env_map(
+        overrides: &[(&str, &str)],
+        hermeticity_mode: HermeticityMode,
+    ) -> Result<NormalizedBuildEnvironment, crate::Error> {
+        let mut drv = test_derivation();
+        for (key, value) in overrides {
+            drv.environment.insert((*key).to_string(), (*value).into());
+        }
+        normalize_build_environment(&drv, "/nix/store", hermeticity_mode)
+    }
+
     #[test]
     fn build_request_has_correct_builder() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         assert_eq!(req.command_args[0], "/bin/sh");
         assert_eq!(req.command_args[1], "-c");
@@ -347,19 +460,56 @@ mod tests {
     #[test]
     fn build_request_has_sandbox_env() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         let env_map: BTreeMap<&str, &[u8]> =
             req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
 
         assert_eq!(*env_map.get("HOME").unwrap(), &b"/homeless-shelter"[..]);
+        assert_eq!(*env_map.get("LANG").unwrap(), &b"C"[..]);
+        assert_eq!(*env_map.get("SHELL").unwrap(), &b"/bin/sh"[..]);
+        assert_eq!(*env_map.get("SOURCE_DATE_EPOCH").unwrap(), &b"1"[..]);
         assert_eq!(*env_map.get("TMPDIR").unwrap(), &b"/build"[..]);
+        assert_eq!(*env_map.get("TZ").unwrap(), &b"UTC"[..]);
+        assert_eq!(*env_map.get("USER").unwrap(), &b"nixbld"[..]);
+    }
+
+    #[test]
+    fn practical_mode_audits_protected_environment_override() {
+        let normalized = normalize_env_map(&[("PATH", "/tmp/bin")], HermeticityMode::Practical).unwrap();
+        let path_value = normalized.environment_vars.get("PATH").unwrap();
+
+        assert_eq!(path_value.as_slice(), b"/tmp/bin");
+        assert_eq!(normalized.audit_events.len(), 1);
+        assert_eq!(normalized.audit_events[0].kind, HermeticityAuditKind::EnvironmentOverride);
+        assert!(normalized.audit_events[0].detail.contains("PATH"));
+    }
+
+    #[test]
+    fn strict_mode_rejects_protected_environment_override() {
+        let err = normalize_env_map(&[("HOME", "/tmp/home")], HermeticityMode::Strict).unwrap_err();
+
+        assert!(matches!(err, crate::Error::UnsafeEnvOverride { .. }));
+        assert!(err.to_string().contains("HOME"));
+    }
+
+    #[test]
+    fn strict_mode_allows_source_date_epoch_override() {
+        let normalized = normalize_env_map(&[("SOURCE_DATE_EPOCH", "1234")], HermeticityMode::Strict).unwrap();
+        let source_date_epoch = normalized.environment_vars.get("SOURCE_DATE_EPOCH").unwrap();
+
+        assert_eq!(source_date_epoch.as_slice(), b"1234");
+        assert!(normalized.audit_events.is_empty());
     }
 
     #[test]
     fn build_request_has_system_constraint() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         assert!(req.constraints.contains(&BuildConstraints::System("x86_64-linux".to_string())));
         assert!(req.constraints.contains(&BuildConstraints::ProvideBinSh));
@@ -368,7 +518,9 @@ mod tests {
     #[test]
     fn build_request_outputs_are_relative() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         for output in &req.outputs {
             assert!(!output.starts_with("/"), "output path must be relative: {output:?}");
@@ -379,7 +531,9 @@ mod tests {
     #[test]
     fn build_request_has_refscan_needles() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         // At least one needle for the output
         assert!(!req.refscan_needles.is_empty());
@@ -672,7 +826,9 @@ mod tests {
     #[test]
     fn fetcher_build_request_has_builtin_builder() {
         let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         assert_eq!(req.command_args[0], "builtin:fetchurl");
         // Fetcher derivations have no arguments.
@@ -682,7 +838,9 @@ mod tests {
     #[test]
     fn fetcher_build_request_preserves_url_env_var() {
         let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         let env_map: BTreeMap<&str, &[u8]> =
             req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
@@ -704,7 +862,9 @@ mod tests {
         drv.environment.insert("rev".to_string(), "abc123".into());
         drv.environment.insert("executable".to_string(), "1".into());
 
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         let env_map: BTreeMap<&str, &[u8]> =
             req.environment_vars.iter().map(|e| (e.key.as_str(), e.value.as_ref())).collect();
@@ -724,7 +884,9 @@ mod tests {
     #[test]
     fn fetcher_build_request_is_recognized_by_is_fetch_request() {
         let drv = make_fetcher_drv("https://example.com/file.txt", None);
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         assert!(
             crate::fetch_build_service::is_fetch_request(&req),
@@ -735,7 +897,9 @@ mod tests {
     #[test]
     fn sandbox_build_request_is_not_fetch_request() {
         let drv = test_derivation();
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         assert!(
             !crate::fetch_build_service::is_fetch_request(&req),
@@ -751,7 +915,9 @@ mod tests {
         // Create a fetcher drv with a known flat hash so the output path
         // is deterministic (FOD path computation).
         let drv = make_fetcher_drv("https://example.com/foo.txt", Some(CAHash::Flat(NixHash::Sha256([0xBB; 32]))));
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store").unwrap();
+        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
 
         // Must have exactly one output (fetchers produce "out" only).
         assert_eq!(req.outputs.len(), 1, "fetcher must have exactly one output");

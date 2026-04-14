@@ -9,6 +9,9 @@ use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
+pub use crunch_build::HermeticityAuditEvent;
+pub use crunch_build::HermeticityAuditKind;
+pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
 use crunch_build::Worker;
 use crunch_glue::ConversionCache;
@@ -17,72 +20,6 @@ use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
 use tracing::info;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HermeticityMode {
-    Practical,
-    Strict,
-}
-
-impl HermeticityMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Practical => "practical",
-            Self::Strict => "strict",
-        }
-    }
-
-    pub fn is_strict(self) -> bool {
-        matches!(self, Self::Strict)
-    }
-}
-
-impl std::fmt::Display for HermeticityMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HermeticityAuditKind {
-    HostToolFallback,
-    PathInfoFallback,
-    ClosureResolutionDegraded,
-    EnvironmentOverride,
-    FetchToolFallback,
-}
-
-impl HermeticityAuditKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::HostToolFallback => "host-tool-fallback",
-            Self::PathInfoFallback => "pathinfo-fallback",
-            Self::ClosureResolutionDegraded => "closure-resolution-degraded",
-            Self::EnvironmentOverride => "environment-override",
-            Self::FetchToolFallback => "fetch-tool-fallback",
-        }
-    }
-}
-
-impl std::fmt::Display for HermeticityAuditKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HermeticityAuditEvent {
-    pub kind: HermeticityAuditKind,
-    pub detail: String,
-}
-
-impl HermeticityAuditEvent {
-    pub fn new(kind: HermeticityAuditKind, detail: impl Into<String>) -> Self {
-        let detail = detail.into();
-        assert!(!detail.trim().is_empty(), "hermeticity audit detail must not be empty");
-        Self { kind, detail }
-    }
-}
 
 pub struct BuildConfig {
     pub file: PathBuf,
@@ -220,6 +157,7 @@ async fn build_linux(
         config.trust_unsigned,
         config.verbose,
     );
+    builder.set_hermeticity_mode(config.hermeticity_mode);
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
     let store_dir = config.store_dir.clone();
@@ -233,6 +171,8 @@ async fn build_linux(
         Ok(result) => result,
         Err(err) => return Err(Error::Build(format!("{err}"))),
     };
+    let mut hermeticity_audit_events = hermeticity_audit_events;
+    hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
     normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
     Ok(PipelineResult {
         root_labels: build_root_labels(&root_drv_paths, &config.store_dir),

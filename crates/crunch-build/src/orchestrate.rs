@@ -22,6 +22,8 @@ use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::HermeticityAuditEvent;
+use crate::HermeticityMode;
 use crate::build_request::collect_input_paths;
 use crate::build_request::derivation_to_build_request;
 use crate::fod::verify_fod_hash;
@@ -129,6 +131,8 @@ pub struct Builder<BServ> {
     /// When true, skip signature verification on cache hits.
     trust_unsigned: bool,
     verbose: bool,
+    hermeticity_mode: HermeticityMode,
+    hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 }
 
 impl<BServ> Builder<BServ>
@@ -172,6 +176,8 @@ where BServ: BuildService + 'static
             trusted_keys,
             trust_unsigned,
             verbose,
+            hermeticity_mode: HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
         }
     }
 
@@ -211,6 +217,8 @@ where BServ: BuildService + 'static
             trusted_keys,
             trust_unsigned,
             verbose,
+            hermeticity_mode: HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
         }
     }
 
@@ -225,6 +233,14 @@ where BServ: BuildService + 'static
     /// The logical store directory prefix.
     pub fn store_dir(&self) -> &str {
         self.store.store_dir()
+    }
+
+    pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
+        self.hermeticity_mode = hermeticity_mode;
+    }
+
+    pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
+        std::mem::take(&mut self.hermeticity_audit_events)
     }
 
     /// Read the full content of a blob from castore.
@@ -353,7 +369,10 @@ where BServ: BuildService + 'static
         let sandbox_inputs = self.collect_sandbox_inputs(derivation, known_paths, &all_source_paths).await?;
 
         // 5. Create build request.
-        let build_request = derivation_to_build_request(derivation, &sandbox_inputs, self.store.store_dir())?;
+        let request_envelope =
+            derivation_to_build_request(derivation, &sandbox_inputs, self.store.store_dir(), self.hermeticity_mode)?;
+        self.hermeticity_audit_events.extend(request_envelope.audit_events.iter().cloned());
+        let build_request = request_envelope.build_request;
 
         info!(drv = %drv_name, "building");
         if self.verbose {

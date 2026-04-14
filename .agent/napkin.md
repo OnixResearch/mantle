@@ -110,6 +110,7 @@
 - Do not assume `rustup` exists in `~/.cargo/bin` just because nightly toolchains exist under `~/.rustup/toolchains/`. The self-hosting proof helper needs a direct fallback scan of `~/.rustup/toolchains/` and common Nix store tool wrappers (`clang`, `mold`, `pkg-config`, OpenSSL pkgconfig dirs) when the login shell PATH is sparse.
 - OpenSpec `validate` rejects a delta requirement whose body doesn't contain an RFC-2119 strength word. Even if the second sentence has `MUST`, make the first sentence explicit (`The X MUST ...`) to avoid parser complaints.
 - `openspec archive <change>` aborts if the delta requirement is already present in the main spec (`... ADDED failed ... already exists`). If the main spec is already synced and `git diff` confirms no pending delta merge, rerun with `--skip-specs` to archive the completed change cleanly.
+- `openspec archive` is interactive by default. In agent runs use `openspec archive -y <change>` or the prompt will fail with `User force closed the prompt`.
 - `openspec validate <change>` expects change spec files to contain delta headers like `## ADDED Requirements` / `## MODIFIED Requirements`. A title-and-purpose-only spec file fails validation even if the requirements below are well-formed.
 - `openspec new change <name>` only scaffolds `.openspec.yaml` in this repo/tool version. Proposal, design, tasks, and delta spec files still need to be written by hand.
 - `openspec status` does not take a positional change name. Use `openspec status --change <name>` if you want artifact status for one change.
@@ -302,6 +303,7 @@
 - **No NAR hash, no tarball, no FOD.** Source tree is copied directly into the store as a plain path. Derivation references it as `Input::Source("/nix/store/HASH-crunch-src")`. Store path name uses blake3 fingerprint of file listing (paths + sizes) encoded as nix-base32 (first 20 bytes → 32 chars).
 - Store path names must use nix-base32 (`0-9a-z` minus `e,o,t,u`). Hex hashes are invalid. Use `nix_compat::nixbase32::encode()`.
 - Generated .ncl uses `format!()` with `r#"..."#`. `{{` in format strings → literal `{` in output. Shell `${VAR}` in Nickel `m%"..."` passes through to shell (Nickel uses `%{...}` for interpolation).
+- `cargo fmt -- <files>` only accepts Rust sources. If you include `tasks.md` or other Markdown paths, rustfmt tries to parse them as Rust and errors on the markdown headings/backticks.
 - Source tree with vendored deps is ~787 MiB. Needs that much free in the store dir.
 - `busybox-static` path from AGENTS.md may get GC'd. Re-fetch with `nix-build '<nixpkgs>' -A pkgsStatic.busybox --no-out-link`.
 - Output: 31 MiB static-pie musl-linked ELF at `$store/*-crunch/bin/crunch`.
@@ -312,6 +314,7 @@
 - `crunch-store` crate: owns export, ca_mapping, StoreHandle, query. crunch-build re-exports via thin wrappers.
 - `Builder<BS, DS, BServ, PIS>` -> `Builder<BServ>`. Uses `Arc<dyn BlobService>` etc internally.
 - `Builder::new()` is generic over concrete types (wraps in Arc). `Builder::with_state_dir()` takes pre-wrapped `Arc<dyn ...>` for StoreHandle callers.
+- Builder hermeticity defaults to `Practical`. If a caller builds through `Builder` directly and wants strict sandbox-env enforcement or audit propagation, it must call `set_hermeticity_mode(...)` before `Worker::run()` / `build_all()` and read back `take_hermeticity_audit_events()` afterward.
 - `BubblewrapBuildService<Arc<dyn BlobService>, Arc<dyn DirectoryService>>` works fine — auto_impl on Arc means trait methods dispatch correctly.
 - `SimpleRenderer<BS, DS>` internal type params: replaced with `SimpleRenderer<Arc<dyn BlobService>, Arc<dyn DirectoryService>>` in the one `compute_ca_output` signature.
 - Tests that call `with_state_dir` directly need explicit `Arc::new(bs) as Arc<dyn BlobService>` wrapping.

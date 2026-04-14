@@ -33,6 +33,13 @@ pub enum Error {
     #[error("output has no store path: {output} in {drv_name}")]
     OutputNoPath { output: String, drv_name: String },
 
+    #[error("unsafe sandbox environment override for {key}: {sandbox_value:?} -> {derivation_value:?}")]
+    UnsafeEnvOverride {
+        key: String,
+        sandbox_value: String,
+        derivation_value: String,
+    },
+
     #[error("sandbox error: {0}")]
     Sandbox(#[from] std::io::Error),
 
@@ -129,6 +136,19 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("lib"), "should name the output: {msg}");
         assert!(msg.contains("mylib"), "should name the drv: {msg}");
+    }
+
+    #[test]
+    fn unsafe_env_override_display() {
+        let err = Error::UnsafeEnvOverride {
+            key: "PATH".to_string(),
+            sandbox_value: "/path-not-set".to_string(),
+            derivation_value: "/tmp/bin".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("PATH"), "should name the env key: {msg}");
+        assert!(msg.contains("/path-not-set"), "should show the sandbox value: {msg}");
+        assert!(msg.contains("/tmp/bin"), "should show the derivation value: {msg}");
     }
 
     #[test]

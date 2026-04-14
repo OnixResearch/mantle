@@ -57,6 +57,9 @@ hosts: files dns
 services: files
 ";
 
+const SANDBOX_UMASK_BITS: u32 = 0o022;
+const _: () = assert!(SANDBOX_UMASK_BITS <= 0o777);
+
 /// Bubblewrap based sandbox executor.
 ///
 /// It executes the sandbox command in separate uts, ipc, pid and user namespaces,
@@ -127,19 +130,33 @@ impl SandboxOutcome {
     }
 }
 
+#[cfg(unix)]
+fn set_sandbox_umask(command: &mut Command) {
+    // SAFETY: `pre_exec` runs in the forked child immediately before `execve`.
+    // The closure performs one libc syscall (`umask`) and does not allocate or
+    // touch shared Rust state.
+    unsafe {
+        command.pre_exec(|| {
+            nix::libc::umask(SANDBOX_UMASK_BITS as nix::libc::mode_t);
+            Ok(())
+        });
+    }
+}
+
 impl Bwrap {
     // TODO(#132): support streaming std{err,out}
     /// Run the sandbox and return the result.
     pub async fn run(mut self) -> std::io::Result<SandboxOutcome> {
         let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
 
+        let mut command = Command::new("bwrap");
+        command.args(self.args);
+        // Make sure we've closed stdin otherwise builds can hang forever blocked on std io.
+        command.stdin(Stdio::null());
+        set_sandbox_umask(&mut command);
+
         Ok(SandboxOutcome {
-            output: Command::new("bwrap")
-                .args(self.args)
-                // Make sure we've closed stdin otherwise builds can hang forever blocked on std io.
-                .stdin(Stdio::null())
-                .output()
-                .await?,
+            output: command.output().await?,
             scratch_dir: self.host_workdir.join("scratches"),
         })
     }
