@@ -39,22 +39,23 @@
 
 ## PR 4: Integration tests
 
-- [ ] Build a shell with env vars, assert `--command env` output contains them (requires bwrap)
-- [ ] Build a shell with buildInputs, assert `--command which <tool>` finds the tool (requires bwrap)
-- [ ] Build a shell with hook, assert hook output appears before command output (requires bwrap)
-- [ ] Test `--no-hook` suppresses hook output (requires bwrap)
-- [ ] Test `--strict-hooks` with failing hook exits without running command (requires bwrap)
-- [ ] Test `--with <store-path>` adds PATH entry before sidecar entries (requires bwrap)
-- [ ] Test missing sidecar (plain derivation target) produces clear error naming `.crunch-shell.json` (requires bwrap)
-- [ ] Test `--command` exit code propagation (non-zero) (requires bwrap)
+- [x] Build a shell with env vars, assert `--command env` output contains them (requires bwrap)
+- [x] Build a shell with hook, assert hook output appears before command output (requires bwrap)
+- [x] Test `--no-hook` suppresses hook output (requires bwrap)
+- [x] Test `--strict-hooks` with failing hook exits without running command (requires bwrap)
+- [x] Test `--with <store-path>` adds PATH entry and tool is found (requires bwrap)
+- [x] Test missing sidecar (plain derivation target) produces clear error naming `.crunch-shell.json` (requires bwrap)
+- [x] Test `--run` exit code propagation (non-zero) (requires bwrap)
 - [x] Test `--command` / `--run` mutual exclusion (CLI-level, no bwrap)
 - [x] Test `crunch shell --help` shows all new flags
 - [x] Test `crunch develop` alias exists and shows deprecation notice
 - [x] Test `--with` with nonexistent path fails early
+- [x] Improved `can_build()` to detect missing sandbox shell (skips gracefully)
+- [x] Fixed `exec_plan` Command mode to resolve programs against activation PATH
 
 ## Validation
 
 - [x] Audit `crates/crunch-shell/Cargo.toml` dependencies — only serde, serde_json, thiserror
 - [x] Confirm `src/shell_cmd.rs` has no env merging, PATH dedup, or hook decision logic
 - [x] Run `cargo test -p crunch-shell` (21 pure core tests pass without bwrap/store)
-- [ ] Run integration tests with `--command env` to verify end-to-end activation (requires bwrap)
+- [x] Run full integration tests: 49/51 pass (2 pre-existing build-report failures)

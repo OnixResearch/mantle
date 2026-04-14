@@ -182,6 +182,23 @@ fn exec_hook(hook: &str, plan: &ActivationPlan, strict: bool) -> Result<(), RunE
     Ok(())
 }
 
+/// Search for a program name in the given PATH directories.
+/// Returns the absolute path if found, None otherwise.
+fn resolve_in_path(cmd: &OsString, path: &[PathBuf]) -> Option<OsString> {
+    let cmd_path = Path::new(cmd);
+    // If the command contains a path separator, it's already a path.
+    if cmd_path.components().count() > 1 {
+        return None;
+    }
+    for dir in path {
+        let candidate = dir.join(cmd);
+        if candidate.is_file() {
+            return Some(candidate.into_os_string());
+        }
+    }
+    None
+}
+
 fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
     let env_path = std::env::join_paths(&plan.path)
         .unwrap_or_default();
@@ -198,7 +215,11 @@ fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
             let (cmd, args) = argv.split_first().ok_or_else(|| {
                 RunError::Internal("--command requires at least one argument".into())
             })?;
-            std::process::Command::new(cmd)
+            // Resolve the program against the activation PATH, not the host
+            // PATH. Command::new uses execvp which searches the *parent's*
+            // PATH, but we want the composed shell PATH.
+            let resolved = resolve_in_path(cmd, &plan.path).unwrap_or_else(|| cmd.clone());
+            std::process::Command::new(&resolved)
                 .args(args)
                 .envs(&plan.env)
                 .env("PATH", &env_path)

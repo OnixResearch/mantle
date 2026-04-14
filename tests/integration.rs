@@ -195,16 +195,54 @@ let seed = import "seed.ncl" in
 
 // ── Phase 4: Build tests (Linux-only) ──────────────────────────
 
+/// Check if we can actually build (need bwrap + sandbox shell + nix store).
+/// Shared by build_tests and shell_build_tests.
+#[cfg(target_os = "linux")]
+fn can_build() -> bool {
+    if !std::path::Path::new("/nix/store").exists() {
+        return false;
+    }
+    if std::process::Command::new("bwrap").arg("--version").output().is_err() {
+        return false;
+    }
+    // Verify the sandbox shell is available. The crunch binary at runtime
+    // checks SNIX_BUILD_SANDBOX_SHELL env, then compile-time default, then
+    // discovers busybox-static in /nix/store. If all fail, builds break.
+    // Mirror that discovery here so we skip instead of failing cryptically.
+    if let Ok(shell) = std::env::var("SNIX_BUILD_SANDBOX_SHELL") {
+        if shell != "/bin/sh" {
+            return std::path::Path::new(&shell).is_file();
+        }
+    }
+    // Check common static busybox locations
+    for candidate in ["/run/current-system/sw/bin/busybox-static", "/bin/busybox.static"] {
+        if std::path::Path::new(candidate).is_file() {
+            return true;
+        }
+    }
+    // Scan /nix/store for busybox-static (limited)
+    if let Ok(entries) = std::fs::read_dir("/nix/store") {
+        let mut count = 0u32;
+        for entry in entries.flatten() {
+            count = count.saturating_add(1);
+            if count > 50_000 {
+                break;
+            }
+            let name = entry.file_name();
+            if name.to_string_lossy().contains("busybox-static") {
+                let bin = entry.path().join("bin/busybox");
+                if bin.is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 #[cfg(target_os = "linux")]
 mod build_tests {
     use super::*;
-
-    /// Check if we can actually build (need bwrap + nix store with bash).
-    fn can_build() -> bool {
-        // Quick check: does /nix/store exist and is bwrap available?
-        std::path::Path::new("/nix/store").exists()
-            && std::process::Command::new("bwrap").arg("--version").output().is_ok()
-    }
 
     #[test]
     fn build_trivial_derivation() {
@@ -1244,6 +1282,348 @@ let lib = {
         inputs.iter().any(|v| v.is_object() && v.get("output").is_some()),
         "inputs should contain an output selection: {inputs:?}"
     );
+}
+
+// ── Shell build tests (Linux-only, require bwrap) ───────────────
+
+#[cfg(target_os = "linux")]
+mod shell_build_tests {
+    use super::*;
+
+    /// Write a crunch.ncl project whose default devShell produces a sidecar.
+    fn write_shell_project(
+        dir: &std::path::Path,
+        env_entries: &[(&str, &str)],
+        path_entries: &[&str],
+        hook: Option<&str>,
+    ) {
+        let env_record = if env_entries.is_empty() {
+            "{}".to_string()
+        } else {
+            let fields: Vec<String> = env_entries
+                .iter()
+                .map(|(k, v)| format!("    {k} = \"{v}\","))
+                .collect();
+            format!("{{\n{}\n  }}", fields.join("\n"))
+        };
+
+        let path_array = if path_entries.is_empty() {
+            "[]".to_string()
+        } else {
+            let items: Vec<String> = path_entries
+                .iter()
+                .map(|p| format!("    \"{p}\","))
+                .collect();
+            format!("[\n{}\n  ]", items.join("\n"))
+        };
+
+        let hook_value = match hook {
+            Some(h) => format!("\"{h}\""),
+            None => "null".to_string(),
+        };
+
+        let ncl = format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  devShells = {{
+    default = {{
+      name = "test-shell",
+      builder = "/bin/sh",
+      args = ["-c", "/bin/busybox mkdir -p \"$out\"\nprintf '%s\\n' \"$CRUNCH_SIDECAR_JSON\" > \"$out/.crunch-shell.json\""],
+      addressing_mode = 'input-addressed,
+      env = {{
+        CRUNCH_SIDECAR_JSON = std.serialize 'Json {{
+          version = 1,
+          env = {env_record},
+          path_entries = {path_array},
+          hook = {hook_value},
+        }},
+      }},
+    }} | crunch.Derivation,
+  }},
+}}"#
+        );
+
+        std::fs::write(dir.join("crunch.ncl"), ncl).unwrap();
+    }
+
+    #[test]
+    fn shell_env_vars_visible_in_command() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        write_shell_project(
+            dir.path(),
+            &[("TEST_FOO", "hello_from_sidecar"), ("TEST_BAR", "42")],
+            &[],
+            None,
+        );
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--command", "env"])
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "shell --command env: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("TEST_FOO=hello_from_sidecar"), "env should have TEST_FOO: {stdout}");
+        assert!(stdout.contains("TEST_BAR=42"), "env should have TEST_BAR: {stdout}");
+        assert!(stdout.contains("CRUNCH_SHELL="), "env should have CRUNCH_SHELL: {stdout}");
+    }
+
+    #[test]
+    fn shell_hook_output_appears() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        write_shell_project(
+            dir.path(),
+            &[],
+            &[],
+            Some("echo HOOK_MARKER >&2"),
+        );
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--command", "true"])
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "shell with hook: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("HOOK_MARKER"), "hook output should appear in stderr: {stderr}");
+    }
+
+    #[test]
+    fn shell_no_hook_suppresses_hook() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        write_shell_project(
+            dir.path(),
+            &[],
+            &[],
+            Some("echo HOOK_MARKER >&2"),
+        );
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--no-hook", "--command", "true"])
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "shell --no-hook: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!stderr.contains("HOOK_MARKER"), "--no-hook should suppress hook: {stderr}");
+    }
+
+    #[test]
+    fn shell_strict_hooks_exits_on_failure() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        write_shell_project(
+            dir.path(),
+            &[],
+            &[],
+            Some("exit 7"),
+        );
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--strict-hooks", "--command", "true"])
+            .output()
+            .unwrap();
+
+        assert!(!output.status.success(), "--strict-hooks with failing hook should fail");
+        assert_eq!(
+            output.status.code(),
+            Some(7),
+            "exit code should propagate from hook"
+        );
+    }
+
+    #[test]
+    fn shell_with_adds_path_entry() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let tool_dir = tempfile::tempdir().unwrap();
+
+        // Create a dummy executable in a bin/ subdirectory.
+        // compute_activation appends /bin to --with paths.
+        let bin_dir = tool_dir.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let tool_path = bin_dir.join("crunch-test-tool");
+        std::fs::write(&tool_path, "#!/bin/sh\necho found-it\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tool_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        write_shell_project(dir.path(), &[], &[], None);
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("shell")
+            .arg("--with")
+            .arg(tool_dir.path())
+            .args(["--command", "crunch-test-tool"])
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "--with should add tool to PATH: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("found-it"), "tool output: {stdout}");
+    }
+
+    #[test]
+    fn shell_missing_sidecar_clear_error() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        // Write a devShell that builds a plain file (no sidecar).
+        std::fs::write(
+            dir.path().join("crunch.ncl"),
+            r#"let crunch = import "lib.ncl" in
+{
+  devShells = {
+    default = {
+      name = "no-sidecar",
+      builder = "/bin/sh",
+      args = ["-c", "echo just-a-file > $out"],
+      addressing_mode = 'input-addressed,
+    } | crunch.Derivation,
+  },
+}"#,
+        )
+        .unwrap();
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--command", "true"])
+            .output()
+            .unwrap();
+
+        assert!(!output.status.success(), "missing sidecar should fail");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(".crunch-shell.json"),
+            "error should name the sidecar file: {stderr}"
+        );
+        assert!(
+            stderr.contains("mkShell"),
+            "error should suggest mkShell: {stderr}"
+        );
+    }
+
+    #[test]
+    fn shell_exit_code_propagation() {
+        if !can_build() {
+            eprintln!("skipping: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+
+        write_shell_project(dir.path(), &[], &[], None);
+
+        let output = crunch_cmd()
+            .current_dir(dir.path())
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .args(["shell", "--run", "exit 42"])
+            .output()
+            .unwrap();
+
+        assert!(!output.status.success(), "non-zero exit should propagate");
+        assert_eq!(
+            output.status.code(),
+            Some(42),
+            "exit code should be 42"
+        );
+    }
 }
 
 // ── Shell CLI tests ──────────────────────────────────────────────
