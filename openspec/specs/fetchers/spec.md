@@ -229,8 +229,8 @@ Fetcher derivations MUST still bypass the sandbox only by being routed to
 
 ### Requirement: Hash verification
 
-After a fetch build returns a `BuildResult`, the shared post-build path
-(`finish_build`) MUST verify the output against the declared hash.
+The shared post-build path (`finish_build`) MUST, after a fetch build
+returns a `BuildResult`, verify the output against the declared hash.
 
 The shared post-build path MUST apply these per-mode rules:
 

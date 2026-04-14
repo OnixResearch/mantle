@@ -872,22 +872,143 @@ mod tests {
         format!("file://{}", path.display())
     }
 
+    fn create_bare_git_repo_with_history() -> (tempfile::TempDir, PathBuf, String, String) {
+        let (tempdir, repo, first_rev, second_rev) = create_git_repo_with_history();
+        let bare_repo = tempdir.path().join("repo.git");
+        run_git(tempdir.path(), &["clone", "--bare", repo.to_str().unwrap(), bare_repo.to_str().unwrap()]);
+        assert!(bare_repo.exists(), "bare git fixture must exist");
+        assert!(bare_repo.join("HEAD").exists(), "bare git fixture must contain HEAD");
+        (tempdir, bare_repo, first_rev, second_rev)
+    }
+
     #[cfg(unix)]
-    fn make_fake_git_binary(dir: &Path, marker: &Path) -> PathBuf {
+    fn write_fake_git_tool(dir: &Path, name: &str, marker: &Path, version: &str) {
         use std::os::unix::fs::PermissionsExt;
 
+        let tool = dir.join(name);
+        let script = format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  printf '%s\\n' '{version}' >&2\nfi\nprintf '%s %s\\n' '{name}' \"$*\" >> '{}'\nexit 97\n",
+            marker.display()
+        );
+        std::fs::write(&tool, script).unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn make_fake_git_toolchain(dir: &Path, marker: &Path, version: &str) {
         std::fs::create_dir_all(dir).unwrap();
-        let git = dir.join("git");
-        std::fs::write(
-            &git,
-            format!(
-                "#!/bin/sh\nprintf 'fake-git-2.99\\n' >&2\nprintf 'invoked\\n' >> '{}'\nexit 99\n",
-                marker.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o755)).unwrap();
-        git
+        write_fake_git_tool(dir, "git", marker, version);
+        write_fake_git_tool(dir, "git-upload-pack", marker, version);
+        write_fake_git_tool(dir, "ssh", marker, version);
+    }
+
+    struct GitDaemonGuard {
+        child: std::process::Child,
+        _log_root: tempfile::TempDir,
+        log_path: PathBuf,
+        port: u16,
+    }
+
+    impl GitDaemonGuard {
+        fn url_for(&self, repo_name: &str) -> String {
+            assert!(!repo_name.is_empty(), "repo name must not be empty");
+            format!("git://127.0.0.1:{}/{}", self.port, repo_name)
+        }
+    }
+
+    impl Drop for GitDaemonGuard {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    fn reserve_local_port() -> u16 {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_ne!(port, 0, "ephemeral port reservation must choose a port");
+        drop(listener);
+        port
+    }
+
+    fn wait_for_git_daemon_ready(child: &mut std::process::Child, port: u16, log_path: &Path) {
+        const MAX_ATTEMPTS: u32 = 100;
+        const SLEEP_MS: u64 = 50;
+
+        for _attempt in 0..MAX_ATTEMPTS {
+            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return;
+            }
+            if let Some(status) = child.try_wait().unwrap() {
+                let log = std::fs::read_to_string(log_path).unwrap_or_default();
+                panic!("git daemon exited early with {status}: {log}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(SLEEP_MS));
+        }
+
+        let log = std::fs::read_to_string(log_path).unwrap_or_default();
+        panic!("git daemon did not become ready on port {port}: {log}");
+    }
+
+    fn spawn_git_daemon(repo_root: &Path) -> GitDaemonGuard {
+        let port = reserve_local_port();
+        let log_root = tempfile::tempdir().unwrap();
+        let log_path = log_root.path().join("git-daemon.log");
+        let stdout_log = std::fs::File::create(&log_path).unwrap();
+        let stderr_log = stdout_log.try_clone().unwrap();
+        let child = std::process::Command::new("git")
+            .arg("daemon")
+            .arg("--export-all")
+            .arg("--reuseaddr")
+            .arg(format!("--base-path={}", repo_root.display()))
+            .arg("--listen=127.0.0.1")
+            .arg(format!("--port={port}"))
+            .arg(repo_root)
+            .stdout(std::process::Stdio::from(stdout_log))
+            .stderr(std::process::Stdio::from(stderr_log))
+            .spawn()
+            .unwrap();
+        let mut guard = GitDaemonGuard {
+            child,
+            _log_root: log_root,
+            log_path,
+            port,
+        };
+        wait_for_git_daemon_ready(&mut guard.child, port, &guard.log_path);
+        assert!(guard.log_path.exists(), "git daemon log path must exist");
+        guard
+    }
+
+    fn collect_checkout_snapshot(root: &Path) -> Vec<String> {
+        fn visit(path: &Path, root: &Path, out: &mut Vec<String>) {
+            let mut children = std::fs::read_dir(path)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>();
+            children.sort();
+            for child in children {
+                let rel = child.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                let meta = std::fs::symlink_metadata(&child).unwrap();
+                if meta.is_dir() {
+                    out.push(format!("dir:{rel}"));
+                    visit(&child, root, out);
+                    continue;
+                }
+                if meta.file_type().is_symlink() {
+                    let target = std::fs::read_link(&child).unwrap();
+                    out.push(format!("symlink:{rel}:{}", target.display()));
+                    continue;
+                }
+                let bytes = std::fs::read(&child).unwrap();
+                out.push(format!("file:{rel}:{:?}", bytes));
+            }
+        }
+
+        assert!(root.is_dir(), "checkout snapshot root must be a directory");
+        let mut out = Vec::new();
+        visit(root, root, &mut out);
+        assert!(!out.iter().any(|entry| entry.contains(".git")), "snapshot must not contain .git entries: {out:?}");
+        out
     }
 
     // ── parse_fetch tests ──────────────────────────────────────────
@@ -1028,7 +1149,7 @@ mod tests {
         let (_tempdir, repo, first_rev, _second_rev) = create_git_repo_with_history();
         let fake_root = tempfile::tempdir().unwrap();
         let marker = fake_root.path().join("fake-git-invoked.txt");
-        make_fake_git_binary(fake_root.path(), &marker);
+        make_fake_git_toolchain(fake_root.path(), &marker, "git version 2.99-test");
         let out_root = tempfile::tempdir().unwrap();
         let out = out_root.path().join("git-checkout");
 
@@ -1037,6 +1158,54 @@ mod tests {
 
         assert!(out.join("hello.txt").exists(), "fetchGit should succeed with only fake git on PATH");
         assert!(!marker.exists(), "fetchGit must not invoke fake host git binaries");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fetch_git_git_transport_ignores_fake_git_versions_and_keeps_errors_crunch_owned() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, bare_repo, first_rev, _second_rev) = create_bare_git_repo_with_history();
+        let daemon = spawn_git_daemon(bare_repo.parent().unwrap());
+        let repo_name = bare_repo.file_name().unwrap().to_string_lossy().to_string();
+        let url = daemon.url_for(&repo_name);
+        let out_root = tempfile::tempdir().unwrap();
+
+        let fake_root_a = tempfile::tempdir().unwrap();
+        let marker_a = fake_root_a.path().join("fake-git-a.txt");
+        make_fake_git_toolchain(fake_root_a.path(), &marker_a, "git version 1.0-a");
+        let out_a = out_root.path().join("git-checkout-a");
+        let error_a = {
+            let _guard = PathGuard::set(fake_root_a.path().as_os_str());
+            fetch_git(&url, &first_rev, out_a.to_str().unwrap()).unwrap();
+            let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+            fetch_git(&url, invalid_rev, out_root.path().join("git-error-a").to_str().unwrap()).unwrap_err().to_string()
+        };
+
+        let fake_root_b = tempfile::tempdir().unwrap();
+        let marker_b = fake_root_b.path().join("fake-git-b.txt");
+        make_fake_git_toolchain(fake_root_b.path(), &marker_b, "git version 9.9-b");
+        let out_b = out_root.path().join("git-checkout-b");
+        let error_b = {
+            let _guard = PathGuard::set(fake_root_b.path().as_os_str());
+            fetch_git(&url, &first_rev, out_b.to_str().unwrap()).unwrap();
+            let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+            fetch_git(&url, invalid_rev, out_root.path().join("git-error-b").to_str().unwrap()).unwrap_err().to_string()
+        };
+
+        let snapshot_a = collect_checkout_snapshot(&out_a);
+        let snapshot_b = collect_checkout_snapshot(&out_b);
+        assert_eq!(snapshot_a, snapshot_b, "fake host git version must not change fetched tree");
+        assert_eq!(std::fs::read_to_string(out_a.join("hello.txt")).unwrap(), "first revision\n");
+        assert!(!out_a.join(".git").exists(), "remote fetchGit output must not contain .git");
+        assert!(!out_b.join(".git").exists(), "remote fetchGit output must not contain .git");
+        assert_eq!(
+            error_a,
+            format!("git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'")
+        );
+        assert_eq!(error_a, error_b, "fake host git version must not change invalid-rev error text");
+        assert!(!error_a.contains("fatal:"), "remote invalid-rev error must stay crunch-owned: {error_a}");
+        assert!(!marker_a.exists(), "remote git transport must not invoke PATH git helpers");
+        assert!(!marker_b.exists(), "remote git transport must not invoke PATH git helpers");
     }
 
     #[test]
@@ -1079,7 +1248,16 @@ mod tests {
 
         assert!(!non_test.contains("std::process::Command"));
         assert!(!non_test.contains("std::env::var(\"PATH\")"));
-        for probe in ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/run/current-system/sw/bin/git"] {
+        assert!(!non_test.contains("git-upload-pack"));
+        assert!(!non_test.contains("--version"));
+        assert!(!non_test.contains("command -v git"));
+        for probe in [
+            "/usr/bin/git",
+            "/bin/git",
+            "/usr/local/bin/git",
+            "/run/current-system/sw/bin/git",
+            "/nix/store/",
+        ] {
             assert!(!non_test.contains(probe), "non-test fetcher code must not probe host git path {probe}");
         }
     }

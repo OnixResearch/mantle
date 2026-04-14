@@ -12,7 +12,8 @@
 - [x] Add tests that invalid revisions report `requested revision '<rev>' could not be materialized`, fetch failures stay crunch-owned instead of host-`git` `fatal:` text, and neither path depends on host `git` stderr formatting
 - [x] Add tests that `fetchGit` materializes the requested revision and strips `.git/`
 - [x] Add tests that `fetchGit` still materializes the requested revision and the same output tree when host `PATH` is empty
-- [x] Add tests that common host-path probes or fake host `git` binaries with different reported versions do not change the requested-revision output tree, `.git` stripping, or the crunch-owned-vs-`fatal:` error split
+- [x] Add tests that fake host `git` binaries with different reported versions do not change the requested-revision output tree, `.git` stripping, or the crunch-owned-vs-`fatal:` error split
+- [x] Add non-`file://` transport coverage that exercises the isolated remote fetch path without using host git helpers from `PATH`
 - [x] Add tests that the provided `hash` still controls fixed-output acceptance for `fetchGit`, including recursive hash mismatch handling
-- [x] Add a deterministic source-inspection test that fails if non-test fetchGit implementation code reintroduces `std::process::Command`, `std::env::var("PATH")`, or fixed host `git` probe paths
-- [x] Run `cargo test -p crunch-build --lib --tests`, `cargo test -p crunch --test stdlib_tests fetch_git_produces_git_env -- --nocapture`, `CRUNCH_FORCE_EMBEDDED_STDLIB=1 cargo test -p crunch --test stdlib_tests fetch_git_produces_git_env -- --nocapture`, and `openspec validate remove-host-git-from-fetchgit`
+- [x] Add a deterministic source-inspection test that fails if non-test fetchGit implementation code reintroduces `std::process::Command`, `std::env::var("PATH")`, version probes, `git-upload-pack`, or fixed host `git` probe paths
+- [x] Run `cargo test -p crunch-build --lib --tests`, `cargo test -p crunch --test stdlib_tests fetch_git_produces_git_env -- --nocapture`, `CRUNCH_FORCE_EMBEDDED_STDLIB=1 cargo test -p crunch --test stdlib_tests fetch_git_produces_git_env -- --nocapture`, `cargo test -p crunch --test integration_build fetchgit_ -- --nocapture`, and `openspec validate fetchers`
