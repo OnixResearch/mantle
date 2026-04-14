@@ -931,52 +931,69 @@ mod tests {
         port
     }
 
-    fn wait_for_git_daemon_ready(child: &mut std::process::Child, port: u16, log_path: &Path) {
-        const MAX_ATTEMPTS: u32 = 100;
+    fn wait_for_git_daemon_ready(
+        child: &mut std::process::Child,
+        port: u16,
+        log_path: &Path,
+    ) -> Result<(), String> {
+        const MAX_READY_ATTEMPTS: u32 = 100;
         const SLEEP_MS: u64 = 50;
 
-        for _attempt in 0..MAX_ATTEMPTS {
+        for _attempt in 0..MAX_READY_ATTEMPTS {
             if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                return;
+                return Ok(());
             }
             if let Some(status) = child.try_wait().unwrap() {
                 let log = std::fs::read_to_string(log_path).unwrap_or_default();
-                panic!("git daemon exited early with {status}: {log}");
+                return Err(format!("git daemon exited early with {status}: {log}"));
             }
             std::thread::sleep(std::time::Duration::from_millis(SLEEP_MS));
         }
 
         let log = std::fs::read_to_string(log_path).unwrap_or_default();
-        panic!("git daemon did not become ready on port {port}: {log}");
+        Err(format!("git daemon did not become ready on port {port}: {log}"))
     }
 
     fn spawn_git_daemon(repo_root: &Path) -> GitDaemonGuard {
-        let port = reserve_local_port();
-        let log_root = tempfile::tempdir().unwrap();
-        let log_path = log_root.path().join("git-daemon.log");
-        let stdout_log = std::fs::File::create(&log_path).unwrap();
-        let stderr_log = stdout_log.try_clone().unwrap();
-        let child = std::process::Command::new("git")
-            .arg("daemon")
-            .arg("--export-all")
-            .arg("--reuseaddr")
-            .arg(format!("--base-path={}", repo_root.display()))
-            .arg("--listen=127.0.0.1")
-            .arg(format!("--port={port}"))
-            .arg(repo_root)
-            .stdout(std::process::Stdio::from(stdout_log))
-            .stderr(std::process::Stdio::from(stderr_log))
-            .spawn()
-            .unwrap();
-        let mut guard = GitDaemonGuard {
-            child,
-            _log_root: log_root,
-            log_path,
-            port,
-        };
-        wait_for_git_daemon_ready(&mut guard.child, port, &guard.log_path);
-        assert!(guard.log_path.exists(), "git daemon log path must exist");
-        guard
+        const MAX_SPAWN_ATTEMPTS: u32 = 8;
+        assert!(repo_root.is_dir(), "git daemon repo root must exist");
+
+        let mut last_error = String::new();
+        for _attempt in 0..MAX_SPAWN_ATTEMPTS {
+            let port = reserve_local_port();
+            let log_root = tempfile::tempdir().unwrap();
+            let log_path = log_root.path().join("git-daemon.log");
+            let stdout_log = std::fs::File::create(&log_path).unwrap();
+            let stderr_log = stdout_log.try_clone().unwrap();
+            let child = std::process::Command::new("git")
+                .arg("daemon")
+                .arg("--export-all")
+                .arg("--reuseaddr")
+                .arg(format!("--base-path={}", repo_root.display()))
+                .arg("--listen=127.0.0.1")
+                .arg(format!("--port={port}"))
+                .arg(repo_root)
+                .stdout(std::process::Stdio::from(stdout_log))
+                .stderr(std::process::Stdio::from(stderr_log))
+                .spawn()
+                .unwrap();
+            let mut guard = GitDaemonGuard {
+                child,
+                _log_root: log_root,
+                log_path,
+                port,
+            };
+            assert!(guard.log_path.exists(), "git daemon log path must exist");
+            match wait_for_git_daemon_ready(&mut guard.child, port, &guard.log_path) {
+                Ok(()) => return guard,
+                Err(err) => {
+                    last_error = err;
+                    drop(guard);
+                }
+            }
+        }
+
+        panic!("git daemon failed after {MAX_SPAWN_ATTEMPTS} attempts: {last_error}");
     }
 
     fn collect_checkout_snapshot(root: &Path) -> Vec<String> {
