@@ -1,5 +1,10 @@
 # Napkin
 
+## Build Pipeline Overhead Lessons (2026-04-14)
+- `PathInfoService` can expose a cheap metadata path without changing all callers: add a default `get_references()` that falls back to `get()`, then override `vendor/snix-store` `NixHTTPPathInfoService` to parse/verify `.narinfo` only. That lets closure walks avoid full NAR download while substitution still uses `get()`.
+- `PreparedBuild` should keep only post-build metadata (`refscan_needles`, sandbox inputs, rewrites), not the whole `BuildRequest`. Move the owned `BuildRequest` straight into the spawned task or the worker pays a huge clone for no reason.
+- On this host, `cargo test` can fail in doctests/rustdoc with shared `~/.cargo-target` cross-toolchain artifacts even when lib/tests are green. For transcript evidence use `cargo test --lib --tests ...` or isolate with `CARGO_TARGET_DIR`.
+
 ## Sandbox Shell Lessons (2026-04-10)
 - The static busybox at `/nix/store/7mc37j...` is an ash-only build — no coreutils applets (mkdir, chmod, etc). Tests needing directory outputs fail with `mkdir: applet not found`.
 - `pkgsStatic.busybox` gives a full-featured static busybox with all applets: `/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox`

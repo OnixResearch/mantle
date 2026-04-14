@@ -8,6 +8,7 @@
 //! State transitions are validated and return errors on invalid moves.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
@@ -55,9 +56,11 @@ pub enum GoalState {
 pub struct Goal {
     /// The derivation's store path (the .drv path).
     pub drv_path: StorePath<String>,
-    /// The derivation to build. `None` while in `AwaitingDerivation`
-    /// state (dynamic derivations — producer hasn't finished yet).
-    pub derivation: Option<Derivation>,
+    /// The derivation to build. Shared to avoid cloning large
+    /// derivations across ready/dispatch paths. `None` while in
+    /// `AwaitingDerivation` state (dynamic derivations — producer
+    /// hasn't finished yet).
+    pub derivation: Option<Arc<Derivation>>,
     /// Current lifecycle state.
     pub state: GoalState,
     /// Absolute drv-path keys of goals that this one waits on.
@@ -75,10 +78,10 @@ pub struct Goal {
 
 impl Goal {
     /// Create a new goal in `Pending` state.
-    pub fn new(drv_path: StorePath<String>, derivation: Derivation) -> Self {
+    pub fn new(drv_path: StorePath<String>, derivation: impl Into<Arc<Derivation>>) -> Self {
         Self {
             drv_path,
-            derivation: Some(derivation),
+            derivation: Some(derivation.into()),
             state: GoalState::Pending,
             waitees: Vec::new(),
             waiters: Vec::new(),
@@ -88,7 +91,7 @@ impl Goal {
     }
 
     /// Create a new root goal in `Pending` state.
-    pub fn new_root(drv_path: StorePath<String>, derivation: Derivation) -> Self {
+    pub fn new_root(drv_path: StorePath<String>, derivation: impl Into<Arc<Derivation>>) -> Self {
         let mut goal = Self::new(drv_path, derivation);
         goal.is_root = true;
         goal
@@ -115,7 +118,7 @@ impl Goal {
     ///
     /// Called by the Worker after the producer build completes and
     /// the `.drv` output has been parsed.
-    pub fn set_derivation(&mut self, derivation: Derivation) -> Result<(), Error> {
+    pub fn set_derivation(&mut self, derivation: impl Into<Arc<Derivation>>) -> Result<(), Error> {
         if self.state != GoalState::AwaitingDerivation {
             return Err(Error::Store(format!(
                 "goal {}: set_derivation() called in {:?} state, expected AwaitingDerivation",
@@ -124,7 +127,7 @@ impl Goal {
             )));
         }
         debug_assert!(self.derivation.is_none(), "AwaitingDerivation goal should not already have a derivation");
-        self.derivation = Some(derivation);
+        self.derivation = Some(derivation.into());
         self.state = GoalState::Pending;
         Ok(())
     }

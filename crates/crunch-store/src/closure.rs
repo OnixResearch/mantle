@@ -90,8 +90,8 @@ async fn lookup_references(
 }
 
 async fn lookup_local_references(local: &dyn PathInfoService, digest: [u8; 20]) -> LookupStatus {
-    match local.get(digest).await {
-        Ok(Some(pi)) => LookupStatus::Found(pi.references),
+    match local.get_references(digest).await {
+        Ok(Some(refs)) => LookupStatus::Found(refs),
         Ok(None) => LookupStatus::Missing("no local PathInfo".to_string()),
         Err(e) => LookupStatus::Failed(format!("local PathInfo query failed: {e}")),
     }
@@ -114,8 +114,8 @@ async fn lookup_remote_references(remote: Option<&dyn PathInfoService>, digest: 
     let Some(remote) = remote else {
         return LookupStatus::Missing("no remote narinfo configured".to_string());
     };
-    match remote.get(digest).await {
-        Ok(Some(pi)) => LookupStatus::Found(pi.references),
+    match remote.get_references(digest).await {
+        Ok(Some(refs)) => LookupStatus::Found(refs),
         Ok(None) => LookupStatus::Missing("no remote narinfo".to_string()),
         Err(e) => LookupStatus::Failed(format!("remote narinfo query failed: {e}")),
     }
@@ -173,6 +173,8 @@ mod tests {
     struct MockPathInfoService {
         entries: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], PathInfo>>>,
         failed_gets: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], String>>>,
+        get_counts: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], u32>>>,
+        reference_counts: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], u32>>>,
     }
 
     impl MockPathInfoService {
@@ -183,15 +185,41 @@ mod tests {
         fn fail_get(&self, sp: &StorePath<String>, message: &str) {
             self.failed_gets.lock().unwrap().insert(*sp.digest(), message.to_string());
         }
+
+        fn get_count(&self, sp: &StorePath<String>) -> u32 {
+            self.get_counts.lock().unwrap().get(sp.digest()).copied().unwrap_or(0)
+        }
+
+        fn reference_count(&self, sp: &StorePath<String>) -> u32 {
+            self.reference_counts.lock().unwrap().get(sp.digest()).copied().unwrap_or(0)
+        }
+
+        fn bump_count(counts: &std::sync::Mutex<BTreeMap<[u8; 20], u32>>, digest: [u8; 20]) {
+            let mut counts = counts.lock().unwrap();
+            let next = counts.get(&digest).copied().unwrap_or(0).saturating_add(1);
+            counts.insert(digest, next);
+        }
     }
 
     #[async_trait]
     impl PathInfoService for MockPathInfoService {
         async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+            Self::bump_count(&self.get_counts, digest);
             if let Some(message) = self.failed_gets.lock().unwrap().get(&digest).cloned() {
                 return Err(std::io::Error::other(message).into());
             }
             Ok(self.entries.lock().unwrap().get(&digest).cloned())
+        }
+
+        async fn get_references(
+            &self,
+            digest: [u8; 20],
+        ) -> Result<Option<Vec<StorePath<String>>>, pathinfoservice::Error> {
+            Self::bump_count(&self.reference_counts, digest);
+            if let Some(message) = self.failed_gets.lock().unwrap().get(&digest).cloned() {
+                return Err(std::io::Error::other(message).into());
+            }
+            Ok(self.entries.lock().unwrap().get(&digest).map(|pi| pi.references.clone()))
         }
 
         async fn put(&self, pi: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
@@ -324,6 +352,8 @@ mod tests {
             .unwrap();
         assert!(closure.audit_events.is_empty());
         assert_eq!(closure.paths.len(), 2);
+        assert_eq!(remote.reference_count(&b), 1);
+        assert_eq!(remote.get_count(&b), 0);
     }
 
     #[tokio::test]
@@ -404,5 +434,28 @@ mod tests {
             .unwrap();
         assert_eq!(closure.paths.len(), 1);
         assert!(closure.audit_events.is_empty());
+        assert_eq!(remote.reference_count(&a), 1);
+        assert_eq!(remote.get_count(&a), 0);
+    }
+
+    #[tokio::test]
+    async fn remote_metadata_lookup_failure_degrades_practical_mode() {
+        let local = MockPathInfoService::default();
+        let remote = MockPathInfoService::default();
+        let b = make_sp("b", 2);
+        let a = make_sp("a", 1);
+
+        local.insert(make_pi(&a, vec![b.clone()]));
+        remote.fail_get(&b, "narinfo offline");
+
+        let closure = resolve_closure(&a, &local, Some(&remote), StoreFallbackMode::Practical, "/crunch/store")
+            .await
+            .unwrap();
+        assert_eq!(closure.paths.len(), 2);
+        assert_eq!(closure.audit_events.len(), 1);
+        assert_eq!(closure.audit_events[0].kind, StoreAuditKind::ClosureResolutionDegraded);
+        assert!(closure.audit_events[0].detail.contains("narinfo offline"));
+        assert_eq!(remote.reference_count(&b), 1);
+        assert_eq!(remote.get_count(&b), 0);
     }
 }

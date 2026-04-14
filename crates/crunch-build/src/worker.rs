@@ -172,15 +172,14 @@ impl Worker {
                 .get_by_drv_path(&drv_abs)
                 .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
             let derivation = entry.derivation.clone();
+            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
 
             let goal = if root {
-                Goal::new_root(sp.clone(), derivation.clone())
+                Goal::new_root(sp.clone(), derivation)
             } else {
-                Goal::new(sp, derivation.clone())
+                Goal::new(sp, derivation)
             };
             self.registry.insert(key.clone(), goal)?;
-
-            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
 
             // Enqueue deps for creation.
             for dep_sp in &dep_drv_paths {
@@ -671,7 +670,7 @@ impl Worker {
         let mut dispatched: u32 = 0;
         while let Some(drv_key) = self.ready_queue.pop_front() {
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
-            let prepare_result = builder.prepare_build(&drv_path, &derivation, known_paths, is_root).await;
+            let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
             self.handle_prepare_result(
                 &drv_key,
                 prepare_result,
@@ -690,7 +689,7 @@ impl Worker {
     fn ready_goal_inputs(
         &self,
         drv_key: &str,
-    ) -> Result<(StorePath<String>, bool, nix_compat::derivation::Derivation), Error> {
+    ) -> Result<(StorePath<String>, bool, Arc<nix_compat::derivation::Derivation>), Error> {
         let goal = self
             .registry
             .get(drv_key)
@@ -725,9 +724,10 @@ impl Worker {
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
                 self.fail_goal(drv_key, &err_msg, failed)
             }
-            Ok(PrepareResult::NeedsBuild(prepared)) => {
-                self.spawn_prepared_build(drv_key, prepared, builder, sem, join_set, pending_meta)
-            }
+            Ok(PrepareResult::NeedsBuild {
+                prepared,
+                build_request,
+            }) => self.spawn_prepared_build(drv_key, prepared, build_request, builder, sem, join_set, pending_meta),
         }
     }
 
@@ -735,6 +735,7 @@ impl Worker {
         &mut self,
         drv_key: &str,
         prepared: PreparedBuild,
+        build_request: snix_build::buildservice::BuildRequest,
         builder: &Builder<BServ>,
         sem: &Arc<Semaphore>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
@@ -749,7 +750,6 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
         goal.mark_building()?;
 
-        let build_request = prepared.build_request.clone();
         let replaced = pending_meta.insert(drv_key.to_string(), prepared);
         debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
 
@@ -798,7 +798,7 @@ impl Worker {
         }
 
         let is_root = goal.is_root;
-        let waiters = goal.waiters.clone();
+        let waiters = std::mem::take(&mut goal.waiters);
 
         if is_root {
             outcomes.push(outcome);
@@ -835,7 +835,7 @@ impl Worker {
         goal.mark_build_failed()?;
 
         let is_root = goal.is_root;
-        let waiters = goal.waiters.clone();
+        let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
 
         if is_root {
@@ -880,7 +880,7 @@ impl Worker {
         goal.notify_dep_failed()?;
 
         let is_root = goal.is_root;
-        let waiters = goal.waiters.clone();
+        let waiters = std::mem::take(&mut goal.waiters);
         let drv_name = goal.drv_path.name().to_string();
 
         if is_root {
@@ -1144,6 +1144,7 @@ mod tests {
 
         // Leaf should be Done.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Done);
+        assert!(w.registry.get(&leaf_key).unwrap().waiters.is_empty());
         // Top should now be Ready (its sole dep completed).
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Ready);
         // Top should be in the ready queue.
@@ -1174,6 +1175,24 @@ mod tests {
 
         assert_eq!(outcomes.len(), 1);
         assert!(outcomes[0].cached);
+    }
+
+    #[test]
+    fn ready_goal_inputs_reuses_shared_derivation_arc() {
+        let mut kp = DerivationRegistry::default();
+        let drv = make_drv();
+        let sp = register_drv(&mut kp, "root.drv", &drv);
+
+        let mut w = Worker::new(1);
+        w.want(&sp, &kp, true).unwrap();
+
+        let key = sp.to_absolute_path();
+        let registry_arc = kp.get_by_drv_path(&key).unwrap().derivation.clone();
+        let goal_arc = w.registry.get(&key).unwrap().derivation.as_ref().unwrap().clone();
+        let (_, _, ready_arc) = w.ready_goal_inputs(&key).unwrap();
+
+        assert!(std::sync::Arc::ptr_eq(&registry_arc, &goal_arc));
+        assert!(std::sync::Arc::ptr_eq(&goal_arc, &ready_arc));
     }
 
     #[test]
@@ -1246,9 +1265,11 @@ mod tests {
 
         // Leaf should be Failed.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Failed);
+        assert!(w.registry.get(&leaf_key).unwrap().waiters.is_empty());
         // Mid should be Failed (dep failed).
         let mid_key = mid_sp.to_absolute_path();
         assert_eq!(w.registry.get(&mid_key).unwrap().state, GoalState::Failed);
+        assert!(w.registry.get(&mid_key).unwrap().waiters.is_empty());
         // Top should be Failed (transitive dep failed).
         let top_key = top_sp.to_absolute_path();
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Failed);

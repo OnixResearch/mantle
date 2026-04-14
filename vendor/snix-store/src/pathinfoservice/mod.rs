@@ -11,6 +11,7 @@ mod tests;
 
 use auto_impl::auto_impl;
 use futures::stream::BoxStream;
+use nix_compat::store_path::StorePath;
 use snix_castore::composition::Registry;
 use snix_castore::composition::ServiceBuilder;
 
@@ -52,6 +53,15 @@ pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub trait PathInfoService: Send + Sync {
     /// Retrieve a PathInfo by the output digest.
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error>;
+
+    /// Retrieve only the referenced store paths for a digest.
+    ///
+    /// The default implementation falls back to `get()` and extracts
+    /// `PathInfo.references`, but remote implementations may override this to
+    /// avoid fetching or materializing the full object payload.
+    async fn get_references(&self, digest: [u8; 20]) -> Result<Option<Vec<StorePath<String>>>, Error> {
+        Ok(self.get(digest).await?.map(|path_info| path_info.references))
+    }
 
     /// Check if a PathInfo exists.
     /// Has a naïve default impl, but store implementations may decide to

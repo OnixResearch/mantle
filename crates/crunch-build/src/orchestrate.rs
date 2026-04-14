@@ -110,8 +110,8 @@ struct CaOutputIntermediate {
 pub(crate) struct PreparedBuild {
     pub(crate) drv_path: StorePath<String>,
     pub(crate) drv_name: String,
-    pub(crate) derivation: Derivation,
-    pub(crate) build_request: snix_build::buildservice::BuildRequest,
+    pub(crate) derivation: Arc<Derivation>,
+    pub(crate) refscan_needles: Vec<String>,
     pub(crate) sandbox_inputs: BTreeMap<StorePath<String>, Node>,
     pub(crate) input_rewrites: Vec<(String, String)>,
     pub(crate) is_ca: bool,
@@ -124,7 +124,10 @@ pub(crate) struct PreparedBuild {
 /// needs a sandbox build.
 pub(crate) enum PrepareResult {
     Done(BuildOutcome),
-    NeedsBuild(PreparedBuild),
+    NeedsBuild {
+        prepared: PreparedBuild,
+        build_request: snix_build::buildservice::BuildRequest,
+    },
 }
 
 /// Orchestrates the build pipeline: evaluating dependencies, checking
@@ -354,14 +357,15 @@ where BServ: BuildService + 'static
     pub(crate) async fn prepare_build(
         &mut self,
         drv_path: &StorePath<String>,
-        derivation: &Derivation,
+        derivation: Arc<Derivation>,
         known_paths: &mut DerivationRegistry,
         is_root: bool,
     ) -> Result<PrepareResult, Error> {
         let drv_name = drv_path.name().to_string();
+        let derivation_ref = derivation.as_ref();
 
         // 1. Cache check
-        if let Some(cached_outputs) = self.check_cache(drv_path, derivation, is_root).await? {
+        if let Some(cached_outputs) = self.check_cache(drv_path, derivation_ref, is_root).await? {
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
@@ -372,25 +376,29 @@ where BServ: BuildService + 'static
         }
 
         // 2. Ensure input derivation outputs are in castore.
-        for (input_drv_path, _output_names) in &derivation.input_derivations {
+        for (input_drv_path, _output_names) in &derivation_ref.input_derivations {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
-                let input_drv = entry.derivation.clone();
-                self.ensure_input_nodes(&input_drv).await?;
+                self.ensure_input_nodes(entry.derivation.as_ref()).await?;
             }
         }
 
         // 3. Resolve source inputs + closures.
-        let all_source_paths = self.resolve_and_ingest_sources(derivation).await?;
+        let all_source_paths = self.resolve_and_ingest_sources(derivation_ref).await?;
 
         // 4. Collect sandbox inputs.
-        let sandbox_inputs = self.collect_sandbox_inputs(derivation, known_paths, &all_source_paths).await?;
+        let sandbox_inputs = self.collect_sandbox_inputs(derivation_ref, known_paths, &all_source_paths).await?;
 
         // 5. Create build request.
-        let request_envelope =
-            derivation_to_build_request(derivation, &sandbox_inputs, self.store.store_dir(), self.hermeticity_mode)?;
+        let request_envelope = derivation_to_build_request(
+            derivation_ref,
+            &sandbox_inputs,
+            self.store.store_dir(),
+            self.hermeticity_mode,
+        )?;
         self.hermeticity_audit_events.extend(request_envelope.audit_events.iter().cloned());
         let build_request = request_envelope.build_request;
+        let refscan_needles = build_request.refscan_needles.clone();
 
         info!(drv = %drv_name, "building");
         if self.verbose {
@@ -402,19 +410,22 @@ where BServ: BuildService + 'static
             );
         }
 
-        let input_rewrites = self.collect_ca_input_rewrites(derivation, known_paths);
-        let is_ca = derivation.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
+        let input_rewrites = self.collect_ca_input_rewrites(derivation_ref, known_paths);
+        let is_ca = derivation_ref.outputs.values().all(|o| o.path.is_none() && o.ca_hash.is_none());
 
-        Ok(PrepareResult::NeedsBuild(PreparedBuild {
-            drv_path: drv_path.clone(),
-            drv_name,
-            derivation: derivation.clone(),
+        Ok(PrepareResult::NeedsBuild {
+            prepared: PreparedBuild {
+                drv_path: drv_path.clone(),
+                drv_name,
+                derivation,
+                refscan_needles,
+                sandbox_inputs,
+                input_rewrites,
+                is_ca,
+                is_root,
+            },
             build_request,
-            sandbox_inputs,
-            input_rewrites,
-            is_ca,
-            is_root,
-        }))
+        })
     }
 
     /// Process a completed sandbox build: apply rewrites, hash outputs,
@@ -452,7 +463,7 @@ where BServ: BuildService + 'static
                         build_output,
                         &prepared.input_rewrites,
                         &prepared.sandbox_inputs,
-                        &prepared.build_request,
+                        &prepared.refscan_needles,
                         &prepared.derivation,
                         known_paths,
                         prepared.is_ca,
@@ -618,7 +629,7 @@ where BServ: BuildService + 'static
             })?;
             let references = resolve_references(
                 &build_output.output_needles,
-                &prepared.build_request.refscan_needles,
+                &prepared.refscan_needles,
                 &prepared.derivation,
                 &prepared.sandbox_inputs,
             );
@@ -878,7 +889,7 @@ where BServ: BuildService + 'static
         build_output: &snix_build::buildservice::BuildOutput,
         input_rewrites: &[(String, String)],
         sandbox_inputs: &BTreeMap<StorePath<String>, Node>,
-        build_request: &snix_build::buildservice::BuildRequest,
+        refscan_needles: &[String],
         derivation: &Derivation,
         known_paths: &mut DerivationRegistry,
         is_ca: bool,
@@ -909,12 +920,7 @@ where BServ: BuildService + 'static
             .await?;
         self.verify_output_hash_if_needed(drv_name, output_name, output, nar_size, &nar_sha256, &final_node)
             .await?;
-        let references = resolve_references(
-            &build_output.output_needles,
-            &build_request.refscan_needles,
-            derivation,
-            sandbox_inputs,
-        );
+        let references = resolve_references(&build_output.output_needles, refscan_needles, derivation, sandbox_inputs);
         self.persist_and_export_output(
             drv_path,
             output_name,

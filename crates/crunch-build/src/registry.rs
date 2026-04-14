@@ -9,6 +9,7 @@
 //! only needs `nix_compat::Derivation` and associated store paths.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crunch_attestation::Claims;
 use nix_compat::derivation::Derivation;
@@ -21,7 +22,7 @@ const MAX_ENTRIES: u32 = 16_384;
 pub struct RegistryEntry {
     pub drv_path: StorePath<String>,
     pub hash_derivation_modulo: [u8; 32],
-    pub derivation: Derivation,
+    pub derivation: Arc<Derivation>,
     /// Whether this is a content-addressed derivation (output paths
     /// resolved after build).
     pub content_addressed: bool,
@@ -81,10 +82,11 @@ impl DerivationRegistry {
         &mut self,
         drv_path: StorePath<String>,
         hdm: [u8; 32],
-        derivation: Derivation,
+        derivation: impl Into<Arc<Derivation>>,
         content_addressed: bool,
         provenance_claims: Option<Claims>,
     ) {
+        let derivation = derivation.into();
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(self.entries.len() < MAX_ENTRIES as usize, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
 

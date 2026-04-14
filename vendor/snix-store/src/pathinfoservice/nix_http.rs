@@ -91,6 +91,37 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
         let s = format!("{}.narinfo", nixbase32::encode(&digest));
         self.base_url.join(&s).map_err(|e| Error::JoinUrl(self.base_url.to_owned(), s.to_owned(), e))
     }
+
+    async fn fetch_narinfo_text(&self, digest: [u8; 20]) -> Result<Option<String>, Error> {
+        let narinfo_url = self.derive_narinfo_url(digest)?;
+        let span = Span::current();
+        span.record("narinfo.url", narinfo_url.to_string());
+
+        let resp = self.http_client.get(narinfo_url).send().await.map_err(Error::Reqwest)?;
+        if resp.status() == StatusCode::NOT_FOUND || resp.status() == StatusCode::FORBIDDEN {
+            return Ok(None);
+        }
+
+        let narinfo_str = resp.text().await.map_err(Error::DecodeBody)?;
+        Ok(Some(narinfo_str))
+    }
+
+    fn parse_and_verify_narinfo<'a>(&self, narinfo_str: &'a str) -> Result<NarInfo<'a>, Error> {
+        let narinfo = NarInfo::parse(narinfo_str).map_err(Error::ParseNARInfo)?;
+
+        if !self.trusted_public_keys.is_empty() {
+            let fingerprint = narinfo.fingerprint();
+            let has_valid_signature = self
+                .trusted_public_keys
+                .iter()
+                .any(|pubkey| narinfo.signatures.iter().any(|sig| pubkey.verify(&fingerprint, sig)));
+            if !has_valid_signature {
+                return Err(Error::NoValidSignature);
+            }
+        }
+
+        Ok(narinfo)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -142,37 +173,11 @@ where
 {
     #[instrument(skip_all, err, fields(path.digest=nixbase32::encode(&digest), instance_name=%self.instance_name))]
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
-        let narinfo_url = self.derive_narinfo_url(digest)?;
-
-        let span = Span::current();
-        span.record("narinfo.url", narinfo_url.to_string());
-
-        let resp = self.http_client.get(narinfo_url).send().await.map_err(Error::Reqwest)?;
-
-        // In the case of a 404, return a NotFound.
-        // We also return a NotFound in case of a 403 - this is to match the behaviour as Nix,
-        // when querying nix-cache.s3.amazonaws.com directly, rather than cache.nixos.org.
-        if resp.status() == StatusCode::NOT_FOUND || resp.status() == StatusCode::FORBIDDEN {
+        let Some(narinfo_str) = self.fetch_narinfo_text(digest).await? else {
             return Ok(None);
-        }
-
-        let narinfo_str = resp.text().await.map_err(Error::DecodeBody)?;
-
-        // parse the received narinfo
-        let narinfo = NarInfo::parse(&narinfo_str).map_err(Error::ParseNARInfo)?;
-
-        // if [self.trusted_public_keys] is set, ensure there's at least one valid signature.
-        if !self.trusted_public_keys.is_empty() {
-            let fingerprint = narinfo.fingerprint();
-
-            if !self
-                .trusted_public_keys
-                .iter()
-                .any(|pubkey| narinfo.signatures.iter().any(|sig| pubkey.verify(&fingerprint, sig)))
-            {
-                Err(Error::NoValidSignature)?
-            }
-        }
+        };
+        let narinfo = self.parse_and_verify_narinfo(&narinfo_str)?;
+        let span = Span::current();
 
         // To construct the full PathInfo, we also need to populate the node field,
         // and for this we need to download the NAR file and ingest it into castore.
@@ -251,6 +256,15 @@ where
                 .collect(),
             ca: narinfo.ca,
         }))
+    }
+
+    #[instrument(skip_all, err, fields(path.digest=nixbase32::encode(&digest), instance_name=%self.instance_name))]
+    async fn get_references(&self, digest: [u8; 20]) -> Result<Option<Vec<StorePath<String>>>, pathinfoservice::Error> {
+        let Some(narinfo_str) = self.fetch_narinfo_text(digest).await? else {
+            return Ok(None);
+        };
+        let narinfo = self.parse_and_verify_narinfo(&narinfo_str)?;
+        Ok(Some(narinfo.references.iter().map(StorePath::to_owned).collect()))
     }
 
     #[instrument(skip_all, err, fields(path.digest=nixbase32::encode(&digest), instance_name=%self.instance_name))]
@@ -369,11 +383,173 @@ impl ServiceBuilder for NixHTTPPathInfoServiceConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::net::TcpStream;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+    use std::thread;
+    use std::thread::JoinHandle;
+    use std::time::Duration;
+
     use rstest::rstest;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use url::Url;
 
+    use super::NixHTTPPathInfoService;
     use super::NixHTTPPathInfoServiceConfig;
     use super::NixHTTPPathInfoServiceParams;
+    use crate::pathinfoservice::PathInfoService;
+
+    const TEST_NARINFO: &str = r#"StorePath: /nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432
+URL: nar/1094wph9z4nwlgvsd53abfz8i117ykiv5dwnq9nnhz846s7xqd7d.nar.xz
+Compression: xz
+FileHash: sha256:1094wph9z4nwlgvsd53abfz8i117ykiv5dwnq9nnhz846s7xqd7d
+FileSize: 114980
+NarHash: sha256:0lxjvvpr59c2mdram7ympy5ay741f180kv3349hvfc3f8nrmbqf6
+NarSize: 464152
+References: 7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc-glibc-2.27
+Deriver: unknown-deriver
+Sig: cache.nixos.org-1:sn5s/RrqEI+YG6/PjwdbPjcAC7rcta7sJU4mFOawGvJBLsWkyLtBrT2EuFt/LJjWkTZ+ZWOI9NTtjo/woMdvAg==
+Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7acJjLn3jofOtilAAwRILKIfVuyrbjAA==
+"#;
+
+    #[derive(Default, Debug)]
+    struct RequestCounts {
+        narinfo_gets: u32,
+        nar_gets: u32,
+    }
+
+    fn test_service_config(base_url: Url) -> NixHTTPPathInfoServiceConfig {
+        NixHTTPPathInfoServiceConfig {
+            base_url,
+            params: NixHTTPPathInfoServiceParams {
+                blob_service: "&root".to_string(),
+                directory_service: "&root".to_string(),
+                trusted_public_keys: vec![],
+            },
+        }
+    }
+
+    fn spawn_test_server(
+        narinfo_body: &'static str,
+    ) -> (Url, Arc<Mutex<RequestCounts>>, Arc<AtomicBool>, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        listener.set_nonblocking(true).expect("nonblocking listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let counts = Arc::new(Mutex::new(RequestCounts::default()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let counts_ref = counts.clone();
+        let stop_ref = stop.clone();
+
+        let handle = thread::spawn(move || {
+            while !stop_ref.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _peer)) => handle_connection(&mut stream, narinfo_body, &counts_ref),
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10))
+                    }
+                    Err(err) => panic!("accept failed: {err}"),
+                }
+            }
+        });
+
+        (format!("http://{addr}/").parse().expect("base url"), counts, stop, handle)
+    }
+
+    fn handle_connection(stream: &mut TcpStream, narinfo_body: &str, counts: &Arc<Mutex<RequestCounts>>) {
+        let mut buf = [0u8; 4096];
+        let bytes_read = stream.read(&mut buf).expect("read request");
+        let request = String::from_utf8_lossy(&buf[..bytes_read]);
+        let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).unwrap_or("/");
+
+        let (status_line, body) = if path.ends_with(".narinfo") {
+            counts.lock().expect("request counts").narinfo_gets += 1;
+            ("HTTP/1.1 200 OK", narinfo_body)
+        } else if path.ends_with(".nar") || path.ends_with(".nar.xz") {
+            counts.lock().expect("request counts").nar_gets += 1;
+            ("HTTP/1.1 500 Internal Server Error", "unexpected nar request")
+        } else {
+            ("HTTP/1.1 200 OK", "wake")
+        };
+
+        let response = format!(
+            "{status_line}\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+        stream.flush().expect("flush response");
+    }
+
+    fn stop_test_server(base_url: &Url, stop: Arc<AtomicBool>, handle: JoinHandle<()>) {
+        stop.store(true, Ordering::SeqCst);
+        let host = base_url.host_str().expect("host");
+        let port = base_url.port_or_known_default().expect("port");
+        let _ = TcpStream::connect((host, port));
+        handle.join().expect("server join");
+    }
+
+    fn test_store_path() -> nix_compat::store_path::StorePath<String> {
+        nix_compat::store_path::StorePath::from_absolute_path(
+            b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432",
+        )
+        .expect("store path")
+    }
+
+    fn test_reference_path() -> nix_compat::store_path::StorePath<String> {
+        nix_compat::store_path::StorePath::from_absolute_path(b"/nix/store/7gx4kiv5m0i7d7qkixq2cwzbr10lvxwc-glibc-2.27")
+            .expect("reference path")
+    }
+
+    #[tokio::test]
+    async fn get_references_fetches_only_narinfo_metadata() {
+        let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
+        let config = test_service_config(base_url.clone());
+        let blob_service = MemoryBlobService::default();
+        let directory_service =
+            RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default())
+                .expect("directory service");
+        let service = NixHTTPPathInfoService::try_build("test".to_string(), config, blob_service, directory_service)
+            .expect("nix http service");
+
+        let refs = service
+            .get_references(*test_store_path().digest())
+            .await
+            .expect("metadata lookup")
+            .expect("narinfo refs");
+
+        assert_eq!(refs, vec![test_reference_path()]);
+        let counts = counts.lock().expect("request counts");
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 0);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
+    }
+
+    #[tokio::test]
+    async fn get_still_fetches_nar_payload_for_full_pathinfo() {
+        let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
+        let config = test_service_config(base_url.clone());
+        let blob_service = MemoryBlobService::default();
+        let directory_service =
+            RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default())
+                .expect("directory service");
+        let service = NixHTTPPathInfoService::try_build("test".to_string(), config, blob_service, directory_service)
+            .expect("nix http service");
+
+        let err = service.get(*test_store_path().digest()).await.expect_err("full get should request nar payload");
+        assert!(format!("{err}").contains("failed to request NAR"));
+        let counts = counts.lock().expect("request counts");
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 1);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
+    }
 
     #[rstest]
     /// Correct Scheme for the cache.nixos.org binary cache.
