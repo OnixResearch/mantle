@@ -1245,3 +1245,44 @@ let lib = {
         "inputs should contain an output selection: {inputs:?}"
     );
 }
+
+// ── Shell CLI tests ──────────────────────────────────────────────
+
+#[test]
+fn shell_command_run_mutual_exclusion() {
+    crunch_cmd()
+        .args(["shell", "--command", "foo", "--run", "bar"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn shell_help_shows_new_flags() {
+    crunch_cmd()
+        .args(["shell", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--command"))
+        .stdout(predicate::str::contains("--run"))
+        .stdout(predicate::str::contains("--with"))
+        .stdout(predicate::str::contains("--no-hook"))
+        .stdout(predicate::str::contains("--strict-hooks"));
+}
+
+#[test]
+fn develop_alias_exists() {
+    crunch_cmd()
+        .args(["develop", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alias for `shell`"));
+}
+
+#[test]
+fn shell_with_nonexistent_path_fails() {
+    crunch_cmd()
+        .args(["shell", "--with", "/nonexistent/store/path/that/definitely/does/not/exist"])
+        .assert()
+        .failure();
+}
