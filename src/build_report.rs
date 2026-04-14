@@ -16,6 +16,8 @@ pub struct BuildJsonReport {
     pub output_dir: String,
     pub state_dir: String,
     pub store_dir: String,
+    pub hermeticity_mode: String,
+    pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
     pub failed: Vec<BuildJsonFailure>,
@@ -28,6 +30,12 @@ pub struct BuildJsonCounts {
     pub built_total: u32,
     pub cached_total: u32,
     pub failed_total: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonHermeticityAuditEvent {
+    pub kind: String,
+    pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,9 +85,18 @@ pub fn render_build_json_report(
 }
 
 fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> BuildJsonReport {
+    debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
     let failure_reports = build_failure_reports(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_reports, &failure_reports);
+    let hermeticity_audit_events = result
+        .hermeticity_audit_events
+        .iter()
+        .map(|event| BuildJsonHermeticityAuditEvent {
+            kind: event.kind.as_str().to_string(),
+            detail: event.detail.clone(),
+        })
+        .collect();
     let fod_mismatches = result
         .fod_mismatches
         .iter()
@@ -96,6 +113,8 @@ fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &P
         output_dir: config.output_dir.display().to_string(),
         state_dir: config.state_dir.display().to_string(),
         store_dir: config.store_dir.clone(),
+        hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
+        hermeticity_audit_events,
         counts,
         outcomes: outcome_reports,
         failed: failure_reports,
@@ -272,6 +291,7 @@ mod tests {
             verbose: false,
             max_jobs: 1,
             substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
             trust_unsigned: false,
@@ -301,11 +321,19 @@ mod tests {
             failed: Vec::new(),
             fod_mismatches: Vec::new(),
             root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: vec![crunch_pipeline::HermeticityAuditEvent::new(
+                crunch_pipeline::HermeticityAuditKind::HostToolFallback,
+                "using external bwrap",
+            )],
         };
 
         let report = build_json_report(&config, &result, logs_dir.path());
         let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
 
+        assert_eq!(report.hermeticity_mode, "practical");
+        assert_eq!(report.hermeticity_audit_events.len(), 1);
+        assert_eq!(report.hermeticity_audit_events[0].kind, "host-tool-fallback");
         assert_eq!(report.outcomes.len(), 1);
         assert_eq!(report.outcomes[0].outputs.len(), 1);
         assert_eq!(report.outcomes[0].outputs[0].artifact_attestation.logical_path, logical_path);

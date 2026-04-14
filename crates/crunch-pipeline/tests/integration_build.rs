@@ -47,6 +47,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         verbose: false,
         max_jobs: 2,
         substituter_url: None,
+        hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
         keypair,
         trusted_keys,
         trust_unsigned: false,
@@ -83,6 +84,8 @@ async fn pipeline_builds_trivial_derivation_end_to_end() {
     let result = build(&config).await.unwrap();
     assert!(result.failed.is_empty(), "pipeline failures: {:?}", result.failed);
     assert!(result.fod_mismatches.is_empty(), "unexpected FOD mismatches");
+    assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Practical);
+    assert!(result.hermeticity_audit_events.is_empty(), "unexpected hermeticity audit events");
     assert_eq!(result.outcomes.len(), 1);
 
     let outcome = &result.outcomes[0];

@@ -319,6 +319,7 @@ mod build_tests {
             .arg("--state-dir")
             .arg(state.path())
             .arg("build")
+            .arg("--strict-hermetic")
             .arg("--no-substitute")
             .arg("-I")
             .arg(dir.path())
@@ -330,6 +331,8 @@ mod build_tests {
         let stdout = String::from_utf8(output.stdout).unwrap();
         let report: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be valid JSON report");
         assert_eq!(report["schema"], "crunch-build-report-v1");
+        assert_eq!(report["hermeticity_mode"], "strict");
+        assert_eq!(report["hermeticity_audit_events"], serde_json::json!([]));
         assert_eq!(report["counts"]["succeeded_total"], 1);
         assert_eq!(report["counts"]["failed_total"], 0);
         assert_eq!(report["outcomes"][0]["label"], "json-success");
@@ -389,6 +392,8 @@ mod build_tests {
         let stdout = String::from_utf8(output.stdout).unwrap();
         let report: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be valid JSON report");
         assert_eq!(report["schema"], "crunch-build-report-v1");
+        assert_eq!(report["hermeticity_mode"], "practical");
+        assert_eq!(report["hermeticity_audit_events"], serde_json::json!([]));
         assert_eq!(report["counts"]["failed_total"], 1);
         assert_eq!(report["failed"][0]["label"], "json-fail");
         assert!(report["failed"][0]["error"].as_str().unwrap().contains("exit code 7"));

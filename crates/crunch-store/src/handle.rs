@@ -59,6 +59,25 @@ pub struct CacheHit {
     pub node: Node,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreAuditKind {
+    PathInfoFallback,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreAuditEvent {
+    pub kind: StoreAuditKind,
+    pub detail: String,
+}
+
+impl StoreAuditEvent {
+    fn new(kind: StoreAuditKind, detail: impl Into<String>) -> Self {
+        let detail = detail.into();
+        assert!(!detail.trim().is_empty(), "store audit detail must not be empty");
+        Self { kind, detail }
+    }
+}
+
 /// Bundles all store services behind `Arc<dyn ...>`. The single point of
 /// contact between crunch-build (or any consumer) and the storage layer.
 ///
@@ -74,6 +93,8 @@ pub struct StoreHandle {
     output_dir_str: String,
     /// Logical store prefix (e.g. "/crunch/store" or "/nix/store").
     store_dir: String,
+    /// Startup-time degraded store facts recorded while opening services.
+    startup_audit_events: Vec<StoreAuditEvent>,
     /// Output store path -> Node for outputs built/ingested this session.
     pub output_nodes: HashMap<StorePath<String>, Node>,
     /// Absolute output path -> PathInfo for outputs built this session.
@@ -98,7 +119,7 @@ impl StoreHandle {
 
         let blob_service = open_blob_service(state_dir)?;
         let directory_service = open_directory_service()?;
-        let pathinfo_service = open_pathinfo_service(state_dir).await?;
+        let (pathinfo_service, mut startup_audit_events) = open_pathinfo_service(state_dir).await?;
 
         let remote_pathinfo = match config.remote_cache_url {
             Some(ref url_str) => {
@@ -144,6 +165,7 @@ impl StoreHandle {
             state_dir: config.state_dir,
             output_dir_str,
             store_dir: config.store_dir,
+            startup_audit_events: std::mem::take(&mut startup_audit_events),
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             ca_mappings,
@@ -189,6 +211,7 @@ impl StoreHandle {
             state_dir,
             output_dir_str,
             store_dir,
+            startup_audit_events: Vec::new(),
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             ca_mappings,
@@ -198,6 +221,11 @@ impl StoreHandle {
     /// Arc-cloned blob service.
     pub fn blob_service(&self) -> Arc<dyn BlobService> {
         self.blob_service.clone()
+    }
+
+    /// Startup-time degraded store facts captured while opening services.
+    pub fn startup_audit_events(&self) -> &[StoreAuditEvent] {
+        &self.startup_audit_events
     }
 
     /// Arc-cloned directory service.
@@ -548,7 +576,7 @@ fn open_directory_service() -> Result<Arc<dyn DirectoryService>, Error> {
     Ok(Arc::new(svc))
 }
 
-async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoService>, Error> {
+async fn open_pathinfo_service(state_dir: &Path) -> Result<(Arc<dyn PathInfoService>, Vec<StoreAuditEvent>), Error> {
     let db_path = state_dir.join("pathinfo.redb");
     match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
         path: Some(db_path.clone()),
@@ -559,7 +587,7 @@ async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoServi
     {
         Ok(svc) => {
             info!(path = %db_path.display(), "PathInfo database opened");
-            Ok(Arc::new(svc))
+            Ok((Arc::new(svc), Vec::new()))
         }
         Err(e) => {
             tracing::warn!(
@@ -567,9 +595,11 @@ async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoServi
                 err = %e,
                 "failed to open PathInfo database, using in-memory fallback"
             );
+            let detail =
+                format!("failed to open PathInfo database at {}: {e}; using in-memory fallback", db_path.display());
             let svc = RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig::default())
                 .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
-            Ok(Arc::new(svc))
+            Ok((Arc::new(svc), vec![StoreAuditEvent::new(StoreAuditKind::PathInfoFallback, detail)]))
         }
     }
 }

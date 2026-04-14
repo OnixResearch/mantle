@@ -1575,7 +1575,8 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     let stage0_output = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(format!(
-            "printf 'self-build-proof: invoking-binary={}\\n' >&2; \
+            "printf 'self-build-proof: hermeticity-mode=practical\\n' >&2; \
+             printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
              printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \
@@ -1591,7 +1592,8 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     let stage2_output = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(format!(
-            "printf 'self-build-proof: invoking-binary={}\\n' >&2; \
+            "printf 'self-build-proof: hermeticity-mode=practical\\n' >&2; \
+             printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
              printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \

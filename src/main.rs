@@ -110,6 +110,10 @@ enum Command {
         /// Escape hatch for migrating from unsigned stores.
         #[arg(long)]
         trust_unsigned: bool,
+
+        /// Reject degraded hermetic behavior once strict-mode blockers exist.
+        #[arg(long)]
+        strict_hermetic: bool,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -213,6 +217,10 @@ enum Command {
         /// Accept unsigned/unverified PathInfo on cache hits
         #[arg(long)]
         trust_unsigned: bool,
+
+        /// Reject degraded hermetic behavior once strict-mode blockers exist.
+        #[arg(long)]
+        strict_hermetic: bool,
 
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
@@ -478,6 +486,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             signing_key,
             trusted_public_keys,
             trust_unsigned,
+            strict_hermetic,
         } => run_build_command(
             ctx,
             file.as_ref(),
@@ -489,6 +498,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             signing_key.as_deref(),
             trusted_public_keys,
             *trust_unsigned,
+            *strict_hermetic,
         ),
         _ => unreachable!("build helper called with non-build command"),
     }
@@ -506,9 +516,15 @@ fn run_build_command(
     signing_key: Option<&std::path::Path>,
     trusted_public_keys: &[String],
     trust_unsigned: bool,
+    strict_hermetic: bool,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let substituter_url = (!no_substitute).then_some(substituters);
+    let hermeticity_mode = if strict_hermetic {
+        crunch_pipeline::HermeticityMode::Strict
+    } else {
+        crunch_pipeline::HermeticityMode::Practical
+    };
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     let target = project_build::parse_build_target(file.map(PathBuf::as_path));
     match target {
@@ -527,6 +543,7 @@ fn run_build_command(
                 signing_key,
                 parsed_trusted.as_deref(),
                 trust_unsigned,
+                hermeticity_mode,
                 ctx.output_mode(),
             )
         }
@@ -549,6 +566,7 @@ fn run_build_command(
                 signing_key,
                 parsed_trusted.as_deref(),
                 trust_unsigned,
+                hermeticity_mode,
                 ctx.output_mode(),
             )
         }
@@ -695,6 +713,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             signing_key,
             trusted_public_keys,
             trust_unsigned,
+            strict_hermetic,
             source_store_path,
         } => run_self_build_command(
             ctx,
@@ -704,6 +723,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             signing_key.as_deref(),
             trusted_public_keys,
             *trust_unsigned,
+            *strict_hermetic,
             source_store_path.as_deref(),
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
@@ -718,9 +738,15 @@ fn run_self_build_command(
     signing_key: Option<&std::path::Path>,
     trusted_public_keys: &[String],
     trust_unsigned: bool,
+    strict_hermetic: bool,
     source_store_path: Option<&std::path::Path>,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
+    let hermeticity_mode = if strict_hermetic {
+        crunch_pipeline::HermeticityMode::Strict
+    } else {
+        crunch_pipeline::HermeticityMode::Practical
+    };
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     self_build::cmd_self_build(
         &ctx.store,
@@ -733,6 +759,7 @@ fn run_self_build_command(
         signing_key,
         parsed_trusted.as_deref(),
         trust_unsigned,
+        hermeticity_mode,
         source_store_path,
     )
     .map(|_report| ())
@@ -779,6 +806,7 @@ fn build_from_expr(
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     debug_assert!(max_jobs > 0, "max_jobs must be positive");
@@ -800,6 +828,7 @@ fn build_from_expr(
         signing_key_path,
         trusted_public_keys,
         trust_unsigned,
+        hermeticity_mode,
         output_mode,
     )
 }
@@ -818,6 +847,7 @@ fn build_from_expr_raw(
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(max_jobs > 0, "max_jobs must be positive");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
@@ -838,6 +868,7 @@ fn build_from_expr_raw(
         verbose,
         max_jobs,
         substituter_url: substituter_url.map(str::to_owned),
+        hermeticity_mode,
         keypair,
         trusted_keys,
         trust_unsigned,
@@ -971,6 +1002,7 @@ fn build_project_expr(
         signing_key_path,
         None, // trusted keys — project commands don't accept custom keys yet
         trust_unsigned,
+        crunch_pipeline::HermeticityMode::Practical, // develop/run do not expose a strict flag yet
     )
 }
 

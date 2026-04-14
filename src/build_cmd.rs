@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use crunch_build::signing;
 use crunch_pipeline::BuildConfig;
+use crunch_pipeline::HermeticityAuditEvent;
+use crunch_pipeline::HermeticityMode;
 use crunch_pipeline::PipelineResult;
 use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
@@ -44,6 +46,7 @@ pub fn cmd_build(
     signing_key_path: Option<&Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
@@ -59,6 +62,7 @@ pub fn cmd_build(
         verbose,
         max_jobs,
         substituter_url: substituter_url.map(str::to_owned),
+        hermeticity_mode,
         keypair,
         trusted_keys,
         trust_unsigned,
@@ -86,6 +90,7 @@ pub fn report_build_result(
 
     write_success_logs(config, result, &logs_dir, output_mode);
     if output_mode.is_human() {
+        print_hermeticity_summary(result);
         print_success_outputs(config, result);
     }
 
@@ -183,6 +188,37 @@ fn print_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &P
         .map_err(|e| RunError::Internal(format!("serializing build report: {e}")))?;
     println!("{report}");
     Ok(())
+}
+
+fn print_hermeticity_summary(result: &PipelineResult) {
+    for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
+        eprintln!("{line}");
+    }
+}
+
+fn format_hermeticity_summary(mode: HermeticityMode, events: &[HermeticityAuditEvent]) -> Vec<String> {
+    let mut lines = Vec::with_capacity(events.len().saturating_add(1));
+    if events.is_empty() {
+        lines.push(format!("hermeticity: {mode} (no degraded facts)"));
+        return lines;
+    }
+
+    lines.push(format!(
+        "WARNING: degraded hermeticity: {mode} ({} {})",
+        events.len(),
+        audit_event_label(events.len())
+    ));
+    for event in events {
+        lines.push(format!("  - {}: {}", event.kind, event.detail));
+    }
+    lines
+}
+
+fn audit_event_label(event_count: usize) -> &'static str {
+    if event_count == 1 {
+        return "audit event";
+    }
+    "audit events"
 }
 
 fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
@@ -345,4 +381,34 @@ pub fn build_import_paths(extra: &[PathBuf]) -> Result<Vec<OsString>, RunError> 
         paths.push(path.into());
     }
     Ok(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use crunch_pipeline::HermeticityAuditKind;
+
+    use super::*;
+
+    #[test]
+    fn format_hermeticity_summary_reports_clean_mode() {
+        let lines = format_hermeticity_summary(HermeticityMode::Strict, &[]);
+        assert_eq!(lines, vec!["hermeticity: strict (no degraded facts)".to_string()]);
+    }
+
+    #[test]
+    fn format_hermeticity_summary_reports_degraded_events() {
+        let events = vec![HermeticityAuditEvent::new(
+            HermeticityAuditKind::HostToolFallback,
+            "using external bwrap",
+        )];
+        let lines = format_hermeticity_summary(HermeticityMode::Practical, &events);
+        assert_eq!(lines[0], "WARNING: degraded hermeticity: practical (1 audit event)");
+        assert_eq!(lines[1], "  - host-tool-fallback: using external bwrap");
+    }
+
+    #[test]
+    fn audit_event_label_pluralizes_count() {
+        assert_eq!(audit_event_label(1), "audit event");
+        assert_eq!(audit_event_label(2), "audit events");
+    }
 }

@@ -135,6 +135,8 @@ impl BwrapSource {
 /// selected, and where the output landed.
 #[derive(Debug, Clone)]
 pub struct SelfBuildReport {
+    /// Hermeticity mode selected for this self-build.
+    pub hermeticity_mode: crunch_pipeline::HermeticityMode,
     /// Path to the crunch binary that drove this self-build.
     pub invoking_binary: PathBuf,
     /// Exact staged source tree used for this self-build.
@@ -161,6 +163,7 @@ impl SelfBuildReport {
     /// filter stderr for this prefix and parse the key-value pairs.
     pub fn format_proof_lines(&self) -> String {
         let mut out = String::with_capacity(512);
+        out.push_str(&format!("{PROOF_PREFIX} hermeticity-mode={}\n", self.hermeticity_mode.as_str(),));
         out.push_str(&format!("{PROOF_PREFIX} invoking-binary={}\n", self.invoking_binary.display(),));
         out.push_str(&format!("{PROOF_PREFIX} staged-source={}\n", self.staged_source.display(),));
         out.push_str(&format!("{PROOF_PREFIX} bwrap-source={}\n", self.bwrap_source,));
@@ -177,6 +180,7 @@ impl SelfBuildReport {
     /// is missing.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn parse_proof_lines(text: &str) -> Option<Self> {
+        let mut hermeticity_mode: Option<crunch_pipeline::HermeticityMode> = None;
         let mut invoking_binary: Option<PathBuf> = None;
         let mut staged_source: Option<PathBuf> = None;
         let mut bwrap_source: Option<BwrapSource> = None;
@@ -189,7 +193,13 @@ impl SelfBuildReport {
                 Some(r) => r.trim(),
                 None => continue,
             };
-            if let Some(val) = rest.strip_prefix("invoking-binary=") {
+            if let Some(val) = rest.strip_prefix("hermeticity-mode=") {
+                hermeticity_mode = match val {
+                    "practical" => Some(crunch_pipeline::HermeticityMode::Practical),
+                    "strict" => Some(crunch_pipeline::HermeticityMode::Strict),
+                    _ => None,
+                };
+            } else if let Some(val) = rest.strip_prefix("invoking-binary=") {
                 invoking_binary = Some(PathBuf::from(val));
             } else if let Some(val) = rest.strip_prefix("staged-source=") {
                 staged_source = Some(PathBuf::from(val));
@@ -207,6 +217,7 @@ impl SelfBuildReport {
         }
 
         Some(SelfBuildReport {
+            hermeticity_mode: hermeticity_mode?,
             invoking_binary: invoking_binary?,
             staged_source: staged_source?,
             bwrap_source: bwrap_source?,
@@ -1071,6 +1082,7 @@ fn build_all_bootstrap_tools(
     keypair: &crunch_build::KeyPair,
     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<BootstrapTools, RunError> {
     validate_bootstrap_tools(bootstrap_dir)?;
     let mut built_bwrap_output_dir: Option<PathBuf> = None;
@@ -1092,6 +1104,7 @@ fn build_all_bootstrap_tools(
             keypair,
             trusted_keys,
             trust_unsigned,
+            hermeticity_mode,
         )?;
         if *tool_name == "bwrap.ncl" {
             let bwrap_path = tool_output_dir.join("bin").join("bwrap");
@@ -1161,6 +1174,7 @@ fn build_crunch_binary(
     keypair: crunch_build::KeyPair,
     trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<PathBuf, RunError> {
     let ncl_content = generate_self_build_ncl(src_store_name, bwrap_store_name, busybox_store_name, store_dir);
 
@@ -1182,6 +1196,7 @@ fn build_crunch_binary(
         } else {
             Some("https://cache.nixos.org".to_string())
         },
+        hermeticity_mode,
         keypair,
         trusted_keys,
         trust_unsigned,
@@ -1214,6 +1229,7 @@ fn build_bootstrap_tool(
     keypair: &crunch_build::KeyPair,
     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<PathBuf, RunError> {
     assert!(tool_ncl.exists(), "tool NCL must exist: {}", tool_ncl.display());
     assert!(!import_paths.is_empty(), "import_paths must not be empty");
@@ -1231,6 +1247,7 @@ fn build_bootstrap_tool(
         } else {
             Some("https://cache.nixos.org".to_string())
         },
+        hermeticity_mode,
         keypair: keypair.clone(),
         trusted_keys: trusted_keys.to_vec(),
         trust_unsigned,
@@ -1510,6 +1527,7 @@ pub fn cmd_self_build(
     signing_key_path: Option<&Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_store_path: Option<&Path>,
 ) -> Result<SelfBuildReport, RunError> {
     let setup = initialize_self_build(output_dir, source_store_path)?;
@@ -1529,6 +1547,7 @@ pub fn cmd_self_build(
         &shared.keypair,
         &shared.trusted_keys,
         trust_unsigned,
+        hermeticity_mode,
     )?;
 
     eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
@@ -1547,10 +1566,12 @@ pub fn cmd_self_build(
         shared.keypair,
         shared.trusted_keys,
         trust_unsigned,
+        hermeticity_mode,
     )?;
     verify_self_build_output(&output_binary, no_verify)?;
 
     let report = SelfBuildReport {
+        hermeticity_mode,
         invoking_binary: setup.invoking_binary,
         staged_source: shared.staged_source,
         bwrap_source: tools.bwrap_source,
@@ -1808,6 +1829,8 @@ mod tests {
                 crunch_pipeline::drv_key_for("/nix/store", &drv_path),
                 "busybox".to_string(),
             )]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
         };
 
         let actual =
@@ -1841,6 +1864,8 @@ mod tests {
                 (crunch_pipeline::drv_key_for("/nix/store", &drv_a), "crunch".to_string()),
                 (crunch_pipeline::drv_key_for("/nix/store", &drv_b), "crunch".to_string()),
             ]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
         };
 
         let err =
@@ -2353,6 +2378,7 @@ mod tests {
     #[test]
     fn report_format_roundtrip_with_busybox() {
         let report = SelfBuildReport {
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/tmp/checkout/target/debug/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin")),
@@ -2367,6 +2393,7 @@ mod tests {
         }
 
         let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
+        assert_eq!(parsed.hermeticity_mode, report.hermeticity_mode);
         assert_eq!(parsed.invoking_binary, report.invoking_binary);
         assert_eq!(parsed.staged_source, report.staged_source);
         assert_eq!(parsed.bwrap_source, report.bwrap_source);
@@ -2377,6 +2404,7 @@ mod tests {
     #[test]
     fn report_format_roundtrip_without_busybox() {
         let report = SelfBuildReport {
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             invoking_binary: PathBuf::from("/usr/bin/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
             bwrap_source: BwrapSource::HostFallback(PathBuf::from("/usr/bin/bwrap")),
@@ -2399,7 +2427,8 @@ mod tests {
     #[test]
     fn report_parse_returns_none_for_partial_input() {
         let partial = format!(
-            "{PROOF_PREFIX} invoking-binary=/bin/crunch\n\
+            "{PROOF_PREFIX} hermeticity-mode=strict\n\
+             {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
              {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
              {PROOF_PREFIX} bwrap-source=host-fallback:/usr/bin/bwrap\n"
         );
@@ -2412,6 +2441,7 @@ mod tests {
         let mixed = format!(
             "some random log line\n\
              {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-start:bwrap.ncl\n\
+             {PROOF_PREFIX} hermeticity-mode=strict\n\
              {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
              {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
              another log line\n\
@@ -2422,6 +2452,7 @@ mod tests {
              {PROOF_PREFIX} {PROGRESS_KEY}crunch-build-done\n"
         );
         let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite progress markers");
+        assert_eq!(parsed.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
         assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
         assert_eq!(parsed.staged_source, PathBuf::from("/store/src-crunch-src"));
         assert!(parsed.bwrap_source.is_crunch_built());

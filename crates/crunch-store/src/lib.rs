@@ -25,6 +25,8 @@ pub use error::Error;
 pub use export::MAX_EXPORT_DEPTH;
 pub use export::export_castore_to_disk;
 pub use handle::CacheHit;
+pub use handle::StoreAuditEvent;
+pub use handle::StoreAuditKind;
 pub use handle::StoreConfig;
 pub use handle::StoreHandle;
 pub use query::PathInfoDetail;

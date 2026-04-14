@@ -18,6 +18,72 @@ use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
 use tracing::info;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HermeticityMode {
+    Practical,
+    Strict,
+}
+
+impl HermeticityMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Practical => "practical",
+            Self::Strict => "strict",
+        }
+    }
+
+    pub fn is_strict(self) -> bool {
+        matches!(self, Self::Strict)
+    }
+}
+
+impl std::fmt::Display for HermeticityMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HermeticityAuditKind {
+    HostToolFallback,
+    PathInfoFallback,
+    ClosureResolutionDegraded,
+    EnvironmentOverride,
+    FetchToolFallback,
+}
+
+impl HermeticityAuditKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::HostToolFallback => "host-tool-fallback",
+            Self::PathInfoFallback => "pathinfo-fallback",
+            Self::ClosureResolutionDegraded => "closure-resolution-degraded",
+            Self::EnvironmentOverride => "environment-override",
+            Self::FetchToolFallback => "fetch-tool-fallback",
+        }
+    }
+}
+
+impl std::fmt::Display for HermeticityAuditKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HermeticityAuditEvent {
+    pub kind: HermeticityAuditKind,
+    pub detail: String,
+}
+
+impl HermeticityAuditEvent {
+    pub fn new(kind: HermeticityAuditKind, detail: impl Into<String>) -> Self {
+        let detail = detail.into();
+        assert!(!detail.trim().is_empty(), "hermeticity audit detail must not be empty");
+        Self { kind, detail }
+    }
+}
+
 pub struct BuildConfig {
     pub file: PathBuf,
     pub import_paths: Vec<OsString>,
@@ -27,6 +93,7 @@ pub struct BuildConfig {
     pub verbose: bool,
     pub max_jobs: u32,
     pub substituter_url: Option<String>,
+    pub hermeticity_mode: HermeticityMode,
     /// Signing keypair — every build output gets signed.
     pub keypair: KeyPair,
     /// Trusted public keys for signature verification on cache hits.
@@ -41,6 +108,8 @@ pub struct PipelineResult {
     pub failed: Vec<FailedGoal>,
     pub fod_mismatches: Vec<FodMismatch>,
     pub root_labels: HashMap<String, String>,
+    pub hermeticity_mode: HermeticityMode,
+    pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,10 +173,11 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     })
     .await
     .map_err(|e| Error::Internal(format!("opening store: {e}")))?;
+    let hermeticity_audit_events = map_store_audit_events(store.startup_audit_events());
 
     #[cfg(target_os = "linux")]
     {
-        return build_linux(config, store, derivations).await;
+        return build_linux(config, store, derivations, hermeticity_audit_events).await;
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -122,6 +192,7 @@ async fn build_linux(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
     derivations: Vec<(String, CrunchDerivation)>,
+    hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 ) -> Result<PipelineResult, Error> {
     use snix_build::buildservice::BubblewrapBuildService;
 
@@ -168,7 +239,20 @@ async fn build_linux(
         fod_mismatches: collect_fod_mismatches(&worker_result.failed),
         outcomes: worker_result.outcomes,
         failed: worker_result.failed,
+        hermeticity_mode: config.hermeticity_mode,
+        hermeticity_audit_events,
     })
+}
+
+fn map_store_audit_events(store_events: &[crunch_store::StoreAuditEvent]) -> Vec<HermeticityAuditEvent> {
+    let mut mapped = Vec::with_capacity(store_events.len());
+    for store_event in store_events {
+        let kind = match store_event.kind {
+            crunch_store::StoreAuditKind::PathInfoFallback => HermeticityAuditKind::PathInfoFallback,
+        };
+        mapped.push(HermeticityAuditEvent::new(kind, store_event.detail.clone()));
+    }
+    mapped
 }
 
 fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
@@ -328,5 +412,34 @@ mod tests {
         normalize_failed_goal_keys(&mut failed, "/crunch/store");
 
         assert_eq!(failed[0].drv_key, drv_path.to_absolute_path_with_prefix("/crunch/store"));
+    }
+
+    #[test]
+    fn hermeticity_mode_display_uses_stable_strings() {
+        assert_eq!(HermeticityMode::Practical.as_str(), "practical");
+        assert_eq!(HermeticityMode::Strict.to_string(), "strict");
+        assert!(HermeticityMode::Strict.is_strict());
+        assert!(!HermeticityMode::Practical.is_strict());
+    }
+
+    #[test]
+    fn hermeticity_audit_event_preserves_kind_and_detail() {
+        let event = HermeticityAuditEvent::new(HermeticityAuditKind::HostToolFallback, "used host bwrap");
+        assert_eq!(event.kind.as_str(), "host-tool-fallback");
+        assert_eq!(event.detail, "used host bwrap");
+    }
+
+    #[test]
+    fn map_store_audit_events_preserves_pathinfo_fallback() {
+        let store_events = vec![crunch_store::StoreAuditEvent {
+            kind: crunch_store::StoreAuditKind::PathInfoFallback,
+            detail: "using in-memory fallback".to_string(),
+        }];
+
+        let mapped = map_store_audit_events(&store_events);
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].kind, HermeticityAuditKind::PathInfoFallback);
+        assert_eq!(mapped[0].detail, "using in-memory fallback");
     }
 }

@@ -232,6 +232,7 @@ Building derivations (not just compiling crunch) requires:
 - **Worker goal keys still use `/nix/store` formatting internally**: `crunch-build::Worker`/`GoalRegistry` key derivations with `StorePath::to_absolute_path()`. `crunch-pipeline` normalizes failed goal keys back to the configured `store_dir` before returning `PipelineResult`, otherwise `--fix` and root-label lookup break under non-default prefixes.
 - **Workspace test gotchas**: `vendor/fuse-backend-rs` had a Linux test that registered a dup of stdout with epoll; on this host stdout isn't epollable, so the test now uses a pipe read-end and must explicitly close/drop the pipe write end. `vendor/snix-castore` had a doctest for `ServiceBuilder` that now needs `#[async_trait::async_trait]` on the impl example to compile. `crates/crunch-pipeline/tests/integration_build.rs` should reuse `can_build()` for any `build()` integration test, even fetcher-only ones, because `crunch_pipeline::build()` is `Error::Build("building is only supported on Linux (requires bwrap)")` on non-Linux hosts. `tests/integration_build.rs` fetcher e2e coverage should use `DispatchBuildService<FetchBuildService, ...>` plus `file://` fixtures; a plain `DummyBuildService` with a local HTTP server can hang forever because no request reaches the server and `server.join()` blocks. PATH-sensitive `src/self_build.rs` tests must serialize with `PATH_MUTEX`, point PATH at tempdirs they control (including an empty tempdir for no-tool cases), use fake executables instead of the host environment, and assert the full error string with `assert_eq!` so the tests stay deterministic. Optional-feature audit note: `cargo check -p fuse-backend-rs --features async-io` now gets past the old `unexpected cfg(feature = "async_io")` warning, but the feature still fails deeper with upstream dyn-compat / async trait errors in `src/api/vfs/mod.rs` and `src/api/filesystem/async_io.rs`. Backward-compat audit note: recreating `crates/crunch-build/src/export.rs` only restores downstream API if `crates/crunch-build/src/lib.rs` exposes it as `pub mod export;`; keep an integration test that imports `crunch_build::export::export_castore_to_disk` so the path stays checked.
 - **PathInfoService list+put hazard**: `crunch-store::store_sign()` must not call `svc.put()` while iterating `svc.list()` on the same backend. `LruPathInfoService` can hang in that pattern. Collect matching `PathInfo`s first, then persist updates in a second pass.
+- **Startup store degradations now surface as hermeticity audits**: `StoreHandle::startup_audit_events()` reports startup-time degraded store facts. Today it emits `PathInfoFallback` when `pathinfo.redb` cannot be opened and crunch falls back to an in-memory PathInfo service; `crunch-pipeline` maps that to `HermeticityAuditKind::PathInfoFallback` and includes it in `PipelineResult` for human/JSON reporting. Strict-mode enforcement stays for later changes.
 - **`crunch-eval::Error` display must render Nickel diagnostics, not `{:?}`**: formatting `NickelError` through the derived `#[error("...")]` debug path can stack overflow on contract failures (`tests::eval_error_display_has_context`). Use `NickelError::format(..., nickel_lang::ErrorFormat::Text)` and fall back to a plain summary only if diagnostic rendering itself fails.
 - **Signed PathInfo invariant**: `StoreHandle::persist_and_export_signed_output()` rejects unsigned `PathInfo`s and store-path mismatches. `crunch store sign --all` is a migration path for unsigned entries only; already-signed entries must be left unchanged.
 - **Configurable store prefix**: `--store-prefix /crunch/store` (default) or
@@ -341,11 +342,11 @@ When claiming test results in commit messages or completion summaries:
   `cargo test --test X -- --list` proves compilation + discovery.
   Only `--ignored --nocapture` with captured output proves execution.
 - `crunch --json build ...` now emits a stable `crunch-build-report-v1`
-  JSON object on stdout. It includes counts, per-root outcomes,
-  failure records, and output paths. `tests/smoke.rs` and the new
-  build JSON CLI tests use it instead of scraping human stdout.
-  `log_file` fields are optional and must only appear when the log file
-  actually exists on disk.
+  JSON object on stdout. It includes `hermeticity_mode`,
+  `hermeticity_audit_events`, counts, per-root outcomes, failure records,
+  and output paths. `tests/smoke.rs` and the new build JSON CLI tests use it
+  instead of scraping human stdout. `log_file` fields are optional and must
+  only appear when the log file actually exists on disk.
 - Audit-grade integration tests now write bundles under
   `target/test-audit/<suite>/.../` with `meta.json`, `stdout.txt`,
   `stderr.txt`, and BLAKE3 digests for produced artifacts. Smoke tests
@@ -362,6 +363,7 @@ When claiming test results in commit messages or completion summaries:
   `/home/brittonr/.cargo-target/debug/crunch self-build --store /tmp/crunch-stage0-self-build-final-store --state-dir /tmp/crunch-stage0-self-build-final-state --no-substitute -j 4 --verbose --log-level info`
   with `PATH` including `/nix/store/csk28n2yj6pzwkslf3mn2gdxz33xxazr-bubblewrap-0.11.0/bin`, `PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig`, and `SNIX_BUILD_SANDBOX_SHELL=/nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox`. The successful output root was `/tmp/crunch-stage0-self-build-final-store/xsrdwvrp6nlkr5xhxqiw9fnmqxs0i4vk-crunch`.
 - Successful proof runs now write a shareable bundle under `target/self-hosting-proof/run-*` and refresh `target/self-hosting-proof/latest`. The ignored proof test honors `CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR` when the helper needs a custom destination, and relative `--bundle-dir` values are anchored to the repo root before export or `latest` updates.
+- `cargo test -p crunch -p crunch-pipeline` is not currently all-green on this tree: after the hermeticity-mode work it still failed on the pre-existing unrelated `tests/integration_build.rs::eval_hello_world_with_seed` assertion `drv.builder.contains("bash")`. Use targeted crates/tests for validation until that fixture is fixed.
 - `./scripts/prove-self-hosting.sh --check` is only a host-prereq preflight, not proof evidence. On 2026-04-10 the full proof initially still failed in stage0 while building `busybox.drv` with `bwrap: execvp /bin/sh: No such file or directory`; use the reported audit bundle + `stage0-diagnostics.txt` when triaging, and do not archive proof-related changes from `--check` alone.
 - `scripts/prove-self-hosting.sh` must resolve a real `busybox-static` for `SNIX_BUILD_SANDBOX_SHELL` when the env is unset or `/bin/sh`. A `bash-static` fallback is not enough for the proof because the sandbox also bind-mounts the shell at `/bin/busybox`, and bootstrap scripts expect busybox applets like `mkdir`, `ln`, and `chmod`. The helper scans installed `busybox-static` paths first and now FAILS fast if none is available; it no longer realizes `pkgsStatic.busybox` through `nix-build`.
 - The helper does not require a rich login shell PATH: it falls back to `~/.rustup/toolchains/` for nightly cargo/rustc and scans common NixOS locations (`/run/wrappers/bin`, `/run/current-system/sw/bin`, `/nix/store/*-clang-wrapper-*`, `/nix/store/*-mold-*`, `/nix/store/*-pkg-config-wrapper-*`, `/nix/store/*-openssl-*-dev/lib/pkgconfig`).
@@ -517,8 +519,8 @@ When claiming test results in commit messages or completion summaries:
 - `src/self_build.rs` emits stable proof progress markers on stderr:
   `self-build-proof: progress=bootstrap-tool-start:<tool>`,
   `...bootstrap-tool-done:<tool>`, `...crunch-build-start`, and
-  `...crunch-build-done`. `SelfBuildReport::parse_proof_lines()` ignores these
-  extra proof lines, so parsers that only need the final report stay compatible.
+  `...crunch-build-done`. Final proof lines now also include
+  `self-build-proof: hermeticity-mode=<practical|strict>`. `SelfBuildReport::parse_proof_lines()` ignores the extra progress lines, so parsers that only need the final report stay compatible.
 - The generated self-build derivation still prints a misleading non-fatal
   verify line: `src/self_build.rs` runs `$out/bin/crunch --version 2>&1 | head -3 || ... --help`,
   but `crunch` has no `--version`. The pipeline succeeds because `head`
