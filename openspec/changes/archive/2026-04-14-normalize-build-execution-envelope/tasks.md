@@ -15,5 +15,5 @@
 
 ## Phase 3: Validation
 
-- [x] Re-read the touched build-pipeline spec against the final envelope shape before closing the change
+- [x] Re-read the touched build-pipeline spec against the final envelope shape and record the check in `validation.md`
 - [x] Run `openspec validate normalize-build-execution-envelope`

@@ -71,6 +71,7 @@ pub struct NormalizedBuildEnvironment {
 }
 
 #[derive(Debug)]
+#[must_use = "inspect audit_events or consciously discard them"]
 pub struct BuildRequestEnvelope {
     pub build_request: BuildRequest,
     pub audit_events: Vec<HermeticityAuditEvent>,

@@ -143,6 +143,9 @@ fn set_sandbox_umask(command: &mut Command) {
     }
 }
 
+#[cfg(not(unix))]
+fn set_sandbox_umask(_command: &mut Command) {}
+
 impl Bwrap {
     // TODO(#132): support streaming std{err,out}
     /// Run the sandbox and return the result.
