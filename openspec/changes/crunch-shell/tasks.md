@@ -17,14 +17,14 @@
 
 ## PR 2: Sidecar generation in mkShell
 
-- [ ] Add `hook | String | optional` field to `mkShell` params in `builders/mk_derivation.ncl`
-- [ ] Make `mkShell` builder script write `$out/.crunch-shell.json` with version, env, path_entries, hook
-- [ ] Remove the "this derivation is not meant to be built" error — mkShell must actually build to produce the sidecar
-- [ ] Sidecar `path_entries` populated from `buildInputs` bin dirs
-- [ ] Sidecar `env` populated from the `env` param (not build-sandbox env, not derivation `env` field)
-- [ ] Stdlib test: `mkShell { env = { X = "1" }, hook = "echo hi" }` produces valid sidecar JSON
-- [ ] Stdlib test: `mkShell` without hook produces sidecar with null/absent hook
-- [ ] Stdlib test: sidecar version is 1
+- [x] Add `hook | String | optional` field to `mkShell` params in `builders/mk_derivation.ncl`
+- [x] Make `mkShell` builder script write `$out/.crunch-shell.json` with version, env, path_entries, hook
+- [x] Remove the "this derivation is not meant to be built" error — mkShell must actually build to produce the sidecar
+- [x] Sidecar `path_entries` populated from `buildInputs` bin dirs
+- [x] Sidecar `env` populated from the `env` param (not build-sandbox env, not derivation `env` field)
+- [x] Stdlib test: `mkShell { env = { X = "1" }, hook = "echo hi" }` produces valid sidecar JSON
+- [x] Stdlib test: `mkShell` without hook produces sidecar with null/absent hook
+- [x] Stdlib test: sidecar version is 1
 
 ## PR 3: CLI and imperative shell
 

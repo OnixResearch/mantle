@@ -979,10 +979,89 @@ builders.mkShell {
     assert!(output.status.success(), "mkShell eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("test-shell"), "name: {stdout}");
-    assert!(stdout.contains("not meant to be built"), "fail message: {stdout}");
     assert!(stdout.contains("gcc"), "PATH should include gcc: {stdout}");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(parsed["env"]["CC"].as_str() == Some("gcc"), "env.CC: {stdout}");
+
+    // Sidecar JSON is embedded in the derivation's env
+    let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str()
+        .expect("CRUNCH_SIDECAR_JSON should be a string in derivation env");
+    let sidecar: serde_json::Value = serde_json::from_str(sidecar_raw)
+        .expect("CRUNCH_SIDECAR_JSON should be valid JSON");
+    assert_eq!(sidecar["version"], 1, "sidecar version");
+    assert_eq!(sidecar["env"]["CC"].as_str(), Some("gcc"), "sidecar env.CC");
+    assert!(sidecar["hook"].is_null(), "no hook declared");
+    let path_entries = sidecar["path_entries"].as_array().expect("path_entries is array");
+    assert_eq!(path_entries.len(), 1);
+    assert!(path_entries[0].as_str().unwrap().ends_with("/bin"), "path entry ends with /bin");
+}
+
+#[test]
+fn eval_mkshell_sidecar_with_hook() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let builders = import "builders/lib.ncl" in
+builders.mkShell {
+  bash = "/nix/store/00000000000000000000000000000000-bash",
+  name = "hook-shell",
+  env = { GREETING = "hi" },
+  hook = "echo welcome",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "mkShell+hook eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str().unwrap();
+    let sidecar: serde_json::Value = serde_json::from_str(sidecar_raw).unwrap();
+    assert_eq!(sidecar["version"], 1);
+    assert_eq!(sidecar["hook"].as_str(), Some("echo welcome"));
+    assert_eq!(sidecar["env"]["GREETING"].as_str(), Some("hi"));
+}
+
+#[test]
+fn eval_mkshell_sidecar_empty_inputs() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("test.ncl"),
+        r#"let builders = import "builders/lib.ncl" in
+builders.mkShell {
+  name = "bare-shell",
+}"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .arg("eval")
+        .arg("-I")
+        .arg(dir.path())
+        .arg("-I")
+        .arg(crunch_root())
+        .arg(dir.path().join("test.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success(), "bare mkShell eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str().unwrap();
+    let sidecar: serde_json::Value = serde_json::from_str(sidecar_raw).unwrap();
+    assert_eq!(sidecar["version"], 1);
+    assert_eq!(sidecar["env"], serde_json::json!({}));
+    assert_eq!(sidecar["path_entries"], serde_json::json!([]));
+    assert!(sidecar["hook"].is_null());
 }
 
 #[test]

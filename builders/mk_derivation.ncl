@@ -293,9 +293,9 @@ in
 
 # mkShell: create a dev environment derivation.
 #
-# The derivation passes contract validation but fails if actually built.
-# A future `crunch shell` command will inspect the record to construct
-# an interactive environment.
+# When built, the derivation writes `$out/.crunch-shell.json` — a
+# versioned sidecar that `crunch shell` reads to construct the
+# interactive environment.
 let mkShell = fun params =>
   let resolved_bash =
     if std.record.has_field "bash" params then params.bash
@@ -313,6 +313,24 @@ let mkShell = fun params =>
     if std.record.has_field "name" params then params.name
     else "shell"
   in
+  let the_hook =
+    if std.record.has_field "hook" params then params.hook
+    else null
+  in
+  let path_entry_list =
+    bi
+    |> std.array.map (fun input =>
+      if std.is_string input then "%{input}/bin"
+      else "")
+    |> std.array.filter (fun s => std.string.length s > 0)
+  in
+  let sidecar = {
+    version = 1,
+    env = extra_env,
+    path_entries = path_entry_list,
+    hook = the_hook,
+  } in
+  let sidecar_json = std.serialize 'Json sidecar in
   let the_path = make_path bi in
   let path_env =
     if std.string.length the_path > 0 then { PATH = the_path }
@@ -324,9 +342,9 @@ let mkShell = fun params =>
       if std.is_string resolved_bash then b
       else "/bin/sh"
     ),
-    args = ["-c", "echo 'error: this derivation is not meant to be built, use crunch shell' >&2; exit 1"],
+    args = ["-c", "set -e\nmkdir -p \"$out\"\nprintf '%s\\n' \"$CRUNCH_SIDECAR_JSON\" > \"$out/.crunch-shell.json\""],
     inputs = bi,
-    env = path_env & extra_env,
+    env = path_env & extra_env & { CRUNCH_SIDECAR_JSON = sidecar_json },
   } | Derivation
 in
 
