@@ -677,12 +677,24 @@ where BServ: BuildService + 'static
             // optional binary cache narinfo). No subprocess call.
             let remote_ref = self.store.remote_pathinfo();
             let remote_dyn: Option<&dyn snix_store::pathinfoservice::PathInfoService> = remote_ref.as_deref();
-            let closure =
-                crunch_store::resolve_closure(source_path, self.store.pathinfo_service().as_ref(), remote_dyn)
-                    .await
-                    .map_err(|e| Error::Store(format!("closure resolution failed for {}: {e}", source_path)))?;
+            let fallback_mode = if self.hermeticity_mode.is_strict() {
+                crunch_store::StoreFallbackMode::Strict
+            } else {
+                crunch_store::StoreFallbackMode::Practical
+            };
+            let closure = crunch_store::resolve_closure(
+                source_path,
+                self.store.pathinfo_service().as_ref(),
+                remote_dyn,
+                fallback_mode,
+                self.store.store_dir(),
+            )
+            .await
+            .map_err(|e| Error::Store(format!("closure resolution failed for {}: {e}", source_path)))?;
+            self.hermeticity_audit_events
+                .extend(closure.audit_events.into_iter().map(HermeticityAuditEvent::from));
 
-            for sp in closure {
+            for sp in closure.paths {
                 if !all_source_paths.contains(&sp) {
                     all_source_paths.push(sp);
                 }

@@ -102,14 +102,21 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
         )?;
     debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 
-    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+    let store = match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: config.state_dir.clone(),
         output_dir: config.output_dir.clone(),
         remote_cache_url: config.substituter_url.clone(),
+        fallback_mode: store_fallback_mode(config.hermeticity_mode),
         store_dir: config.store_dir.clone(),
     })
     .await
-    .map_err(|e| Error::Internal(format!("opening store: {e}")))?;
+    {
+        Ok(store) => store,
+        Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
+            return build_preflight_failure(config, &derivations, err.to_string());
+        }
+        Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
+    };
     let hermeticity_audit_events = map_store_audit_events(store.startup_audit_events());
 
     #[cfg(target_os = "linux")]
@@ -185,14 +192,14 @@ async fn build_linux(
 }
 
 fn map_store_audit_events(store_events: &[crunch_store::StoreAuditEvent]) -> Vec<HermeticityAuditEvent> {
-    let mut mapped = Vec::with_capacity(store_events.len());
-    for store_event in store_events {
-        let kind = match store_event.kind {
-            crunch_store::StoreAuditKind::PathInfoFallback => HermeticityAuditKind::PathInfoFallback,
-        };
-        mapped.push(HermeticityAuditEvent::new(kind, store_event.detail.clone()));
+    store_events.iter().cloned().map(HermeticityAuditEvent::from).collect()
+}
+
+fn store_fallback_mode(mode: HermeticityMode) -> crunch_store::StoreFallbackMode {
+    if mode.is_strict() {
+        return crunch_store::StoreFallbackMode::Strict;
     }
-    mapped
+    crunch_store::StoreFallbackMode::Practical
 }
 
 fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
@@ -250,6 +257,43 @@ fn build_root_labels(root_drv_paths: &[(String, StorePath<String>)], store_dir: 
         labels.insert(key, label.clone());
     }
     labels
+}
+
+fn build_preflight_failure(
+    config: &BuildConfig,
+    derivations: &[(String, CrunchDerivation)],
+    error: String,
+) -> Result<PipelineResult, Error> {
+    let root_drv_paths = convert_root_drv_paths(derivations, &config.store_dir)?;
+    let failed = root_drv_paths
+        .iter()
+        .map(|(_, drv_path)| FailedGoal {
+            drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
+            error: error.clone(),
+        })
+        .collect();
+    Ok(PipelineResult {
+        outcomes: Vec::new(),
+        failed,
+        fod_mismatches: Vec::new(),
+        root_labels: build_root_labels(&root_drv_paths, &config.store_dir),
+        hermeticity_mode: config.hermeticity_mode,
+        hermeticity_audit_events: Vec::new(),
+    })
+}
+
+fn convert_root_drv_paths(
+    derivations: &[(String, CrunchDerivation)],
+    store_dir: &str,
+) -> Result<Vec<(String, StorePath<String>)>, Error> {
+    let mut cache = ConversionCache::new(store_dir);
+    let mut root_drv_paths = Vec::with_capacity(derivations.len());
+    for (label, drv) in derivations {
+        let (drv_path, _nix_drv) =
+            crunch_glue::convert(drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
+        root_drv_paths.push((label.clone(), drv_path));
+    }
+    Ok(root_drv_paths)
 }
 
 fn normalize_failed_goal_keys(failed: &mut [FailedGoal], store_dir: &str) {
@@ -381,5 +425,25 @@ mod tests {
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].kind, HermeticityAuditKind::PathInfoFallback);
         assert_eq!(mapped[0].detail, "using in-memory fallback");
+    }
+
+    #[test]
+    fn map_store_audit_events_preserves_closure_degraded_kind() {
+        let store_events = vec![crunch_store::StoreAuditEvent {
+            kind: crunch_store::StoreAuditKind::ClosureResolutionDegraded,
+            detail: "missing closure facts".to_string(),
+        }];
+
+        let mapped = map_store_audit_events(&store_events);
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].kind, HermeticityAuditKind::ClosureResolutionDegraded);
+        assert_eq!(mapped[0].detail, "missing closure facts");
+    }
+
+    #[test]
+    fn store_fallback_mode_matches_hermeticity_mode() {
+        assert_eq!(store_fallback_mode(HermeticityMode::Practical), crunch_store::StoreFallbackMode::Practical);
+        assert_eq!(store_fallback_mode(HermeticityMode::Strict), crunch_store::StoreFallbackMode::Strict);
     }
 }

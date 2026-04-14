@@ -257,6 +257,7 @@ fn seed_store() -> SeededStore {
             state_dir: state_dir.path().to_path_buf(),
             output_dir: output_dir.path().to_path_buf(),
             remote_cache_url: None,
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: STORE_DIR.to_string(),
         })
         .await

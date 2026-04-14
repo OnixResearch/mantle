@@ -27,6 +27,9 @@ use tracing::info as trace_info;
 use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
+use crate::StoreAuditEvent;
+use crate::StoreAuditKind;
+use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
 use crate::attestation::load_artifact_attestation;
@@ -46,6 +49,9 @@ pub struct StoreConfig {
     /// Optional remote binary cache URL (e.g., "https://cache.nixos.org").
     pub remote_cache_url: Option<String>,
 
+    /// How strictly store-layer fallbacks are handled.
+    pub fallback_mode: StoreFallbackMode,
+
     /// The logical store prefix for derivation paths (e.g. "/crunch/store"
     /// or "/nix/store" in compat mode). Derivation hashes, output paths,
     /// and sandbox layout all use this prefix.
@@ -57,25 +63,6 @@ pub struct StoreConfig {
 pub struct CacheHit {
     pub path_info: PathInfo,
     pub node: Node,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StoreAuditKind {
-    PathInfoFallback,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoreAuditEvent {
-    pub kind: StoreAuditKind,
-    pub detail: String,
-}
-
-impl StoreAuditEvent {
-    fn new(kind: StoreAuditKind, detail: impl Into<String>) -> Self {
-        let detail = detail.into();
-        assert!(!detail.trim().is_empty(), "store audit detail must not be empty");
-        Self { kind, detail }
-    }
 }
 
 /// Bundles all store services behind `Arc<dyn ...>`. The single point of
@@ -119,7 +106,8 @@ impl StoreHandle {
 
         let blob_service = open_blob_service(state_dir)?;
         let directory_service = open_directory_service()?;
-        let (pathinfo_service, mut startup_audit_events) = open_pathinfo_service(state_dir).await?;
+        let (pathinfo_service, mut startup_audit_events) =
+            open_pathinfo_service(state_dir, config.fallback_mode).await?;
 
         let remote_pathinfo = match config.remote_cache_url {
             Some(ref url_str) => {
@@ -576,7 +564,10 @@ fn open_directory_service() -> Result<Arc<dyn DirectoryService>, Error> {
     Ok(Arc::new(svc))
 }
 
-async fn open_pathinfo_service(state_dir: &Path) -> Result<(Arc<dyn PathInfoService>, Vec<StoreAuditEvent>), Error> {
+async fn open_pathinfo_service(
+    state_dir: &Path,
+    fallback_mode: StoreFallbackMode,
+) -> Result<(Arc<dyn PathInfoService>, Vec<StoreAuditEvent>), Error> {
     let db_path = state_dir.join("pathinfo.redb");
     match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
         path: Some(db_path.clone()),
@@ -590,15 +581,18 @@ async fn open_pathinfo_service(state_dir: &Path) -> Result<(Arc<dyn PathInfoServ
             Ok((Arc::new(svc), Vec::new()))
         }
         Err(e) => {
+            let detail = format!("failed to open PathInfo database at {}: {e}", db_path.display());
+            if fallback_mode.is_strict() {
+                return Err(Error::PathInfoFallbackRejected { detail });
+            }
             tracing::warn!(
                 path = %db_path.display(),
                 err = %e,
                 "failed to open PathInfo database, using in-memory fallback"
             );
-            let detail =
-                format!("failed to open PathInfo database at {}: {e}; using in-memory fallback", db_path.display());
             let svc = RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig::default())
                 .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
+            let detail = format!("{detail}; using in-memory fallback");
             Ok((Arc::new(svc), vec![StoreAuditEvent::new(StoreAuditKind::PathInfoFallback, detail)]))
         }
     }
@@ -712,6 +706,32 @@ mod tests {
             deriver: None,
             ca: None,
         }
+    }
+
+    #[tokio::test]
+    async fn practical_pathinfo_open_fallback_records_audit_event() {
+        let state_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(state_dir.path().join("pathinfo.redb")).unwrap();
+
+        let (_svc, audit_events) = open_pathinfo_service(state_dir.path(), StoreFallbackMode::Practical).await.unwrap();
+
+        assert_eq!(audit_events.len(), 1);
+        assert_eq!(audit_events[0].kind, StoreAuditKind::PathInfoFallback);
+        assert!(audit_events[0].detail.contains("using in-memory fallback"));
+    }
+
+    #[tokio::test]
+    async fn strict_pathinfo_open_fallback_is_rejected() {
+        let state_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(state_dir.path().join("pathinfo.redb")).unwrap();
+
+        let err = match open_pathinfo_service(state_dir.path(), StoreFallbackMode::Strict).await {
+            Ok(_) => panic!("strict mode should reject PathInfo fallback"),
+            Err(err) => err,
+        };
+
+        assert!(matches!(err, Error::PathInfoFallbackRejected { .. }));
+        assert!(err.to_string().contains("strict mode does not permit in-memory PathInfo fallback"));
     }
 
     #[tokio::test]

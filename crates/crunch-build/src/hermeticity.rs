@@ -64,6 +64,21 @@ impl HermeticityAuditEvent {
     }
 }
 
+impl From<crunch_store::StoreAuditKind> for HermeticityAuditKind {
+    fn from(value: crunch_store::StoreAuditKind) -> Self {
+        match value {
+            crunch_store::StoreAuditKind::PathInfoFallback => Self::PathInfoFallback,
+            crunch_store::StoreAuditKind::ClosureResolutionDegraded => Self::ClosureResolutionDegraded,
+        }
+    }
+}
+
+impl From<crunch_store::StoreAuditEvent> for HermeticityAuditEvent {
+    fn from(value: crunch_store::StoreAuditEvent) -> Self {
+        Self::new(value.kind.into(), value.detail)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,5 +96,13 @@ mod tests {
         let event = HermeticityAuditEvent::new(HermeticityAuditKind::HostToolFallback, "used host bwrap");
         assert_eq!(event.kind.as_str(), "host-tool-fallback");
         assert_eq!(event.detail, "used host bwrap");
+    }
+
+    #[test]
+    fn store_audit_kinds_map_to_public_hermeticity_kinds() {
+        let pathinfo = HermeticityAuditKind::from(crunch_store::StoreAuditKind::PathInfoFallback);
+        let closure = HermeticityAuditKind::from(crunch_store::StoreAuditKind::ClosureResolutionDegraded);
+        assert_eq!(pathinfo, HermeticityAuditKind::PathInfoFallback);
+        assert_eq!(closure, HermeticityAuditKind::ClosureResolutionDegraded);
     }
 }

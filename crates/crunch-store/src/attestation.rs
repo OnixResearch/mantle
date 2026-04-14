@@ -22,6 +22,7 @@ use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
+use crate::StoreFallbackMode;
 use crate::resolve_closure;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -244,7 +245,7 @@ async fn synthesize_runtime_closure_attestation(
     remote: Option<&dyn PathInfoService>,
     roots: &[StorePath<String>],
 ) -> Result<ClosureAttestation, Error> {
-    let member_paths = resolve_member_paths(local, remote, roots).await?;
+    let member_paths = resolve_member_paths(local, remote, roots, store_dir).await?;
     let closure_node_id = closure_node_id(store_dir, roots, ClosureSemantics::Runtime);
     let member_set: BTreeSet<String> = member_paths.iter().map(|path| logical_path(path, store_dir)).collect();
     let mut members = Vec::new();
@@ -323,6 +324,7 @@ async fn resolve_member_paths(
     local: &dyn PathInfoService,
     remote: Option<&dyn PathInfoService>,
     roots: &[StorePath<String>],
+    store_dir: &str,
 ) -> Result<Vec<StorePath<String>>, Error> {
     if roots.is_empty() {
         return Err(Error::Attestation("closure roots must not be empty".to_string()));
@@ -330,7 +332,8 @@ async fn resolve_member_paths(
 
     let mut member_paths = BTreeSet::new();
     for root in roots {
-        for member in resolve_closure(root, local, remote).await? {
+        let closure = resolve_closure(root, local, remote, StoreFallbackMode::Practical, store_dir).await?;
+        for member in closure.paths {
             member_paths.insert(member);
         }
     }

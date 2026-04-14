@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -30,6 +31,17 @@ fn repo_root() -> PathBuf {
 fn import_paths() -> Vec<OsString> {
     let stdlib = crunch_eval::stdlib::stdlib_import_path().expect("stdlib import path should resolve");
     vec![stdlib.into(), repo_root().into_os_string()]
+}
+
+fn host_store_path() -> Option<String> {
+    let entries = std::fs::read_dir("/nix/store").ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if nix_compat::store_path::StorePath::<String>::from_absolute_path(path.as_os_str().as_bytes()).is_ok() {
+            return Some(path.display().to_string());
+        }
+    }
+    None
 }
 
 fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConfig {
@@ -338,4 +350,184 @@ async fn pipeline_strict_mode_rejects_environment_override() {
     );
     assert!(result.failed[0].error.contains("unsafe sandbox environment override"));
     assert!(result.failed[0].error.contains("PATH"));
+}
+
+#[tokio::test]
+async fn pipeline_practical_mode_reports_pathinfo_startup_fallback() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(state_dir.path().join("pathinfo.redb")).unwrap();
+    let source = work.path().join("fetch.txt");
+    let ncl_file = work.path().join("fetch.ncl");
+    let content = b"pathinfo fallback\n";
+
+    std::fs::write(&source, content).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+crunch.fetchurl {{
+  name = "pathinfo-fallback-src",
+  url = "file://{}",
+  hash = "{}",
+}}"#,
+            source.display(),
+            sha256_sri(content),
+        ),
+    )
+    .unwrap();
+
+    let result = build(&build_config(ncl_file, output_dir.path(), state_dir.path())).await.unwrap();
+
+    assert!(result.failed.is_empty(), "practical pathinfo fallback should still build: {:?}", result.failed);
+    assert_eq!(result.outcomes.len(), 1);
+    assert!(
+        result
+            .hermeticity_audit_events
+            .iter()
+            .any(|event| event.kind == crunch_pipeline::HermeticityAuditKind::PathInfoFallback)
+    );
+}
+
+#[tokio::test]
+async fn pipeline_strict_mode_rejects_pathinfo_startup_fallback() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(state_dir.path().join("pathinfo.redb")).unwrap();
+    let source = work.path().join("fetch.txt");
+    let ncl_file = work.path().join("fetch.ncl");
+    let content = b"pathinfo fallback strict\n";
+
+    std::fs::write(&source, content).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+crunch.fetchurl {{
+  name = "pathinfo-fallback-src",
+  url = "file://{}",
+  hash = "{}",
+}}"#,
+            source.display(),
+            sha256_sri(content),
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+
+    assert!(result.outcomes.is_empty(), "strict mode should reject before fetch build: {:?}", result.outcomes);
+    assert_eq!(result.failed.len(), 1, "strict-mode failures: {:?}", result.failed);
+    assert!(result.hermeticity_audit_events.is_empty());
+    assert!(result.failed[0].error.contains("strict mode does not permit in-memory PathInfo fallback"));
+    assert_eq!(result.root_labels.len(), 1);
+}
+
+#[tokio::test]
+async fn pipeline_practical_mode_reports_degraded_closure_resolution() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+    let Some(source_path) = host_store_path() else {
+        eprintln!("skipping: no host /nix/store path available");
+        return;
+    };
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("closure-practical.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  name = "pipeline-closure-practical",
+  builder = "/bin/sh",
+  args = ["-c", "set -eu; test -e \"$src\"; printf 'closure ok' > \"$out\""],
+  env = {{ src = "{}" }},
+  inputs = ["{}"],
+  addressing_mode = 'input-addressed,
+}} | crunch.Derivation"#,
+            source_path, source_path,
+        ),
+    )
+    .unwrap();
+
+    let result = build(&build_config(ncl_file, output_dir.path(), state_dir.path())).await.unwrap();
+
+    assert!(
+        result.failed.is_empty(),
+        "practical degraded closure build should still succeed: {:?}",
+        result.failed
+    );
+    assert_eq!(result.outcomes.len(), 1);
+    let degraded = result
+        .hermeticity_audit_events
+        .iter()
+        .find(|event| event.kind == crunch_pipeline::HermeticityAuditKind::ClosureResolutionDegraded)
+        .expect("missing closure degraded audit event");
+    assert!(degraded.detail.contains(&source_path));
+}
+
+#[tokio::test]
+async fn pipeline_strict_mode_rejects_missing_closure_facts() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+    let Some(source_path) = host_store_path() else {
+        eprintln!("skipping: no host /nix/store path available");
+        return;
+    };
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("closure-strict.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  name = "pipeline-closure-strict",
+  builder = "/bin/sh",
+  args = ["-c", "set -eu; test -e \"$src\"; printf 'closure ok' > \"$out\""],
+  env = {{ src = "{}" }},
+  inputs = ["{}"],
+  addressing_mode = 'input-addressed,
+}} | crunch.Derivation"#,
+            source_path, source_path,
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+
+    assert!(result.outcomes.is_empty(), "strict mode should reject before sandbox build: {:?}", result.outcomes);
+    assert_eq!(result.failed.len(), 1, "strict-mode failures: {:?}", result.failed);
+    assert!(result.hermeticity_audit_events.is_empty());
+    assert!(result.failed[0].error.contains("missing closure facts for source input"));
+    assert!(result.failed[0].error.contains(&source_path));
 }

@@ -8,29 +8,48 @@ use snix_store::pathinfoservice::PathInfoService;
 use tracing::warn;
 
 use crate::Error;
+use crate::StoreAuditEvent;
+use crate::StoreAuditKind;
+use crate::StoreFallbackMode;
 
 /// Maximum transitive depth for closure walks. Prevents runaway
 /// recursion from cycles the visited-set misses or absurdly deep
 /// dependency chains.
 pub const MAX_CLOSURE_DEPTH: u32 = 1024;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosureResolution {
+    pub paths: Vec<StorePath<String>>,
+    pub audit_events: Vec<StoreAuditEvent>,
+}
+
+enum LookupStatus {
+    Found(Vec<StorePath<String>>),
+    Missing(String),
+    Failed(String),
+}
+
+enum ReferenceLookup {
+    Resolved(Vec<StorePath<String>>),
+    Degraded(String),
+}
+
 /// Resolve the full runtime closure of `root` by walking PathInfo
 /// references.
 ///
 /// Tries `local` first, then `remote` (if provided). Returns the
 /// transitive set of all referenced store paths, including `root`
-/// itself.
-///
-/// Paths with no PathInfo in either source are skipped with a warning
-/// (graceful degradation — static binaries have no refs, dynamic ones
-/// will fail at load time with a clear error).
+/// itself, plus any practical-mode degraded audit events.
 pub async fn resolve_closure(
     root: &StorePath<String>,
     local: &dyn PathInfoService,
     remote: Option<&dyn PathInfoService>,
-) -> Result<Vec<StorePath<String>>, Error> {
+    fallback_mode: StoreFallbackMode,
+    store_dir: &str,
+) -> Result<ClosureResolution, Error> {
     let mut visited: BTreeSet<[u8; 20]> = BTreeSet::new();
     let mut result: Vec<StorePath<String>> = Vec::new();
+    let mut audit_events: Vec<StoreAuditEvent> = Vec::new();
     let mut stack: Vec<(StorePath<String>, u32)> = vec![(root.clone(), 0)];
 
     while let Some((path, depth)) = stack.pop() {
@@ -43,59 +62,85 @@ pub async fn resolve_closure(
             warn!(path = %path, depth = depth, "closure depth limit ({MAX_CLOSURE_DEPTH}) reached, skipping deeper refs");
             continue;
         }
-        let refs = match lookup_references(local, remote, &path, digest, depth).await {
-            Some(refs) => refs,
-            None => continue,
-        };
-        push_unvisited_refs(&mut stack, &visited, refs, depth);
+        match lookup_references(local, remote, digest).await {
+            ReferenceLookup::Resolved(refs) => push_unvisited_refs(&mut stack, &visited, refs, depth),
+            ReferenceLookup::Degraded(reason) => {
+                handle_degraded_lookup(fallback_mode, &path, reason, store_dir, &mut audit_events)?;
+            }
+        }
     }
 
     debug_assert!(!result.is_empty(), "closure must contain at least the root");
-    Ok(result)
+    Ok(ClosureResolution {
+        paths: result,
+        audit_events,
+    })
 }
 
 async fn lookup_references(
     local: &dyn PathInfoService,
     remote: Option<&dyn PathInfoService>,
-    path: &StorePath<String>,
     digest: [u8; 20],
-    depth: u32,
-) -> Option<Vec<StorePath<String>>> {
+) -> ReferenceLookup {
+    match lookup_local_references(local, digest).await {
+        LookupStatus::Found(refs) => ReferenceLookup::Resolved(refs),
+        LookupStatus::Missing(local_reason) => lookup_remote_or_degrade(remote, digest, local_reason).await,
+        LookupStatus::Failed(local_reason) => lookup_remote_or_degrade(remote, digest, local_reason).await,
+    }
+}
+
+async fn lookup_local_references(local: &dyn PathInfoService, digest: [u8; 20]) -> LookupStatus {
     match local.get(digest).await {
-        Ok(Some(pi)) => Some(pi.references),
-        Ok(None) => lookup_remote_references(remote, path, digest, depth).await,
-        Err(e) => {
-            warn!(path = %path, err = %e, "local PathInfo query failed, skipping refs");
-            None
+        Ok(Some(pi)) => LookupStatus::Found(pi.references),
+        Ok(None) => LookupStatus::Missing("no local PathInfo".to_string()),
+        Err(e) => LookupStatus::Failed(format!("local PathInfo query failed: {e}")),
+    }
+}
+
+async fn lookup_remote_or_degrade(
+    remote: Option<&dyn PathInfoService>,
+    digest: [u8; 20],
+    local_reason: String,
+) -> ReferenceLookup {
+    match lookup_remote_references(remote, digest).await {
+        LookupStatus::Found(refs) => ReferenceLookup::Resolved(refs),
+        LookupStatus::Missing(remote_reason) | LookupStatus::Failed(remote_reason) => {
+            ReferenceLookup::Degraded(format!("{local_reason}; {remote_reason}"))
         }
     }
 }
 
-async fn lookup_remote_references(
-    remote: Option<&dyn PathInfoService>,
-    path: &StorePath<String>,
-    digest: [u8; 20],
-    depth: u32,
-) -> Option<Vec<StorePath<String>>> {
+async fn lookup_remote_references(remote: Option<&dyn PathInfoService>, digest: [u8; 20]) -> LookupStatus {
     let Some(remote) = remote else {
-        if depth > 0 {
-            warn!(path = %path, "no local PathInfo and no remote configured, mounting without further refs");
-        }
-        return None;
+        return LookupStatus::Missing("no remote narinfo configured".to_string());
     };
     match remote.get(digest).await {
-        Ok(Some(pi)) => Some(pi.references),
-        Ok(None) => {
-            if depth > 0 {
-                warn!(path = %path, "no closure data (local or remote), mounting without further refs");
-            }
-            None
-        }
-        Err(e) => {
-            warn!(path = %path, err = %e, "remote PathInfo query failed, skipping refs");
-            None
-        }
+        Ok(Some(pi)) => LookupStatus::Found(pi.references),
+        Ok(None) => LookupStatus::Missing("no remote narinfo".to_string()),
+        Err(e) => LookupStatus::Failed(format!("remote narinfo query failed: {e}")),
     }
+}
+
+fn handle_degraded_lookup(
+    fallback_mode: StoreFallbackMode,
+    path: &StorePath<String>,
+    reason: String,
+    store_dir: &str,
+    audit_events: &mut Vec<StoreAuditEvent>,
+) -> Result<(), Error> {
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
+    if fallback_mode.is_strict() {
+        return Err(Error::MissingClosureFacts {
+            path: path.clone(),
+            store_dir: store_dir.to_string(),
+            detail: reason,
+        });
+    }
+    let detail = format!("missing closure facts for {}: {reason}", path.to_absolute_path_with_prefix(store_dir));
+    warn!(path = %path, detail = %detail, "closure resolution degraded, mounting declared path only");
+    audit_events.push(StoreAuditEvent::new(StoreAuditKind::ClosureResolutionDegraded, detail));
+    Ok(())
 }
 
 fn push_unvisited_refs(
@@ -114,31 +159,38 @@ fn push_unvisited_refs(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
 
     use async_trait::async_trait;
+    use futures::stream::StreamExt;
     use snix_store::path_info::PathInfo;
     use snix_store::pathinfoservice::PathInfoService;
     use snix_store::pathinfoservice::{self};
 
     use super::*;
 
-    // -- Mock PathInfoService --------------------------------------------------
-
-    /// In-memory PathInfoService for testing closure walks.
     #[derive(Default, Clone)]
     struct MockPathInfoService {
         entries: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], PathInfo>>>,
+        failed_gets: std::sync::Arc<std::sync::Mutex<BTreeMap<[u8; 20], String>>>,
     }
 
     impl MockPathInfoService {
         fn insert(&self, pi: PathInfo) {
             self.entries.lock().unwrap().insert(*pi.store_path.digest(), pi);
         }
+
+        fn fail_get(&self, sp: &StorePath<String>, message: &str) {
+            self.failed_gets.lock().unwrap().insert(*sp.digest(), message.to_string());
+        }
     }
 
     #[async_trait]
     impl PathInfoService for MockPathInfoService {
         async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+            if let Some(message) = self.failed_gets.lock().unwrap().get(&digest).cloned() {
+                return Err(std::io::Error::other(message).into());
+            }
             Ok(self.entries.lock().unwrap().get(&digest).cloned())
         }
 
@@ -153,11 +205,6 @@ mod tests {
         }
     }
 
-    use futures::stream::StreamExt;
-
-    // -- Helpers ---------------------------------------------------------------
-
-    /// Create a StorePath with a unique digest derived from `name_bytes`.
     fn make_sp(name: &str, seed: u8) -> StorePath<String> {
         let mut digest = [0u8; 20];
         digest[0] = seed;
@@ -182,22 +229,20 @@ mod tests {
         }
     }
 
-    // -- Tests -----------------------------------------------------------------
-
     #[tokio::test]
     async fn single_path_no_refs() {
         let local = MockPathInfoService::default();
         let sp = make_sp("hello", 1);
         local.insert(make_pi(&sp, vec![]));
 
-        let closure = resolve_closure(&sp, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 1);
-        assert_eq!(closure[0], sp);
+        let closure = resolve_closure(&sp, &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 1);
+        assert_eq!(closure.paths[0], sp);
     }
 
     #[tokio::test]
     async fn linear_chain() {
-        // A -> B -> C (no refs)
         let local = MockPathInfoService::default();
         let c = make_sp("c", 3);
         let b = make_sp("b", 2);
@@ -207,10 +252,10 @@ mod tests {
         local.insert(make_pi(&b, vec![c.clone()]));
         local.insert(make_pi(&a, vec![b.clone()]));
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 3);
-        // All three must be present (order depends on stack traversal).
-        let digests: BTreeSet<_> = closure.iter().map(|p| *p.digest()).collect();
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 3);
+        let digests: BTreeSet<_> = closure.paths.iter().map(|p| *p.digest()).collect();
         assert!(digests.contains(a.digest()));
         assert!(digests.contains(b.digest()));
         assert!(digests.contains(c.digest()));
@@ -218,7 +263,6 @@ mod tests {
 
     #[tokio::test]
     async fn diamond_dedup() {
-        // A -> B, A -> C, B -> D, C -> D
         let local = MockPathInfoService::default();
         let d = make_sp("d", 4);
         let c = make_sp("c", 3);
@@ -230,13 +274,13 @@ mod tests {
         local.insert(make_pi(&b, vec![d.clone()]));
         local.insert(make_pi(&a, vec![b.clone(), c.clone()]));
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 4, "diamond should dedup D");
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 4, "diamond should dedup D");
     }
 
     #[tokio::test]
     async fn cycle_terminates() {
-        // A -> B -> A
         let local = MockPathInfoService::default();
         let b = make_sp("b", 2);
         let a = make_sp("a", 1);
@@ -244,28 +288,29 @@ mod tests {
         local.insert(make_pi(&a, vec![b.clone()]));
         local.insert(make_pi(&b, vec![a.clone()]));
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 2);
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 2);
     }
 
     #[tokio::test]
-    async fn missing_path_warns_continues() {
-        // A -> B, B not in any service.
+    async fn practical_mode_records_degraded_child_lookup() {
         let local = MockPathInfoService::default();
         let b = make_sp("b", 2);
         let a = make_sp("a", 1);
 
         local.insert(make_pi(&a, vec![b.clone()]));
-        // B intentionally missing.
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        // Both A and B in the closure (B was listed as a ref of A).
-        assert_eq!(closure.len(), 2);
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/crunch/store").await.unwrap();
+        assert_eq!(closure.paths.len(), 2);
+        assert_eq!(closure.audit_events.len(), 1);
+        assert_eq!(closure.audit_events[0].kind, StoreAuditKind::ClosureResolutionDegraded);
+        assert!(closure.audit_events[0].detail.contains(&b.to_absolute_path_with_prefix("/crunch/store")));
+        assert!(!closure.audit_events[0].detail.contains("/nix/store"));
     }
 
     #[tokio::test]
     async fn remote_fallback() {
-        // A is local, B is remote-only.
         let local = MockPathInfoService::default();
         let remote = MockPathInfoService::default();
         let b = make_sp("b", 2);
@@ -274,35 +319,52 @@ mod tests {
         local.insert(make_pi(&a, vec![b.clone()]));
         remote.insert(make_pi(&b, vec![]));
 
-        let closure = resolve_closure(&a, &local, Some(&remote)).await.unwrap();
-        assert_eq!(closure.len(), 2);
+        let closure = resolve_closure(&a, &local, Some(&remote), StoreFallbackMode::Practical, "/nix/store")
+            .await
+            .unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 2);
     }
 
     #[tokio::test]
-    async fn root_with_no_pathinfo_returns_just_root() {
-        // Root has no PathInfo anywhere.
+    async fn practical_mode_records_degraded_root_lookup() {
         let local = MockPathInfoService::default();
         let a = make_sp("a", 1);
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 1);
-        assert_eq!(closure[0], a);
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/crunch/store").await.unwrap();
+        assert_eq!(closure.paths.len(), 1);
+        assert_eq!(closure.paths[0], a);
+        assert_eq!(closure.audit_events.len(), 1);
+        assert_eq!(closure.audit_events[0].kind, StoreAuditKind::ClosureResolutionDegraded);
+        assert!(closure.audit_events[0].detail.contains("/crunch/store"));
+    }
+
+    #[tokio::test]
+    async fn strict_mode_rejects_missing_root_closure_facts() {
+        let local = MockPathInfoService::default();
+        let a = make_sp("a", 1);
+
+        let err = resolve_closure(&a, &local, None, StoreFallbackMode::Strict, "/crunch/store").await.unwrap_err();
+        assert!(
+            matches!(err, Error::MissingClosureFacts { ref path, ref store_dir, .. } if *path == a && store_dir == "/crunch/store")
+        );
+        assert!(err.to_string().contains("/crunch/store"));
+        assert!(!err.to_string().contains("/nix/store"));
     }
 
     #[tokio::test]
     async fn self_reference() {
-        // A references itself.
         let local = MockPathInfoService::default();
         let a = make_sp("a", 1);
         local.insert(make_pi(&a, vec![a.clone()]));
 
-        let closure = resolve_closure(&a, &local, None).await.unwrap();
-        assert_eq!(closure.len(), 1);
+        let closure = resolve_closure(&a, &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
+        assert_eq!(closure.paths.len(), 1);
     }
 
     #[tokio::test]
     async fn depth_limit_enforced() {
-        // Build a chain deeper than MAX_CLOSURE_DEPTH.
         let local = MockPathInfoService::default();
         let depth = MAX_CLOSURE_DEPTH + 10;
         let mut paths: Vec<StorePath<String>> = Vec::new();
@@ -312,19 +374,35 @@ mod tests {
             paths.push(sp);
         }
 
-        // Wire refs: n0 -> n1 -> n2 -> ... -> n_{depth}
         for i in 0..depth as usize {
             local.insert(make_pi(&paths[i], vec![paths[i + 1].clone()]));
         }
         local.insert(make_pi(&paths[depth as usize], vec![]));
 
-        let closure = resolve_closure(&paths[0], &local, None).await.unwrap();
-        // Should have at most MAX_CLOSURE_DEPTH + 1 entries (root + 1024 levels).
+        let closure =
+            resolve_closure(&paths[0], &local, None, StoreFallbackMode::Practical, "/nix/store").await.unwrap();
+        assert!(closure.audit_events.is_empty());
         assert!(
-            closure.len() <= (MAX_CLOSURE_DEPTH as usize) + 2,
+            closure.paths.len() <= (MAX_CLOSURE_DEPTH as usize) + 2,
             "closure too large: {} (limit {})",
-            closure.len(),
+            closure.paths.len(),
             MAX_CLOSURE_DEPTH + 2
         );
+    }
+
+    #[tokio::test]
+    async fn local_query_error_can_still_use_remote_refs() {
+        let local = MockPathInfoService::default();
+        let remote = MockPathInfoService::default();
+        let a = make_sp("a", 1);
+
+        local.fail_get(&a, "disk offline");
+        remote.insert(make_pi(&a, vec![]));
+
+        let closure = resolve_closure(&a, &local, Some(&remote), StoreFallbackMode::Practical, "/nix/store")
+            .await
+            .unwrap();
+        assert_eq!(closure.paths.len(), 1);
+        assert!(closure.audit_events.is_empty());
     }
 }
