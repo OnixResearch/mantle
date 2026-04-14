@@ -1022,10 +1022,11 @@ builders.mkShell {
     assert!(parsed["env"]["CC"].as_str() == Some("gcc"), "env.CC: {stdout}");
 
     // Sidecar JSON is embedded in the derivation's env
-    let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str()
+    let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"]
+        .as_str()
         .expect("CRUNCH_SIDECAR_JSON should be a string in derivation env");
-    let sidecar: serde_json::Value = serde_json::from_str(sidecar_raw)
-        .expect("CRUNCH_SIDECAR_JSON should be valid JSON");
+    let sidecar: serde_json::Value =
+        serde_json::from_str(sidecar_raw).expect("CRUNCH_SIDECAR_JSON should be valid JSON");
     assert_eq!(sidecar["version"], 1, "sidecar version");
     assert_eq!(sidecar["env"]["CC"].as_str(), Some("gcc"), "sidecar env.CC");
     assert!(sidecar["hook"].is_null(), "no hook declared");
@@ -1059,7 +1060,11 @@ builders.mkShell {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "mkShell+hook eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "mkShell+hook eval should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str().unwrap();
@@ -1091,7 +1096,11 @@ builders.mkShell {
         .output()
         .expect("should run");
 
-    assert!(output.status.success(), "bare mkShell eval should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "bare mkShell eval should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let sidecar_raw = parsed["env"]["CRUNCH_SIDECAR_JSON"].as_str().unwrap();
@@ -1300,20 +1309,14 @@ mod shell_build_tests {
         let env_record = if env_entries.is_empty() {
             "{}".to_string()
         } else {
-            let fields: Vec<String> = env_entries
-                .iter()
-                .map(|(k, v)| format!("    {k} = \"{v}\","))
-                .collect();
+            let fields: Vec<String> = env_entries.iter().map(|(k, v)| format!("    {k} = \"{v}\",")).collect();
             format!("{{\n{}\n  }}", fields.join("\n"))
         };
 
         let path_array = if path_entries.is_empty() {
             "[]".to_string()
         } else {
-            let items: Vec<String> = path_entries
-                .iter()
-                .map(|p| format!("    \"{p}\","))
-                .collect();
+            let items: Vec<String> = path_entries.iter().map(|p| format!("    \"{p}\",")).collect();
             format!("[\n{}\n  ]", items.join("\n"))
         };
 
@@ -1358,12 +1361,7 @@ mod shell_build_tests {
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
 
-        write_shell_project(
-            dir.path(),
-            &[("TEST_FOO", "hello_from_sidecar"), ("TEST_BAR", "42")],
-            &[],
-            None,
-        );
+        write_shell_project(dir.path(), &[("TEST_FOO", "hello_from_sidecar"), ("TEST_BAR", "42")], &[], None);
 
         let output = crunch_cmd()
             .current_dir(dir.path())
@@ -1375,11 +1373,7 @@ mod shell_build_tests {
             .output()
             .unwrap();
 
-        assert!(
-            output.status.success(),
-            "shell --command env: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "shell --command env: {}", String::from_utf8_lossy(&output.stderr));
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("TEST_FOO=hello_from_sidecar"), "env should have TEST_FOO: {stdout}");
         assert!(stdout.contains("TEST_BAR=42"), "env should have TEST_BAR: {stdout}");
@@ -1397,12 +1391,7 @@ mod shell_build_tests {
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
 
-        write_shell_project(
-            dir.path(),
-            &[],
-            &[],
-            Some("echo HOOK_MARKER >&2"),
-        );
+        write_shell_project(dir.path(), &[], &[], Some("echo HOOK_MARKER >&2"));
 
         let output = crunch_cmd()
             .current_dir(dir.path())
@@ -1414,11 +1403,7 @@ mod shell_build_tests {
             .output()
             .unwrap();
 
-        assert!(
-            output.status.success(),
-            "shell with hook: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "shell with hook: {}", String::from_utf8_lossy(&output.stderr));
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains("HOOK_MARKER"), "hook output should appear in stderr: {stderr}");
     }
@@ -1434,12 +1419,7 @@ mod shell_build_tests {
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
 
-        write_shell_project(
-            dir.path(),
-            &[],
-            &[],
-            Some("echo HOOK_MARKER >&2"),
-        );
+        write_shell_project(dir.path(), &[], &[], Some("echo HOOK_MARKER >&2"));
 
         let output = crunch_cmd()
             .current_dir(dir.path())
@@ -1451,11 +1431,7 @@ mod shell_build_tests {
             .output()
             .unwrap();
 
-        assert!(
-            output.status.success(),
-            "shell --no-hook: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "shell --no-hook: {}", String::from_utf8_lossy(&output.stderr));
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!stderr.contains("HOOK_MARKER"), "--no-hook should suppress hook: {stderr}");
     }
@@ -1471,12 +1447,7 @@ mod shell_build_tests {
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
 
-        write_shell_project(
-            dir.path(),
-            &[],
-            &[],
-            Some("exit 7"),
-        );
+        write_shell_project(dir.path(), &[], &[], Some("exit 7"));
 
         let output = crunch_cmd()
             .current_dir(dir.path())
@@ -1489,11 +1460,7 @@ mod shell_build_tests {
             .unwrap();
 
         assert!(!output.status.success(), "--strict-hooks with failing hook should fail");
-        assert_eq!(
-            output.status.code(),
-            Some(7),
-            "exit code should propagate from hook"
-        );
+        assert_eq!(output.status.code(), Some(7), "exit code should propagate from hook");
     }
 
     #[test]
@@ -1584,14 +1551,8 @@ mod shell_build_tests {
 
         assert!(!output.status.success(), "missing sidecar should fail");
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains(".crunch-shell.json"),
-            "error should name the sidecar file: {stderr}"
-        );
-        assert!(
-            stderr.contains("mkShell"),
-            "error should suggest mkShell: {stderr}"
-        );
+        assert!(stderr.contains(".crunch-shell.json"), "error should name the sidecar file: {stderr}");
+        assert!(stderr.contains("mkShell"), "error should suggest mkShell: {stderr}");
     }
 
     #[test]
@@ -1618,11 +1579,7 @@ mod shell_build_tests {
             .unwrap();
 
         assert!(!output.status.success(), "non-zero exit should propagate");
-        assert_eq!(
-            output.status.code(),
-            Some(42),
-            "exit code should be 42"
-        );
+        assert_eq!(output.status.code(), Some(42), "exit code should be 42");
     }
 }
 
@@ -1662,7 +1619,11 @@ fn develop_alias_exists() {
 #[test]
 fn shell_with_nonexistent_path_fails() {
     crunch_cmd()
-        .args(["shell", "--with", "/nonexistent/store/path/that/definitely/does/not/exist"])
+        .args([
+            "shell",
+            "--with",
+            "/nonexistent/store/path/that/definitely/does/not/exist",
+        ])
         .assert()
         .failure();
 }

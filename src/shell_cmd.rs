@@ -1,10 +1,14 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use crunch_shell::{
-    ActivationPlan, ExecMode, ExecTarget, HostEnv, ShellSidecar, compute_activation,
-};
+use crunch_shell::ActivationPlan;
+use crunch_shell::ExecMode;
+use crunch_shell::ExecTarget;
+use crunch_shell::HostEnv;
+use crunch_shell::ShellSidecar;
+use crunch_shell::compute_activation;
 
 use crate::errors::RunError;
 use crate::project_build;
@@ -54,8 +58,8 @@ pub fn cmd_shell(
             e,
         ))
     })?;
-    let sidecar = ShellSidecar::from_json(&sidecar_bytes)
-        .map_err(|e| RunError::Internal(format!("bad sidecar: {e}")))?;
+    let sidecar =
+        ShellSidecar::from_json(&sidecar_bytes).map_err(|e| RunError::Internal(format!("bad sidecar: {e}")))?;
 
     // 3. Snapshot host environment.
     let host_env = snapshot_host_env();
@@ -76,10 +80,7 @@ pub fn cmd_shell(
     // 5. Validate --with paths.
     for p in with_paths {
         if !p.exists() {
-            return Err(RunError::Internal(format!(
-                "--with path does not exist: {}",
-                p.display(),
-            )));
+            return Err(RunError::Internal(format!("--with path does not exist: {}", p.display(),)));
         }
     }
 
@@ -146,9 +147,7 @@ fn build_shell_target(
 
 fn snapshot_host_env() -> HostEnv {
     let env: BTreeMap<String, String> = std::env::vars().collect();
-    let shell = std::env::var("SHELL")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/bin/sh"));
+    let shell = std::env::var("SHELL").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/bin/sh"));
     HostEnv { env, shell }
 }
 
@@ -156,13 +155,10 @@ fn exec_hook(hook: &str, plan: &ActivationPlan, strict: bool) -> Result<(), RunE
     let shell = match &plan.exec_target {
         ExecTarget::Interactive { shell } => shell.clone(),
         ExecTarget::Run { shell, .. } => shell.clone(),
-        ExecTarget::Command { .. } => {
-            PathBuf::from(std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into()))
-        }
+        ExecTarget::Command { .. } => PathBuf::from(std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())),
     };
 
-    let env_path = std::env::join_paths(&plan.path)
-        .unwrap_or_default();
+    let env_path = std::env::join_paths(&plan.path).unwrap_or_default();
 
     let status = std::process::Command::new(&shell)
         .arg("-c")
@@ -200,39 +196,29 @@ fn resolve_in_path(cmd: &OsString, path: &[PathBuf]) -> Option<OsString> {
 }
 
 fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
-    let env_path = std::env::join_paths(&plan.path)
-        .unwrap_or_default();
+    let env_path = std::env::join_paths(&plan.path).unwrap_or_default();
 
     let status = match &plan.exec_target {
         ExecTarget::Interactive { shell } => {
             eprintln!("entering shell ({})", plan.env.get("CRUNCH_SHELL").unwrap_or(&String::new()));
-            std::process::Command::new(shell)
-                .envs(&plan.env)
-                .env("PATH", &env_path)
-                .status()
+            std::process::Command::new(shell).envs(&plan.env).env("PATH", &env_path).status()
         }
         ExecTarget::Command { argv } => {
-            let (cmd, args) = argv.split_first().ok_or_else(|| {
-                RunError::Internal("--command requires at least one argument".into())
-            })?;
+            let (cmd, args) = argv
+                .split_first()
+                .ok_or_else(|| RunError::Internal("--command requires at least one argument".into()))?;
             // Resolve the program against the activation PATH, not the host
             // PATH. Command::new uses execvp which searches the *parent's*
             // PATH, but we want the composed shell PATH.
             let resolved = resolve_in_path(cmd, &plan.path).unwrap_or_else(|| cmd.clone());
-            std::process::Command::new(&resolved)
-                .args(args)
-                .envs(&plan.env)
-                .env("PATH", &env_path)
-                .status()
+            std::process::Command::new(&resolved).args(args).envs(&plan.env).env("PATH", &env_path).status()
         }
-        ExecTarget::Run { shell, script } => {
-            std::process::Command::new(shell)
-                .arg("-c")
-                .arg(script)
-                .envs(&plan.env)
-                .env("PATH", &env_path)
-                .status()
-        }
+        ExecTarget::Run { shell, script } => std::process::Command::new(shell)
+            .arg("-c")
+            .arg(script)
+            .envs(&plan.env)
+            .env("PATH", &env_path)
+            .status(),
     }
     .map_err(|e| RunError::Internal(format!("exec: {e}")))?;
 

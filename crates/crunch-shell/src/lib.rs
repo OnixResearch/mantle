@@ -1,7 +1,9 @@
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Protected environment variables that must never be overwritten from sidecar data.
 /// Changing this list requires a code change and a test update.
@@ -32,8 +34,7 @@ pub struct ShellSidecar {
 
 impl ShellSidecar {
     pub fn from_json(json: &str) -> Result<Self, ShellError> {
-        let sidecar: Self = serde_json::from_str(json)
-            .map_err(|e| ShellError::SidecarParse(e.to_string()))?;
+        let sidecar: Self = serde_json::from_str(json).map_err(|e| ShellError::SidecarParse(e.to_string()))?;
         if sidecar.version != 1 {
             return Err(ShellError::UnsupportedSidecarVersion {
                 version: sidecar.version,
@@ -153,11 +154,8 @@ pub fn compute_activation(
     env.insert("CRUNCH_SHELL".to_string(), output_path.to_string());
 
     // 4. Compose PATH: [--with bins] ++ [sidecar path_entries] ++ [host PATH].
-    let host_path_entries: Vec<PathBuf> = host_env
-        .env
-        .get("PATH")
-        .map(|p| std::env::split_paths(p).collect())
-        .unwrap_or_default();
+    let host_path_entries: Vec<PathBuf> =
+        host_env.env.get("PATH").map(|p| std::env::split_paths(p).collect()).unwrap_or_default();
 
     let mut seen = std::collections::HashSet::new();
     let mut path = Vec::new();
@@ -224,11 +222,17 @@ fn is_protected(key: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
 
+    use super::*;
+
     fn sidecar_v1(env: BTreeMap<String, String>, path_entries: Vec<PathBuf>, hook: Option<String>) -> ShellSidecar {
-        ShellSidecar { version: 1, env, path_entries, hook }
+        ShellSidecar {
+            version: 1,
+            env,
+            path_entries,
+            hook,
+        }
     }
 
     fn host(env: &[(&str, &str)], shell: &str) -> HostEnv {
@@ -240,11 +244,8 @@ mod tests {
 
     #[test]
     fn env_merge_basic() {
-        let sidecar = sidecar_v1(
-            [("RUST_LOG".into(), "debug".into())].into(),
-            vec![PathBuf::from("/store/tool/bin")],
-            None,
-        );
+        let sidecar =
+            sidecar_v1([("RUST_LOG".into(), "debug".into())].into(), vec![PathBuf::from("/store/tool/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin"), ("HOME", "/home/user")], "/bin/bash");
         let plan = compute_activation(&sidecar, &host_env, "/store/myshell", &[], &ExecMode::Interactive).unwrap();
         assert_eq!(plan.env.get("RUST_LOG").unwrap(), "debug");
@@ -272,11 +273,7 @@ mod tests {
     #[test]
     fn all_protected_vars_defended() {
         for &var in PROTECTED_VARS {
-            let sidecar = sidecar_v1(
-                [(var.to_string(), "bad".into())].into(),
-                vec![PathBuf::from("/bin")],
-                None,
-            );
+            let sidecar = sidecar_v1([(var.to_string(), "bad".into())].into(), vec![PathBuf::from("/bin")], None);
             let host_env = host(&[("PATH", "/usr/bin"), (var, "good")], "/bin/sh");
             let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Interactive).unwrap();
             assert_eq!(plan.env.get(var).unwrap(), "good", "protected var {var} was overwritten");
@@ -289,44 +286,30 @@ mod tests {
 
     #[test]
     fn path_ordering_with_before_sidecar_before_host() {
-        let sidecar = sidecar_v1(
-            BTreeMap::new(),
-            vec![PathBuf::from("/store/C/bin")],
-            None,
-        );
+        let sidecar = sidecar_v1(BTreeMap::new(), vec![PathBuf::from("/store/C/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin:/bin")], "/bin/sh");
         let with = vec![PathBuf::from("/store/A"), PathBuf::from("/store/B")];
         let plan = compute_activation(&sidecar, &host_env, "/out", &with, &ExecMode::Interactive).unwrap();
-        assert_eq!(
-            plan.path,
-            vec![
-                PathBuf::from("/store/A/bin"),
-                PathBuf::from("/store/B/bin"),
-                PathBuf::from("/store/C/bin"),
-                PathBuf::from("/usr/bin"),
-                PathBuf::from("/bin"),
-            ]
-        );
+        assert_eq!(plan.path, vec![
+            PathBuf::from("/store/A/bin"),
+            PathBuf::from("/store/B/bin"),
+            PathBuf::from("/store/C/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+        ]);
     }
 
     #[test]
     fn path_dedup_first_wins() {
-        let sidecar = sidecar_v1(
-            BTreeMap::new(),
-            vec![PathBuf::from("/usr/bin"), PathBuf::from("/foo/bin")],
-            None,
-        );
+        let sidecar = sidecar_v1(BTreeMap::new(), vec![PathBuf::from("/usr/bin"), PathBuf::from("/foo/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin:/bar/bin")], "/bin/sh");
         let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Interactive).unwrap();
         // /usr/bin appears once, in sidecar position
-        assert_eq!(
-            plan.path,
-            vec![
-                PathBuf::from("/usr/bin"),
-                PathBuf::from("/foo/bin"),
-                PathBuf::from("/bar/bin"),
-            ]
-        );
+        assert_eq!(plan.path, vec![
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/foo/bin"),
+            PathBuf::from("/bar/bin"),
+        ]);
     }
 
     #[test]
@@ -409,7 +392,9 @@ mod tests {
         let sidecar = sidecar_v1(BTreeMap::new(), vec![PathBuf::from("/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin")], "/bin/fish");
         let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Interactive).unwrap();
-        assert_eq!(plan.exec_target, ExecTarget::Interactive { shell: PathBuf::from("/bin/fish") });
+        assert_eq!(plan.exec_target, ExecTarget::Interactive {
+            shell: PathBuf::from("/bin/fish")
+        });
     }
 
     #[test]
@@ -417,7 +402,8 @@ mod tests {
         let sidecar = sidecar_v1(BTreeMap::new(), vec![PathBuf::from("/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin")], "/bin/bash");
         let argv = vec![OsString::from("make"), OsString::from("test")];
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Command { argv: argv.clone() }).unwrap();
+        let plan =
+            compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Command { argv: argv.clone() }).unwrap();
         assert_eq!(plan.exec_target, ExecTarget::Command { argv });
     }
 
@@ -425,11 +411,14 @@ mod tests {
     fn exec_target_run() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec![PathBuf::from("/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin")], "/bin/bash");
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Run { script: "echo $X".into() }).unwrap();
-        assert_eq!(
-            plan.exec_target,
-            ExecTarget::Run { shell: PathBuf::from("/bin/bash"), script: "echo $X".into() }
-        );
+        let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Run {
+            script: "echo $X".into(),
+        })
+        .unwrap();
+        assert_eq!(plan.exec_target, ExecTarget::Run {
+            shell: PathBuf::from("/bin/bash"),
+            script: "echo $X".into()
+        });
     }
 
     #[test]
@@ -442,11 +431,7 @@ mod tests {
 
     #[test]
     fn crunch_shell_overrides_sidecar() {
-        let sidecar = sidecar_v1(
-            [("CRUNCH_SHELL".into(), "wrong".into())].into(),
-            vec![PathBuf::from("/bin")],
-            None,
-        );
+        let sidecar = sidecar_v1([("CRUNCH_SHELL".into(), "wrong".into())].into(), vec![PathBuf::from("/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin")], "/bin/sh");
         let plan = compute_activation(&sidecar, &host_env, "/store/correct", &[], &ExecMode::Interactive).unwrap();
         assert_eq!(plan.env.get("CRUNCH_SHELL").unwrap(), "/store/correct");
@@ -469,11 +454,7 @@ mod tests {
     #[test]
     fn protected_var_absent_from_host_not_injected() {
         // If sidecar declares DISPLAY but host has no DISPLAY, it should be skipped (not injected).
-        let sidecar = sidecar_v1(
-            [("DISPLAY".into(), ":1".into())].into(),
-            vec![PathBuf::from("/bin")],
-            None,
-        );
+        let sidecar = sidecar_v1([("DISPLAY".into(), ":1".into())].into(), vec![PathBuf::from("/bin")], None);
         let host_env = host(&[("PATH", "/usr/bin")], "/bin/sh");
         let plan = compute_activation(&sidecar, &host_env, "/out", &[], &ExecMode::Interactive).unwrap();
         assert!(!plan.env.contains_key("DISPLAY"));

@@ -990,7 +990,6 @@ fn first_output_path(
     None
 }
 
-
 /// Find the first executable in out_path/bin and exec it with args.
 fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError> {
     let bin_dir = out_path.join("bin");
@@ -1070,7 +1069,6 @@ fn build_project_expr(
         crunch_pipeline::HermeticityMode::Practical, // develop/run do not expose a strict flag yet
     )
 }
-
 
 #[allow(clippy::too_many_arguments)]
 fn cmd_run(
