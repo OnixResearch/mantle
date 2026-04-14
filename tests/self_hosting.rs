@@ -53,6 +53,7 @@ const MAX_RECORDED_PROOF_TOOLS: usize = 16;
 const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
 const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
+const PROOF_COMMAND_SENTINEL_ENV: &str = "CRUNCH_TEST_PROOF_COMMAND_SENTINEL";
 const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
 const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
@@ -1756,7 +1757,7 @@ impl ProofScriptFixture {
         std::fs::copy(&src_script, &dst_script).unwrap();
         chmod_executable(&dst_script);
 
-        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"${TMPDIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt\"\nprintf '%s\\n' \"${CARGO_TARGET_DIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
+        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nif [ -n \"${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}\" ]; then\n  printf 'launched\\n' > \"$CRUNCH_TEST_PROOF_COMMAND_SENTINEL\"\nfi\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"${TMPDIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt\"\nprintf '%s\\n' \"${CARGO_TARGET_DIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
         write_executable_script(&tool_dir.join("cargo"), cargo_body);
         write_executable_script(
             &tool_dir.join("rustc"),
@@ -1812,6 +1813,10 @@ impl ProofScriptFixture {
 
     fn read_bundle_text(&self, bundle_dir: &Path, file_name: &str) -> String {
         std::fs::read_to_string(bundle_dir.join(file_name)).unwrap().trim().to_string()
+    }
+
+    fn proof_launch_sentinel(&self, name: &str) -> PathBuf {
+        self.repo_dir.join(format!("{name}-proof-command-launched.txt"))
     }
 
     fn base_command_in_cwd(&self, cwd: &Path) -> std::process::Command {
@@ -2054,11 +2059,18 @@ fn prove_self_hosting_script_anchors_default_scratch_root_to_repo_root_from_non_
 fn prove_self_hosting_script_rejects_create_failure_scratch_override_without_fallback() {
     let fixture = ProofScriptFixture::new();
     let blocked_parent = fixture.repo_dir.join("blocked-parent");
+    let bundle_dir = fixture.repo_dir.join("target/create-failure-override-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("create-failure-override");
     std::fs::create_dir_all(&blocked_parent).unwrap();
     chmod_mode(&blocked_parent, 0o555);
 
-    let output =
-        fixture.run_args_with_envs(&["--check"], &[(PROOF_SCRATCH_ENV, "blocked-parent/child-scratch".to_string())]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/create-failure-override-bundle"],
+        &[
+            (PROOF_SCRATCH_ENV, "blocked-parent/child-scratch".to_string()),
+            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+        ],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&blocked_parent, 0o755);
 
@@ -2069,6 +2081,8 @@ fn prove_self_hosting_script_rejects_create_failure_scratch_override_without_fal
         !fixture.default_scratch_root().exists(),
         "default scratch root must not be created when explicit override cannot be created"
     );
+    assert!(!launch_sentinel.exists(), "proof command must not launch on override create failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on override create failure");
 }
 
 #[cfg(unix)]
@@ -2076,8 +2090,16 @@ fn prove_self_hosting_script_rejects_create_failure_scratch_override_without_fal
 fn prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback() {
     let fixture = ProofScriptFixture::new();
     let blocked_path = fixture.repo_dir.join("blocked-scratch");
+    let bundle_dir = fixture.repo_dir.join("target/non-directory-override-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("non-directory-override");
     std::fs::write(&blocked_path, "blocked\n").unwrap();
-    let output = fixture.run_args_with_envs(&["--check"], &[(PROOF_SCRATCH_ENV, "blocked-scratch".to_string())]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/non-directory-override-bundle"],
+        &[
+            (PROOF_SCRATCH_ENV, "blocked-scratch".to_string()),
+            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+        ],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for unusable override");
@@ -2087,6 +2109,8 @@ fn prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback(
         !fixture.default_scratch_root().exists(),
         "default scratch root must not be created when explicit override fails"
     );
+    assert!(!launch_sentinel.exists(), "proof command must not launch on override non-directory failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on override non-directory failure");
 }
 
 #[cfg(unix)]
@@ -2094,11 +2118,18 @@ fn prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback(
 fn prove_self_hosting_script_rejects_unwritable_scratch_override_without_fallback() {
     let fixture = ProofScriptFixture::new();
     let unwritable_root = fixture.repo_dir.join("unwritable-override-scratch");
+    let bundle_dir = fixture.repo_dir.join("target/unwritable-override-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("unwritable-override");
     std::fs::create_dir_all(&unwritable_root).unwrap();
     chmod_mode(&unwritable_root, 0o555);
 
-    let output =
-        fixture.run_args_with_envs(&["--check"], &[(PROOF_SCRATCH_ENV, "unwritable-override-scratch".to_string())]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/unwritable-override-bundle"],
+        &[
+            (PROOF_SCRATCH_ENV, "unwritable-override-scratch".to_string()),
+            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+        ],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&unwritable_root, 0o755);
 
@@ -2109,20 +2140,29 @@ fn prove_self_hosting_script_rejects_unwritable_scratch_override_without_fallbac
         !fixture.default_scratch_root().exists(),
         "default scratch root must not be created when unwritable override fails"
     );
+    assert!(!launch_sentinel.exists(), "proof command must not launch on override unwritable failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on override unwritable failure");
 }
 
 #[cfg(unix)]
 #[test]
 fn prove_self_hosting_script_rejects_create_failure_default_scratch_before_proof_work() {
     let fixture = ProofScriptFixture::new();
+    let bundle_dir = fixture.repo_dir.join("target/create-failure-default-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("create-failure-default");
     std::fs::create_dir_all(fixture.repo_dir.join("target")).unwrap();
     std::fs::write(fixture.repo_dir.join("target/self-hosting-proof"), "blocked-parent\n").unwrap();
-    let output = fixture.run_args(&["--check"]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/create-failure-default-bundle"],
+        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail when default scratch root cannot be created");
     assert!(stderr.contains(PROOF_SCRATCH_ENV));
     assert!(stderr.contains(&fixture.default_scratch_root().display().to_string()));
+    assert!(!launch_sentinel.exists(), "proof command must not launch on default create failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on default create failure");
 }
 
 #[cfg(unix)]
@@ -2130,14 +2170,21 @@ fn prove_self_hosting_script_rejects_create_failure_default_scratch_before_proof
 fn prove_self_hosting_script_rejects_unusable_default_scratch_before_proof_work() {
     let fixture = ProofScriptFixture::new();
     let default_root = fixture.default_scratch_root();
+    let bundle_dir = fixture.repo_dir.join("target/non-directory-default-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("non-directory-default");
     std::fs::create_dir_all(default_root.parent().unwrap()).unwrap();
     std::fs::write(&default_root, "blocked\n").unwrap();
-    let output = fixture.run_args(&["--check"]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/non-directory-default-bundle"],
+        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for unusable default scratch root");
     assert!(stderr.contains(PROOF_SCRATCH_ENV));
     assert!(stderr.contains(&default_root.display().to_string()));
+    assert!(!launch_sentinel.exists(), "proof command must not launch on default non-directory failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on default non-directory failure");
 }
 
 #[cfg(unix)]
@@ -2145,26 +2192,37 @@ fn prove_self_hosting_script_rejects_unusable_default_scratch_before_proof_work(
 fn prove_self_hosting_script_rejects_unwritable_default_scratch_before_proof_work() {
     let fixture = ProofScriptFixture::new();
     let default_root = fixture.default_scratch_root();
+    let bundle_dir = fixture.repo_dir.join("target/unwritable-default-bundle");
+    let launch_sentinel = fixture.proof_launch_sentinel("unwritable-default");
     std::fs::create_dir_all(&default_root).unwrap();
     chmod_mode(&default_root, 0o555);
 
-    let output = fixture.run_args(&["--check"]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/unwritable-default-bundle"],
+        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&default_root, 0o755);
 
     assert!(!output.status.success(), "script should fail for unwritable default scratch root");
     assert!(stderr.contains(PROOF_SCRATCH_ENV));
     assert!(stderr.contains(&default_root.display().to_string()));
+    assert!(!launch_sentinel.exists(), "proof command must not launch on default unwritable failure");
+    assert!(!bundle_dir.exists(), "bundle dir must stay absent on default unwritable failure");
 }
 
 #[cfg(unix)]
 #[test]
 fn prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work() {
     let fixture = ProofScriptFixture::new();
+    let launch_sentinel = fixture.proof_launch_sentinel("below-threshold-default");
     fixture.set_stat_output(4_194_303, 1024);
     let bundle_arg = Path::new("target/too-small-scratch-bundle");
     let bundle_dir = fixture.repo_dir.join(bundle_arg);
-    let output = fixture.run(bundle_arg);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/too-small-scratch-bundle"],
+        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for undersized proof scratch root");
@@ -2174,6 +2232,7 @@ fn prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work()
         !bundle_dir.exists(),
         "proof bundle dir must stay absent when preflight blocks the run before proof work"
     );
+    assert!(!launch_sentinel.exists(), "proof command must not launch on default low-space failure");
 }
 
 #[cfg(unix)]
@@ -2181,14 +2240,18 @@ fn prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work()
 fn prove_self_hosting_script_rejects_below_threshold_override_scratch_before_proof_work() {
     let fixture = ProofScriptFixture::new();
     let override_root = fixture.repo_dir.join("too-small-override-scratch");
+    let launch_sentinel = fixture.proof_launch_sentinel("below-threshold-override");
     let bundle_arg = Path::new("target/too-small-override-scratch-bundle");
     let bundle_dir = fixture.repo_dir.join(bundle_arg);
     fixture.set_stat_output(4_194_303, 1024);
     let bundle_arg_owned = bundle_arg.to_string_lossy().into_owned();
-    let output = fixture.run_args_with_envs(&["--bundle-dir", &bundle_arg_owned], &[(
-        PROOF_SCRATCH_ENV,
-        "too-small-override-scratch".to_string(),
-    )]);
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", &bundle_arg_owned],
+        &[
+            (PROOF_SCRATCH_ENV, "too-small-override-scratch".to_string()),
+            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+        ],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for undersized override scratch root");
@@ -2198,6 +2261,7 @@ fn prove_self_hosting_script_rejects_below_threshold_override_scratch_before_pro
         !bundle_dir.exists(),
         "proof bundle dir must stay absent when override preflight blocks the run before proof work"
     );
+    assert!(!launch_sentinel.exists(), "proof command must not launch on override low-space failure");
 }
 
 #[cfg(unix)]

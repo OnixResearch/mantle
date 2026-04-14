@@ -1,7 +1,11 @@
 # validation Specification
 
 ## Purpose
-TBD - created by archiving change avoid-tmpfs-validation-failures. Update Purpose after archive.
+
+Define validation requirements for the self-hosting proof helper's scratch-path
+selection, environment rewriting, low-space preflight, and heavy direct-Cargo
+scratch guidance.
+
 ## Requirements
 ### Requirement: Self-hosting proof helper uses disk-backed scratch by default
 
