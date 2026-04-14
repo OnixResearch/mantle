@@ -8,8 +8,8 @@ in place.
 ## Why
 
 `fetchGit` still depends on host `git` discovery through common paths and
-`PATH`. That makes fetch semantics depend on ambient host tools and host `git`
-configuration.
+`PATH`. That makes fetch semantics depend on ambient host tool discovery and
+whatever host `git` binary happens to be found first.
 
 That is one of the largest remaining hermeticity leaks in crunch's external
 source path.

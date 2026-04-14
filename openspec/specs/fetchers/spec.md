@@ -5,9 +5,7 @@
 Defines how crunch downloads external resources (URLs, tarballs, git
 repos) and stores them as fixed-output derivations. Fetchers bridge
 the gap between the network and the hermetic build sandbox.
-
 ## Requirements
-
 ### Requirement: fetchurl — download a file by URL
 
 The Nickel stdlib MUST provide `crunch.fetchurl` that accepts a URL
@@ -98,9 +96,8 @@ bzip2 (`.bz2`, `.tbz2`), zstd (`.zst`, `.zstd`), and uncompressed `.tar`.
 
 ### Requirement: fetchGit — clone a git repository
 
-The Nickel stdlib MUST provide `crunch.fetchGit` that clones a git
-repository at a specific revision and stores the working tree (without
-`.git/`).
+The Nickel stdlib MUST provide `crunch.fetchGit` that materializes a git
+repository at a specific revision and stores the working tree without `.git/`.
 
 ```nickel
 let src = crunch.fetchGit {
@@ -111,6 +108,7 @@ let src = crunch.fetchGit {
 ```
 
 The resulting derivation MUST have:
+
 - `builder = "builtin:fetchurl"`
 - `system = "builtin"`
 - `fixed_output.mode = 'recursive` (NAR hash of checkout)
@@ -118,28 +116,34 @@ The resulting derivation MUST have:
 - `env.type = "git"`
 - `env.rev` set to the commit hash
 
-The implementation MUST shell out to the `git` binary. The `.git/`
-directory MUST NOT appear in the output.
+The implementation MUST use a crunch-controlled git materialization path. It
+MUST NOT discover or depend on an arbitrary host `git` from `PATH` or from
+common host filesystem locations. It MUST NOT shell out to host `git`
+subprocesses in crunch-owned fetchGit implementation code.
 
-#### Scenario: Clone at specific rev
+The `.git/` directory MUST NOT appear in the output.
+
+#### Scenario: Clone at specific rev without host git discovery
 
 - GIVEN `crunch.fetchGit { url = "...", rev = "abc123...", hash = "..." }`
 - WHEN `crunch build` runs
-- THEN the repo is cloned, checked out at the specified rev, `.git/`
-  removed, and the tree stored
+- THEN the repo is fetched and checked out at the specified revision
+- AND the fetch path does not depend on an arbitrary host `git` found through `PATH` or common host filesystem locations
+- AND the output tree excludes `.git/`
 
-#### Scenario: Git not installed
+#### Scenario: Host PATH git is irrelevant
 
-- GIVEN `git` is not in PATH
-- WHEN a fetchGit derivation is built
-- THEN the error message says "git command not found" and suggests
-  installing it
+- GIVEN the host has no `git` on `PATH`, or has a different `git` version than another host
+- WHEN the same `fetchGit` derivation is built on both hosts
+- THEN crunch uses the same crunch-controlled fetch implementation on each host
+- AND host `git` availability or version does not change the fetch semantics
 
-#### Scenario: Invalid rev
+#### Scenario: Invalid rev remains a fetch error
 
-- GIVEN a rev that doesn't exist in the remote
+- GIVEN a rev that does not exist in the requested repository
 - WHEN the fetch runs
-- THEN the error includes the git stderr with the failed checkout
+- THEN the error reports that the requested revision could not be materialized
+- AND the error does not depend on host `git` stderr formatting
 
 ### Requirement: Fetch BuildRequest encoding
 
@@ -212,9 +216,9 @@ fetch execution. The `prepare_build()` method MUST treat all derivations
 the same: it constructs a `BuildRequest` and dispatches via the
 `BuildService` trait.
 
-Fetcher derivations still bypass the sandbox, but they do so by being
-routed to `FetchBuildService` through `DispatchBuildService`, not by
-bypassing `BuildService::do_build()` entirely.
+Fetcher derivations MUST still bypass the sandbox only by being routed to
+`FetchBuildService` through `DispatchBuildService`, not by bypassing
+`BuildService::do_build()` entirely.
 
 #### Scenario: No is_builtin_fetcher check
 
@@ -226,11 +230,13 @@ bypassing `BuildService::do_build()` entirely.
 ### Requirement: Hash verification
 
 After a fetch build returns a `BuildResult`, the shared post-build path
-(`finish_build`) MUST verify the output against the declared hash:
+(`finish_build`) MUST verify the output against the declared hash.
 
-- For `mode = 'flat` (fetchurl): hash the raw file bytes from the
+The shared post-build path MUST apply these per-mode rules:
+
+- For `mode = 'flat` (fetchurl), it MUST hash the raw file bytes from the
   produced file node
-- For `mode = 'recursive` (fetchTarball, fetchGit): compute the NAR hash
+- For `mode = 'recursive` (fetchTarball, fetchGit), it MUST compute the NAR hash
   of the produced output tree
 
 A mismatch MUST:
@@ -387,3 +393,4 @@ not at build time.
 - GIVEN `crunch.fetchurl { url = "...", hash = "not-a-hash" }`
 - WHEN evaluated
 - THEN Nickel reports a contract violation for invalid hash format
+

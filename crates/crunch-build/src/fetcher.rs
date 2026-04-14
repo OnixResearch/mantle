@@ -7,6 +7,8 @@
 use std::io::Read;
 use std::io::{self};
 use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 
 use nix_compat::derivation::Derivation;
 use nix_compat::nixhash::CAHash;
@@ -72,9 +74,6 @@ pub enum FetchError {
 
     #[error("git fetch failed: {0}")]
     GitError(String),
-
-    #[error("git not found in PATH — install git to use fetchGit")]
-    GitNotFound,
 
     #[error("decompression failed: {0}")]
     DecompressError(String),
@@ -561,88 +560,228 @@ fn validate_symlink_depth(
 
 // ── Git fetch ──────────────────────────────────────────────────────────
 
-/// Clone a git repository and checkout a specific revision.
-///
-/// Shells out to the `git` binary. The `.git` directory is stripped.
+const MAX_GIT_PATH_COMPONENTS: u32 = 1024;
+
+/// Clone a git repository and materialize a specific revision without using
+/// any host `git` binary.
 pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
-    // Cache check: if output already exists, skip.
-    if Path::new(out).exists() {
+    let out_path = Path::new(out);
+    assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
+    assert!(!rev.is_empty(), "git revision must not be empty");
+
+    if out_path.exists() {
         info!(out = out, "using cached git fetch");
         return Ok(());
     }
 
-    let git = find_git()?;
-
-    let tmp_parent = Path::new(out).parent().unwrap_or(Path::new("/tmp"));
+    let tmp_parent = out_path.parent().unwrap_or(Path::new("/tmp"));
     std::fs::create_dir_all(tmp_parent)?;
-    let tmp_bare = format!("{out}.git-bare-tmp");
-    let _ = std::fs::remove_dir_all(&tmp_bare);
+    let tmp_dir = tempfile::Builder::new().prefix("crunch-fetchgit-").tempdir_in(tmp_parent)?;
+    let repo_dir = tmp_dir.path().join("repo.git");
+    let staged_out = tmp_dir.path().join("out");
+    assert!(!repo_dir.exists(), "fresh temp repo path must be absent");
+    assert!(!staged_out.exists(), "fresh staged output path must be absent");
 
-    // Clone bare (faster — no working tree).
+    if let Some(local_repo_path) = local_git_repo_path(url)? {
+        stage_local_git_tree(&local_repo_path, url, rev, &staged_out)?;
+    } else {
+        let repo = fetch_git_repo(url, &repo_dir)?;
+        let tree_id = resolve_git_tree_id(&repo, url, rev)?;
+        stage_git_tree(&repo, tree_id, &staged_out)?;
+    }
+    std::fs::rename(&staged_out, out_path)?;
+
     let short_rev = &rev[..rev.len().min(12)];
-    info!(url = url, rev = short_rev, "git clone");
-    let clone_out = std::process::Command::new(&git)
-        .args(["clone", "--bare", url, &tmp_bare])
-        .output()
-        .map_err(|e| FetchError::GitError(format!("running git clone: {e}")))?;
-
-    if !clone_out.status.success() {
-        let stderr = String::from_utf8_lossy(&clone_out.stderr);
-        let _ = std::fs::remove_dir_all(&tmp_bare);
-        return Err(FetchError::GitError(format!("git clone failed for '{url}':\n{stderr}")));
-    }
-
-    // Checkout specific rev into output dir.
-    std::fs::create_dir_all(out)?;
-    let checkout_out = std::process::Command::new(&git)
-        .args(["--git-dir", &tmp_bare, "--work-tree", out, "checkout", rev, "--", "."])
-        .output()
-        .map_err(|e| FetchError::GitError(format!("running git checkout: {e}")))?;
-
-    if !checkout_out.status.success() {
-        let stderr = String::from_utf8_lossy(&checkout_out.stderr);
-        let _ = std::fs::remove_dir_all(&tmp_bare);
-        let _ = std::fs::remove_dir_all(out);
-        return Err(FetchError::GitError(format!("git checkout failed for rev '{rev}':\n{stderr}")));
-    }
-
-    // Clean up bare clone.
-    let _ = std::fs::remove_dir_all(&tmp_bare);
-
     info!(url = url, rev = short_rev, out = out, "git fetch complete");
     Ok(())
 }
 
-/// Find the `git` binary in common locations or PATH.
-fn find_git() -> Result<String, FetchError> {
-    // Check well-known paths (FHS, Homebrew, NixOS).
-    for path in [
-        "/usr/bin/git",
-        "/bin/git",
-        "/usr/local/bin/git",
-        "/run/current-system/sw/bin/git",
-    ] {
-        if Path::new(path).exists() {
-            return Ok(path.to_string());
-        }
+fn local_git_repo_path(url: &str) -> Result<Option<PathBuf>, FetchError> {
+    let parsed = Url::parse(url).map_err(|err| FetchError::GitError(format!("invalid git URL '{url}': {err}")))?;
+    if parsed.scheme() != "file" {
+        return Ok(None);
     }
-    // Check NixOS per-user profile paths.
-    if let Ok(user) = std::env::var("USER") {
-        let profile_path = format!("/etc/profiles/per-user/{user}/bin/git");
-        if Path::new(&profile_path).exists() {
-            return Ok(profile_path);
+    let local_path = parsed
+        .to_file_path()
+        .map_err(|()| FetchError::GitError(format!("invalid git file URL '{url}'")))?;
+    Ok(Some(local_path))
+}
+
+fn stage_local_git_tree(local_repo_path: &Path, url: &str, rev: &str, staged_out: &Path) -> Result<(), FetchError> {
+    assert!(staged_out.file_name().is_some(), "staged output path must be named");
+    let repo = gix::open_opts(local_repo_path, gix::open::Options::isolated())
+        .map_err(|err| FetchError::GitError(format!("failed to open local git repository '{url}': {err}")))?;
+    let tree_id = resolve_git_tree_id(&repo, url, rev)?;
+    stage_git_tree(&repo, tree_id, staged_out)
+}
+
+fn fetch_git_repo(url: &str, repo_dir: &Path) -> Result<gix::Repository, FetchError> {
+    let interrupt = AtomicBool::new(false);
+    let mut prepare = gix::clone::PrepareFetch::new(
+        url,
+        repo_dir,
+        gix::create::Kind::Bare,
+        gix::create::Options::default(),
+        gix::open::Options::isolated(),
+    )
+    .map_err(|err| FetchError::GitError(format!("failed to initialize isolated git fetch for '{url}': {err}")))?;
+
+    let (repo, _outcome) = prepare
+        .fetch_only(gix::progress::Discard, &interrupt)
+        .map_err(|err| FetchError::GitError(format!("failed to fetch git repository '{url}': {err}")))?;
+    assert!(repo.workdir().is_none(), "bare fetch repository must not have a workdir");
+    assert!(repo.path().exists(), "fetched bare repository path must exist");
+    Ok(repo)
+}
+
+fn resolve_git_tree_id(repo: &gix::Repository, url: &str, rev: &str) -> Result<gix::hash::ObjectId, FetchError> {
+    assert!(!url.is_empty(), "git url must not be empty");
+    assert!(!rev.is_empty(), "git rev must not be empty");
+
+    let requested = repo.rev_parse_single(rev).map_err(|_err| {
+        FetchError::GitError(format!("requested revision '{rev}' could not be materialized from '{url}'"))
+    })?;
+    let object = requested.object().map_err(|_err| {
+        FetchError::GitError(format!("requested revision '{rev}' could not be materialized from '{url}'"))
+    })?;
+    let tree = object.peel_to_tree().map_err(|_err| {
+        FetchError::GitError(format!("requested revision '{rev}' could not be materialized from '{url}'"))
+    })?;
+    Ok(tree.id().detach())
+}
+
+fn stage_git_tree(repo: &gix::Repository, tree_id: gix::hash::ObjectId, staged_out: &Path) -> Result<(), FetchError> {
+    assert!(!staged_out.exists(), "staged output directory must not already exist");
+    std::fs::create_dir_all(staged_out)?;
+    let (mut stream, _index) = repo
+        .worktree_stream(tree_id)
+        .map_err(|err| FetchError::GitError(format!("failed to prepare git tree materialization: {err}")))?;
+
+    let mut entry_count_u32: u32 = 0;
+    while let Some(mut entry) = stream
+        .next_entry()
+        .map_err(|err| FetchError::GitError(format!("failed to read git tree entry stream: {err}")))?
+    {
+        entry_count_u32 = entry_count_u32.saturating_add(1);
+        if entry_count_u32 > MAX_TAR_ENTRIES {
+            return Err(FetchError::GitError(format!(
+                "git checkout exceeds entry limit of {MAX_TAR_ENTRIES} entries"
+            )));
         }
+        let dest = materialize_git_relative_path(staged_out, entry.relative_path())?;
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_git_entry(&dest, &mut entry)?;
     }
-    // Fall back to scanning PATH directly.
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in path_var.split(':') {
-            let candidate = Path::new(dir).join("git");
-            if candidate.exists() {
-                return Ok(candidate.to_string_lossy().to_string());
+
+    assert!(staged_out.is_dir(), "staged git output must exist as a directory");
+    Ok(())
+}
+
+fn materialize_git_relative_path(staged_out: &Path, relative: &gix::bstr::BStr) -> Result<PathBuf, FetchError> {
+    let relative_path = gix::path::try_from_bstr(relative)
+        .map_err(|err| FetchError::GitError(format!("git entry path '{relative}' is not valid on this platform: {err}")))?;
+
+    let mut component_count_u32: u32 = 0;
+    let mut dest = PathBuf::from(staged_out);
+    for component in relative_path.as_ref().components() {
+        match component {
+            std::path::Component::Normal(part) => {
+                component_count_u32 = component_count_u32.saturating_add(1);
+                if component_count_u32 > MAX_GIT_PATH_COMPONENTS {
+                    return Err(FetchError::GitError(format!(
+                        "git entry path '{relative}' exceeds component limit of {MAX_GIT_PATH_COMPONENTS}"
+                    )));
+                }
+                dest.push(part);
+            }
+            std::path::Component::CurDir => {
+                return Err(FetchError::GitError(format!("git entry path '{relative}' contains '.' component")));
+            }
+            std::path::Component::ParentDir => {
+                return Err(FetchError::GitError(format!("git entry path '{relative}' contains '..' component")));
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                return Err(FetchError::GitError(format!("git entry path '{relative}' is absolute")));
             }
         }
     }
-    Err(FetchError::GitNotFound)
+
+    if component_count_u32 == 0 {
+        return Err(FetchError::GitError("git entry path must not be empty".to_string()));
+    }
+    assert!(dest.starts_with(staged_out), "git entry destination must stay under staged output");
+    Ok(dest)
+}
+
+fn write_git_entry(dest: &Path, entry: &mut gix::worktree::stream::Entry<'_>) -> Result<(), FetchError> {
+    assert!(entry.mode.is_blob_or_symlink(), "git stream only yields blobs or symlinks");
+    if entry.mode.is_link() {
+        write_git_symlink(dest, entry)?;
+    } else {
+        write_git_blob(dest, entry)?;
+    }
+    Ok(())
+}
+
+fn write_git_blob(dest: &Path, entry: &mut gix::worktree::stream::Entry<'_>) -> Result<(), FetchError> {
+    assert!(entry.mode.is_blob(), "blob writer expects a blob entry");
+    assert!(!entry.mode.is_link(), "blob writer must not receive symlink entries");
+
+    let mut file = std::fs::File::create(dest)?;
+    std::io::copy(entry, &mut file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = if entry.mode.is_executable() { 0o755 } else { 0o644 };
+        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))?;
+    }
+    Ok(())
+}
+
+fn write_git_symlink(dest: &Path, entry: &mut gix::worktree::stream::Entry<'_>) -> Result<(), FetchError> {
+    assert!(entry.mode.is_link(), "symlink writer expects a symlink entry");
+    let target_bytes = read_git_entry_bytes(entry)?;
+    let target_path = git_symlink_target_path(&target_bytes)?;
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&target_path, dest)?;
+        return Ok(());
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(&target_path, dest)?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err(FetchError::GitError(
+        "git symlink materialization is unsupported on this platform".to_string(),
+    ))
+}
+
+fn read_git_entry_bytes(entry: &mut gix::worktree::stream::Entry<'_>) -> Result<Vec<u8>, FetchError> {
+    let capacity_bytes = entry.bytes_remaining().unwrap_or(0);
+    let mut buf = Vec::with_capacity(capacity_bytes);
+    entry.read_to_end(&mut buf)?;
+    Ok(buf)
+}
+
+fn git_symlink_target_path(target_bytes: &[u8]) -> Result<PathBuf, FetchError> {
+    #[cfg(unix)]
+    {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        return Ok(PathBuf::from(OsString::from_vec(target_bytes.to_vec())));
+    }
+    #[cfg(not(unix))]
+    {
+        let target = std::str::from_utf8(target_bytes).map_err(|err| {
+            FetchError::GitError(format!("git symlink target is not valid UTF-8 on this platform: {err}"))
+        })?;
+        Ok(PathBuf::from(target))
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -674,6 +813,81 @@ mod tests {
             input_sources: std::collections::BTreeSet::new(),
             outputs,
         }
+    }
+
+    static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct PathGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathGuard {
+        fn set(path: &std::ffi::OsStr) -> Self {
+            let original = std::env::var_os("PATH");
+            unsafe { std::env::set_var("PATH", path) };
+            Self { original }
+        }
+    }
+
+    impl Drop for PathGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(path) => unsafe { std::env::set_var("PATH", path) },
+                None => unsafe { std::env::remove_var("PATH") },
+            }
+        }
+    }
+
+    fn run_git(dir: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
+        assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn create_git_repo_with_history() -> (tempfile::TempDir, PathBuf, String, String) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let repo = tempdir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+
+        run_git(&repo, &["init"]);
+        run_git(&repo, &["branch", "-M", "main"]);
+        run_git(&repo, &["config", "user.email", "test@example.com"]);
+        run_git(&repo, &["config", "user.name", "Test User"]);
+
+        std::fs::write(repo.join("hello.txt"), "first revision\n").unwrap();
+        run_git(&repo, &["add", "."]);
+        run_git(&repo, &["commit", "-m", "first"]);
+        let first_rev = run_git(&repo, &["rev-parse", "HEAD"]);
+
+        std::fs::write(repo.join("hello.txt"), "second revision\n").unwrap();
+        std::fs::write(repo.join("extra.txt"), "present only in second revision\n").unwrap();
+        run_git(&repo, &["add", "."]);
+        run_git(&repo, &["commit", "-m", "second"]);
+        let second_rev = run_git(&repo, &["rev-parse", "HEAD"]);
+
+        (tempdir, repo, first_rev, second_rev)
+    }
+
+    fn file_url(path: &Path) -> String {
+        format!("file://{}", path.display())
+    }
+
+    #[cfg(unix)]
+    fn make_fake_git_binary(dir: &Path, marker: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        std::fs::create_dir_all(dir).unwrap();
+        let git = dir.join("git");
+        std::fs::write(
+            &git,
+            format!(
+                "#!/bin/sh\nprintf 'fake-git-2.99\\n' >&2\nprintf 'invoked\\n' >> '{}'\nexit 99\n",
+                marker.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o755)).unwrap();
+        git
     }
 
     // ── parse_fetch tests ──────────────────────────────────────────
@@ -775,6 +989,99 @@ mod tests {
         let drv = make_drv("builtin:fetchurl", vec![("url", "https://example.com/file.txt")], None);
         let fetch = parse_fetch(&drv).unwrap();
         assert!(matches!(fetch, Fetch::Url { exp_hash: None, .. }));
+    }
+
+    #[test]
+    fn fetch_git_materializes_requested_revision_without_dot_git() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, repo, first_rev, second_rev) = create_git_repo_with_history();
+        let out_root = tempfile::tempdir().unwrap();
+        let out = out_root.path().join("git-checkout");
+
+        fetch_git(&file_url(&repo), &first_rev, out.to_str().unwrap()).unwrap();
+
+        assert!(out.is_dir(), "git fetch should produce a directory output");
+        assert_eq!(std::fs::read_to_string(out.join("hello.txt")).unwrap(), "first revision\n");
+        assert!(!out.join("extra.txt").exists(), "older revision should not contain later file");
+        assert!(!out.join(".git").exists(), "fetchGit output must not contain .git metadata");
+        assert_ne!(first_rev, second_rev, "history fixture must contain two distinct revisions");
+    }
+
+    #[test]
+    fn fetch_git_succeeds_with_empty_path() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, repo, first_rev, _second_rev) = create_git_repo_with_history();
+        let out_root = tempfile::tempdir().unwrap();
+        let out = out_root.path().join("git-checkout");
+
+        let _guard = PathGuard::set(std::ffi::OsStr::new(""));
+        fetch_git(&file_url(&repo), &first_rev, out.to_str().unwrap()).unwrap();
+
+        assert!(out.join("hello.txt").exists(), "fetchGit should not require host PATH git");
+        assert_eq!(std::fs::read_to_string(out.join("hello.txt")).unwrap(), "first revision\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fetch_git_ignores_fake_git_binary_on_path() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, repo, first_rev, _second_rev) = create_git_repo_with_history();
+        let fake_root = tempfile::tempdir().unwrap();
+        let marker = fake_root.path().join("fake-git-invoked.txt");
+        make_fake_git_binary(fake_root.path(), &marker);
+        let out_root = tempfile::tempdir().unwrap();
+        let out = out_root.path().join("git-checkout");
+
+        let _guard = PathGuard::set(fake_root.path().as_os_str());
+        fetch_git(&file_url(&repo), &first_rev, out.to_str().unwrap()).unwrap();
+
+        assert!(out.join("hello.txt").exists(), "fetchGit should succeed with only fake git on PATH");
+        assert!(!marker.exists(), "fetchGit must not invoke fake host git binaries");
+    }
+
+    #[test]
+    fn fetch_git_invalid_revision_reports_crunch_owned_error() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, repo, _first_rev, _second_rev) = create_git_repo_with_history();
+        let out_root = tempfile::tempdir().unwrap();
+        let out = out_root.path().join("git-checkout");
+        let url = file_url(&repo);
+        let err = fetch_git(&url, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", out.to_str().unwrap()).unwrap_err();
+        let message = err.to_string();
+
+        assert_eq!(
+            message,
+            format!("git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'")
+        );
+        assert!(!message.contains("fatal:"), "error should not depend on host git stderr: {message}");
+    }
+
+    #[test]
+    fn fetch_git_missing_repo_reports_crunch_owned_error() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let missing_repo = tempdir.path().join("missing-repo");
+        let out = tempdir.path().join("git-checkout");
+        let url = file_url(&missing_repo);
+        let err = fetch_git(&url, "refs/heads/main", out.to_str().unwrap()).unwrap_err();
+        let message = err.to_string();
+
+        assert!(
+            message.starts_with(&format!("git fetch failed: failed to open local git repository '{url}':")),
+            "unexpected fetch failure message: {message}"
+        );
+        assert!(!message.contains("fatal:"), "error should not depend on host git stderr: {message}");
+    }
+
+    #[test]
+    fn fetch_git_non_test_implementation_has_no_host_git_discovery_patterns() {
+        let source = include_str!("fetcher.rs");
+        let non_test = source.split("#[cfg(test)]").next().unwrap();
+
+        assert!(!non_test.contains("std::process::Command"));
+        assert!(!non_test.contains("std::env::var(\"PATH\")"));
+        for probe in ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/run/current-system/sw/bin/git"] {
+            assert!(!non_test.contains(probe), "non-test fetcher code must not probe host git path {probe}");
+        }
     }
 
     // ── extract_tar tests ──────────────────────────────────────────

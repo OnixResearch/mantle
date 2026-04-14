@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_build::DerivationRegistry;
@@ -499,6 +500,75 @@ fn make_fetch_builder(
     )
 }
 
+fn run_git(dir: &Path, args: &[&str]) -> String {
+    let output = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
+    assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn create_git_repo_with_head(parent: &Path) -> (PathBuf, String) {
+    let repo = parent.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    run_git(&repo, &["init"]);
+    run_git(&repo, &["branch", "-M", "main"]);
+    run_git(&repo, &["config", "user.email", "test@example.com"]);
+    run_git(&repo, &["config", "user.name", "Test User"]);
+    std::fs::write(repo.join("hello.txt"), "hello from fetchgit integration\n").unwrap();
+    run_git(&repo, &["add", "."]);
+    run_git(&repo, &["commit", "-m", "initial"]);
+    let rev = run_git(&repo, &["rev-parse", "HEAD"]);
+    (repo, rev)
+}
+
+fn copy_tree_without_dot_git(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for entry in std::fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let file_name = entry.file_name();
+        if file_name == ".git" {
+            continue;
+        }
+        let dest = dst.join(&file_name);
+        let file_type = entry.file_type().unwrap();
+        if file_type.is_dir() {
+            copy_tree_without_dot_git(&path, &dest);
+        } else {
+            std::fs::copy(&path, &dest).unwrap();
+        }
+    }
+}
+
+fn compute_recursive_sha256_sri(path: &Path) -> String {
+    use sha2::Digest;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+    use snix_castore::import::fs::ingest_path;
+    use snix_store::nar::write_nar;
+    use snix_store::utils::AsyncIoBridge;
+
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let root = path.to_path_buf();
+    rt.block_on(async move {
+        let blob_service = MemoryBlobService::default();
+        let directory_service = RedbDirectoryService::new_temporary(
+            "fetchgit-hash".to_string(),
+            RedbDirectoryServiceConfig::default(),
+        )
+        .unwrap();
+        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
+            .await
+            .unwrap();
+        let mut hasher = sha2::Sha256::new();
+        write_nar(AsyncIoBridge(&mut hasher), &node, blob_service, directory_service)
+            .await
+            .unwrap();
+        let digest: [u8; 32] = hasher.finalize().into();
+        format!("sha256-{}", data_encoding::BASE64.encode(&digest))
+    })
+}
+
 #[test]
 fn fetchurl_downloads_and_verifies_hash() {
     use sha2::Digest;
@@ -663,5 +733,130 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         Ok(_) => {
             panic!("expected hash mismatch error but build succeeded");
         }
+    }
+}
+
+#[test]
+fn fetchgit_downloads_requested_revision_and_verifies_recursive_hash() {
+    let output_dir = tempfile::tempdir().unwrap();
+    let output_dir_str = output_dir.path().to_str().unwrap();
+    let repo_root = tempfile::tempdir().unwrap();
+    let (repo, rev) = create_git_repo_with_head(repo_root.path());
+    let expected_tree = tempfile::tempdir().unwrap();
+    copy_tree_without_dot_git(&repo, expected_tree.path());
+    let sri_hash = compute_recursive_sha256_sri(expected_tree.path());
+    let repo_url = format!("file://{}", repo.display());
+
+    let drv = CrunchDerivation {
+        name: "git-src".to_string(),
+        builder: "builtin:fetchurl".to_string(),
+        system: "builtin".to_string(),
+        args: vec![],
+        outputs: vec!["out".to_string()],
+        env: {
+            let mut e = HashMap::new();
+            e.insert("url".to_string(), repo_url);
+            e.insert("type".to_string(), "git".to_string());
+            e.insert("rev".to_string(), rev);
+            e
+        },
+        inputs: vec![],
+        fixed_output: Some(crunch_glue::FixedOutput {
+            hash: sri_hash,
+            algo: "sha256".to_string(),
+            mode: "recursive".to_string(),
+        }),
+        addressing_mode: "input-addressed".to_string(),
+        provenance: None,
+    };
+
+    let mut cc = ConversionCache::default();
+    let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
+
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
+    let out_path = nix_drv
+        .outputs
+        .get("out")
+        .unwrap()
+        .path
+        .as_ref()
+        .unwrap()
+        .to_absolute_path_with_prefix(output_dir_str);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(async {
+        let mut builder = make_fetch_builder(output_dir.path());
+        builder.build(&drv_path, &mut kp).await
+    });
+
+    match result {
+        Ok(outcome) => {
+            assert!(!outcome.cached, "fresh fetchgit build should not be cached");
+            assert!(outcome.outputs.contains_key("out"));
+            assert!(Path::new(&out_path).exists(), "fetchgit output should exist at {out_path}");
+            assert_eq!(
+                std::fs::read_to_string(Path::new(&out_path).join("hello.txt")).unwrap(),
+                "hello from fetchgit integration\n"
+            );
+            assert!(!Path::new(&out_path).join(".git").exists(), "fetchgit output must not contain .git");
+        }
+        Err(err) => panic!("fetchgit build failed: {err}"),
+    }
+}
+
+#[test]
+fn fetchgit_wrong_recursive_hash_reports_mismatch() {
+    let output_dir = tempfile::tempdir().unwrap();
+    let repo_root = tempfile::tempdir().unwrap();
+    let (repo, rev) = create_git_repo_with_head(repo_root.path());
+    let repo_url = format!("file://{}", repo.display());
+
+    let drv = CrunchDerivation {
+        name: "git-src".to_string(),
+        builder: "builtin:fetchurl".to_string(),
+        system: "builtin".to_string(),
+        args: vec![],
+        outputs: vec!["out".to_string()],
+        env: {
+            let mut e = HashMap::new();
+            e.insert("url".to_string(), repo_url);
+            e.insert("type".to_string(), "git".to_string());
+            e.insert("rev".to_string(), rev);
+            e
+        },
+        inputs: vec![],
+        fixed_output: Some(crunch_glue::FixedOutput {
+            hash: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+            algo: "sha256".to_string(),
+            mode: "recursive".to_string(),
+        }),
+        addressing_mode: "input-addressed".to_string(),
+        provenance: None,
+    };
+
+    let mut cc = ConversionCache::default();
+    let (drv_path, _nix_drv) = crunch_glue::convert(&drv, &mut cc).unwrap();
+
+    let mut kp = DerivationRegistry::default();
+    populate_registry(&mut kp, cc.iter_entries());
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(async {
+        let mut builder = make_fetch_builder(output_dir.path());
+        builder.build(&drv_path, &mut kp).await
+    });
+
+    match result {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("hash mismatch")
+                    || msg.contains("FOD hash mismatch")
+                    || msg.contains("root build(s) failed"),
+                "expected recursive hash mismatch from fetchgit, got: {msg}"
+            );
+        }
+        Ok(_) => panic!("expected fetchgit recursive hash mismatch but build succeeded"),
     }
 }

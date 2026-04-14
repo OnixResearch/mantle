@@ -265,8 +265,13 @@ fn fetch_git_produces_git_env() {
     assert!(result.is_ok(), "fetchGit failed: {:?}", result.err());
     let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
     assert_eq!(drv.builder, "builtin:fetchurl");
+    assert_eq!(drv.system, "builtin");
+    assert_eq!(drv.env.get("url").unwrap(), "https://github.com/user/repo.git");
     assert_eq!(drv.env.get("type").unwrap(), "git");
     assert_eq!(drv.env.get("rev").unwrap(), "abc123def456");
+    let fixed_output = drv.fixed_output.expect("fetchGit must remain fixed-output");
+    assert_eq!(fixed_output.mode, "recursive");
+    assert_eq!(fixed_output.hash, "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=");
     assert_eq!(drv.name, "repo");
 }
 

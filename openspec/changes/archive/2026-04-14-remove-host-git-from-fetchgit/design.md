@@ -3,8 +3,9 @@
 ## Context
 
 A host-discovered `git` binary is an ambient dependency. Different hosts may
-have different `git` versions, config files, or credential helpers, and crunch
-cannot make strong hermeticity claims while fetch semantics depend on that.
+have different `git` versions or different binaries earlier in `PATH`, and
+crunch cannot make strong hermeticity claims while fetch semantics depend on
+that.
 
 ## Goals / Non-Goals
 
@@ -24,9 +25,11 @@ cannot make strong hermeticity claims while fetch semantics depend on that.
 ### 1. No arbitrary host PATH discovery
 
 **Choice:** `fetchGit` no longer scans `PATH` or common host filesystem paths for
-an ambient `git` binary.
+an ambient `git` binary, and crunch-owned fetchGit code no longer shells out to
+host `git` subprocesses.
 
-**Rationale:** host-tool discovery is the impurity we are removing.
+**Rationale:** host-tool discovery and subprocess fallback are the impurities we
+are removing.
 
 ### 2. Preserve the user-facing fetchGit contract
 

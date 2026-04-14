@@ -5,7 +5,7 @@
 # Clones the repo, checks out the specified rev, strips .git/,
 # and stores the working tree. Hash is the NAR of the checkout.
 #
-# Requires git in PATH.
+# Does not require host git in PATH.
 #
 # To get the hash for a new rev:
 #   1. Use a dummy hash and run with --fix

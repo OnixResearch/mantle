@@ -37,6 +37,7 @@ bzip2-rs = "0.1"
 ruzstd = "0.8"
 tempfile = "3"
 url = "2"
+gix = { version = "0.81.0", features = ["blocking-http-transport-reqwest-rust-tls"] }
 
 [dev-dependencies]
 crunch-attestation = { path = "../crunch-attestation" }

@@ -23,7 +23,9 @@ The resulting derivation MUST have:
 - `env.rev` set to the commit hash
 
 The implementation MUST use a crunch-controlled git materialization path. It
-MUST NOT discover or depend on an arbitrary host `git` from `PATH`.
+MUST NOT discover or depend on an arbitrary host `git` from `PATH` or from
+common host filesystem locations. It MUST NOT shell out to host `git`
+subprocesses in crunch-owned fetchGit implementation code.
 
 The `.git/` directory MUST NOT appear in the output.
 
@@ -32,7 +34,7 @@ The `.git/` directory MUST NOT appear in the output.
 - GIVEN `crunch.fetchGit { url = "...", rev = "abc123...", hash = "..." }`
 - WHEN `crunch build` runs
 - THEN the repo is fetched and checked out at the specified revision
-- AND the fetch path does not depend on an arbitrary host `git` found through `PATH`
+- AND the fetch path does not depend on an arbitrary host `git` found through `PATH` or common host filesystem locations
 - AND the output tree excludes `.git/`
 
 #### Scenario: Host PATH git is irrelevant

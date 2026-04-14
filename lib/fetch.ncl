@@ -126,7 +126,7 @@ in
       {
         name = the_name,
         builder = "builtin:fetchurl",
-        system = 'x86_64-linux,
+        system = 'builtin,
         args = [],
         outputs = ["out"],
         env = the_env,
