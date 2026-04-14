@@ -419,6 +419,9 @@ When claiming test results in commit messages or completion summaries:
   whole checked-in `lib/` directory, not a handpicked subset. Missing
   `fetch.ncl` / `project_outputs.ncl` only shows up after install, when
   `crunch bootstrap --fetch` can no longer rely on the source-tree `lib/`.
+- `CRUNCH_FORCE_EMBEDDED_STDLIB=1` forces `crunch-eval` to skip source-tree
+  stdlib discovery and use the embedded Nickel stdlib. Use it when proving
+  installed-style `crunch bootstrap --fetch` behavior from a checkout.
 - `examples/bootstrap-no-nix.ncl` must discover the seed through `$NIX_STORE`,
   not a hardcoded `/nix/store`, or the example breaks under the default
   `/crunch/store` logical prefix.

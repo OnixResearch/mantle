@@ -71,11 +71,24 @@ pub fn source_stdlib_dir() -> Option<PathBuf> {
     None
 }
 
+fn force_embedded_stdlib_from_env() -> bool {
+    match std::env::var("CRUNCH_FORCE_EMBEDDED_STDLIB") {
+        Ok(value) => {
+            let normalized = value.trim().to_ascii_lowercase();
+            normalized == "1" || normalized == "true" || normalized == "yes"
+        }
+        Err(_) => false,
+    }
+}
+
 /// Get the stdlib import path — tries source tree first, falls back to
-/// writing embedded files.
+/// writing embedded files. Set `CRUNCH_FORCE_EMBEDDED_STDLIB=1` to force the
+/// embedded path even in a source checkout.
 pub fn stdlib_import_path() -> Result<PathBuf, std::io::Error> {
-    if let Some(source_dir) = source_stdlib_dir() {
-        return Ok(source_dir);
+    if !force_embedded_stdlib_from_env() {
+        if let Some(source_dir) = source_stdlib_dir() {
+            return Ok(source_dir);
+        }
     }
     write_stdlib(None)
 }
@@ -83,6 +96,8 @@ pub fn stdlib_import_path() -> Result<PathBuf, std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    static STDLIB_ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn write_stdlib_creates_all_files() {
@@ -162,5 +177,26 @@ mod tests {
         let expr = crate::evaluate_str(r#"let lib = import "lib.ncl" in "ok""#, &import_paths).unwrap();
         assert_eq!(expr.as_str(), Some("ok"));
         assert!(dir.path().join("fetch.ncl").exists());
+    }
+
+    #[test]
+    fn stdlib_import_path_can_force_embedded_copy() {
+        let _guard = STDLIB_ENV_MUTEX.lock().unwrap();
+        // SAFETY: test process serializes all environment mutation through
+        // STDLIB_ENV_MUTEX, and this test restores the variable before exit.
+        unsafe {
+            std::env::set_var("CRUNCH_FORCE_EMBEDDED_STDLIB", "1");
+        }
+
+        let path = stdlib_import_path().unwrap();
+        let repo_dir = source_stdlib_dir().unwrap();
+
+        // SAFETY: same serialization + restoration argument as above.
+        unsafe {
+            std::env::remove_var("CRUNCH_FORCE_EMBEDDED_STDLIB");
+        }
+
+        assert_ne!(path, repo_dir);
+        assert!(path.join("fetch.ncl").exists());
     }
 }

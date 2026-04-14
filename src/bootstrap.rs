@@ -929,4 +929,22 @@ mod tests {
         assert!(json["reduction"]["retained_tools"].is_array());
         assert!(json["notes"].is_array());
     }
+
+    #[test]
+    fn stage_reduced_seed_provider_materializes_kernel_headers_in_target_include() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw_root = dir.path().join("raw");
+        let stage_root = dir.path().join("stage");
+        let linux_dir = raw_root.join("include").join("linux");
+        std::fs::create_dir_all(&linux_dir).unwrap();
+        std::fs::write(linux_dir.join("capability.h"), b"capability\n").unwrap();
+        std::fs::write(linux_dir.join("loop.h"), b"loop\n").unwrap();
+
+        let provider = load_fetch_seed_provider().unwrap();
+        stage_reduced_seed_provider(&raw_root, &stage_root, &provider).unwrap();
+
+        let target_include = stage_root.join(&provider.target).join("include").join("linux");
+        assert!(target_include.join("capability.h").exists());
+        assert!(target_include.join("loop.h").exists());
+    }
 }

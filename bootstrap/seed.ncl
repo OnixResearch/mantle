@@ -135,7 +135,9 @@ let seed_toolchain = {
         fi
       done
 
-      # Normalize the target sysroot view.
+      # Normalize the target sysroot view. This copies the raw top-level
+      # headers, including linux/*.h, into <target>/include so downstream
+      # bootstrap stages can rely on the normalized sysroot contract.
       if [ -d "$out/include" ]; then
         $BB rm -rf "$out/%{seed_target}/include"
         copy_tree "$out/include" "$out/%{seed_target}/include"

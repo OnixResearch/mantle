@@ -48,6 +48,7 @@
 - An archived OpenSpec change is not proof that the code landed. Re-grep the live tree before assuming an archived proposal/spec/task set was actually implemented.
 - If an implementation change is unrelated to the active proposal-only OpenSpec change in the same branch, split it into its own active change before asking for review. Done review treats mixed self-build/code work and attestation-spec work as a mismatch even when both are valid on their own.
 - For OpenSpec-only turns, validate the new change directory before the final reply and include explicit evidence for any non-OpenSpec file you mention.
+- Portability/backend API work spans three main specs in this repo: `portability` (abstraction boundary), `pipeline` (public `crunch-pipeline` API), and `build-pipeline` (runtime dispatch semantics). Updating only one leaves the story inconsistent.
 - `openspec archive` validates rebuilt main specs, not just the change. A main spec file with delta-style headers (`## ADDED Requirements`) fails archive until it has the normal `## Purpose` / `## Requirements` structure.
 
 ## Build Environment
@@ -85,12 +86,16 @@
 - Seed derivation scripts only get `/bin/sh` and `/bin/busybox`; they do NOT get `cat` on PATH. Use `$BB cat > file <<EOF`, not plain `cat > file`, or self-build stage0 dies with `/bin/sh: cat: not found` when building `musl-seed-toolchain`.
 - Stage3 self-build NCL must not say plain `import "seed.ncl"` / `import "lib.ncl"` from a temp file. `lib/seed.ncl` shadows `bootstrap/seed.ncl`, so self-build got `FieldMissing toolchain` at eval time. Use rooted imports (`bootstrap/...`, `lib/lib.ncl`) and pass both the repo root and `lib/` as import paths, otherwise `lib/lib.ncl` can't find its plain `import "fetch.ncl"`.
 - Embedded stdlib in `crates/crunch-eval/src/stdlib.rs` must track the whole `lib/` directory. Missing `fetch.ncl` / `project_outputs.ncl` hides in dev because `stdlib_import_path()` prefers the source-tree `lib/`, then breaks installed `crunch bootstrap --fetch`.
+- `CRUNCH_FORCE_EMBEDDED_STDLIB=1` is useful proof/debug hook: it bypasses the source-tree `lib/` and forces `crunch-eval` to use the embedded Nickel stdlib. Use it to verify installed-style `crunch bootstrap --fetch` behavior from a checkout.
 - `examples/bootstrap-no-nix.ncl` must glob seed paths through `$NIX_STORE`, not `/nix/store`, or it fails under default `/crunch/store` logical builds.
 - A staged-source fingerprint based only on `path:size` is wrong. Same-size edits can silently reuse an old `*-crunch-src` tree and make self-build prove the wrong code. Hash file contents too.
 - After a root build, do not rediscover "the" result by scanning `read_dir()` for the first matching `*-crunch` / `*-bwrap` / `*-busybox`. Use the exact root output path from `PipelineResult`, or an older sibling output can be selected nondeterministically.
 - Stage1 can embed a compile-time `SNIX_BUILD_SANDBOX_SHELL` path that only exists in the stage0 temp store. `vendor/snix-build::choose_sandbox_shell()` must ignore a non-placeholder compile default if the file is missing, then fall back to a discovered static busybox or `/bin/sh`.
 - Thread exact bootstrap tool outputs into the generated self-build derivation. If the NCL shell script scans `$NIX_STORE/*-bwrap` or `*-busybox` inside a shared proof store, it can pick stale siblings and make the proof report one tool path while the actual crunch build uses another.
 - Reused staged-source validation must include `lib/`, not just `Cargo.toml`, `bootstrap/`, and `.cargo/vendor-config.toml`; `cmd_self_build()` always constructs import paths from `src_dir/lib`.
+
+## OpenSpec Notes
+- Repo-wide hardening work fits one active change with multi-domain delta specs. For hermeticity/determinism planning, `cli`, `build-pipeline`, `fetchers`, `store`, and `bootstrap` were enough; no need to force everything into one giant domain spec.
 
 ## Tooling Gotchas
 - Real-crate Cargo examples inside crunch sandboxes should `set -eu` explicitly. A plain derivation script does not get mkDerivation's safety shell prologue, so `cp target/...` failures can still yield a misleading successful build if the script never enables `-e`.
