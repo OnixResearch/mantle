@@ -944,8 +944,12 @@ mod tests {
         repo_root: &Path,
         git_path: &Path,
         log_path: &Path,
+        stop: &AtomicBool,
     ) -> Result<(), String> {
         use std::os::fd::{FromRawFd, IntoRawFd};
+
+        const MAX_CHILD_WAIT_ATTEMPTS: u32 = 400;
+        const CHILD_WAIT_SLEEP_MS: u64 = 25;
 
         let stdout_stream = stream.try_clone().map_err(|err| format!("failed to clone git socket: {err}"))?;
         let stdin_file = unsafe { std::fs::File::from_raw_fd(stream.into_raw_fd()) };
@@ -966,12 +970,30 @@ mod tests {
             .stderr(std::process::Stdio::from(stderr_log))
             .spawn()
             .map_err(|err| format!("failed to spawn inetd git daemon child: {err}"))?;
-        let status = child.wait().map_err(|err| format!("failed to wait for inetd git daemon child: {err}"))?;
-        if !status.success() {
-            let log = std::fs::read_to_string(log_path).unwrap_or_default();
-            return Err(format!("inetd git daemon child exited with {status}: {log}"));
+
+        for _attempt in 0..MAX_CHILD_WAIT_ATTEMPTS {
+            if let Some(status) = child.try_wait().map_err(|err| format!("failed to poll inetd git daemon child: {err}"))? {
+                if status.success() {
+                    return Ok(());
+                }
+                let log = std::fs::read_to_string(log_path).unwrap_or_default();
+                return Err(format!("inetd git daemon child exited with {status}: {log}"));
+            }
+            if stop.load(std::sync::atomic::Ordering::SeqCst) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(CHILD_WAIT_SLEEP_MS));
         }
-        Ok(())
+
+        let _ = child.kill();
+        let status = child.wait().map_err(|err| format!("failed to reap timed-out inetd git daemon child: {err}"))?;
+        let log = std::fs::read_to_string(log_path).unwrap_or_default();
+        Err(format!(
+            "inetd git daemon child exceeded timeout after {} ms and ended with {status}: {log}",
+            MAX_CHILD_WAIT_ATTEMPTS as u64 * CHILD_WAIT_SLEEP_MS
+        ))
     }
 
     #[cfg(unix)]
@@ -1007,7 +1029,13 @@ mod tests {
                 if stop_thread.load(std::sync::atomic::Ordering::SeqCst) {
                     break;
                 }
-                if let Err(err) = serve_git_daemon_connection(stream, &repo_root_buf, &git_path_buf, &log_path_thread) {
+                if let Err(err) = serve_git_daemon_connection(
+                    stream,
+                    &repo_root_buf,
+                    &git_path_buf,
+                    &log_path_thread,
+                    &stop_thread,
+                ) {
                     append_git_daemon_log_line(&log_path_thread, &err);
                 }
             }
