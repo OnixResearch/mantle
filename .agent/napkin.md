@@ -49,6 +49,8 @@
 - If an implementation change is unrelated to the active proposal-only OpenSpec change in the same branch, split it into its own active change before asking for review. Done review treats mixed self-build/code work and attestation-spec work as a mismatch even when both are valid on their own.
 - For OpenSpec-only turns, validate the new change directory before the final reply and include explicit evidence for any non-OpenSpec file you mention.
 - Portability/backend API work spans three main specs in this repo: `portability` (abstraction boundary), `pipeline` (public `crunch-pipeline` API), and `build-pipeline` (runtime dispatch semantics). Updating only one leaves the story inconsistent.
+- When adding an OpenSpec implementation plan, keep helper ownership/location aligned with the delta spec text, not just the proposal/design. Done review caught a drift where the plan allowed a helper in `crunch-pipeline` while the spec said `crunch-eval` exposes it.
+- If `tasks.md` includes a validation step and you actually run `openspec validate`, mark that task done in the same turn or the tracker drifts from the evidence transcript.
 - `openspec archive` validates rebuilt main specs, not just the change. A main spec file with delta-style headers (`## ADDED Requirements`) fails archive until it has the normal `## Purpose` / `## Requirements` structure.
 
 ## Build Environment
@@ -96,6 +98,7 @@
 
 ## OpenSpec Notes
 - Repo-wide hardening work fits one active change with multi-domain delta specs. For hermeticity/determinism planning, `cli`, `build-pipeline`, `fetchers`, `store`, and `bootstrap` were enough; no need to force everything into one giant domain spec.
+- Parallel file creation into the SAME `openspec/changes/<name>/` dir via multiple `write` calls was flaky here: some artifacts disappeared or only one file survived. For new change scaffolding, write files sequentially per change (or use one shell script), then validate immediately.
 
 ## Tooling Gotchas
 - Real-crate Cargo examples inside crunch sandboxes should `set -eu` explicitly. A plain derivation script does not get mkDerivation's safety shell prologue, so `cp target/...` failures can still yield a misleading successful build if the script never enables `-e`.
@@ -143,6 +146,9 @@
 
 ## Architecture Notes
 - Recursive async functions need Box::pin indirection (E0391 cycle in layout computation). See `build_derivation` → `build_derivation_inner` pattern in orchestrate.rs.
+- `crunch_pipeline::build()` still goes through `crunch_eval::evaluate_to_json()` + `serde_json` (`crates/crunch-pipeline/src/lib.rs`) even though `crunch-glue::CrunchDerivation` now has `NickelString` wrappers for direct `Expr::to_serde()` deserialization. For large package sets, removing that JSON round-trip looks like the cheapest eval-path speed win.
+- Worker hot path still clones large structs repeatedly: `Derivation` in `worker.rs` (`create_goals_bfs`, `ready_goal_inputs`) and `BuildRequest` in `spawn_prepared_build()`, plus waiter `Vec<String>` cloning in completion/failure propagation. `Arc<Derivation>` / `mem::take(waiters)` are likely cheap wins before deeper scheduler work.
+- `resolve_closure()` asks `PathInfoService::get()` for remote fallback. With `vendor/snix-store` `NixHTTPPathInfoService`, `get()` downloads + ingests the whole NAR, so remote closure resolution can fetch content just to learn references. A metadata-only narinfo path would cut fresh-store closure overhead.
 - `BubblewrapBuildService` is behind `#[cfg(target_os = "linux")]` in snix-build. Added `pub use bwrap::BubblewrapBuildService` to vendored mod.rs.
 - `RedbDirectoryServiceConfig` fields were private in vendored snix-castore. Made them `pub` to construct from crunch binary.
 - Generated Nickel code in Rust: `push_str` does NOT format-expand `{{` to `{` — those are literal. Only `format!`/`write!` macros expand `{{`.
