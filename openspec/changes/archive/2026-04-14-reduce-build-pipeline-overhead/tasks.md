@@ -4,7 +4,7 @@
 
 - [x] Add a direct typed derivation-extraction helper in `crunch-eval` for single-derivation and package-set Nickel results
 - [x] Add regression tests for nested derivation inputs with Nickel enum tags through the direct path
-- [ ] Confirm the current build path still passes unchanged while the helper is staged
+- [x] Confirm the current build path still passes unchanged while the helper is staged
 
 ## PR 2: Switch pipeline build path off JSON
 
@@ -20,16 +20,16 @@
 
 ## PR 4: Metadata-only remote closure lookup
 
-- [ ] Add a metadata-only remote narinfo lookup path for closure walking
-- [ ] Keep full NAR download and ingest on actual substitution only
-- [ ] Add focused tests for metadata-only closure walks, misses, and graceful fallback
+- [x] Add a metadata-only remote narinfo lookup path for closure walking
+- [x] Keep full NAR download and ingest on actual substitution only
+- [x] Add focused tests for metadata-only closure walks, misses, and graceful fallback
 
 ## PR 5: Worker hot-path ownership cleanup
 
-- [ ] Reduce `BuildRequest` cloning on the dispatch path
-- [ ] Reduce waiter-vector cloning on completion and failure propagation
-- [ ] Reduce `Derivation` cloning on the ready/dispatch path if the first two cleanup steps leave meaningful remaining churn
-- [ ] Add focused tests for the updated worker ownership flow
+- [x] Reduce `BuildRequest` cloning on the dispatch path
+- [x] Reduce waiter-vector cloning on completion and failure propagation
+- [x] Reduce `Derivation` cloning on the ready/dispatch path if the first two cleanup steps leave meaningful remaining churn
+- [x] Add focused tests for the updated worker ownership flow
 
 ## Validation
 

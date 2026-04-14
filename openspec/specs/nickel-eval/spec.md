@@ -11,24 +11,20 @@ system, merge semantics, and export pipeline — not custom parsing.
 ### Requirement: Nickel evaluation via eval_full_for_export
 
 The system MUST use `nickel-lang-core` to parse, typecheck, and evaluate
-`.ncl` files. Evaluation MUST use the export path (`eval_full_for_export`)
-which:
+`.ncl` files. Evaluation MUST use the export-ready deep evaluation path
+(`eval_full_for_export` or an equivalent API) which:
 
-1. Fully reduces the expression (forces all thunks)
-2. Strips `not_exported` fields
-3. Validates all contracts
-4. Produces a fully-resolved `NickelValue`
+1. fully reduces the expression,
+2. strips `not_exported` fields,
+3. validates contracts,
+4. leaves the evaluated value available for direct typed extraction or JSON
+   rendering, depending on the caller.
 
-The build pipeline uses Nickel's JSON export to produce a JSON string,
-then deserializes into typed Rust structs via `serde_json::from_value()`.
-This JSON round-trip is intentional: `Expr::to_serde()` fails on Nickel
-enum tags in nested derivation inputs (e.g., an `Input::Derivation` whose
-`system` field is `'x86_64-linux`). Nickel's JSON export pipeline converts
-enum variants to plain strings, which `serde_json` handles correctly.
+Build execution MUST consume derivation-shaped results through a direct typed
+extraction path. `crunch eval <file>` MAY still render the evaluated result
+through Nickel's JSON export for operator-visible output.
 
-`crunch eval <file>` also outputs this JSON for human-readable debug output.
-
-#### Scenario: Evaluate and deserialize
+#### Scenario: Evaluate and deserialize derivation directly
 
 - GIVEN a `.ncl` file containing:
   ```nickel
@@ -39,17 +35,26 @@ enum variants to plain strings, which `serde_json` handles correctly.
     _internal | not_exported = "stripped",
   }
   ```
-- WHEN crunch-eval evaluates it
-- THEN the exported JSON contains `name`, `builder`, `system`
-  (no `_internal`), and the glue layer deserializes it into
-  a `CrunchDerivation` Rust struct via `serde_json`
+- WHEN crunch-eval evaluates it for build execution
+- THEN the evaluated expression deserializes directly into a
+  `CrunchDerivation`
+- AND `_internal` is absent from the resulting Rust value
 
-#### Scenario: Evaluation error with source location
+### Requirement: Direct derivation extraction supports nested enum-tag fields
 
-- GIVEN a `.ncl` file with a type error or unresolved variable
-- WHEN crunch-eval evaluates it
-- THEN a structured error is returned including the source file, line, and
-  column, using Nickel's error formatting
+The system MUST provide a direct typed extraction path for
+`CrunchDerivation`-shaped Rust structs that accepts Nickel enum tags in both
+top-level and nested derivation fields without first converting the whole
+evaluation result to JSON.
+
+#### Scenario: Nested derivation input uses enum tags
+
+- GIVEN a package set where an `Input::Derivation` record contains
+  `system = 'x86_64-linux` and `addressing_mode = 'content-addressed`
+- WHEN crunch-eval deserializes the evaluated expression for the build
+  pipeline
+- THEN the nested derivation is accepted as a typed Rust value
+- AND the pipeline does not need a JSON export string to normalize those tags
 
 ### Requirement: Contract validation at eval time
 
@@ -174,27 +179,6 @@ crunch-eval MUST configure Nickel's import resolution to find:
   and `seed.ncl` in the same directory
 - WHEN `crunch build hello.ncl` is run
 - THEN the import resolves relative to `hello.ncl`'s directory
-
-### Requirement: Value passing via JSON export
-
-crunch-eval MUST evaluate the Nickel expression in-process and export
-the result to a JSON string via Nickel's export pipeline. The JSON
-string is then deserialized into typed Rust structs (`CrunchDerivation`)
-via `serde_json`. No intermediate files are written — the JSON exists
-only as an in-memory `String`.
-
-The glue layer defines `#[derive(serde::Deserialize)]` Rust structs that
-mirror the Nickel Derivation contract. Deserialization handles
-objects → structs, arrays → Vec, strings → enums (via `NickelString`
-wrapper), nullable → Option.
-
-The JSON round-trip exists because Nickel's `Expr::to_serde()` does not
-convert enum tags to strings for fields typed as `String` on the Rust
-side. The `NickelString` serde wrapper in crunch-glue accepts both plain
-strings and enum-tag representations via `deserialize_any`, but nested
-derivation inputs (where a full `CrunchDerivation` appears inside an
-`Input` array) still fail through `to_serde()`. The JSON export path
-handles all cases correctly.
 
 ### Requirement: Explicit input declarations
 

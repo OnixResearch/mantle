@@ -6,7 +6,7 @@ Defines the `crunch-store` crate: a standalone module owning all
 store operations — service construction, caching, realization, queries,
 and CA mapping persistence.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: crunch-store crate
 
@@ -142,34 +142,39 @@ across process restarts.
 
 ### Requirement: Native closure resolution
 
-The system MUST resolve runtime closures using its own data, not
-by shelling out to `nix-store -qR`.
+The system MUST resolve runtime closures using its own data, not by shelling
+out to `nix-store -qR`.
 
 For each source input that needs closure resolution:
 
-1. Check local PathInfo (redb) for the `references` field
-2. If not in local PathInfo, query the binary cache narinfo
-3. Walk references transitively until the full closure is collected
-4. If neither source is available, use the declared path only
-   (no closure) and log a warning
+1. check local `PathInfo` for the `references` field,
+2. if not in local `PathInfo`, fetch and parse remote narinfo metadata for
+   `References:`,
+3. walk references transitively until the full closure is collected,
+4. download and ingest a remote NAR only when actual substitution is
+   requested, not while enumerating closure references,
+5. if neither source is available, use the declared path only and log a
+   warning.
 
 #### Scenario: Crunch-built input closure from PathInfo
 
-- GIVEN a crunch-built library `libfoo` with PathInfo in redb
-- AND PathInfo.references lists `libbar` and `glibc`
+- GIVEN a crunch-built library `libfoo` with `PathInfo` in redb
+- AND `PathInfo.references` lists `libbar` and `glibc`
 - WHEN a derivation depends on `libfoo`
 - THEN `libfoo`, `libbar`, and `glibc` are all mounted in the sandbox
 
-#### Scenario: Nix seed input closure from narinfo
+#### Scenario: Nix seed input closure from narinfo metadata
 
 - GIVEN a Nix seed path `/nix/store/...-bash-5.2`
-- AND the binary cache narinfo for that path lists 3 references
+- AND the remote narinfo for that path lists 3 references
 - WHEN a derivation depends on bash
 - THEN bash and its 3 transitive references are mounted
+- AND crunch does not download the bash NAR payload merely to continue the
+  closure walk
 
 #### Scenario: No closure data available
 
-- GIVEN a seed path with no local PathInfo and no narinfo
+- GIVEN a seed path with no local `PathInfo` and no remote narinfo
 - WHEN a derivation depends on it
 - THEN only the declared path is mounted
 - AND a warning is logged
@@ -178,8 +183,8 @@ For each source input that needs closure resolution:
 
 - GIVEN a statically-linked binary from `crunch bootstrap --fetch`
 - WHEN a derivation depends on it
-- THEN PathInfo.references is empty
-- AND only the declared path is mounted (correct behavior)
+- THEN `PathInfo.references` is empty
+- AND only the declared path is mounted
 
 ### Requirement: Cycle-safe closure walking
 
@@ -205,9 +210,7 @@ Paths beyond this depth MUST be skipped with a warning.
 - THEN the first 1024 levels are included
 - AND a warning is logged about the depth limit
 
-## MODIFIED Requirements
-
-### Requirement: Builder service ownership (modified)
+### Requirement: Builder service ownership
 
 The `Builder` MUST NOT own BlobService, DirectoryService, or
 PathInfoService directly. It MUST receive a `StoreHandle` and call
