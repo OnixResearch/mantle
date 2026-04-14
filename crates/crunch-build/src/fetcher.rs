@@ -902,13 +902,16 @@ mod tests {
         write_fake_git_tool(dir, "ssh", marker, version);
     }
 
+    #[cfg(unix)]
     struct GitDaemonGuard {
-        child: std::process::Child,
+        stop: std::sync::Arc<AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
         _log_root: tempfile::TempDir,
         log_path: PathBuf,
         port: u16,
     }
 
+    #[cfg(unix)]
     impl GitDaemonGuard {
         fn url_for(&self, repo_name: &str) -> String {
             assert!(!repo_name.is_empty(), "repo name must not be empty");
@@ -916,84 +919,108 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for GitDaemonGuard {
         fn drop(&mut self) {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+            self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+            let _ = std::net::TcpStream::connect(("127.0.0.1", self.port));
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
         }
     }
 
-    fn reserve_local_port() -> u16 {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        assert_ne!(port, 0, "ephemeral port reservation must choose a port");
-        drop(listener);
-        port
+    #[cfg(unix)]
+    fn append_git_daemon_log_line(log_path: &Path, line: &str) {
+        use std::io::Write;
+
+        let mut log = std::fs::OpenOptions::new().create(true).append(true).open(log_path).unwrap();
+        writeln!(log, "{line}").unwrap();
     }
 
-    fn wait_for_git_daemon_ready(
-        child: &mut std::process::Child,
-        port: u16,
+    #[cfg(unix)]
+    fn serve_git_daemon_connection(
+        stream: std::net::TcpStream,
+        repo_root: &Path,
+        git_path: &Path,
         log_path: &Path,
     ) -> Result<(), String> {
-        const MAX_READY_ATTEMPTS: u32 = 100;
-        const SLEEP_MS: u64 = 50;
+        use std::os::fd::{FromRawFd, IntoRawFd};
 
-        for _attempt in 0..MAX_READY_ATTEMPTS {
-            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                return Ok(());
-            }
-            if let Some(status) = child.try_wait().unwrap() {
-                let log = std::fs::read_to_string(log_path).unwrap_or_default();
-                return Err(format!("git daemon exited early with {status}: {log}"));
-            }
-            std::thread::sleep(std::time::Duration::from_millis(SLEEP_MS));
+        let stdout_stream = stream.try_clone().map_err(|err| format!("failed to clone git socket: {err}"))?;
+        let stdin_file = unsafe { std::fs::File::from_raw_fd(stream.into_raw_fd()) };
+        let stdout_file = unsafe { std::fs::File::from_raw_fd(stdout_stream.into_raw_fd()) };
+        let stderr_log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
+            .map_err(|err| format!("failed to open git daemon log: {err}"))?;
+        let mut child = std::process::Command::new(git_path)
+            .arg("daemon")
+            .arg("--inetd")
+            .arg("--export-all")
+            .arg(format!("--base-path={}", repo_root.display()))
+            .arg(repo_root)
+            .stdin(std::process::Stdio::from(stdin_file))
+            .stdout(std::process::Stdio::from(stdout_file))
+            .stderr(std::process::Stdio::from(stderr_log))
+            .spawn()
+            .map_err(|err| format!("failed to spawn inetd git daemon child: {err}"))?;
+        let status = child.wait().map_err(|err| format!("failed to wait for inetd git daemon child: {err}"))?;
+        if !status.success() {
+            let log = std::fs::read_to_string(log_path).unwrap_or_default();
+            return Err(format!("inetd git daemon child exited with {status}: {log}"));
         }
-
-        let log = std::fs::read_to_string(log_path).unwrap_or_default();
-        Err(format!("git daemon did not become ready on port {port}: {log}"))
+        Ok(())
     }
 
-    fn spawn_git_daemon(repo_root: &Path) -> GitDaemonGuard {
-        const MAX_SPAWN_ATTEMPTS: u32 = 8;
-        assert!(repo_root.is_dir(), "git daemon repo root must exist");
+    #[cfg(unix)]
+    fn host_git_path() -> PathBuf {
+        let output = std::process::Command::new("which").arg("git").output().unwrap();
+        assert!(output.status.success(), "which git must succeed before PATH poisoning");
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        assert!(!path.is_empty(), "which git must return a path");
+        PathBuf::from(path)
+    }
 
-        let mut last_error = String::new();
-        for _attempt in 0..MAX_SPAWN_ATTEMPTS {
-            let port = reserve_local_port();
-            let log_root = tempfile::tempdir().unwrap();
-            let log_path = log_root.path().join("git-daemon.log");
-            let stdout_log = std::fs::File::create(&log_path).unwrap();
-            let stderr_log = stdout_log.try_clone().unwrap();
-            let child = std::process::Command::new("git")
-                .arg("daemon")
-                .arg("--export-all")
-                .arg("--reuseaddr")
-                .arg(format!("--base-path={}", repo_root.display()))
-                .arg("--listen=127.0.0.1")
-                .arg(format!("--port={port}"))
-                .arg(repo_root)
-                .stdout(std::process::Stdio::from(stdout_log))
-                .stderr(std::process::Stdio::from(stderr_log))
-                .spawn()
-                .unwrap();
-            let mut guard = GitDaemonGuard {
-                child,
-                _log_root: log_root,
-                log_path,
-                port,
-            };
-            assert!(guard.log_path.exists(), "git daemon log path must exist");
-            match wait_for_git_daemon_ready(&mut guard.child, port, &guard.log_path) {
-                Ok(()) => return guard,
-                Err(err) => {
-                    last_error = err;
-                    drop(guard);
+    #[cfg(unix)]
+    fn spawn_git_daemon(repo_root: &Path, git_path: &Path) -> GitDaemonGuard {
+        assert!(repo_root.is_dir(), "git daemon repo root must exist");
+        assert!(git_path.is_absolute(), "git daemon helper must use an absolute git path");
+        assert!(git_path.exists(), "git daemon helper git path must exist");
+
+        let log_root = tempfile::tempdir().unwrap();
+        let log_path = log_root.path().join("git-daemon.log");
+        std::fs::File::create(&log_path).unwrap();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_ne!(port, 0, "git daemon listener must bind a real port");
+
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let stop_thread = std::sync::Arc::clone(&stop);
+        let repo_root_buf = repo_root.to_path_buf();
+        let git_path_buf = git_path.to_path_buf();
+        let log_path_thread = log_path.clone();
+        let thread = std::thread::spawn(move || {
+            loop {
+                let (stream, _addr) = listener.accept().unwrap();
+                if stop_thread.load(std::sync::atomic::Ordering::SeqCst) {
+                    break;
+                }
+                if let Err(err) = serve_git_daemon_connection(stream, &repo_root_buf, &git_path_buf, &log_path_thread) {
+                    append_git_daemon_log_line(&log_path_thread, &err);
                 }
             }
-        }
+        });
 
-        panic!("git daemon failed after {MAX_SPAWN_ATTEMPTS} attempts: {last_error}");
+        assert!(log_path.exists(), "git daemon log path must exist");
+        GitDaemonGuard {
+            stop,
+            thread: Some(thread),
+            _log_root: log_root,
+            log_path,
+            port,
+        }
     }
 
     fn collect_checkout_snapshot(root: &Path) -> Vec<String> {
@@ -1182,7 +1209,8 @@ mod tests {
     fn fetch_git_git_transport_ignores_fake_git_versions_and_keeps_errors_crunch_owned() {
         let _path_lock = PATH_MUTEX.lock().unwrap();
         let (_tempdir, bare_repo, first_rev, _second_rev) = create_bare_git_repo_with_history();
-        let daemon = spawn_git_daemon(bare_repo.parent().unwrap());
+        let git_path = host_git_path();
+        let daemon = spawn_git_daemon(bare_repo.parent().unwrap(), &git_path);
         let repo_name = bare_repo.file_name().unwrap().to_string_lossy().to_string();
         let url = daemon.url_for(&repo_name);
         let out_root = tempfile::tempdir().unwrap();
@@ -1193,7 +1221,10 @@ mod tests {
         let out_a = out_root.path().join("git-checkout-a");
         let error_a = {
             let _guard = PathGuard::set(fake_root_a.path().as_os_str());
-            fetch_git(&url, &first_rev, out_a.to_str().unwrap()).unwrap();
+            fetch_git(&url, &first_rev, out_a.to_str().unwrap()).unwrap_or_else(|err| {
+                let log = std::fs::read_to_string(&daemon.log_path).unwrap_or_default();
+                panic!("remote fetch failed: {err}; git daemon log: {log}")
+            });
             let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
             fetch_git(&url, invalid_rev, out_root.path().join("git-error-a").to_str().unwrap()).unwrap_err().to_string()
         };
@@ -1204,7 +1235,10 @@ mod tests {
         let out_b = out_root.path().join("git-checkout-b");
         let error_b = {
             let _guard = PathGuard::set(fake_root_b.path().as_os_str());
-            fetch_git(&url, &first_rev, out_b.to_str().unwrap()).unwrap();
+            fetch_git(&url, &first_rev, out_b.to_str().unwrap()).unwrap_or_else(|err| {
+                let log = std::fs::read_to_string(&daemon.log_path).unwrap_or_default();
+                panic!("remote fetch failed: {err}; git daemon log: {log}")
+            });
             let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
             fetch_git(&url, invalid_rev, out_root.path().join("git-error-b").to_str().unwrap()).unwrap_err().to_string()
         };
