@@ -566,6 +566,7 @@ const MAX_GIT_PATH_COMPONENTS: u32 = 1024;
 /// any host `git` binary.
 pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
     let out_path = Path::new(out);
+    assert!(!url.is_empty(), "git url must not be empty");
     assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
     assert!(!rev.is_empty(), "git revision must not be empty");
 
@@ -939,6 +940,41 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn wait_for_inetd_child(
+        child: &mut std::process::Child,
+        stop: &AtomicBool,
+        log_path: &Path,
+        max_wait_attempts_u32: u32,
+        wait_sleep_ms: u64,
+    ) -> Result<(), String> {
+        assert!(max_wait_attempts_u32 > 0, "inetd child wait attempts must be positive");
+        assert!(wait_sleep_ms > 0, "inetd child wait sleep must be positive");
+
+        for _attempt in 0..max_wait_attempts_u32 {
+            if let Some(status) = child.try_wait().map_err(|err| format!("failed to poll inetd git daemon child: {err}"))? {
+                if status.success() {
+                    return Ok(());
+                }
+                let log = std::fs::read_to_string(log_path).unwrap_or_default();
+                return Err(format!("inetd git daemon child exited with {status}: {log}"));
+            }
+            if stop.load(std::sync::atomic::Ordering::SeqCst) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(wait_sleep_ms));
+        }
+
+        let _ = child.kill();
+        let status = child.wait().map_err(|err| format!("failed to reap timed-out inetd git daemon child: {err}"))?;
+        let log = std::fs::read_to_string(log_path).unwrap_or_default();
+        Err(format!(
+            "inetd git daemon child exceeded timeout after {} ms and ended with {status}: {log}",
+            max_wait_attempts_u32 as u64 * wait_sleep_ms
+        ))
+    }
+
     fn serve_git_daemon_connection(
         stream: std::net::TcpStream,
         repo_root: &Path,
@@ -970,30 +1006,7 @@ mod tests {
             .stderr(std::process::Stdio::from(stderr_log))
             .spawn()
             .map_err(|err| format!("failed to spawn inetd git daemon child: {err}"))?;
-
-        for _attempt in 0..MAX_CHILD_WAIT_ATTEMPTS {
-            if let Some(status) = child.try_wait().map_err(|err| format!("failed to poll inetd git daemon child: {err}"))? {
-                if status.success() {
-                    return Ok(());
-                }
-                let log = std::fs::read_to_string(log_path).unwrap_or_default();
-                return Err(format!("inetd git daemon child exited with {status}: {log}"));
-            }
-            if stop.load(std::sync::atomic::Ordering::SeqCst) {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Ok(());
-            }
-            std::thread::sleep(std::time::Duration::from_millis(CHILD_WAIT_SLEEP_MS));
-        }
-
-        let _ = child.kill();
-        let status = child.wait().map_err(|err| format!("failed to reap timed-out inetd git daemon child: {err}"))?;
-        let log = std::fs::read_to_string(log_path).unwrap_or_default();
-        Err(format!(
-            "inetd git daemon child exceeded timeout after {} ms and ended with {status}: {log}",
-            MAX_CHILD_WAIT_ATTEMPTS as u64 * CHILD_WAIT_SLEEP_MS
-        ))
+        wait_for_inetd_child(&mut child, stop, log_path, MAX_CHILD_WAIT_ATTEMPTS, CHILD_WAIT_SLEEP_MS)
     }
 
     #[cfg(unix)]
@@ -1081,6 +1094,49 @@ mod tests {
         visit(root, root, &mut out);
         assert!(!out.iter().any(|entry| entry.contains(".git")), "snapshot must not contain .git entries: {out:?}");
         out
+    }
+
+    #[cfg(unix)]
+    fn spawn_stuck_child() -> std::process::Child {
+        let shell = Path::new("/bin/sh");
+        assert!(shell.exists(), "test shell must exist");
+        std::process::Command::new(shell)
+            .arg("-c")
+            .arg("while :; do :; done")
+            .spawn()
+            .unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_for_inetd_child_kills_on_stop_signal() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let log_path = tempdir.path().join("git-daemon.log");
+        std::fs::write(&log_path, "").unwrap();
+        let stop = AtomicBool::new(true);
+        let mut child = spawn_stuck_child();
+
+        wait_for_inetd_child(&mut child, &stop, &log_path, 4, 5).unwrap();
+
+        let status = child.try_wait().unwrap();
+        assert!(status.is_some(), "stop path must reap inetd child");
+        assert!(log_path.exists(), "stop-path log file must still exist");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_for_inetd_child_times_out_and_reaps_child() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let log_path = tempdir.path().join("git-daemon.log");
+        std::fs::write(&log_path, "").unwrap();
+        let stop = AtomicBool::new(false);
+        let mut child = spawn_stuck_child();
+
+        let err = wait_for_inetd_child(&mut child, &stop, &log_path, 2, 5).unwrap_err();
+
+        assert!(err.contains("exceeded timeout"), "timeout path must report timeout: {err}");
+        let status = child.try_wait().unwrap();
+        assert!(status.is_some(), "timeout path must reap inetd child");
     }
 
     // ── parse_fetch tests ──────────────────────────────────────────
