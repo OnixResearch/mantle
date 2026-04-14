@@ -5,21 +5,29 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly DEFAULT_TOOLCHAIN="nightly"
 readonly PROOF_COMMAND=(cargo test -p crunch --test self_hosting -- --ignored --nocapture)
-readonly MIN_TMP_FREE_KIB=4194304
-readonly MIN_TMP_FREE_MIB=4096
+readonly MIN_PROOF_SCRATCH_FREE_KIB=4194304
+readonly MIN_PROOF_SCRATCH_FREE_MIB=4096
 readonly DEFAULT_BUNDLE_ROOT="$REPO_ROOT/target/self-hosting-proof"
 readonly PROOF_BUNDLE_ENV="CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
+readonly PROOF_SCRATCH_ENV="CRUNCH_PROOF_SCRATCH_DIR"
 readonly PROOF_MODE_ENV="CRUNCH_SELF_HOSTING_PROOF_MODE"
 readonly PROOF_STAGE0_INVENTORY_DOC_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC"
 readonly PROOF_MODE_FIXED_POINT="fixed-point"
 readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
+readonly DEFAULT_SCRATCH_ROOT="$DEFAULT_BUNDLE_ROOT/work"
+readonly DEFAULT_SCRATCH_SOURCE="default repo-local policy"
+readonly SCRATCH_TMP_SUBDIR="tmp"
+readonly SCRATCH_CARGO_TARGET_SUBDIR="cargo-target"
 readonly MAX_PATH_SOURCE_DIRS=128
 readonly MAX_PATH_LINKS=8192
 readonly BLOCKED_NIX_BINARIES=(nix-build nix-store nix-shell nix)
 
 path_prefix=""
+scratch_root=""
+scratch_source=""
 tmp_dir=""
-tmp_free_kib="0"
+cargo_target_dir=""
+scratch_free_kib="0"
 proof_bundle_dir=""
 proof_path_dir=""
 mode="run"
@@ -358,33 +366,76 @@ read_free_space_kib() {
 
   stat_output="$(stat -f -c '%a %S' "$dir" 2>/dev/null || true)"
   if [[ -z "$stat_output" ]]; then
-    die "failed to read free space for temporary directory: $dir"
+    die "failed to read free space for proof scratch root: $dir"
   fi
 
   read -r free_blocks block_size <<< "$stat_output"
   if [[ ! "$free_blocks" =~ ^[0-9]+$ ]]; then
-    die "failed to parse free blocks for temporary directory: $dir"
+    die "failed to parse free blocks for proof scratch root: $dir"
   fi
   if [[ ! "$block_size" =~ ^[0-9]+$ ]]; then
-    die "failed to parse filesystem block size for temporary directory: $dir"
+    die "failed to parse filesystem block size for proof scratch root: $dir"
   fi
 
   free_bytes=$(( free_blocks * block_size ))
   printf '%s\n' "$(( free_bytes / 1024 ))"
 }
 
-require_tmp_space() {
-  tmp_dir="${TMPDIR:-/tmp}"
-  if [[ ! -d "$tmp_dir" ]]; then
-    die "temporary directory does not exist: $tmp_dir"
-  fi
-  if [[ ! -w "$tmp_dir" ]]; then
-    die "temporary directory is not writable: $tmp_dir"
+normalize_repo_relative_path() {
+  local path_raw="${1:?path is required}"
+
+  if [[ "$path_raw" == /* ]]; then
+    printf '%s\n' "$path_raw"
+    return
   fi
 
-  tmp_free_kib="$(read_free_space_kib "$tmp_dir")"
-  if (( tmp_free_kib < MIN_TMP_FREE_KIB )); then
-    die "only $(( tmp_free_kib / 1024 )) MiB free in $tmp_dir; need at least ${MIN_TMP_FREE_MIB} MiB for the proof"
+  printf '%s/%s\n' "$REPO_ROOT" "$path_raw"
+}
+
+require_writable_dir() {
+  local dir="${1:?directory is required}"
+  local label="${2:?label is required}"
+
+  if ! mkdir -p -- "$dir" 2>/dev/null; then
+    die "$label is not usable: $dir. Set $PROOF_SCRATCH_ENV to redirect proof scratch"
+  fi
+  if [[ ! -d "$dir" ]]; then
+    die "$label is not a directory: $dir. Set $PROOF_SCRATCH_ENV to redirect proof scratch"
+  fi
+  if [[ ! -w "$dir" ]]; then
+    die "$label is not writable: $dir. Set $PROOF_SCRATCH_ENV to redirect proof scratch"
+  fi
+}
+
+resolve_proof_scratch_root() {
+  local requested_root="${CRUNCH_PROOF_SCRATCH_DIR:-}"
+
+  if [[ -n "$requested_root" ]]; then
+    scratch_root="$(normalize_repo_relative_path "$requested_root")"
+    scratch_source="$PROOF_SCRATCH_ENV"
+    require_writable_dir "$scratch_root" "proof scratch root from $PROOF_SCRATCH_ENV"
+    return
+  fi
+
+  scratch_root="$DEFAULT_SCRATCH_ROOT"
+  scratch_source="$DEFAULT_SCRATCH_SOURCE"
+  require_writable_dir "$scratch_root" "default proof scratch root"
+}
+
+configure_proof_scratch() {
+  resolve_proof_scratch_root
+
+  tmp_dir="$scratch_root/$SCRATCH_TMP_SUBDIR"
+  cargo_target_dir="$scratch_root/$SCRATCH_CARGO_TARGET_SUBDIR"
+  require_writable_dir "$tmp_dir" "proof TMPDIR under $scratch_root"
+  require_writable_dir "$cargo_target_dir" "proof CARGO_TARGET_DIR under $scratch_root"
+
+  export TMPDIR="$tmp_dir"
+  export CARGO_TARGET_DIR="$cargo_target_dir"
+
+  scratch_free_kib="$(read_free_space_kib "$scratch_root")"
+  if (( scratch_free_kib < MIN_PROOF_SCRATCH_FREE_KIB )); then
+    die "only $(( scratch_free_kib / 1024 )) MiB free in proof scratch root $scratch_root; need at least ${MIN_PROOF_SCRATCH_FREE_MIB} MiB for the proof. Set $PROOF_SCRATCH_ENV to a larger filesystem"
   fi
 }
 
@@ -463,12 +514,7 @@ default_proof_bundle_dir() {
 normalize_bundle_dir() {
   local bundle_dir_raw="${1:?bundle dir is required}"
 
-  if [[ "$bundle_dir_raw" == /* ]]; then
-    printf '%s\n' "$bundle_dir_raw"
-    return
-  fi
-
-  printf '%s/%s\n' "$REPO_ROOT" "$bundle_dir_raw"
+  normalize_repo_relative_path "$bundle_dir_raw"
 }
 
 resolve_proof_bundle_dir() {
@@ -480,12 +526,28 @@ resolve_proof_bundle_dir() {
   default_proof_bundle_dir
 }
 
+show_scratch_summary() {
+  local bundle_dir="${1:-}"
+
+  note "proof mode: $proof_mode"
+  note "proof scratch root: $scratch_root"
+  note "proof scratch source: $scratch_source"
+  note "proof TMPDIR: $tmp_dir"
+  note "proof CARGO_TARGET_DIR: $cargo_target_dir"
+  note "proof scratch free: $(( scratch_free_kib / 1024 )) MiB"
+  if [[ -n "$bundle_dir" ]]; then
+    note "proof bundle dir: $bundle_dir"
+  fi
+  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]]; then
+    note "proof PATH dir: $proof_path_dir"
+  fi
+}
+
 show_check_summary() {
   local bundle_dir
   bundle_dir="$(resolve_proof_bundle_dir)"
 
   note "self-hosting proof check passed"
-  note "proof mode: $proof_mode"
   note "repo: $REPO_ROOT"
   note "cargo: $(command -v cargo)"
   note "rustc: $(command -v rustc)"
@@ -495,13 +557,8 @@ show_check_summary() {
   note "bwrap: $(command -v bwrap)"
   note "openssl: $(pkg-config --modversion openssl)"
   note "SNIX_BUILD_SANDBOX_SHELL: $SNIX_BUILD_SANDBOX_SHELL"
-  note "tmpdir: $tmp_dir"
-  note "tmp free: $(( tmp_free_kib / 1024 )) MiB"
-  note "proof bundle dir: $bundle_dir"
+  show_scratch_summary "$bundle_dir"
   note "stage0 inventory doc: $REPO_ROOT/docs/bootstrap-stage0-inventory.md"
-  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]]; then
-    note "proof PATH dir: $proof_path_dir"
-  fi
   note "proof command: ${PROOF_COMMAND[*]}"
 }
 
@@ -564,7 +621,7 @@ main() {
   configure_sandbox_shell
   configure_openssl_lookup
   require_nightly_rustc
-  require_tmp_space
+  configure_proof_scratch
   configure_non_nix_path
 
   cd "$REPO_ROOT"
@@ -579,6 +636,7 @@ main() {
   export "$PROOF_BUNDLE_ENV=$bundle_dir"
   export "$PROOF_MODE_ENV=$proof_mode"
   export "$PROOF_STAGE0_INVENTORY_DOC_ENV=$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
+  show_scratch_summary "$bundle_dir"
 
   if "${PROOF_COMMAND[@]}"; then
     proof_status=0

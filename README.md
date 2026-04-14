@@ -379,7 +379,9 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
   the staged source tree recorded by stage0.
 - **Host prerequisites**: Linux, the repo's nightly Rust toolchain, `clang`,
   `mold`, `pkg-config`, OpenSSL development files, `bwrap`, `git`, `cargo`,
-  a static sandbox shell, and about 4 GiB free in `${TMPDIR:-/tmp}`.
+  a static sandbox shell, and about 4 GiB free in the proof scratch
+  filesystem (`target/self-hosting-proof/work/` by default, or
+  `CRUNCH_PROOF_SCRATCH_DIR`).
 - **Evidence today**: the helper prepares the environment and runs
   `cargo test -p crunch --test self_hosting -- --ignored --nocapture`, which
   drives the stage0 -> stage1 -> stage2 proof path.
@@ -453,13 +455,19 @@ and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
 are anchored to the repo root before the helper exports them to the proof test
 or updates `latest`.
 
+The helper does not inherit ambient `TMPDIR` or `CARGO_TARGET_DIR`. It picks a
+proof scratch root from `CRUNCH_PROOF_SCRATCH_DIR` when set, else from the
+repo-local default `target/self-hosting-proof/work/`, then rewrites both env
+vars under that root before it launches `cargo test`. `--check` reports the
+selected scratch root, provenance, and free-space preflight result.
+
 Host prerequisites:
 - Linux
 - `rustup` with the repo's `nightly` toolchain installed
 - `clang`, `mold`, `pkg-config`, and OpenSSL development files visible to `pkg-config`
 - `bwrap`, `git`, and `cargo`
 - a static `SNIX_BUILD_SANDBOX_SHELL`
-- about 4 GiB free in `${TMPDIR:-/tmp}`
+- about 4 GiB free in the selected proof scratch filesystem (`target/self-hosting-proof/work/` by default, or `CRUNCH_PROOF_SCRATCH_DIR`)
 
 If `pkg-config --exists openssl` does not work in your current shell, export
 `CRUNCH_PROOF_OPENSSL_PKGCONFIG=/path/to/openssl/lib/pkgconfig` before running
@@ -469,10 +477,26 @@ If no installed static busybox is discoverable, set `SNIX_BUILD_SANDBOX_SHELL`
 explicitly before running the helper. The helper no longer realizes one through
 hidden `nix-build` fallback.
 
+If you bypass the helper for a compile-heavy non-proof Cargo command, start
+from the prerequisite PATH / `PKG_CONFIG_PATH` / `SNIX_BUILD_SANDBOX_SHELL`
+setup documented in `AGENTS.md`, then move both temp files and Cargo artifacts
+onto disk-backed scratch yourself:
+
+```bash
+export TMPDIR="$PWD/target/manual-work/tmp"
+export CARGO_TARGET_DIR="$PWD/target/manual-work/cargo-target"
+mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR"
+cargo test -p crunch --test self_hosting -- --list
+```
+
+That example is scratch guidance only. For self-hosting evidence, keep using
+`./scripts/prove-self-hosting.sh`.
+
 This runs two stages: the checkout binary builds stage1, then the stage1
 binary rebuilds crunch as stage2 from the same staged source tree. The test
 asserts that stage2 selected crunch-built `bwrap` and `busybox`, not host
-fallbacks. Expect about 30 minutes and about 4 GiB free in `/tmp`.
+fallbacks. Expect about 30 minutes and about 4 GiB free in the selected proof
+scratch filesystem.
 
 Each proof bundle contains:
 - `manifest.json` — stable machine-readable digests for the checkout, stage1,
@@ -521,14 +545,14 @@ Related bootstrap work worth keeping handy:
 | `error: pkg-config cannot find openssl` | OpenSSL `.pc` files are outside the default search path | export `CRUNCH_PROOF_OPENSSL_PKGCONFIG=/path/to/openssl/lib/pkgconfig` and rerun |
 | `error: required tool 'mold' not found` | linker tools missing from the shell | enter the repo dev shell or add the tool directory to `PATH` before running the helper |
 | `error: required tool 'bwrap' not found` | bubblewrap not installed | `nix-shell -p bubblewrap` or install bwrap from your distro |
-| `error: only <n> MiB free in <tmpdir>; need at least 4096 MiB for the proof` | insufficient temporary disk space | free space in `${TMPDIR:-/tmp}` or point `TMPDIR` at a larger filesystem |
-| `error: temporary directory does not exist:` | `TMPDIR` points at a missing location | unset `TMPDIR` or point it at a real directory before running the helper |
-| `error: temporary directory is not writable:` | proof tempdir is not usable | pick a writable `TMPDIR` or fix permissions before running the helper |
-| Stage0 fails with permission errors writing to store | unwritable output directory | The proof uses a tempdir under `${TMPDIR:-/tmp}`; check that filesystem has space and write permissions |
+| `error: only <n> MiB free in proof scratch root <dir>; need at least 4096 MiB for the proof. Set CRUNCH_PROOF_SCRATCH_DIR to a larger filesystem` | selected proof scratch filesystem is too small | free space under `target/self-hosting-proof/work/`, or point `CRUNCH_PROOF_SCRATCH_DIR` at a larger writable filesystem |
+| `error: proof scratch root from CRUNCH_PROOF_SCRATCH_DIR is not usable:` | explicit scratch override points at a blocked or unwritable location | point `CRUNCH_PROOF_SCRATCH_DIR` at a writable directory |
+| `error: default proof scratch root is not usable:` | repo-local `target/self-hosting-proof/work/` cannot be created or written | fix repo `target/` permissions or set `CRUNCH_PROOF_SCRATCH_DIR` to a writable directory |
+| Stage0 fails with permission errors writing to store | unwritable output directory | The proof uses the selected scratch root for temp files, but build outputs still need writable store and state directories |
 | Stage2 reports `bwrap-source=host-fallback:` | stage0 did not produce crunch-built bwrap | Clear the proof store and rerun; the bootstrap chain may have failed silently |
 | Stage2 reports `busybox-path=none` | no crunch-built busybox in the proof store | Same as above — the bootstrap chain did not complete |
 | Stale pathinfo.redb causes false cache hits | prior run left state in `~/.local/state/crunch/` | The proof uses per-stage state dirs to avoid this; if running manually, pass `--state-dir` to a fresh directory |
-| `No space left on device` | insufficient `/tmp` space | Free about 4 GiB in `/tmp`; the proof stores two full bootstrap chains |
+| `No space left on device` | selected proof scratch filesystem or later proof outputs still ran out of space | free about 4 GiB under `target/self-hosting-proof/work/` or set `CRUNCH_PROOF_SCRATCH_DIR` to a larger filesystem |
 
 ## Project Management
 

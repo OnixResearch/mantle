@@ -36,7 +36,7 @@ Anything outside those buckets is a hidden trust edge.
 | Host `bwrap` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before crunch has built its own | later self-build stages switch to crunch-built `bwrap` |
 | Static `SNIX_BUILD_SANDBOX_SHELL` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | must be explicit; hidden realization is not acceptable for the stronger claim |
 | Host Rust nightly + `cargo` + `clang` + `mold` + `pkg-config` + OpenSSL dev files | `./scripts/prove-self-hosting.sh` | stage0 helper builds the checkout test binary and prepares the proof env | proof-only prerequisites, not required by `crunch bootstrap --fetch` |
-| About 4 GiB free in `${TMPDIR:-/tmp}` | `./scripts/prove-self-hosting.sh` | proof stores two full bootstrap chains plus audit bundles | capacity requirement, not a trust root, but still a stage0 prerequisite |
+| About 4 GiB free in the selected proof scratch filesystem (`target/self-hosting-proof/work/` by default, or `CRUNCH_PROOF_SCRATCH_DIR`) | `./scripts/prove-self-hosting.sh` | proof stores two full bootstrap chains plus audit bundles | capacity requirement, not a trust root, but still a stage0 prerequisite |
 
 ### Pinned fetched artifacts
 
