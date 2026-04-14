@@ -40,6 +40,7 @@ crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-project = { path = "crates/crunch-project" }
 crunch-attestation = { path = "crates/crunch-attestation" }
+crunch-shell = { path = "crates/crunch-shell" }
 nix-compat = { path = "vendor/nix-compat" }
 snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }

@@ -10,8 +10,10 @@ mod project_build;
 mod project_cmd;
 mod project_resolve;
 mod self_build;
+mod shell_cmd;
 mod store_cmd;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -228,6 +230,52 @@ enum Command {
     },
 
     /// Enter a development shell from crunch.ncl devShells
+    Shell {
+        /// Shell name or .#name selector (default: default.shell or only shell)
+        name: Option<String>,
+
+        /// Additional import paths for Nickel
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Maximum number of concurrent builds
+        #[arg(short, long)]
+        jobs: Option<u32>,
+
+        /// Disable remote binary cache substitution
+        #[arg(long)]
+        no_substitute: bool,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+        /// Accept unsigned/unverified PathInfo on cache hits
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Execute a command inside the shell environment and exit
+        #[arg(long, conflicts_with = "run_script", num_args = 1.., value_name = "CMD")]
+        command: Vec<OsString>,
+
+        /// Pass a script string to $SHELL -c inside the shell environment
+        #[arg(long = "run", conflicts_with = "command")]
+        run_script: Option<String>,
+
+        /// Layer additional store paths into the shell environment
+        #[arg(long = "with")]
+        with_paths: Vec<PathBuf>,
+
+        /// Suppress hook execution
+        #[arg(long)]
+        no_hook: bool,
+
+        /// Make hook failure fatal (exit immediately)
+        #[arg(long)]
+        strict_hooks: bool,
+    },
+
+    /// Alias for `shell` (deprecated, use `crunch shell`)
     Develop {
         /// Shell name or .#name selector (default: default.shell or only shell)
         name: Option<String>,
@@ -462,6 +510,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         | Command::ListStale
         | Command::Upgrade => run_project_command(&args.command),
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
+        Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
     }
@@ -609,6 +658,41 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
     attest_cmd::cmd_attest(action, &current_dir_or_error()?, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
 }
 
+fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    match command {
+        Command::Shell {
+            name,
+            import_paths,
+            jobs,
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+            command: cmd_argv,
+            run_script,
+            with_paths,
+            no_hook,
+            strict_hooks,
+        } => shell_cmd::cmd_shell(
+            name.as_deref(),
+            import_paths,
+            *jobs,
+            *no_substitute,
+            signing_key.as_deref(),
+            *trust_unsigned,
+            cmd_argv,
+            run_script.as_deref(),
+            with_paths,
+            *no_hook,
+            *strict_hooks,
+            &ctx.store,
+            &ctx.resolved_state_dir,
+            &ctx.store_prefix,
+            ctx.verbose,
+        ),
+        _ => unreachable!("shell helper called with non-shell command"),
+    }
+}
+
 fn run_develop_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     match command {
         Command::Develop {
@@ -640,13 +724,18 @@ fn run_develop_command(
     signing_key: Option<&std::path::Path>,
     trust_unsigned: bool,
 ) -> Result<(), RunError> {
-    cmd_develop(
+    shell_cmd::cmd_shell(
         name,
         import_paths,
         jobs,
         no_substitute,
         signing_key,
         trust_unsigned,
+        &[],
+        None,
+        &[],
+        false,
+        false,
         &ctx.store,
         &ctx.resolved_state_dir,
         &ctx.store_prefix,
@@ -901,30 +990,6 @@ fn first_output_path(
     None
 }
 
-/// Exec into a shell with the build output on PATH.
-fn exec_shell(out_path: &std::path::Path) -> Result<(), RunError> {
-    let bin_dir = out_path.join("bin");
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = if bin_dir.is_dir() {
-        format!("{}:{current_path}", bin_dir.display())
-    } else {
-        current_path
-    };
-
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    eprintln!("entering dev shell ({})", out_path.display());
-    if bin_dir.is_dir() {
-        eprintln!("  PATH += {}", bin_dir.display());
-    }
-
-    let status = std::process::Command::new(&shell)
-        .env("PATH", &new_path)
-        .env("CRUNCH_DEV_SHELL", out_path.as_os_str())
-        .status()
-        .map_err(|e| RunError::Internal(format!("exec {shell}: {e}")))?;
-
-    std::process::exit(status.code().unwrap_or(1));
-}
 
 /// Find the first executable in out_path/bin and exec it with args.
 fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError> {
@@ -1006,47 +1071,6 @@ fn build_project_expr(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn cmd_develop(
-    name: Option<&str>,
-    import_paths: &[PathBuf],
-    jobs: Option<u32>,
-    no_substitute: bool,
-    signing_key: Option<&std::path::Path>,
-    trust_unsigned: bool,
-    output_dir: &std::path::Path,
-    state_dir: &std::path::Path,
-    store_prefix: &str,
-    verbose: bool,
-) -> Result<(), RunError> {
-    let cwd = current_dir_or_error()?;
-    let target = name_to_build_target(name);
-    let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
-    let shell_target = match &resolved.target {
-        project_build::ProjectTarget::Default => project_build::ProjectTarget::DefaultShell,
-        project_build::ProjectTarget::Attribute(segs) if segs.len() == 1 => {
-            project_build::ProjectTarget::NamedShell(segs[0].clone())
-        }
-        other => other.clone(),
-    };
-    let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
-    let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-    let result = build_project_expr(
-        &expr,
-        resolved.import_paths,
-        output_dir,
-        state_dir,
-        store_prefix,
-        verbose,
-        max_jobs,
-        no_substitute,
-        signing_key,
-        trust_unsigned,
-    )?;
-    let out_path = first_output_path(&result, output_dir, store_prefix)
-        .ok_or_else(|| RunError::Internal("no outputs built for dev shell".into()))?;
-    exec_shell(&out_path)
-}
 
 #[allow(clippy::too_many_arguments)]
 fn cmd_run(

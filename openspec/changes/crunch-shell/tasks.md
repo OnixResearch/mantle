@@ -28,14 +28,14 @@
 
 ## PR 3: CLI and imperative shell
 
-- [ ] Add `Shell` variant to CLI `Command` enum with `--command`, `--run`, `--with`, `--no-hook`, `--strict-hooks`
-- [ ] Keep `Develop` as an alias that dispatches to the shell handler
-- [ ] Implement `cmd_shell()` in `src/shell_cmd.rs`: build target → read sidecar → snapshot host env → call `compute_activation()` → match `ExecTarget` → `std::process::Command`
-- [ ] Wire `--command` / `--run` mutual exclusion as a clap conflict
-- [ ] Wire `--with` resolution: store paths validated on disk, `.#attr` resolved and built via existing project build path
-- [ ] Wire hook execution: `$SHELL -c <hook>` before exec, warn on non-zero, fatal with `--strict-hooks`
-- [ ] Wire `--no-hook` suppression (shell-side, not core-side)
-- [ ] Propagate command exit code as process exit code
+- [x] Add `Shell` variant to CLI `Command` enum with `--command`, `--run`, `--with`, `--no-hook`, `--strict-hooks`
+- [x] Keep `Develop` as an alias that dispatches to the shell handler
+- [x] Implement `cmd_shell()` in `src/shell_cmd.rs`: build target → read sidecar → snapshot host env → call `compute_activation()` → match `ExecTarget` → `std::process::Command`
+- [x] Wire `--command` / `--run` mutual exclusion as a clap conflict
+- [x] Wire `--with` resolution: store paths validated on disk, `.#attr` resolved and built via existing project build path
+- [x] Wire hook execution: `$SHELL -c <hook>` before exec, warn on non-zero, fatal with `--strict-hooks`
+- [x] Wire `--no-hook` suppression (shell-side, not core-side)
+- [x] Propagate command exit code as process exit code
 
 ## PR 4: Integration tests
 
