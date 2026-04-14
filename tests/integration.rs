@@ -55,6 +55,19 @@ fn eval_output_is_valid_json() {
 }
 
 #[test]
+fn eval_still_uses_json_export_after_build_path_switch() {
+    let output = crunch_cmd().arg("eval").arg(fixture("simple.ncl")).output().expect("should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should stay JSON");
+    assert_eq!(parsed["name"], "simple-test");
+    assert_eq!(parsed["builder"], "/bin/sh");
+    assert_eq!(parsed["args"][0], "-c");
+    assert_eq!(parsed["args"][1], "echo hello > $out");
+}
+
+#[test]
 fn eval_invalid_nickel_exits_2() {
     crunch_cmd()
         .arg("eval")

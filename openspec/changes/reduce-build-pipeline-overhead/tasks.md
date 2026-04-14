@@ -33,5 +33,5 @@
 
 ## Validation
 
-- [x] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
+- [ ] Re-read the touched pipeline, nickel-eval, build-pipeline, and store specs against the final implementation plan before coding
 - [x] Run `openspec validate reduce-build-pipeline-overhead`
