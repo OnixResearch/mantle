@@ -1183,37 +1183,59 @@ fn build_all_bootstrap_tools(
     trusted_keys: &[nix_compat::narinfo::VerifyingKey],
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
+    bootstrap_bwrap_source: Option<&BwrapSource>,
+    bootstrap_busybox_path: Option<&Path>,
 ) -> Result<BootstrapTools, RunError> {
     validate_bootstrap_tools(bootstrap_dir)?;
     let mut built_bwrap_output_dir: Option<PathBuf> = None;
     let mut built_busybox_output_dir: Option<PathBuf> = None;
 
     for tool_name in REQUIRED_BOOTSTRAP_TOOLS {
-        let tool_path = bootstrap_dir.join(tool_name);
         emit_progress_marker(&format!("bootstrap-tool-start:{tool_name}"));
-        eprintln!("  building {tool_name}...");
-        let tool_output_dir = build_bootstrap_tool(
-            &tool_path,
-            import_paths,
-            output_dir,
-            state_dir,
-            store_dir,
-            verbose,
-            max_jobs,
-            no_substitute,
-            keypair,
-            trusted_keys,
-            trust_unsigned,
-            hermeticity_mode,
-        )?;
+        let reused_output_dir = match *tool_name {
+            "bwrap.ncl" => bootstrap_bwrap_source
+                .map(|source| source.bin_dir())
+                .transpose()?
+                .map(|dir| dir.parent().expect("bwrap bin dir must have store root parent").to_path_buf()),
+            "busybox.ncl" => bootstrap_busybox_path.map(|path| {
+                path.parent()
+                    .and_then(|bin_dir| bin_dir.parent())
+                    .expect("busybox path must have store root parent")
+                    .to_path_buf()
+            }),
+            _ => None,
+        };
+        let tool_output_dir = if let Some(dir) = reused_output_dir {
+            eprintln!("  reusing {tool_name} from {}...", dir.display());
+            dir
+        } else {
+            let tool_path = bootstrap_dir.join(tool_name);
+            eprintln!("  building {tool_name}...");
+            build_bootstrap_tool(
+                &tool_path,
+                import_paths,
+                output_dir,
+                state_dir,
+                store_dir,
+                verbose,
+                max_jobs,
+                no_substitute,
+                keypair,
+                trusted_keys,
+                trust_unsigned,
+                hermeticity_mode,
+            )?
+        };
         if *tool_name == "bwrap.ncl" {
             let bwrap_path = tool_output_dir.join("bin").join("bwrap");
             ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+            resolve_store_entry_name(&tool_output_dir, output_dir, "bwrap")?;
             built_bwrap_output_dir = Some(tool_output_dir.clone());
         }
         if *tool_name == "busybox.ncl" {
             let busybox_path = tool_output_dir.join("bin").join("busybox");
             ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+            resolve_store_entry_name(&tool_output_dir, output_dir, "busybox")?;
             built_busybox_output_dir = Some(tool_output_dir.clone());
         }
         emit_progress_marker(&format!("bootstrap-tool-done:{tool_name}"));
@@ -1244,7 +1266,14 @@ fn build_all_bootstrap_tools(
 
     let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, output_dir, "bwrap")?;
     let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, output_dir, "busybox")?;
-    let bwrap_source = BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf());
+    let bwrap_source = match bootstrap_bwrap_source {
+        Some(source) => source.clone(),
+        None => BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf()),
+    };
+    let busybox_path = match bootstrap_busybox_path {
+        Some(path) => path.to_path_buf(),
+        None => busybox_path,
+    };
     activate_bwrap_source(&bwrap_source)?;
 
     Ok(BootstrapTools {
@@ -1523,6 +1552,60 @@ fn absolutize_path(path: &Path) -> Result<PathBuf, RunError> {
     Ok(cwd.join(path))
 }
 
+fn resolve_explicit_bootstrap_output_dir(
+    binary_path: &Path,
+    output_dir: &Path,
+    label: &str,
+    expected_file_name: &str,
+) -> Result<(PathBuf, PathBuf), RunError> {
+    assert!(!label.is_empty(), "label must not be empty");
+    assert!(!expected_file_name.is_empty(), "expected file name must not be empty");
+    let absolute_binary = absolutize_path(binary_path)?;
+    ensure_executable_file(&absolute_binary, &format!("exact {label}"))?;
+    let actual_file_name = absolute_binary.file_name().and_then(|name| name.to_str()).ok_or_else(|| {
+        RunError::Internal(format!("exact {label} path has no UTF-8 file name: {}", absolute_binary.display()))
+    })?;
+    if actual_file_name != expected_file_name {
+        return Err(RunError::Internal(format!(
+            "exact {label} path {} must end with {expected_file_name}",
+            absolute_binary.display(),
+        )));
+    }
+    let bin_dir = absolute_binary.parent().ok_or_else(|| {
+        RunError::Internal(format!("exact {label} path has no parent directory: {}", absolute_binary.display()))
+    })?;
+    let output_root = bin_dir.parent().ok_or_else(|| {
+        RunError::Internal(format!("exact {label} path has no store root parent: {}", absolute_binary.display()))
+    })?;
+    resolve_store_entry_name(output_root, output_dir, label)?;
+    Ok((output_root.to_path_buf(), absolute_binary))
+}
+
+fn resolve_explicit_bootstrap_bwrap_source(
+    output_dir: &Path,
+    bootstrap_bwrap_path: Option<&Path>,
+) -> Result<Option<BwrapSource>, RunError> {
+    let Some(path) = bootstrap_bwrap_path else {
+        return Ok(None);
+    };
+    let (_output_root, binary_path) = resolve_explicit_bootstrap_output_dir(path, output_dir, "bwrap", "bwrap")?;
+    let bin_dir = binary_path.parent().ok_or_else(|| {
+        RunError::Internal(format!("exact bwrap path has no parent directory: {}", binary_path.display()))
+    })?;
+    Ok(Some(BwrapSource::CrunchBuilt(bin_dir.to_path_buf())))
+}
+
+fn resolve_explicit_bootstrap_busybox_path(
+    output_dir: &Path,
+    bootstrap_busybox_path: Option<&Path>,
+) -> Result<Option<PathBuf>, RunError> {
+    let Some(path) = bootstrap_busybox_path else {
+        return Ok(None);
+    };
+    let (_output_root, binary_path) = resolve_explicit_bootstrap_output_dir(path, output_dir, "busybox", "busybox")?;
+    Ok(Some(binary_path))
+}
+
 fn enforce_source_resolution_policy(
     output_dir: &Path,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
@@ -1579,6 +1662,8 @@ struct SelfBuildSetup {
     src_dir: PathBuf,
     bootstrap_dir: PathBuf,
     fallback_events: Vec<SelfBuildFallbackEvent>,
+    bootstrap_bwrap_source: Option<BwrapSource>,
+    bootstrap_busybox_path: Option<PathBuf>,
 }
 
 struct SelfBuildShared {
@@ -1593,6 +1678,8 @@ fn initialize_self_build(
     output_dir: &Path,
     source_store_path: Option<&Path>,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
+    bootstrap_bwrap_path: Option<&Path>,
+    bootstrap_busybox_path: Option<&Path>,
 ) -> Result<SelfBuildSetup, RunError> {
     eprintln!("=== crunch self-build ===");
 
@@ -1600,10 +1687,18 @@ fn initialize_self_build(
     eprintln!("  invoking binary: {}", invoking_binary.display());
     let output_dir = absolutize_path(output_dir)?;
 
-    let initial_bwrap = resolve_bwrap_source(&output_dir, hermeticity_mode)?;
+    let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, bootstrap_bwrap_path)?;
+    let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, bootstrap_busybox_path)?;
+
+    let initial_bwrap = match &explicit_bwrap_source {
+        Some(source) => source.clone(),
+        None => resolve_bwrap_source(&output_dir, hermeticity_mode)?,
+    };
     let mut fallback_events = Vec::new();
-    if let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap) {
-        fallback_events.push(event);
+    if explicit_bwrap_source.is_none() {
+        if let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap) {
+            fallback_events.push(event);
+        }
     }
     activate_bwrap_source(&initial_bwrap)?;
 
@@ -1621,6 +1716,8 @@ fn initialize_self_build(
         src_dir,
         bootstrap_dir,
         fallback_events,
+        bootstrap_bwrap_source: explicit_bwrap_source,
+        bootstrap_busybox_path: explicit_busybox_path,
     })
 }
 
@@ -1679,8 +1776,16 @@ pub fn cmd_self_build(
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_store_path: Option<&Path>,
+    bootstrap_bwrap_path: Option<&Path>,
+    bootstrap_busybox_path: Option<&Path>,
 ) -> Result<SelfBuildReport, RunError> {
-    let setup = initialize_self_build(output_dir, source_store_path, hermeticity_mode)?;
+    let setup = initialize_self_build(
+        output_dir,
+        source_store_path,
+        hermeticity_mode,
+        bootstrap_bwrap_path,
+        bootstrap_busybox_path,
+    )?;
     let shared =
         prepare_self_build_shared(&setup, state_dir, signing_key_path, trusted_public_keys, source_store_path)?;
 
@@ -1698,6 +1803,8 @@ pub fn cmd_self_build(
         &shared.trusted_keys,
         trust_unsigned,
         hermeticity_mode,
+        setup.bootstrap_bwrap_source.as_ref(),
+        setup.bootstrap_busybox_path.as_deref(),
     )?;
 
     eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
@@ -2133,6 +2240,94 @@ mod tests {
 
         let store_name = resolve_store_entry_name(&entry_path, output_dir.path(), "bwrap").unwrap();
         assert_eq!(store_name, "abc123-bwrap");
+    }
+
+    #[test]
+    fn resolve_explicit_bootstrap_bwrap_source_accepts_exact_store_binary() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let bwrap_bin = output_dir.path().join("abc123-bwrap").join("bin").join("bwrap");
+        std::fs::create_dir_all(bwrap_bin.parent().unwrap()).unwrap();
+        std::fs::write(&bwrap_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let source = resolve_explicit_bootstrap_bwrap_source(output_dir.path(), Some(&bwrap_bin)).unwrap();
+        assert!(source.is_some(), "explicit bwrap source should resolve");
+        match source.unwrap() {
+            BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, output_dir.path().join("abc123-bwrap").join("bin")),
+            BwrapSource::HostFallback(path) => {
+                panic!("expected crunch-built bwrap, got host fallback {}", path.display())
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_explicit_bootstrap_bwrap_source_ignores_stale_sibling() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let stage0_bwrap_bin = output_dir.path().join("aaa-stage0-bwrap").join("bin").join("bwrap");
+        std::fs::create_dir_all(stage0_bwrap_bin.parent().unwrap()).unwrap();
+        std::fs::write(&stage0_bwrap_bin, "#!/bin/sh\n").unwrap();
+        let stale_bwrap_bin = output_dir.path().join("zzz-stale-bwrap").join("bin").join("bwrap");
+        std::fs::create_dir_all(stale_bwrap_bin.parent().unwrap()).unwrap();
+        std::fs::write(&stale_bwrap_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stage0_bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&stale_bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let source = resolve_explicit_bootstrap_bwrap_source(output_dir.path(), Some(&stage0_bwrap_bin)).unwrap();
+        match source.unwrap() {
+            BwrapSource::CrunchBuilt(dir) => {
+                assert_eq!(dir, output_dir.path().join("aaa-stage0-bwrap").join("bin"));
+                assert_ne!(dir, output_dir.path().join("zzz-stale-bwrap").join("bin"));
+            }
+            BwrapSource::HostFallback(path) => panic!("expected crunch-built bwrap, got host fallback {}", path.display()),
+        }
+    }
+
+    #[test]
+    fn resolve_explicit_bootstrap_busybox_path_rejects_path_outside_store() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let outside_dir = tempfile::tempdir().unwrap();
+        let busybox_bin = outside_dir.path().join("outside-busybox").join("bin").join("busybox");
+        std::fs::create_dir_all(busybox_bin.parent().unwrap()).unwrap();
+        std::fs::write(&busybox_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&busybox_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let err = resolve_explicit_bootstrap_busybox_path(output_dir.path(), Some(&busybox_bin)).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("must live directly under the self-build store"), "unexpected error: {message}");
+    }
+
+    #[test]
+    fn resolve_explicit_bootstrap_busybox_path_ignores_stale_sibling() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let stage0_busybox_bin = output_dir.path().join("aaa-stage0-busybox").join("bin").join("busybox");
+        std::fs::create_dir_all(stage0_busybox_bin.parent().unwrap()).unwrap();
+        std::fs::write(&stage0_busybox_bin, "#!/bin/sh\n").unwrap();
+        let stale_busybox_bin = output_dir.path().join("zzz-stale-busybox").join("bin").join("busybox");
+        std::fs::create_dir_all(stale_busybox_bin.parent().unwrap()).unwrap();
+        std::fs::write(&stale_busybox_bin, "#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&stage0_busybox_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&stale_busybox_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let busybox_path =
+            resolve_explicit_bootstrap_busybox_path(output_dir.path(), Some(&stage0_busybox_bin)).unwrap();
+        assert_eq!(busybox_path, Some(stage0_busybox_bin.clone()));
+        assert_ne!(busybox_path, Some(stale_busybox_bin));
     }
 
     #[test]

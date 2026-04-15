@@ -1,0 +1,36 @@
+schema: crunch-self-hosting-proof-v2
+generated_unix_s: 1776226646
+repo_root: /home/brittonr/git/crunch/crunch
+bundle_dir: /home/brittonr/git/crunch/crunch/target/self-hosting-proof/strict-hermeticity-check
+store_dir: /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store
+staged_source: /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/dz9r3mzjpqqhfdanr9jhrnb49a9yayyg-crunch-src
+proof_mode: FixedPoint
+stage0_path_strategy: inherited
+stage0_path_dir: <inherited>
+stage0_nix_binaries_absent: []
+stage0_inventory_doc: f0e34395b013a2739d94818475fcd6f6674afb0fab488eadf7b7c9f6ccf248aa stage0-prerequisites/inventory.md
+sandbox_shell: 0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276 /nix/store/d7fc5i7y71rj8cr5jwmaxwjnyvfiybdp-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+stage0_state: /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/state0
+stage2_state: /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/state2
+store_crunch_entries: ["pimdm2a11nn4ldv6a36nf89v6d98sn9d-crunch"]
+store_bwrap_entries: ["00000000000000000000000000000000-stale-bwrap", "pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap"]
+store_busybox_entries: ["00000000000000000000000000000000-stale-busybox", "7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox"]
+checkout_binary: 7e733b4ab266b24f772518da2fbf6936560d9db619e8c0a4da2adf16acc165de /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/cargo-target/debug/crunch
+stage1_binary: 43f9dbdd77c0000874a3ece62e0a0cab1875a92dea66ad2fa1961f4ce0d74570 /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/stage1-crunch
+stage2_binary: 43f9dbdd77c0000874a3ece62e0a0cab1875a92dea66ad2fa1961f4ce0d74570 /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/pimdm2a11nn4ldv6a36nf89v6d98sn9d-crunch/bin/crunch
+stage0_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage0_busybox: 76b70c054a2681f04ff263f069854e85a1e951e6243ff15c5ea2b72222564cab /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox/bin/busybox
+stage2_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage2_busybox: 76b70c054a2681f04ff263f069854e85a1e951e6243ff15c5ea2b72222564cab /home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox/bin/busybox
+stage1_equals_stage2: true
+stage1_vs_stage2: same_size=true size_delta_bytes=0 first_diff_offset=None
+stage0_bwrap_equals_stage2_bwrap: true
+stage0_busybox_equals_stage2_busybox: true
+stage1_embedded_store_paths: ["/nix/store/7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox/bin/busybox"]
+stage2_embedded_store_paths: ["/nix/store/7zf934zcyvfz7wg4xf82j97qrvdiaqax-busybox/bin/busybox"]
+stage0_hermeticity_mode: practical
+stage0_fallback_events: ["bwrap-host-fallback:/nix/store/csk28n2yj6pzwkslf3mn2gdxz33xxazr-bubblewrap-0.11.0/bin/bwrap", "source-host-discovery:/home/brittonr/git/crunch/crunch"]
+stage0_report: crunch-built:/home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+stage2_hermeticity_mode: strict
+stage2_fallback_events: []
+stage2_report: crunch-built:/home/brittonr/git/crunch/crunch/target/self-hosting-proof/work/tmp/.tmpT0sgQj/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin

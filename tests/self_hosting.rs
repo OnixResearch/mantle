@@ -2412,17 +2412,15 @@ fn prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env
     std::fs::create_dir_all(&busybox_root).unwrap();
     write_executable_script(&busybox_root.join("busybox"), "#!/bin/sh\nset -eu\nexit 0\n");
     let nix_build_sentinel = fixture.proof_launch_sentinel("nix-build-default-shell");
-    let nix_build_body = format!(
-        "#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n",
-        nix_build_sentinel.display()
-    );
+    let nix_build_body =
+        format!("#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n", nix_build_sentinel.display());
     write_executable_script(&fixture.tool_dir.join("nix-build"), &nix_build_body);
     let bundle_dir = fixture.repo_dir.join("target/default-discovered-shell-proof");
 
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/default-discovered-shell-proof"],
-        &[("SNIX_BUILD_SANDBOX_SHELL", "/bin/sh".to_string())],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/default-discovered-shell-proof"], &[(
+        "SNIX_BUILD_SANDBOX_SHELL",
+        "/bin/sh".to_string(),
+    )]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
@@ -2430,10 +2428,7 @@ fn prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env
         std::fs::read_to_string(bundle_dir.join("sandbox-shell.txt")).unwrap().trim(),
         fixture.repo_dir.join("target/proof-busybox-static/bin/busybox").display().to_string()
     );
-    assert!(
-        !nix_build_sentinel.exists(),
-        "default sandbox-shell discovery must not invoke nix-build"
-    );
+    assert!(!nix_build_sentinel.exists(), "default sandbox-shell discovery must not invoke nix-build");
 }
 
 #[cfg(unix)]
@@ -2442,30 +2437,19 @@ fn prove_self_hosting_script_fails_fast_when_default_sandbox_shell_missing_witho
     let fixture = ProofScriptFixture::new();
     std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
     let nix_build_sentinel = fixture.proof_launch_sentinel("nix-build-missing-shell");
-    let nix_build_body = format!(
-        "#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n",
-        nix_build_sentinel.display()
-    );
+    let nix_build_body =
+        format!("#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n", nix_build_sentinel.display());
     write_executable_script(&fixture.tool_dir.join("nix-build"), &nix_build_body);
 
-    let output = fixture.run_args_with_envs(
-        &["--check"],
-        &[
-            ("SNIX_BUILD_SANDBOX_SHELL", "/bin/sh".to_string()),
-            ("CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE", "target/definitely-missing-busybox".to_string()),
-        ],
-    );
+    let output = fixture.run_args_with_envs(&["--check"], &[
+        ("SNIX_BUILD_SANDBOX_SHELL", "/bin/sh".to_string()),
+        ("CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE", "target/definitely-missing-busybox".to_string()),
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail when no static busybox is discoverable");
-    assert!(
-        stderr.contains("static busybox shell not found"),
-        "failure should be explicit, stderr:\n{stderr}"
-    );
-    assert!(
-        !nix_build_sentinel.exists(),
-        "missing-shell path must not invoke nix-build"
-    );
+    assert!(stderr.contains("static busybox shell not found"), "failure should be explicit, stderr:\n{stderr}");
+    assert!(!nix_build_sentinel.exists(), "missing-shell path must not invoke nix-build");
 }
 
 #[cfg(unix)]
@@ -2839,6 +2823,13 @@ fn self_hosting_stage0_stage1_stage2() {
     assert!(removed >= 1, "should have removed at least 1 *-crunch dir");
     assert!(find_crunch_binary(&store).is_none(), "crunch output should be gone after invalidation",);
 
+    let stale_bwrap_bin = store.join("00000000000000000000000000000000-stale-bwrap").join("bin").join("bwrap");
+    write_executable_script(&stale_bwrap_bin, "#!/bin/sh\nset -eu\nexit 97\n");
+    let stale_busybox_bin = store.join("00000000000000000000000000000000-stale-busybox").join("bin").join("busybox");
+    write_executable_script(&stale_busybox_bin, "#!/bin/sh\nset -eu\nexit 98\n");
+    assert_ne!(stale_bwrap_bin, bwrap_bin, "stale bwrap sibling must differ from stage0 bwrap");
+    assert_ne!(stale_busybox_bin, busybox_bin, "stale busybox sibling must differ from stage0 busybox");
+
     // Fresh state dir so pathinfo.redb doesn't give a false cache hit
     // on the final crunch output.
     let stage2_state = proof_dir.path().join("state2");
@@ -2861,6 +2852,10 @@ fn self_hosting_stage0_stage1_stage2() {
         "self-build".to_string(),
         "--source-store-path".to_string(),
         staged_source.to_string(),
+        "--bootstrap-bwrap-path".to_string(),
+        bwrap_bin.display().to_string(),
+        "--bootstrap-busybox-path".to_string(),
+        busybox_bin.display().to_string(),
         "--no-substitute".to_string(),
         "-j".to_string(),
         "4".to_string(),
@@ -2990,6 +2985,13 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage2_evidence),
     );
     let bwrap_report_path = extract_bwrap_binary_path(&stage2_evidence.stderr).expect("checked proof line above");
+    let normalized_bwrap_report_path = normalize_bwrap_binary_path(&bwrap_report_path);
+    assert_eq!(
+        normalized_bwrap_report_path,
+        bwrap_bin,
+        "stage2 must reuse the exact stage0 bwrap root even when stale siblings exist.\n{}",
+        stage_context(&stage2_evidence),
+    );
     let bwrap_store_name =
         extract_store_entry_name(&bwrap_report_path).expect("bwrap report path must include store entry");
     let expected_bwrap_log = format!("Using crunch-built bwrap: {stage2_store_prefix}/{bwrap_store_name}/bin");
@@ -3022,6 +3024,12 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage2_evidence),
     );
     let busybox_report_path = PathBuf::from(busybox_val);
+    assert_eq!(
+        busybox_report_path,
+        busybox_bin,
+        "stage2 must reuse the exact stage0 busybox root even when stale siblings exist.\n{}",
+        stage_context(&stage2_evidence),
+    );
     let busybox_store_name =
         extract_store_entry_name(&busybox_report_path).expect("busybox report path must include store entry");
     let expected_busybox_log =

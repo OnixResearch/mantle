@@ -227,6 +227,14 @@ enum Command {
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
         source_store_path: Option<PathBuf>,
+
+        /// Internal: reuse the exact stage0-produced bwrap binary in later proof stages.
+        #[arg(long, hide = true)]
+        bootstrap_bwrap_path: Option<PathBuf>,
+
+        /// Internal: reuse the exact stage0-produced busybox binary in later proof stages.
+        #[arg(long, hide = true)]
+        bootstrap_busybox_path: Option<PathBuf>,
     },
 
     /// Enter a development shell from crunch.ncl devShells
@@ -804,6 +812,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trust_unsigned,
             strict_hermetic,
             source_store_path,
+            bootstrap_bwrap_path,
+            bootstrap_busybox_path,
         } => run_self_build_command(
             ctx,
             *jobs,
@@ -814,6 +824,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             *trust_unsigned,
             *strict_hermetic,
             source_store_path.as_deref(),
+            bootstrap_bwrap_path.as_deref(),
+            bootstrap_busybox_path.as_deref(),
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
     }
@@ -829,6 +841,8 @@ fn run_self_build_command(
     trust_unsigned: bool,
     strict_hermetic: bool,
     source_store_path: Option<&std::path::Path>,
+    bootstrap_bwrap_path: Option<&std::path::Path>,
+    bootstrap_busybox_path: Option<&std::path::Path>,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let hermeticity_mode = if strict_hermetic {
@@ -850,6 +864,8 @@ fn run_self_build_command(
         trust_unsigned,
         hermeticity_mode,
         source_store_path,
+        bootstrap_bwrap_path,
+        bootstrap_busybox_path,
     )
     .map(|_report| ())
 }
