@@ -536,6 +536,16 @@ fn pipeline_determinism_fetcher_root_stable_across_ambient_state() {
 }
 
 #[test]
+fn pipeline_determinism_self_build_friendly_path_stable_across_ambient_state() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    assert_success_probe_stability("pipeline_determinism_probe_self_build_friendly_path");
+}
+
+#[test]
 fn pipeline_determinism_strict_blocker_stable_across_ambient_state() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");
@@ -610,6 +620,59 @@ crunch.fetchurl {{
             source_file.display(),
             sha256_sri(content),
         ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+    assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
+    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    emit_probe(&success_probe(&result));
+}
+
+#[tokio::test]
+#[ignore]
+async fn pipeline_determinism_probe_self_build_friendly_path() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("determinism-self-build-friendly.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+let bootstrap_tool = {
+  name = "determinism-bootstrap-tool",
+  builder = "/bin/sh",
+  args = ["-c", "set -eu; printf 'bootstrap tool payload\n' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation in
+{
+  name = "determinism-self-build-friendly",
+  builder = "/bin/sh",
+  args = [
+    "-c",
+    m%"
+      set -eu
+      BB=/bin/busybox
+      TOOL_PATH=""
+      for d in $NIX_STORE/*-determinism-bootstrap-tool; do
+        if [ -f "$d" ]; then TOOL_PATH="$d"; break; fi
+      done
+      test -n "$TOOL_PATH"
+      $BB cat "$TOOL_PATH" > $out
+    "%
+  ],
+  inputs = [bootstrap_tool],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
     )
     .unwrap();
 
