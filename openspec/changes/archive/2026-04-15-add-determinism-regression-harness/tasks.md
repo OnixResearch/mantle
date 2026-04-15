@@ -22,5 +22,5 @@
 
 ## Phase 4: Validation
 
-- [x] Run targeted Rust tests for the new determinism coverage
-- [x] Run `openspec validate add-determinism-regression-harness`
+- [x] Run targeted Rust tests for the new determinism coverage and keep the command transcript in `validation.md`
+- [x] Run `openspec validate add-determinism-regression-harness` and keep the command transcript in `validation.md`
