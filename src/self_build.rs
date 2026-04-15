@@ -2451,34 +2451,55 @@ mod tests {
     }
 
     #[test]
-    fn resolve_bwrap_source_falls_back_to_path() {
+    fn resolve_bwrap_source_falls_back_to_controlled_host_path() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let fake_dir = tempfile::tempdir().unwrap();
+        let fake_dir_path = make_fake_executable(fake_dir.path(), "bwrap");
+        let fake_bwrap_path = fake_dir_path.join("bwrap");
+        let _path_guard = PathGuard::set(fake_dir.path());
+
+        assert_eq!(find_executable_on_path("bwrap"), Some(fake_bwrap_path.clone()));
+
+        let store = tempfile::tempdir().unwrap();
+        let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical).unwrap();
+
+        assert!(!result.is_crunch_built(), "should be host fallback");
+        match result {
+            BwrapSource::HostFallback(path) => assert_eq!(path, fake_bwrap_path),
+            _ => panic!("expected HostFallback"),
+        }
+    }
+
+    #[test]
+    fn resolve_bwrap_source_errors_without_host_bwrap_on_controlled_path() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let empty_path = tempfile::tempdir().unwrap();
+        let _path_guard = PathGuard::set(empty_path.path());
+
+        let empty_entries = std::fs::read_dir(empty_path.path()).unwrap().count();
+        assert_eq!(empty_entries, 0, "temp PATH dir must start empty");
+        assert!(find_executable_on_path("bwrap").is_none(), "empty temp PATH must not expose bwrap");
+
         let store = tempfile::tempdir().unwrap();
         let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical);
-        match find_host_bwrap() {
-            Some(host_path) => {
-                let src = result.unwrap();
-                assert!(!src.is_crunch_built(), "should be host fallback");
-                match src {
-                    BwrapSource::HostFallback(p) => assert_eq!(p, host_path),
-                    _ => panic!("expected HostFallback"),
-                }
-            }
-            None => {
-                assert!(result.is_err(), "should error when no bwrap");
-                let msg = result.unwrap_err().message().to_string();
-                assert!(msg.contains("not found"), "error: {msg}");
-            }
-        }
+
+        assert!(result.is_err(), "should error when no bwrap");
+        assert_eq!(
+            result.unwrap_err().message(),
+            "bwrap (bubblewrap) not found. The first self-build requires bwrap on PATH. \
+             Install it from https://github.com/containers/bubblewrap",
+        );
     }
 
     #[test]
     fn resolve_bwrap_source_strict_rejects_host_fallback_once_bootstrap_root_exists() {
         let _lock = PATH_MUTEX.lock().unwrap();
-        let orig = std::env::var_os("PATH");
-
         let fake_dir = tempfile::tempdir().unwrap();
-        make_fake_executable(fake_dir.path(), "bwrap");
-        unsafe { std::env::set_var("PATH", fake_dir.path()) };
+        let fake_dir_path = make_fake_executable(fake_dir.path(), "bwrap");
+        let fake_bwrap_path = fake_dir_path.join("bwrap");
+        let _path_guard = PathGuard::set(fake_dir.path());
+
+        assert_eq!(find_executable_on_path("bwrap"), Some(fake_bwrap_path));
 
         let store = tempfile::tempdir().unwrap();
         let broken_bwrap_dir = store.path().join("abc-bwrap").join("bin");
@@ -2486,11 +2507,6 @@ mod tests {
         std::fs::write(broken_bwrap_dir.join("bwrap"), "not executable").unwrap();
 
         let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Strict);
-
-        match &orig {
-            Some(p) => unsafe { std::env::set_var("PATH", p) },
-            None => unsafe { std::env::remove_var("PATH") },
-        }
 
         assert!(result.is_err(), "strict later stage must reject host fallback");
         let message = result.unwrap_err().message().to_string();
@@ -2579,6 +2595,27 @@ mod tests {
             std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         dir.to_path_buf()
+    }
+
+    struct PathGuard {
+        original_path: Option<std::ffi::OsString>,
+    }
+
+    impl PathGuard {
+        fn set(controlled_path: &Path) -> Self {
+            let original_path = std::env::var_os("PATH");
+            unsafe { std::env::set_var("PATH", controlled_path) };
+            Self { original_path }
+        }
+    }
+
+    impl Drop for PathGuard {
+        fn drop(&mut self) {
+            match &self.original_path {
+                Some(path) => unsafe { std::env::set_var("PATH", path) },
+                None => unsafe { std::env::remove_var("PATH") },
+            }
+        }
     }
 
     #[test]
@@ -3027,10 +3064,8 @@ mod tests {
     #[test]
     fn verify_tools_on_disk_errors_on_empty_store() {
         let _lock = PATH_MUTEX.lock().unwrap();
-        let orig = std::env::var_os("PATH");
         let empty_path = tempfile::tempdir().unwrap();
-
-        unsafe { std::env::set_var("PATH", empty_path.path()) };
+        let _path_guard = PathGuard::set(empty_path.path());
 
         let empty_entries = std::fs::read_dir(empty_path.path()).unwrap().count();
         assert_eq!(empty_entries, 0, "temp PATH dir must start empty");
@@ -3038,11 +3073,6 @@ mod tests {
 
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
-
-        match &orig {
-            Some(p) => unsafe { std::env::set_var("PATH", p) },
-            None => unsafe { std::env::remove_var("PATH") },
-        }
 
         assert!(result.is_err(), "must error when no tools on disk");
         assert_eq!(
@@ -3058,21 +3088,18 @@ mod tests {
     #[test]
     fn verify_tools_on_disk_error_names_bwrap_ncl() {
         let _lock = PATH_MUTEX.lock().unwrap();
-        let orig = std::env::var_os("PATH");
 
         // Put a fake bwrap on PATH so resolve_bwrap_source returns
         // HostFallback instead of erroring with "not found".
         let fake_dir = tempfile::tempdir().unwrap();
-        make_fake_executable(fake_dir.path(), "bwrap");
-        unsafe { std::env::set_var("PATH", fake_dir.path()) };
+        let fake_dir_path = make_fake_executable(fake_dir.path(), "bwrap");
+        let fake_bwrap_path = fake_dir_path.join("bwrap");
+        let _path_guard = PathGuard::set(fake_dir.path());
+
+        assert_eq!(find_executable_on_path("bwrap"), Some(fake_bwrap_path));
 
         let store = tempfile::tempdir().unwrap();
         let result = verify_tools_on_disk(store.path());
-
-        match &orig {
-            Some(p) => unsafe { std::env::set_var("PATH", p) },
-            None => unsafe { std::env::remove_var("PATH") },
-        }
 
         assert!(result.is_err());
         assert_eq!(
