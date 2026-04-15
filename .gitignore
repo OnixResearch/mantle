@@ -21,3 +21,4 @@ vendor-deps/
 autoresearch.config.json
 
 .pi/
+/.agent
