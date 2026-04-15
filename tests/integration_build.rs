@@ -552,18 +552,14 @@ fn compute_recursive_sha256_sri(path: &Path) -> String {
     let root = path.to_path_buf();
     rt.block_on(async move {
         let blob_service = MemoryBlobService::default();
-        let directory_service = RedbDirectoryService::new_temporary(
-            "fetchgit-hash".to_string(),
-            RedbDirectoryServiceConfig::default(),
-        )
-        .unwrap();
+        let directory_service =
+            RedbDirectoryService::new_temporary("fetchgit-hash".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap();
         let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
             .await
             .unwrap();
         let mut hasher = sha2::Sha256::new();
-        write_nar(AsyncIoBridge(&mut hasher), &node, blob_service, directory_service)
-            .await
-            .unwrap();
+        write_nar(AsyncIoBridge(&mut hasher), &node, blob_service, directory_service).await.unwrap();
         let digest: [u8; 32] = hasher.finalize().into();
         format!("sha256-{}", data_encoding::BASE64.encode(&digest))
     })

@@ -602,9 +602,8 @@ fn local_git_repo_path(url: &str) -> Result<Option<PathBuf>, FetchError> {
     if parsed.scheme() != "file" {
         return Ok(None);
     }
-    let local_path = parsed
-        .to_file_path()
-        .map_err(|()| FetchError::GitError(format!("invalid git file URL '{url}'")))?;
+    let local_path =
+        parsed.to_file_path().map_err(|()| FetchError::GitError(format!("invalid git file URL '{url}'")))?;
     Ok(Some(local_path))
 }
 
@@ -665,9 +664,7 @@ fn stage_git_tree(repo: &gix::Repository, tree_id: gix::hash::ObjectId, staged_o
     {
         entry_count_u32 = entry_count_u32.saturating_add(1);
         if entry_count_u32 > MAX_TAR_ENTRIES {
-            return Err(FetchError::GitError(format!(
-                "git checkout exceeds entry limit of {MAX_TAR_ENTRIES} entries"
-            )));
+            return Err(FetchError::GitError(format!("git checkout exceeds entry limit of {MAX_TAR_ENTRIES} entries")));
         }
         let dest = materialize_git_relative_path(staged_out, entry.relative_path())?;
         if let Some(parent) = dest.parent() {
@@ -681,8 +678,9 @@ fn stage_git_tree(repo: &gix::Repository, tree_id: gix::hash::ObjectId, staged_o
 }
 
 fn materialize_git_relative_path(staged_out: &Path, relative: &gix::bstr::BStr) -> Result<PathBuf, FetchError> {
-    let relative_path = gix::path::try_from_bstr(relative)
-        .map_err(|err| FetchError::GitError(format!("git entry path '{relative}' is not valid on this platform: {err}")))?;
+    let relative_path = gix::path::try_from_bstr(relative).map_err(|err| {
+        FetchError::GitError(format!("git entry path '{relative}' is not valid on this platform: {err}"))
+    })?;
 
     let mut component_count_u32: u32 = 0;
     let mut dest = PathBuf::from(staged_out);
@@ -757,9 +755,7 @@ fn write_git_symlink(dest: &Path, entry: &mut gix::worktree::stream::Entry<'_>) 
         return Ok(());
     }
     #[allow(unreachable_code)]
-    Err(FetchError::GitError(
-        "git symlink materialization is unsupported on this platform".to_string(),
-    ))
+    Err(FetchError::GitError("git symlink materialization is unsupported on this platform".to_string()))
 }
 
 fn read_git_entry_bytes(entry: &mut gix::worktree::stream::Entry<'_>) -> Result<Vec<u8>, FetchError> {
@@ -951,7 +947,9 @@ mod tests {
         assert!(wait_sleep_ms > 0, "inetd child wait sleep must be positive");
 
         for _attempt in 0..max_wait_attempts_u32 {
-            if let Some(status) = child.try_wait().map_err(|err| format!("failed to poll inetd git daemon child: {err}"))? {
+            if let Some(status) =
+                child.try_wait().map_err(|err| format!("failed to poll inetd git daemon child: {err}"))?
+            {
                 if status.success() {
                     return Ok(());
                 }
@@ -982,7 +980,8 @@ mod tests {
         log_path: &Path,
         stop: &AtomicBool,
     ) -> Result<(), String> {
-        use std::os::fd::{FromRawFd, IntoRawFd};
+        use std::os::fd::FromRawFd;
+        use std::os::fd::IntoRawFd;
 
         const MAX_CHILD_WAIT_ATTEMPTS: u32 = 400;
         const CHILD_WAIT_SLEEP_MS: u64 = 25;
@@ -1042,13 +1041,9 @@ mod tests {
                 if stop_thread.load(std::sync::atomic::Ordering::SeqCst) {
                     break;
                 }
-                if let Err(err) = serve_git_daemon_connection(
-                    stream,
-                    &repo_root_buf,
-                    &git_path_buf,
-                    &log_path_thread,
-                    &stop_thread,
-                ) {
+                if let Err(err) =
+                    serve_git_daemon_connection(stream, &repo_root_buf, &git_path_buf, &log_path_thread, &stop_thread)
+                {
                     append_git_daemon_log_line(&log_path_thread, &err);
                 }
             }
@@ -1066,10 +1061,7 @@ mod tests {
 
     fn collect_checkout_snapshot(root: &Path) -> Vec<String> {
         fn visit(path: &Path, root: &Path, out: &mut Vec<String>) {
-            let mut children = std::fs::read_dir(path)
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
-                .collect::<Vec<_>>();
+            let mut children = std::fs::read_dir(path).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
             children.sort();
             for child in children {
                 let rel = child.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
@@ -1100,11 +1092,7 @@ mod tests {
     fn spawn_stuck_child() -> std::process::Child {
         let shell = Path::new("/bin/sh");
         assert!(shell.exists(), "test shell must exist");
-        std::process::Command::new(shell)
-            .arg("-c")
-            .arg("while :; do :; done")
-            .spawn()
-            .unwrap()
+        std::process::Command::new(shell).arg("-c").arg("while :; do :; done").spawn().unwrap()
     }
 
     #[cfg(unix)]
@@ -1310,7 +1298,9 @@ mod tests {
                 panic!("remote fetch failed: {err}; git daemon log: {log}")
             });
             let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-            fetch_git(&url, invalid_rev, out_root.path().join("git-error-a").to_str().unwrap()).unwrap_err().to_string()
+            fetch_git(&url, invalid_rev, out_root.path().join("git-error-a").to_str().unwrap())
+                .unwrap_err()
+                .to_string()
         };
 
         let fake_root_b = tempfile::tempdir().unwrap();
@@ -1324,7 +1314,9 @@ mod tests {
                 panic!("remote fetch failed: {err}; git daemon log: {log}")
             });
             let invalid_rev = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-            fetch_git(&url, invalid_rev, out_root.path().join("git-error-b").to_str().unwrap()).unwrap_err().to_string()
+            fetch_git(&url, invalid_rev, out_root.path().join("git-error-b").to_str().unwrap())
+                .unwrap_err()
+                .to_string()
         };
 
         let snapshot_a = collect_checkout_snapshot(&out_a);
@@ -1335,7 +1327,9 @@ mod tests {
         assert!(!out_b.join(".git").exists(), "remote fetchGit output must not contain .git");
         assert_eq!(
             error_a,
-            format!("git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'")
+            format!(
+                "git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'"
+            )
         );
         assert_eq!(error_a, error_b, "fake host git version must not change invalid-rev error text");
         assert!(!error_a.contains("fatal:"), "remote invalid-rev error must stay crunch-owned: {error_a}");
@@ -1355,7 +1349,9 @@ mod tests {
 
         assert_eq!(
             message,
-            format!("git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'")
+            format!(
+                "git fetch failed: requested revision 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' could not be materialized from '{url}'"
+            )
         );
         assert!(!message.contains("fatal:"), "error should not depend on host git stderr: {message}");
     }
