@@ -27,25 +27,25 @@ let binutils = (import "binutils.ncl") in
 let musl = (import "musl.ncl") in
 
 let gcc_src = crunch.fetchTarball {
-  url = "https://ftp.gnu.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.gz",
+  url = "https://ftpmirror.gnu.org/gcc/gcc-13.3.0/gcc-13.3.0.tar.gz",
   hash = "sha256-WWameciUJMmYPeqfDIPa3YmPZaZUuB6r6XpwlfjRXo8=",
   name = "gcc-src",
 } in
 
 let gmp_src = crunch.fetchTarball {
-  url = "https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2",
+  url = "https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.bz2",
   hash = "sha256-69A2yy9AY8/OFO5FfNmsvd01vTknitC/wrQSjaZq86A=",
   name = "gmp-src",
 } in
 
 let mpfr_src = crunch.fetchTarball {
-  url = "https://ftp.gnu.org/gnu/mpfr/mpfr-4.1.0.tar.bz2",
+  url = "https://ftpmirror.gnu.org/mpfr/mpfr-4.1.0.tar.bz2",
   hash = "sha256-Q8xRKVAvE1c0uPSWy/Kav0Hfw0UxlnWzePXE13u6sDw=",
   name = "mpfr-src",
 } in
 
 let mpc_src = crunch.fetchTarball {
-  url = "https://ftp.gnu.org/gnu/mpc/mpc-1.2.1.tar.gz",
+  url = "https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz",
   hash = "sha256-nyt5XHt58wWilbLRlIDuECmD3qBqmKTx4jiGL/7n5Ws=",
   name = "mpc-src",
 } in
