@@ -422,7 +422,7 @@ fn eval_hello_world_with_seed() {
 
     assert_eq!(drv.name, "hello-world");
     assert!(!drv.inputs.is_empty());
-    assert!(drv.builder.contains("bash"));
+    assert_eq!(drv.builder, "/bin/sh");
 
     // Check that inputs are all valid store paths
     for input in &drv.inputs {
