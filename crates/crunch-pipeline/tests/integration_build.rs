@@ -482,9 +482,20 @@ fn pipeline_host_ambient_state_does_not_leak_into_strict_build() {
     }
 
     let current_exe = std::env::current_exe().unwrap();
-    let current_path = std::env::var_os("PATH").unwrap_or_default();
-    let poisoned_path =
-        std::env::join_paths([PathBuf::from("/tmp/hostile-path").into_os_string(), current_path]).unwrap();
+    let hostile_root = tempfile::tempdir().unwrap();
+    let hostile_home = hostile_root.path().join("hostile-home");
+    let hostile_path_dir = hostile_root.path().join("hostile-path");
+    let hostile_tmpdir = hostile_root.path().join("hostile-tmpdir");
+    let hostile_temp = hostile_root.path().join("hostile-temp");
+    let hostile_tmp = hostile_root.path().join("hostile-tmp");
+    let hostile_tempdir = hostile_root.path().join("hostile-tempdir");
+    std::fs::create_dir_all(&hostile_home).unwrap();
+    std::fs::create_dir_all(&hostile_path_dir).unwrap();
+    std::fs::create_dir_all(&hostile_tmpdir).unwrap();
+    std::fs::create_dir_all(&hostile_temp).unwrap();
+    std::fs::create_dir_all(&hostile_tmp).unwrap();
+    std::fs::create_dir_all(&hostile_tempdir).unwrap();
+    let poisoned_path = build_poisoned_path(&hostile_path_dir);
 
     let output = std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -492,18 +503,18 @@ fn pipeline_host_ambient_state_does_not_leak_into_strict_build() {
         .arg("sh")
         .arg(&current_exe)
         .arg("pipeline_normalizes_runtime_environment_and_umask")
-        .env("HOME", "/tmp/hostile-home")
+        .env("HOME", &hostile_home)
         .env("PATH", &poisoned_path)
         .env("USER", "hostile-user")
         .env("LOGNAME", "hostile-logname")
         .env("TZ", "America/New_York")
         .env("LANG", "en_US.UTF-8")
         .env("LC_ALL", "en_US.UTF-8")
-        .env("TMPDIR", "/tmp/hostile-tmpdir")
-        .env("TEMP", "/tmp/hostile-temp")
-        .env("TMP", "/tmp/hostile-tmp")
-        .env("TEMPDIR", "/tmp/hostile-tempdir")
-        .env("SHELL", "/tmp/hostile-shell")
+        .env("TMPDIR", &hostile_tmpdir)
+        .env("TEMP", &hostile_temp)
+        .env("TMP", &hostile_tmp)
+        .env("TEMPDIR", &hostile_tempdir)
+        .env("SHELL", hostile_root.path().join("hostile-shell"))
         .output()
         .unwrap();
 

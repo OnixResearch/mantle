@@ -430,19 +430,7 @@ pub enum StoreAction {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-
-    let level = args.log_level.as_deref().map(|value| value.parse().unwrap_or(tracing::Level::INFO)).unwrap_or(
-        if args.verbose {
-            tracing::Level::DEBUG
-        } else {
-            tracing::Level::WARN
-        },
-    );
-
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive(level.into()))
-        .with_writer(std::io::stderr)
-        .init();
+    init_tracing(&args);
 
     let json_errors = args.json;
 
@@ -457,6 +445,26 @@ fn main() -> ExitCode {
             error.exit_code()
         }
     }
+}
+
+fn init_tracing(args: &Args) {
+    let log_requested = args.verbose || args.log_level.is_some() || std::env::var_os("RUST_LOG").is_some();
+    if args.json && !log_requested {
+        return;
+    }
+
+    let level = args.log_level.as_deref().map(|value| value.parse().unwrap_or(tracing::Level::INFO)).unwrap_or(
+        if args.verbose {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::WARN
+        },
+    );
+
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive(level.into()))
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 #[derive(Debug, Clone)]

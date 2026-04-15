@@ -18,6 +18,6 @@ result*
 *.sock
 data/
 vendor-deps/
-
+autoresearch.config.json
 
 .pi/
