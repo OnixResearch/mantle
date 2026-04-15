@@ -56,6 +56,7 @@ const PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
 const PROOF_COMMAND_SENTINEL_ENV: &str = "CRUNCH_TEST_PROOF_COMMAND_SENTINEL";
 const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
 const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
+const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
@@ -202,9 +203,11 @@ struct ProofStageFiles {
 
 #[derive(Debug, Clone, Serialize)]
 struct ProofReportManifest {
+    hermeticity_mode: String,
     invoking_binary: String,
     staged_source: String,
     bwrap_source: String,
+    fallback_events: Vec<String>,
     busybox_path: Option<String>,
     output_binary: String,
 }
@@ -456,6 +459,18 @@ fn extract_proof_field<'a>(stderr: &'a str, key: &str) -> Option<&'a str> {
         }
     }
     None
+}
+
+fn extract_proof_fields<'a>(stderr: &'a str, key: &str) -> Vec<&'a str> {
+    let prefix = format!("self-build-proof: {key}=");
+    let mut values = Vec::new();
+    for line in stderr.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix(&prefix) {
+            values.push(rest);
+        }
+    }
+    values
 }
 
 fn extract_optional_path_field(stderr: &str, key: &str) -> Option<PathBuf> {
@@ -843,6 +858,14 @@ impl ProofMode {
     }
 }
 
+fn proof_later_stage_hermeticity_mode() -> crunch_pipeline::HermeticityMode {
+    match std::env::var(PROOF_LATER_STAGE_HERMETICITY_ENV).ok().as_deref() {
+        Some("practical") => crunch_pipeline::HermeticityMode::Practical,
+        Some("strict") | None => crunch_pipeline::HermeticityMode::Strict,
+        Some(other) => panic!("unexpected {PROOF_LATER_STAGE_HERMETICITY_ENV} value: {other}"),
+    }
+}
+
 fn proof_inventory_doc_source() -> PathBuf {
     let source = std::env::var_os(PROOF_STAGE0_INVENTORY_DOC_ENV)
         .map(PathBuf::from)
@@ -989,6 +1012,9 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
     assert!(!stage.stage_name.is_empty(), "stage name must not be empty");
     assert!(!stage.stderr.is_empty(), "stage stderr must not be empty");
 
+    let hermeticity_mode = extract_proof_field(&stage.stderr, "hermeticity-mode").unwrap_or_else(|| {
+        panic!("{} missing hermeticity-mode proof line.\n{}", stage.stage_name, stage_context(stage),)
+    });
     let invoking_binary = extract_proof_field(&stage.stderr, "invoking-binary").unwrap_or_else(|| {
         panic!("{} missing invoking-binary proof line.\n{}", stage.stage_name, stage_context(stage),)
     });
@@ -998,11 +1024,25 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         .unwrap_or_else(|| panic!("{} missing bwrap-source proof line.\n{}", stage.stage_name, stage_context(stage),));
     let output_binary = extract_proof_field(&stage.stderr, "output-binary")
         .unwrap_or_else(|| panic!("{} missing output-binary proof line.\n{}", stage.stage_name, stage_context(stage),));
+    let fallback_events_raw = extract_proof_fields(&stage.stderr, "fallback-event");
+    assert!(
+        !fallback_events_raw.is_empty(),
+        "{} missing fallback-event proof lines.\n{}",
+        stage.stage_name,
+        stage_context(stage),
+    );
+    let fallback_events = if fallback_events_raw.len() == 1 && fallback_events_raw[0] == "none" {
+        Vec::new()
+    } else {
+        fallback_events_raw.into_iter().map(str::to_string).collect()
+    };
 
     ProofReportManifest {
+        hermeticity_mode: hermeticity_mode.to_string(),
         invoking_binary: invoking_binary.to_string(),
         staged_source: staged_source.to_string(),
         bwrap_source: bwrap_source.to_string(),
+        fallback_events,
         busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
         output_binary: output_binary.to_string(),
     }
@@ -1236,7 +1276,11 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     ));
     out.push_str(&format!("stage1_embedded_store_paths: {:?}\n", manifest.fixed_point.stage1_embedded_store_paths));
     out.push_str(&format!("stage2_embedded_store_paths: {:?}\n", manifest.fixed_point.stage2_embedded_store_paths));
+    out.push_str(&format!("stage0_hermeticity_mode: {}\n", manifest.stage0.report.hermeticity_mode));
+    out.push_str(&format!("stage0_fallback_events: {:?}\n", manifest.stage0.report.fallback_events));
     out.push_str(&format!("stage0_report: {}\n", manifest.stage0.report.bwrap_source));
+    out.push_str(&format!("stage2_hermeticity_mode: {}\n", manifest.stage2.report.hermeticity_mode));
+    out.push_str(&format!("stage2_fallback_events: {:?}\n", manifest.stage2.report.fallback_events));
     out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
     out
 }
@@ -1583,6 +1627,8 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
              printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
              printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: fallback-event=bwrap-host-fallback:/run/wrappers/bin/bwrap\\n' >&2; \
+             printf 'self-build-proof: fallback-event=source-host-discovery:/work/crunch\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \
              printf 'self-build-proof: output-binary={}\\n' >&2",
             checkout_binary.display(),
@@ -1596,10 +1642,11 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     let stage2_output = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(format!(
-            "printf 'self-build-proof: hermeticity-mode=practical\\n' >&2; \
+            "printf 'self-build-proof: hermeticity-mode=strict\\n' >&2; \
              printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
              printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: fallback-event=none\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \
              printf 'self-build-proof: output-binary={}\\n' >&2",
             stage1_binary.display(),
@@ -1662,12 +1709,18 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains("\"store_inventory\""));
     assert!(manifest_json.contains("\"prerequisites\""));
     assert!(manifest_json.contains("\"mode\": "));
+    assert!(manifest_json.contains("\"hermeticity_mode\""));
+    assert!(manifest_json.contains("\"fallback_events\""));
     assert!(bundle_dir.join("stage0-prerequisites/inventory.md").exists());
     assert!(summary.contains("proof_mode:"));
     assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));
     assert!(summary.contains("stage1_equals_stage2:"));
     assert!(summary.contains("stage1_embedded_store_paths:"));
+    assert!(summary.contains("stage0_hermeticity_mode: practical"));
+    assert!(summary.contains("stage2_hermeticity_mode: strict"));
+    assert!(summary.contains("stage0_fallback_events:"));
+    assert!(summary.contains("stage2_fallback_events: []"));
     assert!(summary.contains(&stage2_binary.display().to_string()));
 }
 
@@ -1757,7 +1810,7 @@ impl ProofScriptFixture {
         std::fs::copy(&src_script, &dst_script).unwrap();
         chmod_executable(&dst_script);
 
-        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nif [ -n \"${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}\" ]; then\n  printf 'launched\\n' > \"$CRUNCH_TEST_PROOF_COMMAND_SENTINEL\"\nfi\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"${TMPDIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt\"\nprintf '%s\\n' \"${CARGO_TARGET_DIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
+        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nif [ -n \"${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}\" ]; then\n  printf 'launched\\n' > \"$CRUNCH_TEST_PROOF_COMMAND_SENTINEL\"\nfi\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/later-stage-hermeticity.txt\"\nprintf '%s\\n' \"${SNIX_BUILD_SANDBOX_SHELL:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/sandbox-shell.txt\"\nprintf '%s\\n' \"${TMPDIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt\"\nprintf '%s\\n' \"${CARGO_TARGET_DIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
         write_executable_script(&tool_dir.join("cargo"), cargo_body);
         write_executable_script(
             &tool_dir.join("rustc"),
@@ -2064,13 +2117,10 @@ fn prove_self_hosting_script_rejects_create_failure_scratch_override_without_fal
     std::fs::create_dir_all(&blocked_parent).unwrap();
     chmod_mode(&blocked_parent, 0o555);
 
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/create-failure-override-bundle"],
-        &[
-            (PROOF_SCRATCH_ENV, "blocked-parent/child-scratch".to_string()),
-            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
-        ],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/create-failure-override-bundle"], &[
+        (PROOF_SCRATCH_ENV, "blocked-parent/child-scratch".to_string()),
+        (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&blocked_parent, 0o755);
 
@@ -2093,13 +2143,10 @@ fn prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback(
     let bundle_dir = fixture.repo_dir.join("target/non-directory-override-bundle");
     let launch_sentinel = fixture.proof_launch_sentinel("non-directory-override");
     std::fs::write(&blocked_path, "blocked\n").unwrap();
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/non-directory-override-bundle"],
-        &[
-            (PROOF_SCRATCH_ENV, "blocked-scratch".to_string()),
-            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
-        ],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/non-directory-override-bundle"], &[
+        (PROOF_SCRATCH_ENV, "blocked-scratch".to_string()),
+        (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for unusable override");
@@ -2123,13 +2170,10 @@ fn prove_self_hosting_script_rejects_unwritable_scratch_override_without_fallbac
     std::fs::create_dir_all(&unwritable_root).unwrap();
     chmod_mode(&unwritable_root, 0o555);
 
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/unwritable-override-bundle"],
-        &[
-            (PROOF_SCRATCH_ENV, "unwritable-override-scratch".to_string()),
-            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
-        ],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/unwritable-override-bundle"], &[
+        (PROOF_SCRATCH_ENV, "unwritable-override-scratch".to_string()),
+        (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&unwritable_root, 0o755);
 
@@ -2152,10 +2196,10 @@ fn prove_self_hosting_script_rejects_create_failure_default_scratch_before_proof
     let launch_sentinel = fixture.proof_launch_sentinel("create-failure-default");
     std::fs::create_dir_all(fixture.repo_dir.join("target")).unwrap();
     std::fs::write(fixture.repo_dir.join("target/self-hosting-proof"), "blocked-parent\n").unwrap();
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/create-failure-default-bundle"],
-        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/create-failure-default-bundle"], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail when default scratch root cannot be created");
@@ -2174,10 +2218,10 @@ fn prove_self_hosting_script_rejects_unusable_default_scratch_before_proof_work(
     let launch_sentinel = fixture.proof_launch_sentinel("non-directory-default");
     std::fs::create_dir_all(default_root.parent().unwrap()).unwrap();
     std::fs::write(&default_root, "blocked\n").unwrap();
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/non-directory-default-bundle"],
-        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/non-directory-default-bundle"], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for unusable default scratch root");
@@ -2197,10 +2241,10 @@ fn prove_self_hosting_script_rejects_unwritable_default_scratch_before_proof_wor
     std::fs::create_dir_all(&default_root).unwrap();
     chmod_mode(&default_root, 0o555);
 
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/unwritable-default-bundle"],
-        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/unwritable-default-bundle"], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     chmod_mode(&default_root, 0o755);
 
@@ -2219,10 +2263,10 @@ fn prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work()
     fixture.set_stat_output(4_194_303, 1024);
     let bundle_arg = Path::new("target/too-small-scratch-bundle");
     let bundle_dir = fixture.repo_dir.join(bundle_arg);
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", "target/too-small-scratch-bundle"],
-        &[(PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string())],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/too-small-scratch-bundle"], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for undersized proof scratch root");
@@ -2245,13 +2289,10 @@ fn prove_self_hosting_script_rejects_below_threshold_override_scratch_before_pro
     let bundle_dir = fixture.repo_dir.join(bundle_arg);
     fixture.set_stat_output(4_194_303, 1024);
     let bundle_arg_owned = bundle_arg.to_string_lossy().into_owned();
-    let output = fixture.run_args_with_envs(
-        &["--bundle-dir", &bundle_arg_owned],
-        &[
-            (PROOF_SCRATCH_ENV, "too-small-override-scratch".to_string()),
-            (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
-        ],
-    );
+    let output = fixture.run_args_with_envs(&["--bundle-dir", &bundle_arg_owned], &[
+        (PROOF_SCRATCH_ENV, "too-small-override-scratch".to_string()),
+        (PROOF_COMMAND_SENTINEL_ENV, launch_sentinel.display().to_string()),
+    ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success(), "script should fail for undersized override scratch root");
@@ -2342,8 +2383,113 @@ fn prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc() {
         std::fs::read_to_string(bundle_dir.join("inventory-doc.txt")).unwrap().trim(),
         fixture.repo_dir.join("docs/bootstrap-stage0-inventory.md").display().to_string()
     );
+    assert_eq!(std::fs::read_to_string(bundle_dir.join("later-stage-hermeticity.txt")).unwrap().trim(), "strict");
     assert!(!bundle_dir.join("blocked-tools-found.txt").exists(), "blocked nix tools must stay off helper PATH");
     assert!(stderr.contains("proof mode: non-nix-host"));
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_exports_strict_later_stage_hermeticity_by_default() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let bundle_arg = Path::new("target/default-proof");
+    let bundle_dir = fixture.repo_dir.join(bundle_arg);
+
+    let output = fixture.run(bundle_arg);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(std::fs::read_to_string(bundle_dir.join("later-stage-hermeticity.txt")).unwrap().trim(), "strict");
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env_is_bin_sh() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let busybox_root = fixture.repo_dir.join("target/proof-busybox-static/bin");
+    std::fs::create_dir_all(&busybox_root).unwrap();
+    write_executable_script(&busybox_root.join("busybox"), "#!/bin/sh\nset -eu\nexit 0\n");
+    let nix_build_sentinel = fixture.proof_launch_sentinel("nix-build-default-shell");
+    let nix_build_body = format!(
+        "#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n",
+        nix_build_sentinel.display()
+    );
+    write_executable_script(&fixture.tool_dir.join("nix-build"), &nix_build_body);
+    let bundle_dir = fixture.repo_dir.join("target/default-discovered-shell-proof");
+
+    let output = fixture.run_args_with_envs(
+        &["--bundle-dir", "target/default-discovered-shell-proof"],
+        &[("SNIX_BUILD_SANDBOX_SHELL", "/bin/sh".to_string())],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(
+        std::fs::read_to_string(bundle_dir.join("sandbox-shell.txt")).unwrap().trim(),
+        fixture.repo_dir.join("target/proof-busybox-static/bin/busybox").display().to_string()
+    );
+    assert!(
+        !nix_build_sentinel.exists(),
+        "default sandbox-shell discovery must not invoke nix-build"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_fails_fast_when_default_sandbox_shell_missing_without_nix_build_fallback() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let nix_build_sentinel = fixture.proof_launch_sentinel("nix-build-missing-shell");
+    let nix_build_body = format!(
+        "#!/bin/sh\nset -eu\nprintf 'called\\n' > \"{}\"\nexit 99\n",
+        nix_build_sentinel.display()
+    );
+    write_executable_script(&fixture.tool_dir.join("nix-build"), &nix_build_body);
+
+    let output = fixture.run_args_with_envs(
+        &["--check"],
+        &[
+            ("SNIX_BUILD_SANDBOX_SHELL", "/bin/sh".to_string()),
+            ("CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE", "target/definitely-missing-busybox".to_string()),
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "script should fail when no static busybox is discoverable");
+    assert!(
+        stderr.contains("static busybox shell not found"),
+        "failure should be explicit, stderr:\n{stderr}"
+    );
+    assert!(
+        !nix_build_sentinel.exists(),
+        "missing-shell path must not invoke nix-build"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_anchors_relative_sandbox_shell_to_repo_root() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let busybox_root = fixture.repo_dir.join("target/proof-busybox-static/bin");
+    std::fs::create_dir_all(&busybox_root).unwrap();
+    write_executable_script(&busybox_root.join("busybox"), "#!/bin/sh\nset -eu\nexit 0\n");
+    let bundle_arg = Path::new("target/relative-shell-proof");
+    let bundle_dir = fixture.repo_dir.join(bundle_arg);
+
+    let output = fixture.run_args_with_envs(&["--bundle-dir", "target/relative-shell-proof"], &[(
+        "SNIX_BUILD_SANDBOX_SHELL",
+        "target/proof-busybox-static/bin/busybox".to_string(),
+    )]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(
+        std::fs::read_to_string(bundle_dir.join("sandbox-shell.txt")).unwrap().trim(),
+        fixture.repo_dir.join("target/proof-busybox-static/bin/busybox").display().to_string()
+    );
 }
 
 #[cfg(unix)]
@@ -2510,9 +2656,11 @@ fn self_hosting_stage0_stage1_stage2() {
     }
 
     let proof_mode = ProofMode::current();
+    let later_stage_hermeticity = proof_later_stage_hermeticity_mode();
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
     eprintln!("proof dir: {}", proof_dir.path().display());
     eprintln!("proof mode: {:?}", proof_mode);
+    eprintln!("later-stage hermeticity: {}", later_stage_hermeticity.as_str());
     let store = proof_dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
 
@@ -2573,6 +2721,25 @@ fn self_hosting_stage0_stage1_stage2() {
     eprintln!("stage0 stdout: {}", stage0_evidence.stdout_file.display());
     eprintln!("stage0 stderr: {}", stage0_evidence.stderr_file.display());
     assert_stage_success(&stage0_evidence);
+
+    let s0_mode = extract_proof_field(&stage0_evidence.stderr, "hermeticity-mode");
+    assert_eq!(
+        s0_mode,
+        Some("practical"),
+        "stage0 should report practical hermeticity.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    let s0_fallbacks = extract_proof_fields(&stage0_evidence.stderr, "fallback-event");
+    assert!(
+        s0_fallbacks.iter().any(|value| value.starts_with("bwrap-host-fallback:")),
+        "stage0 should report initial host bwrap fallback.\n{}",
+        stage_context(&stage0_evidence),
+    );
+    assert!(
+        s0_fallbacks.iter().any(|value| value.starts_with("source-host-discovery:")),
+        "stage0 should report checkout source discovery fallback.\n{}",
+        stage_context(&stage0_evidence),
+    );
 
     // Find the stage1 binary.
     let stage1_binary = find_crunch_binary(&store);
@@ -2681,7 +2848,7 @@ fn self_hosting_stage0_stage1_stage2() {
 
     eprintln!("\n=== PROOF: Stage 2 (stage1 -> stage2) ===\n");
 
-    let stage2_command = vec![
+    let mut stage2_command = vec![
         stage1_binary.display().to_string(),
         "--verbose".to_string(),
         "--log-level".to_string(),
@@ -2698,6 +2865,9 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
+    if later_stage_hermeticity.is_strict() {
+        stage2_command.push("--strict-hermetic".to_string());
+    }
     eprintln!("stage2 store: {}", store.display());
     eprintln!("stage2 state: {}", stage2_state.display());
     let stage2_store_prefix = expected_store_prefix(&stage2_command);
@@ -2794,6 +2964,19 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage2_evidence),
     );
 
+    let s2_mode = extract_proof_field(&stage2_evidence.stderr, "hermeticity-mode");
+    assert!(
+        s2_mode.is_some(),
+        "stage2 should emit hermeticity-mode proof line.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    assert_eq!(
+        s2_mode.unwrap(),
+        later_stage_hermeticity.as_str(),
+        "stage2 must report the selected later-stage hermeticity mode.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
     let s2_bwrap = extract_proof_field(&stage2_evidence.stderr, "bwrap-source");
     assert!(
         s2_bwrap.is_some(),
@@ -2817,6 +3000,14 @@ fn self_hosting_stage0_stage1_stage2() {
     );
 
     // Stage2 MUST find crunch-built busybox on disk and use the exact same one inside the crunch build.
+    let s2_fallbacks = extract_proof_fields(&stage2_evidence.stderr, "fallback-event");
+    assert_eq!(
+        s2_fallbacks,
+        vec!["none"],
+        "stage2 strict proof path must report zero fallback events.\n{}",
+        stage_context(&stage2_evidence),
+    );
+
     let s2_busybox = extract_proof_field(&stage2_evidence.stderr, "busybox-path");
     assert!(
         s2_busybox.is_some(),

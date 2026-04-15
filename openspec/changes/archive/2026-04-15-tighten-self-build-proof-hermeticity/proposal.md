@@ -18,6 +18,7 @@ fallback rediscovery.
 - reject host fallback sandbox-tool discovery in later proof stages once crunch-built tool roots exist
 - report exact bootstrap-tool provenance and fallback events in proof output
 - add regression coverage for later-stage fallback rejection
+- keep the existing shell-based proof entry point and busybox sandbox shell; no devshell/coreutils/proof-helper rewrite in this change
 
 ## Capabilities
 

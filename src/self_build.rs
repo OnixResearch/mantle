@@ -128,6 +128,37 @@ impl BwrapSource {
     }
 }
 
+/// Host-fallback events that a self-build stage observed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SelfBuildFallbackEvent {
+    /// Self-build had to bootstrap with a host-provided bwrap.
+    BwrapHostFallback(PathBuf),
+    /// Self-build found its source tree by walking the host checkout.
+    SourceHostDiscovery(PathBuf),
+}
+
+impl fmt::Display for SelfBuildFallbackEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BwrapHostFallback(path) => write!(f, "bwrap-host-fallback:{}", path.display()),
+            Self::SourceHostDiscovery(path) => write!(f, "source-host-discovery:{}", path.display()),
+        }
+    }
+}
+
+impl SelfBuildFallbackEvent {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn parse(s: &str) -> Option<Self> {
+        if let Some(rest) = s.strip_prefix("bwrap-host-fallback:") {
+            return Some(Self::BwrapHostFallback(PathBuf::from(rest)));
+        }
+        if let Some(rest) = s.strip_prefix("source-host-discovery:") {
+            return Some(Self::SourceHostDiscovery(PathBuf::from(rest)));
+        }
+        None
+    }
+}
+
 /// Structured report from a self-build run.
 ///
 /// Captures the facts a proof runner needs to verify that self-hosting
@@ -141,8 +172,10 @@ pub struct SelfBuildReport {
     pub invoking_binary: PathBuf,
     /// Exact staged source tree used for this self-build.
     pub staged_source: PathBuf,
-    /// How bwrap was resolved (crunch-built vs host fallback).
+    /// How bwrap was resolved after bootstrap tools were available.
     pub bwrap_source: BwrapSource,
+    /// Host-fallback events observed earlier in the stage.
+    pub fallback_events: Vec<SelfBuildFallbackEvent>,
     /// Path to the busybox binary that the NCL script will use for
     /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no crunch-built busybox
     /// was found in the output store (falls back to `/bin/sh`).
@@ -167,6 +200,13 @@ impl SelfBuildReport {
         out.push_str(&format!("{PROOF_PREFIX} invoking-binary={}\n", self.invoking_binary.display(),));
         out.push_str(&format!("{PROOF_PREFIX} staged-source={}\n", self.staged_source.display(),));
         out.push_str(&format!("{PROOF_PREFIX} bwrap-source={}\n", self.bwrap_source,));
+        if self.fallback_events.is_empty() {
+            out.push_str(&format!("{PROOF_PREFIX} fallback-event=none\n"));
+        } else {
+            for event in &self.fallback_events {
+                out.push_str(&format!("{PROOF_PREFIX} fallback-event={}\n", event));
+            }
+        }
         match &self.busybox_path {
             Some(p) => out.push_str(&format!("{PROOF_PREFIX} busybox-path={}\n", p.display(),)),
             None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
@@ -184,6 +224,7 @@ impl SelfBuildReport {
         let mut invoking_binary: Option<PathBuf> = None;
         let mut staged_source: Option<PathBuf> = None;
         let mut bwrap_source: Option<BwrapSource> = None;
+        let mut fallback_events: Vec<SelfBuildFallbackEvent> = Vec::new();
         let mut busybox_path: Option<Option<PathBuf>> = None;
         let mut output_binary: Option<PathBuf> = None;
 
@@ -205,6 +246,11 @@ impl SelfBuildReport {
                 staged_source = Some(PathBuf::from(val));
             } else if let Some(val) = rest.strip_prefix("bwrap-source=") {
                 bwrap_source = BwrapSource::parse(val);
+            } else if let Some(val) = rest.strip_prefix("fallback-event=") {
+                if val != "none" {
+                    let event = SelfBuildFallbackEvent::parse(val)?;
+                    fallback_events.push(event);
+                }
             } else if let Some(val) = rest.strip_prefix("busybox-path=") {
                 if val == "none" {
                     busybox_path = Some(None);
@@ -221,6 +267,7 @@ impl SelfBuildReport {
             invoking_binary: invoking_binary?,
             staged_source: staged_source?,
             bwrap_source: bwrap_source?,
+            fallback_events,
             busybox_path: busybox_path?,
             output_binary: output_binary?,
         })
@@ -774,27 +821,80 @@ fn dir_size(dir: &Path) -> u64 {
     total
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BootstrapToolPresence {
+    has_bwrap_root: bool,
+    has_busybox_root: bool,
+}
+
+impl BootstrapToolPresence {
+    fn has_any(self) -> bool {
+        self.has_bwrap_root || self.has_busybox_root
+    }
+}
+
+fn store_has_entry_with_suffix(output_dir: &Path, suffix: &str) -> bool {
+    assert!(!suffix.is_empty(), "suffix must not be empty");
+    let Ok(entries) = std::fs::read_dir(output_dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().ends_with(suffix) {
+            return true;
+        }
+    }
+    false
+}
+
+fn inspect_bootstrap_tool_presence(output_dir: &Path) -> BootstrapToolPresence {
+    BootstrapToolPresence {
+        has_bwrap_root: store_has_entry_with_suffix(output_dir, "-bwrap"),
+        has_busybox_root: store_has_entry_with_suffix(output_dir, "-busybox"),
+    }
+}
+
+fn strict_later_stage_active(
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+    presence: BootstrapToolPresence,
+) -> bool {
+    if !hermeticity_mode.is_strict() {
+        return false;
+    }
+    presence.has_any()
+}
+
+fn reject_host_bwrap_fallback(output_dir: &Path, presence: BootstrapToolPresence) -> Result<BwrapSource, RunError> {
+    Err(RunError::Internal(format!(
+        "strict self-build later stage refuses host bwrap fallback after bootstrap roots already exist in {} \
+         (bwrap_root={}, busybox_root={}). Reuse the crunch-built bwrap output instead.",
+        output_dir.display(),
+        presence.has_bwrap_root,
+        presence.has_busybox_root,
+    )))
+}
+
 /// Locate the best bwrap binary for the self-build pipeline.
 ///
 /// Preference order:
 /// 1. Crunch-built bwrap in `output_dir` (from a prior self-build)
 /// 2. Any bwrap on the host PATH (first bootstrap)
 ///
-/// Returns `Some(dir)` when a crunch-built bwrap was found — the caller
-/// must prepend it to PATH so `Command::new("bwrap")` picks it up.
-/// Returns `Ok(None)` when falling back to an external bwrap on PATH.
-/// Returns `Err` when no bwrap exists anywhere.
-/// Resolve bwrap and return a typed source indicator.
-///
-/// Returns `CrunchBuilt(dir)` when a crunch-built bwrap was found in
-/// the output store. The caller should prepend `dir` to PATH.
-/// Returns `HostFallback(path)` when falling back to an external bwrap.
-/// Returns `Err` when no bwrap exists anywhere.
-fn resolve_bwrap_source(output_dir: &Path) -> Result<BwrapSource, RunError> {
+/// Strict later stages reject host fallback once bootstrap-tool roots already
+/// exist on disk.
+fn resolve_bwrap_source(
+    output_dir: &Path,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+) -> Result<BwrapSource, RunError> {
     // 1. Prefer crunch-built bwrap from the output store.
     if let Some(bwrap_dir) = find_crunch_bwrap(output_dir) {
         eprintln!("  bwrap: {} (crunch-built)", bwrap_dir.display());
         return Ok(BwrapSource::CrunchBuilt(bwrap_dir));
+    }
+
+    let presence = inspect_bootstrap_tool_presence(output_dir);
+    if strict_later_stage_active(hermeticity_mode, presence) {
+        return reject_host_bwrap_fallback(output_dir, presence);
     }
 
     // 2. Fall back to a host bwrap. On NixOS, prefer the wrapper dir
@@ -1039,7 +1139,7 @@ fn validate_bootstrap_tools(bootstrap_dir: &Path) -> Result<(), RunError> {
 /// Returns `Err` if either tool is missing from the output store.
 #[cfg_attr(not(test), allow(dead_code))]
 fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), RunError> {
-    let bwrap_source = resolve_bwrap_source(output_dir)?;
+    let bwrap_source = resolve_bwrap_source(output_dir, crunch_pipeline::HermeticityMode::Practical)?;
     if !bwrap_source.is_crunch_built() {
         return Err(RunError::Internal(
             "bwrap was not found on disk after building bwrap.ncl. \
@@ -1423,14 +1523,53 @@ fn absolutize_path(path: &Path) -> Result<PathBuf, RunError> {
     Ok(cwd.join(path))
 }
 
-fn resolve_self_build_source_dir(output_dir: &Path, source_store_path: Option<&Path>) -> Result<PathBuf, RunError> {
+fn enforce_source_resolution_policy(
+    output_dir: &Path,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+    presence: BootstrapToolPresence,
+    source_store_path: Option<&Path>,
+) -> Result<(), RunError> {
+    if source_store_path.is_some() {
+        return Ok(());
+    }
+    if !strict_later_stage_active(hermeticity_mode, presence) {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "strict self-build later stage requires --source-store-path once bootstrap roots already exist in {} \
+         (bwrap_root={}, busybox_root={}). Refusing checkout source discovery fallback.",
+        output_dir.display(),
+        presence.has_bwrap_root,
+        presence.has_busybox_root,
+    )))
+}
+
+fn fallback_event_for_bwrap_source(source: &BwrapSource) -> Option<SelfBuildFallbackEvent> {
+    match source {
+        BwrapSource::CrunchBuilt(_) => None,
+        BwrapSource::HostFallback(path) => Some(SelfBuildFallbackEvent::BwrapHostFallback(path.clone())),
+    }
+}
+
+fn resolve_self_build_source_dir(
+    output_dir: &Path,
+    source_store_path: Option<&Path>,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+) -> Result<(PathBuf, Vec<SelfBuildFallbackEvent>), RunError> {
+    let presence = inspect_bootstrap_tool_presence(output_dir);
+    enforce_source_resolution_policy(output_dir, hermeticity_mode, presence, source_store_path)?;
+
     match source_store_path {
         Some(existing_source) => {
             let absolute_source = absolutize_path(existing_source)?;
             validate_staged_source_dir(&absolute_source, output_dir)?;
-            Ok(absolute_source)
+            Ok((absolute_source, Vec::new()))
         }
-        None => find_source_dir(),
+        None => {
+            let source_dir = find_source_dir()?;
+            let event = SelfBuildFallbackEvent::SourceHostDiscovery(source_dir.clone());
+            Ok((source_dir, vec![event]))
+        }
     }
 }
 
@@ -1439,6 +1578,7 @@ struct SelfBuildSetup {
     output_dir: PathBuf,
     src_dir: PathBuf,
     bootstrap_dir: PathBuf,
+    fallback_events: Vec<SelfBuildFallbackEvent>,
 }
 
 struct SelfBuildShared {
@@ -1449,17 +1589,26 @@ struct SelfBuildShared {
     trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
 }
 
-fn initialize_self_build(output_dir: &Path, source_store_path: Option<&Path>) -> Result<SelfBuildSetup, RunError> {
+fn initialize_self_build(
+    output_dir: &Path,
+    source_store_path: Option<&Path>,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+) -> Result<SelfBuildSetup, RunError> {
     eprintln!("=== crunch self-build ===");
 
     let invoking_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("crunch"));
     eprintln!("  invoking binary: {}", invoking_binary.display());
     let output_dir = absolutize_path(output_dir)?;
 
-    let initial_bwrap = resolve_bwrap_source(&output_dir)?;
+    let initial_bwrap = resolve_bwrap_source(&output_dir, hermeticity_mode)?;
+    let mut fallback_events = Vec::new();
+    if let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap) {
+        fallback_events.push(event);
+    }
     activate_bwrap_source(&initial_bwrap)?;
 
-    let src_dir = resolve_self_build_source_dir(&output_dir, source_store_path)?;
+    let (src_dir, source_events) = resolve_self_build_source_dir(&output_dir, source_store_path, hermeticity_mode)?;
+    fallback_events.extend(source_events);
     eprintln!("source: {}", src_dir.display());
     let bootstrap_dir = src_dir.join("bootstrap");
     if !bootstrap_dir.exists() {
@@ -1471,6 +1620,7 @@ fn initialize_self_build(output_dir: &Path, source_store_path: Option<&Path>) ->
         output_dir,
         src_dir,
         bootstrap_dir,
+        fallback_events,
     })
 }
 
@@ -1530,7 +1680,7 @@ pub fn cmd_self_build(
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_store_path: Option<&Path>,
 ) -> Result<SelfBuildReport, RunError> {
-    let setup = initialize_self_build(output_dir, source_store_path)?;
+    let setup = initialize_self_build(output_dir, source_store_path, hermeticity_mode)?;
     let shared =
         prepare_self_build_shared(&setup, state_dir, signing_key_path, trusted_public_keys, source_store_path)?;
 
@@ -1575,6 +1725,7 @@ pub fn cmd_self_build(
         invoking_binary: setup.invoking_binary,
         staged_source: shared.staged_source,
         bwrap_source: tools.bwrap_source,
+        fallback_events: setup.fallback_events,
         busybox_path: tools.busybox_path,
         output_binary,
     };
@@ -2096,7 +2247,7 @@ mod tests {
             std::fs::set_permissions(&bwrap_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let result = resolve_bwrap_source(store.path()).unwrap();
+        let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical).unwrap();
         assert!(result.is_crunch_built(), "should prefer crunch-built bwrap",);
         match result {
             BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, bwrap_dir),
@@ -2107,7 +2258,7 @@ mod tests {
     #[test]
     fn resolve_bwrap_source_falls_back_to_path() {
         let store = tempfile::tempdir().unwrap();
-        let result = resolve_bwrap_source(store.path());
+        let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical);
         match find_host_bwrap() {
             Some(host_path) => {
                 let src = result.unwrap();
@@ -2123,6 +2274,51 @@ mod tests {
                 assert!(msg.contains("not found"), "error: {msg}");
             }
         }
+    }
+
+    #[test]
+    fn resolve_bwrap_source_strict_rejects_host_fallback_once_bootstrap_root_exists() {
+        let _lock = PATH_MUTEX.lock().unwrap();
+        let orig = std::env::var_os("PATH");
+
+        let fake_dir = tempfile::tempdir().unwrap();
+        make_fake_executable(fake_dir.path(), "bwrap");
+        unsafe { std::env::set_var("PATH", fake_dir.path()) };
+
+        let store = tempfile::tempdir().unwrap();
+        let broken_bwrap_dir = store.path().join("abc-bwrap").join("bin");
+        std::fs::create_dir_all(&broken_bwrap_dir).unwrap();
+        std::fs::write(broken_bwrap_dir.join("bwrap"), "not executable").unwrap();
+
+        let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Strict);
+
+        match &orig {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert!(result.is_err(), "strict later stage must reject host fallback");
+        let message = result.unwrap_err().message().to_string();
+        assert!(message.contains("refuses host bwrap fallback"), "unexpected error: {message}");
+        assert!(message.contains("bwrap_root=true"), "unexpected error: {message}");
+        assert!(message.contains("busybox_root=false"), "unexpected error: {message}");
+    }
+
+    #[test]
+    fn enforce_source_resolution_policy_rejects_checkout_fallback_in_strict_later_stage() {
+        let presence = BootstrapToolPresence {
+            has_bwrap_root: true,
+            has_busybox_root: true,
+        };
+        let output_dir = Path::new("/tmp/proof-store");
+
+        let result =
+            enforce_source_resolution_policy(output_dir, crunch_pipeline::HermeticityMode::Strict, presence, None);
+
+        assert!(result.is_err(), "strict later stage must require --source-store-path");
+        let message = result.unwrap_err().message().to_string();
+        assert!(message.contains("requires --source-store-path"), "unexpected error: {message}");
+        assert!(message.contains("Refusing checkout source discovery fallback"), "unexpected error: {message}");
     }
 
     #[test]
@@ -2382,6 +2578,10 @@ mod tests {
             invoking_binary: PathBuf::from("/tmp/checkout/target/debug/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin")),
+            fallback_events: vec![
+                SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from("/run/wrappers/bin/bwrap")),
+                SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from("/work/crunch")),
+            ],
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
             output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
         };
@@ -2397,6 +2597,7 @@ mod tests {
         assert_eq!(parsed.invoking_binary, report.invoking_binary);
         assert_eq!(parsed.staged_source, report.staged_source);
         assert_eq!(parsed.bwrap_source, report.bwrap_source);
+        assert_eq!(parsed.fallback_events, report.fallback_events);
         assert_eq!(parsed.busybox_path, report.busybox_path);
         assert_eq!(parsed.output_binary, report.output_binary);
     }
@@ -2408,13 +2609,18 @@ mod tests {
             invoking_binary: PathBuf::from("/usr/bin/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
             bwrap_source: BwrapSource::HostFallback(PathBuf::from("/usr/bin/bwrap")),
+            fallback_events: vec![SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from(
+                "/usr/bin/bwrap",
+            ))],
             busybox_path: None,
             output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
         };
         let lines = report.format_proof_lines();
         assert!(lines.contains("busybox-path=none"));
+        assert!(lines.contains("fallback-event=bwrap-host-fallback:/usr/bin/bwrap"));
 
         let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
+        assert_eq!(parsed.fallback_events, report.fallback_events);
         assert!(parsed.busybox_path.is_none());
         assert!(!parsed.bwrap_source.is_crunch_built());
     }
@@ -2430,7 +2636,8 @@ mod tests {
             "{PROOF_PREFIX} hermeticity-mode=strict\n\
              {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
              {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
-             {PROOF_PREFIX} bwrap-source=host-fallback:/usr/bin/bwrap\n"
+             {PROOF_PREFIX} bwrap-source=host-fallback:/usr/bin/bwrap\n\
+             {PROOF_PREFIX} fallback-event=none\n"
         );
         // Missing busybox-path and output-binary.
         assert!(SelfBuildReport::parse_proof_lines(&partial).is_none());
@@ -2447,6 +2654,7 @@ mod tests {
              another log line\n\
              {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-done:bwrap.ncl\n\
              {PROOF_PREFIX} bwrap-source=crunch-built:/store/x-bwrap/bin\n\
+             {PROOF_PREFIX} fallback-event=source-host-discovery:/work/crunch\n\
              {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
              {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n\
              {PROOF_PREFIX} {PROGRESS_KEY}crunch-build-done\n"
@@ -2456,6 +2664,9 @@ mod tests {
         assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
         assert_eq!(parsed.staged_source, PathBuf::from("/store/src-crunch-src"));
         assert!(parsed.bwrap_source.is_crunch_built());
+        assert_eq!(parsed.fallback_events, vec![SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from(
+            "/work/crunch"
+        ))]);
     }
 
     // ── find_crunch_busybox tests ───────────────────────────────

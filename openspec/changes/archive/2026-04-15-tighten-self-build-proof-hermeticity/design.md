@@ -18,6 +18,8 @@ still need a stronger policy boundary than stage0. Once crunch has built its own
 
 - remove stage0 host prerequisites entirely
 - redesign the whole proof workflow
+- replace the existing shell-based proof helper or the busybox sandbox shell
+- introduce a devshell/coreutils rewrite as part of this hermeticity change
 
 ## Decisions
 

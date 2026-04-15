@@ -12,8 +12,10 @@ readonly PROOF_BUNDLE_ENV="CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
 readonly PROOF_SCRATCH_ENV="CRUNCH_PROOF_SCRATCH_DIR"
 readonly PROOF_MODE_ENV="CRUNCH_SELF_HOSTING_PROOF_MODE"
 readonly PROOF_STAGE0_INVENTORY_DOC_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC"
+readonly PROOF_LATER_STAGE_HERMETICITY_ENV="CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE"
 readonly PROOF_MODE_FIXED_POINT="fixed-point"
 readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
+readonly PROOF_LATER_STAGE_HERMETICITY_DEFAULT="strict"
 readonly DEFAULT_SCRATCH_ROOT="$DEFAULT_BUNDLE_ROOT/work"
 readonly DEFAULT_SCRATCH_SOURCE="default repo-local policy"
 readonly SCRATCH_TMP_SUBDIR="tmp"
@@ -32,6 +34,7 @@ proof_bundle_dir=""
 proof_path_dir=""
 mode="run"
 proof_mode="$PROOF_MODE_FIXED_POINT"
+proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
 
 usage() {
   cat <<'EOF'
@@ -255,11 +258,22 @@ configure_c_compiler() {
 
 discover_static_sandbox_shell() {
   local candidate
+  local override_candidate="${CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE:-}"
+
+  if [[ -n "$override_candidate" ]]; then
+    candidate="$(normalize_repo_relative_path "$override_candidate")"
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+    return 1
+  fi
 
   # Host-convenience discovery only. This helper may use an already-installed
   # static busybox from common NixOS/Nix locations, but it must not realize one
   # through `nix-build` or any other hidden fallback.
   for candidate in \
+    "$REPO_ROOT/target/proof-busybox-static/bin/busybox" \
     "/run/current-system/sw/bin/busybox-static" \
     "/bin/busybox.static" \
     /nix/store/*-busybox-static-*/bin/busybox
@@ -278,7 +292,7 @@ configure_sandbox_shell() {
   local shell_path=""
 
   if [[ -n "$requested_shell" && "$requested_shell" != "/bin/sh" ]]; then
-    shell_path="$requested_shell"
+    shell_path="$(normalize_repo_relative_path "$requested_shell")"
   else
     shell_path="$(discover_static_sandbox_shell 2>/dev/null || true)"
   fi
@@ -543,6 +557,19 @@ show_scratch_summary() {
   fi
 }
 
+resolve_later_stage_hermeticity() {
+  local requested="${CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE:-$PROOF_LATER_STAGE_HERMETICITY_DEFAULT}"
+
+  case "$requested" in
+    practical|strict)
+      printf '%s\n' "$requested"
+      ;;
+    *)
+      die "unsupported later-stage hermeticity mode: $requested"
+      ;;
+  esac
+}
+
 show_check_summary() {
   local bundle_dir
   bundle_dir="$(resolve_proof_bundle_dir)"
@@ -557,6 +584,7 @@ show_check_summary() {
   note "bwrap: $(command -v bwrap)"
   note "openssl: $(pkg-config --modversion openssl)"
   note "SNIX_BUILD_SANDBOX_SHELL: $SNIX_BUILD_SANDBOX_SHELL"
+  note "later proof-stage hermeticity: $proof_later_stage_hermeticity"
   show_scratch_summary "$bundle_dir"
   note "stage0 inventory doc: $REPO_ROOT/docs/bootstrap-stage0-inventory.md"
   note "proof command: ${PROOF_COMMAND[*]}"
@@ -565,6 +593,7 @@ show_check_summary() {
 parse_args() {
   mode="run"
   proof_mode="$PROOF_MODE_FIXED_POINT"
+  proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -621,6 +650,7 @@ main() {
   configure_sandbox_shell
   configure_openssl_lookup
   require_nightly_rustc
+  proof_later_stage_hermeticity="$(resolve_later_stage_hermeticity)"
   configure_proof_scratch
   configure_non_nix_path
 
@@ -636,6 +666,7 @@ main() {
   export "$PROOF_BUNDLE_ENV=$bundle_dir"
   export "$PROOF_MODE_ENV=$proof_mode"
   export "$PROOF_STAGE0_INVENTORY_DOC_ENV=$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
+  export "$PROOF_LATER_STAGE_HERMETICITY_ENV=$proof_later_stage_hermeticity"
   show_scratch_summary "$bundle_dir"
 
   if "${PROOF_COMMAND[@]}"; then
