@@ -66,6 +66,250 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
     }
 }
 
+const DETERMINISM_PROBE_PREFIX: &str = "determinism-probe:";
+
+#[derive(Debug, Clone, Copy)]
+struct AmbientCase {
+    name: &'static str,
+    user: &'static str,
+    logname: &'static str,
+    tz: &'static str,
+    lang: &'static str,
+    umask: &'static str,
+}
+
+const AMBIENT_CASES: [AmbientCase; 3] = [
+    AmbientCase {
+        name: "new-york-077",
+        user: "hostile-user-a",
+        logname: "hostile-logname-a",
+        tz: "America/New_York",
+        lang: "en_US.UTF-8",
+        umask: "077",
+    },
+    AmbientCase {
+        name: "tokyo-022",
+        user: "hostile-user-b",
+        logname: "hostile-logname-b",
+        tz: "Asia/Tokyo",
+        lang: "ja_JP.UTF-8",
+        umask: "022",
+    },
+    AmbientCase {
+        name: "berlin-027",
+        user: "hostile-user-c",
+        logname: "hostile-logname-c",
+        tz: "Europe/Berlin",
+        lang: "de_DE.UTF-8",
+        umask: "027",
+    },
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProbeAuditEvent {
+    kind: String,
+    detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeterminismProbe {
+    output_digest_hex: Option<String>,
+    audit_events: Vec<ProbeAuditEvent>,
+    blocker_class: Option<String>,
+}
+
+fn build_poisoned_path(prefix_dir: &Path) -> OsString {
+    let mut path_entries = vec![prefix_dir.to_path_buf()];
+    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    path_entries.extend(std::env::split_paths(&current_path).filter(|entry| !entry.as_os_str().is_empty()));
+    std::env::join_paths(path_entries).expect("poisoned PATH should be valid")
+}
+
+fn parse_probe(stdout: &[u8]) -> DeterminismProbe {
+    let stdout = String::from_utf8_lossy(stdout);
+    let start = stdout
+        .find(DETERMINISM_PROBE_PREFIX)
+        .unwrap_or_else(|| panic!("missing probe line in stdout:\n{stdout}"));
+    let payload = stdout[start + DETERMINISM_PROBE_PREFIX.len()..]
+        .lines()
+        .next()
+        .expect("probe payload line must exist");
+    let mut fields = payload.split('\t');
+    let digest = decode_optional_field(fields.next().expect("probe digest field must exist"));
+    let blocker = decode_optional_field(fields.next().expect("probe blocker field must exist"));
+    let audit_events = decode_audit_events(fields.next().expect("probe audit field must exist"));
+    assert!(fields.next().is_none(), "probe payload must have exactly three fields");
+    DeterminismProbe {
+        output_digest_hex: digest,
+        audit_events,
+        blocker_class: blocker,
+    }
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn encode_field(value: &str) -> String {
+    data_encoding::BASE64.encode(value.as_bytes())
+}
+
+fn decode_field(value: &str) -> String {
+    let decoded = data_encoding::BASE64.decode(value.as_bytes()).expect("probe field should be valid base64");
+    String::from_utf8(decoded).expect("probe field should be valid UTF-8")
+}
+
+fn encode_optional_field(value: Option<&str>) -> String {
+    value.map_or_else(|| "-".to_string(), encode_field)
+}
+
+fn decode_optional_field(value: &str) -> Option<String> {
+    if value == "-" {
+        return None;
+    }
+    Some(decode_field(value))
+}
+
+fn encode_audit_events(events: &[ProbeAuditEvent]) -> String {
+    if events.is_empty() {
+        return "-".to_string();
+    }
+    events
+        .iter()
+        .map(|event| format!("{}:{}", encode_field(&event.kind), encode_field(&event.detail)))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn decode_audit_events(value: &str) -> Vec<ProbeAuditEvent> {
+    if value == "-" {
+        return Vec::new();
+    }
+    value
+        .split(',')
+        .map(|entry| {
+            let (kind, detail) = entry.split_once(':').expect("audit entry should contain kind/detail separator");
+            ProbeAuditEvent {
+                kind: decode_field(kind),
+                detail: decode_field(detail),
+            }
+        })
+        .collect()
+}
+
+fn summarize_audit_events(events: &[crunch_pipeline::HermeticityAuditEvent]) -> Vec<ProbeAuditEvent> {
+    events
+        .iter()
+        .map(|event| ProbeAuditEvent {
+            kind: event.kind.as_str().to_string(),
+            detail: event.detail.clone(),
+        })
+        .collect()
+}
+
+fn emit_probe(probe: &DeterminismProbe) {
+    println!(
+        "{DETERMINISM_PROBE_PREFIX}{}\t{}\t{}",
+        encode_optional_field(probe.output_digest_hex.as_deref()),
+        encode_optional_field(probe.blocker_class.as_deref()),
+        encode_audit_events(&probe.audit_events),
+    );
+}
+
+fn success_probe(result: &crunch_pipeline::PipelineResult) -> DeterminismProbe {
+    assert!(result.failed.is_empty(), "successful probe must not fail: {:?}", result.failed);
+    assert_eq!(result.outcomes.len(), 1, "successful probe must have one outcome");
+    let out = result.outcomes[0].outputs.get("out").expect("successful probe must have out output");
+    DeterminismProbe {
+        output_digest_hex: Some(hex_bytes(&out.nar_sha256)),
+        audit_events: summarize_audit_events(&result.hermeticity_audit_events),
+        blocker_class: None,
+    }
+}
+
+fn blocker_probe(result: &crunch_pipeline::PipelineResult, blocker_class: &str) -> DeterminismProbe {
+    assert!(result.outcomes.is_empty(), "blocker probe must not succeed: {:?}", result.outcomes);
+    assert_eq!(result.failed.len(), 1, "blocker probe must report one failure");
+    DeterminismProbe {
+        output_digest_hex: None,
+        audit_events: summarize_audit_events(&result.hermeticity_audit_events),
+        blocker_class: Some(blocker_class.to_string()),
+    }
+}
+
+fn run_ambient_probe(test_name: &str, case: AmbientCase) -> DeterminismProbe {
+    let current_exe = std::env::current_exe().expect("current test binary should exist");
+    let root = tempfile::tempdir().expect("ambient temp root should exist");
+    let home_dir = root.path().join("home");
+    let tmp_dir = root.path().join("tmp");
+    let cwd_dir = root.path().join("cwd");
+    let path_prefix = root.path().join("path-prefix");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    std::fs::create_dir_all(&cwd_dir).unwrap();
+    std::fs::create_dir_all(&path_prefix).unwrap();
+
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg("cd \"$3\" && umask \"$4\" && exec \"$1\" --ignored --exact --nocapture --test-threads=1 \"$2\"")
+        .arg("sh")
+        .arg(&current_exe)
+        .arg(test_name)
+        .arg(&cwd_dir)
+        .arg(case.umask)
+        .env("HOME", &home_dir)
+        .env("PATH", build_poisoned_path(&path_prefix))
+        .env("USER", case.user)
+        .env("LOGNAME", case.logname)
+        .env("TZ", case.tz)
+        .env("LANG", case.lang)
+        .env("LC_ALL", case.lang)
+        .env("TMPDIR", &tmp_dir)
+        .env("TEMP", &tmp_dir)
+        .env("TMP", &tmp_dir)
+        .env("TEMPDIR", &tmp_dir)
+        .env("SHELL", "/tmp/hostile-shell")
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "ambient case {} failed for {test_name}\nstdout:\n{}\nstderr:\n{}",
+        case.name,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut combined = output.stdout;
+    combined.extend_from_slice(&output.stderr);
+    parse_probe(&combined)
+}
+
+fn assert_success_probe_stability(test_name: &str) {
+    let mut probes = AMBIENT_CASES.iter().map(|case| (case.name, run_ambient_probe(test_name, *case)));
+    let (baseline_name, baseline_probe) = probes.next().expect("ambient cases must not be empty");
+    let baseline_digest = baseline_probe.output_digest_hex.clone().expect("baseline success probe must emit digest");
+    assert!(baseline_probe.blocker_class.is_none(), "baseline success probe must not emit blocker");
+    for (case_name, probe) in probes {
+        let digest = probe.output_digest_hex.clone().expect("success probe must emit digest");
+        assert_eq!(digest, baseline_digest, "digest changed for {case_name}");
+        assert_eq!(probe.audit_events, baseline_probe.audit_events, "audit events changed for {case_name}");
+        assert!(probe.blocker_class.is_none(), "success probe must not emit blocker for {case_name}");
+    }
+    assert!(!baseline_name.is_empty(), "baseline case name must not be empty");
+}
+
+fn assert_blocker_probe_stability(test_name: &str, expected_blocker: &str) {
+    let mut probes = AMBIENT_CASES.iter().map(|case| (case.name, run_ambient_probe(test_name, *case)));
+    let (_baseline_name, baseline_probe) = probes.next().expect("ambient cases must not be empty");
+    assert_eq!(baseline_probe.output_digest_hex, None, "blocker probe must not emit digest");
+    assert_eq!(baseline_probe.blocker_class.as_deref(), Some(expected_blocker));
+    for (case_name, probe) in probes {
+        assert_eq!(probe.output_digest_hex, None, "blocker probe must not emit digest for {case_name}");
+        assert_eq!(probe.audit_events, baseline_probe.audit_events, "blocker audit events changed for {case_name}");
+        assert_eq!(probe.blocker_class, baseline_probe.blocker_class, "blocker class changed for {case_name}");
+    }
+}
+
 #[tokio::test]
 async fn pipeline_builds_trivial_derivation_end_to_end() {
     if !can_build() {
@@ -269,6 +513,149 @@ fn pipeline_host_ambient_state_does_not_leak_into_strict_build() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn pipeline_determinism_normal_derivation_stable_across_ambient_state() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    assert_success_probe_stability("pipeline_determinism_probe_normal_derivation");
+}
+
+#[test]
+fn pipeline_determinism_fetcher_root_stable_across_ambient_state() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    assert_success_probe_stability("pipeline_determinism_probe_fetcher_root");
+}
+
+#[test]
+fn pipeline_determinism_strict_blocker_stable_across_ambient_state() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    assert_blocker_probe_stability(
+        "pipeline_determinism_probe_strict_environment_override_blocker",
+        "unsafe-env-override:PATH",
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn pipeline_determinism_probe_normal_derivation() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("determinism-normal.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "determinism-normal",
+  builder = "/bin/sh",
+  args = ["-c", "set -eu; printf 'stable normal build\n' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+    assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
+    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    emit_probe(&success_probe(&result));
+}
+
+#[tokio::test]
+#[ignore]
+async fn pipeline_determinism_probe_fetcher_root() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let source_file = work.path().join("fetch.txt");
+    let ncl_file = work.path().join("determinism-fetch.ncl");
+    let content = b"stable fetch root\n";
+
+    std::fs::write(&source_file, content).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+crunch.fetchurl {{
+  name = "determinism-fetch-root",
+  url = "file://{}",
+  hash = "{}",
+}}"#,
+            source_file.display(),
+            sha256_sri(content),
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+    assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
+    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    emit_probe(&success_probe(&result));
+}
+
+#[tokio::test]
+#[ignore]
+async fn pipeline_determinism_probe_strict_environment_override_blocker() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("determinism-blocker.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "determinism-strict-blocker",
+  builder = "/bin/sh",
+  args = ["-c", "set -eu; printf '%s' \"$PATH\" > $out"],
+  env = { PATH = "/override/bin" },
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+
+    let result = build(&config).await.unwrap();
+    assert!(result.hermeticity_audit_events.is_empty(), "strict blocker must not degrade into audit events");
+    assert!(result.failed[0].error.contains("unsafe sandbox environment override"));
+    assert!(result.failed[0].error.contains("PATH"));
+    emit_probe(&blocker_probe(&result, "unsafe-env-override:PATH"));
 }
 
 #[tokio::test]
