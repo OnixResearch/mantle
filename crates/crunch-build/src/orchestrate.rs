@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crunch_store::ArtifactProvenance;
+use crunch_store::GcRootSource;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -152,6 +153,7 @@ pub struct Builder<BServ> {
     hermeticity_mode: HermeticityMode,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
+    root_retention_source: Option<GcRootSource>,
 }
 
 impl<BServ> Builder<BServ>
@@ -198,6 +200,7 @@ where BServ: BuildService + 'static
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             source_closure_cache: HashMap::new(),
+            root_retention_source: None,
         }
     }
 
@@ -240,6 +243,7 @@ where BServ: BuildService + 'static
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
             source_closure_cache: HashMap::new(),
+            root_retention_source: None,
         }
     }
 
@@ -258,6 +262,10 @@ where BServ: BuildService + 'static
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
         self.hermeticity_mode = hermeticity_mode;
+    }
+
+    pub fn set_root_retention_source(&mut self, root_retention_source: Option<GcRootSource>) {
+        self.root_retention_source = root_retention_source;
     }
 
     pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
@@ -1112,7 +1120,15 @@ where BServ: BuildService + 'static
         signing::sign_pathinfo(&mut path_info, &self.keypair.signing_key);
 
         self.store
-            .persist_and_export_signed_output(output_name, output_path, path_info, final_node, provenance, is_root)
+            .persist_and_export_signed_output(
+                output_name,
+                output_path,
+                path_info,
+                final_node,
+                provenance,
+                is_root,
+                self.root_retention_source,
+            )
             .await
             .map_err(|e| Error::Store(format!("{e}")))
     }
@@ -1128,7 +1144,7 @@ where BServ: BuildService + 'static
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         let cached = self
             .store
-            .check_cache(drv_path, derivation, is_root)
+            .check_cache(drv_path, derivation, is_root, self.root_retention_source)
             .await
             .map_err(|e| Error::Store(format!("{e}")))?;
 

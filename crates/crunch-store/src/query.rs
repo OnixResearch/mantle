@@ -110,10 +110,10 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
 
-        if let Some(filter) = path_filter {
-            if !sp_str.contains(filter) {
-                continue;
-            }
+        if let Some(filter) = path_filter
+            && !sp_str.contains(filter)
+        {
+            continue;
         }
 
         let abs = std::path::Path::new("/nix/store").join(&sp_str);
@@ -160,10 +160,10 @@ pub async fn store_verify_signatures(
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let path = pi.store_path.to_string();
 
-        if let Some(filter) = path_filter {
-            if !path.contains(filter) {
-                continue;
-            }
+        if let Some(filter) = path_filter
+            && !path.contains(filter)
+        {
+            continue;
         }
 
         let store_path_ref: StorePathRef = pi.store_path.as_ref();

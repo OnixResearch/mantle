@@ -16,6 +16,8 @@ use crunch_build::KeyPair;
 use crunch_build::Worker;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
+use crunch_store::GcRootSource;
+use crunch_store::StoreMutationGuard;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
@@ -37,6 +39,8 @@ pub struct BuildConfig {
     pub trusted_keys: Vec<VerifyingKey>,
     /// When true, skip signature verification on cache hits.
     pub trust_unsigned: bool,
+    /// Optional retained-root source for successful top-level outputs.
+    pub root_retention_source: Option<GcRootSource>,
 }
 
 #[derive(Debug)]
@@ -92,6 +96,8 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
 
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
+    let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
+        .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
 
     let derivations =
         crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&config.file, &config.import_paths).map_err(
@@ -165,6 +171,7 @@ async fn build_linux(
         config.verbose,
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
+    builder.set_root_retention_source(config.root_retention_source);
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
     let store_dir = config.store_dir.clone();

@@ -34,4 +34,13 @@ pub enum Error {
 
     #[error("attestation: {0}")]
     Attestation(String),
+
+    #[error("root registry: {0}")]
+    RootRegistry(String),
+
+    #[error("store mutation lock: {0}")]
+    MutationLock(String),
+
+    #[error("gc: {0}")]
+    Gc(String),
 }

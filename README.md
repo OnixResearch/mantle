@@ -304,6 +304,29 @@ By default, cached PathInfo must be signed by a trusted key. The default
 trust set includes `cache.nixos.org-1`. Use `--trusted-public-keys` to
 override.
 
+### Retained roots and manual GC
+
+Successful top-level outputs from `crunch build`, `crunch self-build`, and
+`crunch bootstrap --fetch` are retained automatically as GC roots. Use:
+
+```bash
+crunch store roots
+crunch store pin /nix/store/<hash>-name
+crunch store unpin /nix/store/<hash>-name
+crunch store gc --dry-run
+crunch store gc
+```
+
+`crunch store gc --dry-run` reports the retained-root count, candidate path
+count, reclaimable bytes, and each candidate logical store path without
+mutating state. Real GC sweeps unreachable exported outputs, PathInfo rows,
+attestation sidecars, and unreachable castore content. GC fails closed if a
+retained root's reachability metadata is missing or unreadable.
+
+Current safety bounds are internal and fail closed rather than partially
+collect: exported-output byte walks stop at depth 128 or 100,000 visited
+entries, and filesystem/blob scans stop at 200,000 entries.
+
 ## Bootstrap
 
 crunch needs some trusted inputs to build anything. The repo tracks four
@@ -598,6 +621,10 @@ crunch bootstrap [-o seed.ncl]   Generate seed from Nix store (or --fetch for Ni
 crunch self-build                Build crunch from its own source
 crunch store list                List all known store paths
 crunch store info <path>         Show PathInfo for a store path
+crunch store roots               List retained GC roots
+crunch store pin <path>          Pin a logical store path as a GC root
+crunch store unpin <path>        Remove a retained GC root
+crunch store gc [--dry-run]      Sweep unreachable local store state
 crunch store verify [<path>]     Verify NAR hashes and signatures
 crunch store sign [<path>]       Sign PathInfo entries (or --all)
 crunch log [query]               Show a stored build log
@@ -660,7 +687,8 @@ crunch upgrade                   Migrate project files to current schema
 
 ## Known Limitations
 
-- **No garbage collection**: `crunch store gc` is not implemented.
+- **Manual GC only**: `crunch store gc` is implemented, but background or
+  low-space-triggered collection is still future work.
 - **Concurrent builds**: independent derivations run in parallel (up to
   `-j N`, default: CPU count, max 16). The lazy goal scheduler
   dispatches builds as their dependencies complete; sandbox execution

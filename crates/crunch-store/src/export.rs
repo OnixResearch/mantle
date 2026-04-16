@@ -131,7 +131,7 @@ mod tests {
         writer.write_all(data).await.unwrap();
         let digest = writer.close().await.unwrap();
         let node = Node::File {
-            digest: digest.clone(),
+            digest,
             size: data.len() as u64,
             executable: false,
         };
@@ -439,7 +439,7 @@ mod tests {
         export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
         // Verify the leaf file exists at the expected depth (d/d/d/d/d).
-        let mut path = format!("{dest}");
+        let mut path = dest.to_string();
         for _ in 0..5 {
             path = format!("{path}/d");
         }

@@ -27,6 +27,9 @@ use tracing::info as trace_info;
 use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
+use crate::GcReport;
+use crate::GcRootRecord;
+use crate::GcRootSource;
 use crate::StoreAuditEvent;
 use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
@@ -36,6 +39,8 @@ use crate::attestation::load_artifact_attestation;
 use crate::attestation::load_or_create_runtime_closure_attestation;
 use crate::attestation::persist_artifact_attestation;
 use crate::export::export_castore_to_disk;
+use crate::gc;
+use crate::roots;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -105,7 +110,7 @@ impl StoreHandle {
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
 
         let blob_service = open_blob_service(state_dir)?;
-        let directory_service = open_directory_service()?;
+        let directory_service = open_directory_service(state_dir).await?;
         let (pathinfo_service, mut startup_audit_events) =
             open_pathinfo_service(state_dir, config.fallback_mode).await?;
 
@@ -241,6 +246,40 @@ impl StoreHandle {
         &self.store_dir
     }
 
+    pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {
+        roots::list_roots(&self.state_dir)
+    }
+
+    pub async fn pin_retained_root(&self, logical_path: &str) -> Result<GcRootRecord, Error> {
+        roots::pin_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), logical_path).await
+    }
+
+    pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
+        roots::unpin_root(&self.state_dir, &self.store_dir, logical_path)
+    }
+
+    pub async fn register_retained_root(
+        &self,
+        store_path: &StorePath<String>,
+        source: GcRootSource,
+    ) -> Result<GcRootRecord, Error> {
+        roots::register_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), store_path, source).await
+    }
+
+    pub async fn garbage_collect(&mut self, dry_run: bool) -> Result<GcReport, Error> {
+        gc::run_gc(
+            &self.state_dir,
+            &self.output_dir_str,
+            &self.store_dir,
+            self.pathinfo_service.as_ref(),
+            self.directory_service.as_ref(),
+            self.blob_service.as_ref(),
+            &mut self.ca_mappings,
+            dry_run,
+        )
+        .await
+    }
+
     /// Check whether the castore has the content referenced by a Node.
     ///
     /// Files: probe blob_service. Directories: probe directory_service.
@@ -277,7 +316,7 @@ impl StoreHandle {
                         "blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})"
                     )));
                 }
-                digest.clone()
+                *digest
             }
             other => {
                 return Err(Error::BlobService(format!("read_blob called on non-file node: {other:?}")));
@@ -357,6 +396,7 @@ impl StoreHandle {
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         is_root: bool,
+        root_source: Option<GcRootSource>,
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
 
@@ -389,6 +429,9 @@ impl StoreHandle {
                         self.built_outputs
                             .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
                         self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
+                        if is_root && let Some(source) = root_source {
+                            self.register_retained_root(&output_path, source).await?;
+                        }
                         infos.insert(output_name.clone(), path_info);
                     } else {
                         tracing::warn!(
@@ -399,13 +442,12 @@ impl StoreHandle {
                     }
                 }
                 None => {
-                    if !is_fod {
-                        if let Some(remote_pi) =
-                            self.try_substitute_remote(digest, &output_path, output_name, is_root).await?
-                        {
-                            infos.insert(output_name.clone(), remote_pi);
-                            continue;
-                        }
+                    if !is_fod
+                        && let Some(remote_pi) =
+                            self.try_substitute_remote(digest, &output_path, output_name, is_root, root_source).await?
+                    {
+                        infos.insert(output_name.clone(), remote_pi);
+                        continue;
                     }
                     return Ok(None);
                 }
@@ -425,6 +467,7 @@ impl StoreHandle {
         output_path: &StorePath<String>,
         output_name: &str,
         is_root: bool,
+        root_source: Option<GcRootSource>,
     ) -> Result<Option<PathInfo>, Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
 
@@ -451,6 +494,9 @@ impl StoreHandle {
                 self.built_outputs
                     .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), remote_pi.clone());
                 self.export_output_if_needed(output_path, &remote_pi.node, is_root).await?;
+                if is_root && let Some(source) = root_source {
+                    self.register_retained_root(output_path, source).await?;
+                }
 
                 Ok(Some(remote_pi))
             }
@@ -481,10 +527,19 @@ impl StoreHandle {
         final_node: Node,
         provenance: Option<ArtifactProvenance>,
         is_root: bool,
+        root_source: Option<GcRootSource>,
     ) -> Result<PathInfo, Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
-        self.persist_pathinfo_and_export(output_name, output_path, path_info, final_node, provenance, is_root)
-            .await
+        self.persist_pathinfo_and_export(
+            output_name,
+            output_path,
+            path_info,
+            final_node,
+            provenance,
+            is_root,
+            root_source,
+        )
+        .await
     }
 
     async fn export_output_if_needed(
@@ -525,6 +580,7 @@ impl StoreHandle {
         final_node: Node,
         provenance: Option<ArtifactProvenance>,
         is_root: bool,
+        root_source: Option<GcRootSource>,
     ) -> Result<PathInfo, Error> {
         if path_info.store_path != *output_path {
             return Err(Error::Store(format!(
@@ -548,6 +604,9 @@ impl StoreHandle {
         self.built_outputs.insert(abs_path, path_info.clone());
         self.output_nodes.insert(output_path.clone(), final_node.clone());
         self.export_output_if_needed(output_path, &final_node, is_root).await?;
+        if is_root && let Some(source) = root_source {
+            self.register_retained_root(output_path, source).await?;
+        }
 
         Ok(path_info)
     }
@@ -589,13 +648,15 @@ fn open_blob_service(state_dir: &Path) -> Result<Arc<dyn BlobService>, Error> {
     Ok(Arc::new(svc))
 }
 
-fn open_directory_service() -> Result<Arc<dyn DirectoryService>, Error> {
-    let svc = RedbDirectoryService::new_temporary("crunch".to_string(), RedbDirectoryServiceConfig {
-        path: None,
+async fn open_directory_service(state_dir: &Path) -> Result<Arc<dyn DirectoryService>, Error> {
+    let db_path = state_dir.join("directories.redb");
+    let svc = RedbDirectoryService::new("crunch".to_string(), RedbDirectoryServiceConfig {
+        path: Some(db_path.clone()),
         read_only: false,
         cache_size: None,
     })
-    .map_err(|e| Error::DirectoryService(format!("{e}")))?;
+    .await
+    .map_err(|e| Error::DirectoryService(format!("opening {}: {e}", db_path.display())))?;
     Ok(Arc::new(svc))
 }
 
@@ -814,7 +875,7 @@ mod tests {
         let out_abs = output_path.to_absolute_path_with_prefix("/crunch/store");
         handle.insert_ca_mapping(&drv_abs, "out", &out_abs);
 
-        let cached = handle.check_cache(&drv_path, &derivation, false).await.unwrap();
+        let cached = handle.check_cache(&drv_path, &derivation, false, None).await.unwrap();
         let outputs = cached.expect("CA mapping with matching custom prefix should cache-hit");
         assert_eq!(outputs.get("out").unwrap().store_path, output_path);
     }
@@ -847,11 +908,49 @@ mod tests {
                 },
                 None,
                 false,
+                None,
             )
             .await
             .unwrap_err();
 
         assert!(matches!(err, Error::Store(msg) if msg.contains("unsigned PathInfo")));
+    }
+
+    #[tokio::test]
+    async fn failed_persist_does_not_register_root() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("failed-root", 9);
+        let path_info = PathInfo {
+            store_path: output_path.clone(),
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [1u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+
+        let err = handle
+            .persist_and_export_signed_output(
+                "out",
+                &output_path,
+                path_info,
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                None,
+                true,
+                Some(crate::GcRootSource::Build),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, Error::Store(msg) if msg.contains("unsigned PathInfo")));
+        assert!(crate::roots::list_roots(state_dir.path()).unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -872,11 +971,67 @@ mod tests {
                 },
                 None,
                 false,
+                None,
             )
             .await
             .unwrap_err();
 
         assert!(matches!(err, Error::Store(msg) if msg.contains("store path mismatch")));
+    }
+
+    #[tokio::test]
+    async fn persist_signed_output_registers_build_root() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("rooted-build", 12);
+
+        handle
+            .persist_and_export_signed_output(
+                "out",
+                &output_path,
+                signed_pathinfo(output_path.clone()),
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                None,
+                true,
+                Some(crate::GcRootSource::Build),
+            )
+            .await
+            .unwrap();
+
+        drop(handle);
+        let roots = crate::roots::list_roots(state_dir.path()).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].logical_path, output_path.to_absolute_path());
+        assert_eq!(roots[0].source, crate::GcRootSource::Build);
+    }
+
+    #[tokio::test]
+    async fn persist_signed_output_registers_self_build_root() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("rooted-self-build", 13);
+
+        handle
+            .persist_and_export_signed_output(
+                "out",
+                &output_path,
+                signed_pathinfo(output_path.clone()),
+                Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                None,
+                true,
+                Some(crate::GcRootSource::SelfBuild),
+            )
+            .await
+            .unwrap();
+
+        drop(handle);
+        let roots = crate::roots::list_roots(state_dir.path()).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].source, crate::GcRootSource::SelfBuild);
     }
 
     #[tokio::test]
@@ -895,6 +1050,7 @@ mod tests {
                 },
                 None,
                 false,
+                None,
             )
             .await
             .unwrap();
@@ -905,15 +1061,43 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remote_substitution_writes_artifact_attestation() {
+    async fn remote_substitution_registers_bootstrap_root() {
         let state_dir = tempfile::tempdir().unwrap();
         let (mut handle, remote) = test_handle_with_remote(state_dir.path());
-        let output_path = test_output("substituted-path", 11);
+        let output_path = test_output("bootstrap-root", 14);
         let path_info = signed_pathinfo(output_path.clone());
 
         remote.put(path_info).await.unwrap();
 
-        let substituted = handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true).await.unwrap();
+        let substituted = handle
+            .try_substitute_remote(
+                *output_path.digest(),
+                &output_path,
+                "out",
+                true,
+                Some(crate::GcRootSource::Bootstrap),
+            )
+            .await
+            .unwrap();
+        assert!(substituted.is_some(), "remote substitution should hit");
+
+        drop(handle);
+        let roots = crate::roots::list_roots(state_dir.path()).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].source, crate::GcRootSource::Bootstrap);
+    }
+
+    #[tokio::test]
+    async fn remote_substitution_writes_artifact_attestation() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, remote) = test_handle_with_remote(state_dir.path());
+        let output_path = test_output("substituted-path", 15);
+        let path_info = signed_pathinfo(output_path.clone());
+
+        remote.put(path_info).await.unwrap();
+
+        let substituted =
+            handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
         assert!(substituted.is_some(), "remote substitution should hit");
 
         let exported = PathBuf::from(output_path.to_absolute_path_with_prefix(state_dir.path().to_str().unwrap()));

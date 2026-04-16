@@ -663,6 +663,8 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
 
     // 2. Set up services for the fetch-only Builder.
     let state_dir = resolve_state_dir();
+    let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&state_dir)
+        .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
     let _ = std::fs::create_dir_all(&state_dir);
 
     let blob_service = {
@@ -702,6 +704,7 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
         false,
         verbose,
     );
+    builder.set_root_retention_source(Some(crunch_store::GcRootSource::Bootstrap));
 
     // 3. Build the raw fetched tarball output.
     let mut known_paths = crunch_build::DerivationRegistry::new(LOGICAL_STORE_DIR);

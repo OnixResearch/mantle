@@ -354,14 +354,13 @@ async fn load_pathinfo(
         return Ok(path_info);
     }
 
-    if let Some(remote) = remote {
-        if let Some(path_info) = remote
+    if let Some(remote) = remote
+        && let Some(path_info) = remote
             .get(digest)
             .await
             .map_err(|e| Error::Attestation(format!("loading remote PathInfo for {store_path}: {e}")))?
-        {
-            return Ok(path_info);
-        }
+    {
+        return Ok(path_info);
     }
 
     Err(Error::Attestation(format!("missing PathInfo for closure member {store_path}")))
@@ -674,12 +673,15 @@ mod tests {
         .await
         .unwrap();
 
-        let stored =
-            load_or_create_runtime_closure_attestation(state_dir.path(), "/nix/store", local.as_ref(), None, &[
-                root.clone()
-            ])
-            .await
-            .unwrap();
+        let stored = load_or_create_runtime_closure_attestation(
+            state_dir.path(),
+            "/nix/store",
+            local.as_ref(),
+            None,
+            std::slice::from_ref(&root),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(stored.attestation.facts.members.len(), 2);
         assert_eq!(stored.attestation.facts.root_node_ids, vec![artifact_node_id(&logical_path(&root, "/nix/store"))]);
@@ -742,14 +744,21 @@ mod tests {
         .await
         .unwrap();
 
-        let closure_path =
-            closure_attestation_path(state_dir.path(), "/nix/store", &[root.clone()], ClosureSemantics::Runtime);
-        let first =
-            load_or_create_runtime_closure_attestation(state_dir.path(), "/nix/store", local.as_ref(), None, &[
-                root.clone()
-            ])
-            .await
-            .unwrap();
+        let closure_path = closure_attestation_path(
+            state_dir.path(),
+            "/nix/store",
+            std::slice::from_ref(&root),
+            ClosureSemantics::Runtime,
+        );
+        let first = load_or_create_runtime_closure_attestation(
+            state_dir.path(),
+            "/nix/store",
+            local.as_ref(),
+            None,
+            std::slice::from_ref(&root),
+        )
+        .await
+        .unwrap();
         let first_bytes = tokio::fs::read(&closure_path).await.unwrap();
         assert_eq!(first_bytes, first.attestation.canonical_bytes().unwrap());
 
@@ -825,12 +834,15 @@ mod tests {
         .await
         .unwrap();
 
-        let first =
-            load_or_create_runtime_closure_attestation(state_dir.path(), "/nix/store", local.as_ref(), None, &[
-                root.clone()
-            ])
-            .await
-            .unwrap();
+        let first = load_or_create_runtime_closure_attestation(
+            state_dir.path(),
+            "/nix/store",
+            local.as_ref(),
+            None,
+            std::slice::from_ref(&root),
+        )
+        .await
+        .unwrap();
         let second =
             load_or_create_runtime_closure_attestation(state_dir.path(), "/nix/store", local.as_ref(), None, &[root])
                 .await

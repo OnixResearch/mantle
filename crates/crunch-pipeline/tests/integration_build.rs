@@ -63,6 +63,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         keypair,
         trusted_keys,
         trust_unsigned: false,
+        root_retention_source: None,
     }
 }
 
@@ -599,7 +600,11 @@ async fn pipeline_determinism_probe_normal_derivation() {
 
     let result = build(&config).await.unwrap();
     assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
-    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    assert!(
+        result.hermeticity_audit_events.is_empty(),
+        "unexpected audit events: {:?}",
+        result.hermeticity_audit_events
+    );
     emit_probe(&success_probe(&result));
 }
 
@@ -639,7 +644,11 @@ crunch.fetchurl {{
 
     let result = build(&config).await.unwrap();
     assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
-    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    assert!(
+        result.hermeticity_audit_events.is_empty(),
+        "unexpected audit events: {:?}",
+        result.hermeticity_audit_events
+    );
     emit_probe(&success_probe(&result));
 }
 
@@ -692,7 +701,11 @@ let bootstrap_tool = {
 
     let result = build(&config).await.unwrap();
     assert_eq!(result.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
-    assert!(result.hermeticity_audit_events.is_empty(), "unexpected audit events: {:?}", result.hermeticity_audit_events);
+    assert!(
+        result.hermeticity_audit_events.is_empty(),
+        "unexpected audit events: {:?}",
+        result.hermeticity_audit_events
+    );
     emit_probe(&success_probe(&result));
 }
 

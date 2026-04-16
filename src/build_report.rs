@@ -295,6 +295,7 @@ mod tests {
             keypair: signing_key,
             trusted_keys: Vec::new(),
             trust_unsigned: false,
+            root_retention_source: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
         let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [2u8; 20]).unwrap();

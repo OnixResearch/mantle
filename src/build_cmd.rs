@@ -10,6 +10,7 @@ use crunch_pipeline::PipelineResult;
 use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
 use crunch_pipeline::parse_drv_key;
+use crunch_store::GcRootSource;
 use nix_compat::store_path::StorePath;
 
 use crate::build_log::write_log_file;
@@ -66,6 +67,7 @@ pub fn cmd_build(
         keypair,
         trusted_keys,
         trust_unsigned,
+        root_retention_source: Some(GcRootSource::Build),
     };
 
     let result = run_build(&config)?;

@@ -1329,6 +1329,7 @@ fn build_crunch_binary(
         keypair,
         trusted_keys,
         trust_unsigned,
+        root_retention_source: Some(crunch_store::GcRootSource::SelfBuild),
     };
 
     let result = run_build(&config)?;
@@ -1380,6 +1381,7 @@ fn build_bootstrap_tool(
         keypair: keypair.clone(),
         trusted_keys: trusted_keys.to_vec(),
         trust_unsigned,
+        root_retention_source: None,
     };
 
     let result = run_build(&config)?;
@@ -2286,7 +2288,9 @@ mod tests {
                 assert_eq!(dir, output_dir.path().join("aaa-stage0-bwrap").join("bin"));
                 assert_ne!(dir, output_dir.path().join("zzz-stale-bwrap").join("bin"));
             }
-            BwrapSource::HostFallback(path) => panic!("expected crunch-built bwrap, got host fallback {}", path.display()),
+            BwrapSource::HostFallback(path) => {
+                panic!("expected crunch-built bwrap, got host fallback {}", path.display())
+            }
         }
     }
 

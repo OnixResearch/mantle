@@ -271,7 +271,7 @@ fn seed_store() -> SeededStore {
         };
 
         store
-            .persist_and_export_signed_output("out", &root_path, root_info, node.clone(), None, true)
+            .persist_and_export_signed_output("out", &root_path, root_info, node.clone(), None, true, None)
             .await
             .unwrap();
         store
@@ -282,6 +282,7 @@ fn seed_store() -> SeededStore {
                 node,
                 None,
                 false,
+                None,
             )
             .await
             .unwrap();

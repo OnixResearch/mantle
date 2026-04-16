@@ -34,18 +34,20 @@ impl CaMappings {
 
     /// Save to disk. Errors are logged but not fatal.
     pub fn save(&self, state_dir: &Path) {
-        let path = Self::file_path(state_dir);
-        let _ = std::fs::create_dir_all(state_dir);
-        match serde_json::to_string_pretty(self) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&path, &json) {
-                    tracing::warn!(path = %path.display(), err = %e, "failed to save CA mappings");
-                }
-            }
-            Err(e) => {
-                tracing::warn!(err = %e, "failed to serialize CA mappings");
-            }
+        if let Err(err) = self.save_checked(state_dir) {
+            tracing::warn!(path = %Self::file_path(state_dir).display(), err = %err, "failed to save CA mappings");
         }
+    }
+
+    /// Save to disk atomically and surface the error to the caller.
+    pub fn save_checked(&self, state_dir: &Path) -> Result<(), String> {
+        let path = Self::file_path(state_dir);
+        std::fs::create_dir_all(state_dir).map_err(|err| format!("creating {}: {err}", state_dir.display()))?;
+        let json = serde_json::to_vec_pretty(self).map_err(|err| format!("serializing {}: {err}", path.display()))?;
+        let tmp_path = state_dir.join("ca_mappings.json.tmp");
+        std::fs::write(&tmp_path, json).map_err(|err| format!("writing {}: {err}", tmp_path.display()))?;
+        std::fs::rename(&tmp_path, &path)
+            .map_err(|err| format!("renaming {} -> {}: {err}", tmp_path.display(), path.display()))
     }
 
     /// Record a resolved CA output.
@@ -75,6 +77,14 @@ impl CaMappings {
             }
         }
         None
+    }
+
+    /// Drop CA output-path entries that no longer refer to live store paths.
+    pub fn retain_output_paths(&mut self, live_paths: &std::collections::BTreeSet<String>) {
+        self.mappings.retain(|_drv_path, outputs| {
+            outputs.retain(|_output_name, output_path| live_paths.contains(output_path));
+            !outputs.is_empty()
+        });
     }
 
     fn file_path(state_dir: &Path) -> PathBuf {

@@ -396,6 +396,24 @@ pub enum StoreAction {
         /// Store path (full or fragment to match)
         path: String,
     },
+    /// List retained GC roots
+    Roots,
+    /// Pin a logical store path as a retained GC root
+    Pin {
+        /// Logical store path to retain
+        path: String,
+    },
+    /// Remove a retained GC root
+    Unpin {
+        /// Logical store path to remove
+        path: String,
+    },
+    /// Run manual garbage collection
+    Gc {
+        /// Preview removals without mutating state
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Verify NAR hash and trusted signatures of stored paths
     Verify {
         /// Optional: verify a specific path (default: all)
@@ -517,7 +535,9 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
-        Command::Store { action } => store_cmd::cmd_store(action.clone()),
+        Command::Store { action } => {
+            store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
+        }
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Init
         | Command::Check
@@ -985,6 +1005,7 @@ fn build_from_expr_raw(
         keypair,
         trusted_keys,
         trust_unsigned,
+        root_retention_source: None,
     };
 
     build_cmd::run_build(&config)
