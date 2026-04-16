@@ -1135,6 +1135,7 @@ mod tests {
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: leaf_sp.clone(),
             outputs: std::collections::HashMap::new(),
+            substitutions: std::collections::HashMap::new(),
             cached: false,
             log: None,
         };
@@ -1166,6 +1167,7 @@ mod tests {
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: sp.clone(),
             outputs: std::collections::HashMap::new(),
+            substitutions: std::collections::HashMap::new(),
             cached: true,
             log: None,
         };
@@ -1219,6 +1221,7 @@ mod tests {
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: shared_sp.clone(),
             outputs: std::collections::HashMap::new(),
+            substitutions: std::collections::HashMap::new(),
             cached: false,
             log: None,
         };

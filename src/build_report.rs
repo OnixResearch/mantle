@@ -52,6 +52,17 @@ pub struct BuildJsonOutput {
     pub name: String,
     pub path: String,
     pub artifact_attestation: BuildJsonAttestationReference,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub substitution: Option<BuildJsonSubstitution>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonSubstitution {
+    pub mode: String,
+    pub transferred_bytes: u64,
+    pub reused_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -160,6 +171,12 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
                             logical_path,
                             path: attestation_path.display().to_string(),
                         },
+                        substitution: outcome.substitutions.get(name).map(|report| BuildJsonSubstitution {
+                            mode: report.mode.as_str().to_string(),
+                            transferred_bytes: report.transferred_bytes,
+                            reused_bytes: report.reused_bytes,
+                            fallback_reason: report.fallback_reason.clone(),
+                        }),
                     }
                 })
                 .collect();
@@ -211,6 +228,8 @@ fn count_as_u32(count: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -267,6 +286,7 @@ mod tests {
         let outcome = crunch_build::BuildOutcome {
             drv_path,
             outputs: HashMap::new(),
+            substitutions: HashMap::new(),
             cached: false,
             log: Some("body".into()),
         };
@@ -314,6 +334,12 @@ mod tests {
         let outcome = crunch_build::BuildOutcome {
             drv_path: drv_path.clone(),
             outputs: HashMap::from([("out".to_string(), path_info)]),
+            substitutions: HashMap::from([("out".to_string(), crunch_store::OutputSubstitutionReport {
+                mode: crunch_store::OutputSubstitutionMode::Delta,
+                transferred_bytes: 12,
+                reused_bytes: 34,
+                fallback_reason: None,
+            })]),
             cached: false,
             log: None,
         };
@@ -339,5 +365,119 @@ mod tests {
         assert_eq!(report.outcomes[0].outputs.len(), 1);
         assert_eq!(report.outcomes[0].outputs[0].artifact_attestation.logical_path, logical_path);
         assert!(report.outcomes[0].outputs[0].artifact_attestation.path.contains("attestations/artifacts/"));
+        let substitution = report.outcomes[0].outputs[0].substitution.as_ref().expect("substitution report");
+        assert_eq!(substitution.mode, "delta");
+        assert_eq!(substitution.transferred_bytes, 12);
+        assert_eq!(substitution.reused_bytes, 34);
+        assert!(substitution.fallback_reason.is_none());
+    }
+
+    #[test]
+    fn render_build_json_report_serializes_full_substitution_fields_stably() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 1,
+            substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [3u8; 20]).unwrap();
+        let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [4u8; 20]).unwrap();
+        let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
+        let exported_path = output_path.to_absolute_path_with_prefix(config.output_dir.to_str().unwrap());
+        let attestation_path =
+            crunch_store::artifact_attestation_file_path(state_dir.path(), &config.store_dir, &output_path)
+                .display()
+                .to_string();
+        let path_info = snix_store::path_info::PathInfo {
+            store_path: output_path.clone(),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: 1,
+            nar_sha256: [0x22; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: HashMap::from([("out".to_string(), path_info)]),
+            substitutions: HashMap::from([("out".to_string(), crunch_store::OutputSubstitutionReport {
+                mode: crunch_store::OutputSubstitutionMode::Full,
+                transferred_bytes: 55,
+                reused_bytes: 0,
+                fallback_reason: Some("stream_application_failed".to_string()),
+            })]),
+            cached: true,
+            log: None,
+        };
+        let result = PipelineResult {
+            outcomes: vec![outcome],
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+        };
+
+        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+
+        assert_eq!(
+            json_value,
+            json!({
+                "schema": "crunch-build-report-v1",
+                "file": config.file.display().to_string(),
+                "output_dir": config.output_dir.display().to_string(),
+                "state_dir": config.state_dir.display().to_string(),
+                "store_dir": config.store_dir.clone(),
+                "hermeticity_mode": "practical",
+                "hermeticity_audit_events": [],
+                "counts": {
+                    "succeeded_total": 1,
+                    "built_total": 0,
+                    "cached_total": 1,
+                    "failed_total": 0,
+                },
+                "outcomes": [{
+                    "drv_key": drv_key_for(&config.store_dir, &drv_path),
+                    "label": "demo",
+                    "cached": true,
+                    "log_file": null,
+                    "outputs": [{
+                        "name": "out",
+                        "path": exported_path,
+                        "artifact_attestation": {
+                            "logical_path": logical_path.clone(),
+                            "path": attestation_path,
+                        },
+                        "substitution": {
+                            "mode": "full",
+                            "transferred_bytes": 55,
+                            "reused_bytes": 0,
+                            "fallback_reason": "stream_application_failed",
+                        }
+                    }]
+                }],
+                "failed": [],
+                "fod_mismatches": [],
+            })
+        );
     }
 }

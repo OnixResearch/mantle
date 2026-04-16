@@ -36,6 +36,8 @@ pub use export::export_castore_to_disk;
 pub use gc::GcOperationKind;
 pub use gc::GcReport;
 pub use handle::CacheHit;
+pub use handle::OutputSubstitutionMode;
+pub use handle::OutputSubstitutionReport;
 pub use handle::StoreConfig;
 pub use handle::StoreHandle;
 pub use mutation_lock::StoreMutationGuard;

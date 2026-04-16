@@ -291,6 +291,35 @@ Building derivations (not just compiling crunch) requires:
   `mem::take()` instead of cloning them. Remaining hot spots are now outside
   those paths (for example deeper scheduler structure and remote metadata
   transport itself), not the old clone-heavy ready/dispatch flow.
+- **Delta substitution integration boundary**: `crates/crunch-store` cannot
+  import `crates/crunch-delta` directly because `crunch-delta` already depends
+  on `crunch-store`. The current runtime integration slice therefore lives in
+  `StoreHandle::try_substitute_remote()` as same-authority
+  `/delta/capabilities` probing, advertisement validation, a same-authority
+  candidate-request POST, a bounded local has-set POST built from receiver
+  `PathInfo` + castore presence, NDJSON stream-frame decode, chunk/blob frame
+  ingestion into local castore, and final signed-`PathInfo` acceptance through
+  `persist_and_export_signed_output()`. Current wire gap: `DeltaArtifactNode`
+  still has no directory-entry names, so crunch-store can reconstruct blob or
+  symlink roots directly, and can only accept directory roots when the full
+  directory closure is already present locally by digest; new directory shapes
+  still require fallback. Query-string gotcha: substituter URLs may carry
+  `trusted_public_keys[...]`; `normalized_cache_base_url()` must clear query /
+  fragment before joining delta endpoints so trust config does not leak into
+  `/delta/*` requests. Reporting note: successful remote substitutions now
+  record per-output mode/bytes/fallback data on `StoreHandle`; when a full
+  substitution's local castore tree is incomplete (common in in-memory remote
+  test fixtures), report `transferred_bytes` falls back to `PathInfo.nar_size`.
+  Test harness note: `test_handle_with_remote()` uses an in-memory
+  `LruPathInfoService`, so fallback-path tests there prove crunch-store
+  decision logic but do NOT exercise `NixHTTPPathInfoService` narinfo
+  signature verification on the final full-fetch path. Separate stronger-fixture
+  note: a tiny real HTTP server plus `NixHTTPPathInfoService` still does NOT
+  satisfy the persisted-cache e2e task unless the served narinfo/NAR bytes are
+  reopened from a prior build's `state_dir/pathinfo.redb` + `state_dir/blobs`.
+  Keep the repo-local deterministic compatibility test between crunch-store
+  wire constants and `crunch-delta`'s protocol-v1 helpers when changing
+  chunk-profile or endpoint defaults.
 - **BLAKE3 everywhere**: `HashAlgo::Blake3` + `NixHash::Blake3` in nix-compat,
   `NAR_BLAKE3`/`FLAT_BLAKE3` in pathinfo.proto, blake3 branches in
   `nar_hash()`/`hash_blob()`/`verify_flat_hash()`/`HashingReader`. The

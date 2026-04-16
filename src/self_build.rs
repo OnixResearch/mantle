@@ -2080,6 +2080,7 @@ mod tests {
             outcomes: vec![crunch_build::BuildOutcome {
                 drv_path: drv_path.clone(),
                 outputs: std::collections::HashMap::from([("out".to_string(), output)]),
+                substitutions: std::collections::HashMap::new(),
                 cached: false,
                 log: None,
             }],
@@ -2108,12 +2109,14 @@ mod tests {
                 crunch_build::BuildOutcome {
                     drv_path: drv_a.clone(),
                     outputs: std::collections::HashMap::from([("out".to_string(), test_path_info("crunch-a"))]),
+                    substitutions: std::collections::HashMap::new(),
                     cached: false,
                     log: None,
                 },
                 crunch_build::BuildOutcome {
                     drv_path: drv_b.clone(),
                     outputs: std::collections::HashMap::from([("out".to_string(), test_path_info("crunch-b"))]),
+                    substitutions: std::collections::HashMap::new(),
                     cached: false,
                     log: None,
                 },

@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crunch_store::ArtifactProvenance;
 use crunch_store::GcRootSource;
+use crunch_store::OutputSubstitutionReport;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -91,10 +92,17 @@ pub struct BuildOutcome {
     pub drv_path: StorePath<String>,
     /// Output name → PathInfo for each output.
     pub outputs: HashMap<String, PathInfo>,
+    /// Output name → substitution reporting for successful remote cache hits.
+    pub substitutions: HashMap<String, OutputSubstitutionReport>,
     /// Whether the build was served from cache (output already existed).
     pub cached: bool,
     /// Captured build stdout+stderr, if available.
     pub log: Option<String>,
+}
+
+struct CacheCheckHit {
+    infos: HashMap<String, PathInfo>,
+    substitutions: HashMap<String, OutputSubstitutionReport>,
 }
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
@@ -373,11 +381,12 @@ where BServ: BuildService + 'static
         let derivation_ref = derivation.as_ref();
 
         // 1. Cache check
-        if let Some(cached_outputs) = self.check_cache(drv_path, derivation_ref, is_root).await? {
+        if let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
-                outputs: cached_outputs,
+                outputs: cached_hit.infos,
+                substitutions: cached_hit.substitutions,
                 cached: true,
                 log: None,
             }));
@@ -499,6 +508,7 @@ where BServ: BuildService + 'static
         Ok(BuildOutcome {
             drv_path: prepared.drv_path.clone(),
             outputs: output_infos,
+            substitutions: HashMap::new(),
             cached: false,
             log: build_result.log,
         })
@@ -1141,7 +1151,7 @@ where BServ: BuildService + 'static
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         is_root: bool,
-    ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
+    ) -> Result<Option<CacheCheckHit>, Error> {
         let cached = self
             .store
             .check_cache(drv_path, derivation, is_root, self.root_retention_source)
@@ -1152,8 +1162,17 @@ where BServ: BuildService + 'static
             return Ok(None);
         };
 
+        let substitutions = infos
+            .iter()
+            .filter_map(|(output_name, path_info)| {
+                self.store
+                    .take_output_substitution_report(&path_info.store_path)
+                    .map(|report| (output_name.clone(), report))
+            })
+            .collect::<HashMap<_, _>>();
+
         if self.trust_unsigned {
-            return Ok(Some(infos));
+            return Ok(Some(CacheCheckHit { infos, substitutions }));
         }
 
         // Verify signatures on every cached output.
@@ -1178,7 +1197,7 @@ where BServ: BuildService + 'static
             }
         }
 
-        Ok(Some(infos))
+        Ok(Some(CacheCheckHit { infos, substitutions }))
     }
 
     /// Collect build-input provenance for native attestations.

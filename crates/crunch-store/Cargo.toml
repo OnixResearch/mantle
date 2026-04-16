@@ -18,11 +18,13 @@ fs2 = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
+reqwest = { version = "0.13.1", default-features = true, features = ["json"] }
 tokio = { version = "1", features = ["fs", "rt"] }
 tracing = "0.1"
 url = "2"
 
 [dev-dependencies]
+crunch-delta = { path = "../crunch-delta" }
 futures = "0.3"
 pretty_assertions = "1.0"
 tempfile = "3"

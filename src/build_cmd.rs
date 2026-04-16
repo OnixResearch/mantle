@@ -174,15 +174,35 @@ fn print_success_outputs(config: &BuildConfig, result: &PipelineResult) {
         outputs.sort_by(|left, right| left.0.cmp(right.0));
         for (output_name, path_info) in outputs {
             let path = path_info.store_path.to_absolute_path_with_prefix(output_dir_str);
-            let suffix = match (outcome.cached, multi && output_name != "out") {
-                (true, true) => format!(" ({output_name}, cached)"),
-                (true, false) => " (cached)".to_string(),
-                (false, true) => format!(" ({output_name})"),
-                (false, false) => String::new(),
-            };
+            let suffix = format_output_suffix(outcome, output_name, multi);
             println!("{path}{suffix}");
         }
     }
+}
+
+fn format_output_suffix(outcome: &crunch_build::BuildOutcome, output_name: &str, multi: bool) -> String {
+    let mut parts = Vec::<String>::new();
+    if multi && output_name != "out" {
+        parts.push(output_name.to_string());
+    }
+    if outcome.cached {
+        parts.push("cached".to_string());
+    }
+    if let Some(report) = outcome.substitutions.get(output_name) {
+        parts.push(format!(
+            "substitution={}, transferred_bytes={}, reused_bytes={}",
+            report.mode.as_str(),
+            report.transferred_bytes,
+            report.reused_bytes
+        ));
+        if let Some(reason) = &report.fallback_reason {
+            parts.push(format!("fallback_reason={reason}"));
+        }
+    }
+    if parts.is_empty() {
+        return String::new();
+    }
+    format!(" ({})", parts.join(", "))
 }
 
 fn print_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> Result<(), RunError> {
@@ -412,5 +432,52 @@ mod tests {
     fn audit_event_label_pluralizes_count() {
         assert_eq!(audit_event_label(1), "audit event");
         assert_eq!(audit_event_label(2), "audit events");
+    }
+
+    #[test]
+    fn format_output_suffix_includes_full_substitution_report() {
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap(),
+            outputs: std::collections::HashMap::new(),
+            substitutions: std::collections::HashMap::from([(
+                "out".to_string(),
+                crunch_store::OutputSubstitutionReport {
+                    mode: crunch_store::OutputSubstitutionMode::Full,
+                    transferred_bytes: 55,
+                    reused_bytes: 0,
+                    fallback_reason: Some("stream_application_failed".to_string()),
+                },
+            )]),
+            cached: true,
+            log: None,
+        };
+
+        let suffix = format_output_suffix(&outcome, "out", false);
+        assert_eq!(
+            suffix,
+            " (cached, substitution=full, transferred_bytes=55, reused_bytes=0, fallback_reason=stream_application_failed)"
+        );
+    }
+
+    #[test]
+    fn format_output_suffix_includes_delta_substitution_report_without_fallback_reason() {
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [2u8; 20]).unwrap(),
+            outputs: std::collections::HashMap::new(),
+            substitutions: std::collections::HashMap::from([(
+                "out".to_string(),
+                crunch_store::OutputSubstitutionReport {
+                    mode: crunch_store::OutputSubstitutionMode::Delta,
+                    transferred_bytes: 12,
+                    reused_bytes: 34,
+                    fallback_reason: None,
+                },
+            )]),
+            cached: true,
+            log: None,
+        };
+
+        let suffix = format_output_suffix(&outcome, "out", false);
+        assert_eq!(suffix, " (cached, substitution=delta, transferred_bytes=12, reused_bytes=34)");
     }
 }
