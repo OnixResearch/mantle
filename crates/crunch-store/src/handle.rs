@@ -3135,6 +3135,134 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn remote_substitution_closure_scoped_delta_accepts_requested_output_and_reports_reuse() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, _remote) = test_handle_with_remote(state_dir.path());
+        let capability_path = "/delta/capabilities".to_string();
+        let candidate_path = "/delta/request".to_string();
+        let has_set_path = "/delta/has-set".to_string();
+        let stream_path = "/delta/stream".to_string();
+        let requested_output_path = test_output("delta-closure-requested", 40);
+        let sibling_output_path = test_output("delta-closure-sibling", 41);
+        let shared_bytes = b"closure-local-";
+        let shared_digest = store_local_blob(&handle, shared_bytes).await;
+        handle
+            .pathinfo_service
+            .put(signed_file_pathinfo(sibling_output_path.clone(), shared_digest, shared_bytes.len() as u64, false))
+            .await
+            .unwrap();
+        let remote_bytes = b"closure-remote";
+        let remote_chunk_digest: snix_castore::B3Digest = blake3::hash(remote_bytes).as_bytes().into();
+        let final_bytes = [shared_bytes.as_slice(), remote_bytes.as_slice()].concat();
+        let final_digest: snix_castore::B3Digest = blake3::hash(&final_bytes).as_bytes().into();
+        let candidate_body = serde_json::to_string(&DeltaCandidateResponseWire {
+            session_id: "session-out".to_string(),
+            negotiated: DeltaNegotiatedProtocolWire {
+                version: 1,
+                chunk_profile: DeltaChunkProfileWire::protocol_v1(),
+            },
+            sender: DeltaClosureFixtureWire {
+                store_prefix: "/nix/store".to_string(),
+                outputs: vec![
+                    DeltaOutputFixtureWire {
+                        output_id: requested_output_path.to_absolute_path(),
+                        root: DeltaArtifactNodeWire::Blob {
+                            digest: final_digest,
+                            size_bytes: final_bytes.len() as u64,
+                            chunks: vec![
+                                DeltaChunkRefWire {
+                                    digest: shared_digest,
+                                    size_bytes: shared_bytes.len() as u64,
+                                },
+                                DeltaChunkRefWire {
+                                    digest: remote_chunk_digest,
+                                    size_bytes: remote_bytes.len() as u64,
+                                },
+                            ],
+                        },
+                    },
+                    DeltaOutputFixtureWire {
+                        output_id: sibling_output_path.to_absolute_path(),
+                        root: DeltaArtifactNodeWire::Blob {
+                            digest: shared_digest,
+                            size_bytes: shared_bytes.len() as u64,
+                            chunks: Vec::new(),
+                        },
+                    },
+                ],
+            },
+            output_name: "out".to_string(),
+        })
+        .unwrap();
+        let stream_body = delta_stream_body(&[
+            DeltaTransferFrameWire::Chunk {
+                parent_digest: final_digest,
+                chunk_digest: remote_chunk_digest,
+                chunk_index: 1,
+                bytes: remote_bytes.to_vec(),
+            },
+            DeltaTransferFrameWire::FinalPathInfo {
+                path_info: signed_file_pathinfo(
+                    requested_output_path.clone(),
+                    final_digest,
+                    final_bytes.len() as u64,
+                    false,
+                ),
+            },
+        ]);
+        let (base_url, counts, stop, probe_handle) = spawn_delta_probe_server(DeltaProbeServerConfig {
+            capability_status_line: "HTTP/1.1 200 OK",
+            capability_body: supported_delta_capability_body(&candidate_path, &has_set_path, &stream_path),
+            capability_path,
+            candidate_status_line: "HTTP/1.1 200 OK",
+            candidate_body,
+            candidate_path,
+            has_set_status_line: "HTTP/1.1 200 OK",
+            has_set_body: "has-set-ok".to_string(),
+            has_set_path,
+            stream_status_line: "HTTP/1.1 200 OK",
+            stream_body,
+            stream_path,
+        });
+        handle.remote_cache_url = Some(base_url.clone());
+
+        let substituted = handle
+            .try_substitute_remote(
+                *requested_output_path.digest(),
+                &requested_output_path,
+                "out",
+                true,
+                Some(GcRootSource::Bootstrap),
+            )
+            .await
+            .unwrap()
+            .expect("closure-scoped delta substitution should accept requested output");
+
+        let report = handle.take_output_substitution_report(&requested_output_path).expect("substitution report");
+        let counts = counts.lock().unwrap();
+        let has_set_body = counts.last_has_set_body.as_ref().expect("has-set body");
+        let has_set: DeltaReceiverHasSetWire = serde_json::from_str(has_set_body).unwrap();
+        assert!(
+            has_set.manifest.known_outputs.contains(&sibling_output_path.to_absolute_path()),
+            "closure-scoped manifest should include reusable sibling output"
+        );
+        drop(counts);
+
+        assert_eq!(substituted.store_path, requested_output_path);
+        assert_eq!(report.mode, OutputSubstitutionMode::Delta);
+        assert_eq!(report.transferred_bytes, remote_bytes.len() as u64);
+        assert_eq!(report.reused_bytes, shared_bytes.len() as u64);
+        assert!(report.fallback_reason.is_none());
+        let exported_path = requested_output_path.to_absolute_path_with_prefix(handle.output_dir_str());
+        assert_eq!(std::fs::read(&exported_path).unwrap(), final_bytes);
+        let roots = crate::roots::list_roots(state_dir.path()).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].logical_path, requested_output_path.to_absolute_path());
+        assert_eq!(roots[0].source, GcRootSource::Bootstrap);
+        stop_delta_probe_server(&base_url, stop, probe_handle);
+    }
+
+    #[tokio::test]
     async fn remote_substitution_stream_failure_falls_back_through_real_http_cache() {
         let remote_state_dir = tempfile::tempdir().unwrap();
         let remote_output_dir = tempfile::tempdir().unwrap();
@@ -3853,5 +3981,110 @@ mod tests {
         let stored = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
         assert_eq!(stored.attestation.facts.output_name, "out");
         assert_eq!(stored.attestation.facts.logical_path, output_path.to_absolute_path());
+    }
+
+    #[tokio::test]
+    async fn delta_and_full_substitution_record_same_attestation_and_root_metadata() {
+        let output_path = test_output("delta-attestation-parity", 37);
+        let path_info = signed_pathinfo(output_path.clone());
+        let capability_path = "/delta/capabilities".to_string();
+        let candidate_path = "/delta/request".to_string();
+        let has_set_path = "/delta/has-set".to_string();
+        let stream_path = "/delta/stream".to_string();
+        let candidate_body =
+            candidate_response_body(&output_path.to_absolute_path(), "out", DeltaArtifactNodeWire::Symlink {
+                target: "target".to_string(),
+            });
+        let stream_body = delta_stream_body(&[DeltaTransferFrameWire::FinalPathInfo {
+            path_info: path_info.clone(),
+        }]);
+
+        let delta_state_dir = tempfile::tempdir().unwrap();
+        let (mut delta_handle, _delta_remote) = test_handle_with_remote(delta_state_dir.path());
+        let (base_url, _counts, stop, probe_handle) = spawn_delta_probe_server(DeltaProbeServerConfig {
+            capability_status_line: "HTTP/1.1 200 OK",
+            capability_body: supported_delta_capability_body(&candidate_path, &has_set_path, &stream_path),
+            capability_path,
+            candidate_status_line: "HTTP/1.1 200 OK",
+            candidate_body,
+            candidate_path,
+            has_set_status_line: "HTTP/1.1 200 OK",
+            has_set_body: "has-set-ok".to_string(),
+            has_set_path,
+            stream_status_line: "HTTP/1.1 200 OK",
+            stream_body,
+            stream_path,
+        });
+        delta_handle.remote_cache_url = Some(base_url.clone());
+
+        let delta_substituted = delta_handle
+            .try_substitute_remote(*output_path.digest(), &output_path, "out", true, Some(GcRootSource::Bootstrap))
+            .await
+            .unwrap()
+            .expect("delta substitution should hit");
+        let delta_attestation = delta_handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        let delta_stored_pathinfo = delta_handle
+            .pathinfo_service
+            .get(*output_path.digest())
+            .await
+            .unwrap()
+            .expect("delta pathinfo should persist");
+        let delta_report = delta_handle.take_output_substitution_report(&output_path).expect("delta report");
+        let delta_roots = crate::roots::list_roots(delta_state_dir.path()).unwrap();
+        let delta_exported = output_path.to_absolute_path_with_prefix(delta_handle.output_dir_str());
+        assert_eq!(delta_report.mode, OutputSubstitutionMode::Delta);
+        assert_eq!(delta_substituted, path_info);
+        assert_eq!(delta_stored_pathinfo, path_info);
+        assert_eq!(delta_roots.len(), 1);
+        assert_eq!(delta_roots[0].logical_path, output_path.to_absolute_path());
+        assert_eq!(delta_roots[0].source, GcRootSource::Bootstrap);
+        assert_eq!(std::fs::read_link(&delta_exported).unwrap(), PathBuf::from("target"));
+        stop_delta_probe_server(&base_url, stop, probe_handle);
+
+        let full_state_dir = tempfile::tempdir().unwrap();
+        let (mut full_handle, full_remote) = test_handle_with_remote(full_state_dir.path());
+        full_remote.put(path_info.clone()).await.unwrap();
+
+        let full_substituted = full_handle
+            .try_substitute_remote(*output_path.digest(), &output_path, "out", true, Some(GcRootSource::Bootstrap))
+            .await
+            .unwrap()
+            .expect("full substitution should hit");
+        let full_attestation = full_handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        let full_stored_pathinfo = full_handle
+            .pathinfo_service
+            .get(*output_path.digest())
+            .await
+            .unwrap()
+            .expect("full pathinfo should persist");
+        let full_report = full_handle.take_output_substitution_report(&output_path).expect("full report");
+        let full_roots = crate::roots::list_roots(full_state_dir.path()).unwrap();
+        let full_exported = output_path.to_absolute_path_with_prefix(full_handle.output_dir_str());
+        assert_eq!(full_report.mode, OutputSubstitutionMode::Full);
+        assert_eq!(full_substituted, path_info);
+        assert_eq!(full_stored_pathinfo, path_info);
+        assert_eq!(full_roots.len(), 1);
+        assert_eq!(full_roots[0].logical_path, output_path.to_absolute_path());
+        assert_eq!(full_roots[0].source, GcRootSource::Bootstrap);
+        assert_eq!(std::fs::read_link(&full_exported).unwrap(), PathBuf::from("target"));
+
+        assert_eq!(
+            delta_attestation, full_attestation,
+            "accepted delta and full substitutions should persist identical artifact attestations"
+        );
+        assert_eq!(
+            delta_stored_pathinfo, full_stored_pathinfo,
+            "accepted delta and full substitutions should persist identical PathInfo"
+        );
+        assert_eq!(
+            delta_handle.output_nodes.get(&output_path),
+            full_handle.output_nodes.get(&output_path),
+            "accepted delta and full substitutions should populate the same cached output node"
+        );
+        assert_eq!(
+            delta_handle.built_outputs.get(&delta_exported),
+            full_handle.built_outputs.get(&full_exported),
+            "accepted delta and full substitutions should populate the same built-output metadata"
+        );
     }
 }

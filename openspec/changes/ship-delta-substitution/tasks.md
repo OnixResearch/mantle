@@ -2,23 +2,23 @@
 
 ## Phase 1: HTTP substitution integration
 
-- [~] Add delta-capable negotiation to the trusted HTTP substituter path while
+- [x] Add delta-capable negotiation to the trusted HTTP substituter path while
       keeping ordinary full-artifact fallback available and requiring delta
       negotiation to stay on the same trusted HTTP authority chosen for
       ordinary substitution. ⏱ started: 2026-04-16T01:38Z
-- [~] Implement receiver compatibility-manifest construction from local
+- [x] Implement receiver compatibility-manifest construction from local
       `PathInfo` and castore presence for the requested output or closure,
       using cheap metadata paths such as `get_references()` where available so
       manifest building does not force full payload reads. ⏱ started: 2026-04-16T02:18Z
-- [~] Wire the existing repo delta-transfer protocol and codec into the trusted
+- [x] Wire the existing repo delta-transfer protocol and codec into the trusted
       HTTP substituter path, including any capability or parameter exchange
       needed before streaming starts. ⏱ started: 2026-04-16T13:16Z
-- [~] Implement streamed delta transfer handling in the trusted HTTP
+- [x] Implement streamed delta transfer handling in the trusted HTTP
       substituter path, including applying the delta stream and reconstructing
       the final artifact before final acceptance. ⏱ started: 2026-04-16T13:34Z
 - [x] Implement mid-stream delta failure handling that can restart through the
       ordinary full-fetch path when streamed delta transfer cannot finish.
-- [~] Feed completed delta transfers into the existing final cache-hit
+- [x] Feed completed delta transfers into the existing final cache-hit
       acceptance path so signed `PathInfo` verification stays unchanged and the
       same local metadata or attestation consequences as ordinary substitution
       are recorded. ⏱ started: 2026-04-16T13:34Z
@@ -33,7 +33,7 @@
       fallback reason. ⏱ started: 2026-04-16T14:47Z
 - [x] Expose those reporting fields in both human-readable output and the JSON
       build report.
-- [ ] Document how a cache operator can tell whether a substitution used delta
+- [x] Document how a cache operator can tell whether a substitution used delta
       reuse or ordinary full fetch.
 
 ## Phase 3: Validation coverage
@@ -49,14 +49,14 @@
       compatibility manifest.
 - [x] Add tests that manifest construction stays bounded to the requested
       output or closure and does not enumerate the whole local store first.
-- [ ] Add an end-to-end closure-scoped delta substitution test covering
+- [x] Add an end-to-end closure-scoped delta substitution test covering
       negotiation or fallback, final acceptance, and reporting for a requested
       closure.
 - [x] Add tests that delta negotiation or stream failure falls back cleanly to
       ordinary substitution without changing final trust semantics. ⏱ started: 2026-04-16T13:45Z
 - [x] Add tests that a completed delta transport is still rejected when the
       final signed `PathInfo` is untrusted. ⏱ started: 2026-04-16T13:45Z
-- [ ] Add tests that delta-backed and full-fetch cache hits record the same
+- [x] Add tests that delta-backed and full-fetch cache hits record the same
       local metadata or attestation consequences after final acceptance.
 - [x] Add tests that human-readable and JSON reporting both expose transfer
       mode and byte counts for successful delta and full-fetch cache hits, with

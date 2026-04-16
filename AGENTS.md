@@ -318,7 +318,12 @@ Building derivations (not just compiling crunch) requires:
   now seeds a real store, persists a signed output into
   `state_dir/pathinfo.redb` + `state_dir/blobs`, reopens that state, renders a
   real NAR from reopened castore data, and serves it over a tiny HTTP server to
-  exercise `NixHTTPPathInfoService` trust + fallback end to end. Keep the
+  exercise `NixHTTPPathInfoService` trust + fallback end to end. Cheapest
+  closure-scoped delta e2e pattern: build a candidate whose `sender.outputs`
+  includes the requested output plus one sibling output already present
+  locally, make the requested output reuse a chunk/blob reachable from that
+  sibling, and assert the receiver manifest advertises only that sibling within
+  closure scope while final reporting still records a delta hit. Keep the
   repo-local deterministic compatibility test between crunch-store wire
   constants and `crunch-delta`'s protocol-v1 helpers when changing
   chunk-profile or endpoint defaults.

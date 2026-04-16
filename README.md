@@ -41,6 +41,20 @@ records, and output paths so tests can assert on structured data instead
 of scraping human text. The optional `log_file` fields are only present
 when the corresponding log was actually written to disk.
 
+For successful cache hits, each output may also include a `substitution`
+object. `mode` is `delta` when crunch completed the hit through delta
+reuse and `full` when it completed through ordinary full-artifact fetch.
+`transferred_bytes` reports bytes fetched from the cache, `reused_bytes`
+reports receiver-local reuse, and `fallback_reason` only appears when
+crunch started delta negotiation but finished through full fetch.
+
+Human output reports same facts inline on cached outputs, for example:
+
+```text
+…/result-path (cached, substitution=delta, transferred_bytes=12, reused_bytes=34)
+…/result-path (cached, substitution=full, transferred_bytes=55, reused_bytes=0, fallback_reason=stream_application_failed)
+```
+
 Output lands in `/nix/store/<hash>-hello` by default (the `--store`
 default). Derivation hashes are computed under the `/crunch/store`
 logical prefix (`--store-prefix`). Use `--store /tmp/mystore` to
