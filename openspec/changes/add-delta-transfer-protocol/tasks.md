@@ -11,9 +11,9 @@
 
 ## Phase 2: Protocol model and ownership
 
-- [ ] Decide where the delta protocol layer lives: `crunch-store`, vendored
+- [x] Decide where the delta protocol layer lives: `crunch-store`, vendored
       `snix-castore`, or a dedicated protocol crate
-- [ ] Define receiver compatibility manifest types, requested-scope bounds, and
+- [x] Define receiver compatibility manifest types, requested-scope bounds, and
       metadata-only construction rules; manifest probes must use
       `PathInfoService::get_references()` or an equivalent metadata-only path,
       not `get()`
@@ -30,20 +30,25 @@
 
 - [ ] Add capability negotiation so a trusted substituter can advertise delta
       transfer support
-- [ ] Implement coarsest-first reuse planning for whole outputs, unchanged
+- [x] Implement coarsest-first reuse planning for whole outputs, unchanged
       subtrees, whole blobs, and chunks
-- [ ] Add bounded cross-output blob-digest tracking so shared blobs are sent at
+- [x] Add bounded cross-output blob-digest tracking so shared blobs are sent at
       most once per transfer session
+- [ ] Implement streamed delta send/receive state with bounded per-transfer
+      memory; active directory, blob, and chunk windows may scale memory, but
+      total closure bytes must not
 - [ ] Verify the reconstructed castore root digest matches the final signed
-      `PathInfo` before accepting a delta-transferred output
+      `PathInfo` and synthesize the same artifact-attestation outcome as
+      ordinary substitution before accepting a delta-transferred output
 - [ ] Keep successfully verified chunks and blobs from interrupted transfers in
-      castore while discarding incomplete session state
+      castore while discarding incomplete session state; partial transfers must
+      not emit artifact attestations
 - [ ] Fall back cleanly to full-artifact substitution when capability,
       negotiation, or reuse planning does not line up
 
 ## Phase 4: Verification and measurement
 
-- [ ] Add planner unit tests for whole-output, subtree, blob, chunk, and
+- [x] Add planner unit tests for whole-output, subtree, blob, chunk, and
       cross-output reuse cases
 - [ ] Add unit tests proving finalized CA outputs are planned from post-rewrite
       bytes only
@@ -54,8 +59,11 @@
       signatures and falls back according to substitution policy
 - [ ] Add an integration test that uses a legacy cache with no delta endpoints
       and falls back transparently to ordinary substitution
-- [ ] Benchmark transferred bytes and wall-clock behavior against full-artifact
-      substitution on representative closures
+- [ ] Add an integration or measurement test proving large closures transfer
+      incrementally without whole-closure buffering
+- [x] Benchmark a fixed representative closure suite with transferred bytes as
+      the primary metric and wall-clock as a secondary metric against
+      full-artifact substitution
 
 ## Validation
 
