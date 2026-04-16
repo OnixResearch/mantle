@@ -19,6 +19,7 @@ pub use attestation::StoredArtifactAttestation;
 pub use attestation::StoredClosureAttestation;
 pub use attestation::artifact_attestation_file_path;
 pub use attestation::closure_attestation_file_path;
+pub use attestation::persist_artifact_attestation;
 pub use audit::StoreAuditEvent;
 pub use audit::StoreAuditKind;
 pub use ca_mapping::CaMappings;

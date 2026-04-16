@@ -9,7 +9,7 @@ For the first transport shape, a delta-capable HTTP cache MUST expose its delta
 negotiation and streaming endpoints under the same cache authority used for
 ordinary substitution.
 
-When both sides support delta transfer, crunch SHOULD prefer the delta path if
+When both sides support delta transfer, crunch MUST prefer the delta path if
 receiver-local reuse can reduce transferred bytes. If capability negotiation
 fails or reuse is not available, crunch MUST fall back to ordinary substitution
 behavior.

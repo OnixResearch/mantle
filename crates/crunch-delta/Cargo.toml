@@ -8,6 +8,11 @@ license.workspace = true
 async-trait = "0.1"
 blake3 = "=1.8.2"
 bytes = "1"
+crunch-store = { path = "../crunch-store" }
+ed25519-dalek = "2.1.1"
 futures = "0.3"
+nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
 snix-castore = { path = "../../vendor/snix-castore" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "io-util"] }
+snix-store = { path = "../../vendor/snix-store" }
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "io-util", "fs"] }

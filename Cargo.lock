@@ -1138,8 +1138,13 @@ dependencies = [
  "async-trait",
  "blake3",
  "bytes",
+ "crunch-store",
+ "ed25519-dalek",
  "futures",
+ "nix-compat",
  "snix-castore",
+ "snix-store",
+ "thiserror 2.0.18",
  "tokio",
 ]
 

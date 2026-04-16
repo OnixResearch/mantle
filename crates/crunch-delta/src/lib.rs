@@ -1,20 +1,57 @@
 mod fixtures;
 mod manifest;
 mod model;
+mod negotiation;
 mod planner;
+mod substitution;
 
-pub use fixtures::{
-    BenchCase, BenchSuite, ReceiverFrontierSummary, ReceiverLossyFrontierSummary, ReceiverProbabilisticFrontierSummary,
-    bench_suite,
-};
-pub use manifest::{
-    ManifestBuildOutcome, ManifestError, ManifestProbeCounts, build_receiver_manifest, build_receiver_manifest_lossy,
-    build_receiver_manifest_probabilistic,
-};
-pub use model::{
-    ArtifactNode, BlobNode, ChunkProfile, ChunkRef, ClosureFixture, DirectoryNode, OutputFixture, ReceiverManifest,
-    TransferPlan, TransferTally, chunk_profile_v1,
-};
-pub use planner::{PlanError, plan_transfer};
-
-pub const PROTOCOL_VERSION_V1: u32 = 1;
+pub use fixtures::BenchCase;
+pub use fixtures::BenchSuite;
+pub use fixtures::ReceiverFrontierSummary;
+pub use fixtures::ReceiverLossyFrontierSummary;
+pub use fixtures::ReceiverProbabilisticFrontierSummary;
+pub use fixtures::bench_suite;
+pub use manifest::ManifestBuildOutcome;
+pub use manifest::ManifestError;
+pub use manifest::ManifestProbeCounts;
+pub use manifest::build_receiver_manifest;
+pub use manifest::build_receiver_manifest_lossy;
+pub use manifest::build_receiver_manifest_probabilistic;
+pub use model::ArtifactNode;
+pub use model::BlobNode;
+pub use model::ChunkProfile;
+pub use model::ChunkRef;
+pub use model::ClosureFixture;
+pub use model::DirectoryNode;
+pub use model::OutputFixture;
+pub use model::ReceiverManifest;
+pub use model::TransferPlan;
+pub use model::TransferTally;
+pub use model::chunk_profile_v1;
+pub use negotiation::ChunkDigestAlgorithmWire;
+pub use negotiation::ChunkProfileWire;
+pub use negotiation::ChunkingAlgorithmWire;
+pub use negotiation::NegotiatedProtocol;
+pub use negotiation::NegotiationError;
+pub use negotiation::NegotiationOffer;
+pub use negotiation::PROTOCOL_VERSION_V1;
+pub use negotiation::chunk_profile_wire_v1;
+pub use negotiation::negotiate_protocol;
+pub use planner::PlanError;
+pub use planner::plan_transfer;
+pub use substitution::ContentCatalog;
+pub use substitution::DeltaAcceptanceMode;
+pub use substitution::DeltaCandidateResponse;
+pub use substitution::DeltaCapabilityAdvertisement;
+pub use substitution::DeltaFallbackReason;
+pub use substitution::DeltaFetchOutcome;
+pub use substitution::DeltaFetchRequest;
+pub use substitution::DeltaHttpEndpoints;
+pub use substitution::DeltaReceiverHasSet;
+pub use substitution::DeltaReceiverState;
+pub use substitution::DeltaSubstitutionError;
+pub use substitution::DeltaTransferFrame;
+pub use substitution::DeltaTransferStats;
+pub use substitution::InMemoryDeltaAuthority;
+pub use substitution::RetainedContentStore;
+pub use substitution::substitute_from_authority;
