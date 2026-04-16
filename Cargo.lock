@@ -1060,6 +1060,7 @@ dependencies = [
  "digest",
  "flate2",
  "futures",
+ "libc",
  "nix-compat",
  "predicates",
  "pretty_assertions",
@@ -1075,6 +1076,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ureq",
+ "url",
 ]
 
 [[package]]

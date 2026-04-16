@@ -2,64 +2,64 @@
 
 ## Phase 1: Preflight and plan surface
 
-- [ ] Add `crunch doctor` and its report type for no-mutate host and runtime
+- [x] Add `crunch doctor` and its report type for no-mutate host and runtime
       preflight checks, explicitly covering nightly toolchain visibility,
       `bwrap`, sandbox shell availability, writable state or store paths, and
       FUSE or `fusermount3` availability for workflows that depend on it as
       part of the initial workflow profiles.
-- [ ] Define how `crunch doctor` selects or defaults the workflow profile and
+- [x] Define how `crunch doctor` selects or defaults the workflow profile and
       report that selected profile in success and failure output.
-- [ ] Verify CLI parsing and dispatch for explicit `crunch doctor` profile
+- [x] Verify CLI parsing and dispatch for explicit `crunch doctor` profile
       selection, and confirm the documented default profile is used when no
       explicit selection is supplied.
-- [ ] Add `crunch build --plan` plan-mode plumbing that reports per-root
+- [x] Add `crunch build --plan` plan-mode plumbing that reports per-root
       planned action labels (`cached`, `substitute`, `build`, `preflight-error`)
       and stops before substitution downloads, build dispatch, or store
       mutation.
-- [ ] Verify CLI parsing and dispatch for `crunch build --plan`, and confirm
+- [x] Verify CLI parsing and dispatch for `crunch build --plan`, and confirm
       normal build semantics remain unchanged when `--plan` is absent.
-- [ ] Add a dedicated `tests/operator_diagnostics.rs` target for doctor, plan,
+- [x] Add a dedicated `tests/operator_diagnostics.rs` target for doctor, plan,
       JSON failure schema, and human-readable failure reporting coverage.
-- [ ] Document available doctor profiles, the default profile when none is
+- [x] Document available doctor profiles, the default profile when none is
       supplied, and which preflight checks each profile covers.
-- [ ] Document which planned action labels crunch will report for each root.
-- [ ] Document the intended operator troubleshooting workflow.
+- [x] Document which planned action labels crunch will report for each root.
+- [x] Document the intended operator troubleshooting workflow.
 
 ## Phase 2: Structured failure reporting
 
-- [ ] Add a typed failure envelope carrying failing root, phase, error class,
+- [x] Add a typed failure envelope carrying failing root, phase, error class,
       and saved log path when available.
-- [ ] Define, document, and snapshot-check the stable JSON failure schema for
+- [x] Define, document, and snapshot-check the stable JSON failure schema for
       that envelope, including exact field names and omission of
       `saved_log_path` when no saved log exists.
-- [ ] Render that envelope in both human-readable build failures and JSON build
+- [x] Render that envelope in both human-readable build failures and JSON build
       reports.
-- [ ] Keep existing saved log behavior, but point operator-facing output at the
+- [x] Keep existing saved log behavior, but point operator-facing output at the
       structured failure summary first.
 
 ## Phase 3: Validation coverage
 
-- [ ] Add tests that `crunch doctor` reports missing prerequisites without
+- [x] Add tests that `crunch doctor` reports missing prerequisites without
       starting builds or mutating store or state, exits non-zero on failure,
       identifies the checked workflow profile on success, and identifies the
       selected workflow profile in failure output.
-- [ ] Add tests that a successful `crunch doctor` run also starts no builds and
+- [x] Add tests that a successful `crunch doctor` run also starts no builds and
       mutates neither store nor state.
-- [ ] Add tests that workflow-profile selection or defaulting drives the
+- [x] Add tests that workflow-profile selection or defaulting drives the
       expected prerequisite checks for doctor.
-- [ ] Add tests that plan mode reports cached, substitute, build, or preflight
+- [x] Add tests that plan mode reports cached, substitute, build, or preflight
       outcomes without starting a build, triggering substitution downloads, or
       mutating local store state.
-- [ ] Add tests that `crunch build --plan` parses and dispatches correctly,
+- [x] Add tests that `crunch build --plan` parses and dispatches correctly,
       while ordinary `crunch build` behavior is unchanged when `--plan` is not
       present.
-- [ ] Add tests and human-readable snapshots that JSON and human failure
+- [x] Add tests and human-readable snapshots that JSON and human failure
       reports expose the same failing root, phase, error class, and log-path
       facts, including omission of the log path when no saved log exists.
 
 ## Validation
 
-- [ ] Run `openspec validate add-operator-diagnostics`.
-- [ ] Run `cargo test -p crunch --test operator_diagnostics -- --nocapture`
+- [x] Run `openspec validate add-operator-diagnostics`.
+- [x] Run `cargo test -p crunch --test operator_diagnostics -- --nocapture`
       with the repo's documented build environment and keep the `test result:`
       lines.

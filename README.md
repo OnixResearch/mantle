@@ -55,6 +55,69 @@ Human output reports same facts inline on cached outputs, for example:
 …/result-path (cached, substitution=full, transferred_bytes=55, reused_bytes=0, fallback_reason=stream_application_failed)
 ```
 
+## Operator diagnostics
+
+Use `crunch doctor` before a fresh build host or self-build run:
+
+```bash
+# Default profile: build
+crunch doctor
+
+# Self-build prerequisites
+crunch doctor --profile self-build
+```
+
+Current doctor profiles:
+
+- `build` — default. Checks `bwrap`, sandbox shell resolution,
+  `fusermount3`, writable state dir, and writable output store dir.
+- `self-build` — everything in `build`, plus nightly `cargo +nightly`
+  and `rustc +nightly` visibility.
+
+Doctor is read-only: it does not start builds, download substitutes, or mutate
+store state.
+
+Use `crunch build --plan` to preview what crunch will do per root without
+building:
+
+```bash
+crunch build --plan hello.ncl
+crunch --json build --plan hello.ncl
+```
+
+Planned action labels:
+
+- `cached` — every output is already accepted from local PathInfo + castore
+- `substitute` — at least one output is missing locally but remote narinfo says
+  a cache hit is available, and no local build is needed
+- `build` — no acceptable cache hit exists, but local build preflight passed
+- `preflight-error` — crunch cannot perform the local build path for that root
+  (for example missing output store dir, missing `bwrap`, or missing sandbox
+  shell)
+
+Recommended operator workflow:
+
+1. Run `crunch doctor` for the intended workflow profile.
+2. Run `crunch build --plan ...` to see which roots are cached,
+   substitutable, buildable, or blocked by preflight.
+3. Run the real build only after doctor and plan look sane.
+4. If a build fails, read the structured failure summary first, then open the
+   saved log path when one is present.
+
+JSON build failures in `crunch-build-report-v1` now use a typed failure
+envelope under `failed[]` with these fields:
+
+- `root` — operator-facing root label
+- `drv_key` — derivation store key
+- `phase` — `preflight` or `build`
+- `error_class` — typed class such as `preflight`,
+  `fixed-output-hash-mismatch`, or `sandbox`
+- `message` — original failure text
+- `saved_log_path` — only present when crunch wrote a saved failure log
+
+Human failure output prints the same facts in the same order before any deeper
+error text.
+
 Output lands in `/nix/store/<hash>-hello` by default (the `--store`
 default). Derivation hashes are computed under the `/crunch/store`
 logical prefix (`--store-prefix`). Use `--store /tmp/mystore` to

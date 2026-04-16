@@ -13,6 +13,9 @@ use crunch_pipeline::parse_drv_key;
 use crunch_store::GcRootSource;
 use nix_compat::store_path::StorePath;
 
+use crate::build_failure::build_failure_envelopes;
+use crate::build_failure::render_human_failure_summary;
+use crate::build_failure::should_write_failure_log;
 use crate::build_log::write_log_file;
 use crate::build_report::render_build_json_report;
 use crate::errors::RunError;
@@ -113,10 +116,10 @@ pub fn report_build_result(
     }
 
     if output_mode.is_human() {
-        print_failed_builds(result);
+        print_failed_builds(result, &config.store_dir, &logs_dir);
     }
 
-    Err(RunError::Build(format!("{} root build(s) failed", result.failed.len(),)))
+    Err(RunError::Reported(1))
 }
 
 fn maybe_single_fod_mismatch(
@@ -245,6 +248,9 @@ fn audit_event_label(event_count: usize) -> &'static str {
 
 fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
     for failed in &result.failed {
+        if !should_write_failure_log(&failed.error) {
+            continue;
+        }
         let Some(drv_path) = parse_drv_key(&config.store_dir, &failed.drv_key) else {
             continue;
         };
@@ -253,10 +259,11 @@ fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &
     }
 }
 
-fn print_failed_builds(result: &PipelineResult) {
-    for failed in &result.failed {
-        eprintln!("FAILED: {}", failed.drv_key);
-        eprintln!("  {}", failed.error);
+fn print_failed_builds(result: &PipelineResult, store_dir: &str, logs_dir: &Path) {
+    for envelope in build_failure_envelopes(result, store_dir, logs_dir) {
+        for line in render_human_failure_summary(&envelope) {
+            eprintln!("{line}");
+        }
     }
 }
 

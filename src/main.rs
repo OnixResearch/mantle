@@ -1,11 +1,14 @@
 mod attest_cmd;
 mod bootstrap;
 mod build_cmd;
+mod build_failure;
 mod build_log;
+mod build_plan;
 mod build_report;
 mod errors;
 mod fix;
 mod log_cmd;
+mod operator_diagnostics;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
@@ -24,6 +27,7 @@ use build_cmd::state_dir;
 use clap::Parser;
 use clap::Subcommand;
 use errors::RunError;
+use operator_diagnostics::DoctorProfile;
 
 #[derive(Parser, Debug)]
 #[command(name = "crunch", about = "Nickel build system on the Nix store protocol")]
@@ -86,6 +90,10 @@ enum Command {
         #[arg(long)]
         fix: bool,
 
+        /// Show planned per-root actions without building or mutating local store state
+        #[arg(long)]
+        plan: bool,
+
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
         jobs: Option<u32>,
@@ -116,6 +124,13 @@ enum Command {
         /// Reject degraded hermetic behavior once strict-mode blockers exist.
         #[arg(long)]
         strict_hermetic: bool,
+    },
+
+    /// Run no-mutate operator preflight checks for a workflow profile
+    Doctor {
+        /// Workflow profile to check
+        #[arg(long, value_enum, default_value_t = DoctorProfile::Build)]
+        profile: DoctorProfile,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -455,10 +470,13 @@ fn main() -> ExitCode {
     match run(args) {
         Ok(()) => ExitCode::from(0),
         Err(error) => {
-            if json_errors {
-                eprintln!("{}", error.format_json());
+            let rendered = if json_errors {
+                error.format_json()
             } else {
-                eprintln!("{}", error.format_human());
+                error.format_human()
+            };
+            if !rendered.is_empty() {
+                eprintln!("{rendered}");
             }
             error.exit_code()
         }
@@ -531,6 +549,7 @@ fn build_run_context(args: &Args) -> RunContext {
 
 fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     match &args.command {
+        Command::Doctor { profile } => run_doctor_command(ctx, *profile),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
@@ -552,6 +571,32 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     }
 }
 
+fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), RunError> {
+    let report = operator_diagnostics::collect_doctor_report(operator_diagnostics::DoctorRequest {
+        profile,
+        store_dir: &ctx.store,
+        state_dir: &ctx.resolved_state_dir,
+    });
+
+    if ctx.json {
+        let rendered =
+            report.render_json().map_err(|e| RunError::Internal(format!("serializing doctor report: {e}")))?;
+        println!("{rendered}");
+    } else {
+        let rendered = report.render_human();
+        if report.ok {
+            println!("{rendered}");
+        } else {
+            eprintln!("{rendered}");
+        }
+    }
+
+    if report.ok {
+        return Ok(());
+    }
+    Err(RunError::Reported(3))
+}
+
 fn run_eval(file: &PathBuf, import_paths: &[PathBuf]) -> Result<(), RunError> {
     let import_paths = build_import_paths(import_paths)?;
     let json = crunch_eval::evaluate_to_json(file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
@@ -565,6 +610,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             file,
             import_paths,
             fix,
+            plan,
             jobs,
             substituters,
             no_substitute,
@@ -577,6 +623,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             file.as_ref(),
             import_paths,
             *fix,
+            *plan,
             *jobs,
             substituters,
             *no_substitute,
@@ -595,6 +642,7 @@ fn run_build_command(
     file: Option<&PathBuf>,
     import_paths: &[PathBuf],
     fix: bool,
+    plan: bool,
     jobs: Option<u32>,
     substituters: &str,
     no_substitute: bool,
@@ -615,6 +663,20 @@ fn run_build_command(
     match target {
         project_build::BuildTarget::File(path) => {
             let import_paths = build_import_paths(import_paths)?;
+            if plan {
+                return build_plan::cmd_build_plan(build_plan::BuildPlanConfig {
+                    file: &path,
+                    import_paths: &import_paths,
+                    output_dir: &ctx.store,
+                    state_dir: &ctx.resolved_state_dir,
+                    store_dir: &ctx.store_prefix,
+                    substituter_url,
+                    signing_key_path: signing_key,
+                    trusted_public_keys: parsed_trusted.as_deref(),
+                    trust_unsigned,
+                    output_mode: ctx.output_mode(),
+                });
+            }
             cmd_build(
                 &path,
                 &import_paths,
@@ -638,6 +700,20 @@ fn run_build_command(
             let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
             let mut full_import_paths = build_import_paths(&[])?;
             full_import_paths.extend(resolved.import_paths);
+            if plan {
+                return build_plan_from_expr(
+                    &expr,
+                    &full_import_paths,
+                    &ctx.store,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                    substituter_url,
+                    signing_key,
+                    parsed_trusted.as_deref(),
+                    trust_unsigned,
+                    ctx.output_mode(),
+                );
+            }
             build_from_expr(
                 &expr,
                 &full_import_paths,
@@ -964,6 +1040,37 @@ fn build_from_expr(
         hermeticity_mode,
         output_mode,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_plan_from_expr(
+    expr: &str,
+    import_paths: &[std::ffi::OsString],
+    output_dir: &std::path::Path,
+    state_dir: &std::path::Path,
+    store_dir: &str,
+    substituter_url: Option<&str>,
+    signing_key_path: Option<&std::path::Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+
+    build_plan::cmd_build_plan(build_plan::BuildPlanConfig {
+        file: tmp.path(),
+        import_paths,
+        output_dir,
+        state_dir,
+        store_dir,
+        substituter_url,
+        signing_key_path,
+        trusted_public_keys,
+        trust_unsigned,
+        output_mode,
+    })
 }
 
 /// Build from an inline Nickel expression and return the pipeline result.

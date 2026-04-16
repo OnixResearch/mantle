@@ -6,8 +6,9 @@ use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
 use serde::Serialize;
 
+use crate::build_failure::BuildFailureEnvelope;
+use crate::build_failure::build_failure_envelopes;
 use crate::build_log::existing_log_file_path;
-use crate::build_log::existing_log_file_path_from_drv_key;
 
 #[derive(Debug, Serialize)]
 pub struct BuildJsonReport {
@@ -20,7 +21,7 @@ pub struct BuildJsonReport {
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
-    pub failed: Vec<BuildJsonFailure>,
+    pub failed: Vec<BuildFailureEnvelope>,
     pub fod_mismatches: Vec<BuildJsonFodMismatch>,
 }
 
@@ -72,14 +73,6 @@ pub struct BuildJsonAttestationReference {
 }
 
 #[derive(Debug, Serialize)]
-pub struct BuildJsonFailure {
-    pub drv_key: String,
-    pub label: String,
-    pub error: String,
-    pub log_file: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
 pub struct BuildJsonFodMismatch {
     pub name: String,
     pub expected_sri: String,
@@ -98,7 +91,7 @@ pub fn render_build_json_report(
 fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
-    let failure_reports = build_failure_reports(result, &config.store_dir, logs_dir);
+    let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_reports, &failure_reports);
     let hermeticity_audit_events = result
         .hermeticity_audit_events
@@ -133,7 +126,7 @@ fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &P
     }
 }
 
-fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildJsonFailure]) -> BuildJsonCounts {
+fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) -> BuildJsonCounts {
     let succeeded_total = count_as_u32(outcomes.len());
     let failed_total = count_as_u32(failed.len());
     let cached_total = count_as_u32(outcomes.iter().filter(|outcome| outcome.cached).count());
@@ -195,30 +188,11 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
     reports
 }
 
-fn build_failure_reports(result: &PipelineResult, store_dir: &str, logs_dir: &Path) -> Vec<BuildJsonFailure> {
-    let mut reports: Vec<BuildJsonFailure> = result
-        .failed
-        .iter()
-        .map(|failed| BuildJsonFailure {
-            drv_key: failed.drv_key.clone(),
-            label: label_for_key(result, &failed.drv_key).unwrap_or(&failed.drv_key).to_string(),
-            error: failed.error.clone(),
-            log_file: failure_log_file(logs_dir, store_dir, &failed.drv_key),
-        })
-        .collect();
-    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
-    reports
-}
-
 fn success_log_file(logs_dir: &Path, outcome: &crunch_build::BuildOutcome) -> Option<String> {
     if outcome.log.is_none() && outcome.cached {
         return None;
     }
     existing_log_file_path(logs_dir, &outcome.drv_path)
-}
-
-fn failure_log_file(logs_dir: &Path, store_dir: &str, drv_key: &str) -> Option<String> {
-    existing_log_file_path_from_drv_key(logs_dir, store_dir, drv_key)
 }
 
 fn count_as_u32(count: usize) -> u32 {
@@ -256,11 +230,13 @@ mod tests {
                 outputs: Vec::new(),
             },
         ];
-        let failed = vec![BuildJsonFailure {
+        let failed = vec![BuildFailureEnvelope {
+            root: "c".into(),
             drv_key: "c".into(),
-            label: "c".into(),
-            error: "boom".into(),
-            log_file: Some("c.log".into()),
+            phase: crate::build_failure::FailurePhase::Build,
+            error_class: crate::build_failure::FailureClass::Builder,
+            message: "boom".into(),
+            saved_log_path: Some("c.log".into()),
         }];
 
         let counts = build_counts(&outcomes, &failed);
@@ -268,13 +244,6 @@ mod tests {
         assert_eq!(counts.built_total, 1);
         assert_eq!(counts.cached_total, 1);
         assert_eq!(counts.failed_total, 1);
-    }
-
-    #[test]
-    fn failure_log_file_is_none_for_unparsable_drv_key() {
-        let logs_dir = tempfile::tempdir().unwrap();
-        let log_path = failure_log_file(logs_dir.path(), "/crunch/store", "not-a-drv-key");
-        assert!(log_path.is_none());
     }
 
     #[test]
@@ -292,6 +261,109 @@ mod tests {
         };
         let log_path = success_log_file(logs_dir.path(), &outcome);
         assert!(log_path.is_none());
+    }
+
+    #[test]
+    fn build_json_failure_report_uses_typed_envelope_schema() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 1,
+            substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [9u8; 20]).unwrap();
+        crate::build_log::write_log_file(logs_dir.path(), &drv_path, "demo", false, "failure body");
+        let drv_key = drv_key_for(&config.store_dir, &drv_path);
+        let result = PipelineResult {
+            outcomes: Vec::new(),
+            failed: vec![crunch_build::FailedGoal {
+                drv_key: drv_key.clone(),
+                error: "FOD hash mismatch for demo: expected sha256-a, got sha256-b".to_string(),
+            }],
+            fod_mismatches: vec![crunch_pipeline::FodMismatch {
+                name: "demo".to_string(),
+                expected_sri: "sha256-a".to_string(),
+                actual_sri: "sha256-b".to_string(),
+            }],
+            root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+        };
+
+        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+        let saved_log_path = crate::build_log::existing_log_file_path(logs_dir.path(), &drv_path).unwrap();
+
+        assert_eq!(
+            json_value["failed"][0],
+            json!({
+                "root": "demo",
+                "drv_key": drv_key,
+                "phase": "build",
+                "error_class": "fixed-output-hash-mismatch",
+                "message": "FOD hash mismatch for demo: expected sha256-a, got sha256-b",
+                "saved_log_path": saved_log_path,
+            })
+        );
+    }
+
+    #[test]
+    fn build_json_preflight_failure_omits_saved_log_path_field() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 1,
+            substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [10u8; 20]).unwrap();
+        let drv_key = drv_key_for(&config.store_dir, &drv_path);
+        let result = PipelineResult {
+            outcomes: Vec::new(),
+            failed: vec![crunch_build::FailedGoal {
+                drv_key: drv_key.clone(),
+                error: "strict mode does not permit in-memory PathInfo fallback: broken redb".to_string(),
+            }],
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+        };
+
+        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+        assert_eq!(json_value["failed"][0]["phase"], "preflight");
+        assert_eq!(json_value["failed"][0]["error_class"], "preflight");
+        assert!(json_value["failed"][0].get("saved_log_path").is_none());
     }
 
     #[test]

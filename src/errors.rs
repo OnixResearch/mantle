@@ -6,6 +6,8 @@
 use std::fmt;
 use std::process::ExitCode;
 
+const REPORTED_EXIT_CODE_KIND: &str = "reported";
+
 /// Top-level error from running a crunch command.
 #[derive(Debug)]
 pub enum RunError {
@@ -15,6 +17,8 @@ pub enum RunError {
     Build(String),
     /// Internal error (IO, configuration, missing tools).
     Internal(String),
+    /// The command already emitted its own structured output.
+    Reported(u8),
 }
 
 impl RunError {
@@ -28,6 +32,7 @@ impl RunError {
             RunError::Eval(_) => ExitCode::from(2),
             RunError::Build(_) => ExitCode::from(1),
             RunError::Internal(_) => ExitCode::from(3),
+            RunError::Reported(code) => ExitCode::from(*code),
         }
     }
 
@@ -37,6 +42,7 @@ impl RunError {
             RunError::Eval(_) => "eval",
             RunError::Build(_) => "build",
             RunError::Internal(_) => "internal",
+            RunError::Reported(_) => REPORTED_EXIT_CODE_KIND,
         }
     }
 
@@ -44,6 +50,7 @@ impl RunError {
     pub fn message(&self) -> &str {
         match self {
             RunError::Eval(msg) | RunError::Build(msg) | RunError::Internal(msg) => msg,
+            RunError::Reported(_) => "",
         }
     }
 
@@ -68,11 +75,16 @@ impl RunError {
                     format!("error: {msg}\n\nsuggestions:\n{suggestions}")
                 }
             }
+            RunError::Reported(_) => String::new(),
         }
     }
 
     /// Format as a JSON object for `--json` mode.
     pub fn format_json(&self) -> String {
+        if matches!(self, RunError::Reported(_)) {
+            return String::new();
+        }
+
         // Manual formatting to avoid pulling serde into this module for
         // a three-field object. The message is escaped for JSON safety.
         let escaped = self
@@ -86,6 +98,7 @@ impl RunError {
             RunError::Eval(_) => 2,
             RunError::Build(_) => 1,
             RunError::Internal(_) => 3,
+            RunError::Reported(_) => unreachable!("reported errors already returned early"),
         };
         format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind())
     }
@@ -191,6 +204,7 @@ mod tests {
         assert_eq!(RunError::Build("x".into()).exit_code(), ExitCode::from(1));
         assert_eq!(RunError::Eval("x".into()).exit_code(), ExitCode::from(2));
         assert_eq!(RunError::Internal("x".into()).exit_code(), ExitCode::from(3));
+        assert_eq!(RunError::Reported(4).exit_code(), ExitCode::from(4));
     }
 
     #[test]
@@ -198,6 +212,7 @@ mod tests {
         assert_eq!(RunError::Eval("".into()).kind(), "eval");
         assert_eq!(RunError::Build("".into()).kind(), "build");
         assert_eq!(RunError::Internal("".into()).kind(), "internal");
+        assert_eq!(RunError::Reported(4).kind(), "reported");
     }
 
     #[test]
@@ -242,6 +257,14 @@ mod tests {
         let e = RunError::Internal("no store".into());
         let j = e.format_json();
         assert_eq!(j, r#"{"error":"no store","code":3,"kind":"internal"}"#);
+    }
+
+    #[test]
+    fn reported_format_is_empty() {
+        let e = RunError::Reported(4);
+        assert!(e.format_human().is_empty());
+        assert!(e.format_json().is_empty());
+        assert_eq!(e.message(), "");
     }
 
     #[test]

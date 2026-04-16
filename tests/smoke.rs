@@ -58,8 +58,11 @@ struct BuildJsonOutput {
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct BuildJsonFailure {
-    label: String,
-    error: String,
+    root: String,
+    phase: String,
+    error_class: String,
+    message: String,
+    saved_log_path: Option<PathBuf>,
 }
 
 struct BuildRun {
@@ -131,7 +134,7 @@ fn build_ncl_with_state(ncl_content: &str, store: &Path, state_dir: Option<&Path
         report
             .failed
             .iter()
-            .map(|failure| format!("{}: {}", failure.label, failure.error))
+            .map(|failure| format!("{}: {}", failure.root, failure.message))
             .collect::<Vec<_>>()
     );
     BuildRun { report }
@@ -343,11 +346,13 @@ fn smoke_build_failure_reports_error() {
 
     assert!(!output.status.success(), "build should fail");
     assert_eq!(report.counts.failed_total, 1, "report should record one failed root");
-    assert_eq!(report.failed[0].label, "will-fail");
-    assert!(report.failed[0].error.contains("42") || report.failed[0].error.contains("will-fail"));
+    assert_eq!(report.failed[0].root, "will-fail");
+    assert_eq!(report.failed[0].phase, "build");
+    assert_eq!(report.failed[0].error_class, "builder");
+    assert!(report.failed[0].message.contains("42") || report.failed[0].message.contains("will-fail"));
+    assert!(report.failed[0].saved_log_path.is_some(), "build failure should record a saved log path");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let error_json: serde_json::Value = serde_json::from_str(stderr.trim()).expect("stderr should be JSON");
-    assert_eq!(error_json["kind"], "build");
+    assert!(stderr.trim().is_empty(), "reported build failures should not print a second JSON error");
 }
 
 #[test]
@@ -598,7 +603,7 @@ fn smoke_build_multi_derivation_partial_failure_keeps_successful_root() {
     assert_eq!(report.counts.succeeded_total, 1);
     assert_eq!(report.counts.failed_total, 1);
     assert!(report.outcomes.iter().any(|outcome| outcome.label == "alpha"));
-    assert!(report.failed.iter().any(|failure| failure.label == "beta"));
+    assert!(report.failed.iter().any(|failure| failure.root == "beta"));
 
     let alpha_output = report
         .outcomes
