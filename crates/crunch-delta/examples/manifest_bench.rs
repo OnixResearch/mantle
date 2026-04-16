@@ -1,6 +1,8 @@
 use std::time::Instant;
 
-use crunch_delta::{bench_suite, build_receiver_manifest, plan_transfer};
+use crunch_delta::bench_suite;
+use crunch_delta::build_receiver_manifest;
+use crunch_delta::plan_transfer;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {

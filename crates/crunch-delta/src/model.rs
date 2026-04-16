@@ -58,9 +58,7 @@ pub struct BlobNode {
 
 impl BlobNode {
     pub fn chunked_size_bytes(&self) -> u64 {
-        self.chunks
-            .iter()
-            .fold(0u64, |total, chunk| total.saturating_add(chunk.size_bytes))
+        self.chunks.iter().fold(0u64, |total, chunk| total.saturating_add(chunk.size_bytes))
     }
 
     pub fn validate(&self) {
@@ -80,9 +78,7 @@ pub struct DirectoryNode {
 
 impl DirectoryNode {
     pub fn full_transfer_bytes(&self) -> u64 {
-        self.children
-            .iter()
-            .fold(0u64, |total, child| total.saturating_add(child.full_transfer_bytes()))
+        self.children.iter().fold(0u64, |total, child| total.saturating_add(child.full_transfer_bytes()))
     }
 }
 
@@ -123,9 +119,7 @@ pub struct ClosureFixture {
 
 impl ClosureFixture {
     pub fn full_transfer_bytes(&self) -> u64 {
-        self.outputs
-            .iter()
-            .fold(0u64, |total, output| total.saturating_add(output.full_transfer_bytes()))
+        self.outputs.iter().fold(0u64, |total, output| total.saturating_add(output.full_transfer_bytes()))
     }
 }
 

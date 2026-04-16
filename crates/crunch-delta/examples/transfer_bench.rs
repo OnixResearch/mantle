@@ -1,6 +1,7 @@
 use std::time::Instant;
 
-use crunch_delta::{bench_suite, plan_transfer};
+use crunch_delta::bench_suite;
+use crunch_delta::plan_transfer;
 
 fn main() {
     let suite = bench_suite();

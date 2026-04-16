@@ -2,7 +2,12 @@ use std::collections::HashSet;
 
 use snix_castore::B3Digest;
 
-use crate::model::{ArtifactNode, BlobNode, ClosureFixture, ReceiverManifest, TransferPlan, TransferTally};
+use crate::model::ArtifactNode;
+use crate::model::BlobNode;
+use crate::model::ClosureFixture;
+use crate::model::ReceiverManifest;
+use crate::model::TransferPlan;
+use crate::model::TransferTally;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanError {
@@ -44,12 +49,8 @@ pub fn plan_transfer(sender: &ClosureFixture, receiver: &ReceiverManifest) -> Re
             tally.reused_outputs = tally.reused_outputs.saturating_add(1);
             continue;
         }
-        transferred_bytes = transferred_bytes.saturating_add(plan_node(
-            &output.root,
-            receiver,
-            &mut available_blobs,
-            &mut tally,
-        ));
+        transferred_bytes =
+            transferred_bytes.saturating_add(plan_node(&output.root, receiver, &mut available_blobs, &mut tally));
     }
 
     Ok(TransferPlan {
@@ -83,9 +84,10 @@ fn plan_directory(
         return 0;
     }
 
-    directory.children.iter().fold(0u64, |total, child| {
-        total.saturating_add(plan_node(child, receiver, available_blobs, tally))
-    })
+    directory
+        .children
+        .iter()
+        .fold(0u64, |total, child| total.saturating_add(plan_node(child, receiver, available_blobs, tally)))
 }
 
 fn plan_blob(
@@ -139,9 +141,8 @@ fn analyze_blob_chunks(blob: &BlobNode, receiver: &ReceiverManifest) -> (u64, u3
 
 #[cfg(test)]
 mod tests {
-    use crate::bench_suite;
-
     use super::*;
+    use crate::bench_suite;
 
     #[test]
     fn prefix_mismatch_is_rejected() {
@@ -150,13 +151,10 @@ mod tests {
         let mut receiver = case.receiver.clone();
         receiver.store_prefix = "/nix/store".to_owned();
         let err = plan_transfer(&case.sender, &receiver).expect_err("prefix mismatch must fail");
-        assert_eq!(
-            err,
-            PlanError::StorePrefixMismatch {
-                sender_prefix: "/crunch/store".to_owned(),
-                receiver_prefix: "/nix/store".to_owned(),
-            }
-        );
+        assert_eq!(err, PlanError::StorePrefixMismatch {
+            sender_prefix: "/crunch/store".to_owned(),
+            receiver_prefix: "/nix/store".to_owned(),
+        });
     }
 
     #[test]

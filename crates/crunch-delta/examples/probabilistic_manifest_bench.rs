@@ -1,6 +1,8 @@
 use std::time::Instant;
 
-use crunch_delta::{bench_suite, build_receiver_manifest_probabilistic, plan_transfer};
+use crunch_delta::bench_suite;
+use crunch_delta::build_receiver_manifest_probabilistic;
+use crunch_delta::plan_transfer;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -17,12 +19,7 @@ async fn main() {
             .await
             .expect("probabilistic manifest build must succeed");
         let plan = plan_transfer(&case.sender, &outcome.manifest).expect("plan must succeed");
-        assert_eq!(
-            plan.transferred_bytes,
-            case.expected_coarse_bytes,
-            "case {} wire bytes regressed",
-            case.name
-        );
+        assert_eq!(plan.transferred_bytes, case.expected_coarse_bytes, "case {} wire bytes regressed", case.name);
         println!(
             "case={} manifest_probes={} wire_bytes={} full_bytes={} target_bytes={}",
             case.name,

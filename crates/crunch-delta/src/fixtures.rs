@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::model::{ArtifactNode, BlobNode, ChunkRef, ClosureFixture, DirectoryNode, OutputFixture, ReceiverManifest};
 use snix_castore::B3Digest;
+
+use crate::model::ArtifactNode;
+use crate::model::BlobNode;
+use crate::model::ChunkRef;
+use crate::model::ClosureFixture;
+use crate::model::DirectoryNode;
+use crate::model::OutputFixture;
+use crate::model::ReceiverManifest;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BenchCase {
@@ -57,8 +64,7 @@ pub enum GroupedOutputHeaderMode {
     PackedModeInSummaryCount,
 }
 
-pub const DEFAULT_PROBABILISTIC_WIRE_LAYOUT: ProbabilisticWireLayout =
-    ProbabilisticWireLayout::GroupedByOutput;
+pub const DEFAULT_PROBABILISTIC_WIRE_LAYOUT: ProbabilisticWireLayout = ProbabilisticWireLayout::GroupedByOutput;
 pub const DEFAULT_GROUPED_OUTPUT_HEADER_MODE: GroupedOutputHeaderMode =
     GroupedOutputHeaderMode::PackedModeInSummaryCount;
 
@@ -77,9 +83,7 @@ impl ReceiverProbabilisticFrontierSummary {
         let slot_bytes = u64::from(self.filter_config.slot_count).div_ceil(8);
         let blob_filter_count = u64::from(self.blob_filter_bits.is_some());
         let chunk_filter_count = u64::from(self.chunk_filter_bits.is_some());
-        let filter_count = 1u64
-            .saturating_add(blob_filter_count)
-            .saturating_add(chunk_filter_count);
+        let filter_count = 1u64.saturating_add(blob_filter_count).saturating_add(chunk_filter_count);
         slot_bytes.saturating_mul(filter_count)
     }
 
@@ -89,9 +93,7 @@ impl ReceiverProbabilisticFrontierSummary {
 
     pub fn wire_entry_bytes_with_ref_bytes(&self, ref_bytes: u64) -> u64 {
         let presence_bytes = 1u64;
-        ref_bytes
-            .saturating_add(presence_bytes)
-            .saturating_add(self.payload_bytes())
+        ref_bytes.saturating_add(presence_bytes).saturating_add(self.payload_bytes())
     }
 
     pub fn wire_payload_bytes_with_ref_bytes(&self, ref_bytes: u64) -> u64 {
@@ -124,32 +126,32 @@ pub struct BenchSuite {
 
 impl BenchSuite {
     pub fn full_transfer_bytes_total(&self) -> u64 {
-        self.cases
-            .iter()
-            .fold(0u64, |total, case| total.saturating_add(case.expected_full_bytes))
+        self.cases.iter().fold(0u64, |total, case| total.saturating_add(case.expected_full_bytes))
     }
 
     pub fn coarse_transfer_bytes_total(&self) -> u64 {
-        self.cases
-            .iter()
-            .fold(0u64, |total, case| total.saturating_add(case.expected_coarse_bytes))
+        self.cases.iter().fold(0u64, |total, case| total.saturating_add(case.expected_coarse_bytes))
     }
 
     pub fn probabilistic_filter_bytes_total(&self) -> u64 {
-        self.cases.iter().fold(0u64, |total, case| {
-            total.saturating_add(case.probabilistic_filter_bytes())
-        })
+        self.cases.iter().fold(0u64, |total, case| total.saturating_add(case.probabilistic_filter_bytes()))
     }
 
     pub fn probabilistic_summary_wire_bytes_total(&self) -> u64 {
-        self.cases.iter().fold(0u64, |total, case| {
-            total.saturating_add(case.probabilistic_summary_wire_bytes())
-        })
+        self.cases
+            .iter()
+            .fold(0u64, |total, case| total.saturating_add(case.probabilistic_summary_wire_bytes()))
     }
 }
 
 pub fn bench_suite() -> BenchSuite {
-    let cases = vec![whole_output_hit_case(), subtree_hit_case(), blob_hit_case(), chunk_hit_case(), cross_output_case()];
+    let cases = vec![
+        whole_output_hit_case(),
+        subtree_hit_case(),
+        blob_hit_case(),
+        chunk_hit_case(),
+        cross_output_case(),
+    ];
     let suite = BenchSuite { cases };
     assert_eq!(DEFAULT_PROBABILISTIC_FILTER_CONFIG.tap_count, 3, "unexpected default probabilistic tap count");
     assert_eq!(suite.probabilistic_filter_bytes_total(), 562, "default probabilistic filter bytes changed");
@@ -175,15 +177,7 @@ fn whole_output_hit_case() -> BenchCase {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![sender_output],
     };
-    build_case(
-        "whole-output-hit",
-        sender,
-        receiver,
-        receiver_store,
-        Vec::new(),
-        HashSet::new(),
-        0,
-    )
+    build_case("whole-output-hit", sender, receiver, receiver_store, Vec::new(), HashSet::new(), 0)
 }
 
 fn subtree_hit_case() -> BenchCase {
@@ -205,10 +199,11 @@ fn subtree_hit_case() -> BenchCase {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![OutputFixture {
             output_id: "subtree-hit".to_owned(),
-            root: dir_node(
-                "subtree-root",
-                vec![shared_a.clone(), shared_b.clone(), blob_node("subtree-changed-blob", 16_384)],
-            ),
+            root: dir_node("subtree-root", vec![
+                shared_a.clone(),
+                shared_b.clone(),
+                blob_node("subtree-changed-blob", 16_384),
+            ]),
         }],
     };
     let mut receiver = ReceiverManifest::new("/crunch/store");
@@ -216,21 +211,18 @@ fn subtree_hit_case() -> BenchCase {
     receiver.known_directories.insert(shared_b_digest);
     let receiver_output = OutputFixture {
         output_id: "subtree-hit-local".to_owned(),
-        root: dir_node(
-            "subtree-local-root",
-            vec![
-                unmatched_a.clone(),
-                unmatched_b.clone(),
-                unmatched_c.clone(),
-                unmatched_d.clone(),
-                unmatched_e.clone(),
-                unmatched_f.clone(),
-                unmatched_g.clone(),
-                unmatched_h.clone(),
-                shared_a.clone(),
-                shared_b.clone(),
-            ],
-        ),
+        root: dir_node("subtree-local-root", vec![
+            unmatched_a.clone(),
+            unmatched_b.clone(),
+            unmatched_c.clone(),
+            unmatched_d.clone(),
+            unmatched_e.clone(),
+            unmatched_f.clone(),
+            unmatched_g.clone(),
+            unmatched_h.clone(),
+            shared_a.clone(),
+            shared_b.clone(),
+        ]),
     };
     let receiver_store = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
@@ -248,16 +240,10 @@ fn subtree_hit_case() -> BenchCase {
         frontier_summary(&receiver_output.output_id, &shared_a),
         frontier_summary(&receiver_output.output_id, &shared_b),
     ];
-    receiver_frontiers.extend(
-        shared_a_nested_dirs
-            .iter()
-            .map(|node| frontier_summary(&receiver_output.output_id, node)),
-    );
-    receiver_frontiers.extend(
-        shared_b_nested_dirs
-            .iter()
-            .map(|node| frontier_summary(&receiver_output.output_id, node)),
-    );
+    receiver_frontiers
+        .extend(shared_a_nested_dirs.iter().map(|node| frontier_summary(&receiver_output.output_id, node)));
+    receiver_frontiers
+        .extend(shared_b_nested_dirs.iter().map(|node| frontier_summary(&receiver_output.output_id, node)));
     build_case(
         "subtree-hit",
         sender,
@@ -288,16 +274,13 @@ fn blob_hit_case() -> BenchCase {
     receiver.known_blobs.insert(shared_digest);
     let receiver_output = OutputFixture {
         output_id: "blob-hit-local".to_owned(),
-        root: dir_node(
-            "blob-hit-local-root",
-            vec![
-                shared_dir.clone(),
-                unmatched_a.clone(),
-                unmatched_b.clone(),
-                unmatched_c.clone(),
-                unmatched_d.clone(),
-            ],
-        ),
+        root: dir_node("blob-hit-local-root", vec![
+            shared_dir.clone(),
+            unmatched_a.clone(),
+            unmatched_b.clone(),
+            unmatched_c.clone(),
+            unmatched_d.clone(),
+        ]),
     };
     let receiver_store = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
@@ -341,19 +324,19 @@ fn chunk_hit_case() -> BenchCase {
         digest: digest("chunk:chunk-hit-local:tail"),
         size_bytes: 262_144,
     });
-    let local_blob_dir = dir_node(
-        "chunk-hit-local-dir",
-        vec![chunked_blob_from_chunks("chunk-hit-local", &receiver_chunks)],
-    );
+    let local_blob_dir =
+        dir_node("chunk-hit-local-dir", vec![chunked_blob_from_chunks("chunk-hit-local", &receiver_chunks)]);
     let unmatched_a = dir_node("chunk-hit-unmatched-a", vec![blob_node("chunk-hit-unmatched-a-blob", 4_096)]);
     let unmatched_b = dir_node("chunk-hit-unmatched-b", vec![blob_node("chunk-hit-unmatched-b-blob", 4_096)]);
     let unmatched_c = dir_node("chunk-hit-unmatched-c", vec![blob_node("chunk-hit-unmatched-c-blob", 4_096)]);
     let receiver_output = OutputFixture {
         output_id: "chunk-hit-local".to_owned(),
-        root: dir_node(
-            "chunk-hit-local-root",
-            vec![local_blob_dir.clone(), unmatched_a.clone(), unmatched_b.clone(), unmatched_c.clone()],
-        ),
+        root: dir_node("chunk-hit-local-root", vec![
+            local_blob_dir.clone(),
+            unmatched_a.clone(),
+            unmatched_b.clone(),
+            unmatched_c.clone(),
+        ]),
     };
     let receiver_store = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
@@ -383,11 +366,17 @@ fn cross_output_case() -> BenchCase {
         outputs: vec![
             OutputFixture {
                 output_id: "cross-output-a".to_owned(),
-                root: dir_node("cross-output-a-root", vec![shared_blob.clone(), blob_node("cross-output-a-unique", 4_096)]),
+                root: dir_node("cross-output-a-root", vec![
+                    shared_blob.clone(),
+                    blob_node("cross-output-a-unique", 4_096),
+                ]),
             },
             OutputFixture {
                 output_id: "cross-output-b".to_owned(),
-                root: dir_node("cross-output-b-root", vec![shared_blob.clone(), blob_node("cross-output-b-unique", 4_096)]),
+                root: dir_node("cross-output-b-root", vec![
+                    shared_blob.clone(),
+                    blob_node("cross-output-b-unique", 4_096),
+                ]),
             },
         ],
     };
@@ -440,14 +429,9 @@ fn build_case(
     expected_coarse_bytes: u64,
 ) -> BenchCase {
     let expected_full_bytes = sender.full_transfer_bytes();
-    let receiver_lossy_frontiers = receiver_frontiers
-        .iter()
-        .map(lossy_frontier_summary)
-        .collect::<Vec<_>>();
-    let receiver_probabilistic_frontiers = receiver_frontiers
-        .iter()
-        .map(probabilistic_frontier_summary)
-        .collect::<Vec<_>>();
+    let receiver_lossy_frontiers = receiver_frontiers.iter().map(lossy_frontier_summary).collect::<Vec<_>>();
+    let receiver_probabilistic_frontiers =
+        receiver_frontiers.iter().map(probabilistic_frontier_summary).collect::<Vec<_>>();
     assert!(expected_full_bytes >= expected_coarse_bytes, "coarse plan must not exceed full transfer");
     assert_eq!(sender.store_prefix, receiver.store_prefix, "benchmark case prefixes must match");
     assert_eq!(sender.store_prefix, receiver_store.store_prefix, "receiver store prefix must match sender");
@@ -478,9 +462,10 @@ impl BenchCase {
             return 0;
         }
 
-        let summary_entry_bytes = self.receiver_probabilistic_frontiers.iter().fold(0u64, |total, summary| {
-            total.saturating_add(summary.wire_entry_bytes())
-        });
+        let summary_entry_bytes = self
+            .receiver_probabilistic_frontiers
+            .iter()
+            .fold(0u64, |total, summary| total.saturating_add(summary.wire_entry_bytes()));
         match DEFAULT_PROBABILISTIC_WIRE_LAYOUT {
             ProbabilisticWireLayout::NaivePerSummary => {
                 let owner_ref_bytes = summary_count.saturating_mul(4);
@@ -489,9 +474,7 @@ impl BenchCase {
                 } else {
                     summary_count.saturating_mul(3)
                 };
-                summary_entry_bytes
-                    .saturating_add(owner_ref_bytes)
-                    .saturating_add(config_bytes)
+                summary_entry_bytes.saturating_add(owner_ref_bytes).saturating_add(config_bytes)
             }
             ProbabilisticWireLayout::GroupedByOutput => {
                 let case_config_bytes: u64 = if self.uses_default_probabilistic_filter_config() {
@@ -501,27 +484,25 @@ impl BenchCase {
                 };
                 let summarized_output_count = self.summarized_output_count();
                 let full_output_coverage = summarized_output_count == self.receiver_store.outputs.len() as u64;
-                let grouped_entry_bytes = self.receiver_store.outputs.iter().enumerate().fold(0u64, |total, (index, output)| {
-                    let output_summaries = self
-                        .receiver_probabilistic_frontiers
-                        .iter()
-                        .filter(|summary| summary.owner_output_id == output.output_id)
-                        .collect::<Vec<_>>();
-                    if output_summaries.is_empty() {
-                        return total;
-                    }
-                    let output_ref_bytes = if summarized_output_count == 1 || full_output_coverage {
-                        0
-                    } else {
-                        u64_varint_bytes(index as u64)
-                    };
-                    let header_bytes = grouped_output_header_bytes(output, &output_summaries);
-                    let entry_bytes = grouped_output_entry_bytes(output, &output_summaries);
-                    total
-                        .saturating_add(output_ref_bytes)
-                        .saturating_add(header_bytes)
-                        .saturating_add(entry_bytes)
-                });
+                let grouped_entry_bytes =
+                    self.receiver_store.outputs.iter().enumerate().fold(0u64, |total, (index, output)| {
+                        let output_summaries = self
+                            .receiver_probabilistic_frontiers
+                            .iter()
+                            .filter(|summary| summary.owner_output_id == output.output_id)
+                            .collect::<Vec<_>>();
+                        if output_summaries.is_empty() {
+                            return total;
+                        }
+                        let output_ref_bytes = if summarized_output_count == 1 || full_output_coverage {
+                            0
+                        } else {
+                            u64_varint_bytes(index as u64)
+                        };
+                        let header_bytes = grouped_output_header_bytes(output, &output_summaries);
+                        let entry_bytes = grouped_output_entry_bytes(output, &output_summaries);
+                        total.saturating_add(output_ref_bytes).saturating_add(header_bytes).saturating_add(entry_bytes)
+                    });
                 case_config_bytes.saturating_add(grouped_entry_bytes)
             }
         }
@@ -544,10 +525,7 @@ impl BenchCase {
     }
 }
 
-fn grouped_output_header_bytes(
-    output: &OutputFixture,
-    summaries: &[&ReceiverProbabilisticFrontierSummary],
-) -> u64 {
+fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
     let mode_bytes = match DEFAULT_GROUPED_OUTPUT_HEADER_MODE {
         GroupedOutputHeaderMode::SeparateModeByte => 1u64,
         GroupedOutputHeaderMode::PackedModeInSummaryCount => 0u64,
@@ -560,11 +538,8 @@ fn grouped_output_header_bytes(
     if can_pack_uniform_optional_filter_tag_in_small_header(output, summaries) {
         return 1u64.saturating_add(coverage_count_bytes);
     }
-    if can_pack_large_uniform_optional_filter_tag_in_grouped_header(
-        summaries,
-        split_count_bytes,
-        coverage_count_bytes,
-    ) {
+    if can_pack_large_uniform_optional_filter_tag_in_grouped_header(summaries, split_count_bytes, coverage_count_bytes)
+    {
         return 1;
     }
     if can_pack_large_uniform_optional_filter_tag_and_split_in_grouped_header(
@@ -594,42 +569,31 @@ fn grouped_output_header_bytes(
         .saturating_add(nested_descendant_stream_mode_bytes)
 }
 
-fn grouped_output_entry_bytes(
-    output: &OutputFixture,
-    summaries: &[&ReceiverProbabilisticFrontierSummary],
-) -> u64 {
+fn grouped_output_entry_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
     if complete_root_child_ordinals(output, summaries).is_some() {
-        return summaries.iter().fold(0u64, |total, summary| {
-            total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(0))
-        });
+        return summaries
+            .iter()
+            .fold(0u64, |total, summary| total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(0)));
     }
     if let Some(root_child_prefix_len) = complete_root_child_prefix_len(output, summaries) {
         let root_child_prefix_len = root_child_prefix_len as usize;
-        let prefix_bytes = summaries[..root_child_prefix_len].iter().fold(0u64, |total, summary| {
-            total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(0))
-        });
+        let prefix_bytes = summaries[..root_child_prefix_len]
+            .iter()
+            .fold(0u64, |total, summary| total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(0)));
         let relative_refs_by_digest = nested_summary_relative_refs(output);
         let nested_payload_bytes = summaries[root_child_prefix_len..]
             .iter()
             .fold(0u64, |total, summary| total.saturating_add(summary.payload_bytes()));
         if let Some(relative_refs_by_digest) = relative_refs_by_digest.as_ref() {
-            if let Some(delta_ref_bytes) = delta_coded_nested_descendant_ref_bytes(
-                relative_refs_by_digest,
-                summaries,
-                root_child_prefix_len,
-            ) {
-                return prefix_bytes
-                    .saturating_add(nested_payload_bytes)
-                    .saturating_add(delta_ref_bytes);
+            if let Some(delta_ref_bytes) =
+                delta_coded_nested_descendant_ref_bytes(relative_refs_by_digest, summaries, root_child_prefix_len)
+            {
+                return prefix_bytes.saturating_add(nested_payload_bytes).saturating_add(delta_ref_bytes);
             }
-            if let Some(run_ref_bytes) = run_coded_nested_descendant_ref_bytes(
-                relative_refs_by_digest,
-                summaries,
-                root_child_prefix_len,
-            ) {
-                return prefix_bytes
-                    .saturating_add(nested_payload_bytes)
-                    .saturating_add(run_ref_bytes);
+            if let Some(run_ref_bytes) =
+                run_coded_nested_descendant_ref_bytes(relative_refs_by_digest, summaries, root_child_prefix_len)
+            {
+                return prefix_bytes.saturating_add(nested_payload_bytes).saturating_add(run_ref_bytes);
             }
         }
         let uniform_parent_ordinal = relative_refs_by_digest
@@ -650,9 +614,9 @@ fn grouped_output_entry_bytes(
         });
         return prefix_bytes.saturating_add(nested_bytes);
     }
-    summaries.iter().fold(0u64, |total, summary| {
-        total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(32))
-    })
+    summaries
+        .iter()
+        .fold(0u64, |total, summary| total.saturating_add(summary.wire_payload_bytes_with_ref_bytes(32)))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -699,12 +663,7 @@ fn collect_nested_summary_relative_refs(
             return None;
         }
         *descendant_ordinal = descendant_ordinal.saturating_add(1);
-        collect_nested_summary_relative_refs(
-            child,
-            root_child_ordinal,
-            descendant_ordinal,
-            refs_by_digest,
-        )?;
+        collect_nested_summary_relative_refs(child, root_child_ordinal, descendant_ordinal, refs_by_digest)?;
     }
     Some(())
 }
@@ -713,8 +672,7 @@ fn nested_summary_relative_ref_bytes(relative_ref: &NestedSummaryRelativeRef) ->
     if relative_ref.root_child_ordinal <= 7 && relative_ref.descendant_ordinal <= 31 {
         return 1;
     }
-    u64_varint_bytes(relative_ref.root_child_ordinal)
-        .saturating_add(u64_varint_bytes(relative_ref.descendant_ordinal))
+    u64_varint_bytes(relative_ref.root_child_ordinal).saturating_add(u64_varint_bytes(relative_ref.descendant_ordinal))
 }
 
 fn uniform_nested_parent_ordinal_bytes(
@@ -727,11 +685,9 @@ fn uniform_nested_parent_ordinal_bytes(
     let Some(root_child_prefix_len) = complete_root_child_prefix_len(output, summaries) else {
         return 0;
     };
-    let Some(parent_ordinal) = uniform_nested_parent_ordinal(
-        &relative_refs_by_digest,
-        summaries,
-        root_child_prefix_len as usize,
-    ) else {
+    let Some(parent_ordinal) =
+        uniform_nested_parent_ordinal(&relative_refs_by_digest, summaries, root_child_prefix_len as usize)
+    else {
         return 0;
     };
     u64_varint_bytes(parent_ordinal)
@@ -748,22 +704,11 @@ fn nested_descendant_stream_mode_bytes(
         return 0;
     };
     let root_child_prefix_len = root_child_prefix_len as usize;
-    if delta_coded_nested_descendant_ref_bytes(
-        &relative_refs_by_digest,
-        summaries,
-        root_child_prefix_len,
-    )
-    .is_some()
-    {
+    if delta_coded_nested_descendant_ref_bytes(&relative_refs_by_digest, summaries, root_child_prefix_len).is_some() {
         return 1;
     }
     u64::from(
-        run_coded_nested_descendant_ref_bytes(
-            &relative_refs_by_digest,
-            summaries,
-            root_child_prefix_len,
-        )
-        .is_some(),
+        run_coded_nested_descendant_ref_bytes(&relative_refs_by_digest, summaries, root_child_prefix_len).is_some(),
     )
 }
 
@@ -772,11 +717,7 @@ fn delta_coded_nested_descendant_ref_bytes(
     summaries: &[&ReceiverProbabilisticFrontierSummary],
     root_child_prefix_len: usize,
 ) -> Option<u64> {
-    let parent_ordinal = uniform_nested_parent_ordinal(
-        relative_refs_by_digest,
-        summaries,
-        root_child_prefix_len,
-    )?;
+    let parent_ordinal = uniform_nested_parent_ordinal(relative_refs_by_digest, summaries, root_child_prefix_len)?;
     let mut total_ref_bytes = 0u64;
     let mut previous_descendant_ordinal = None;
     for summary in &summaries[root_child_prefix_len..] {
@@ -951,9 +892,7 @@ fn can_pack_uniform_optional_filter_tag_in_small_header(
     let Some(first_tag) = summaries.first().and_then(|summary| summary.packed_optional_filter_tag()) else {
         return false;
     };
-    summaries
-        .iter()
-        .all(|summary| summary.packed_optional_filter_tag() == Some(first_tag))
+    summaries.iter().all(|summary| summary.packed_optional_filter_tag() == Some(first_tag))
 }
 
 fn grouped_optional_filter_tag_bytes(summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
@@ -1011,18 +950,13 @@ fn can_pack_large_uniform_optional_filter_tag_and_split_in_grouped_header(
     split_count <= 7
 }
 
-fn shared_uniform_optional_filter_tag_bytes(
-    summaries: &[&ReceiverProbabilisticFrontierSummary],
-) -> Option<u64> {
+fn shared_uniform_optional_filter_tag_bytes(summaries: &[&ReceiverProbabilisticFrontierSummary]) -> Option<u64> {
     let packed_tag_bytes = packed_optional_filter_tag_bytes(summaries)?;
     if packed_tag_bytes <= 1 {
         return None;
     }
     let first_tag = summaries.first()?.packed_optional_filter_tag()?;
-    if summaries
-        .iter()
-        .all(|summary| summary.packed_optional_filter_tag() == Some(first_tag))
-    {
+    if summaries.iter().all(|summary| summary.packed_optional_filter_tag() == Some(first_tag)) {
         return Some(1);
     }
     None
@@ -1044,9 +978,7 @@ fn complete_root_child_ordinals(
     let mut ordinals = Vec::with_capacity(summaries.len());
     let mut seen_ordinals = HashSet::new();
     for summary in summaries {
-        let ordinal = root_child_ordinals
-            .get(&summary.directory_digest)
-            .copied()?;
+        let ordinal = root_child_ordinals.get(&summary.directory_digest).copied()?;
         if !seen_ordinals.insert(ordinal) {
             return None;
         }
@@ -1243,10 +1175,10 @@ fn numbered_leaf_dirs(label_prefix: &str, count: u32, blob_size_bytes: u64) -> V
     assert!(blob_size_bytes > 0, "blob size must be positive");
     let mut nodes = Vec::with_capacity(count as usize);
     for index in 0..count {
-        nodes.push(dir_node(
-            &format!("{label_prefix}-{index}"),
-            vec![blob_node(&format!("{label_prefix}-blob-{index}"), blob_size_bytes)],
-        ));
+        nodes.push(dir_node(&format!("{label_prefix}-{index}"), vec![blob_node(
+            &format!("{label_prefix}-blob-{index}"),
+            blob_size_bytes,
+        )]));
     }
     assert_eq!(nodes.len(), count as usize, "generated node count mismatch");
     nodes
@@ -1301,7 +1233,12 @@ mod tests {
             } else {
                 assert!(!case.receiver_frontiers.is_empty(), "case {}", case.name);
                 assert_eq!(case.receiver_frontiers.len(), case.receiver_lossy_frontiers.len(), "case {}", case.name);
-                assert_eq!(case.receiver_frontiers.len(), case.receiver_probabilistic_frontiers.len(), "case {}", case.name);
+                assert_eq!(
+                    case.receiver_frontiers.len(),
+                    case.receiver_probabilistic_frontiers.len(),
+                    "case {}",
+                    case.name
+                );
                 assert!(!case.frontier_complete_outputs.is_empty(), "case {}", case.name);
             }
         }

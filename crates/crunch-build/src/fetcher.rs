@@ -5,7 +5,9 @@
 //! Adapted from snix-redox's `fetchers.rs`.
 
 use std::io::Read;
-use std::io::{self, Seek, SeekFrom};
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -465,14 +467,9 @@ fn extract_tar_entry<R: Read>(
         tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &resolved_dest),
         tar::EntryType::Directory => prepare_directory_entry_dest(&resolved_dest),
         tar::EntryType::Symlink => create_tar_symlink(entry, &resolved_dest, out_path, &relative),
-        tar::EntryType::Link => copy_tar_hardlink(
-            entry,
-            &resolved_dest,
-            out_path,
-            prefix_to_strip,
-            &relative,
-            deferred_hardlinks,
-        ),
+        tar::EntryType::Link => {
+            copy_tar_hardlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative, deferred_hardlinks)
+        }
         _ => Ok(()),
     }
 }
@@ -540,7 +537,9 @@ fn discard_shadowed_deferred_hardlinks(
     deferred_hardlinks.retain(|(_, pending_dest)| pending_dest != dest_path);
 }
 
-fn replay_deferred_hardlinks(deferred_hardlinks: &[(std::path::PathBuf, std::path::PathBuf)]) -> Result<(), FetchError> {
+fn replay_deferred_hardlinks(
+    deferred_hardlinks: &[(std::path::PathBuf, std::path::PathBuf)],
+) -> Result<(), FetchError> {
     let deferred_count_u32 = u32::try_from(deferred_hardlinks.len())
         .map_err(|_| FetchError::TarError("too many deferred tar hardlinks".to_owned()))?;
     assert!(deferred_count_u32 <= MAX_TAR_ENTRIES, "deferred hardlinks exceed tar entry limit");
@@ -596,10 +595,7 @@ fn copy_replayed_hardlink(target_path: &Path, dest_path: &Path) -> Result<(), Fe
 
 fn missing_deferred_hardlink_target_error(target_path: &Path) -> FetchError {
     assert!(!target_path.as_os_str().is_empty(), "missing deferred hardlink target path must not be empty");
-    FetchError::TarError(format!(
-        "tar hardlink target missing after extraction: {}",
-        target_path.display()
-    ))
+    FetchError::TarError(format!("tar hardlink target missing after extraction: {}", target_path.display()))
 }
 
 /// Strip the top-level directory prefix from a tar entry path.
@@ -617,10 +613,7 @@ fn strip_tar_prefix(entry_path: &Path, prefix: &Option<std::path::PathBuf>) -> s
 fn validate_entry_not_absolute(entry_path: &Path) -> Result<(), FetchError> {
     for component in entry_path.components() {
         if matches!(component, std::path::Component::RootDir | std::path::Component::Prefix(_)) {
-            return Err(FetchError::TarError(format!(
-                "tar entry has absolute path: {}",
-                entry_path.display()
-            )));
+            return Err(FetchError::TarError(format!("tar entry has absolute path: {}", entry_path.display())));
         }
     }
     Ok(())
@@ -651,7 +644,12 @@ fn validate_relative_path(relative: &Path) -> Result<(), FetchError> {
 /// Validate that a symlink target stays within the output directory.
 /// Rejects absolute targets and resolves relative targets against the
 /// symlink's physical parent path inside the extracted tree.
-fn validate_symlink_target(target_path: &Path, dest: &Path, relative: &Path, out_path: &Path) -> Result<(), FetchError> {
+fn validate_symlink_target(
+    target_path: &Path,
+    dest: &Path,
+    relative: &Path,
+    out_path: &Path,
+) -> Result<(), FetchError> {
     if target_path.has_root() {
         return Err(FetchError::TarError(format!(
             "tar symlink has absolute target: {} -> {}",
@@ -671,10 +669,7 @@ fn symlink_parent_relative(dest: &Path, out_path: &Path, relative: &Path) -> Res
         return Ok(PathBuf::new());
     };
     let stripped = parent.strip_prefix(out_path).map_err(|_| {
-        FetchError::TarError(format!(
-            "tar symlink target base escapes output dir: {}",
-            relative.display()
-        ))
+        FetchError::TarError(format!("tar symlink target base escapes output dir: {}", relative.display()))
     })?;
     Ok(stripped.to_path_buf())
 }
@@ -693,7 +688,11 @@ fn validate_hardlink_target(out_path: &Path, stripped_target: &Path, relative: &
 }
 
 #[cfg(test)]
-fn resolve_relative_within_root(base_relative: &Path, candidate_path: &Path, context: &str) -> Result<PathBuf, FetchError> {
+fn resolve_relative_within_root(
+    base_relative: &Path,
+    candidate_path: &Path,
+    context: &str,
+) -> Result<PathBuf, FetchError> {
     let mut resolved = PathBuf::new();
     for component in base_relative.components() {
         match component {
@@ -720,10 +719,7 @@ fn resolve_relative_within_root(base_relative: &Path, candidate_path: &Path, con
                 }
             }
             std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                return Err(FetchError::TarError(format!(
-                    "{context} is absolute: {}",
-                    candidate_path.display()
-                )));
+                return Err(FetchError::TarError(format!("{context} is absolute: {}", candidate_path.display())));
             }
         }
     }
@@ -733,18 +729,11 @@ fn resolve_relative_within_root(base_relative: &Path, candidate_path: &Path, con
 fn resolve_entry_destination_path(out_path: &Path, relative: &Path, context: &str) -> Result<PathBuf, FetchError> {
     assert!(!relative.as_os_str().is_empty(), "entry destination path must not be empty");
     let Some(leaf_name) = relative.file_name() else {
-        return Err(FetchError::TarError(format!(
-            "{context} has no final path component: {}",
-            relative.display()
-        )));
+        return Err(FetchError::TarError(format!("{context} has no final path component: {}", relative.display())));
     };
     let parent_relative = relative.parent().unwrap_or(Path::new(""));
-    let resolved_parent = resolve_existing_path_contained(
-        out_path,
-        parent_relative,
-        context,
-        MAX_TAR_SYMLINK_EXPANSIONS,
-    )?;
+    let resolved_parent =
+        resolve_existing_path_contained(out_path, parent_relative, context, MAX_TAR_SYMLINK_EXPANSIONS)?;
     let dest = out_path.join(resolved_parent).join(leaf_name);
     assert!(dest.starts_with(out_path), "entry destination must stay under output dir");
     Ok(dest)
@@ -776,7 +765,7 @@ fn remove_existing_non_directory_entry(dest: &Path) -> Result<(), FetchError> {
             return Err(FetchError::TarError(format!(
                 "failed to inspect existing tar destination {}: {err}",
                 dest.display()
-            )))
+            )));
         }
     };
     if existing_metadata.is_dir() {
@@ -786,13 +775,13 @@ fn remove_existing_non_directory_entry(dest: &Path) -> Result<(), FetchError> {
     Ok(())
 }
 
-fn resolve_contained_host_path(out_path: &Path, candidate_relative: &Path, context: &str) -> Result<PathBuf, FetchError> {
-    let resolved_relative = resolve_existing_path_contained(
-        out_path,
-        candidate_relative,
-        context,
-        MAX_TAR_SYMLINK_EXPANSIONS,
-    )?;
+fn resolve_contained_host_path(
+    out_path: &Path,
+    candidate_relative: &Path,
+    context: &str,
+) -> Result<PathBuf, FetchError> {
+    let resolved_relative =
+        resolve_existing_path_contained(out_path, candidate_relative, context, MAX_TAR_SYMLINK_EXPANSIONS)?;
     Ok(out_path.join(resolved_relative))
 }
 
@@ -841,10 +830,7 @@ fn resolve_existing_path_contained(
                 }
             }
             std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                return Err(FetchError::TarError(format!(
-                    "{context} is absolute: {}",
-                    candidate_relative.display()
-                )));
+                return Err(FetchError::TarError(format!("{context} is absolute: {}", candidate_relative.display())));
             }
         }
     }
@@ -2026,16 +2012,40 @@ mod tests {
 
     impl<'a> RawTarEntry<'a> {
         fn dir(path: &'a str) -> Self {
-            Self { path, typeflag: b'5', mode: 0o755, linkname: None, data: &[] }
+            Self {
+                path,
+                typeflag: b'5',
+                mode: 0o755,
+                linkname: None,
+                data: &[],
+            }
         }
         fn file(path: &'a str, data: &'a [u8]) -> Self {
-            Self { path, typeflag: b'0', mode: 0o644, linkname: None, data }
+            Self {
+                path,
+                typeflag: b'0',
+                mode: 0o644,
+                linkname: None,
+                data,
+            }
         }
         fn symlink(path: &'a str, target: &'a str) -> Self {
-            Self { path, typeflag: b'2', mode: 0o777, linkname: Some(target), data: &[] }
+            Self {
+                path,
+                typeflag: b'2',
+                mode: 0o777,
+                linkname: Some(target),
+                data: &[],
+            }
         }
         fn hardlink(path: &'a str, target: &'a str) -> Self {
-            Self { path, typeflag: b'1', mode: 0o644, linkname: Some(target), data: &[] }
+            Self {
+                path,
+                typeflag: b'1',
+                mode: 0o644,
+                linkname: Some(target),
+                data: &[],
+            }
         }
     }
 
@@ -2079,10 +2089,7 @@ mod tests {
 
         let err = extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("escapes output dir") || msg.contains("symlink"),
-            "expected escape error: {msg}"
-        );
+        assert!(msg.contains("escapes output dir") || msg.contains("symlink"), "expected escape error: {msg}");
         assert!(!escape_dir.join("file.txt").exists(), "write through symlink must not escape");
     }
 
@@ -2254,10 +2261,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_symlink_chain_at_expansion_boundary() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/h{index}");
             let target_string = format!("h{}", index + 1);
@@ -2276,10 +2280,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_rejects_symlink_chain_past_expansion_boundary() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..65_u32 {
             let path_string = format!("pkg/z{index}");
             let target_string = format!("z{}", index + 1);
@@ -2300,10 +2301,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_symlink_creation_under_boundary_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/s{index}");
             let target_string = format!("s{}", index + 1);
@@ -2326,10 +2324,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_directory_creation_under_boundary_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/d{index}");
             let target_string = format!("d{}", index + 1);
@@ -2348,10 +2343,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_hardlink_creation_under_boundary_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/k{index}");
             let target_string = format!("k{}", index + 1);
@@ -2371,10 +2363,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_hardlink_target_traversal_under_boundary_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/t{index}");
             let target_string = format!("t{}", index + 1);
@@ -2394,10 +2383,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_symlink_target_traversal_under_short_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..16_u32 {
             let path_string = format!("pkg/u{index}");
             let target_string = format!("u{}", index + 1);
@@ -2420,10 +2406,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn extract_tar_preserves_hardlink_target_normalization_under_boundary_chain() {
-        let mut entries = vec![
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/real/"),
-        ];
+        let mut entries = vec![RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/real/")];
         for index in 1_u32..64_u32 {
             let path_string = format!("pkg/n{index}");
             let target_string = format!("n{}", index + 1);
@@ -2508,10 +2491,7 @@ mod tests {
 
     #[test]
     fn extract_tar_preserves_basic_directory_entry() {
-        let tar_data = build_raw_tar(&[
-            RawTarEntry::dir("pkg/"),
-            RawTarEntry::dir("pkg/dir/"),
-        ]);
+        let tar_data = build_raw_tar(&[RawTarEntry::dir("pkg/"), RawTarEntry::dir("pkg/dir/")]);
         let tmp = tempfile::tempdir().unwrap();
         let out = tmp.path().join("out");
 
@@ -2658,10 +2638,7 @@ mod tests {
 
         extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
         assert!(out.join("link.txt").is_symlink());
-        assert_eq!(
-            std::fs::read_link(out.join("link.txt")).unwrap(),
-            Path::new("real.txt")
-        );
+        assert_eq!(std::fs::read_link(out.join("link.txt")).unwrap(), Path::new("real.txt"));
         assert_eq!(std::fs::read_to_string(out.join("link.txt")).unwrap(), "content");
     }
 
@@ -2738,10 +2715,7 @@ mod tests {
 
         extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
         assert!(out.join("sub/link.txt").is_symlink());
-        assert_eq!(
-            std::fs::read_link(out.join("sub/link.txt")).unwrap(),
-            Path::new("../real.txt")
-        );
+        assert_eq!(std::fs::read_link(out.join("sub/link.txt")).unwrap(), Path::new("../real.txt"));
         assert_eq!(std::fs::read_to_string(out.join("sub/link.txt")).unwrap(), "hello");
     }
 }
