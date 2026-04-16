@@ -15,7 +15,7 @@ with durable roots and clear operator reporting.
 
 - add a durable GC root registry for retained outputs
 - auto-root successful top-level outputs from `crunch build`, `crunch
-  self-build`, `crunch bootstrap`, and `crunch bootstrap --fetch`
+  self-build`, and `crunch bootstrap --fetch`
 - add manual mark-and-sweep collection over `PathInfo`, exported outputs, and
   castore content
 - make GC fail closed when retained-root reachability metadata is missing,

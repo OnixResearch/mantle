@@ -1,5 +1,8 @@
-## ADDED Requirements
+# store-gc Specification
 
+## Purpose
+Define durable retained-root management and manual mark-and-sweep garbage collection for local crunch store state.
+## Requirements
 ### Requirement: Durable GC root registry
 
 The store layer MUST maintain a durable GC root registry for retained logical
@@ -8,9 +11,9 @@ store paths.
 Each root record MUST survive process restart and include at least the logical
 store path, the root source, and creation time. The registry MUST keep at most
 one retained-root record per logical store path. Successful top-level outputs
-from `crunch build`, `crunch self-build`, `crunch bootstrap`, and
-`crunch bootstrap --fetch` MUST be registered as retained roots after their
-output metadata is persisted successfully.
+from `crunch build`, `crunch self-build`, and `crunch bootstrap --fetch` MUST
+be registered as retained roots after their output metadata is persisted
+successfully.
 
 #### Scenario: Top-level build output becomes a retained root
 
@@ -176,3 +179,4 @@ and reclaimable byte totals.
 - THEN crunch reports what would be deleted and how many bytes are reclaimable
 - AND no retained roots, `PathInfo`, exported outputs, or castore content are
   deleted
+

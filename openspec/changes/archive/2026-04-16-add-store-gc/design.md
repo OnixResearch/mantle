@@ -45,13 +45,15 @@ avoids ambiguous multi-record deletion semantics.
 
 **Implementation:** each retained-root record stores the logical store path plus
 source metadata (`build`, `self-build`, `bootstrap`, or explicit pin) and
-creation time as informational fields. Re-rooting an existing path updates that
-record instead of creating a second retained-root entry.
+creation time as informational fields. Here `bootstrap` means the
+`crunch bootstrap --fetch` entry point. Re-rooting an existing path updates
+that record instead of creating a second retained-root entry.
 
 ### 2. Auto-root top-level requested outputs only
 
 **Choice:** successful top-level outputs from `crunch build`, `crunch
-self-build`, and bootstrap entry points become retained roots automatically.
+self-build`, and `crunch bootstrap --fetch` become retained roots
+automatically.
 Dependencies do not.
 
 **Rationale:** operators usually want the outputs they asked for to survive, but
