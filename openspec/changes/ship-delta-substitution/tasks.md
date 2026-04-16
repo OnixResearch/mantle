@@ -45,9 +45,9 @@
       ordinary substituter authority.
 - [x] Add tests that a trusted cache without delta support still serves a normal
       full-artifact substitution cache hit without error.
-- [ ] Add tests that missing local backing content is treated as absent from the
+- [x] Add tests that missing local backing content is treated as absent from the
       compatibility manifest.
-- [ ] Add tests that manifest construction stays bounded to the requested
+- [x] Add tests that manifest construction stays bounded to the requested
       output or closure and does not enumerate the whole local store first.
 - [ ] Add an end-to-end closure-scoped delta substitution test covering
       negotiation or fallback, final acceptance, and reporting for a requested
@@ -63,12 +63,9 @@
       deterministic assertions for expected transferred or reused byte counts or
       invariant relationships, and with fallback reason present only for
       successful full-fetch outcomes that abandoned attempted delta negotiation. ⏱ started: 2026-04-16T14:47Z
-- [~] Exercise at least one real local HTTP cache fixture built from persisted
+- [x] Exercise at least one real local HTTP cache fixture built from persisted
       `state_dir/pathinfo.redb`, `state_dir/blobs`, a tiny local HTTP server,
-      and a fresh receiver `state_dir`, rather than an in-memory fake. Current
-      coverage now reaches a real HTTP server plus `NixHTTPPathInfoService`,
-      but it still hand-builds narinfo/NAR fixtures instead of serving bytes
-      reopened from persisted receiver state. ⏱ started: 2026-04-16T14:47Z
+      and a fresh receiver `state_dir`, rather than an in-memory fake. ⏱ started: 2026-04-16T14:47Z
 
 ## Validation
 

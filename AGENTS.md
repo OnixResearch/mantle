@@ -313,12 +313,14 @@ Building derivations (not just compiling crunch) requires:
   Test harness note: `test_handle_with_remote()` uses an in-memory
   `LruPathInfoService`, so fallback-path tests there prove crunch-store
   decision logic but do NOT exercise `NixHTTPPathInfoService` narinfo
-  signature verification on the final full-fetch path. Separate stronger-fixture
-  note: a tiny real HTTP server plus `NixHTTPPathInfoService` still does NOT
-  satisfy the persisted-cache e2e task unless the served narinfo/NAR bytes are
-  reopened from a prior build's `state_dir/pathinfo.redb` + `state_dir/blobs`.
-  Keep the repo-local deterministic compatibility test between crunch-store
-  wire constants and `crunch-delta`'s protocol-v1 helpers when changing
+  signature verification on the final full-fetch path. Stronger fixture note:
+  `remote_substitution_stream_failure_falls_back_through_real_http_cache`
+  now seeds a real store, persists a signed output into
+  `state_dir/pathinfo.redb` + `state_dir/blobs`, reopens that state, renders a
+  real NAR from reopened castore data, and serves it over a tiny HTTP server to
+  exercise `NixHTTPPathInfoService` trust + fallback end to end. Keep the
+  repo-local deterministic compatibility test between crunch-store wire
+  constants and `crunch-delta`'s protocol-v1 helpers when changing
   chunk-profile or endpoint defaults.
 - **BLAKE3 everywhere**: `HashAlgo::Blake3` + `NixHash::Blake3` in nix-compat,
   `NAR_BLAKE3`/`FLAT_BLAKE3` in pathinfo.proto, blake3 branches in

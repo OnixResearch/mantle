@@ -2969,32 +2969,249 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn remote_substitution_missing_local_backing_content_is_absent_from_receiver_manifest() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, _remote) = test_handle_with_remote(state_dir.path());
+        let capability_path = "/delta/capabilities".to_string();
+        let candidate_path = "/delta/request".to_string();
+        let has_set_path = "/delta/has-set".to_string();
+        let stream_path = "/delta/stream".to_string();
+        let output_path = test_output("delta-missing-backing", 33);
+        let final_bytes = b"delta-full";
+        let final_digest: snix_castore::B3Digest = blake3::hash(final_bytes).as_bytes().into();
+        handle
+            .pathinfo_service
+            .put(signed_file_pathinfo(output_path.clone(), final_digest, final_bytes.len() as u64, false))
+            .await
+            .unwrap();
+        let candidate_body =
+            candidate_response_body(&output_path.to_absolute_path(), "out", DeltaArtifactNodeWire::Blob {
+                digest: final_digest,
+                size_bytes: final_bytes.len() as u64,
+                chunks: Vec::new(),
+            });
+        let stream_body = delta_stream_body(&[
+            DeltaTransferFrameWire::Blob {
+                digest: final_digest,
+                bytes: final_bytes.to_vec(),
+            },
+            DeltaTransferFrameWire::FinalPathInfo {
+                path_info: signed_file_pathinfo(output_path.clone(), final_digest, final_bytes.len() as u64, false),
+            },
+        ]);
+        let (base_url, counts, stop, probe_handle) = spawn_delta_probe_server(DeltaProbeServerConfig {
+            capability_status_line: "HTTP/1.1 200 OK",
+            capability_body: supported_delta_capability_body(&candidate_path, &has_set_path, &stream_path),
+            capability_path,
+            candidate_status_line: "HTTP/1.1 200 OK",
+            candidate_body,
+            candidate_path,
+            has_set_status_line: "HTTP/1.1 200 OK",
+            has_set_body: "has-set-ok".to_string(),
+            has_set_path,
+            stream_status_line: "HTTP/1.1 200 OK",
+            stream_body,
+            stream_path,
+        });
+        handle.remote_cache_url = Some(base_url.clone());
+
+        let substituted =
+            handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
+        assert!(substituted.is_some(), "delta substitution should still succeed");
+
+        let counts = counts.lock().unwrap();
+        let has_set_body = counts.last_has_set_body.as_ref().expect("has-set body");
+        let has_set: DeltaReceiverHasSetWire = serde_json::from_str(has_set_body).unwrap();
+        assert!(
+            has_set.manifest.known_outputs.is_empty(),
+            "missing local output backing should not advertise output reuse"
+        );
+        assert!(
+            has_set.manifest.known_blobs.is_empty(),
+            "missing local blob backing should not advertise blob reuse"
+        );
+        assert!(
+            has_set.manifest.known_chunks.is_empty(),
+            "no local chunks should be advertised when backing content is absent"
+        );
+        drop(counts);
+        stop_delta_probe_server(&base_url, stop, probe_handle);
+    }
+
+    #[tokio::test]
+    async fn remote_substitution_receiver_manifest_stays_bounded_to_requested_output() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, _remote) = test_handle_with_remote(state_dir.path());
+        let capability_path = "/delta/capabilities".to_string();
+        let candidate_path = "/delta/request".to_string();
+        let has_set_path = "/delta/has-set".to_string();
+        let stream_path = "/delta/stream".to_string();
+        let output_path = test_output("delta-bounded-manifest", 34);
+        let unrelated_output_path = test_output("delta-unrelated-local", 35);
+        let local_chunk = b"delta-local-";
+        let local_chunk_digest = store_local_blob(&handle, local_chunk).await;
+        let unrelated_bytes = b"unrelated-store-content";
+        let unrelated_digest = store_local_blob(&handle, unrelated_bytes).await;
+        handle
+            .pathinfo_service
+            .put(signed_file_pathinfo(
+                unrelated_output_path.clone(),
+                unrelated_digest,
+                unrelated_bytes.len() as u64,
+                false,
+            ))
+            .await
+            .unwrap();
+        let remote_chunk = b"delta-remote";
+        let remote_chunk_digest: snix_castore::B3Digest = blake3::hash(remote_chunk).as_bytes().into();
+        let final_bytes = [local_chunk.as_slice(), remote_chunk.as_slice()].concat();
+        let final_digest: snix_castore::B3Digest = blake3::hash(&final_bytes).as_bytes().into();
+        let candidate_body =
+            candidate_response_body(&output_path.to_absolute_path(), "out", DeltaArtifactNodeWire::Blob {
+                digest: final_digest,
+                size_bytes: final_bytes.len() as u64,
+                chunks: vec![
+                    DeltaChunkRefWire {
+                        digest: local_chunk_digest,
+                        size_bytes: local_chunk.len() as u64,
+                    },
+                    DeltaChunkRefWire {
+                        digest: remote_chunk_digest,
+                        size_bytes: remote_chunk.len() as u64,
+                    },
+                ],
+            });
+        let stream_body = delta_stream_body(&[
+            DeltaTransferFrameWire::Chunk {
+                parent_digest: final_digest,
+                chunk_digest: remote_chunk_digest,
+                chunk_index: 1,
+                bytes: remote_chunk.to_vec(),
+            },
+            DeltaTransferFrameWire::FinalPathInfo {
+                path_info: signed_file_pathinfo(output_path.clone(), final_digest, final_bytes.len() as u64, false),
+            },
+        ]);
+        let (base_url, counts, stop, probe_handle) = spawn_delta_probe_server(DeltaProbeServerConfig {
+            capability_status_line: "HTTP/1.1 200 OK",
+            capability_body: supported_delta_capability_body(&candidate_path, &has_set_path, &stream_path),
+            capability_path,
+            candidate_status_line: "HTTP/1.1 200 OK",
+            candidate_body,
+            candidate_path,
+            has_set_status_line: "HTTP/1.1 200 OK",
+            has_set_body: "has-set-ok".to_string(),
+            has_set_path,
+            stream_status_line: "HTTP/1.1 200 OK",
+            stream_body,
+            stream_path,
+        });
+        handle.remote_cache_url = Some(base_url.clone());
+
+        let substituted =
+            handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
+        assert!(substituted.is_some(), "delta substitution should succeed with bounded manifest");
+
+        let counts = counts.lock().unwrap();
+        let has_set_body = counts.last_has_set_body.as_ref().expect("has-set body");
+        let has_set: DeltaReceiverHasSetWire = serde_json::from_str(has_set_body).unwrap();
+        assert_eq!(has_set.manifest.known_outputs.len(), 0, "unrelated outputs must stay out of manifest");
+        assert_eq!(has_set.manifest.known_blobs.len(), 0, "unrelated blobs must stay out of manifest");
+        assert_eq!(
+            has_set.manifest.known_chunks,
+            vec![local_chunk_digest],
+            "manifest should only include chunks reachable from requested output"
+        );
+        assert!(
+            !has_set.manifest.known_outputs.contains(&unrelated_output_path.to_absolute_path()),
+            "manifest should not enumerate unrelated local outputs"
+        );
+        assert!(
+            !has_set.manifest.known_blobs.contains(&unrelated_digest),
+            "manifest should not enumerate unrelated local blobs"
+        );
+        drop(counts);
+        stop_delta_probe_server(&base_url, stop, probe_handle);
+    }
+
+    #[tokio::test]
     async fn remote_substitution_stream_failure_falls_back_through_real_http_cache() {
-        let remote_fixture_dir = tempfile::tempdir().unwrap();
-        let remote_fixture = test_handle(remote_fixture_dir.path());
+        let remote_state_dir = tempfile::tempdir().unwrap();
+        let remote_output_dir = tempfile::tempdir().unwrap();
         let output_path = test_output("delta-real-http-fallback", 32);
         let first_chunk = b"delta-local-";
         let second_chunk = b"delta-remote";
-        let first_chunk_digest = store_local_blob(&remote_fixture, first_chunk).await;
+        let first_chunk_digest: snix_castore::B3Digest = blake3::hash(first_chunk).as_bytes().into();
         let second_chunk_digest: snix_castore::B3Digest = blake3::hash(second_chunk).as_bytes().into();
         let final_bytes = [first_chunk.as_slice(), second_chunk.as_slice()].concat();
-        let final_digest = store_local_blob(&remote_fixture, &final_bytes).await;
-        let node = Node::File {
-            digest: final_digest,
-            size: final_bytes.len() as u64,
-            executable: false,
-        };
-        let renderer = SimpleRenderer::new(remote_fixture.blob_service(), remote_fixture.directory_service());
-        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
         let trusted_dalek = ed25519_dalek::SigningKey::from_bytes(&[21u8; 32]);
         let trusted_verify = VerifyingKey::new("real-http-cache-1".to_string(), trusted_dalek.verifying_key());
         let trusted_sign = SigningKey::new("real-http-cache-1".to_string(), trusted_dalek);
-        let path_info =
-            signed_pathinfo_with_signing_key(output_path.clone(), node.clone(), nar_size, nar_sha256, &trusted_sign);
+
+        {
+            let mut seeded_remote = StoreHandle::open(StoreConfig {
+                state_dir: remote_state_dir.path().to_path_buf(),
+                output_dir: remote_output_dir.path().to_path_buf(),
+                remote_cache_url: None,
+                fallback_mode: StoreFallbackMode::Practical,
+                store_dir: "/nix/store".to_string(),
+            })
+            .await
+            .unwrap();
+            let final_digest = store_local_blob(&seeded_remote, &final_bytes).await;
+            let node = Node::File {
+                digest: final_digest,
+                size: final_bytes.len() as u64,
+                executable: false,
+            };
+            let renderer = SimpleRenderer::new(seeded_remote.blob_service(), seeded_remote.directory_service());
+            let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
+            let path_info = signed_pathinfo_with_signing_key(
+                output_path.clone(),
+                node.clone(),
+                nar_size,
+                nar_sha256,
+                &trusted_sign,
+            );
+            seeded_remote
+                .persist_and_export_signed_output("out", &output_path, path_info, node, None, false, None)
+                .await
+                .unwrap();
+        }
+
+        let persisted_remote = StoreHandle::open(StoreConfig {
+            state_dir: remote_state_dir.path().to_path_buf(),
+            output_dir: remote_output_dir.path().to_path_buf(),
+            remote_cache_url: None,
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: "/nix/store".to_string(),
+        })
+        .await
+        .unwrap();
+        let path_info = persisted_remote
+            .pathinfo_service
+            .get(*output_path.digest())
+            .await
+            .unwrap()
+            .expect("persisted pathinfo");
+        assert_eq!(path_info.store_path, output_path);
+        assert!(!path_info.signatures.is_empty(), "persisted pathinfo should stay signed");
+        let final_digest = match path_info.node.clone() {
+            Node::File {
+                digest,
+                size,
+                executable,
+            } => {
+                assert_eq!(size, final_bytes.len() as u64);
+                assert!(!executable, "fixture output should be non-executable");
+                digest
+            }
+            other => panic!("expected persisted file node, got {other:?}"),
+        };
         let nar_path = "/nar/delta-real-http-fallback.nar".to_string();
         let narinfo_path = format!("/{}.narinfo", nix_compat::nixbase32::encode(output_path.digest()));
         let narinfo_body = narinfo_body_for(&path_info, &nar_path, &trusted_sign);
-        let nar_body = render_nar_bytes(&remote_fixture, &node).await;
+        let nar_body = render_nar_bytes(&persisted_remote, &path_info.node).await;
 
         let capability_path = "/delta/capabilities".to_string();
         let candidate_path = "/delta/request".to_string();
