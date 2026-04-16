@@ -1050,6 +1050,7 @@ dependencies = [
  "clap",
  "crunch-attestation",
  "crunch-build",
+ "crunch-delta",
  "crunch-eval",
  "crunch-glue",
  "crunch-pipeline",

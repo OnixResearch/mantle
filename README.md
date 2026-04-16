@@ -136,6 +136,20 @@ The repo ships runnable examples under [`examples/`](examples/):
 - [`examples/project/`](examples/project/) — project-aware `crunch build .#name` layout
 - [`examples/README.md`](examples/README.md) — short index of the full example set
 
+## Benchmark suite
+
+Checked-in benchmark entry points live under [`examples/`](examples/):
+
+- `cargo run --example benchmark_eval_smoke -- --bundle-out target/benchmarks/eval-smoke.json --repeat-count 2`
+- `cargo run --example benchmark_suite -- --bundle-out target/benchmarks/suite.json --repeat-count 2`
+- `cargo run --example benchmark_compare -- --baseline target/benchmarks/baseline.json --fresh target/benchmarks/suite.json --absolute-threshold-ns 1000 --percent-threshold 5`
+
+The smoke path keeps local checks cheap. The full matrix covers evaluation,
+conversion, substitution planning, and build-graph preparation using checked-in
+fixtures only. The compare entry point matches workloads by stable name and
+highlights the largest regressions or wins. See
+[`docs/benchmark-suite.md`](docs/benchmark-suite.md).
+
 ## Fetchers
 
 Download files, tarballs, and git repos as fixed-output derivations:

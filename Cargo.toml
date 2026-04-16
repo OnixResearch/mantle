@@ -65,6 +65,7 @@ url = "2"
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
+crunch-delta = { path = "crates/crunch-delta" }
 pretty_assertions = "1.0"
 tempfile = "3"
 assert_cmd = "2"
