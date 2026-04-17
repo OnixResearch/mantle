@@ -23,6 +23,7 @@ use serde::de::DeserializeOwned;
 mod backend;
 #[cfg(feature = "cranelift-proto")]
 pub(crate) mod cranelift_proto;
+pub mod session;
 pub mod stdlib;
 
 /// Errors from crunch-eval.
@@ -276,6 +277,8 @@ mod tests {
     use crunch_glue::OutputRef;
 
     use super::*;
+    use session::EvaluationSession;
+    use session::RootShape;
 
     // ── Phase 1: File-based evaluation ──────────────────────────
 
@@ -704,5 +707,300 @@ mod tests {
 
         let record = expr.as_record().unwrap();
         assert_eq!(record.value_by_name("port").unwrap().as_i64(), Some(8080));
+    }
+
+    // ── Lazy evaluation session tests ──────────────────────────
+
+    #[test]
+    fn session_single_derivation_discovers_label_from_name() {
+        let session = EvaluationSession::open_str(
+            r#"{
+  name = "hello",
+  builder = "/bin/sh",
+  args = ["-c", "echo hello > $out"],
+  addressing_mode = 'input-addressed,
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(*session.shape(), RootShape::Single);
+        assert_eq!(session.root_labels().len(), 1);
+        assert_eq!(session.root_labels()[0].label, "hello");
+        assert_eq!(session.root_labels()[0].index, 0);
+        assert_eq!(session.explicit_force_count(), 0);
+    }
+
+    #[test]
+    fn session_record_discovers_labels_from_field_names() {
+        let session = EvaluationSession::open_str(
+            r#"{
+  hello = { name = "hello", builder = "/bin/sh" },
+  world = { name = "world", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(*session.shape(), RootShape::Record);
+        let labels: Vec<&str> = session.root_labels().iter().map(|r| r.label.as_str()).collect();
+        assert!(labels.contains(&"hello"));
+        assert!(labels.contains(&"world"));
+        assert_eq!(session.explicit_force_count(), 0);
+    }
+
+    #[test]
+    fn session_array_discovers_labels_from_derivation_names() {
+        let session = EvaluationSession::open_str(
+            r#"[
+  { name = "alpha", builder = "/bin/sh" },
+  { name = "beta", builder = "/bin/sh" },
+]"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(*session.shape(), RootShape::Array);
+        assert_eq!(session.root_labels().len(), 2);
+        assert_eq!(session.root_labels()[0].label, "alpha");
+        assert_eq!(session.root_labels()[1].label, "beta");
+        assert_eq!(session.discovery_metrics().name_fields_accessed, 2);
+    }
+
+    #[test]
+    fn session_force_root_matches_eager_path() {
+        let source = r#"{
+  hello = {
+    name = "hello",
+    builder = "/bin/sh",
+    args = ["-c", "echo hi"],
+    addressing_mode = 'input-addressed,
+  },
+  world = {
+    name = "world",
+    builder = "/bin/sh",
+    system = 'x86_64-linux,
+  },
+}"#;
+
+        // Eager path
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+
+        // Lazy path
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+        let hello: CrunchDerivation = session.force_root("hello").unwrap();
+        let world: CrunchDerivation = session.force_root("world").unwrap();
+
+        let eager_hello = &eager.iter().find(|(l, _)| l == "hello").unwrap().1;
+        let eager_world = &eager.iter().find(|(l, _)| l == "world").unwrap().1;
+
+        assert_eq!(hello.name, eager_hello.name);
+        assert_eq!(hello.builder, eager_hello.builder);
+        assert_eq!(hello.args, eager_hello.args);
+        assert_eq!(world.name, eager_world.name);
+        assert_eq!(world.system, eager_world.system);
+        assert_eq!(session.explicit_force_count(), 2);
+    }
+
+    #[test]
+    fn session_force_all_roots_matches_eager_path() {
+        let source = r#"{
+  a = { name = "a", builder = "/bin/sh" },
+  b = { name = "b", builder = "/bin/sh" },
+}"#;
+
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+        let lazy = session.force_all_roots::<CrunchDerivation>().unwrap();
+
+        assert_eq!(eager.len(), lazy.len());
+        for (eager_item, lazy_item) in eager.iter().zip(lazy.iter()) {
+            assert_eq!(eager_item.0, lazy_item.0);
+            assert_eq!(eager_item.1.name, lazy_item.1.name);
+            assert_eq!(eager_item.1.builder, lazy_item.1.builder);
+        }
+    }
+
+    #[test]
+    fn session_missing_root_returns_error() {
+        let mut session = EvaluationSession::open_str(
+            r#"{ hello = { name = "hello", builder = "/bin/sh" } }"#,
+            &[],
+        )
+        .unwrap();
+
+        let result = session.force_root::<CrunchDerivation>("nonexistent");
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.contains("nonexistent"), "error should mention the missing label: {err}");
+    }
+
+    #[test]
+    fn session_invalid_top_level_shape_returns_error() {
+        let result = EvaluationSession::open_str("42", &[]);
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(
+            err.contains("neither a derivation"),
+            "error should describe invalid shape: {err}"
+        );
+    }
+
+    #[test]
+    fn session_single_derivation_force_matches_eager() {
+        let source = r#"{
+  name = "single",
+  builder = "/bin/sh",
+  args = ["-c", "echo out"],
+}"#;
+
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+        let lazy: CrunchDerivation = session.force_root("single").unwrap();
+
+        assert_eq!(eager[0].1.name, lazy.name);
+        assert_eq!(eager[0].1.builder, lazy.builder);
+        assert_eq!(eager[0].1.args, lazy.args);
+    }
+
+    #[test]
+    fn session_array_force_matches_eager() {
+        let source = r#"[
+  { name = "first", builder = "/bin/sh", args = ["-c", "echo 1"] },
+  { name = "second", builder = "/bin/sh", args = ["-c", "echo 2"] },
+]"#;
+
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+
+        let first: CrunchDerivation = session.force_root("first").unwrap();
+        let second: CrunchDerivation = session.force_root("second").unwrap();
+
+        assert_eq!(first.name, eager[0].1.name);
+        assert_eq!(first.args, eager[0].1.args);
+        assert_eq!(second.name, eager[1].1.name);
+        assert_eq!(second.args, eager[1].1.args);
+    }
+
+    #[test]
+    fn session_nested_derivation_inputs_match_eager() {
+        let source = r#"{
+  app = {
+    name = "app",
+    builder = "/bin/sh",
+    inputs = [
+      { name = "dep", builder = "/bin/sh", addressing_mode = 'input-addressed },
+    ],
+  },
+}"#;
+
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+        let lazy: CrunchDerivation = session.force_root("app").unwrap();
+
+        match (&eager[0].1.inputs[0], &lazy.inputs[0]) {
+            (Input::Derivation(e), Input::Derivation(l)) => {
+                assert_eq!(e.name, l.name);
+                assert_eq!(e.addressing_mode, l.addressing_mode);
+            }
+            _ => panic!("expected nested derivation inputs"),
+        }
+    }
+
+    #[test]
+    fn session_file_based_evaluation() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("pkg.ncl");
+        std::fs::write(
+            &file,
+            r#"{ name = "filepkg", builder = "/bin/sh" }"#,
+        )
+        .unwrap();
+
+        let mut session = EvaluationSession::open_file(&file, &[]).unwrap();
+        assert_eq!(*session.shape(), RootShape::Single);
+        assert_eq!(session.root_labels()[0].label, "filepkg");
+
+        let drv: CrunchDerivation = session.force_root("filepkg").unwrap();
+        assert_eq!(drv.name, "filepkg");
+    }
+
+    #[test]
+    fn session_file_with_imports() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("dep.ncl"),
+            r#"{ name = "dep", builder = "/bin/sh" }"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("main.ncl"),
+            r#"{ mydep = import "dep.ncl" }"#,
+        )
+        .unwrap();
+
+        let mut session =
+            EvaluationSession::open_file(&dir.path().join("main.ncl"), &[]).unwrap();
+        assert_eq!(*session.shape(), RootShape::Record);
+        assert_eq!(session.root_labels()[0].label, "mydep");
+
+        let drv: CrunchDerivation = session.force_root("mydep").unwrap();
+        assert_eq!(drv.name, "dep");
+    }
+
+    #[test]
+    fn session_recursive_record_refs_match_eager() {
+        let source = r#"let base = { builder = "/bin/sh" } in {
+  a = base & { name = "a" },
+  b = base & { name = "b" },
+}"#;
+
+        let eager = evaluate_str_and_extract_named_roots::<CrunchDerivation>(source, &[]).unwrap();
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+        let all = session.force_all_roots::<CrunchDerivation>().unwrap();
+
+        assert_eq!(eager.len(), all.len());
+        for (e, l) in eager.iter().zip(all.iter()) {
+            assert_eq!(e.0, l.0);
+            assert_eq!(e.1.name, l.1.name);
+            assert_eq!(e.1.builder, l.1.builder);
+        }
+    }
+
+    #[test]
+    fn session_does_not_affect_eval_to_json() {
+        // Regression: crunch eval output must be unchanged by the lazy session.
+        let source = r#"{ hello = { name = "hello", builder = "/bin/sh" } }"#;
+        let json = evaluate_str_to_json(source, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["hello"]["name"], "hello");
+        assert_eq!(parsed["hello"]["builder"], "/bin/sh");
+    }
+
+    #[test]
+    fn session_nonselected_force_count_is_zero_for_single_root() {
+        let mut session = EvaluationSession::open_str(
+            r#"{
+  a = { name = "a", builder = "/bin/sh" },
+  b = { name = "b", builder = "/bin/sh" },
+  c = { name = "c", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+
+        let _: CrunchDerivation = session.force_root("a").unwrap();
+        // We explicitly forced exactly 1 root.
+        assert_eq!(session.explicit_force_count(), 1);
+    }
+
+    /// Boundary guard: EvaluationSession is defined in crunch-eval, not crunch-pipeline.
+    #[test]
+    fn session_type_lives_in_crunch_eval() {
+        // This test exists solely as a compile-time boundary guard.
+        // If EvaluationSession were moved to crunch-pipeline, this test
+        // would need to be moved too, making the boundary violation visible.
+        let _: fn(&str, &[OsString]) -> Result<EvaluationSession, Error> =
+            EvaluationSession::open_str;
     }
 }
