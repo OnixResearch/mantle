@@ -37,9 +37,11 @@ crunch --json build hello.ncl
 
 `crunch --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
-records, and output paths so tests can assert on structured data instead
-of scraping human text. The optional `log_file` fields are only present
-when the corresponding log was actually written to disk.
+records, output paths, hermeticity audit data, and per-output
+`artifact_attestation` references (`logical_path` + sidecar `path`) so
+tests and operators can assert on structured data instead of scraping
+human text. The optional `log_file` fields are only present when the
+corresponding log was actually written to disk.
 
 For successful cache hits, each output may also include a `substitution`
 object. `mode` is `delta` when crunch completed the hit through delta
@@ -124,6 +126,36 @@ logical prefix (`--store-prefix`). Use `--store /tmp/mystore` to
 write outputs elsewhere, or `--nix-compat` to switch the logical
 prefix to `/nix/store` for interop testing. See
 [Store Paths and Prefixes](#store-paths-and-prefixes) for details.
+
+Pass `--strict-hermetic` to `crunch build` or `crunch self-build` when
+degraded hermetic behavior should fail instead of warn. Human and JSON
+reports both surface `hermeticity_mode` and any
+`hermeticity_audit_events` recorded during the run.
+
+## Operator workflows
+
+Current operator loops:
+
+- Plan and build: `crunch doctor`, `crunch build --plan`, `crunch build`,
+  `crunch self-build --strict-hermetic`
+- Develop and run: `crunch shell`, `crunch develop`, `crunch run`
+- Inspect and publish: `crunch attest`, `crunch release`
+
+Short examples:
+
+```bash
+# Shells and package execution from crunch.ncl
+crunch shell --command env
+crunch develop            # deprecated alias for shell
+crunch run .#hello -- --help
+
+# Attestation and release evidence entry points
+crunch attest show /nix/store/<hash>-hello
+crunch release verify target/release-evidence/<release-id>
+```
+
+For the full command path, examples, and sidecar rules, see
+[`docs/operator-workflows.md`](docs/operator-workflows.md).
 
 ## Examples
 
@@ -502,8 +534,8 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 - **Evidence today**: the helper prepares the environment and runs
   `cargo test -p crunch --test self_hosting -- --ignored --nocapture`, which
   drives the stage0 -> stage1 -> stage2 proof path.
-- **Not yet proven**: the proof does not claim stage1 == stage2 identity,
-  full-source bootstrap, or reproducible release artifacts.
+- **Not yet proven**: the proof still stops short of a full-source bootstrap
+  root, independent rebuild agreement, or reproducible release artifacts.
 
 ### Bootstrappable Builds checklist
 
@@ -512,7 +544,7 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 | Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
 | Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
 | Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
-| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and tracked-worktree source archive for later `crunch release verify` checks | The proof and release bundle still do not provide independent reproducibility evidence for release outputs |
+| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and tracked-worktree source archive for later bundle-local integrity and proof-context checks with `crunch release verify` | The proof and release bundle still stop short of independent reproducibility evidence for release outputs |
 
 ## Self-Build
 
@@ -521,6 +553,9 @@ crunch can rebuild itself from source once the stage0 prerequisites are already 
 ```bash
 crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
 ```
+
+Pass `--strict-hermetic` when degraded hermeticity should fail instead of
+warn during the self-build path.
 
 This builds the full bootstrap chain (`seed -> make -> dash ->
 binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`) inside a
@@ -644,6 +679,8 @@ crunch release create \
   --proof-bundle target/self-hosting-proof/run-...
 ```
 
+Repeat `--binary` when one release bundle should carry multiple executables.
+
 That command builds a staged-source tarball from the current tracked worktree,
 then copies the release binary, proof bundle, and prerequisite inventory into a
 new release-evidence bundle under `target/release-evidence/<release-id>/` by
@@ -742,28 +779,31 @@ hashing) and updates both `crunch.lock` and `.crunch/inputs.ncl`
 ### Commands
 
 ```
-crunch build <file.ncl>          Evaluate and build
-crunch build -j 4 <file>         Build with max 4 concurrent jobs
-crunch build --fix <file>        Build, auto-fix FOD hash mismatches in .ncl source
+# Build, diagnostics, bootstrap
+crunch doctor                    No-mutate preflight for build or self-build hosts
+crunch build [file.ncl|.#name]   Evaluate and build
+crunch build --plan <target>     Preview cached/substitute/build/preflight-error
+crunch build --fix <file>        Build and rewrite FOD mismatches in source
 crunch eval <file.ncl>           Evaluate and print JSON
-crunch bootstrap [-o seed.ncl]   Generate seed from Nix store (or --fetch for Nix-free)
-crunch self-build                Build crunch from its own source
-crunch store list                List all known store paths
-crunch store info <path>         Show PathInfo for a store path
-crunch store roots               List retained GC roots
-crunch store pin <path>          Pin a logical store path as a GC root
-crunch store unpin <path>        Remove a retained GC root
-crunch store gc [--dry-run]      Sweep unreachable local store state
-crunch store verify [<path>]     Verify NAR hashes and signatures
-crunch store sign [<path>]       Sign PathInfo entries (or --all)
+crunch bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
+crunch self-build                Rebuild crunch from source
+
+# Store, logs, attestations, release evidence
+crunch store <subcommand>        List, inspect, verify, sign, pin, or GC store state
 crunch log [query]               Show a stored build log
-crunch log --list                List all stored logs
-crunch init                      Initialize a new project
-crunch check                     Validate project manifest and lockfile
+crunch attest <subcommand>       Show, verify, diff, or synthesize attestations
+crunch release <subcommand>      Create or verify a release-evidence bundle
+
+# Project workflows
+crunch init                      Initialize crunch-project.ncl, crunch.lock, .crunch/
+crunch check                     Validate manifest, lockfile, and generated inputs
 crunch show                      Show resolved input state
-crunch refresh [names...]        Refresh project inputs
-crunch list-stale                List inputs that would change on refresh
-crunch upgrade                   Migrate project files to current schema
+crunch refresh [names...]        Refresh selected or all project inputs
+crunch list-stale                Report which inputs would change on refresh
+crunch upgrade                   Migrate project files to the current schema
+crunch shell [name]              Enter or execute inside a dev shell
+crunch develop [name]            Deprecated alias for `crunch shell`
+crunch run [name] [-- args...]   Build and execute a package binary
 ```
 
 ### Global flags
@@ -784,12 +824,14 @@ crunch upgrade                   Migrate project files to current schema
 ```
 -j, --jobs <N>                   Max concurrent builds (default: CPU count, max 16)
 --fix                            Auto-fix FOD hash mismatches in .ncl source
+--plan                           Preview per-root action without building
 -I, --import-path <path>         Additional Nickel import paths
 --substituters <url>             Binary cache URLs (default: https://cache.nixos.org)
 --no-substitute                  Disable binary cache substitution
 --signing-key <path>             Path to ed25519 signing keypair file
 --trusted-public-keys <keys>     Trusted public keys for signature verification
 --trust-unsigned                 Accept unsigned PathInfo on cache hits
+--strict-hermetic                Reject degraded hermetic behavior on build-entry commands
 ```
 
 ## Requirements

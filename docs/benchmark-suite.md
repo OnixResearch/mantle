@@ -1,13 +1,14 @@
 # Benchmark suite
 
-Checked-in benchmark entry points:
+README's benchmark section points here. These are the checked-in entry points
+under `examples/`:
 
 - Smoke path: `cargo run --example benchmark_eval_smoke -- --bundle-out target/benchmarks/eval-smoke.json --repeat-count 2`
 - Full matrix: `cargo run --example benchmark_suite -- --bundle-out target/benchmarks/suite.json --repeat-count 2`
 - Compare baseline vs fresh: `cargo run --example benchmark_compare -- --baseline target/benchmarks/baseline.json --fresh target/benchmarks/suite.json --absolute-threshold-ns 1000 --percent-threshold 5`
 
-Both commands write a machine-readable JSON bundle with schema
-`crunch-benchmark-bundle-v1`.
+The smoke and full-suite commands write a machine-readable JSON bundle with
+schema `crunch-benchmark-bundle-v1`.
 
 ## Initial workload matrix
 
@@ -30,7 +31,9 @@ Both commands write a machine-readable JSON bundle with schema
 - `store-persist-lookup-blob` is the only workload that records store phase metrics. Other workloads omit those store metrics because they never cross that boundary honestly.
 - If a workload can only report honest total wall time, the bundle keeps `total_wall_ns` and leaves `phase_metrics` empty rather than inventing a fake phase metric.
 - The comparison entry point matches workloads by stable `workload_name`, compares only the shared metric names in each workload, reports per-workload missing metrics explicitly, and reports the largest regression and largest win across the matched metrics.
+- `benchmark_compare` also accepts `--json` when you want machine-readable comparison output.
 - `--absolute-threshold-ns` highlights changes at or above a fixed nanosecond delta. `--percent-threshold` highlights changes at or above a percentage delta.
+- All three entry points support `-h` / `--help` for their exact flag list.
 - Evaluation and substitution workloads record the default logical store prefix `/crunch/store`.
 - Conversion and build-graph workloads record `/nix/store` because their checked-in seed inputs are absolute `/nix/store/...` paths; using `/crunch/store` there would make `crunch_glue::convert()` reject those seed inputs as invalid store paths.
 
@@ -53,6 +56,7 @@ Both commands write a machine-readable JSON bundle with schema
    - `cargo run --example benchmark_suite -- --bundle-out target/benchmarks/candidate.json --repeat-count 2`
 3. Compare the fresh bundle against the saved baseline:
    - `cargo run --example benchmark_compare -- --baseline target/benchmarks/baseline.json --fresh target/benchmarks/candidate.json --absolute-threshold-ns 1000 --percent-threshold 5`
+   - add `--json` when another tool should consume the comparison result
 4. Read `missing_from_fresh` and `missing_from_baseline` as honest omission, not zero. Sparse metrics stay sparse on purpose.
 5. When a change is likely store-related, inspect `store-persist-lookup-blob` first. That is the only checked-in workload that should carry `store_persistence_wall_ns` or `store_lookup_wall_ns`.
 6. Treat small deltas as noise until the same workload and metric move in the same direction across repeated runs on the same host.
