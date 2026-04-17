@@ -35,7 +35,7 @@ Implementation:
 - `bootstrap/seed.ncl` remains the single source of truth for the fetchable
   seed provider.
 - The provider still fetches `https://musl.cc/x86_64-linux-musl-native.tgz`
-  with recursive hash `sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=`.
+  with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=`.
 - The wrapper now keeps only the directories and binaries needed for the
   current bootstrap chain: compiler drivers, required binutils, headers,
   sysroot content, runtime libraries, and GCC internals.

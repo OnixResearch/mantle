@@ -41,7 +41,7 @@ The normalized contract is:
 
 Current raw input still comes from:
 - `https://musl.cc/x86_64-linux-musl-native.tgz`
-- hash `sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=`
+- hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=`
 
 ## Consequences
 

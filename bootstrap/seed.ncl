@@ -17,7 +17,7 @@ let seed_name = "musl-seed-toolchain" in
 let seed_target = "x86_64-linux-musl" in
 let seed_dynamic_linker = "ld-musl-x86_64.so.1" in
 let raw_url = "https://musl.cc/x86_64-linux-musl-native.tgz" in
-let raw_hash = "sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=" in
+let raw_hash = "sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=" in
 
 let provider_retained_tools = [
   "x86_64-linux-musl-gcc",

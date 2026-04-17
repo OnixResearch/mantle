@@ -59,10 +59,20 @@
 
 ## Validation
 
-- [ ] Produce a full proof artifact with `./scripts/prove-self-hosting.sh`
+- [x] Produce a full proof artifact with `./scripts/prove-self-hosting.sh`
       using the repo's documented environment, create a release evidence bundle
       from that artifact, then run `crunch release verify` against the produced
       bundle using bundle-local contents only and keep the command output, proof
       bundle path, stage diagnostics, and `test result:` lines. Do not treat
       `--check` output as sufficient proof evidence.
+  - Proof evidence: pueue task `69` (`release-evidence-full-proof-rerun4`)
+    finished `Success` with `test result: ok. 1 passed; 0 failed; 0 ignored; 0
+    measured; 41 filtered out; finished in 3079.20s`.
+  - Proof bundle: `target/self-hosting-proof/release-evidence-fresh5`
+    (`manifest.json`, `summary.txt`, `stage0/diagnostics.txt`,
+    `stage2/diagnostics.txt`).
+  - Release bundle command output kept from:
+    `cargo --config .cargo/vendor-config.toml run --quiet -- release create --release-id release-evidence-fresh5 --binary target/self-hosting-proof/work-release-evidence-fix5/tmp/crunch-builds/a5493eed-3b36-4896-b3c1-c2c70076cd73-jJYTCV/scratches/nix/store/dq2za2qwiz8v9dwrx8iz62xajsfbfq66-crunch/bin/crunch --proof-bundle target/self-hosting-proof/release-evidence-fresh5`
+  - Bundle-local verification output kept from:
+    `cargo --config .cargo/vendor-config.toml run --quiet -- release verify target/release-evidence/release-evidence-fresh5`
 - [x] Run `openspec validate add-release-evidence-bundles`.

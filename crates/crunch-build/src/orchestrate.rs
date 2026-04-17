@@ -382,6 +382,7 @@ where BServ: BuildService + 'static
 
         // 1. Cache check
         if let Some(cached_hit) = self.check_cache(drv_path, derivation_ref, is_root).await? {
+            self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
             info!(drv = %drv_name, "all outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
@@ -1198,6 +1199,25 @@ where BServ: BuildService + 'static
         }
 
         Ok(Some(CacheCheckHit { infos, substitutions }))
+    }
+
+    fn record_cached_output_paths(
+        &self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        infos: &HashMap<String, PathInfo>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<(), Error> {
+        let is_ca = derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+        if !is_ca {
+            return Ok(());
+        }
+
+        let drv_abs = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
+        for (output_name, path_info) in infos {
+            known_paths.resolve_output(&drv_abs, output_name, path_info.store_path.clone())?;
+        }
+        Ok(())
     }
 
     /// Collect build-input provenance for native attestations.
@@ -2024,6 +2044,50 @@ mod tests {
         kp.insert(drv_path.clone(), hdm, drv.clone(), true, None);
 
         (drv_path, drv)
+    }
+
+    #[tokio::test]
+    async fn cached_ca_dependency_records_resolved_output_for_later_builds() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis = test_pis();
+
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        let mut seed_registry = DerivationRegistry::default();
+        let (seed_drv_path, _) = build_and_register_ca("cached-seed", &mut seed_registry);
+        let seed_outcome = builder.build(&seed_drv_path, &mut seed_registry).await.unwrap();
+        let seed_output_path = seed_outcome.outputs["out"].store_path.clone();
+
+        let mut dependent_registry = DerivationRegistry::default();
+        let (seed_drv_path_again, _) = build_and_register_ca("cached-seed", &mut dependent_registry);
+        assert_eq!(seed_drv_path_again, seed_drv_path, "same CA derivation must keep same drv path");
+        let (root_drv_path, _) =
+            build_and_register("uses-cached-seed", &[(seed_drv_path.clone(), "out")], &mut dependent_registry);
+
+        let root_outcome = builder.build(&root_drv_path, &mut dependent_registry).await.unwrap();
+        assert!(!root_outcome.outputs.is_empty(), "dependent root must still build");
+
+        let seed_abs = seed_drv_path.to_absolute_path();
+        let recorded_output_path = dependent_registry
+            .get_output_path(&seed_abs, "out")
+            .expect("cached CA dependency must record resolved output path");
+        assert_eq!(recorded_output_path, seed_output_path, "cached CA output path must match first build");
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "only the seed build and dependent root build should dispatch");
     }
 
     #[tokio::test]

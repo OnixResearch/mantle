@@ -466,7 +466,7 @@ fn extract_tar_entry<R: Read>(
     match entry.header().entry_type() {
         tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &resolved_dest),
         tar::EntryType::Directory => prepare_directory_entry_dest(&resolved_dest),
-        tar::EntryType::Symlink => create_tar_symlink(entry, &resolved_dest, out_path, &relative),
+        tar::EntryType::Symlink => create_tar_symlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative),
         tar::EntryType::Link => {
             copy_tar_hardlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative, deferred_hardlinks)
         }
@@ -493,14 +493,16 @@ fn create_tar_symlink<R: Read>(
     entry: &mut tar::Entry<'_, R>,
     dest: &Path,
     out_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
     relative: &Path,
 ) -> Result<(), FetchError> {
     prepare_non_directory_entry_dest(dest)?;
     #[cfg(unix)]
     if let Some(target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
         let target_path = target.as_ref();
-        validate_symlink_target(target_path, dest, relative, out_path)?;
-        std::os::unix::fs::symlink(target_path, dest)?;
+        let normalized_target = normalize_tar_symlink_target(target_path, prefix_to_strip, relative)?;
+        validate_symlink_target(&normalized_target, dest, relative, out_path)?;
+        std::os::unix::fs::symlink(&normalized_target, dest)?;
     }
     Ok(())
 }
@@ -641,22 +643,116 @@ fn validate_relative_path(relative: &Path) -> Result<(), FetchError> {
     Ok(())
 }
 
+/// Normalize a tar symlink target before materialization.
+/// Absolute targets are rebased to the extracted tree root, then rewritten
+/// as relative paths from the symlink's parent directory.
+fn normalize_tar_symlink_target(
+    target_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+    relative: &Path,
+) -> Result<PathBuf, FetchError> {
+    if !target_path.has_root() {
+        return Ok(target_path.to_path_buf());
+    }
+    let rooted_target = rooted_tar_symlink_target(target_path, prefix_to_strip, relative)?;
+    let symlink_parent = relative.parent().unwrap_or(Path::new(""));
+    Ok(relative_path_between(symlink_parent, &rooted_target))
+}
+
+fn rooted_tar_symlink_target(
+    target_path: &Path,
+    prefix_to_strip: &Option<std::path::PathBuf>,
+    relative: &Path,
+) -> Result<PathBuf, FetchError> {
+    assert!(target_path.has_root(), "rooted tar symlink target must be absolute");
+    let context = format!("tar symlink target {} -> {}", relative.display(), target_path.display());
+    let target_without_root = strip_rooted_symlink_target(target_path, relative)?;
+    let stripped_target = match prefix_to_strip {
+        Some(prefix) => {
+            target_without_root.strip_prefix(prefix.as_path()).unwrap_or(&target_without_root).to_path_buf()
+        }
+        None => target_without_root,
+    };
+    resolve_relative_within_root(Path::new(""), &stripped_target, &context)
+}
+
+fn strip_rooted_symlink_target(target_path: &Path, relative: &Path) -> Result<PathBuf, FetchError> {
+    assert!(target_path.has_root(), "rooted symlink target must be absolute");
+    let mut stripped = PathBuf::new();
+    let mut saw_root = false;
+    for component in target_path.components() {
+        match component {
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => saw_root = true,
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(name) => stripped.push(name),
+            std::path::Component::ParentDir => stripped.push(".."),
+        }
+    }
+    if !saw_root {
+        return Err(FetchError::TarError(format!(
+            "tar symlink target is not rooted: {} -> {}",
+            relative.display(),
+            target_path.display()
+        )));
+    }
+    Ok(stripped)
+}
+
+fn relative_path_between(from: &Path, to: &Path) -> PathBuf {
+    let from_components: Vec<std::ffi::OsString> = from
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_os_string()),
+            std::path::Component::CurDir => None,
+            _ => None,
+        })
+        .collect();
+    let to_components: Vec<std::ffi::OsString> = to
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_os_string()),
+            std::path::Component::CurDir => None,
+            _ => None,
+        })
+        .collect();
+
+    let mut shared_prefix_len: u32 = 0;
+    let shared_limit = from_components.len().min(to_components.len());
+    while usize::try_from(shared_prefix_len).ok().is_some_and(|idx| idx < shared_limit) {
+        let idx = usize::try_from(shared_prefix_len).expect("shared prefix length index overflowed usize");
+        if from_components[idx] != to_components[idx] {
+            break;
+        }
+        shared_prefix_len = shared_prefix_len.saturating_add(1);
+    }
+
+    let mut relative = PathBuf::new();
+    for _ in from_components
+        .iter()
+        .skip(usize::try_from(shared_prefix_len).expect("skip index overflowed usize"))
+    {
+        relative.push("..");
+    }
+    for component in to_components.iter().skip(usize::try_from(shared_prefix_len).expect("skip index overflowed usize"))
+    {
+        relative.push(component);
+    }
+    if relative.as_os_str().is_empty() {
+        relative.push(".");
+    }
+    relative
+}
+
 /// Validate that a symlink target stays within the output directory.
-/// Rejects absolute targets and resolves relative targets against the
-/// symlink's physical parent path inside the extracted tree.
+/// Relative targets are resolved against the symlink's physical parent path
+/// inside the extracted tree.
 fn validate_symlink_target(
     target_path: &Path,
     dest: &Path,
     relative: &Path,
     out_path: &Path,
 ) -> Result<(), FetchError> {
-    if target_path.has_root() {
-        return Err(FetchError::TarError(format!(
-            "tar symlink has absolute target: {} -> {}",
-            relative.display(),
-            target_path.display()
-        )));
-    }
+    assert!(!target_path.has_root(), "normalized tar symlink target must be relative");
     let base_relative = symlink_parent_relative(dest, out_path, relative)?;
     let context = format!("tar symlink target {} -> {}", relative.display(), target_path.display());
     let raw_target = base_relative.join(target_path);
@@ -687,7 +783,6 @@ fn validate_hardlink_target(out_path: &Path, stripped_target: &Path, relative: &
     resolve_contained_host_path(out_path, stripped_target, &context)
 }
 
-#[cfg(test)]
 fn resolve_relative_within_root(
     base_relative: &Path,
     candidate_path: &Path,
@@ -2062,16 +2157,20 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn extract_tar_rejects_absolute_symlink_target() {
+    fn extract_tar_rebases_absolute_symlink_target_within_output_root() {
         let tar_data = build_raw_tar(&[
             RawTarEntry::dir("pkg/"),
-            RawTarEntry::symlink("pkg/link", "/etc/passwd"),
+            RawTarEntry::dir("pkg/lib/"),
+            RawTarEntry::file("pkg/lib/libc.so", b"libc"),
+            RawTarEntry::symlink("pkg/lib/ld-musl-x86_64.so.1", "/lib/libc.so"),
         ]);
         let tmp = tempfile::tempdir().unwrap();
         let out = tmp.path().join("out");
 
-        let err = extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap_err();
-        assert!(err.to_string().contains("absolute target"), "expected absolute target error: {err}");
+        extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
+        let link_path = out.join("lib/ld-musl-x86_64.so.1");
+        assert!(link_path.is_symlink(), "rebased target must stay a symlink");
+        assert_eq!(std::fs::read_link(&link_path).unwrap(), PathBuf::from("libc.so"));
     }
 
     #[cfg(unix)]

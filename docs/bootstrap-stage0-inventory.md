@@ -45,7 +45,7 @@ Anything outside those buckets is a hidden trust edge.
 
 | Item | Used by | Why it is trusted today | Notes |
 |---|---|---|---|
-| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | fetched by crunch with recursive hash `sha256-XpcI34j9YwAQj7qw4DpvXqT1CX00vHcUQbAk/do46jw=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/crunch-bootstrap/provider.json` for provenance and dropped payload |
+| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | fetched by crunch with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/crunch-bootstrap/provider.json` for provenance and dropped payload |
 
 ### Crunch-built outputs
 
