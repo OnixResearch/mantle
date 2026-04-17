@@ -107,6 +107,66 @@ expectations that LLVM or Cranelift somehow solve runtime build portability.
 **Implementation:** future specs and docs should describe compiled evaluators as
 an optional eval-layer optimization only.
 
+### 6. Gate evaluator work on checked-in benchmark workloads
+
+**Choice:** until the repo gains a checked-in `crunch project` or self-build
+benchmark, compiled-eval planning will gate on two existing suite workloads:
+`eval-fetch-git` as the narrow evaluation probe and
+`workflow-package-set-eval-build-graph` as the multi-phase representative
+workflow. The remaining suite entries are non-eval controls and do not justify
+compiler work on their own.
+
+**Rationale:** these workloads already separate honest `evaluation_wall_ns`
+from build-graph, substitution, and store work; they use checked-in fixtures;
+and they run in ordinary local checks with no network dependency.
+
+**Implementation:** capture a same-host `benchmark_suite` bundle before any
+backend experiment, record the bundle under
+`openspec/changes/explore-compiled-eval-backends/evidence/`, and keep
+project-command or self-build claims out of scope until a checked-in workload
+measures those paths directly.
+
+### 7. Require both dominant evaluation cost and a material prototype win
+
+**Choice:** compiled-eval work is justified only when a same-host
+`benchmark_suite` run shows `workflow-package-set-eval-build-graph` spending
+more than 90% of `total_wall_ns` in `evaluation_wall_ns`, and a future backend
+prototype can deliver at least a 2x eval-phase speedup on `eval-fetch-git`
+without regressing non-eval workloads past the documented
+`benchmark_compare` thresholds.
+
+**Rationale:** a compiled backend adds dependency, maintenance, bootstrap, and
+correctness cost. The project needs proof that evaluation dominates a real
+workflow and proof that a prototype buys a materially large win.
+
+**Implementation:** use `benchmark_compare` against a saved baseline bundle,
+treat non-eval workloads as guardrails rather than targets, and do not advance
+past a narrow prototype until Phase 3 interpreter-vs-compiled equivalence tests
+pass.
+
+## Current benchmark gate evidence
+
+- Baseline bundle: `target/benchmarks/compiled-eval-gate.json`
+- Checked-in evidence copy:
+  `openspec/changes/explore-compiled-eval-backends/evidence/compiled-eval-gate.json`
+- Command:
+  `cargo run --example benchmark_suite -- --bundle-out target/benchmarks/compiled-eval-gate.json --repeat-count 2`
+- `eval-fetch-git`: `evaluation_wall_ns = 89535453`,
+  `total_wall_ns = 89549279` → evaluation share `99.98%` → interpreter-bound
+- `workflow-package-set-eval-build-graph`:
+  `evaluation_wall_ns = 142402615`, `build_graph_wall_ns = 1158384`,
+  `total_wall_ns = 143675183` → evaluation share `99.11%`,
+  evaluation/build-graph ratio `122.93x` → interpreter-bound
+- `convert-multi-output`, `build-graph-package-set`,
+  `substitution-plan-delta-suite`, and `store-persist-lookup-blob` expose
+  non-eval control phases only and are not compiled-eval targets by
+  themselves
+- The current checked-in suite therefore shows two interpreter-bound
+  eval-bearing workloads and no checked-in I/O-bound eval-bearing workload yet
+- No checked-in benchmark yet measures `crunch project` flows or self-build
+  evaluation directly, so this change keeps project/self-build codegen claims
+  out of scope for now
+
 ## Risks / Trade-offs
 
 **[Wrong bottleneck]**

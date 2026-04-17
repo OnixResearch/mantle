@@ -1,0 +1,215 @@
+{
+  "schema": "crunch-benchmark-bundle-v1",
+  "generated_unix_s": 1776434965,
+  "repo_root": "/home/brittonr/git/crunch/crunch",
+  "bundle_path": "target/benchmarks/compiled-eval-gate.json",
+  "commit": "db663e3426b4",
+  "git_dirty": false,
+  "toolchain": {
+    "rustc_version": "rustc 1.95.0-nightly (5fb2ff861 2026-02-21)\nbinary: rustc\ncommit-hash: 5fb2ff8611e5a4af4dc85977cfdecfbf3ffa6ade\ncommit-date: 2026-02-21\nhost: x86_64-unknown-linux-gnu\nrelease: 1.95.0-nightly\nLLVM version: 22.1.0",
+    "cargo_version": "cargo 1.95.0-nightly (8cc0cb136 2026-02-17)"
+  },
+  "host": {
+    "os": "linux",
+    "arch": "x86_64",
+    "hostname": "britton-desktop"
+  },
+  "results": [
+    {
+      "workload_name": "eval-fetch-git",
+      "workload_kind": "evaluation",
+      "workload_path": "/home/brittonr/git/crunch/crunch/examples/fetch-git.ncl",
+      "rationale": "Nickel evaluation of a checked-in fetcher derivation exercises derivation extraction without introducing build or network execution.",
+      "operation": "crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "same-process-repeated-eval",
+      "repeat_count": 2,
+      "logical_store_prefix": "/crunch/store",
+      "root_count": 1,
+      "total_wall_ns": 89549279,
+      "sample_wall_ns": [
+        44717617,
+        44817836
+      ],
+      "phase_metrics": [
+        {
+          "name": "evaluation_wall_ns",
+          "unit": "ns",
+          "value": 89535453
+        }
+      ]
+    },
+    {
+      "workload_name": "convert-multi-output",
+      "workload_kind": "conversion",
+      "workload_path": "/home/brittonr/git/crunch/crunch/examples/multi-output.ncl",
+      "rationale": "Multi-output conversion exercises store-path construction, output naming, and glue-layer derivation lowering without requiring a sandbox build.",
+      "operation": "crunch_glue::convert over a checked-in multi-output derivation",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "pre-evaluated-roots repeated conversion",
+      "repeat_count": 2,
+      "logical_store_prefix": "/nix/store",
+      "root_count": 1,
+      "total_wall_ns": 565121,
+      "sample_wall_ns": [
+        393568,
+        170891
+      ],
+      "phase_metrics": [
+        {
+          "name": "conversion_wall_ns",
+          "unit": "ns",
+          "value": 564459
+        }
+      ]
+    },
+    {
+      "workload_name": "substitution-plan-delta-suite",
+      "workload_kind": "substitution",
+      "workload_path": "crates/crunch-delta/src/fixtures.rs::bench_suite()",
+      "rationale": "The fixed crunch-delta bench suite is a checked-in substitution-planning workload that measures reuse planning with no network or store mutation.",
+      "operation": "crunch_delta::plan_transfer over crunch_delta::bench_suite()",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "checked-in delta fixture suite",
+      "repeat_count": 2,
+      "logical_store_prefix": "/crunch/store",
+      "root_count": 5,
+      "total_wall_ns": 33143,
+      "sample_wall_ns": [
+        22783,
+        9217
+      ],
+      "phase_metrics": [
+        {
+          "name": "substitution_planning_wall_ns",
+          "unit": "ns",
+          "value": 32000
+        }
+      ]
+    },
+    {
+      "workload_name": "build-graph-package-set",
+      "workload_kind": "build-graph",
+      "workload_path": "/home/brittonr/git/crunch/crunch/examples/package-set.ncl",
+      "rationale": "The package-set example contains multiple named roots and shared builder inputs, so repeated conversion measures build-graph preparation on a checked-in derivation graph.",
+      "operation": "crunch_glue::convert over pre-evaluated package-set roots",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "pre-evaluated-roots repeated graph conversion",
+      "repeat_count": 2,
+      "logical_store_prefix": "/nix/store",
+      "root_count": 2,
+      "total_wall_ns": 712698,
+      "sample_wall_ns": [
+        416592,
+        295455
+      ],
+      "phase_metrics": [
+        {
+          "name": "build_graph_wall_ns",
+          "unit": "ns",
+          "value": 712047
+        }
+      ]
+    },
+    {
+      "workload_name": "workflow-package-set-eval-build-graph",
+      "workload_kind": "workflow",
+      "workload_path": "/home/brittonr/git/crunch/crunch/examples/package-set.ncl",
+      "rationale": "A checked-in package-set workflow that evaluates then lowers the same roots in one run, so maintainers can separate evaluation cost from build-graph preparation cost.",
+      "operation": "crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation> + crunch_glue::convert over examples/package-set.ncl",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "same-process repeated eval+graph conversion",
+      "repeat_count": 2,
+      "logical_store_prefix": "/nix/store",
+      "root_count": 2,
+      "total_wall_ns": 143675183,
+      "sample_wall_ns": [
+        71665033,
+        71957892
+      ],
+      "phase_metrics": [
+        {
+          "name": "evaluation_wall_ns",
+          "unit": "ns",
+          "value": 142402615
+        },
+        {
+          "name": "build_graph_wall_ns",
+          "unit": "ns",
+          "value": 1158384
+        }
+      ]
+    },
+    {
+      "workload_name": "store-persist-lookup-blob",
+      "workload_kind": "store",
+      "workload_path": "examples/benchmark_support.rs::benchmark_store_aware_workload",
+      "rationale": "A fresh temp store per sample persists one signed blob output, reopens the store, and times the follow-up cached-node lookup without inventing store phases for unrelated workloads.",
+      "operation": "crunch_store::StoreHandle::persist_and_export_signed_output + StoreHandle::cached_node_for_path over deterministic local bytes",
+      "entry_point": "cargo run --example benchmark_suite --",
+      "command_argv": [
+        "/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_suite",
+        "--bundle-out",
+        "target/benchmarks/compiled-eval-gate.json",
+        "--repeat-count",
+        "2"
+      ],
+      "cache_mode": "fresh temp store per sample",
+      "repeat_count": 2,
+      "logical_store_prefix": "/crunch/store",
+      "root_count": 1,
+      "total_wall_ns": 11367294,
+      "sample_wall_ns": [
+        6459924,
+        4880991
+      ],
+      "phase_metrics": [
+        {
+          "name": "store_persistence_wall_ns",
+          "unit": "ns",
+          "value": 1081951
+        },
+        {
+          "name": "store_lookup_wall_ns",
+          "unit": "ns",
+          "value": 354014
+        }
+      ]
+    }
+  ]
+}

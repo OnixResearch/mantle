@@ -1,0 +1,21 @@
+command: cargo run --example benchmark_suite -- --bundle-out target/benchmarks/compiled-eval-gate.json --repeat-count 2
+bundle: target/benchmarks/compiled-eval-gate.json
+copied_evidence: openspec/changes/explore-compiled-eval-backends/evidence/compiled-eval-gate.json
+commit: db663e3426b4
+git_dirty: False
+host: britton-desktop (linux x86_64)
+rustc_version: rustc 1.95.0-nightly (5fb2ff861 2026-02-21)
+cargo_version: cargo 1.95.0-nightly (8cc0cb136 2026-02-17)
+
+compiled-eval gate workloads
+- eval-fetch-git: evaluation_wall_ns=89535453 total_wall_ns=89549279 eval_share=99.9846% classification=interpreter-bound
+- workflow-package-set-eval-build-graph: evaluation_wall_ns=142402615 build_graph_wall_ns=1158384 total_wall_ns=143675183 eval_share=99.1143% eval_to_build_graph_ratio=122.93x classification=interpreter-bound
+
+non-eval controls
+- convert-multi-output: conversion_wall_ns=564459 total_wall_ns=565121 classification=non-eval control
+- build-graph-package-set: build_graph_wall_ns=712047 total_wall_ns=712698 classification=non-eval control
+- substitution-plan-delta-suite: substitution_planning_wall_ns=32000 total_wall_ns=33143 classification=non-eval control
+- store-persist-lookup-blob: store_persistence_wall_ns=1081951 store_lookup_wall_ns=354014 total_wall_ns=11367294 classification=non-eval control
+
+note
+- no checked-in benchmark yet measures crunch project flows or self-build evaluation directly
