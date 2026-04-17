@@ -10,3 +10,4 @@
 | [0006](0006-bootstrap-seed-abstraction.md) | Bootstrap seed abstraction | Accepted |
 | [0007](0007-normalized-bootstrap-seed-toolchain.md) | Normalized bootstrap seed toolchain | Accepted |
 | [0008](0008-reduced-muslcc-seed-provider.md) | Reduced musl.cc seed provider | Accepted |
+| [0009](0009-decentralized-release-verification.md) | Decentralized release verification separates technical and social trust | Proposed |
