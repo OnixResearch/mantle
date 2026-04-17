@@ -10,11 +10,15 @@
 use std::ffi::OsString;
 use std::path::Path;
 
+use backend::EvalBackend;
+use backend::EvalRequest;
+use backend::default_backend;
 pub use nickel_lang::Context;
 pub use nickel_lang::Error as NickelError;
 pub use nickel_lang::Expr;
 use serde::de::DeserializeOwned;
 
+mod backend;
 pub mod stdlib;
 
 /// Errors from crunch-eval.
@@ -84,30 +88,41 @@ fn format_nickel_error(err: &NickelError) -> String {
 /// `import_paths` are additional directories to search for imports.
 pub fn evaluate(path: &Path, import_paths: &[OsString]) -> Result<Expr, Error> {
     let source = std::fs::read_to_string(path)?;
-
-    // Set up import resolution: the file's parent directory + any extra paths
-    let mut paths: Vec<OsString> = Vec::new();
-    if let Some(parent) = path.parent() {
-        paths.push(parent.into());
-    }
-    paths.extend_from_slice(import_paths);
-
-    let mut ctx = Context::new().with_added_import_paths(paths).with_source_name(path.display().to_string());
-
-    let expr = ctx.eval_deep_for_export(&source)?;
-    Ok(expr)
+    let request = file_eval_request(path, &source, import_paths);
+    default_backend().eval(request)
 }
 
 /// Evaluate a Nickel source string (not a file path).
 ///
 /// Useful for tests and REPL-like usage.
 pub fn evaluate_str(source: &str, import_paths: &[OsString]) -> Result<Expr, Error> {
-    let mut ctx = Context::new()
-        .with_added_import_paths(import_paths.to_vec())
-        .with_source_name("<input>".to_string());
+    let request = inline_eval_request(source, import_paths);
+    default_backend().eval(request)
+}
 
-    let expr = ctx.eval_deep_for_export(source)?;
-    Ok(expr)
+fn file_eval_request<'a>(path: &Path, source: &'a str, import_paths: &[OsString]) -> EvalRequest<'a> {
+    EvalRequest {
+        source,
+        import_paths: import_paths_for_file(path, import_paths),
+        source_name: path.display().to_string(),
+    }
+}
+
+fn inline_eval_request<'a>(source: &'a str, import_paths: &[OsString]) -> EvalRequest<'a> {
+    EvalRequest {
+        source,
+        import_paths: import_paths.to_vec(),
+        source_name: "<input>".to_string(),
+    }
+}
+
+fn import_paths_for_file(path: &Path, import_paths: &[OsString]) -> Vec<OsString> {
+    let mut paths = Vec::with_capacity(import_paths.len().saturating_add(1));
+    if let Some(parent) = path.parent() {
+        paths.push(parent.into());
+    }
+    paths.extend_from_slice(import_paths);
+    paths
 }
 
 fn deserialize_expr<T: DeserializeOwned>(expr: &Expr, context: &str) -> Result<T, Error> {
@@ -205,30 +220,15 @@ pub fn evaluate_str_and_deserialize<T: serde::de::DeserializeOwned>(
 
 /// Evaluate a Nickel source string and export to JSON.
 pub fn evaluate_str_to_json(source: &str, import_paths: &[OsString]) -> Result<String, Error> {
-    let mut ctx = Context::new()
-        .with_added_import_paths(import_paths.to_vec())
-        .with_source_name("<input>".to_string());
-
-    let expr = ctx.eval_deep_for_export(source)?;
-    let json = ctx.expr_to_json(&expr)?;
-    Ok(json)
+    let request = inline_eval_request(source, import_paths);
+    default_backend().eval_to_json(request)
 }
 
 /// Evaluate and export to JSON string. For `crunch eval` debug output.
 pub fn evaluate_to_json(path: &Path, import_paths: &[OsString]) -> Result<String, Error> {
     let source = std::fs::read_to_string(path)?;
-
-    let mut paths: Vec<OsString> = Vec::new();
-    if let Some(parent) = path.parent() {
-        paths.push(parent.into());
-    }
-    paths.extend_from_slice(import_paths);
-
-    let mut ctx = Context::new().with_added_import_paths(paths).with_source_name(path.display().to_string());
-
-    let expr = ctx.eval_deep_for_export(&source)?;
-    let json = ctx.expr_to_json(&expr)?;
-    Ok(json)
+    let request = file_eval_request(path, &source, import_paths);
+    default_backend().eval_to_json(request)
 }
 
 #[cfg(test)]

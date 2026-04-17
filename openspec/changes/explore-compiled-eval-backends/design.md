@@ -144,6 +144,23 @@ treat non-eval workloads as guardrails rather than targets, and do not advance
 past a narrow prototype until Phase 3 interpreter-vs-compiled equivalence tests
 pass.
 
+### 8. Add a private backend seam before any compiled prototype
+
+**Choice:** `crunch-eval` keeps its current free-function API for callers, but
+routes evaluation through a private `EvalBackend` trait and `EvalRequest`
+carrier owned inside the crate.
+
+**Rationale:** this gives Phase 3 experiments one backend-local insertion point
+without changing downstream crates or forcing an early public API commitment.
+The shipped path stays the Nickel interpreter, while a future prototype can add
+another backend implementation behind the same internal boundary.
+
+**Implementation:** `crates/crunch-eval/src/backend.rs` owns
+`EvalBackend`, `EvalRequest`, and `NickelBackend`. `crates/crunch-eval/src/lib.rs`
+now prepares file or inline requests and delegates `evaluate`,
+`evaluate_str`, `evaluate_to_json`, and `evaluate_str_to_json` through
+`default_backend()`.
+
 ## Current benchmark gate evidence
 
 - Baseline bundle: `target/benchmarks/compiled-eval-gate.json`
