@@ -54,6 +54,8 @@ pub(crate) struct ReleaseWorkflowIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ReleaseProofLinkage {
+    pub release_id: String,
+    pub source_archive_digest_blake3: String,
     pub proof_bundle_schema: String,
     pub proof_mode: String,
     pub staged_source: String,
@@ -150,6 +152,7 @@ pub(crate) fn create_release_evidence_bundle(
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
         copy_file_into_bundle(&inventory_path, &request.bundle_dir, Path::new("proof/inventory.md"))?;
+    let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
 
     let manifest = ReleaseEvidenceManifest {
         schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
@@ -164,6 +167,8 @@ pub(crate) fn create_release_evidence_bundle(
         proof_bundle,
         prerequisite_inventory: prerequisite_inventory.clone(),
         proof_linkage: ReleaseProofLinkage {
+            release_id: request.release_id.clone(),
+            source_archive_digest_blake3,
             proof_bundle_schema: proof_identity.schema,
             proof_mode: proof_identity.proof_mode,
             staged_source: proof_identity.staged_source,
@@ -645,6 +650,12 @@ fn verify_artifact_matches_bundle(
 fn verify_manifest_proof_linkage(manifest: &ReleaseEvidenceManifest, bundle_dir: &Path) -> Result<(), RunError> {
     let proof_bundle_dir = bundle_dir.join(&manifest.proof_bundle.relative_path);
     let proof_identity = load_full_self_hosting_proof_identity(&proof_bundle_dir)?;
+    if manifest.proof_linkage.release_id != manifest.release_id {
+        return Err(RunError::Internal("release evidence proof linkage release_id mismatch".to_string()));
+    }
+    if manifest.proof_linkage.source_archive_digest_blake3 != manifest.source_archive.digest_blake3 {
+        return Err(RunError::Internal("release evidence proof linkage source archive digest mismatch".to_string()));
+    }
     if proof_identity.schema != manifest.proof_linkage.proof_bundle_schema {
         return Err(RunError::Internal("release evidence proof linkage schema mismatch".to_string()));
     }
@@ -739,6 +750,13 @@ fn validate_and_record_path(
 }
 
 fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
+    if manifest.proof_linkage.release_id != manifest.release_id {
+        return Err(RunError::Internal("release evidence proof linkage release_id must match release_id".to_string()));
+    }
+    validate_blake3_hex(
+        &manifest.proof_linkage.source_archive_digest_blake3,
+        "proof_linkage.source_archive_digest_blake3",
+    )?;
     validate_blake3_hex(
         &manifest.proof_linkage.stage2_binary_digest_blake3,
         "proof_linkage.stage2_binary_digest_blake3",
@@ -771,6 +789,11 @@ fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), R
     if manifest.prerequisite_inventory.kind != BundledArtifactKind::File {
         return Err(RunError::Internal(
             "release evidence prerequisite_inventory must be recorded as a file artifact".to_string(),
+        ));
+    }
+    if manifest.proof_linkage.source_archive_digest_blake3 != manifest.source_archive.digest_blake3 {
+        return Err(RunError::Internal(
+            "release evidence proof linkage source archive digest does not match bundled source archive".to_string(),
         ));
     }
     if manifest.proof_linkage.prerequisite_inventory_digest_blake3 != manifest.prerequisite_inventory.digest_blake3 {
@@ -957,6 +980,8 @@ mod tests {
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
             proof_linkage: ReleaseProofLinkage {
+                release_id: "crunch-0.1.0-rc1".to_string(),
+                source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),
                 staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),

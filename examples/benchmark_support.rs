@@ -1242,8 +1242,8 @@ fn build_phase_metrics_from_totals(
     metric_names: Option<Vec<String>>,
     metric_totals: &std::collections::BTreeMap<String, u64>,
 ) -> Result<Vec<BenchmarkMetric>, Error> {
-    let metric_names = metric_names
-        .ok_or_else(|| Error::InvalidArgument("phase metric samples must not be empty".to_string()))?;
+    let metric_names =
+        metric_names.ok_or_else(|| Error::InvalidArgument("phase metric samples must not be empty".to_string()))?;
     let mut phase_metrics = Vec::with_capacity(metric_names.len());
     for metric_name in metric_names {
         let metric_value = metric_totals
@@ -1262,10 +1262,7 @@ fn build_benchmark_runtime() -> Result<tokio::runtime::Runtime, Error> {
         .map_err(|err| Error::InvalidArgument(format!("building benchmark runtime: {err}")))
 }
 
-fn run_store_aware_sample(
-    runtime: &tokio::runtime::Runtime,
-    store_prefix: &str,
-) -> Result<PhasedSample, Error> {
+fn run_store_aware_sample(runtime: &tokio::runtime::Runtime, store_prefix: &str) -> Result<PhasedSample, Error> {
     let state_dir = tempfile::tempdir()?;
     let output_dir = tempfile::tempdir()?;
     let output_path = benchmark_store_path()?;
@@ -1354,10 +1351,7 @@ fn benchmark_signed_pathinfo(
         node,
         references: Vec::new(),
         nar_size: u64::try_from(benchmark_store_payload().len()).map_err(|_| {
-            Error::InvalidArgument(format!(
-                "payload length does not fit in u64: {}",
-                benchmark_store_payload().len()
-            ))
+            Error::InvalidArgument(format!("payload length does not fit in u64: {}", benchmark_store_payload().len()))
         })?,
         nar_sha256: [3u8; 32],
         signatures: vec![signature],
@@ -1648,10 +1642,7 @@ mod tests {
     fn compare_bundles_report_sparse_metric_omissions_per_workload() {
         let baseline = fixture_bundle("baseline", vec![fixture_multi_metric_result(
             MULTI_PHASE_WORKFLOW_WORKLOAD_NAME,
-            vec![
-                (EVAL_PHASE_METRIC_NAME, 100),
-                (BUILD_GRAPH_PHASE_METRIC_NAME, 60),
-            ],
+            vec![(EVAL_PHASE_METRIC_NAME, 100), (BUILD_GRAPH_PHASE_METRIC_NAME, 60)],
             170,
         )]);
         let fresh = fixture_bundle("fresh", vec![fixture_multi_metric_result(
@@ -1760,10 +1751,7 @@ mod tests {
             root_count: 1,
             total_wall_ns,
             sample_wall_ns: vec![total_wall_ns],
-            phase_metrics: phase_metrics
-                .into_iter()
-                .map(|(name, value)| named_metric(name, value))
-                .collect(),
+            phase_metrics: phase_metrics.into_iter().map(|(name, value)| named_metric(name, value)).collect(),
         }
     }
 

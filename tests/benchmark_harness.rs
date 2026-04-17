@@ -154,7 +154,11 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&CONVERSION_PHASE_METRIC_NAME)));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&SUBSTITUTION_PHASE_METRIC_NAME)));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&BUILD_GRAPH_PHASE_METRIC_NAME)));
-    assert!(results.iter().any(|result| phase_metric_names(result).contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME)));
+    assert!(
+        results
+            .iter()
+            .any(|result| phase_metric_names(result).contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME))
+    );
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&STORE_LOOKUP_PHASE_METRIC_NAME)));
     assert!(results.iter().all(|result| result["rationale"].as_str().is_some_and(|value| !value.is_empty())));
     assert!(results.iter().all(|result| result[TOTAL_PHASE_METRIC_NAME].as_u64().is_some()));

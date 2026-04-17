@@ -19,10 +19,10 @@
 - [x] Define and test that the staged-source archive bundled for release
       evidence is exported from the current tracked worktree, not a stale
       `HEAD` archive.
-- [ ] Record bounded claim metadata in the manifest so release evidence stays
+- [x] Record bounded claim metadata in the manifest so release evidence stays
       packaged integrity and proof-context evidence rather than a broader
       bootstrap claim.
-- [ ] Bind the bundled proof artifact and prerequisite inventory to the same
+- [x] Bind the bundled proof artifact and prerequisite inventory to the same
       release identifier, source digest, and binary digests recorded in the
       manifest by creating and validating the internal linkage record described
       in the design.
@@ -43,18 +43,18 @@
 - [x] Add tests that `crunch release verify` fails when the bundle omits any
       required member such as the staged-source archive, release binary,
       proof artifact, or prerequisite inventory.
-- [ ] Add tests that bundle verification fails on digest mismatch, manifest
+- [x] Add tests that bundle verification fails on digest mismatch, manifest
       schema mismatch, proof-linkage mismatch, prerequisite-inventory linkage
       mismatch, missing workflow provenance, or non-canonical manifest
       encoding, and identifies the mismatched artifact.
-- [ ] Add tests that manifest claim-boundary violations are rejected and that
+- [x] Add tests that manifest claim-boundary violations are rejected and that
       docs do not over-claim what bundle verification proves.
 - [x] Add tests that a prerequisite-only proof artifact is rejected for release
       evidence generation and for verification, and says that a full proof
       artifact is required.
 - [x] Add tests that `crunch release verify` succeeds or fails using only
       bundle-local contents, with no external proof, source, or build inputs.
-- [ ] Add tests that a valid bundle verifies successfully and reports the
+- [x] Add tests that a valid bundle verifies successfully and reports the
       bundled release identifier and artifact digests.
 
 ## Validation

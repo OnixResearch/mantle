@@ -84,6 +84,8 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
         println!("release evidence verified: {}", bundle_dir.display());
         println!("release id: {}", manifest.release_id);
         println!("binaries: {}", manifest.binaries.len());
+        println!("source digest: {}", manifest.source_archive.digest_blake3);
+        println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
     }
     Ok(())

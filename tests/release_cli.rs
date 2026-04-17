@@ -41,27 +41,15 @@ fn assert_git_ok(repo_root: &Path, args: &[&str]) {
 }
 
 fn create_minimal_release_repo(repo_root: &Path) {
-    write_file(
-        &repo_root.join(".cargo/vendor-config.toml"),
-        b"directory = \"vendor-deps\"\n",
-    );
-    write_file(
-        &repo_root.join("vendor-deps/dep/Cargo.toml"),
-        b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n",
-    );
-    write_file(
-        &repo_root.join("Cargo.toml"),
-        b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
-    );
+    write_file(&repo_root.join(".cargo/vendor-config.toml"), b"directory = \"vendor-deps\"\n");
+    write_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n");
+    write_file(&repo_root.join("Cargo.toml"), b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n");
     write_file(&repo_root.join("Cargo.lock"), b"# lock\n");
     write_file(&repo_root.join("bootstrap/seed.ncl"), b"{}\n");
     write_file(&repo_root.join("builders/default.ncl"), b"{}\n");
     write_file(&repo_root.join("crates/demo/src/lib.rs"), b"pub fn demo() {}\n");
     write_file(&repo_root.join("lib/lib.ncl"), b"{}\n");
-    write_file(
-        &repo_root.join("rust-toolchain.toml"),
-        b"[toolchain]\nchannel=\"nightly\"\n",
-    );
+    write_file(&repo_root.join("rust-toolchain.toml"), b"[toolchain]\nchannel=\"nightly\"\n");
     write_file(&repo_root.join("src/main.rs"), b"fn main() { println!(\"tracked\"); }\n");
     write_file(&repo_root.join("vendor/README"), b"vendor\n");
 
@@ -336,7 +324,72 @@ fn release_verify_succeeds_using_bundle_local_contents_only() {
         .assert()
         .success()
         .stdout(predicate::str::contains(format!("release id: {}", manifest.release_id)))
-        .stdout(predicate::str::contains(format!("binaries: {}", manifest.binaries.len())));
+        .stdout(predicate::str::contains(format!("binaries: {}", manifest.binaries.len())))
+        .stdout(predicate::str::contains(format!("source digest: {}", manifest.source_archive.digest_blake3)))
+        .stdout(predicate::str::contains(format!(
+            "stage2 digest: {}",
+            manifest.proof_linkage.stage2_binary_digest_blake3
+        )));
+}
+
+#[test]
+fn release_verify_rejects_manifest_schema_mismatch() {
+    let (_temp, bundle_dir, mut manifest) = make_valid_bundle();
+    manifest.schema = "crunch-release-evidence-v999".to_string();
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("release evidence schema must be"));
+}
+
+#[test]
+fn release_verify_rejects_missing_workflow_provenance() {
+    let (_temp, bundle_dir, mut manifest) = make_valid_bundle();
+    manifest.workflow.command.clear();
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("workflow.command must not be empty"));
+}
+
+#[test]
+fn release_verify_rejects_claim_boundary_violation() {
+    let (_temp, bundle_dir, mut manifest) = make_valid_bundle();
+    manifest.claim_scope = "full-source-bootstrap-proof".to_string();
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("claim_scope must be packaged-integrity-evidence"));
+}
+
+#[test]
+fn release_verify_rejects_proof_linkage_source_digest_mismatch() {
+    let (_temp, bundle_dir, mut manifest) = make_valid_bundle();
+    manifest.proof_linkage.source_archive_digest_blake3 = sample_digest(7);
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("source archive digest does not match bundled source archive"));
 }
 
 fn write_canonical_manifest(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) {
@@ -381,7 +434,8 @@ fn hash_tree_entry(root: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Re
     let relative = entry
         .strip_prefix(root)
         .map_err(|err| format!("tree hash strip_prefix {} from {}: {err}", entry.display(), root.display()))?;
-    let metadata = std::fs::symlink_metadata(entry).map_err(|err| format!("symlink_metadata {}: {err}", entry.display()))?;
+    let metadata =
+        std::fs::symlink_metadata(entry).map_err(|err| format!("symlink_metadata {}: {err}", entry.display()))?;
     let relative_bytes = relative.as_os_str().as_encoded_bytes();
     hasher.update(&(relative_bytes.len() as u64).to_le_bytes());
     hasher.update(relative_bytes);
@@ -450,6 +504,8 @@ struct ReleaseWorkflowIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ReleaseProofLinkage {
+    release_id: String,
+    source_archive_digest_blake3: String,
     proof_bundle_schema: String,
     proof_mode: String,
     staged_source: String,
