@@ -12,6 +12,9 @@ mod operator_diagnostics;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
+mod release_cmd;
+mod release_evidence;
+mod release_source;
 mod self_build;
 mod shell_cmd;
 mod store_cmd;
@@ -188,6 +191,12 @@ enum Command {
         action: AttestAction,
     },
 
+    /// Create or verify a release evidence bundle
+    Release {
+        #[command(subcommand)]
+        action: ReleaseAction,
+    },
+
     /// Initialize a new crunch project (manifest, lockfile, .crunch/)
     Init,
 
@@ -352,6 +361,41 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ReleaseAction {
+    /// Create a release evidence bundle from local artifacts
+    Create {
+        /// Release identifier recorded in the bundle manifest
+        #[arg(long)]
+        release_id: String,
+
+        /// Output directory for the bundle (default: target/release-evidence/<release-id>)
+        #[arg(long)]
+        bundle_dir: Option<PathBuf>,
+
+        /// Release binary artifact to bundle (repeat for multiple binaries)
+        #[arg(long = "binary", required = true)]
+        binary: Vec<PathBuf>,
+
+        /// Full self-hosting proof bundle directory from ./scripts/prove-self-hosting.sh
+        #[arg(long)]
+        proof_bundle: PathBuf,
+
+        /// Workflow command identity recorded in the manifest
+        #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
+        workflow_command: String,
+
+        /// Workflow version recorded in the manifest
+        #[arg(long, default_value = "crunch-self-hosting-proof-v2")]
+        workflow_version: String,
+    },
+    /// Verify a release evidence bundle using bundle-local contents only
+    Verify {
+        /// Bundle directory to verify
+        bundle_dir: PathBuf,
     },
 }
 
@@ -553,6 +597,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
+        Command::Release { action } => run_release_command(ctx, action.clone()),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
         Command::Store { action } => {
             store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
@@ -764,6 +809,10 @@ fn run_project_command(command: &Command) -> Result<(), RunError> {
         Command::Upgrade => project_cmd::cmd_upgrade(&cwd),
         _ => unreachable!("project command helper called with non-project command"),
     }
+}
+
+fn run_release_command(ctx: &RunContext, action: ReleaseAction) -> Result<(), RunError> {
+    release_cmd::cmd_release(action, &current_dir_or_error()?, ctx.json)
 }
 
 fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunError> {

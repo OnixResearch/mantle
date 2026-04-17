@@ -36,7 +36,7 @@ const MAX_STAGE_SOURCE_ENTRIES: u32 = 200_000;
 const MAX_STAGE_SOURCE_DEPTH: u32 = 64;
 
 /// Top-level repo entries included in the staged source tree.
-const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
+pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     ".cargo",
     "Cargo.lock",
     "Cargo.toml",
@@ -565,7 +565,7 @@ fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
 /// This is a shallow stage0 guard: it checks that `vendor-deps/` exists and
 /// that `.cargo/vendor-config.toml` points at that checked-in directory. It
 /// does not yet prove that the vendor tree is fresh relative to `Cargo.lock`.
-fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunError> {
+pub(crate) fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunError> {
     let vendor_dir = src_dir.join("vendor-deps");
     let vendor_config = src_dir.join(".cargo").join("vendor-config.toml");
     if !vendor_dir.is_dir() {

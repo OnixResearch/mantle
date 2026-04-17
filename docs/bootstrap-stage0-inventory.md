@@ -9,7 +9,10 @@ Today the repo has two proof modes:
   `PATH` scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
 
 Neither mode yet proves a full-source bootstrap root or reproducible release
-artifacts.
+artifacts. A later `crunch release create` bundle can package the proof bundle,
+release binary, tracked-worktree source archive, and this inventory for bundle-
+local integrity checks, but that packaged evidence still does not widen the
+underlying bootstrap claim.
 
 ## Contract boundary
 
@@ -81,9 +84,13 @@ What the checked-in self-hosting proof demonstrates today:
   `nix-build`, `nix-store`, `nix-shell`, and `nix` absent from `PATH`
 - successful proof bundles copy this inventory and record the resolved stage0
   prerequisite paths they used
+- `crunch release create` can copy a full proof bundle plus this inventory into
+  a release-evidence bundle, and `crunch release verify` can later re-check the
+  packaged digests and proof linkage using bundle-local contents only
 
 What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
 - bit-for-bit reproducible release artifacts from independent rebuilders
+- more than packaged integrity and proof-context evidence for releases; `crunch release verify` checks bundle-local consistency, not independent rebuild agreement
 - removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`

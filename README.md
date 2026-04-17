@@ -429,14 +429,17 @@ different bootstrap paths, and they do not all prove the same thing.
   and build later bootstrap stages.
 - **Self-hosting proof**: a crunch-built `crunch` can rebuild `crunch` from
   the same staged source tree.
+- **Packaged release evidence**: a release bundle carries the exact binary,
+  tracked-worktree source archive, proof bundle, and prerequisite inventory so
+  later verification can check bundle-local integrity and proof linkage.
 - **Full-source bootstrap**: the trusted root has been reduced to small,
   explicitly audited source or bootstrap seeds.
 - **Reproducible release evidence**: independent rebuilds produce the same
   final artifact and can be compared or signed.
 
-Today the repo has seed-assisted bootstrap and a checked-in self-hosting
-proof. It does not yet claim a full-source bootstrap or bit-for-bit
-reproducible release outputs.
+Today the repo has seed-assisted bootstrap, a checked-in self-hosting proof,
+and packaged release evidence. It does not yet claim a full-source bootstrap
+or bit-for-bit reproducible release outputs.
 
 ### Trust inventory by entry point
 
@@ -509,7 +512,7 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 | Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
 | Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
 | Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
-| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, and successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/` | The proof does not yet provide independent reproducibility evidence for release outputs |
+| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and tracked-worktree source archive for later `crunch release verify` checks | The proof and release bundle still do not provide independent reproducibility evidence for release outputs |
 
 ## Self-Build
 
@@ -629,6 +632,41 @@ outputs must match too. In `--non-nix-host` mode it also proves that the stage0
 command path completed with `nix-build`, `nix-store`, `nix-shell`, and `nix`
 absent from `PATH`. It does not yet demonstrate bit-for-bit reproducible
 release artifacts or a full-source bootstrap root.
+
+### Release evidence bundles
+
+A successful proof bundle can be packaged as release evidence:
+
+```bash
+crunch release create \
+  --release-id crunch-<version> \
+  --binary /path/to/crunch \
+  --proof-bundle target/self-hosting-proof/run-...
+```
+
+That command builds a staged-source tarball from the current tracked worktree,
+then copies the release binary, proof bundle, and prerequisite inventory into a
+new release-evidence bundle under `target/release-evidence/<release-id>/` by
+default. The top-level `manifest.json` records BLAKE3 digests for the source
+archive, bundled binary or binaries, proof-bundle directory, prerequisite
+inventory, and the proof-linkage facts copied from the full self-hosting proof.
+
+Later verification is bundle-local:
+
+```bash
+crunch release verify target/release-evidence/<release-id>
+```
+
+`crunch release verify` checks that every required bundled artifact exists,
+that the top-level manifest stays canonical, that bundled digests still match,
+and that the nested proof bundle is a full `crunch-self-hosting-proof-v2`
+artifact rather than prerequisite-only `--check` output.
+
+This verification claim is intentionally narrow. A release evidence bundle is
+packaged integrity and proof-context evidence. It lets another operator inspect
+exact artifacts and verify they are internally consistent. It does not, by
+itself, prove a full-source bootstrap root, independent rebuild agreement, or
+bit-for-bit reproducible release outputs.
 
 ### Bootstrap roadmap
 
