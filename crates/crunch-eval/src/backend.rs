@@ -19,8 +19,17 @@ pub(crate) trait EvalBackend {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct NickelBackend;
 
+#[cfg(feature = "cranelift-proto")]
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct CraneliftPrototypeBackend;
+
 pub(crate) fn default_backend() -> NickelBackend {
     NickelBackend
+}
+
+#[cfg(feature = "cranelift-proto")]
+pub(crate) fn cranelift_prototype_backend() -> CraneliftPrototypeBackend {
+    CraneliftPrototypeBackend
 }
 
 impl EvalBackend for NickelBackend {
@@ -33,6 +42,23 @@ impl EvalBackend for NickelBackend {
         let (ctx, expr) = eval_with_context(request)?;
         let json = ctx.expr_to_json(&expr)?;
         Ok(json)
+    }
+}
+
+#[cfg(feature = "cranelift-proto")]
+impl EvalBackend for CraneliftPrototypeBackend {
+    fn eval(&self, _request: EvalRequest<'_>) -> Result<Expr, Error> {
+        Err(Error::Serde(
+            "cranelift prototype backend only supports JSON export for flat derivation literals".to_string(),
+        ))
+    }
+
+    fn eval_to_json(&self, request: EvalRequest<'_>) -> Result<String, Error> {
+        if !request.import_paths.is_empty() {
+            return Err(Error::Serde("cranelift prototype backend does not support import paths".to_string()));
+        }
+        crate::cranelift_proto::evaluate_flat_derivation_to_json(request.source)
+            .map_err(|err| Error::Serde(err.to_string()))
     }
 }
 

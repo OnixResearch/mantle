@@ -1,0 +1,92 @@
+warning: unused import: `nix_compat::narinfo::Signature`
+ --> crates/crunch-delta/src/substitution.rs:5:5
+  |
+5 | use nix_compat::narinfo::Signature;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `nix_compat::narinfo::SigningKey`
+ --> crates/crunch-delta/src/substitution.rs:6:5
+  |
+6 | use nix_compat::narinfo::SigningKey;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::store_path::StorePath`
+ --> crates/crunch-delta/src/substitution.rs:9:5
+  |
+9 | use nix_compat::store_path::StorePath;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `NaivePerSummary` is never constructed
+  --> crates/crunch-delta/src/fixtures.rs:57:5
+   |
+56 | pub enum ProbabilisticWireLayout {
+   |          ----------------------- variant in this enum
+57 |     NaivePerSummary,
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `ProbabilisticWireLayout` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `SeparateModeByte` is never constructed
+  --> crates/crunch-delta/src/fixtures.rs:63:5
+   |
+62 | pub enum GroupedOutputHeaderMode {
+   |          ----------------------- variant in this enum
+63 |     SeparateModeByte,
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `GroupedOutputHeaderMode` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `blob_read_opens` is never used
+   --> crates/crunch-delta/src/manifest.rs:833:8
+    |
+806 | impl FixtureManifestStore {
+    | ------------------------- method in this implementation
+...
+833 |     fn blob_read_opens(&self) -> u64 {
+    |        ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_ACTIVE_BLOB_WINDOWS` is never used
+  --> crates/crunch-delta/src/substitution.rs:29:11
+   |
+29 | pub const MAX_ACTIVE_BLOB_WINDOWS: u32 = 8;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_ACTIVE_CHUNK_WINDOWS` is never used
+  --> crates/crunch-delta/src/substitution.rs:30:11
+   |
+30 | pub const MAX_ACTIVE_CHUNK_WINDOWS: u32 = 32;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `crunch-delta` (lib) generated 8 warnings (run `cargo fix --lib -p crunch-delta` to apply 3 suggestions)
+   Compiling crunch v0.1.0 (/home/brittonr/git/crunch/crunch)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.23s
+     Running `/home/brittonr/.cache/crunch-roi-target/debug/examples/benchmark_compare --baseline openspec/changes/explore-compiled-eval-backends/evidence/compiled-eval-gate.json --fresh target/benchmarks/compiled-eval-post-prototype.json --absolute-threshold-ns 1000 --percent-threshold 5`
+baseline=openspec/changes/explore-compiled-eval-backends/evidence/compiled-eval-gate.json
+fresh=target/benchmarks/compiled-eval-post-prototype.json
+thresholds: absolute_ns=1000 percent=5
+largest regression: workflow-package-set-eval-build-graph.evaluation_wall_ns delta_ns=2526098 delta_percent=1.77
+largest win: store-persist-lookup-blob.total_wall_ns delta_ns=-842139 delta_percent=-7.41
+workload=build-graph-package-set
+  metric=build_graph_wall_ns baseline=712047 fresh=898226 delta_ns=186179 delta_percent=26.15 direction=regression highlighted=true
+  metric=total_wall_ns baseline=712698 fresh=898837 delta_ns=186139 delta_percent=26.12 direction=regression highlighted=true
+workload=convert-multi-output
+  metric=conversion_wall_ns baseline=564459 fresh=572825 delta_ns=8366 delta_percent=1.48 direction=regression highlighted=true
+  metric=total_wall_ns baseline=565121 fresh=573436 delta_ns=8315 delta_percent=1.47 direction=regression highlighted=true
+workload=eval-fetch-git
+  metric=evaluation_wall_ns baseline=89535453 fresh=91601170 delta_ns=2065717 delta_percent=2.31 direction=regression highlighted=true
+  metric=total_wall_ns baseline=89549279 fresh=91607842 delta_ns=2058563 delta_percent=2.30 direction=regression highlighted=true
+workload=store-persist-lookup-blob
+  metric=store_lookup_wall_ns baseline=354014 fresh=246301 delta_ns=-107713 delta_percent=-30.43 direction=win highlighted=true
+  metric=store_persistence_wall_ns baseline=1081951 fresh=874842 delta_ns=-207109 delta_percent=-19.14 direction=win highlighted=true
+  metric=total_wall_ns baseline=11367294 fresh=10525155 delta_ns=-842139 delta_percent=-7.41 direction=win highlighted=true
+workload=substitution-plan-delta-suite
+  metric=substitution_planning_wall_ns baseline=32000 fresh=26630 delta_ns=-5370 delta_percent=-16.78 direction=win highlighted=true
+  metric=total_wall_ns baseline=33143 fresh=27753 delta_ns=-5390 delta_percent=-16.26 direction=win highlighted=true
+workload=workflow-package-set-eval-build-graph
+  metric=build_graph_wall_ns baseline=1158384 fresh=920217 delta_ns=-238167 delta_percent=-20.56 direction=win highlighted=true
+  metric=evaluation_wall_ns baseline=142402615 fresh=144928713 delta_ns=2526098 delta_percent=1.77 direction=regression highlighted=true
+  metric=total_wall_ns baseline=143675183 fresh=145901649 delta_ns=2226466 delta_percent=1.55 direction=regression highlighted=true
+

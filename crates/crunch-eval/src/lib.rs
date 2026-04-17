@@ -12,6 +12,8 @@ use std::path::Path;
 
 use backend::EvalBackend;
 use backend::EvalRequest;
+#[cfg(feature = "cranelift-proto")]
+use backend::cranelift_prototype_backend;
 use backend::default_backend;
 pub use nickel_lang::Context;
 pub use nickel_lang::Error as NickelError;
@@ -19,6 +21,8 @@ pub use nickel_lang::Expr;
 use serde::de::DeserializeOwned;
 
 mod backend;
+#[cfg(feature = "cranelift-proto")]
+pub(crate) mod cranelift_proto;
 pub mod stdlib;
 
 /// Errors from crunch-eval.
@@ -222,6 +226,40 @@ pub fn evaluate_str_and_deserialize<T: serde::de::DeserializeOwned>(
 pub fn evaluate_str_to_json(source: &str, import_paths: &[OsString]) -> Result<String, Error> {
     let request = inline_eval_request(source, import_paths);
     default_backend().eval_to_json(request)
+}
+
+/// Evaluate a flat derivation literal through the experimental Cranelift prototype backend.
+#[cfg(feature = "cranelift-proto")]
+pub fn evaluate_str_to_json_with_cranelift_prototype(source: &str, import_paths: &[OsString]) -> Result<String, Error> {
+    let request = inline_eval_request(source, import_paths);
+    cranelift_prototype_backend().eval_to_json(request)
+}
+
+/// Evaluate a flat derivation literal through the experimental Cranelift prototype backend.
+#[cfg(feature = "cranelift-proto")]
+pub fn evaluate_str_and_deserialize_with_cranelift_prototype<T: serde::de::DeserializeOwned>(
+    source: &str,
+    import_paths: &[OsString],
+) -> Result<T, Error> {
+    let json = evaluate_str_to_json_with_cranelift_prototype(source, import_paths)?;
+    serde_json::from_str(&json).map_err(|e| Error::Serde(e.to_string()))
+}
+
+/// Evaluate a flat derivation literal through the experimental Cranelift prototype backend.
+#[cfg(feature = "cranelift-proto")]
+pub fn evaluate_str_and_extract_named_roots_with_cranelift_prototype<T: DeserializeOwned>(
+    source: &str,
+    import_paths: &[OsString],
+) -> Result<Vec<(String, T)>, Error> {
+    let json = evaluate_str_to_json_with_cranelift_prototype(source, import_paths)?;
+    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| Error::Serde(e.to_string()))?;
+    let label = value
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| Error::Serde("cranelift prototype output is missing string field `name`".to_string()))?
+        .to_string();
+    let root = serde_json::from_value(value).map_err(|e| Error::Serde(e.to_string()))?;
+    Ok(vec![(label, root)])
 }
 
 /// Evaluate and export to JSON string. For `crunch eval` debug output.
@@ -497,6 +535,43 @@ mod tests {
             }
             other => panic!("expected output selection input, got {other:?}"),
         }
+    }
+
+    #[cfg(feature = "cranelift-proto")]
+    #[test]
+    fn eval_str_and_deserialize_with_cranelift_prototype_matches_nickel_subset() {
+        let source = r#"{
+  name = "proto-demo",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  addressing_mode = 'content-addressed,
+  args = ["-c", "echo hi"],
+}"#;
+        let nickel: CrunchDerivation = evaluate_str_and_deserialize(source, &[]).unwrap();
+        let prototype: CrunchDerivation = evaluate_str_and_deserialize_with_cranelift_prototype(source, &[]).unwrap();
+        assert_eq!(prototype.name, nickel.name);
+        assert_eq!(prototype.builder, nickel.builder);
+        assert_eq!(prototype.system, nickel.system);
+        assert_eq!(prototype.addressing_mode, nickel.addressing_mode);
+        assert_eq!(prototype.args, nickel.args);
+        assert_eq!(prototype.outputs, nickel.outputs);
+    }
+
+    #[cfg(feature = "cranelift-proto")]
+    #[test]
+    fn eval_str_and_extract_named_roots_with_cranelift_prototype_uses_name_field() {
+        let roots = evaluate_str_and_extract_named_roots_with_cranelift_prototype::<CrunchDerivation>(
+            r#"{
+  name = "proto-roots",
+  builder = "/bin/sh",
+}"#,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].0, "proto-roots");
+        assert_eq!(roots[0].1.name, "proto-roots");
+        assert_eq!(roots[0].1.builder, "/bin/sh");
     }
 
     #[test]

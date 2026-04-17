@@ -161,6 +161,27 @@ now prepares file or inline requests and delegates `evaluate`,
 `evaluate_str`, `evaluate_to_json`, and `evaluate_str_to_json` through
 `default_backend()`.
 
+### 9. Keep the first Cranelift prototype feature-gated and subset-only
+
+**Choice:** the first Cranelift experiment stays behind an optional
+`cranelift-proto` Cargo feature and supports only flat derivation literals:
+required `name` and `builder`, plus optional `system`, `addressing_mode`,
+`args`, and `outputs`.
+
+**Rationale:** this proves the backend seam with real code generation while
+keeping the semantic surface small enough to test honestly. The default shipped
+runtime path stays the Nickel interpreter, and the prototype rejects imports,
+merges, nested inputs, env maps, fixed-output metadata, and package-set shapes
+instead of pretending to support them.
+
+**Implementation:** `crates/crunch-eval/src/cranelift_proto.rs` parses the
+supported literal subset, JIT-compiles pointer/length writes for scalar string
+fields and their defaults, and returns JSON through
+`evaluate_str_to_json_with_cranelift_prototype(...)`,
+`evaluate_str_and_deserialize_with_cranelift_prototype(...)`, and
+`evaluate_str_and_extract_named_roots_with_cranelift_prototype(...)`. The
+prototype backend implementation lives in `crates/crunch-eval/src/backend.rs`.
+
 ## Current benchmark gate evidence
 
 - Baseline bundle: `target/benchmarks/compiled-eval-gate.json`
@@ -183,6 +204,23 @@ now prepares file or inline requests and delegates `evaluate`,
 - No checked-in benchmark yet measures `crunch project` flows or self-build
   evaluation directly, so this change keeps project/self-build codegen claims
   out of scope for now
+
+## Current prototype evidence
+
+- `crates/crunch-eval/Cargo.toml` adds optional `cranelift-proto`
+  dependencies only behind the feature flag; the default runtime build path is
+  unchanged
+- `crates/crunch-eval/src/cranelift_proto.rs` now implements a feature-gated
+  Cranelift prototype for flat derivation literals only
+- `openspec/changes/explore-compiled-eval-backends/evidence/cranelift-prototype-tests.txt`
+  captures:
+  - `cargo test -p crunch-eval --lib --features cranelift-proto` →
+    `test result: ok. 41 passed`
+  - `cargo test -p crunch-eval --lib` → `test result: ok. 35 passed`
+  - `cargo test -p crunch --test examples_eval` → `test result: ok. 4 passed`
+- `openspec/changes/explore-compiled-eval-backends/evidence/post-prototype-benchmark-compare.txt`
+  currently shows non-eval drift above the documented thresholds for
+  `build-graph-package-set`, so the regression-guard task remains open
 
 ## Risks / Trade-offs
 

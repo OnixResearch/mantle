@@ -41,13 +41,28 @@
     captures `cargo test -p crunch-eval --lib` → `test result: ok. 35 passed`
     and `cargo test -p crunch --test examples_eval` → `test result: ok. 4
     passed`.
-- [ ] Prototype a narrow Cranelift-backed derivation-evaluation subset if the
+- [x] Prototype a narrow Cranelift-backed derivation-evaluation subset if the
       profiling gate is met, while keeping benchmark/profiling helpers in
       `examples/` or test-only paths instead of `src/lib.rs`
+  - Evidence: `crates/crunch-eval/Cargo.toml` now adds optional
+    `cranelift-proto` dependencies only behind a feature flag;
+    `crates/crunch-eval/src/cranelift_proto.rs` implements a flat-derivation
+    subset; `crates/crunch-eval/src/backend.rs` and `src/lib.rs` expose the
+    experimental path without changing default callers.
+  - Validation:
+    `openspec/changes/explore-compiled-eval-backends/evidence/cranelift-prototype-tests.txt`
+    captures `cargo test -p crunch-eval --lib --features cranelift-proto` →
+    `test result: ok. 41 passed`, `cargo test -p crunch-eval --lib` →
+    `test result: ok. 35 passed`, and `cargo test -p crunch --test
+    examples_eval` → `test result: ok. 4 passed`.
 - [ ] Run `benchmark_compare` against
       `openspec/changes/explore-compiled-eval-backends/evidence/compiled-eval-gate.json`
       after prototype integration and confirm non-eval workloads stay within
       the documented comparison thresholds
+  - Current evidence:
+    `openspec/changes/explore-compiled-eval-backends/evidence/post-prototype-benchmark-compare.txt`
+    still reports `build-graph-package-set.build_graph_wall_ns` at `+26.15%`,
+    so this task remains open pending a stable regression story.
 - [ ] Reassess LLVM only if Cranelift cannot meet measured goals or required
       optimization/target/toolchain constraints
 - [ ] Define interpreter-vs-compiled equivalence tests for contracts, merges,

@@ -4,11 +4,23 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+cranelift-proto = [
+  "dep:cranelift",
+  "dep:cranelift-module",
+  "dep:cranelift-jit",
+  "dep:cranelift-native",
+]
+
 [dependencies]
 nickel-lang = "2.0.0"
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+cranelift = { version = "0.116", optional = true }
+cranelift-module = { version = "0.116", optional = true }
+cranelift-jit = { version = "0.116", optional = true }
+cranelift-native = { version = "0.116", optional = true }
 
 [dev-dependencies]
 crunch-glue = { path = "../crunch-glue" }
