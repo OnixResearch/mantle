@@ -10,8 +10,11 @@ use crunch_delta::bench_suite as delta_bench_suite;
 use crunch_delta::plan_transfer;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
+use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
+use snix_castore::Node;
+use tokio::io::AsyncWriteExt;
 
 pub const BENCHMARK_BUNDLE_SCHEMA_V1: &str = "crunch-benchmark-bundle-v1";
 pub const EVAL_SMOKE_ENTRY_POINT: &str = "cargo run --example benchmark_eval_smoke --";
@@ -23,11 +26,15 @@ pub const EVAL_SMOKE_WORKLOAD_NAME: &str = "eval-fetch-git";
 pub const CONVERSION_WORKLOAD_NAME: &str = "convert-multi-output";
 pub const SUBSTITUTION_WORKLOAD_NAME: &str = "substitution-plan-delta-suite";
 pub const BUILD_GRAPH_WORKLOAD_NAME: &str = "build-graph-package-set";
+pub const MULTI_PHASE_WORKFLOW_WORKLOAD_NAME: &str = "workflow-package-set-eval-build-graph";
+pub const STORE_AWARE_WORKLOAD_NAME: &str = "store-persist-lookup-blob";
 pub const EVAL_SMOKE_CACHE_MODE: &str = "same-process-repeated-eval";
 pub const EVAL_PHASE_METRIC_NAME: &str = "evaluation_wall_ns";
 pub const CONVERSION_PHASE_METRIC_NAME: &str = "conversion_wall_ns";
 pub const SUBSTITUTION_PHASE_METRIC_NAME: &str = "substitution_planning_wall_ns";
 pub const BUILD_GRAPH_PHASE_METRIC_NAME: &str = "build_graph_wall_ns";
+pub const STORE_PERSISTENCE_PHASE_METRIC_NAME: &str = "store_persistence_wall_ns";
+pub const STORE_LOOKUP_PHASE_METRIC_NAME: &str = "store_lookup_wall_ns";
 pub const TOTAL_PHASE_METRIC_NAME: &str = "total_wall_ns";
 
 #[derive(Debug)]
@@ -36,6 +43,7 @@ pub enum Error {
     Eval(crunch_eval::Error),
     Convert(crunch_glue::Error),
     Delta(crunch_delta::PlanError),
+    Store(crunch_store::Error),
     Json(serde_json::Error),
     Command { tool: String, detail: String },
     InvalidArgument(String),
@@ -48,6 +56,7 @@ impl std::fmt::Display for Error {
             Error::Eval(err) => write!(f, "evaluation error: {err}"),
             Error::Convert(err) => write!(f, "conversion error: {err}"),
             Error::Delta(err) => write!(f, "delta planning error: {err}"),
+            Error::Store(err) => write!(f, "store error: {err}"),
             Error::Json(err) => write!(f, "JSON error: {err}"),
             Error::Command { tool, detail } => write!(f, "command `{tool}` failed: {detail}"),
             Error::InvalidArgument(detail) => write!(f, "invalid argument: {detail}"),
@@ -62,6 +71,7 @@ impl std::error::Error for Error {
             Error::Eval(err) => Some(err),
             Error::Convert(err) => Some(err),
             Error::Delta(err) => Some(err),
+            Error::Store(err) => Some(err),
             Error::Json(err) => Some(err),
             Error::Command { .. } | Error::InvalidArgument(_) => None,
         }
@@ -89,6 +99,12 @@ impl From<crunch_glue::Error> for Error {
 impl From<crunch_delta::PlanError> for Error {
     fn from(err: crunch_delta::PlanError) -> Self {
         Self::Delta(err)
+    }
+}
+
+impl From<crunch_store::Error> for Error {
+    fn from(err: crunch_store::Error) -> Self {
+        Self::Store(err)
     }
 }
 
@@ -199,6 +215,19 @@ struct SubstitutionWorkload {
     case_count: u32,
 }
 
+#[derive(Clone)]
+struct MultiPhaseWorkflowWorkload {
+    descriptor: WorkloadDescriptor,
+    workload_path: PathBuf,
+    import_paths: Vec<OsString>,
+    conversion_store_prefix: String,
+}
+
+#[derive(Clone)]
+struct StoreAwareWorkload {
+    descriptor: WorkloadDescriptor,
+}
+
 pub fn default_eval_smoke_bundle_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join("benchmarks").join("eval-smoke.json")
 }
@@ -247,6 +276,12 @@ pub fn run_suite_benchmark(request: &BenchmarkRequest) -> Result<BenchmarkBundle
             }
             SuiteWorkload::Substitution(workload) => {
                 benchmark_substitution_workload(&workload, request.repeat_count, &request.command_argv)?
+            }
+            SuiteWorkload::MultiPhaseWorkflow(workload) => {
+                benchmark_multi_phase_workflow_workload(&workload, request.repeat_count, &request.command_argv)?
+            }
+            SuiteWorkload::StoreAware(workload) => {
+                benchmark_store_aware_workload(&workload, request.repeat_count, &request.command_argv)?
             }
         };
         results.push(result);
@@ -608,6 +643,8 @@ enum SuiteWorkload {
     Evaluation(EvalWorkload),
     Conversion(ConversionWorkload),
     Substitution(SubstitutionWorkload),
+    MultiPhaseWorkflow(MultiPhaseWorkflowWorkload),
+    StoreAware(StoreAwareWorkload),
 }
 
 impl SuiteWorkload {
@@ -616,6 +653,8 @@ impl SuiteWorkload {
             SuiteWorkload::Evaluation(workload) => workload.descriptor,
             SuiteWorkload::Conversion(workload) => workload.descriptor,
             SuiteWorkload::Substitution(workload) => workload.descriptor,
+            SuiteWorkload::MultiPhaseWorkflow(workload) => workload.descriptor,
+            SuiteWorkload::StoreAware(workload) => workload.descriptor,
         }
     }
 }
@@ -713,7 +752,8 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
         import_paths: common_import_paths.clone(),
     };
     let conversion_roots = evaluate_roots(&repo_root.join("examples").join("multi-output.ncl"), &common_import_paths)?;
-    let build_graph_roots = evaluate_roots(&repo_root.join("examples").join("package-set.ncl"), &common_import_paths)?;
+    let build_graph_path = repo_root.join("examples").join("package-set.ncl");
+    let build_graph_roots = evaluate_roots(&build_graph_path, &common_import_paths)?;
     let substitution_case_count = usize_to_u32(delta_bench_suite().cases.len())?;
 
     Ok(vec![
@@ -749,7 +789,7 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
             descriptor: workload_descriptor(
                 BUILD_GRAPH_WORKLOAD_NAME,
                 "build-graph",
-                repo_root.join("examples").join("package-set.ncl"),
+                build_graph_path.clone(),
                 "The package-set example contains multiple named roots and shared builder inputs, so repeated conversion measures build-graph preparation on a checked-in derivation graph.",
                 "crunch_glue::convert over pre-evaluated package-set roots",
                 SUITE_ENTRY_POINT,
@@ -758,6 +798,33 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
             ),
             roots: build_graph_roots,
             metric_name: BUILD_GRAPH_PHASE_METRIC_NAME,
+        }),
+        SuiteWorkload::MultiPhaseWorkflow(MultiPhaseWorkflowWorkload {
+            descriptor: workload_descriptor(
+                MULTI_PHASE_WORKFLOW_WORKLOAD_NAME,
+                "workflow",
+                build_graph_path.clone(),
+                "A checked-in package-set workflow that evaluates then lowers the same roots in one run, so maintainers can separate evaluation cost from build-graph preparation cost.",
+                "crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation> + crunch_glue::convert over examples/package-set.ncl",
+                SUITE_ENTRY_POINT,
+                "same-process repeated eval+graph conversion",
+                "/nix/store",
+            ),
+            workload_path: build_graph_path,
+            import_paths: common_import_paths.clone(),
+            conversion_store_prefix: "/nix/store".to_string(),
+        }),
+        SuiteWorkload::StoreAware(StoreAwareWorkload {
+            descriptor: WorkloadDescriptor {
+                workload_name: STORE_AWARE_WORKLOAD_NAME.to_string(),
+                workload_kind: "store".to_string(),
+                workload_path: "examples/benchmark_support.rs::benchmark_store_aware_workload".to_string(),
+                rationale: "A fresh temp store per sample persists one signed blob output, reopens the store, and times the follow-up cached-node lookup without inventing store phases for unrelated workloads.".to_string(),
+                operation: "crunch_store::StoreHandle::persist_and_export_signed_output + StoreHandle::cached_node_for_path over deterministic local bytes".to_string(),
+                entry_point: SUITE_ENTRY_POINT.to_string(),
+                cache_mode: "fresh temp store per sample".to_string(),
+                logical_store_prefix: DEFAULT_LOGICAL_STORE_PREFIX.to_string(),
+            },
         }),
     ])
 }
@@ -915,10 +982,81 @@ fn benchmark_substitution_workload(
     )
 }
 
+fn benchmark_multi_phase_workflow_workload(
+    workload: &MultiPhaseWorkflowWorkload,
+    repeat_count: u32,
+    command_argv: &[String],
+) -> Result<BenchmarkResult, Error> {
+    let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+        let evaluation_started_at = Instant::now();
+        let roots = evaluate_roots(&workload.workload_path, &workload.import_paths)?;
+        let evaluation_wall_ns = duration_to_ns_u64(evaluation_started_at.elapsed())?;
+        let root_count = usize_to_u32(roots.len())?;
+
+        let conversion_started_at = Instant::now();
+        let mut cache = ConversionCache::new(&workload.conversion_store_prefix);
+        for (_, drv) in &roots {
+            let _ = crunch_glue::convert(drv, &mut cache)?;
+        }
+        let build_graph_wall_ns = duration_to_ns_u64(conversion_started_at.elapsed())?;
+
+        Ok(PhasedSample {
+            root_count,
+            phase_metrics: vec![
+                named_metric(EVAL_PHASE_METRIC_NAME, evaluation_wall_ns),
+                named_metric(BUILD_GRAPH_PHASE_METRIC_NAME, build_graph_wall_ns),
+            ],
+        })
+    })?;
+
+    build_result(
+        &workload.descriptor,
+        command_argv,
+        repeat_count,
+        timed.root_count,
+        timed.total_wall_ns,
+        timed.sample_wall_ns,
+        timed.phase_metrics,
+    )
+}
+
+fn benchmark_store_aware_workload(
+    workload: &StoreAwareWorkload,
+    repeat_count: u32,
+    command_argv: &[String],
+) -> Result<BenchmarkResult, Error> {
+    let runtime = build_benchmark_runtime()?;
+    let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+        run_store_aware_sample(&runtime, &workload.descriptor.logical_store_prefix)
+    })?;
+
+    build_result(
+        &workload.descriptor,
+        command_argv,
+        repeat_count,
+        timed.root_count,
+        timed.total_wall_ns,
+        timed.sample_wall_ns,
+        timed.phase_metrics,
+    )
+}
+
 struct TimedSamples {
     root_count: u32,
     total_wall_ns: u64,
     sample_wall_ns: Vec<u64>,
+}
+
+struct PhasedSample {
+    root_count: u32,
+    phase_metrics: Vec<BenchmarkMetric>,
+}
+
+struct TimedSamplesWithPhaseMetrics {
+    root_count: u32,
+    total_wall_ns: u64,
+    sample_wall_ns: Vec<u64>,
+    phase_metrics: Vec<BenchmarkMetric>,
 }
 
 fn time_repeated_operation<F>(repeat_count: u32, mut operation: F) -> Result<TimedSamples, Error>
@@ -943,6 +1081,42 @@ where F: FnMut() -> Result<u32, Error> {
         root_count: root_count.unwrap_or(0),
         total_wall_ns: duration_to_ns_u64(started_at.elapsed())?,
         sample_wall_ns,
+    })
+}
+
+fn time_repeated_operation_with_phase_metrics<F>(
+    repeat_count: u32,
+    mut operation: F,
+) -> Result<TimedSamplesWithPhaseMetrics, Error>
+where
+    F: FnMut() -> Result<PhasedSample, Error>,
+{
+    if repeat_count == 0 {
+        return Err(Error::InvalidArgument("repeat_count must be positive".to_string()));
+    }
+
+    let mut sample_wall_ns = Vec::with_capacity(repeat_count as usize);
+    let mut root_count: Option<u32> = None;
+    let mut metric_names: Option<Vec<String>> = None;
+    let mut metric_totals = std::collections::BTreeMap::new();
+    let started_at = Instant::now();
+
+    for _ in 0..repeat_count {
+        let sample_started_at = Instant::now();
+        let sample = operation()?;
+        let sample_elapsed_ns = duration_to_ns_u64(sample_started_at.elapsed())?;
+        sample_wall_ns.push(sample_elapsed_ns);
+        record_root_count(&mut root_count, sample.root_count)?;
+        record_phase_metric_names(&mut metric_names, &sample.phase_metrics)?;
+        accumulate_phase_metric_totals(&mut metric_totals, &sample.phase_metrics)?;
+    }
+
+    let phase_metrics = build_phase_metrics_from_totals(metric_names, &metric_totals)?;
+    Ok(TimedSamplesWithPhaseMetrics {
+        root_count: root_count.unwrap_or(0),
+        total_wall_ns: duration_to_ns_u64(started_at.elapsed())?,
+        sample_wall_ns,
+        phase_metrics,
     })
 }
 
@@ -1012,6 +1186,184 @@ fn record_root_count(root_count: &mut Option<u32>, sample_root_count: u32) -> Re
             Ok(())
         }
     }
+}
+
+fn record_phase_metric_names(
+    metric_names: &mut Option<Vec<String>>,
+    sample_metrics: &[BenchmarkMetric],
+) -> Result<(), Error> {
+    let sample_names = phase_metric_names(sample_metrics)?;
+    match metric_names {
+        Some(existing) if *existing != sample_names => Err(Error::InvalidArgument(format!(
+            "workload phase metrics changed across samples: expected {:?}, got {:?}",
+            existing, sample_names
+        ))),
+        Some(_) => Ok(()),
+        None => {
+            *metric_names = Some(sample_names);
+            Ok(())
+        }
+    }
+}
+
+fn phase_metric_names(sample_metrics: &[BenchmarkMetric]) -> Result<Vec<String>, Error> {
+    if sample_metrics.is_empty() {
+        return Err(Error::InvalidArgument("phase metric sample must not be empty".to_string()));
+    }
+
+    let mut names = Vec::with_capacity(sample_metrics.len());
+    for metric in sample_metrics {
+        if metric.name.is_empty() {
+            return Err(Error::InvalidArgument("phase metric name must not be empty".to_string()));
+        }
+        if names.iter().any(|name| name == &metric.name) {
+            return Err(Error::InvalidArgument(format!("duplicate phase metric in sample: {}", metric.name)));
+        }
+        names.push(metric.name.clone());
+    }
+    Ok(names)
+}
+
+fn accumulate_phase_metric_totals(
+    metric_totals: &mut std::collections::BTreeMap<String, u64>,
+    sample_metrics: &[BenchmarkMetric],
+) -> Result<(), Error> {
+    let _ = phase_metric_names(sample_metrics)?;
+    for metric in sample_metrics {
+        let total = metric_totals.entry(metric.name.clone()).or_insert(0);
+        *total = total
+            .checked_add(metric.value)
+            .ok_or_else(|| Error::InvalidArgument(format!("phase metric sum overflowed u64: {}", metric.name)))?;
+    }
+    Ok(())
+}
+
+fn build_phase_metrics_from_totals(
+    metric_names: Option<Vec<String>>,
+    metric_totals: &std::collections::BTreeMap<String, u64>,
+) -> Result<Vec<BenchmarkMetric>, Error> {
+    let metric_names = metric_names
+        .ok_or_else(|| Error::InvalidArgument("phase metric samples must not be empty".to_string()))?;
+    let mut phase_metrics = Vec::with_capacity(metric_names.len());
+    for metric_name in metric_names {
+        let metric_value = metric_totals
+            .get(&metric_name)
+            .copied()
+            .ok_or_else(|| Error::InvalidArgument(format!("missing phase metric total: {metric_name}")))?;
+        phase_metrics.push(named_metric(&metric_name, metric_value));
+    }
+    Ok(phase_metrics)
+}
+
+fn build_benchmark_runtime() -> Result<tokio::runtime::Runtime, Error> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| Error::InvalidArgument(format!("building benchmark runtime: {err}")))
+}
+
+fn run_store_aware_sample(
+    runtime: &tokio::runtime::Runtime,
+    store_prefix: &str,
+) -> Result<PhasedSample, Error> {
+    let state_dir = tempfile::tempdir()?;
+    let output_dir = tempfile::tempdir()?;
+    let output_path = benchmark_store_path()?;
+    let payload_bytes = benchmark_store_payload();
+
+    runtime.block_on(async {
+        let mut store = open_benchmark_store(state_dir.path(), output_dir.path(), store_prefix).await?;
+        let node = store_local_blob(&store, payload_bytes).await?;
+        let path_info = benchmark_signed_pathinfo(output_path.clone(), node.clone())?;
+
+        let persistence_started_at = Instant::now();
+        let persisted_path_info = store
+            .persist_and_export_signed_output("out", &output_path, path_info, node, None, true, None)
+            .await?;
+        assert_eq!(persisted_path_info.store_path, output_path, "persisted path must stay stable");
+        let store_persistence_wall_ns = duration_to_ns_u64(persistence_started_at.elapsed())?;
+        drop(store);
+
+        let mut reopened = open_benchmark_store(state_dir.path(), output_dir.path(), store_prefix).await?;
+        let lookup_started_at = Instant::now();
+        let cached_node = reopened.cached_node_for_path(&output_path).await?;
+        let store_lookup_wall_ns = duration_to_ns_u64(lookup_started_at.elapsed())?;
+        if cached_node.is_none() {
+            return Err(Error::InvalidArgument(format!("store-aware benchmark missed cached node: {output_path}")));
+        }
+
+        Ok(PhasedSample {
+            root_count: 1,
+            phase_metrics: vec![
+                named_metric(STORE_PERSISTENCE_PHASE_METRIC_NAME, store_persistence_wall_ns),
+                named_metric(STORE_LOOKUP_PHASE_METRIC_NAME, store_lookup_wall_ns),
+            ],
+        })
+    })
+}
+
+async fn open_benchmark_store(
+    state_dir: &Path,
+    output_dir: &Path,
+    store_prefix: &str,
+) -> Result<crunch_store::StoreHandle, Error> {
+    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir.to_path_buf(),
+        output_dir: output_dir.to_path_buf(),
+        remote_cache_url: None,
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: store_prefix.to_string(),
+    })
+    .await
+    .map_err(Error::from)
+}
+
+async fn store_local_blob(store: &crunch_store::StoreHandle, contents: &[u8]) -> Result<Node, Error> {
+    let mut writer = store.blob_service().open_write().await;
+    writer.write_all(contents).await?;
+    let digest = writer.close().await.map_err(Error::Io)?;
+    Ok(Node::File {
+        digest,
+        size: u64::try_from(contents.len())
+            .map_err(|_| Error::InvalidArgument(format!("payload length does not fit in u64: {}", contents.len())))?,
+        executable: false,
+    })
+}
+
+fn benchmark_store_payload() -> &'static [u8] {
+    b"store-aware-benchmark-payload-v1\n"
+}
+
+fn benchmark_store_path() -> Result<StorePath<String>, Error> {
+    StorePath::from_name_and_digest_fixed("benchmark-store-output", [7u8; 20])
+        .map_err(|err| Error::InvalidArgument(format!("building benchmark store path: {err}")))
+}
+
+fn benchmark_signed_pathinfo(
+    store_path: StorePath<String>,
+    node: Node,
+) -> Result<snix_store::path_info::PathInfo, Error> {
+    let signature = nix_compat::narinfo::Signature::<&str>::parse(
+        "cache.nixos.org-1:TsTTb3WGTZKphvYdBHXwo6weVILmTytUjLB+vcX89fOjjRicCHmKA4RCPMVLkj6TMJ4GMX3HPVWRdD1hkeKZBQ==",
+    )
+    .map_err(|err| Error::InvalidArgument(format!("parsing benchmark signature: {err}")))?
+    .to_owned();
+
+    Ok(snix_store::path_info::PathInfo {
+        store_path,
+        node,
+        references: Vec::new(),
+        nar_size: u64::try_from(benchmark_store_payload().len()).map_err(|_| {
+            Error::InvalidArgument(format!(
+                "payload length does not fit in u64: {}",
+                benchmark_store_payload().len()
+            ))
+        })?,
+        nar_sha256: [3u8; 32],
+        signatures: vec![signature],
+        deriver: None,
+        ca: None,
+    })
 }
 
 fn collect_toolchain_context() -> Result<ToolchainContext, Error> {
@@ -1130,15 +1482,19 @@ mod tests {
         let descriptors = suite_workload_descriptors().unwrap();
         let names: Vec<String> = descriptors.iter().map(|d| d.workload_name.clone()).collect();
         let kinds: Vec<String> = descriptors.iter().map(|d| d.workload_kind.clone()).collect();
-        assert_eq!(descriptors.len(), 4);
+        assert_eq!(descriptors.len(), 6);
         assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&CONVERSION_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&SUBSTITUTION_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&BUILD_GRAPH_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&MULTI_PHASE_WORKFLOW_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&STORE_AWARE_WORKLOAD_NAME.to_string()));
         assert!(kinds.contains(&"evaluation".to_string()));
         assert!(kinds.contains(&"conversion".to_string()));
         assert!(kinds.contains(&"substitution".to_string()));
         assert!(kinds.contains(&"build-graph".to_string()));
+        assert!(kinds.contains(&"workflow".to_string()));
+        assert!(kinds.contains(&"store".to_string()));
     }
 
     #[test]
@@ -1288,6 +1644,36 @@ mod tests {
         assert!(workload.missing_from_fresh.is_empty());
     }
 
+    #[test]
+    fn compare_bundles_report_sparse_metric_omissions_per_workload() {
+        let baseline = fixture_bundle("baseline", vec![fixture_multi_metric_result(
+            MULTI_PHASE_WORKFLOW_WORKLOAD_NAME,
+            vec![
+                (EVAL_PHASE_METRIC_NAME, 100),
+                (BUILD_GRAPH_PHASE_METRIC_NAME, 60),
+            ],
+            170,
+        )]);
+        let fresh = fixture_bundle("fresh", vec![fixture_multi_metric_result(
+            MULTI_PHASE_WORKFLOW_WORKLOAD_NAME,
+            vec![
+                (EVAL_PHASE_METRIC_NAME, 110),
+                (BUILD_GRAPH_PHASE_METRIC_NAME, 55),
+                (STORE_LOOKUP_PHASE_METRIC_NAME, 9),
+            ],
+            180,
+        )]);
+
+        let report =
+            compare_bundles(&baseline, &fresh, "baseline.json", "fresh.json", &default_compare_thresholds()).unwrap();
+        let workload = &report.matched_workloads[0];
+
+        assert_eq!(workload.workload_name, MULTI_PHASE_WORKFLOW_WORKLOAD_NAME);
+        assert_eq!(workload.matched_metrics.len(), 3);
+        assert_eq!(workload.missing_from_baseline, vec![STORE_LOOKUP_PHASE_METRIC_NAME.to_string()]);
+        assert!(workload.missing_from_fresh.is_empty());
+    }
+
     fn fixture_bundle(commit: &str, results: Vec<BenchmarkResult>) -> BenchmarkBundle {
         BenchmarkBundle {
             schema: BENCHMARK_BUNDLE_SCHEMA_V1.to_string(),
@@ -1351,6 +1737,33 @@ mod tests {
             total_wall_ns,
             sample_wall_ns: vec![total_wall_ns],
             phase_metrics: Vec::new(),
+        }
+    }
+
+    fn fixture_multi_metric_result(
+        workload_name: &str,
+        phase_metrics: Vec<(&str, u64)>,
+        total_wall_ns: u64,
+    ) -> BenchmarkResult {
+        BenchmarkResult {
+            workload_name: workload_name.to_string(),
+            workload_kind: "fixture".to_string(),
+            workload_path: "fixture.ncl".to_string(),
+            rationale: "fixture".to_string(),
+            operation: "fixture".to_string(),
+            entry_point: COMPARE_ENTRY_POINT.to_string(),
+            command_argv: vec!["compare".to_string()],
+            cache_mode: "fixture".to_string(),
+            repeat_count: 1,
+            logical_store_prefix: DEFAULT_LOGICAL_STORE_PREFIX.to_string(),
+            hermeticity_mode: None,
+            root_count: 1,
+            total_wall_ns,
+            sample_wall_ns: vec![total_wall_ns],
+            phase_metrics: phase_metrics
+                .into_iter()
+                .map(|(name, value)| named_metric(name, value))
+                .collect(),
         }
     }
 

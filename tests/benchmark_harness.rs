@@ -13,6 +13,10 @@ use benchmark_support::DEFAULT_REPEAT_COUNT;
 use benchmark_support::EVAL_PHASE_METRIC_NAME;
 use benchmark_support::EVAL_SMOKE_ENTRY_POINT;
 use benchmark_support::EVAL_SMOKE_WORKLOAD_NAME;
+use benchmark_support::MULTI_PHASE_WORKFLOW_WORKLOAD_NAME;
+use benchmark_support::STORE_AWARE_WORKLOAD_NAME;
+use benchmark_support::STORE_LOOKUP_PHASE_METRIC_NAME;
+use benchmark_support::STORE_PERSISTENCE_PHASE_METRIC_NAME;
 use benchmark_support::SUBSTITUTION_PHASE_METRIC_NAME;
 use benchmark_support::SUBSTITUTION_WORKLOAD_NAME;
 use benchmark_support::SUITE_ENTRY_POINT;
@@ -131,23 +135,27 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     let bundle = run_suite_benchmark(&request).unwrap();
 
     assert!(bundle_path.exists(), "suite bundle must be written");
-    assert_eq!(bundle.results.len(), 4);
+    assert_eq!(bundle.results.len(), 6);
 
     let names: Vec<&str> = bundle.results.iter().map(|result| result.workload_name.as_str()).collect();
     assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME));
     assert!(names.contains(&CONVERSION_WORKLOAD_NAME));
     assert!(names.contains(&SUBSTITUTION_WORKLOAD_NAME));
     assert!(names.contains(&BUILD_GRAPH_WORKLOAD_NAME));
+    assert!(names.contains(&MULTI_PHASE_WORKFLOW_WORKLOAD_NAME));
+    assert!(names.contains(&STORE_AWARE_WORKLOAD_NAME));
 
     let json = std::fs::read_to_string(&bundle_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let results = parsed["results"].as_array().unwrap();
-    assert_eq!(results.len(), 4);
+    assert_eq!(results.len(), 6);
     assert!(results.iter().any(|result| result["entry_point"] == SUITE_ENTRY_POINT));
-    assert!(results.iter().any(|result| result["phase_metrics"][0]["name"] == EVAL_PHASE_METRIC_NAME));
-    assert!(results.iter().any(|result| result["phase_metrics"][0]["name"] == CONVERSION_PHASE_METRIC_NAME));
-    assert!(results.iter().any(|result| result["phase_metrics"][0]["name"] == SUBSTITUTION_PHASE_METRIC_NAME));
-    assert!(results.iter().any(|result| result["phase_metrics"][0]["name"] == BUILD_GRAPH_PHASE_METRIC_NAME));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&EVAL_PHASE_METRIC_NAME)));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&CONVERSION_PHASE_METRIC_NAME)));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&SUBSTITUTION_PHASE_METRIC_NAME)));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&BUILD_GRAPH_PHASE_METRIC_NAME)));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME)));
+    assert!(results.iter().any(|result| phase_metric_names(result).contains(&STORE_LOOKUP_PHASE_METRIC_NAME)));
     assert!(results.iter().all(|result| result["rationale"].as_str().is_some_and(|value| !value.is_empty())));
     assert!(results.iter().all(|result| result[TOTAL_PHASE_METRIC_NAME].as_u64().is_some()));
 }
@@ -180,6 +188,69 @@ fn suite_phase_metrics_cover_phase_two_scope() {
     assert!(metric_names.contains(&CONVERSION_PHASE_METRIC_NAME));
     assert!(metric_names.contains(&SUBSTITUTION_PHASE_METRIC_NAME));
     assert!(metric_names.contains(&BUILD_GRAPH_PHASE_METRIC_NAME));
+    assert!(metric_names.contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME));
+    assert!(metric_names.contains(&STORE_LOOKUP_PHASE_METRIC_NAME));
+}
+
+#[test]
+fn suite_has_checked_in_multi_phase_workflow_result() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let bundle_path = temp_dir.path().join("suite.json");
+    let argv = vec![
+        "cargo".to_string(),
+        "run".to_string(),
+        "--example".to_string(),
+        "benchmark_suite".to_string(),
+        "--".to_string(),
+        "--bundle-out".to_string(),
+        bundle_path.display().to_string(),
+        "--repeat-count".to_string(),
+        "1".to_string(),
+    ];
+    let request = suite_request(bundle_path, 1, argv);
+    let bundle = run_suite_benchmark(&request).unwrap();
+    let workflow = bundle
+        .results
+        .iter()
+        .find(|result| result.workload_name == MULTI_PHASE_WORKFLOW_WORKLOAD_NAME)
+        .unwrap();
+    let metric_names: Vec<&str> = workflow.phase_metrics.iter().map(|metric| metric.name.as_str()).collect();
+
+    assert!(workflow.phase_metrics.len() > 1);
+    assert!(metric_names.contains(&EVAL_PHASE_METRIC_NAME));
+    assert!(metric_names.contains(&BUILD_GRAPH_PHASE_METRIC_NAME));
+}
+
+#[test]
+fn store_metrics_only_appear_on_store_aware_workload() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let bundle_path = temp_dir.path().join("suite.json");
+    let argv = vec![
+        "cargo".to_string(),
+        "run".to_string(),
+        "--example".to_string(),
+        "benchmark_suite".to_string(),
+        "--".to_string(),
+        "--bundle-out".to_string(),
+        bundle_path.display().to_string(),
+        "--repeat-count".to_string(),
+        "1".to_string(),
+    ];
+    let request = suite_request(bundle_path, 1, argv);
+    let bundle = run_suite_benchmark(&request).unwrap();
+
+    for result in &bundle.results {
+        let metric_names: Vec<&str> = result.phase_metrics.iter().map(|metric| metric.name.as_str()).collect();
+        let has_store_persistence = metric_names.contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME);
+        let has_store_lookup = metric_names.contains(&STORE_LOOKUP_PHASE_METRIC_NAME);
+        if result.workload_name == STORE_AWARE_WORKLOAD_NAME {
+            assert!(has_store_persistence);
+            assert!(has_store_lookup);
+        } else {
+            assert!(!has_store_persistence, "unexpected store persistence metric on {}", result.workload_name);
+            assert!(!has_store_lookup, "unexpected store lookup metric on {}", result.workload_name);
+        }
+    }
 }
 
 #[test]
@@ -187,7 +258,7 @@ fn suite_workload_descriptors_stay_deterministic() {
     let left = suite_workload_descriptors().unwrap();
     let right = suite_workload_descriptors().unwrap();
     assert_eq!(left, right);
-    assert_eq!(left.len(), 4);
+    assert_eq!(left.len(), 6);
 }
 
 #[test]
@@ -239,11 +310,24 @@ fn benchmark_docs_cover_all_workloads_and_entry_points() {
     assert!(docs.contains("conversion_wall_ns"));
     assert!(docs.contains("substitution_planning_wall_ns"));
     assert!(docs.contains("build_graph_wall_ns"));
+    assert!(docs.contains("store_persistence_wall_ns"));
+    assert!(docs.contains("store_lookup_wall_ns"));
     assert!(docs.contains("phase_metrics` empty"));
     assert!(docs.contains("Ordinary development"));
     assert!(docs.contains("Optimization-specific experiments"));
     assert!(docs.contains("/nix/store"));
     assert!(docs.contains("/crunch/store"));
+    assert!(docs.contains("workflow-package-set-eval-build-graph"));
+    assert!(docs.contains("store-persist-lookup-blob"));
+}
+
+fn phase_metric_names(result: &serde_json::Value) -> Vec<&str> {
+    result["phase_metrics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|metric| metric["name"].as_str().unwrap())
+        .collect()
 }
 
 #[test]

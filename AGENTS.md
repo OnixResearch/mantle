@@ -599,6 +599,11 @@ When claiming test results in commit messages or completion summaries:
   sandbox shell. It auto-discovers a `busybox-static` binary under
   `/nix/store/*busybox-static*/bin/busybox` before falling back to `/bin/sh`.
 
+## Benchmark Harness
+
+- Cheapest honest store-aware benchmark path so far is a fresh temp `StoreHandle` per sample: write one deterministic blob to castore, build a signed `PathInfo`, `persist_and_export_signed_output(...)`, reopen the store, then time `cached_node_for_path(...)`.
+- That persistence boundary only requires a non-empty `PathInfo.signatures` list. For local benchmark fixtures, a parsed fixed narinfo signature string is enough; trust verification is not part of `persist_and_export_signed_output()`.
+
 ## Coding Style: Tiger Style
 
 Follow Tiger Style. The single most important principle is **Functional Core, Imperative Shell (FCIS)**:
