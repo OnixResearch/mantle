@@ -4,9 +4,7 @@
 
 Defines the `crunch-pipeline` crate: the integration layer that wires
 eval, convert, and build into a single callable function.
-
 ## Requirements
-
 ### Requirement: Pipeline entry point
 
 The system MUST provide a `build()` async function that takes a
@@ -63,34 +61,39 @@ need to construct or pass service objects.
 
 ### Requirement: Pipeline owns eval and convert
 
-The pipeline MUST evaluate Nickel in-process and extract derivation data
-through direct typed deserialization for build execution. It MUST NOT
-require a whole-program JSON export merely to obtain `CrunchDerivation`
-values for `build()`.
+The pipeline MUST evaluate Nickel in-process through `crunch-eval`, but it
+MUST NOT require a whole-program export-ready deep evaluation merely to obtain
+root labels.
+
+The build path MUST:
+- discover root labels through the lazy `crunch-eval` boundary first,
+- force derivation values per root only when needed for conversion, and
+- continue to use direct typed derivation extraction rather than a whole-program
+  JSON export string for build execution.
 
 `evaluate_to_json()` remains available for `crunch eval` and other debug or
-reporting paths, but the build path MUST use the direct typed representation
-that `crunch-eval` exposes.
+reporting paths, but the build path MUST use the lazy discovery + selected-root
+forcing representation that `crunch-eval` exposes.
 
 The pipeline MUST still run `crunch_glue::convert()` for each derivation and
 bridge the `ConversionCache` to a `DerivationRegistry`.
 
-#### Scenario: Direct single-derivation extraction
+#### Scenario: Package-set build discovers labels before per-root forcing
 
-- GIVEN a `.ncl` file describing one derivation
+- GIVEN a `.ncl` file exporting a record of derivations
 - WHEN `build()` is called
-- THEN the pipeline deserializes the evaluated Nickel expression directly into
-  a `CrunchDerivation`
-- AND no JSON export string is required before `convert()` runs
+- THEN the pipeline discovers the root labels before it begins per-root
+  derivation forcing and conversion
+- AND it does not need a whole-program export-ready result up front just to
+  learn those labels
 
-#### Scenario: Direct package-set extraction with nested enum tags
+#### Scenario: Full-root build still works through per-root forcing
 
-- GIVEN a `.ncl` file exporting a record of derivations whose nested inputs
-  contain Nickel enum tags
-- WHEN `build()` is called
-- THEN the pipeline deserializes the package set directly into typed Rust
-  derivation values
-- AND `convert()` receives the same derivation graph without a JSON round-trip
+- GIVEN a `.ncl` file exporting multiple root derivations
+- WHEN `build()` is called and all roots are selected for build
+- THEN the pipeline may still force all roots eventually
+- AND it does so through per-root forcing rather than a required whole-program
+  export step before selection
 
 ### Requirement: FOD mismatches as data
 
@@ -141,3 +144,4 @@ The workspace MUST contain the following crates:
 - THEN the workspace contains `crunch`, `crunch-pipeline`, `crunch-eval`,
   `crunch-glue`, `crunch-build`, and `crunch-store`
 - AND each crate owns the role listed above
+
