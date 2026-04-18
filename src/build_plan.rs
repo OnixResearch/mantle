@@ -169,7 +169,7 @@ fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Re
         .map_err(|e| RunError::Eval(format!("{e}")))?;
     let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| match e {
         crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => RunError::Eval(format!("{e}")),
-        crunch_eval::Error::Serde(_) => RunError::Build(format!("{e}")),
+        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => RunError::Build(format!("{e}")),
     })?;
     let mut cache = ConversionCache::new(store_dir);
     let mut roots = Vec::with_capacity(derivations.len());

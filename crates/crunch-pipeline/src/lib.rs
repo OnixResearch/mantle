@@ -102,12 +102,12 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths).map_err(
         |e| match e {
             crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
-            crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
+            crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
         },
     )?;
     let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| match e {
         crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
-        crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
+        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
     })?;
     debug_assert!(!derivations.is_empty(), "must have at least one derivation");
 

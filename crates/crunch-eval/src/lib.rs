@@ -35,6 +35,8 @@ pub enum Error {
 
     Io(std::io::Error),
 
+    Boundary(String),
+
     Serde(String),
 }
 
@@ -43,6 +45,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::Eval(err) => f.write_str(&format_nickel_error(err)),
             Error::Io(err) => write!(f, "reading source file: {err}"),
+            Error::Boundary(err) => write!(f, "evaluation boundary error: {err}"),
             Error::Serde(err) => write!(f, "deserialization error: {err}"),
         }
     }
@@ -53,6 +56,7 @@ impl std::error::Error for Error {
         match self {
             Error::Eval(_) => None,
             Error::Io(err) => Some(err),
+            Error::Boundary(_) => None,
             Error::Serde(_) => None,
         }
     }
@@ -139,12 +143,14 @@ fn record_name(expr: &Expr) -> Option<String> {
 }
 
 fn deserialize_array_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(String, T)>, Error> {
-    let array = expr.as_array().expect("array roots require array expression");
+    let array = expr
+        .as_array()
+        .ok_or_else(|| Error::Boundary("array roots require an array expression".to_string()))?;
     let mut derivations = Vec::with_capacity(array.len());
 
     for (index, item) in array.iter().enumerate() {
         let label = record_name(&item)
-            .ok_or_else(|| Error::Serde(format!("deserializing derivation [{index}]: missing string field 'name'")))?;
+            .ok_or_else(|| Error::Boundary(format!("derivation [{index}] is missing string field 'name'")))?;
         let drv = deserialize_expr(&item, &format!("derivation [{index}]"))?;
         derivations.push((label, drv));
     }
@@ -153,11 +159,13 @@ fn deserialize_array_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(Stri
 }
 
 fn deserialize_record_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(String, T)>, Error> {
-    let record = expr.as_record().expect("record roots require record expression");
+    let record = expr
+        .as_record()
+        .ok_or_else(|| Error::Boundary("record roots require a record expression".to_string()))?;
     let mut derivations = Vec::with_capacity(record.len());
 
     for (key, value) in record.iter() {
-        let value = value.ok_or_else(|| Error::Serde(format!("deserializing derivation '{key}': missing value")))?;
+        let value = value.ok_or_else(|| Error::Boundary(format!("derivation '{key}' is missing a value")))?;
         let drv = deserialize_expr(&value, &format!("derivation '{key}'"))?;
         derivations.push((key.to_string(), drv));
     }
@@ -171,7 +179,7 @@ pub fn extract_named_roots<T: DeserializeOwned>(expr: &Expr) -> Result<Vec<(Stri
     }
 
     let Some(record) = expr.as_record() else {
-        return Err(Error::Serde(
+        return Err(Error::Boundary(
             "expected a Derivation record, array of Derivations, or record of Derivations".to_string(),
         ));
     };
@@ -446,6 +454,27 @@ mod tests {
         assert_eq!(roots.len(), 2);
         assert_eq!(roots[0].0, "alpha");
         assert_eq!(roots[1].0, "beta");
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_rejects_non_root_shape_with_boundary_error() {
+        let expr = evaluate_str("42", &[]).unwrap();
+        let err = extract_named_roots::<CrunchDerivation>(&expr).unwrap_err();
+        assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {err}");
+    }
+
+    #[test]
+    fn eval_str_and_extract_named_roots_array_missing_name_returns_boundary_error() {
+        let err = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"[
+  {
+    builder = "/bin/sh",
+  },
+]"#,
+            &[],
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {err}");
     }
 
     #[test]

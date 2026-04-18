@@ -16,6 +16,8 @@ use nix_compat::store_path::StorePath;
 use crate::build_failure::build_failure_envelopes;
 use crate::build_failure::render_human_failure_summary;
 use crate::build_failure::should_write_failure_log;
+use crate::build_log::DiagnosticPersistenceFailure;
+use crate::build_log::log_file_path;
 use crate::build_log::write_log_file;
 use crate::build_report::render_build_json_report;
 use crate::errors::RunError;
@@ -89,26 +91,38 @@ pub fn report_build_result(
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let logs_dir = log_dir();
-    if std::fs::create_dir_all(&logs_dir).is_err() {
-        debug_assert!(!logs_dir.exists(), "failed create_dir_all should not leave a missing dir invariant broken");
-    }
+    let mut diagnostic_persistence_failures = Vec::new();
+    let log_dir_ready = match prepare_logs_dir(&logs_dir) {
+        Ok(()) => true,
+        Err(failure) => {
+            diagnostic_persistence_failures.push(failure);
+            false
+        }
+    };
 
-    write_success_logs(config, result, &logs_dir, output_mode);
+    if log_dir_ready {
+        diagnostic_persistence_failures.extend(write_success_logs(config, result, &logs_dir, output_mode));
+    }
     if output_mode.is_human() {
         print_hermeticity_summary(result);
         print_success_outputs(config, result);
     }
 
     if result.failed.is_empty() {
+        if output_mode.is_human() {
+            print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
+        }
         if output_mode.is_json() {
-            print_json_report(config, result, &logs_dir)?;
+            print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
         }
         return Ok(());
     }
 
-    write_failure_logs(config, result, &logs_dir);
+    if log_dir_ready {
+        diagnostic_persistence_failures.extend(write_failure_logs(config, result, &logs_dir));
+    }
     if output_mode.is_json() {
-        print_json_report(config, result, &logs_dir)?;
+        print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
     }
 
     if let Some(single_mismatch) = maybe_single_fod_mismatch(config, result, fix, output_mode) {
@@ -117,6 +131,7 @@ pub fn report_build_result(
 
     if output_mode.is_human() {
         print_failed_builds(result, &config.store_dir, &logs_dir);
+        print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
     }
 
     Err(RunError::Reported(1))
@@ -150,22 +165,33 @@ fn maybe_single_fod_mismatch(
     ))
 }
 
-fn write_success_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path, output_mode: BuildOutputMode) {
+fn write_success_logs(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+    output_mode: BuildOutputMode,
+) -> Vec<DiagnosticPersistenceFailure> {
+    let mut failures = Vec::new();
     for outcome in &result.outcomes {
         let drv_key = drv_key_for(&config.store_dir, &outcome.drv_path);
         let label = label_for_key(result, &drv_key).unwrap_or(outcome.drv_path.name());
 
         if let Some(log) = &outcome.log {
-            let _ = write_log(logs_dir, &outcome.drv_path, label, true, log);
+            if let Err(failure) = write_log(logs_dir, &outcome.drv_path, label, true, log) {
+                failures.push(failure);
+            }
             if config.verbose && output_mode.is_human() {
                 eprintln!("--- build log: {label} ---");
                 eprintln!("{log}");
                 eprintln!("--- end log ---");
             }
         } else if !outcome.cached {
-            let _ = write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)");
+            if let Err(failure) = write_log(logs_dir, &outcome.drv_path, label, true, "(no output captured)") {
+                failures.push(failure);
+            }
         }
     }
+    failures
 }
 
 fn print_success_outputs(config: &BuildConfig, result: &PipelineResult) {
@@ -208,8 +234,13 @@ fn format_output_suffix(outcome: &crunch_build::BuildOutcome, output_name: &str,
     format!(" ({})", parts.join(", "))
 }
 
-fn print_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> Result<(), RunError> {
-    let report = render_build_json_report(config, result, logs_dir)
+fn print_json_report(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
+) -> Result<(), RunError> {
+    let report = render_build_json_report(config, result, logs_dir, diagnostic_persistence_failures)
         .map_err(|e| RunError::Internal(format!("serializing build report: {e}")))?;
     println!("{report}");
     Ok(())
@@ -246,7 +277,12 @@ fn audit_event_label(event_count: usize) -> &'static str {
     "audit events"
 }
 
-fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) {
+fn write_failure_logs(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+) -> Vec<DiagnosticPersistenceFailure> {
+    let mut failures = Vec::new();
     for failed in &result.failed {
         if !should_write_failure_log(&failed.error) {
             continue;
@@ -255,8 +291,11 @@ fn write_failure_logs(config: &BuildConfig, result: &PipelineResult, logs_dir: &
             continue;
         };
         let label = label_for_key(result, &failed.drv_key).unwrap_or(drv_path.name());
-        let _ = write_log(logs_dir, &drv_path, label, false, &failed.error);
+        if let Err(failure) = write_log(logs_dir, &drv_path, label, false, &failed.error) {
+            failures.push(failure);
+        }
     }
+    failures
 }
 
 fn print_failed_builds(result: &PipelineResult, store_dir: &str, logs_dir: &Path) {
@@ -267,14 +306,33 @@ fn print_failed_builds(result: &PipelineResult, store_dir: &str, logs_dir: &Path
     }
 }
 
+fn prepare_logs_dir(logs_dir: &Path) -> Result<(), DiagnosticPersistenceFailure> {
+    std::fs::create_dir_all(logs_dir).map_err(|error| DiagnosticPersistenceFailure::create_log_dir(logs_dir, &error))
+}
+
+fn print_diagnostic_persistence_failures(failures: &[DiagnosticPersistenceFailure]) {
+    for failure in failures {
+        eprintln!("WARNING: diagnostic persistence failed");
+        eprintln!("  operation: {}", failure.operation);
+        eprintln!("  artifact: {}", failure.artifact);
+        if let Some(label) = &failure.label {
+            eprintln!("  label: {label}");
+        }
+        eprintln!("  attempted_path: {}", failure.attempted_path);
+        eprintln!("  error: {}", failure.error);
+    }
+}
+
 pub fn write_log(
     log_dir: &Path,
     drv_path: &StorePath<String>,
     label: &str,
     success: bool,
     body: &str,
-) -> Option<PathBuf> {
+) -> Result<PathBuf, DiagnosticPersistenceFailure> {
+    let attempted_path = log_file_path(log_dir, drv_path);
     write_log_file(log_dir, drv_path, label, success, body)
+        .map_err(|error| DiagnosticPersistenceFailure::write_build_log(label, &attempted_path, &error))
 }
 
 pub fn state_dir() -> PathBuf {

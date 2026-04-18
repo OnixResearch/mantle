@@ -33,10 +33,15 @@ relying on `expect(...)` / `unwrap(...)`.
 **Rationale:** callers can recover from a typed error. They cannot recover from
 an unexpected process panic triggered by evaluated input or stale session state.
 
-**Implementation:** harden `crates/crunch-eval/src/lib.rs` and
-`crates/crunch-eval/src/session.rs` first, keeping `debug_assert!` only for
-truly internal impossible-state checks after user-reachable failures have been
-translated into typed errors.
+**Implementation:** harden the public root-boundary helpers first:
+`extract_named_roots()` array/record extraction in
+`crates/crunch-eval/src/lib.rs`, plus `EvaluationSession::force_root()`,
+`ensure_deep_expr()`, `discover_record_labels()`, and related discovery/
+field-extraction helpers in `crates/crunch-eval/src/session.rs`. Use a
+boundary-focused `crunch-eval::Error` variant for malformed-shape or stale-
+state facts, and keep `debug_assert!` only for truly internal impossible-state
+checks after user-reachable failures have already been translated into typed
+errors.
 
 ### 2. Diagnostic persistence failures become explicit operator facts
 
@@ -46,9 +51,11 @@ report that failure explicitly instead of dropping the error on the floor.
 **Rationale:** a missing log path and a failed log write are different facts.
 The operator needs to know which one happened.
 
-**Implementation:** plumb write failures from `src/build_cmd.rs` into human and
-structured reporting, and ensure saved-log references are emitted only when the
-file really exists.
+**Implementation:** plumb write failures from `src/build_cmd.rs`,
+`src/build_log.rs`, and `src/build_report.rs` into both human warnings and a
+structured `diagnostic_persistence_failures` event list in the `--json` build
+report, and ensure saved-log references are emitted only when the file really
+exists.
 
 ### 3. Regression tests cover malformed shapes and write failures directly
 

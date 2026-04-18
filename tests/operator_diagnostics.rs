@@ -403,6 +403,80 @@ fn build_json_preflight_failure_omits_saved_log_path() {
 }
 
 #[test]
+fn build_json_success_reports_log_persistence_failure_without_fake_log_file() {
+    let root = TempDir::new().unwrap();
+    let store_dir = root.path().join("store");
+    let state_dir = root.path().join("state");
+    let source_path = root.path().join("source.txt");
+    let ncl_file = root.path().join("fetch.ncl");
+    let log_target = root.path().join("occupied-log-path");
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::write(&source_path, b"diagnostic-content\n").unwrap();
+    fs::write(&log_target, b"occupied\n").unwrap();
+    let hash_sri = sha256_sri(&fs::read(&source_path).unwrap());
+    write_fetchurl_ncl(&ncl_file, &source_path, &hash_sri);
+
+    let output = crunch()
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("build")
+        .arg(&ncl_file)
+        .env("CRUNCH_LOG_DIR", &log_target)
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "fetchurl build should succeed");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let diagnostic = &json["diagnostic_persistence_failures"][0];
+    assert_eq!(diagnostic["operation"], "create-log-dir");
+    assert_eq!(diagnostic["artifact"], "build-log");
+    assert_eq!(diagnostic["attempted_path"], log_target.display().to_string());
+    assert!(json["outcomes"][0]["log_file"].is_null(), "missing log file must stay null");
+    let built_path = json["outcomes"][0]["outputs"][0]["path"].as_str().unwrap();
+    assert!(Path::new(built_path).exists(), "built output must still exist");
+    assert!(String::from_utf8_lossy(&output.stderr).trim().is_empty(), "json stderr must stay empty");
+}
+
+#[test]
+fn build_human_failure_reports_log_persistence_failure_without_saved_log_path() {
+    let root = TempDir::new().unwrap();
+    let store_dir = root.path().join("store");
+    let state_dir = root.path().join("state");
+    let source_path = root.path().join("missing-source.txt");
+    let ncl_file = root.path().join("missing-fetch.ncl");
+    let log_target = root.path().join("occupied-log-path");
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::write(&log_target, b"occupied\n").unwrap();
+    write_fetchurl_missing_source_ncl(&ncl_file, &source_path);
+
+    let output = crunch()
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("build")
+        .arg(&ncl_file)
+        .env("CRUNCH_LOG_DIR", &log_target)
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "missing source build must fail");
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("WARNING: diagnostic persistence failed"));
+    assert!(stderr.contains("operation: create-log-dir"));
+    assert!(stderr.contains("artifact: build-log"));
+    assert!(!stderr.contains("saved_log_path:"), "failed log write must not invent saved_log_path");
+}
+
+#[test]
 fn build_plan_json_reports_action_schema() {
     let root = TempDir::new().unwrap();
     let tool_dir = root.path().join("tools");

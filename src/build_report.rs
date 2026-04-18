@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
+use crate::build_log::DiagnosticPersistenceFailure;
 use crate::build_log::existing_log_file_path;
 
 #[derive(Debug, Serialize)]
@@ -19,6 +20,7 @@ pub struct BuildJsonReport {
     pub store_dir: String,
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
+    pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
     pub failed: Vec<BuildFailureEnvelope>,
@@ -83,12 +85,18 @@ pub fn render_build_json_report(
     config: &BuildConfig,
     result: &PipelineResult,
     logs_dir: &Path,
+    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
 ) -> Result<String, serde_json::Error> {
-    let report = build_json_report(config, result, logs_dir);
+    let report = build_json_report(config, result, logs_dir, diagnostic_persistence_failures);
     serde_json::to_string_pretty(&report)
 }
 
-fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> BuildJsonReport {
+fn build_json_report(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
+) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
     let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
@@ -119,6 +127,7 @@ fn build_json_report(config: &BuildConfig, result: &PipelineResult, logs_dir: &P
         store_dir: config.store_dir.clone(),
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
+        diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
         outcomes: outcome_reports,
         failed: failure_reports,
@@ -287,7 +296,7 @@ mod tests {
             root_retention_source: None,
         };
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [9u8; 20]).unwrap();
-        crate::build_log::write_log_file(logs_dir.path(), &drv_path, "demo", false, "failure body");
+        crate::build_log::write_log_file(logs_dir.path(), &drv_path, "demo", false, "failure body").unwrap();
         let drv_key = drv_key_for(&config.store_dir, &drv_path);
         let result = PipelineResult {
             outcomes: Vec::new(),
@@ -305,7 +314,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
         };
 
-        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
         let saved_log_path = crate::build_log::existing_log_file_path(logs_dir.path(), &drv_path).unwrap();
 
@@ -359,7 +368,7 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
         };
 
-        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
         assert_eq!(json_value["failed"][0]["phase"], "preflight");
         assert_eq!(json_value["failed"][0]["error_class"], "preflight");
@@ -427,7 +436,7 @@ mod tests {
             )],
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path());
+        let report = build_json_report(&config, &result, logs_dir.path(), &[]);
         let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
 
         assert_eq!(report.hermeticity_mode, "practical");
@@ -508,7 +517,12 @@ mod tests {
             hermeticity_audit_events: Vec::new(),
         };
 
-        let json_report = render_build_json_report(&config, &result, logs_dir.path()).unwrap();
+        let diagnostic_failures = vec![crate::build_log::DiagnosticPersistenceFailure::write_build_log(
+            "demo",
+            &logs_dir.path().join("demo.log"),
+            &std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        )];
+        let json_report = render_build_json_report(&config, &result, logs_dir.path(), &diagnostic_failures).unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
 
         assert_eq!(
@@ -521,6 +535,13 @@ mod tests {
                 "store_dir": config.store_dir.clone(),
                 "hermeticity_mode": "practical",
                 "hermeticity_audit_events": [],
+                "diagnostic_persistence_failures": [{
+                    "operation": "write-build-log",
+                    "artifact": "build-log",
+                    "label": "demo",
+                    "attempted_path": logs_dir.path().join("demo.log").display().to_string(),
+                    "error": "denied",
+                }],
                 "counts": {
                     "succeeded_total": 1,
                     "built_total": 0,

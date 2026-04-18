@@ -143,17 +143,18 @@ impl EvaluationSession {
     /// Returns an error if the label does not match any discovered root.
     pub fn force_root<T: DeserializeOwned>(&mut self, label: &str) -> Result<T, Error> {
         let root_label = self.labels.iter().find(|r| r.label == label).ok_or_else(|| {
-            Error::Serde(format!(
+            Error::Boundary(format!(
                 "no root with label '{label}'; available roots: {}",
                 self.labels.iter().map(|r| r.label.as_str()).collect::<Vec<_>>().join(", ")
             ))
         })?;
         let index = root_label.index;
 
-        self.ensure_deep_expr()?;
-        let deep = self.deep_expr.as_ref().expect("deep_expr set by ensure_deep_expr");
         let shape = self.shape.clone();
-        let field_expr = extract_field_expr(deep, &shape, index)?;
+        let field_expr = {
+            let deep = self.ensure_deep_expr()?;
+            extract_field_expr(deep, &shape, index)?
+        };
 
         self.forced_root_count = self.forced_root_count.saturating_add(1);
         deserialize_expr(&field_expr, &format!("root '{label}'"))
@@ -176,7 +177,9 @@ impl EvaluationSession {
             let expr = self.ctx.eval_deep_for_export(&self.source).map_err(Error::Eval)?;
             self.deep_expr = Some(expr);
         }
-        Ok(self.deep_expr.as_ref().expect("deep_expr just set"))
+        self.deep_expr
+            .as_ref()
+            .ok_or_else(|| Error::Boundary("deep evaluation cache was not populated".to_string()))
     }
 
     fn discover_roots(&mut self) -> Result<(), Error> {
@@ -189,7 +192,7 @@ impl EvaluationSession {
                 self.discover_array_labels()?;
             }
             RootShape::Record => {
-                self.discover_record_labels();
+                self.discover_record_labels()?;
             }
         }
         Ok(())
@@ -201,16 +204,16 @@ impl EvaluationSession {
         let shallow_expr = self.ctx.eval_shallow(&self.source).map_err(Error::Eval)?;
         let record = shallow_expr
             .as_record()
-            .ok_or_else(|| Error::Serde("single shape requires record expression".to_string()))?;
+            .ok_or_else(|| Error::Boundary("single shape requires a record expression".to_string()))?;
         let name_expr = record
             .value_by_name("name")
-            .ok_or_else(|| Error::Serde("single derivation is missing 'name' field".to_string()))?;
+            .ok_or_else(|| Error::Boundary("single derivation is missing 'name' field".to_string()))?;
         let name_value = self.ctx.eval_expr_shallow(name_expr).map_err(Error::Eval)?;
         self.discovery_metrics.name_fields_accessed = self.discovery_metrics.name_fields_accessed.saturating_add(1);
         name_value
             .as_str()
             .map(str::to_owned)
-            .ok_or_else(|| Error::Serde("derivation 'name' field is not a string".to_string()))
+            .ok_or_else(|| Error::Boundary("derivation 'name' field is not a string".to_string()))
     }
 
     fn discover_array_labels(&mut self) -> Result<(), Error> {
@@ -218,7 +221,7 @@ impl EvaluationSession {
         let shallow_expr = self.ctx.eval_shallow(&self.source).map_err(Error::Eval)?;
         let array = shallow_expr
             .as_array()
-            .ok_or_else(|| Error::Serde("array shape requires array expression".to_string()))?;
+            .ok_or_else(|| Error::Boundary("array shape requires an array expression".to_string()))?;
         let count = array.len();
         assert!(count <= u32::MAX as usize, "array root count exceeds u32::MAX");
 
@@ -227,23 +230,25 @@ impl EvaluationSession {
             let name_expr = item_value
                 .as_record()
                 .and_then(|r| r.value_by_name("name"))
-                .ok_or_else(|| Error::Serde(format!("array element [{i}] is missing record 'name' field")))?;
+                .ok_or_else(|| Error::Boundary(format!("array element [{i}] is missing record 'name' field")))?;
             let name_value = self.ctx.eval_expr_shallow(name_expr).map_err(Error::Eval)?;
             self.discovery_metrics.name_fields_accessed = self.discovery_metrics.name_fields_accessed.saturating_add(1);
             let label = name_value
                 .as_str()
                 .map(str::to_owned)
-                .ok_or_else(|| Error::Serde(format!("array element [{i}] 'name' field is not a string")))?;
+                .ok_or_else(|| Error::Boundary(format!("array element [{i}] 'name' field is not a string")))?;
             self.labels.push(RootLabel { label, index: i as u32 });
         }
         Ok(())
     }
 
-    fn discover_record_labels(&mut self) {
+    fn discover_record_labels(&mut self) -> Result<(), Error> {
         // Re-shallow-eval not needed: we stored the shape from the first shallow eval.
         // But we need record field names. Re-shallow-eval is a noop thanks to Nickel sharing.
-        let shallow_expr = self.ctx.eval_shallow(&self.source).expect("re-shallow-eval should not fail");
-        let record = shallow_expr.as_record().expect("record shape requires record");
+        let shallow_expr = self.ctx.eval_shallow(&self.source).map_err(Error::Eval)?;
+        let record = shallow_expr
+            .as_record()
+            .ok_or_else(|| Error::Boundary("record shape requires a record expression".to_string()))?;
         for (i, (key, _value)) in record.iter().enumerate() {
             assert!(i <= u32::MAX as usize, "record root count exceeds u32::MAX");
             self.labels.push(RootLabel {
@@ -251,6 +256,7 @@ impl EvaluationSession {
                 index: i as u32,
             });
         }
+        Ok(())
     }
 }
 
@@ -261,7 +267,7 @@ fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     }
 
     let Some(record) = expr.as_record() else {
-        return Err(Error::Serde(
+        return Err(Error::Boundary(
             "top-level value is neither a derivation, an array of derivations, \
              nor a record of derivations"
                 .to_string(),
@@ -292,17 +298,89 @@ fn extract_field_expr(expr: &Expr, shape: &RootShape, index: u32) -> Result<Expr
         RootShape::Array => {
             let array = expr
                 .as_array()
-                .ok_or_else(|| Error::Serde("expected array expression for array shape".to_string()))?;
-            array.get(index as usize).ok_or_else(|| Error::Serde(format!("array index {index} out of bounds")))
+                .ok_or_else(|| Error::Boundary("expected array expression for array shape".to_string()))?;
+            array
+                .get(index as usize)
+                .ok_or_else(|| Error::Boundary(format!("array index {index} out of bounds")))
         }
         RootShape::Record => {
             let record = expr
                 .as_record()
-                .ok_or_else(|| Error::Serde("expected record expression for record shape".to_string()))?;
+                .ok_or_else(|| Error::Boundary("expected record expression for record shape".to_string()))?;
             let (_key, value) = record
                 .key_value_by_index(index as usize)
-                .ok_or_else(|| Error::Serde(format!("record field index {index} out of bounds")))?;
-            value.ok_or_else(|| Error::Serde(format!("record field at index {index} has no value")))
+                .ok_or_else(|| Error::Boundary(format!("record field index {index} out of bounds")))?;
+            value.ok_or_else(|| Error::Boundary(format!("record field at index {index} has no value")))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::AssertUnwindSafe;
+
+    use crunch_glue::CrunchDerivation;
+
+    use super::*;
+
+    fn eval_deep_expr(source: &str) -> Expr {
+        let mut ctx = Context::new().with_source_name("<test>".to_string());
+        ctx.eval_deep_for_export(source).unwrap()
+    }
+
+    fn test_session(
+        shape: RootShape,
+        source: &str,
+        labels: Vec<RootLabel>,
+        deep_expr: Option<Expr>,
+    ) -> EvaluationSession {
+        EvaluationSession {
+            ctx: Context::new().with_source_name("<test>".to_string()),
+            source: source.to_string(),
+            shape,
+            labels,
+            deep_expr,
+            forced_root_count: 0,
+            discovery_metrics: DiscoveryMetrics::default(),
+        }
+    }
+
+    #[test]
+    fn force_root_returns_boundary_error_for_inconsistent_cached_shape_without_panic() {
+        let mut session = test_session(
+            RootShape::Record,
+            r#"{ demo = { name = "demo", builder = "/bin/sh" } }"#,
+            vec![RootLabel {
+                label: "demo".to_string(),
+                index: 0,
+            }],
+            Some(eval_deep_expr(
+                r#"[
+  { name = "demo", builder = "/bin/sh" },
+]"#,
+            )),
+        );
+
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| session.force_root::<CrunchDerivation>("demo")));
+        assert!(result.is_ok(), "force_root should not panic on inconsistent cached shape");
+        let err = result.unwrap().unwrap_err();
+        assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {err}");
+    }
+
+    #[test]
+    fn discover_record_labels_returns_boundary_error_for_stale_shape_without_panic() {
+        let mut session = test_session(
+            RootShape::Record,
+            r#"[
+  { name = "demo", builder = "/bin/sh" },
+]"#,
+            Vec::new(),
+            None,
+        );
+
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| session.discover_roots()));
+        assert!(result.is_ok(), "discover_roots should not panic on stale record shape");
+        let err = result.unwrap().unwrap_err();
+        assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {err}");
     }
 }
