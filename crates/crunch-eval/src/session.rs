@@ -461,10 +461,12 @@ fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
     assignment: WorkerAssignment,
 ) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
-    let mut session = EvaluationSession::open_source(
+    let mut session = EvaluationSession::open_worker_source(
         worker_input.source.clone(),
         &worker_input.import_paths,
         &worker_input.source_name,
+        worker_input.shape.clone(),
+        worker_input.labels.clone(),
     )
     .map_err(|err| WorkerFailure {
         index: assignment.start_index,
