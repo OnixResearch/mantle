@@ -25,26 +25,49 @@
 
 ## Phase 2: Social trust policy foundations
 
-- [ ] Define a social-policy schema for trusted roles and quorum thresholds
+- [x] Define a social-policy schema for trusted roles and quorum thresholds
       with file-based signer lists
-- [ ] Define independence requirements so the same actor or witness domain
+  - Evidence: `crates/crunch-attestation/src/policy.rs` defines `ReleasePolicy`
+    with `min_matching_witnesses`, `independence_field`, `trusted_release_signers`,
+    and `trusted_witness_signers`. `policy_json_round_trip` test verifies serde.
+- [x] Define independence requirements so the same actor or witness domain
       cannot satisfy all required witness slots
       (release-verification-social / Same actor cannot satisfy all required witness slots)
-- [ ] Define how the verifier consumes trusted-key and role bindings without
+  - Evidence: `evaluate_policy()` counts distinct `witness_identity` values
+    among matching witnesses and requires `distinct_identities >= min_matching_witnesses`.
+    `same_identity_cannot_satisfy_independence` test verifies two attestations
+    from the same identity fail independence with `InsufficientIndependence`.
+- [x] Define how the verifier consumes trusted-key and role bindings without
       embedding that policy into release-attestation or witness-attestation
       digests, ensuring policy updates alone never change attestation digests
       (release-verification-social / Policy update does not change technical artifact digests)
-- [ ] Define policy outcomes for technically valid but policy-insufficient
+  - Evidence: `ReleasePolicy` and `ReleaseRevocations` are separate types
+    never included in canonical attestation bytes. `policy_change_does_not_affect_attestation_digests`
+    test proves changing policy leaves release attestation digest unchanged.
+- [x] Define policy outcomes for technically valid but policy-insufficient
       witness sets
       (release-verification-social / Insufficient quorum fails policy even after technical agreement)
-- [ ] Define revocation and dispute-handling expectations for previously
+  - Evidence: `evaluate_policy()` returns `PolicyStatus::Insufficient` with
+    `PolicyFailureReason::InsufficientQuorum` or `InsufficientIndependence`
+    while preserving `TechnicalClass::ExternalWitnessMatch`.
+    `insufficient_quorum_fails_policy_with_technical_success` test verifies.
+- [x] Define revocation and dispute-handling expectations for previously
       published witness material, including file-based revocation input from a
       verifier-local policy artifact
       (release-verification-social / Revoked witness no longer satisfies release policy;
       release-verification-social / Revocation input comes from a file-based policy artifact)
-- [ ] Define how satisfied quorum promotes the final class to
+  - Evidence: `ReleaseRevocations` defines `revoked_witness_keys` and
+    `revoked_witness_attestation_digests_blake3`. `evaluate_policy()` filters
+    revoked witnesses before quorum counting. Tests:
+    `revoked_key_degrades_policy_without_changing_technical_result`,
+    `revoked_attestation_digest_degrades_policy`,
+    `revocations_applied_before_quorum_counting`.
+- [x] Define how satisfied quorum promotes the final class to
       `quorum-satisfied`
       (release-verification-social / Satisfied quorum promotes final release class)
+  - Evidence: `evaluate_policy()` calls `FinalClass::resolve(technical, Satisfied)`
+    which returns `QuorumSatisfied`. `satisfied_quorum_promotes_final_class`
+    test verifies two independent matching witnesses promote to `QuorumSatisfied`.
 
 ## Phase 3: CLI and workflow plan
 
