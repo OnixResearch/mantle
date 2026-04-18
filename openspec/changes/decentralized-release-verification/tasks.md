@@ -71,13 +71,26 @@
 
 ## Phase 3: CLI and workflow plan
 
-- [ ] Define CLI entry points for inspecting release attestations, inspecting
+- [x] Define CLI entry points for inspecting release attestations, inspecting
       witness attestations, and verifying witness sets against one release
-- [ ] Define machine-readable verifier output for technical failures, policy
+  - Evidence: planned CLI surface extends `crunch attest` with three new
+    subcommands: `crunch attest release-show <dir>` (print release attestation
+    envelope), `crunch attest witness-show <dir> [identity]` (print witness
+    attestation envelopes), and `crunch attest release-verify <dir>` (run full
+    technical + policy verification and print trust tier). All use the existing
+    `VerificationDirectory::discover()` from `discovery.rs`.
+- [x] Define machine-readable verifier output for technical failures, policy
       failures, and final trust-tier reporting, reusing the established
       envelope JSON convention for release and witness attestation display
       and the deterministic `stored_path` semantics from design decision 7
       (design decision 7)
+  - Evidence: `release-show` and `witness-show` reuse the existing envelope
+    shape (`kind`, `digest`, `stored_path`, `attestation`). `release-verify`
+    outputs a JSON object with `technical_class`, `policy_status`,
+    `final_class`, `matching_witness_count`, `independent_witness_identities`,
+    `revoked_witness_count`, and optional `policy_failure_reason`. All fields
+    are defined in `PolicyEvaluation` and `TrustTier` types already
+    implemented in `policy.rs`.
 - [x] Define file-based attestation and policy discovery layout for the first
       phase, including the verification-directory layout for
       `release-attestation.json`, `witnesses/*.json`, `policy.json`, and
@@ -89,10 +102,25 @@
     `revocations.json`. Tests cover zero/two witnesses, missing witnesses dir,
     missing revocations, missing `.sig` sidecar rejection, wrong schema tag,
     and end-to-end discovery → policy evaluation.
-- [ ] Define example operator workflows for self-proof-only, single external
+- [x] Define example operator workflows for self-proof-only, single external
       witness, and quorum-satisfied release publication
-- [ ] Define publication guidance for release evidence, release attestation,
+  - Evidence: three workflow patterns follow from the implemented types:
+    (1) self-proof-only: `release-verify` with zero witnesses reports
+    `self-proof-valid` + `quorum-satisfied` when `min_matching_witnesses=0`;
+    (2) single external witness: one matching `witnesses/*.json` raises
+    technical class to `external-witness-match`, quorum satisfied at
+    `min_matching_witnesses=1`;
+    (3) multi-witness quorum: N independent witnesses with
+    `min_matching_witnesses=N` yields `quorum-satisfied`. All three are
+    exercised by existing policy tests.
+- [x] Define publication guidance for release evidence, release attestation,
       witness attestations, and local or published policy profiles
+  - Evidence: the verification-directory layout from design decision 5 and
+    `discovery.rs` defines the publication convention: `release-attestation.json`
+    + `.sig`, `witnesses/<identity>.json` + `.sig`, `policy.json`, and
+    optional `revocations.json`. Publishers create this directory; verifiers
+    consume it. Policy profiles are local files not embedded in attestation
+    digests.
 
 ## Phase 4: Validation design
 
