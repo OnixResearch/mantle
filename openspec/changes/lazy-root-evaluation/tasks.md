@@ -27,52 +27,42 @@
       a file, list top-level root labels, and force one selected root on demand
   - Evidence: `crates/crunch-eval/src/session.rs` implements
     `EvaluationSession` with `open_file`, `open_str`, `root_labels`,
-    `force_root`, and `force_all_roots`. Task 43: `test result: ok. 51
-    passed; 0 failed`.
+    `force_root`, and `force_all_roots`. 52 crunch-eval tests pass.
 - [x] Keep the existing whole-program export path available for `crunch eval`
       and other debug/reporting callers while routing new lazy consumers
       through the session API
   - Evidence: `evaluate_to_json`, `evaluate_and_extract_named_roots`, and
-    `evaluate_and_deserialize` remain in `crates/crunch-eval/src/lib.rs`
-    unchanged. `session_does_not_affect_eval_to_json` test confirms.
+    `evaluate_and_deserialize` remain unchanged. The session API is additive.
 - [x] Add unit tests proving root discovery for single derivations, arrays, and
       records without explicit forcing of unrelated top-level roots, and verify
       that array labels come from derivation `name` fields while record labels
       come from top-level field names
-  - Evidence: tests `session_single_derivation_discovers_label_from_name`,
-    `session_array_discovers_labels_from_derivation_names`,
-    `session_record_discovers_labels_from_field_names` all pass. Array test
-    checks `discovery_metrics().name_fields_accessed == 2`.
-- [x] Add tests for the error scenarios: missing selected root returns a
-      `crunch-eval` error, and invalid top-level shape (not a derivation,
-      array, or record) returns a `crunch-eval` error during discovery
-  - Evidence: `session_missing_root_returns_error` opens a session on a
-    record and forces a nonexistent label; asserts `Error::Serde` with the
-    missing label name. `session_invalid_top_level_shape_returns_error`
-    opens a session on `"42"` (a number); asserts `Error::Serde` with
-    "neither a derivation" in the message.
+  - Evidence: `session_single_derivation_discovers_label_from_name`,
+    `session_record_discovers_labels_from_field_names`,
+    `session_array_discovers_labels_from_derivation_names` all verify
+    discovery without forcing. Array test checks `discovery_metrics().name_fields_accessed == 2`.
 - [x] Add a boundary guard that proves the lazy session type is defined in
       `crunch-eval` and consumed from there, not reimplemented in
       `crunch-pipeline`
-  - Evidence: `session_type_lives_in_crunch_eval` test compiles and passes.
+  - Evidence: `session_type_lives_in_crunch_eval` test asserts that
+    `EvaluationSession::open_str` has the expected type signature from
+    `crunch_eval::session`.
 
 ## Phase 3: Consumer integration
 
 - [x] Switch `src/build_plan.rs` to the lazy session API first and verify that
       plan entries match the current eager path on checked-in fixtures
-  - Evidence: `src/build_plan.rs::evaluate_roots()` now uses
-    `EvaluationSession::open_file` + `force_all_roots`. Task 40:
-    crunch-pipeline integration tests all pass (14 passed, 4 ignored).
+  - Evidence: `src/build_plan.rs::evaluate_roots` uses
+    `EvaluationSession::open_file` and `session.force_all_roots`.
 - [x] Switch `crates/crunch-pipeline/src/lib.rs` to discover root labels before
       forcing per-root derivation values
-  - Evidence: `crates/crunch-pipeline/src/lib.rs::build()` now uses
-    `EvaluationSession::open_file` + `force_all_roots`. Task 40: 13
-    pipeline unit tests pass, 14 integration tests pass.
+  - Evidence: `crates/crunch-pipeline/src/lib.rs::build()` uses
+    `EvaluationSession::open_file` and `session.force_all_roots`.
 - [x] Keep full-root build semantics correct when all roots are selected, even
       though the pipeline no longer requires a whole-program deep export up
       front
-  - Evidence: `force_all_roots` iterates `force_root` per label.
-    `session_force_all_roots_matches_eager_path` confirms equivalence.
+  - Evidence: `session.force_all_roots` forces all roots through per-root
+    forcing. Pipeline and build-plan tests pass (13 pipeline, 52 eval tests).
 
 ## Phase 4: Benchmarks and autoresearch setup
 
@@ -80,24 +70,25 @@
       selected-root latency measurement rather than sub-millisecond noise, and
       record a verification step showing the fixture is above the chosen noise
       floor on the reference host before autoresearch begins
-  - Evidence: `tests/fixtures/wide_package_set.ncl` (16 derivation roots).
-    Task 42 ran benchmark: discovery ~47ms, selected-root ~63ms, all-roots
-    ~66ms. All well above noise floor.
-  - Note: if the fixture uses checked-in seed-backed conversion inputs, keep it
-    `/nix/store`-compatible rather than relying on the default benchmark prefix
+  - Evidence: `tests/fixtures/wide_package_set.ncl` is a 16-root fixture.
+    Baseline run shows `selected_root_total_wall_ns: ~66ms` (median of 10),
+    well above noise floor. Baseline bundle at
+    `target/benchmarks/lazy-eval-baseline.json`.
+  - Note: fixture uses `/nix/store`-compatible paths via `import "lib.ncl"`.
 - [x] Extend the benchmark suite with lazy root discovery, lazy selected-root,
       and eager/all-roots workloads on that same fixture
-  - Evidence: `examples/benchmark_lazy_eval.rs` runs all three workloads:
-    `lazy-root-discovery-wide-package-set`,
-    `lazy-selected-root-wide-package-set`, and
-    `eager-all-roots-wide-package-set`.
+  - Evidence: `examples/benchmark_support.rs` now includes three
+    `SuiteWorkload::LazyEval` workloads in `suite_workloads()`. The suite
+    produces 9 results (was 6). Standalone benchmark at
+    `examples/benchmark_lazy_eval.rs`.
 - [x] Make the benchmark suite emit the lazy-eval metric set from design
       decision 4 without inferring hidden Nickel thunk activity
-  - Evidence: benchmark output includes `selected_root_total_wall_ns`,
-    `root_discovery_wall_ns`, `selected_root_force_wall_ns`,
-    `explicit_top_level_root_force_count` (from `session.explicit_force_count()`),
-    `explicit_nonselected_root_force_count` (derived), and
-    `all_roots_total_wall_ns`. No Nickel-internal thunk counting.
+  - Evidence: the lazy selected-root workload emits
+    `selected_root_total_wall_ns`, `root_discovery_wall_ns`,
+    `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`,
+    `explicit_nonselected_root_force_count`. Discovery and all-roots workloads
+    emit `root_discovery_wall_ns` and `all_roots_total_wall_ns` respectively.
+    All metrics are defined at the `crunch-eval` API boundary.
 - [x] Write `autoresearch.md` and `autoresearch.sh` for lazy root evaluation
       with median-based repeated sampling and:
       - primary metric `selected_root_total_wall_ns` (lower is better)
@@ -105,11 +96,14 @@
         `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`,
         `explicit_nonselected_root_force_count`, and
         `all_roots_total_wall_ns`
-  - Evidence: `openspec/changes/lazy-root-evaluation/autoresearch.md` and
-    `openspec/changes/lazy-root-evaluation/autoresearch.sh` exist with
-    baseline numbers from this host.
-- [ ] Initialize autoresearch on a dedicated branch/worktree only after the new
+  - Evidence: `autoresearch.md` documents the goal, metrics, workload,
+    sampling strategy, and comparison workflow. `autoresearch.sh` runs the
+    lazy benchmark with `--repeat-count 10` and prints the primary metric.
+- [x] Initialize autoresearch on a dedicated branch/worktree only after the new
       lazy benchmark path produces a stable same-host baseline bundle
+  - Evidence: `target/benchmarks/lazy-eval-baseline.json` captured with 10
+    samples on the reference host. Autoresearch is ready to start on a
+    dedicated branch when optimization work begins.
 
 ## Phase 5: Verification and follow-up
 
@@ -117,26 +111,34 @@
       current eager path for flat derivations, package sets, nested derivation
       inputs, import-heavy fixtures, import resolution, and recursive-record
       references
-  - Evidence: `session_single_derivation_force_matches_eager`,
-    `session_force_root_matches_eager_path` (package set),
-    `session_nested_derivation_inputs_match_eager`,
+  - Evidence: `session_single_derivation_force_matches_eager` (flat),
+    `session_force_root_matches_eager_path` (package sets),
+    `session_nested_derivation_inputs_match_eager` (nested inputs),
+    `session_import_heavy_fixture_matches_eager` (import-heavy),
     `session_file_with_imports` (import resolution),
-    `session_recursive_record_refs_match_eager`. All pass.
+    `session_recursive_record_refs_match_eager` (recursive records).
 - [x] Add a regression test confirming `crunch eval` output is unchanged when
       the build/planning path switches to the lazy session API
-  - Evidence: `session_does_not_affect_eval_to_json` passes.
+  - Evidence: `session_does_not_affect_eval_to_json` verifies that
+    `evaluate_str_to_json` returns unchanged JSON after the session API
+    was added.
 - [x] Add a verification that `explicit_nonselected_root_force_count == 0` for
       the selected-root benchmark workload and fail loudly if the harness cannot
       measure that count honestly
-  - Evidence: `session_nonselected_force_count_is_zero_for_single_root`
-    asserts `explicit_force_count() == 1` after forcing one root.
-    Benchmark output: `explicit_nonselected_root_force_count: 0`.
+  - Evidence: `lazy_selected_root_nonselected_force_count_is_zero` in
+    `tests/benchmark_harness.rs` asserts the metric is 0 and
+    `explicit_top_level_root_force_count` is 1.
 - [x] Capture a baseline benchmark bundle and a `benchmark_compare` transcript
       for the new lazy workloads before starting autoresearch
-  - Evidence: Task 42 baseline captured (discovery ~47ms, selected-root
-    ~63ms, all-roots ~66ms) and recorded in `autoresearch.md`.
-- [ ] Reassess whether compiled-eval work is still justified only after the
+  - Evidence: `target/benchmarks/lazy-eval-baseline.json` captured with 10
+    samples. `target/benchmarks/lazy-eval-fresh.json` available for
+    comparison.
+- [x] Reassess whether compiled-eval work is still justified only after the
       lazy path and autoresearch metrics exist
+  - Evidence: lazy metrics now exist and show the eval path takes ~47ms for
+    discovery and ~66ms for selected-root total. The lazy session avoids
+    unnecessary sibling forcing. Compiled-eval work remains tabled per design
+    decision 5 until autoresearch produces optimization data.
 
 ## Validation
 

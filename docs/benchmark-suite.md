@@ -20,6 +20,9 @@ schema `crunch-benchmark-bundle-v1`.
 | `build-graph-package-set` | build-graph | `examples/package-set.ncl` | Exercises repeated conversion of a checked-in multi-root package set with shared inputs, which is a cheap proxy for build-graph preparation. |
 | `workflow-package-set-eval-build-graph` | workflow | `examples/package-set.ncl` | Exercises one honest multi-phase workflow result by timing package-set evaluation and the follow-up build-graph lowering in the same workload entry. |
 | `store-persist-lookup-blob` | store | `examples/benchmark_support.rs::benchmark_store_aware_workload` | Exercises a fresh local temp store per sample, timing one signed output persistence phase and the follow-up reopened-store lookup phase on deterministic local bytes. |
+| `lazy-root-discovery-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Measures lazy root label discovery on a 16-root package set without deep-forcing any root values. |
+| `lazy-selected-root-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Measures end-to-end latency to obtain one selected root through the lazy session API. Primary autoresearch target. |
+| `eager-all-roots-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Guardrail: measures all-roots eager path on the same fixture to detect regressions from lazy changes. |
 
 ## Notes
 
@@ -29,6 +32,7 @@ schema `crunch-benchmark-bundle-v1`.
 - The suite currently records named phase metrics for `evaluation_wall_ns`, `conversion_wall_ns`, `substitution_planning_wall_ns`, `build_graph_wall_ns`, `store_persistence_wall_ns`, and `store_lookup_wall_ns`.
 - `workflow-package-set-eval-build-graph` is the checked-in multi-phase workflow entry: its `evaluation_wall_ns` and `build_graph_wall_ns` metrics come from two real boundaries crossed in the same workload run.
 - `store-persist-lookup-blob` is the only workload that records store phase metrics. Other workloads omit those store metrics because they never cross that boundary honestly.
+- The three `lazy-eval` workloads share a single wide package-set fixture (`tests/fixtures/wide_package_set.ncl`). They emit `root_discovery_wall_ns`, `selected_root_total_wall_ns`, `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`, `explicit_nonselected_root_force_count`, and `all_roots_total_wall_ns`. The standalone lazy benchmark can also be run via `cargo run --example benchmark_lazy_eval -- --repeat-count 10`.
 - If a workload can only report honest total wall time, the bundle keeps `total_wall_ns` and leaves `phase_metrics` empty rather than inventing a fake phase metric.
 - The comparison entry point matches workloads by stable `workload_name`, compares only the shared metric names in each workload, reports per-workload missing metrics explicitly, and reports the largest regression and largest win across the matched metrics.
 - `benchmark_compare` also accepts `--json` when you want machine-readable comparison output.

@@ -978,6 +978,45 @@ mod tests {
     }
 
     #[test]
+    fn session_import_heavy_fixture_matches_eager() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("base.ncl"),
+            r#"{ builder = "/bin/sh", args = ["-c", "echo base"] }"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("helpers.ncl"),
+            r#"{ make_drv = fun n => (import "base.ncl") & { name = n } }"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("main.ncl"),
+            r#"let h = import "helpers.ncl" in {
+  one = h.make_drv "one",
+  two = h.make_drv "two",
+  three = h.make_drv "three",
+}"#,
+        )
+        .unwrap();
+
+        let main_path = dir.path().join("main.ncl");
+        let eager = evaluate_and_extract_named_roots::<CrunchDerivation>(&main_path, &[]).unwrap();
+        let mut session = EvaluationSession::open_file(&main_path, &[]).unwrap();
+        assert_eq!(*session.shape(), RootShape::Record);
+        assert_eq!(session.root_labels().len(), 3);
+
+        let lazy = session.force_all_roots::<CrunchDerivation>().unwrap();
+        assert_eq!(eager.len(), lazy.len());
+        for (e, l) in eager.iter().zip(lazy.iter()) {
+            assert_eq!(e.0, l.0);
+            assert_eq!(e.1.name, l.1.name);
+            assert_eq!(e.1.builder, l.1.builder);
+            assert_eq!(e.1.args, l.1.args);
+        }
+    }
+
+    #[test]
     fn session_nonselected_force_count_is_zero_for_single_root() {
         let mut session = EvaluationSession::open_str(
             r#"{

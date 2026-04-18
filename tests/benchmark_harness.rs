@@ -21,6 +21,15 @@ use benchmark_support::SUBSTITUTION_PHASE_METRIC_NAME;
 use benchmark_support::SUBSTITUTION_WORKLOAD_NAME;
 use benchmark_support::SUITE_ENTRY_POINT;
 use benchmark_support::TOTAL_PHASE_METRIC_NAME;
+use benchmark_support::LAZY_DISCOVERY_WORKLOAD_NAME;
+use benchmark_support::LAZY_SELECTED_ROOT_WORKLOAD_NAME;
+use benchmark_support::EAGER_ALL_ROOTS_WORKLOAD_NAME;
+use benchmark_support::LAZY_DISCOVERY_METRIC_NAME;
+use benchmark_support::LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME;
+use benchmark_support::LAZY_SELECTED_ROOT_FORCE_METRIC_NAME;
+use benchmark_support::LAZY_FORCE_COUNT_METRIC_NAME;
+use benchmark_support::LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME;
+use benchmark_support::LAZY_ALL_ROOTS_METRIC_NAME;
 use benchmark_support::eval_smoke_request;
 use benchmark_support::run_eval_smoke_benchmark;
 use benchmark_support::run_suite_benchmark;
@@ -135,7 +144,7 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     let bundle = run_suite_benchmark(&request).unwrap();
 
     assert!(bundle_path.exists(), "suite bundle must be written");
-    assert_eq!(bundle.results.len(), 6);
+    assert_eq!(bundle.results.len(), 9);
 
     let names: Vec<&str> = bundle.results.iter().map(|result| result.workload_name.as_str()).collect();
     assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME));
@@ -144,11 +153,14 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     assert!(names.contains(&BUILD_GRAPH_WORKLOAD_NAME));
     assert!(names.contains(&MULTI_PHASE_WORKFLOW_WORKLOAD_NAME));
     assert!(names.contains(&STORE_AWARE_WORKLOAD_NAME));
+    assert!(names.contains(&LAZY_DISCOVERY_WORKLOAD_NAME));
+    assert!(names.contains(&LAZY_SELECTED_ROOT_WORKLOAD_NAME));
+    assert!(names.contains(&EAGER_ALL_ROOTS_WORKLOAD_NAME));
 
     let json = std::fs::read_to_string(&bundle_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let results = parsed["results"].as_array().unwrap();
-    assert_eq!(results.len(), 6);
+    assert_eq!(results.len(), 9);
     assert!(results.iter().any(|result| result["entry_point"] == SUITE_ENTRY_POINT));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&EVAL_PHASE_METRIC_NAME)));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&CONVERSION_PHASE_METRIC_NAME)));
@@ -194,6 +206,9 @@ fn suite_phase_metrics_cover_phase_two_scope() {
     assert!(metric_names.contains(&BUILD_GRAPH_PHASE_METRIC_NAME));
     assert!(metric_names.contains(&STORE_PERSISTENCE_PHASE_METRIC_NAME));
     assert!(metric_names.contains(&STORE_LOOKUP_PHASE_METRIC_NAME));
+    assert!(metric_names.contains(&LAZY_DISCOVERY_METRIC_NAME));
+    assert!(metric_names.contains(&LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME));
+    assert!(metric_names.contains(&LAZY_ALL_ROOTS_METRIC_NAME));
 }
 
 #[test]
@@ -262,7 +277,7 @@ fn suite_workload_descriptors_stay_deterministic() {
     let left = suite_workload_descriptors().unwrap();
     let right = suite_workload_descriptors().unwrap();
     assert_eq!(left, right);
-    assert_eq!(left.len(), 6);
+    assert_eq!(left.len(), 9);
 }
 
 #[test]
@@ -323,6 +338,13 @@ fn benchmark_docs_cover_all_workloads_and_entry_points() {
     assert!(docs.contains("/crunch/store"));
     assert!(docs.contains("workflow-package-set-eval-build-graph"));
     assert!(docs.contains("store-persist-lookup-blob"));
+    assert!(docs.contains("lazy-root-discovery-wide-package-set"));
+    assert!(docs.contains("lazy-selected-root-wide-package-set"));
+    assert!(docs.contains("eager-all-roots-wide-package-set"));
+    assert!(docs.contains("root_discovery_wall_ns"));
+    assert!(docs.contains("selected_root_total_wall_ns"));
+    assert!(docs.contains("explicit_nonselected_root_force_count"));
+    assert!(docs.contains("benchmark_lazy_eval"));
 }
 
 fn phase_metric_names(result: &serde_json::Value) -> Vec<&str> {
@@ -344,10 +366,62 @@ fn benchmark_entry_points_are_checked_in_examples() {
     let compare_source = std::fs::read_to_string(compare_entry).unwrap();
 
     assert_eq!(DEFAULT_REPEAT_COUNT, 5);
+    let lazy_entry = repo_root().join("examples").join("benchmark_lazy_eval.rs");
+    let lazy_source = std::fs::read_to_string(lazy_entry).unwrap();
+
     assert!(smoke_source.contains("run_eval_smoke_benchmark"));
     assert!(suite_source.contains("run_suite_benchmark"));
     assert!(compare_source.contains("compare_benchmark_files"));
     assert!(compare_source.contains("COMPARE_ENTRY_POINT"));
     assert!(smoke_source.contains("METRIC"));
     assert!(suite_source.contains("METRIC"));
+    assert!(lazy_source.contains("EvaluationSession"));
+    assert!(lazy_source.contains("LAZY_DISCOVERY_WORKLOAD"));
+    assert!(lazy_source.contains("LAZY_SELECTED_ROOT_WORKLOAD"));
+    assert!(lazy_source.contains("EAGER_ALL_ROOTS_WORKLOAD"));
+}
+
+#[test]
+fn lazy_selected_root_nonselected_force_count_is_zero() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let bundle_path = temp_dir.path().join("suite.json");
+    let argv = vec![
+        "cargo".to_string(),
+        "run".to_string(),
+        "--example".to_string(),
+        "benchmark_suite".to_string(),
+        "--".to_string(),
+        "--bundle-out".to_string(),
+        bundle_path.display().to_string(),
+        "--repeat-count".to_string(),
+        "1".to_string(),
+    ];
+    let request = suite_request(bundle_path, 1, argv);
+    let bundle = run_suite_benchmark(&request).unwrap();
+
+    let selected = bundle
+        .results
+        .iter()
+        .find(|r| r.workload_name == LAZY_SELECTED_ROOT_WORKLOAD_NAME)
+        .expect("lazy selected root workload must be present");
+
+    let nonselected = selected
+        .phase_metrics
+        .iter()
+        .find(|m| m.name == LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME)
+        .expect("explicit_nonselected_root_force_count metric must be present");
+    assert_eq!(
+        nonselected.value, 0,
+        "nonselected root force count must be 0 for single selected-root benchmark"
+    );
+
+    let force_count = selected
+        .phase_metrics
+        .iter()
+        .find(|m| m.name == LAZY_FORCE_COUNT_METRIC_NAME)
+        .expect("explicit_top_level_root_force_count metric must be present");
+    assert_eq!(
+        force_count.value, 1,
+        "force count must be 1 for single selected-root benchmark"
+    );
 }

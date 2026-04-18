@@ -36,6 +36,17 @@ pub const BUILD_GRAPH_PHASE_METRIC_NAME: &str = "build_graph_wall_ns";
 pub const STORE_PERSISTENCE_PHASE_METRIC_NAME: &str = "store_persistence_wall_ns";
 pub const STORE_LOOKUP_PHASE_METRIC_NAME: &str = "store_lookup_wall_ns";
 pub const TOTAL_PHASE_METRIC_NAME: &str = "total_wall_ns";
+pub const LAZY_DISCOVERY_WORKLOAD_NAME: &str = "lazy-root-discovery-wide-package-set";
+pub const LAZY_SELECTED_ROOT_WORKLOAD_NAME: &str = "lazy-selected-root-wide-package-set";
+pub const EAGER_ALL_ROOTS_WORKLOAD_NAME: &str = "eager-all-roots-wide-package-set";
+pub const LAZY_DISCOVERY_METRIC_NAME: &str = "root_discovery_wall_ns";
+pub const LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME: &str = "selected_root_total_wall_ns";
+pub const LAZY_SELECTED_ROOT_FORCE_METRIC_NAME: &str = "selected_root_force_wall_ns";
+pub const LAZY_FORCE_COUNT_METRIC_NAME: &str = "explicit_top_level_root_force_count";
+pub const LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME: &str = "explicit_nonselected_root_force_count";
+pub const LAZY_ALL_ROOTS_METRIC_NAME: &str = "all_roots_total_wall_ns";
+const WIDE_FIXTURE_PATH: &str = "tests/fixtures/wide_package_set.ncl";
+const LAZY_SELECTED_ROOT_LABEL: &str = "alpha";
 
 #[derive(Debug)]
 pub enum Error {
@@ -282,6 +293,9 @@ pub fn run_suite_benchmark(request: &BenchmarkRequest) -> Result<BenchmarkBundle
             }
             SuiteWorkload::StoreAware(workload) => {
                 benchmark_store_aware_workload(&workload, request.repeat_count, &request.command_argv)?
+            }
+            SuiteWorkload::LazyEval(workload) => {
+                benchmark_lazy_eval_workload(&workload, request.repeat_count, &request.command_argv)?
             }
         };
         results.push(result);
@@ -639,12 +653,21 @@ fn compare_metric(
     })
 }
 
+#[derive(Clone)]
+struct LazyEvalWorkload {
+    descriptor: WorkloadDescriptor,
+    workload_path: PathBuf,
+    import_paths: Vec<OsString>,
+    selected_root_label: String,
+}
+
 enum SuiteWorkload {
     Evaluation(EvalWorkload),
     Conversion(ConversionWorkload),
     Substitution(SubstitutionWorkload),
     MultiPhaseWorkflow(MultiPhaseWorkflowWorkload),
     StoreAware(StoreAwareWorkload),
+    LazyEval(LazyEvalWorkload),
 }
 
 impl SuiteWorkload {
@@ -655,6 +678,7 @@ impl SuiteWorkload {
             SuiteWorkload::Substitution(workload) => workload.descriptor,
             SuiteWorkload::MultiPhaseWorkflow(workload) => workload.descriptor,
             SuiteWorkload::StoreAware(workload) => workload.descriptor,
+            SuiteWorkload::LazyEval(workload) => workload.descriptor,
         }
     }
 }
@@ -825,6 +849,51 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
                 cache_mode: "fresh temp store per sample".to_string(),
                 logical_store_prefix: DEFAULT_LOGICAL_STORE_PREFIX.to_string(),
             },
+        }),
+        SuiteWorkload::LazyEval(LazyEvalWorkload {
+            descriptor: workload_descriptor(
+                LAZY_DISCOVERY_WORKLOAD_NAME,
+                "lazy-eval",
+                repo_root.join(WIDE_FIXTURE_PATH),
+                "Measures lazy root label discovery on a wide package-set fixture without deep-forcing any root values.",
+                "EvaluationSession::open_file + root_labels",
+                SUITE_ENTRY_POINT,
+                "cold-per-sample",
+                "/nix/store",
+            ),
+            workload_path: repo_root.join(WIDE_FIXTURE_PATH),
+            import_paths: common_import_paths.clone(),
+            selected_root_label: String::new(),
+        }),
+        SuiteWorkload::LazyEval(LazyEvalWorkload {
+            descriptor: workload_descriptor(
+                LAZY_SELECTED_ROOT_WORKLOAD_NAME,
+                "lazy-eval",
+                repo_root.join(WIDE_FIXTURE_PATH),
+                "Measures end-to-end latency to obtain one selected root from a wide package set through the lazy session API.",
+                &format!("EvaluationSession::open_file + force_root(\"{}\")", LAZY_SELECTED_ROOT_LABEL),
+                SUITE_ENTRY_POINT,
+                "cold-per-sample",
+                "/nix/store",
+            ),
+            workload_path: repo_root.join(WIDE_FIXTURE_PATH),
+            import_paths: common_import_paths.clone(),
+            selected_root_label: LAZY_SELECTED_ROOT_LABEL.to_string(),
+        }),
+        SuiteWorkload::LazyEval(LazyEvalWorkload {
+            descriptor: workload_descriptor(
+                EAGER_ALL_ROOTS_WORKLOAD_NAME,
+                "lazy-eval",
+                repo_root.join(WIDE_FIXTURE_PATH),
+                "Guardrail: measures all-roots eager path on the same fixture to detect regressions from lazy changes.",
+                "EvaluationSession::open_file + force_all_roots",
+                SUITE_ENTRY_POINT,
+                "cold-per-sample",
+                "/nix/store",
+            ),
+            workload_path: repo_root.join(WIDE_FIXTURE_PATH),
+            import_paths: common_import_paths,
+            selected_root_label: String::new(),
         }),
     ])
 }
@@ -1039,6 +1108,77 @@ fn benchmark_store_aware_workload(
         timed.sample_wall_ns,
         timed.phase_metrics,
     )
+}
+
+fn benchmark_lazy_eval_workload(
+    workload: &LazyEvalWorkload,
+    repeat_count: u32,
+    command_argv: &[String],
+) -> Result<BenchmarkResult, Error> {
+    use crunch_eval::session::EvaluationSession;
+
+    let name = workload.descriptor.workload_name.as_str();
+    match name {
+        LAZY_DISCOVERY_WORKLOAD_NAME => {
+            let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+                let session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
+                let root_count = usize_to_u32(session.root_labels().len())?;
+                Ok(PhasedSample {
+                    root_count,
+                    phase_metrics: vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, 0)],
+                })
+            })?;
+            build_result(&workload.descriptor, command_argv, repeat_count,
+                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns,
+                vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, timed.total_wall_ns)])
+        }
+        LAZY_SELECTED_ROOT_WORKLOAD_NAME => {
+            let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+                let total_start = Instant::now();
+                let discovery_start = Instant::now();
+                let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
+                let discovery_ns = duration_to_ns_u64(discovery_start.elapsed())?;
+                let force_start = Instant::now();
+                let _drv: CrunchDerivation = session.force_root(&workload.selected_root_label)
+                    .map_err(|e| Error::Command { tool: "force_root".into(), detail: e.to_string() })?;
+                let force_ns = duration_to_ns_u64(force_start.elapsed())?;
+                let total_ns = duration_to_ns_u64(total_start.elapsed())?;
+                let force_count = session.explicit_force_count();
+                let nonselected = force_count.saturating_sub(1);
+                Ok(PhasedSample {
+                    root_count: 1,
+                    phase_metrics: vec![
+                        named_metric(LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME, total_ns),
+                        named_metric(LAZY_DISCOVERY_METRIC_NAME, discovery_ns),
+                        named_metric(LAZY_SELECTED_ROOT_FORCE_METRIC_NAME, force_ns),
+                        named_metric(LAZY_FORCE_COUNT_METRIC_NAME, force_count as u64),
+                        named_metric(LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME, nonselected as u64),
+                    ],
+                })
+            })?;
+            build_result(&workload.descriptor, command_argv, repeat_count,
+                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns, timed.phase_metrics)
+        }
+        EAGER_ALL_ROOTS_WORKLOAD_NAME => {
+            let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+                let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
+                let roots = session.force_all_roots::<CrunchDerivation>()
+                    .map_err(|e| Error::Command { tool: "force_all_roots".into(), detail: e.to_string() })?;
+                let root_count = usize_to_u32(roots.len())?;
+                Ok(PhasedSample {
+                    root_count,
+                    phase_metrics: vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, 0)],
+                })
+            })?;
+            build_result(&workload.descriptor, command_argv, repeat_count,
+                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns,
+                vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, timed.total_wall_ns)])
+        }
+        _ => Err(Error::InvalidArgument(format!("unknown lazy-eval workload: {name}"))),
+    }
 }
 
 struct TimedSamples {
@@ -1476,19 +1616,23 @@ mod tests {
         let descriptors = suite_workload_descriptors().unwrap();
         let names: Vec<String> = descriptors.iter().map(|d| d.workload_name.clone()).collect();
         let kinds: Vec<String> = descriptors.iter().map(|d| d.workload_kind.clone()).collect();
-        assert_eq!(descriptors.len(), 6);
+        assert_eq!(descriptors.len(), 9);
         assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&CONVERSION_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&SUBSTITUTION_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&BUILD_GRAPH_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&MULTI_PHASE_WORKFLOW_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&STORE_AWARE_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&LAZY_DISCOVERY_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&LAZY_SELECTED_ROOT_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&EAGER_ALL_ROOTS_WORKLOAD_NAME.to_string()));
         assert!(kinds.contains(&"evaluation".to_string()));
         assert!(kinds.contains(&"conversion".to_string()));
         assert!(kinds.contains(&"substitution".to_string()));
         assert!(kinds.contains(&"build-graph".to_string()));
         assert!(kinds.contains(&"workflow".to_string()));
         assert!(kinds.contains(&"store".to_string()));
+        assert!(kinds.contains(&"lazy-eval".to_string()));
     }
 
     #[test]
