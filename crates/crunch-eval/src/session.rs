@@ -54,12 +54,20 @@ pub struct IsolatedWorkerInput {
     source: String,
     import_paths: Vec<OsString>,
     source_name: String,
+    shape: RootShape,
+    labels: Vec<RootLabel>,
 }
 
 impl IsolatedWorkerInput {
     /// Force one root through an isolated worker session.
     pub fn force_root<T: DeserializeOwned>(&self, label: &str) -> Result<T, Error> {
-        let mut session = EvaluationSession::open_source(self.source.clone(), &self.import_paths, &self.source_name)?;
+        let mut session = EvaluationSession::open_worker_source(
+            self.source.clone(),
+            &self.import_paths,
+            &self.source_name,
+            self.shape.clone(),
+            self.labels.clone(),
+        )?;
         let value = session.force_root(label)?;
         Ok(value)
     }
@@ -127,19 +135,48 @@ impl EvaluationSession {
         let shallow_expr = ctx.eval_shallow(&source).map_err(Error::Eval)?;
         let shape = classify_shape(&mut ctx, &shallow_expr)?;
 
-        let mut session = EvaluationSession {
+        let mut session =
+            Self::new_session(ctx, source, import_paths.to_vec(), source_name.to_string(), shape, Vec::new());
+        session.discover_roots()?;
+        Ok(session)
+    }
+
+    fn open_worker_source(
+        source: String,
+        import_paths: &[OsString],
+        source_name: &str,
+        shape: RootShape,
+        labels: Vec<RootLabel>,
+    ) -> Result<Self, Error> {
+        assert!(!source_name.is_empty(), "source name must not be empty");
+        assert!(!labels.is_empty(), "worker labels must not be empty");
+
+        let ctx = Context::new()
+            .with_added_import_paths(import_paths.to_vec())
+            .with_source_name(source_name.to_string());
+        let session = Self::new_session(ctx, source, import_paths.to_vec(), source_name.to_string(), shape, labels);
+        Ok(session)
+    }
+
+    fn new_session(
+        ctx: Context,
+        source: String,
+        import_paths: Vec<OsString>,
+        source_name: String,
+        shape: RootShape,
+        labels: Vec<RootLabel>,
+    ) -> Self {
+        EvaluationSession {
             ctx,
             source,
-            import_paths: import_paths.to_vec(),
-            source_name: source_name.to_string(),
+            import_paths,
+            source_name,
             shape,
-            labels: Vec::new(),
+            labels,
             deep_expr: None,
             forced_root_count: 0,
             discovery_metrics: DiscoveryMetrics::default(),
-        };
-        session.discover_roots()?;
-        Ok(session)
+        }
     }
 
     /// The top-level shape of the evaluated program.
@@ -168,6 +205,8 @@ impl EvaluationSession {
             source: self.source.clone(),
             import_paths: self.import_paths.clone(),
             source_name: self.source_name.clone(),
+            shape: self.shape.clone(),
+            labels: self.labels.clone(),
         }
     }
 
