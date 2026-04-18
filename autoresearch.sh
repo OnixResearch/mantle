@@ -6,14 +6,18 @@ set -euo pipefail
 # prints the primary metric (parallel_all_roots_total_wall_ns).
 
 REPEAT_COUNT="${REPEAT_COUNT:-10}"
-BUNDLE_OUT="${BUNDLE_OUT:-openspec/changes/parallel-root-evaluation/evidence/parallel-root-benchmark.json}"
-: "${CARGO_TARGET_DIR:=target/autoresearch-parallel-root}"
+BUNDLE_OUT="${BUNDLE_OUT:-target/benchmarks/parallel-root-run.json}"
+CARGO_TARGET_ROOT="${CARGO_TARGET_ROOT:-target/autoresearch-parallel-root}"
 
 export PATH="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:$HOME/.cargo/bin:/nix/store/6jafhh81cf85d0vqwrnhl5yfc4wibxvq-protobuf-29.6/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH"
 export PKG_CONFIG_PATH="/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export SNIX_BUILD_SANDBOX_SHELL="${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
 
 mkdir -p "$(dirname "$BUNDLE_OUT")"
+mkdir -p "$CARGO_TARGET_ROOT"
+if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
+  CARGO_TARGET_DIR="$(mktemp -d "$CARGO_TARGET_ROOT/run-XXXXXX")"
+fi
 export BUNDLE_OUT
 export CARGO_TARGET_DIR
 

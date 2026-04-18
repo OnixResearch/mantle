@@ -333,6 +333,26 @@ impl EvaluationSession {
     }
 }
 
+#[derive(Debug)]
+struct IndexedRoot<T> {
+    index: u32,
+    label: String,
+    value: T,
+}
+
+#[derive(Debug)]
+struct WorkerAssignment {
+    start_index: u32,
+    labels: Vec<String>,
+}
+
+#[derive(Debug)]
+struct WorkerFailure {
+    index: u32,
+    label: String,
+    detail: String,
+}
+
 fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
     labels: &[String],
@@ -340,32 +360,92 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
 ) -> Result<Vec<(String, T)>, Error> {
     let requested_root_count = labels.len();
     let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
-    let mut results = Vec::with_capacity(requested_root_count);
+    let worker_assignments = build_worker_assignments(labels, concurrency_cap);
+    let mut indexed_results = Vec::with_capacity(requested_root_count);
     if requested_root_count == 0 {
-        return Ok(results);
+        return Ok(Vec::new());
     }
 
-    for batch_labels in labels.chunks(concurrency_cap as usize) {
-        let mut handles = Vec::with_capacity(batch_labels.len());
-        for label in batch_labels {
-            let worker = worker_input.clone();
-            let label = label.clone();
-            handles.push(std::thread::spawn(move || -> Result<(String, T), (String, String)> {
-                let value = worker.force_root(&label).map_err(|err| (label.clone(), err.to_string()))?;
-                Ok((label, value))
-            }));
-        }
+    let mut handles = Vec::with_capacity(worker_assignments.len());
+    for assignment in worker_assignments {
+        let worker = worker_input.clone();
+        handles.push(std::thread::spawn(move || -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
+            force_worker_assignment(&worker, assignment)
+        }));
+    }
 
-        for handle in handles {
-            let result =
-                handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
-            match result {
-                Ok(value) => results.push(value),
-                Err((label, detail)) => {
-                    return Err(Error::Boundary(format!("root '{label}': {detail}")));
-                }
+    for handle in handles {
+        let worker_result =
+            handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
+        match worker_result {
+            Ok(mut worker_values) => indexed_results.append(&mut worker_values),
+            Err(failure) => {
+                return Err(Error::Boundary(format!(
+                    "root '{}' at request index {}: {}",
+                    failure.label, failure.index, failure.detail
+                )));
             }
         }
+    }
+
+    indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
+    let ordered_results =
+        indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
+    Ok(ordered_results)
+}
+
+fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<WorkerAssignment> {
+    assert!(concurrency_cap >= 1, "concurrency_cap must be at least 1");
+    assert!(labels.len() <= u32::MAX as usize, "label count must fit in u32");
+    if labels.is_empty() {
+        return Vec::new();
+    }
+
+    let chunk_len = labels.len().div_ceil(concurrency_cap as usize);
+    assert!(chunk_len >= 1, "chunk_len must be at least 1");
+
+    let mut assignments = Vec::new();
+    for (chunk_index, chunk_labels) in labels.chunks(chunk_len).enumerate() {
+        let start_index = chunk_index
+            .checked_mul(chunk_len)
+            .and_then(|value| u32::try_from(value).ok())
+            .expect("worker assignment start index must fit in u32");
+        assignments.push(WorkerAssignment {
+            start_index,
+            labels: chunk_labels.to_vec(),
+        });
+    }
+    assignments
+}
+
+fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
+    worker_input: &IsolatedWorkerInput,
+    assignment: WorkerAssignment,
+) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
+    let mut session = EvaluationSession::open_source(
+        worker_input.source.clone(),
+        &worker_input.import_paths,
+        &worker_input.source_name,
+    )
+    .map_err(|err| WorkerFailure {
+        index: assignment.start_index,
+        label: assignment.labels.first().cloned().unwrap_or_else(|| "<none>".to_string()),
+        detail: err.to_string(),
+    })?;
+    let mut results = Vec::with_capacity(assignment.labels.len());
+
+    for (offset, label) in assignment.labels.iter().enumerate() {
+        let request_index = assignment.start_index.saturating_add(offset as u32);
+        let value = session.force_root(label).map_err(|err| WorkerFailure {
+            index: request_index,
+            label: label.clone(),
+            detail: err.to_string(),
+        })?;
+        results.push(IndexedRoot {
+            index: request_index,
+            label: label.clone(),
+            value,
+        });
     }
 
     Ok(results)
