@@ -1,4 +1,5 @@
 mod canonical;
+pub mod discovery;
 mod digest;
 mod error;
 pub mod policy;
@@ -27,6 +28,9 @@ pub use policy::ReleasePolicy;
 pub use policy::ReleaseRevocations;
 pub use policy::ValidatedWitness;
 pub use policy::evaluate_policy;
+pub use discovery::DiscoveryError;
+pub use discovery::VerificationDirectory;
+pub use discovery::VerificationMaterial;
 pub use schema::ArtifactAttestation;
 pub use schema::ArtifactFacts;
 pub use schema::ArtifactReference;
