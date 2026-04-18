@@ -395,18 +395,22 @@ struct WorkerFailure {
     detail: String,
 }
 
+const MIN_ROOTS_PER_WORKER: usize = 8;
+
 fn force_selected_roots_with_workers<T: DeserializeOwned + Send>(
     worker_input: &IsolatedWorkerInput,
     labels: &[String],
     max_concurrency: u32,
 ) -> Result<Vec<(String, T)>, Error> {
     let requested_root_count = labels.len();
-    let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
-    let worker_assignments = build_worker_assignments(labels, concurrency_cap);
-    let mut indexed_results = Vec::with_capacity(requested_root_count);
     if requested_root_count == 0 {
         return Ok(Vec::new());
     }
+
+    let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
+    let effective_concurrency = clamp_parallel_workers(requested_root_count, concurrency_cap);
+    let worker_assignments = build_worker_assignments(labels, effective_concurrency);
+    let mut indexed_results = Vec::with_capacity(requested_root_count);
 
     std::thread::scope(|scope| {
         let mut handles = Vec::with_capacity(worker_assignments.len());
@@ -435,6 +439,16 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send>(
             indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
         Ok(ordered_results)
     })
+}
+
+fn clamp_parallel_workers(requested_root_count: usize, concurrency_cap: u32) -> u32 {
+    assert!(requested_root_count >= 1, "requested_root_count must not be zero");
+    assert!(concurrency_cap >= 1, "concurrency_cap must be at least 1");
+
+    let max_workers_from_chunking = requested_root_count.div_ceil(MIN_ROOTS_PER_WORKER);
+    let max_workers_from_chunking = max_workers_from_chunking.max(1);
+    let max_workers_from_chunking = u32::try_from(max_workers_from_chunking).expect("worker count must fit in u32");
+    concurrency_cap.min(max_workers_from_chunking)
 }
 
 fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<WorkerAssignment> {
@@ -662,6 +676,15 @@ mod tests {
         assert_eq!(normalize_concurrency_cap(4, 2), 2);
         assert_eq!(normalize_concurrency_cap(2, 4), 2);
         assert_eq!(normalize_concurrency_cap(1, 4), 1);
+    }
+
+    #[test]
+    fn clamp_parallel_workers_preserves_minimum_chunk_size() {
+        assert_eq!(clamp_parallel_workers(1, 4), 1);
+        assert_eq!(clamp_parallel_workers(8, 4), 1);
+        assert_eq!(clamp_parallel_workers(16, 4), 2);
+        assert_eq!(clamp_parallel_workers(24, 4), 3);
+        assert_eq!(clamp_parallel_workers(32, 4), 4);
     }
 
     #[test]
