@@ -8,6 +8,7 @@
 
 use std::ffi::OsString;
 use std::path::Path;
+use std::sync::Arc;
 
 use nickel_lang::Context;
 use nickel_lang::Expr;
@@ -51,11 +52,11 @@ pub struct DiscoveryMetrics {
 /// instead of sharing a mutable Nickel `Context`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IsolatedWorkerInput {
-    source: String,
-    import_paths: Vec<OsString>,
-    source_name: String,
+    source: Arc<str>,
+    import_paths: Arc<[OsString]>,
+    source_name: Arc<str>,
     shape: RootShape,
-    labels: Vec<RootLabel>,
+    labels: Arc<[RootLabel]>,
 }
 
 impl IsolatedWorkerInput {
@@ -63,10 +64,10 @@ impl IsolatedWorkerInput {
     pub fn force_root<T: DeserializeOwned>(&self, label: &str) -> Result<T, Error> {
         let mut session = EvaluationSession::open_worker_source(
             self.source.clone(),
-            &self.import_paths,
-            &self.source_name,
+            self.import_paths.clone(),
+            self.source_name.clone(),
             self.shape.clone(),
-            self.labels.clone(),
+            self.labels.to_vec(),
         )?;
         let value = session.force_root(label)?;
         Ok(value)
@@ -80,11 +81,11 @@ impl IsolatedWorkerInput {
 pub struct EvaluationSession {
     ctx: Context,
     /// Original source text, kept for per-root deep evaluation.
-    source: String,
+    source: Arc<str>,
     /// Resolved import paths used to open this session.
-    import_paths: Vec<OsString>,
+    import_paths: Arc<[OsString]>,
     /// Source name used for diagnostics.
-    source_name: String,
+    source_name: Arc<str>,
     /// Discovered root shape.
     shape: RootShape,
     /// Discovered root labels, populated during construction.
@@ -128,6 +129,9 @@ impl EvaluationSession {
     fn open_source(source: String, import_paths: &[OsString], source_name: &str) -> Result<Self, Error> {
         assert!(!source_name.is_empty(), "source name must not be empty");
 
+        let source: Arc<str> = source.into();
+        let import_paths: Arc<[OsString]> = import_paths.to_vec().into();
+        let source_name: Arc<str> = source_name.to_string().into();
         let mut ctx = Context::new()
             .with_added_import_paths(import_paths.to_vec())
             .with_source_name(source_name.to_string());
@@ -135,16 +139,15 @@ impl EvaluationSession {
         let shallow_expr = ctx.eval_shallow(&source).map_err(Error::Eval)?;
         let shape = classify_shape(&mut ctx, &shallow_expr)?;
 
-        let mut session =
-            Self::new_session(ctx, source, import_paths.to_vec(), source_name.to_string(), shape, Vec::new());
+        let mut session = Self::new_session(ctx, source, import_paths, source_name, shape, Vec::new());
         session.discover_roots()?;
         Ok(session)
     }
 
     fn open_worker_source(
-        source: String,
-        import_paths: &[OsString],
-        source_name: &str,
+        source: Arc<str>,
+        import_paths: Arc<[OsString]>,
+        source_name: Arc<str>,
         shape: RootShape,
         labels: Vec<RootLabel>,
     ) -> Result<Self, Error> {
@@ -154,15 +157,15 @@ impl EvaluationSession {
         let ctx = Context::new()
             .with_added_import_paths(import_paths.to_vec())
             .with_source_name(source_name.to_string());
-        let session = Self::new_session(ctx, source, import_paths.to_vec(), source_name.to_string(), shape, labels);
+        let session = Self::new_session(ctx, source, import_paths, source_name, shape, labels);
         Ok(session)
     }
 
     fn new_session(
         ctx: Context,
-        source: String,
-        import_paths: Vec<OsString>,
-        source_name: String,
+        source: Arc<str>,
+        import_paths: Arc<[OsString]>,
+        source_name: Arc<str>,
         shape: RootShape,
         labels: Vec<RootLabel>,
     ) -> Self {
@@ -206,7 +209,7 @@ impl EvaluationSession {
             import_paths: self.import_paths.clone(),
             source_name: self.source_name.clone(),
             shape: self.shape.clone(),
-            labels: self.labels.clone(),
+            labels: Arc::from(self.labels.clone()),
         }
     }
 
@@ -220,7 +223,7 @@ impl EvaluationSession {
     }
 
     /// Force a selected label set serially through isolated worker sessions.
-    pub fn force_selected_roots<T: DeserializeOwned + Send + 'static>(
+    pub fn force_selected_roots<T: DeserializeOwned + Send>(
         &self,
         labels: &[String],
     ) -> Result<Vec<(String, T)>, Error> {
@@ -228,7 +231,7 @@ impl EvaluationSession {
     }
 
     /// Force a selected label set through isolated worker sessions under a bounded cap.
-    pub fn force_selected_roots_bounded<T: DeserializeOwned + Send + 'static>(
+    pub fn force_selected_roots_bounded<T: DeserializeOwned + Send>(
         &self,
         labels: &[String],
         max_concurrency: u32,
@@ -238,7 +241,7 @@ impl EvaluationSession {
     }
 
     /// Force all discovered roots through isolated worker sessions under a bounded cap.
-    pub fn force_all_roots_bounded<T: DeserializeOwned + Send + 'static>(
+    pub fn force_all_roots_bounded<T: DeserializeOwned + Send>(
         &self,
         max_concurrency: u32,
     ) -> Result<Vec<(String, T)>, Error> {
@@ -392,7 +395,7 @@ struct WorkerFailure {
     detail: String,
 }
 
-fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
+fn force_selected_roots_with_workers<T: DeserializeOwned + Send>(
     worker_input: &IsolatedWorkerInput,
     labels: &[String],
     max_concurrency: u32,
@@ -405,32 +408,33 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
         return Ok(Vec::new());
     }
 
-    let mut handles = Vec::with_capacity(worker_assignments.len());
-    for assignment in worker_assignments {
-        let worker = worker_input.clone();
-        handles.push(std::thread::spawn(move || -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
-            force_worker_assignment(&worker, assignment)
-        }));
-    }
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(worker_assignments.len());
+        for assignment in worker_assignments {
+            handles.push(scope.spawn(move || -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
+                force_worker_assignment(worker_input, assignment)
+            }));
+        }
 
-    for handle in handles {
-        let worker_result =
-            handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
-        match worker_result {
-            Ok(mut worker_values) => indexed_results.append(&mut worker_values),
-            Err(failure) => {
-                return Err(Error::Boundary(format!(
-                    "root '{}' at request index {}: {}",
-                    failure.label, failure.index, failure.detail
-                )));
+        for handle in handles {
+            let worker_result =
+                handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
+            match worker_result {
+                Ok(mut worker_values) => indexed_results.append(&mut worker_values),
+                Err(failure) => {
+                    return Err(Error::Boundary(format!(
+                        "root '{}' at request index {}: {}",
+                        failure.label, failure.index, failure.detail
+                    )));
+                }
             }
         }
-    }
 
-    indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
-    let ordered_results =
-        indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
-    Ok(ordered_results)
+        indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
+        let ordered_results =
+            indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
+        Ok(ordered_results)
+    })
 }
 
 fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<WorkerAssignment> {
@@ -457,7 +461,7 @@ fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<Work
     assignments
 }
 
-fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
+fn force_worker_assignment<T: DeserializeOwned + Send>(
     worker_input: &IsolatedWorkerInput,
     assignment: WorkerAssignment,
 ) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
@@ -469,8 +473,8 @@ fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
         })?;
     let mut session = EvaluationSession::open_worker_source(
         worker_input.source.clone(),
-        &worker_input.import_paths,
-        &worker_input.source_name,
+        worker_input.import_paths.clone(),
+        worker_input.source_name.clone(),
         worker_input.shape.clone(),
         worker_labels,
     )
@@ -608,9 +612,9 @@ mod tests {
     ) -> EvaluationSession {
         EvaluationSession {
             ctx: Context::new().with_source_name("<test>".to_string()),
-            source: source.to_string(),
-            import_paths: Vec::new(),
-            source_name: "<test>".to_string(),
+            source: Arc::<str>::from(source.to_string()),
+            import_paths: Arc::<[OsString]>::from(Vec::<OsString>::new()),
+            source_name: Arc::<str>::from("<test>".to_string()),
             shape,
             labels,
             deep_expr,
