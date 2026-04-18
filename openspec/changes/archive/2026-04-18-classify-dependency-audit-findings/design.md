@@ -31,8 +31,9 @@ the canonical dependency audit entry point.
 unmaintained, and yanked classes we care about. The missing piece is repo-local
 policy, not a new scanner.
 
-**Implementation:** add checked-in config and docs that tell contributors how
-the repo expects deny output to be interpreted.
+**Implementation:** add checked-in config at `deny.toml` and companion policy
+notes in `docs/dependency-audit.md` that tell contributors how the repo expects
+deny output to be interpreted.
 
 ### 2. Findings are classified before waivers are added
 
@@ -48,9 +49,9 @@ persistent waiver lands:
 **Rationale:** this keeps the repo from treating easy fixes and blocked
 upstream debt as the same problem.
 
-**Implementation:** the machine-enforced deny config will carry the narrow
-waivers, and a companion checked-in markdown note will carry the human-readable
-classification for the current finding set.
+**Implementation:** the machine-enforced deny config in `deny.toml` will carry
+the narrow waivers, and `docs/dependency-audit.md` will carry the
+human-readable classification for the current finding set.
 
 ### 3. Waivers must be narrow and revisitable
 
@@ -60,8 +61,23 @@ review trigger or expiry condition.
 
 **Rationale:** broad silent ignores would make future audit output meaningless.
 
-**Implementation:** the checked-in deny config and supporting docs will carry
-that metadata close to the waiver itself.
+**Implementation:** `deny.toml` and `docs/dependency-audit.md` will carry that
+metadata close to the waiver itself.
+
+### 4. License policy stays compatible with crunch's AGPL distribution
+
+**Choice:** the checked-in `cargo deny` policy will include the `licenses`
+check and explicitly allow AGPL-3.0-or-later plus the dependency licenses that
+are compatible with the current crunch distribution.
+
+**Rationale:** crunch itself is AGPL-licensed. The repo-local policy should
+make that stance explicit instead of accidentally treating the workspace's own
+license family as a failure.
+
+**Implementation:** keep the allow-list in `deny.toml`, and mark the vendored
+workspace crates that lack upstream license fields as `publish = false` so
+`licenses.private.ignore = true` can suppress local packaging noise without
+inventing license metadata.
 
 ## Verification Strategy
 

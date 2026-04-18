@@ -1,0 +1,49 @@
+vm-memory v0.10.0
+├── vm-memory feature "backend-mmap"
+│   └── fuse-backend-rs v0.12.0 (/home/brittonr/git/crunch/crunch/vendor/fuse-backend-rs)
+│       ├── fuse-backend-rs feature "caps"
+│       │   └── fuse-backend-rs feature "fusedev"
+│       │       └── fuse-backend-rs feature "default"
+│       │           └── snix-castore v0.1.0 (/home/brittonr/git/crunch/crunch/vendor/snix-castore)
+│       │               ├── snix-castore feature "default"
+│       │               │   ├── crunch v0.1.0 (/home/brittonr/git/crunch/crunch)
+│       │               │   │   └── crunch feature "default" (command-line)
+│       │               │   ├── crunch-build v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-build)
+│       │               │   │   └── crunch-build feature "default"
+│       │               │   │       ├── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │   │       └── crunch-pipeline v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-pipeline)
+│       │               │   │           └── crunch-pipeline feature "default"
+│       │               │   │               └── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │   ├── crunch-delta v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-delta)
+│       │               │   │   └── crunch-delta feature "default"
+│       │               │   │       [dev-dependencies]
+│       │               │   │       └── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │   ├── crunch-store v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-store)
+│       │               │   │   └── crunch-store feature "default"
+│       │               │   │       ├── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │   │       ├── crunch-build v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-build) (*)
+│       │               │   │       ├── crunch-delta v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-delta) (*)
+│       │               │   │       └── crunch-pipeline v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-pipeline) (*)
+│       │               │   ├── snix-build v0.1.0 (/home/brittonr/git/crunch/crunch/vendor/snix-build)
+│       │               │   │   └── snix-build feature "default"
+│       │               │   │       ├── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │   │       ├── crunch-build v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-build) (*)
+│       │               │   │       └── crunch-pipeline v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-pipeline) (*)
+│       │               │   └── snix-store v0.1.0 (/home/brittonr/git/crunch/crunch/vendor/snix-store)
+│       │               │       └── snix-store feature "default"
+│       │               │           ├── crunch v0.1.0 (/home/brittonr/git/crunch/crunch) (*)
+│       │               │           ├── crunch-build v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-build) (*)
+│       │               │           ├── crunch-delta v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-delta) (*)
+│       │               │           └── crunch-store v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-store) (*)
+│       │               ├── snix-castore feature "fs"
+│       │               │   └── snix-castore feature "fuse"
+│       │               │       └── snix-build v0.1.0 (/home/brittonr/git/crunch/crunch/vendor/snix-build) (*)
+│       │               └── snix-castore feature "fuse" (*)
+│       ├── fuse-backend-rs feature "core-foundation-sys"
+│       │   └── fuse-backend-rs feature "fusedev" (*)
+│       ├── fuse-backend-rs feature "default" (*)
+│       ├── fuse-backend-rs feature "fusedev" (*)
+│       └── fuse-backend-rs feature "vmm-sys-util"
+│           └── fuse-backend-rs feature "fusedev" (*)
+└── vm-memory feature "default"
+    └── fuse-backend-rs v0.12.0 (/home/brittonr/git/crunch/crunch/vendor/fuse-backend-rs) (*)

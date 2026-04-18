@@ -2,6 +2,7 @@
 name = "snix-castore"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 async-compression = { version = "0.4.12", features = ["tokio", "zstd"] }
@@ -46,7 +47,7 @@ tokio = { version = "1.39.3", features = [
   "signal",
 ] }
 tokio-stream = { version = "0.1.15", features = ["fs", "net"] }
-tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
+tokio-tar = { package = "astral-tokio-tar", version = "0.6.0" }
 tokio-util = { version = "0.7.11", features = ["io", "io-util", "codec"] }
 toml = { version = "0.8.19", optional = true }
 

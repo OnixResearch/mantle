@@ -1,0 +1,60 @@
+[graph]
+targets = []
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+ignore = [
+  { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill comes through heapless/postcard; current fix path is upstream-blocked until that stack moves to portable-atomic" },
+  { id = "RUSTSEC-2024-0436", reason = "paste comes through nickel-lang-core; current fix path is upstream-blocked until Nickel drops or replaces paste" },
+  { id = "RUSTSEC-2023-0056", reason = "vm-memory 0.10 is pinned through fuse-backend-rs plus the vhost/virtiofs stack; revisit when vendor/fuse-backend-rs and optional virtiofs deps can move together" },
+  { id = "RUSTSEC-2024-0002", reason = "vmm-sys-util 0.11 is pinned through fuse-backend-rs plus the vhost/virtiofs stack; revisit when vendor/fuse-backend-rs and optional virtiofs deps can move together" },
+]
+
+[licenses]
+allow = [
+  "0BSD",
+  "AGPL-3.0-or-later",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "LGPL-3.0-only",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "OpenSSL",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Unlicense",
+  "Zlib",
+  "bzip2-1.0.6",
+]
+confidence-threshold = 0.8
+exceptions = []
+
+[licenses.private]
+ignore = true
+registries = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/tvlfyi/wu-manber.git"]
