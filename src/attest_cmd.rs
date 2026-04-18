@@ -299,13 +299,13 @@ fn verify_project_document(
         }
 
         let actual_digest = document_digest_hex(document)?;
-        if let Some(envelope_digest) = envelope_digest {
-            if envelope_digest != actual_digest {
-                return Err(RunError::Build(format!(
-                    "saved project attestation digest mismatch: expected {}, got {}",
-                    envelope_digest, actual_digest
-                )));
-            }
+        if let Some(envelope_digest) = envelope_digest
+            && envelope_digest != actual_digest
+        {
+            return Err(RunError::Build(format!(
+                "saved project attestation digest mismatch: expected {}, got {}",
+                envelope_digest, actual_digest
+            )));
         }
 
         println!("OK {} digest={} file={}", document.kind(), actual_digest, path.display());
@@ -330,10 +330,10 @@ fn verify_project_document(
 }
 
 async fn load_document_input(store: Option<&StoreHandle>, input: &str) -> Result<AttestationDocument, RunError> {
-    if let Some(store) = store {
-        if let Ok((document, _stored_path)) = load_artifact_document(store, input).await {
-            return Ok(document);
-        }
+    if let Some(store) = store
+        && let Ok((document, _stored_path)) = load_artifact_document(store, input).await
+    {
+        return Ok(document);
     }
 
     let path = Path::new(input);

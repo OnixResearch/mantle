@@ -34,9 +34,7 @@ fn fixture_path() -> PathBuf {
 }
 
 fn stdlib_import_path() -> OsString {
-    crunch_eval::stdlib::stdlib_import_path()
-        .expect("stdlib import path")
-        .into_os_string()
+    crunch_eval::stdlib::stdlib_import_path().expect("stdlib import path").into_os_string()
 }
 
 fn import_paths() -> Vec<OsString> {
@@ -59,11 +57,7 @@ fn measure_lazy_discovery(path: &Path, import_paths: &[OsString]) -> Result<(u64
     Ok((elapsed_ns, root_count))
 }
 
-fn measure_lazy_selected_root(
-    path: &Path,
-    import_paths: &[OsString],
-    label: &str,
-) -> Result<LazyMetrics, Error> {
+fn measure_lazy_selected_root(path: &Path, import_paths: &[OsString], label: &str) -> Result<LazyMetrics, Error> {
     let total_start = Instant::now();
 
     let discovery_start = Instant::now();
@@ -218,8 +212,7 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
             workload_name: EAGER_ALL_ROOTS_WORKLOAD.to_string(),
             workload_kind: "lazy-eval".to_string(),
             workload_path: WIDE_FIXTURE_PATH.to_string(),
-            rationale: "Guardrail: measures all-roots eager path to detect regressions from lazy changes"
-                .to_string(),
+            rationale: "Guardrail: measures all-roots eager path to detect regressions from lazy changes".to_string(),
             operation: "open_file + force_all_roots".to_string(),
             entry_point: "benchmark_lazy_eval".to_string(),
             command_argv: std::env::args().collect(),
@@ -250,10 +243,7 @@ fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(DEFAULT_REPEAT_COUNT);
 
-    let bundle_out = args
-        .iter()
-        .position(|a| a == "--bundle-out")
-        .and_then(|i| args.get(i + 1).cloned());
+    let bundle_out = args.iter().position(|a| a == "--bundle-out").and_then(|i| args.get(i + 1).cloned());
 
     let results = run_lazy_benchmarks(repeat_count).unwrap_or_else(|e| {
         eprintln!("benchmark failed: {e}");
@@ -268,10 +258,7 @@ fn main() {
         // Print human-readable summary to stdout
         for result in &results {
             println!("workload: {}", result.workload_name);
-            println!(
-                "  total_wall_ns: {} (median of {} samples)",
-                result.total_wall_ns, result.repeat_count
-            );
+            println!("  total_wall_ns: {} (median of {} samples)", result.total_wall_ns, result.repeat_count);
             for metric in &result.phase_metrics {
                 println!("  {}: {} {}", metric.name, metric.value, metric.unit);
             }

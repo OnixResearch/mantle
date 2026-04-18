@@ -1,10 +1,10 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::canonical::to_canonical_bytes;
 use crate::AttestationDigest;
 use crate::Canonicalize;
 use crate::Error;
+use crate::canonical::to_canonical_bytes;
 
 pub const RELEASE_ATTESTATION_SCHEMA: &str = "crunch-release-attestation-v1";
 pub const WITNESS_ATTESTATION_SCHEMA: &str = "crunch-witness-attestation-v1";
@@ -113,18 +113,14 @@ impl DetachedSignature {
             });
         }
 
-        let decoded = data_encoding::BASE64
-            .decode(sig_b64.as_bytes())
-            .map_err(|err| Error::InvalidDetachedSignature {
+        let decoded =
+            data_encoding::BASE64.decode(sig_b64.as_bytes()).map_err(|err| Error::InvalidDetachedSignature {
                 message: format!("invalid base64: {err}"),
             })?;
 
         let signature_bytes: [u8; ED25519_SIGNATURE_BYTES] =
             decoded.try_into().map_err(|v: Vec<u8>| Error::InvalidDetachedSignature {
-                message: format!(
-                    "expected {ED25519_SIGNATURE_BYTES} signature bytes, got {}",
-                    v.len()
-                ),
+                message: format!("expected {ED25519_SIGNATURE_BYTES} signature bytes, got {}", v.len()),
             })?;
 
         Ok(Self {
@@ -499,13 +495,11 @@ mod tests {
 
     #[test]
     fn matching_digest_sets_compare_equal() {
-        let digests = vec![
-            BinaryDigest {
-                name: "crunch".to_string(),
-                algorithm: "blake3".to_string(),
-                digest: "aa".repeat(32),
-            },
-        ];
+        let digests = vec![BinaryDigest {
+            name: "crunch".to_string(),
+            algorithm: "blake3".to_string(),
+            digest: "aa".repeat(32),
+        }];
         assert!(binary_digests_match(&digests, &digests));
     }
 
@@ -532,13 +526,10 @@ mod tests {
         attestation.schema = "wrong-schema".to_string();
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(
-            err,
-            Error::SchemaTagMismatch {
-                expected: RELEASE_ATTESTATION_SCHEMA,
-                actual: "wrong-schema".to_string(),
-            }
-        );
+        assert_eq!(err, Error::SchemaTagMismatch {
+            expected: RELEASE_ATTESTATION_SCHEMA,
+            actual: "wrong-schema".to_string(),
+        });
     }
 
     #[test]
@@ -547,13 +538,10 @@ mod tests {
         attestation.schema = "wrong-schema".to_string();
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(
-            err,
-            Error::SchemaTagMismatch {
-                expected: WITNESS_ATTESTATION_SCHEMA,
-                actual: "wrong-schema".to_string(),
-            }
-        );
+        assert_eq!(err, Error::SchemaTagMismatch {
+            expected: WITNESS_ATTESTATION_SCHEMA,
+            actual: "wrong-schema".to_string(),
+        });
     }
 
     // -- Empty field validation --------------------------------------------
@@ -573,7 +561,9 @@ mod tests {
         attestation.witness_identity.clear();
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(err, Error::EmptyField { field: "witness_identity" });
+        assert_eq!(err, Error::EmptyField {
+            field: "witness_identity"
+        });
     }
 
     #[test]
@@ -582,7 +572,9 @@ mod tests {
         attestation.binary_digests[0].name.clear();
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(err, Error::EmptyField { field: "binary_digest.name" });
+        assert_eq!(err, Error::EmptyField {
+            field: "binary_digest.name"
+        });
     }
 
     // -- Env summary bounds ------------------------------------------------
@@ -593,14 +585,11 @@ mod tests {
         attestation.rebuild_environment_summary.system = "x".repeat(257);
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(
-            err,
-            Error::FieldTooLong {
-                field: "system",
-                limit: 256,
-                actual: 257,
-            }
-        );
+        assert_eq!(err, Error::FieldTooLong {
+            field: "system",
+            limit: 256,
+            actual: 257,
+        });
     }
 
     // -- Collection limit --------------------------------------------------
@@ -617,13 +606,10 @@ mod tests {
             .collect();
 
         let err = attestation.canonical_bytes().unwrap_err();
-        assert_eq!(
-            err,
-            Error::CollectionTooLarge {
-                limit: 256,
-                actual: 257,
-            }
-        );
+        assert_eq!(err, Error::CollectionTooLarge {
+            limit: 256,
+            actual: 257,
+        });
     }
 
     // -- Detached signature ------------------------------------------------

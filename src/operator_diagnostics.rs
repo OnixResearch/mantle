@@ -195,11 +195,11 @@ fn find_bwrap() -> Option<PathBuf> {
 }
 
 fn check_sandbox_shell_availability() -> PreflightCheck {
-    if let Some(env_shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL") {
-        if env_shell != "/bin/sh" {
-            let env_path = PathBuf::from(env_shell);
-            return check_explicit_shell("sandbox-shell", &env_path, "SNIX_BUILD_SANDBOX_SHELL");
-        }
+    if let Some(env_shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
+        && env_shell != "/bin/sh"
+    {
+        let env_path = PathBuf::from(env_shell);
+        return check_explicit_shell("sandbox-shell", &env_path, "SNIX_BUILD_SANDBOX_SHELL");
     }
 
     if SANDBOX_SHELL_DEFAULT != "/bin/sh" {

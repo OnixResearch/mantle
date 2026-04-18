@@ -7,10 +7,10 @@ use crate::policy::ReleasePolicy;
 use crate::policy::ReleaseRevocations;
 use crate::policy::ValidatedWitness;
 use crate::release::DetachedSignature;
-use crate::release::ReleaseAttestation;
-use crate::release::WitnessAttestation;
 use crate::release::RELEASE_ATTESTATION_SCHEMA;
+use crate::release::ReleaseAttestation;
 use crate::release::WITNESS_ATTESTATION_SCHEMA;
+use crate::release::WitnessAttestation;
 
 const MAX_WITNESS_FILES: u32 = 1_024;
 
@@ -77,8 +77,7 @@ impl VerificationDirectory {
 
         // Load release attestation.
         let release_json = read_file(&release_path)?;
-        let release_attestation: ReleaseAttestation =
-            parse_json(&release_json, &release_path)?;
+        let release_attestation: ReleaseAttestation = parse_json(&release_json, &release_path)?;
         if release_attestation.schema != RELEASE_ATTESTATION_SCHEMA {
             return Err(DiscoveryError::SchemaTag {
                 path: release_path,
@@ -87,17 +86,15 @@ impl VerificationDirectory {
             });
         }
         // Validate canonical form.
-        let _ = release_attestation
-            .canonical_bytes()
-            .map_err(|err| DiscoveryError::Validation {
-                path: release_path.clone(),
-                source: err,
-            })?;
+        let _ = release_attestation.canonical_bytes().map_err(|err| DiscoveryError::Validation {
+            path: release_path.clone(),
+            source: err,
+        })?;
 
         // Load release signature.
         let release_sig_text = read_file_text(&release_sig_path)?;
-        let release_signature = DetachedSignature::parse(release_sig_text.trim())
-            .map_err(|err| DiscoveryError::Validation {
+        let release_signature =
+            DetachedSignature::parse(release_sig_text.trim()).map_err(|err| DiscoveryError::Validation {
                 path: release_sig_path,
                 source: err,
             })?;
@@ -183,11 +180,9 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
         }
 
         let sig_text = read_file_text(&sig_path)?;
-        let signature = DetachedSignature::parse(sig_text.trim()).map_err(|err| {
-            DiscoveryError::Validation {
-                path: sig_path,
-                source: err,
-            }
+        let signature = DetachedSignature::parse(sig_text.trim()).map_err(|err| DiscoveryError::Validation {
+            path: sig_path,
+            source: err,
         })?;
 
         witnesses.push(DiscoveredWitness {
@@ -210,9 +205,7 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
 ///
 /// Witnesses whose signatures were already validated externally can
 /// use this to bridge discovery into policy evaluation.
-pub fn to_validated_witnesses(
-    discovered: &[DiscoveredWitness],
-) -> Result<Vec<ValidatedWitness>, Error> {
+pub fn to_validated_witnesses(discovered: &[DiscoveredWitness]) -> Result<Vec<ValidatedWitness>, Error> {
     let mut validated = Vec::with_capacity(discovered.len());
     for witness in discovered {
         let attestation_digest = witness.attestation.canonical_digest()?;
@@ -266,27 +259,15 @@ impl std::fmt::Display for DiscoveryError {
             Self::Parse { path, source } => {
                 write!(f, "JSON parse error in {}: {source}", path.display())
             }
-            Self::SchemaTag {
-                path,
-                expected,
-                actual,
-            } => write!(
-                f,
-                "schema tag mismatch in {}: expected {expected}, got {actual}",
-                path.display()
-            ),
-            Self::Validation { path, source } => {
-                write!(
-                    f,
-                    "validation error in {}: {source}",
-                    path.display()
-                )
+            Self::SchemaTag { path, expected, actual } => {
+                write!(f, "schema tag mismatch in {}: expected {expected}, got {actual}", path.display())
             }
-            Self::MissingSigSidecar { attestation_path } => write!(
-                f,
-                "missing .sig sidecar for {}",
-                attestation_path.display()
-            ),
+            Self::Validation { path, source } => {
+                write!(f, "validation error in {}: {source}", path.display())
+            }
+            Self::MissingSigSidecar { attestation_path } => {
+                write!(f, "missing .sig sidecar for {}", attestation_path.display())
+            }
             Self::TooManyWitnesses { limit, actual } => {
                 write!(f, "too many witness files: {actual} > {limit}")
             }
@@ -314,10 +295,7 @@ fn read_file_text(path: &Path) -> Result<String, DiscoveryError> {
     })
 }
 
-fn parse_json<T: serde::de::DeserializeOwned>(
-    bytes: &[u8],
-    path: &Path,
-) -> Result<T, DiscoveryError> {
+fn parse_json<T: serde::de::DeserializeOwned>(bytes: &[u8], path: &Path) -> Result<T, DiscoveryError> {
     serde_json::from_slice(bytes).map_err(|err| DiscoveryError::Parse {
         path: path.to_path_buf(),
         source: err,
@@ -405,10 +383,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_full_layout(dir.path(), 1);
         // Remove the .sig file for the witness.
-        let sig_path = dir
-            .path()
-            .join("witnesses")
-            .join("witness-a.json.sig");
+        let sig_path = dir.path().join("witnesses").join("witness-a.json.sig");
         fs::remove_file(&sig_path).unwrap();
 
         let vdir = VerificationDirectory::new(dir.path().to_path_buf());
@@ -466,18 +441,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            result.trust_tier.technical_class,
-            crate::release::TechnicalClass::ExternalWitnessMatch
-        );
-        assert_eq!(
-            result.trust_tier.policy_status,
-            crate::release::PolicyStatus::Satisfied
-        );
-        assert_eq!(
-            result.trust_tier.final_class,
-            crate::release::FinalClass::QuorumSatisfied
-        );
+        assert_eq!(result.trust_tier.technical_class, crate::release::TechnicalClass::ExternalWitnessMatch);
+        assert_eq!(result.trust_tier.policy_status, crate::release::PolicyStatus::Satisfied);
+        assert_eq!(result.trust_tier.final_class, crate::release::FinalClass::QuorumSatisfied);
     }
 
     #[test]
@@ -486,10 +452,7 @@ mod tests {
         let layout = write_full_layout(dir.path(), 2);
 
         // Revoke witness-a's key.
-        let revocations = ReleaseRevocations::new(
-            vec![layout.witness_keys[0].clone()],
-            Vec::new(),
-        );
+        let revocations = ReleaseRevocations::new(vec![layout.witness_keys[0].clone()], Vec::new());
         let rev_json = serde_json::to_vec_pretty(&revocations).unwrap();
         fs::write(dir.path().join("revocations.json"), rev_json).unwrap();
 
@@ -507,10 +470,7 @@ mod tests {
 
         assert_eq!(result.revoked_witness_count, 1);
         assert_eq!(result.matching_witness_count, 1);
-        assert_eq!(
-            result.trust_tier.policy_status,
-            crate::release::PolicyStatus::Insufficient
-        );
+        assert_eq!(result.trust_tier.policy_status, crate::release::PolicyStatus::Insufficient);
     }
 
     // -- Helpers -----------------------------------------------------------
@@ -529,11 +489,7 @@ mod tests {
             key_name: "release-signer-1".to_string(),
             signature_bytes: [0xab; 64],
         };
-        fs::write(
-            dir.join("release-attestation.json.sig"),
-            release_sig.encode(),
-        )
-        .unwrap();
+        fs::write(dir.join("release-attestation.json.sig"), release_sig.encode()).unwrap();
 
         let release_digest = AttestationDigest::from_canonical_bytes(&release_bytes);
 
@@ -557,21 +513,13 @@ mod tests {
                 },
             );
             let witness_json = serde_json::to_vec_pretty(&witness).unwrap();
-            fs::write(
-                witnesses_dir.join(format!("{identity}.json")),
-                witness_json,
-            )
-            .unwrap();
+            fs::write(witnesses_dir.join(format!("{identity}.json")), witness_json).unwrap();
 
             let witness_sig = DetachedSignature {
                 key_name: key_name.clone(),
                 signature_bytes: [0xcd; 64],
             };
-            fs::write(
-                witnesses_dir.join(format!("{identity}.json.sig")),
-                witness_sig.encode(),
-            )
-            .unwrap();
+            fs::write(witnesses_dir.join(format!("{identity}.json.sig")), witness_sig.encode()).unwrap();
             witness_keys.push(key_name);
         }
 
@@ -579,10 +527,7 @@ mod tests {
             witness_count,
             "witness_identity".to_string(),
             vec!["release-signer-1".to_string()],
-            identities[..witness_count as usize]
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+            identities[..witness_count as usize].iter().map(|s| s.to_string()).collect(),
         );
         let policy_json = serde_json::to_vec_pretty(&policy).unwrap();
         fs::write(dir.join("policy.json"), policy_json).unwrap();

@@ -95,10 +95,8 @@ pub fn cmd_shell(
     }
 
     // 8. Execute hook (shell-side decision).
-    if !no_hook {
-        if let Some(ref hook) = plan.hook {
-            exec_hook(hook, &plan, strict_hooks)?;
-        }
+    if !no_hook && let Some(ref hook) = plan.hook {
+        exec_hook(hook, &plan, strict_hooks)?;
     }
 
     // 9. Exec into target.

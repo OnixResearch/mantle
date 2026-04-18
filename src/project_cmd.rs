@@ -141,7 +141,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 
     for (name, entry) in &lock.inputs {
         let manifest_input = manifest.inputs.iter().find(|i| i.name == *name);
-        let frozen = manifest_input.map_or(false, |i| i.frozen);
+        let frozen = manifest_input.is_some_and(|i| i.frozen);
         let frozen_tag = if frozen { " [frozen]" } else { "" };
 
         let kind_str = match &entry.kind {

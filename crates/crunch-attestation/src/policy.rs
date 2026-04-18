@@ -72,10 +72,7 @@ pub struct ReleaseRevocations {
 }
 
 impl ReleaseRevocations {
-    pub fn new(
-        revoked_witness_keys: Vec<String>,
-        revoked_witness_attestation_digests_blake3: Vec<String>,
-    ) -> Self {
+    pub fn new(revoked_witness_keys: Vec<String>, revoked_witness_attestation_digests_blake3: Vec<String>) -> Self {
         Self {
             schema: RELEASE_REVOCATIONS_SCHEMA.to_string(),
             revoked_witness_keys,
@@ -121,14 +118,8 @@ pub struct PolicyEvaluation {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicyFailureReason {
-    InsufficientQuorum {
-        required: u32,
-        matched: u32,
-    },
-    InsufficientIndependence {
-        distinct_identities: u32,
-        required: u32,
-    },
+    InsufficientQuorum { required: u32, matched: u32 },
+    InsufficientIndependence { distinct_identities: u32, required: u32 },
 }
 
 // ---------------------------------------------------------------------------
@@ -139,8 +130,7 @@ pub enum PolicyFailureReason {
 ///
 /// Steps:
 /// 1. Apply revocations to filter out revoked witnesses.
-/// 2. Check each remaining witness against the release attestation digest
-///    and binary digest set.
+/// 2. Check each remaining witness against the release attestation digest and binary digest set.
 /// 3. Count matching witnesses and distinct witness identities.
 /// 4. Determine technical class from witness match count.
 /// 5. Evaluate quorum and independence policy.
@@ -158,16 +148,9 @@ pub fn evaluate_policy(
     let release_binary_digests = normalize_for_comparison(&release.binary_digests);
 
     // Step 1: filter revoked witnesses.
-    let revoked_keys: BTreeSet<&str> = revocations
-        .revoked_witness_keys
-        .iter()
-        .map(|k| k.as_str())
-        .collect();
-    let revoked_digests: BTreeSet<&str> = revocations
-        .revoked_witness_attestation_digests_blake3
-        .iter()
-        .map(|d| d.as_str())
-        .collect();
+    let revoked_keys: BTreeSet<&str> = revocations.revoked_witness_keys.iter().map(|k| k.as_str()).collect();
+    let revoked_digests: BTreeSet<&str> =
+        revocations.revoked_witness_attestation_digests_blake3.iter().map(|d| d.as_str()).collect();
 
     let mut revoked_count: u32 = 0;
     let mut active_witnesses: Vec<&ValidatedWitness> = Vec::new();
@@ -187,8 +170,7 @@ pub fn evaluate_policy(
     let mut matching_identities: BTreeSet<&str> = BTreeSet::new();
 
     for witness in &active_witnesses {
-        let digest_matches =
-            witness.attestation.release_attestation_digest_blake3 == release_digest;
+        let digest_matches = witness.attestation.release_attestation_digest_blake3 == release_digest;
         let rebuilt = normalize_for_comparison(&witness.attestation.rebuilt_digests);
         let outputs_match = binary_digests_match(&release_binary_digests, &rebuilt);
 
@@ -281,12 +263,7 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
             actual: key_count,
         });
     }
-    let digest_count = u32::try_from(
-        revocations
-            .revoked_witness_attestation_digests_blake3
-            .len(),
-    )
-    .unwrap_or(u32::MAX);
+    let digest_count = u32::try_from(revocations.revoked_witness_attestation_digests_blake3.len()).unwrap_or(u32::MAX);
     if digest_count > MAX_REVOCATION_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_REVOCATION_COUNT,
@@ -350,18 +327,14 @@ mod tests {
         let release = sample_release();
         let digest_before = release.canonical_digest().unwrap();
 
-        let _policy_loose = ReleasePolicy::new(
-            1,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
-        let _policy_strict = ReleasePolicy::new(
-            3,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string(), "witness-c".to_string()],
-        );
+        let _policy_loose = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
+        let _policy_strict = ReleasePolicy::new(3, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+            "witness-c".to_string(),
+        ]);
 
         let digest_after = release.canonical_digest().unwrap();
         assert_eq!(digest_before, digest_after);
@@ -372,12 +345,7 @@ mod tests {
     #[test]
     fn zero_witnesses_yield_self_proof_valid() {
         let release = sample_release();
-        let policy = ReleasePolicy::new(
-            0,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            Vec::new(),
-        );
+        let policy = ReleasePolicy::new(0, "witness_identity".to_string(), vec!["signer-1".to_string()], Vec::new());
         let revocations = ReleaseRevocations::empty();
 
         let result = evaluate_policy(&release, &[], &policy, &revocations).unwrap();
@@ -394,21 +362,14 @@ mod tests {
     fn one_matching_witness_raises_technical_class() {
         let release = sample_release();
         let witness = make_matching_witness(&release, "witness-a");
-        let policy = ReleasePolicy::new(
-            1,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
+        let policy = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
         let revocations = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[witness], &policy, &revocations).unwrap();
+        let result = evaluate_policy(&release, &[witness], &policy, &revocations).unwrap();
 
-        assert_eq!(
-            result.trust_tier.technical_class,
-            TechnicalClass::ExternalWitnessMatch
-        );
+        assert_eq!(result.trust_tier.technical_class, TechnicalClass::ExternalWitnessMatch);
         assert_eq!(result.matching_witness_count, 1);
     }
 
@@ -418,26 +379,16 @@ mod tests {
     fn insufficient_quorum_fails_policy_with_technical_success() {
         let release = sample_release();
         let witness = make_matching_witness(&release, "witness-a");
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
         let revocations = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[witness], &policy, &revocations).unwrap();
+        let result = evaluate_policy(&release, &[witness], &policy, &revocations).unwrap();
 
-        assert_eq!(
-            result.trust_tier.technical_class,
-            TechnicalClass::ExternalWitnessMatch
-        );
+        assert_eq!(result.trust_tier.technical_class, TechnicalClass::ExternalWitnessMatch);
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Insufficient);
-        assert_eq!(
-            result.trust_tier.final_class,
-            FinalClass::ExternalWitnessMatch
-        );
+        assert_eq!(result.trust_tier.final_class, FinalClass::ExternalWitnessMatch);
         assert_eq!(
             result.policy_failure_reason,
             Some(PolicyFailureReason::InsufficientQuorum {
@@ -454,16 +405,13 @@ mod tests {
         let release = sample_release();
         let w_a = make_matching_witness(&release, "witness-a");
         let w_b = make_matching_witness(&release, "witness-b");
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string()],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+        ]);
         let revocations = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[w_a, w_b], &policy, &revocations).unwrap();
+        let result = evaluate_policy(&release, &[w_a, w_b], &policy, &revocations).unwrap();
 
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
         assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
@@ -492,16 +440,12 @@ mod tests {
             attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-second"),
             signer_key_name: "witness-a-key-2".to_string(),
         };
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
         let revocations = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[w1, w2], &policy, &revocations).unwrap();
+        let result = evaluate_policy(&release, &[w1, w2], &policy, &revocations).unwrap();
 
         // Two matching witnesses but only one distinct identity.
         assert_eq!(result.matching_witness_count, 2);
@@ -523,33 +467,22 @@ mod tests {
         let release = sample_release();
         let w_a = make_matching_witness(&release, "witness-a");
         let w_b = make_matching_witness(&release, "witness-b");
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string()],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+        ]);
 
         // Without revocation: satisfied.
         let no_rev = ReleaseRevocations::empty();
-        let before =
-            evaluate_policy(&release, &[w_a.clone(), w_b.clone()], &policy, &no_rev)
-                .unwrap();
+        let before = evaluate_policy(&release, &[w_a.clone(), w_b.clone()], &policy, &no_rev).unwrap();
         assert_eq!(before.trust_tier.policy_status, PolicyStatus::Satisfied);
 
         // Revoke witness-a's key.
-        let rev = ReleaseRevocations::new(
-            vec!["witness-a-key".to_string()],
-            Vec::new(),
-        );
-        let after =
-            evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
+        let rev = ReleaseRevocations::new(vec!["witness-a-key".to_string()], Vec::new());
+        let after = evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
 
         // Technical class unchanged (one remaining match).
-        assert_eq!(
-            after.trust_tier.technical_class,
-            TechnicalClass::ExternalWitnessMatch
-        );
+        assert_eq!(after.trust_tier.technical_class, TechnicalClass::ExternalWitnessMatch);
         // Policy now insufficient.
         assert_eq!(after.trust_tier.policy_status, PolicyStatus::Insufficient);
         assert_eq!(after.revoked_witness_count, 1);
@@ -564,19 +497,13 @@ mod tests {
         let w_a = make_matching_witness(&release, "witness-a");
         let revoked_digest = w_a.attestation_digest.to_hex();
         let w_b = make_matching_witness(&release, "witness-b");
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string()],
-        );
-        let rev = ReleaseRevocations::new(
-            Vec::new(),
-            vec![revoked_digest],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+        ]);
+        let rev = ReleaseRevocations::new(Vec::new(), vec![revoked_digest]);
 
-        let result =
-            evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
+        let result = evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
 
         assert_eq!(result.revoked_witness_count, 1);
         assert_eq!(result.matching_witness_count, 1);
@@ -590,27 +517,18 @@ mod tests {
         let release = sample_release();
         let w_a = make_matching_witness(&release, "witness-a");
         let w_b = make_matching_witness(&release, "witness-b");
-        let policy = ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string()],
-        );
+        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+        ]);
         // Revoke both.
-        let rev = ReleaseRevocations::new(
-            vec!["witness-a-key".to_string(), "witness-b-key".to_string()],
-            Vec::new(),
-        );
+        let rev = ReleaseRevocations::new(vec!["witness-a-key".to_string(), "witness-b-key".to_string()], Vec::new());
 
-        let result =
-            evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
+        let result = evaluate_policy(&release, &[w_a, w_b], &policy, &rev).unwrap();
 
         assert_eq!(result.revoked_witness_count, 2);
         assert_eq!(result.matching_witness_count, 0);
-        assert_eq!(
-            result.trust_tier.technical_class,
-            TechnicalClass::SelfProofValid
-        );
+        assert_eq!(result.trust_tier.technical_class, TechnicalClass::SelfProofValid);
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Insufficient);
     }
 
@@ -629,22 +547,15 @@ mod tests {
             attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att"),
             signer_key_name: "witness-a-key".to_string(),
         };
-        let policy = ReleasePolicy::new(
-            1,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
+        let policy = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
         let rev = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[wrong_ref], &policy, &rev).unwrap();
+        let result = evaluate_policy(&release, &[wrong_ref], &policy, &rev).unwrap();
 
         assert_eq!(result.matching_witness_count, 0);
-        assert_eq!(
-            result.trust_tier.technical_class,
-            TechnicalClass::SelfProofValid
-        );
+        assert_eq!(result.trust_tier.technical_class, TechnicalClass::SelfProofValid);
     }
 
     #[test]
@@ -664,16 +575,12 @@ mod tests {
             attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att"),
             signer_key_name: "witness-a-key".to_string(),
         };
-        let policy = ReleasePolicy::new(
-            1,
-            "witness_identity".to_string(),
-            vec!["signer-1".to_string()],
-            vec!["witness-a".to_string()],
-        );
+        let policy = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
+            "witness-a".to_string(),
+        ]);
         let rev = ReleaseRevocations::empty();
 
-        let result =
-            evaluate_policy(&release, &[wrong_digests], &policy, &rev).unwrap();
+        let result = evaluate_policy(&release, &[wrong_digests], &policy, &rev).unwrap();
 
         assert_eq!(result.matching_witness_count, 0);
     }
@@ -686,15 +593,11 @@ mod tests {
         let mut policy = sample_policy();
         policy.schema = "wrong".to_string();
 
-        let err = evaluate_policy(&release, &[], &policy, &ReleaseRevocations::empty())
-            .unwrap_err();
-        assert_eq!(
-            err,
-            Error::SchemaTagMismatch {
-                expected: RELEASE_POLICY_SCHEMA,
-                actual: "wrong".to_string(),
-            }
-        );
+        let err = evaluate_policy(&release, &[], &policy, &ReleaseRevocations::empty()).unwrap_err();
+        assert_eq!(err, Error::SchemaTagMismatch {
+            expected: RELEASE_POLICY_SCHEMA,
+            actual: "wrong".to_string(),
+        });
     }
 
     #[test]
@@ -705,13 +608,10 @@ mod tests {
         rev.schema = "wrong".to_string();
 
         let err = evaluate_policy(&release, &[], &policy, &rev).unwrap_err();
-        assert_eq!(
-            err,
-            Error::SchemaTagMismatch {
-                expected: RELEASE_REVOCATIONS_SCHEMA,
-                actual: "wrong".to_string(),
-            }
-        );
+        assert_eq!(err, Error::SchemaTagMismatch {
+            expected: RELEASE_REVOCATIONS_SCHEMA,
+            actual: "wrong".to_string(),
+        });
     }
 
     // -- Helpers -----------------------------------------------------------
@@ -735,19 +635,14 @@ mod tests {
     }
 
     fn sample_policy() -> ReleasePolicy {
-        ReleasePolicy::new(
-            2,
-            "witness_identity".to_string(),
-            vec!["release-signer-1".to_string()],
-            vec!["witness-a".to_string(), "witness-b".to_string()],
-        )
+        ReleasePolicy::new(2, "witness_identity".to_string(), vec!["release-signer-1".to_string()], vec![
+            "witness-a".to_string(),
+            "witness-b".to_string(),
+        ])
     }
 
     fn sample_revocations() -> ReleaseRevocations {
-        ReleaseRevocations::new(
-            vec!["witness-a".to_string()],
-            vec!["aa".repeat(32)],
-        )
+        ReleaseRevocations::new(vec!["witness-a".to_string()], vec!["aa".repeat(32)])
     }
 
     fn sample_env() -> RebuildEnvironmentSummary {
@@ -760,12 +655,8 @@ mod tests {
 
     fn make_matching_witness(release: &ReleaseAttestation, identity: &str) -> ValidatedWitness {
         let release_digest = release.canonical_digest().unwrap();
-        let attestation = WitnessAttestation::new(
-            release_digest,
-            identity.to_string(),
-            release.binary_digests.clone(),
-            sample_env(),
-        );
+        let attestation =
+            WitnessAttestation::new(release_digest, identity.to_string(), release.binary_digests.clone(), sample_env());
         let attestation_digest = attestation.canonical_digest().unwrap();
         ValidatedWitness {
             attestation,

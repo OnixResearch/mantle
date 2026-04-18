@@ -99,11 +99,12 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
         .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
 
-    let mut session =
-        crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths).map_err(|e| match e {
+    let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths).map_err(
+        |e| match e {
             crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
             crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
-        })?;
+        },
+    )?;
     let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| match e {
         crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
         crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),

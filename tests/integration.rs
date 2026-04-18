@@ -209,10 +209,10 @@ fn can_build() -> bool {
     // checks SNIX_BUILD_SANDBOX_SHELL env, then compile-time default, then
     // discovers busybox-static in /nix/store. If all fail, builds break.
     // Mirror that discovery here so we skip instead of failing cryptically.
-    if let Ok(shell) = std::env::var("SNIX_BUILD_SANDBOX_SHELL") {
-        if shell != "/bin/sh" {
-            return std::path::Path::new(&shell).is_file();
-        }
+    if let Ok(shell) = std::env::var("SNIX_BUILD_SANDBOX_SHELL")
+        && shell != "/bin/sh"
+    {
+        return std::path::Path::new(&shell).is_file();
     }
     // Check common static busybox locations
     for candidate in ["/run/current-system/sw/bin/busybox-static", "/bin/busybox.static"] {

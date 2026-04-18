@@ -401,10 +401,8 @@ fn remove_crunch_outputs(store: &Path) -> u32 {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") {
-            if std::fs::remove_dir_all(entry.path()).is_ok() {
-                removed += 1;
-            }
+        if name_str.ends_with("-crunch") && std::fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
         }
     }
     removed

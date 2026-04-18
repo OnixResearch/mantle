@@ -40,10 +40,7 @@ pub enum Error {
     InvalidDigestHex { value: String },
 
     #[error("schema tag mismatch: expected {expected}, got {actual}")]
-    SchemaTagMismatch {
-        expected: &'static str,
-        actual: String,
-    },
+    SchemaTagMismatch { expected: &'static str, actual: String },
 
     #[error("field exceeds length limit: {field} ({actual} > {limit})")]
     FieldTooLong {
