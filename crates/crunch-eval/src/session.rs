@@ -417,7 +417,7 @@ where
 type BoxedWorkerJob = Box<dyn WorkerJob + Send + 'static>;
 
 struct BoundedWorkerPool {
-    senders: Vec<mpsc::Sender<BoxedWorkerJob>>,
+    senders: Vec<mpsc::SyncSender<BoxedWorkerJob>>,
     next_worker: AtomicU32,
 }
 
@@ -428,7 +428,7 @@ impl BoundedWorkerPool {
     ) -> Result<mpsc::Receiver<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
         assert!(!self.senders.is_empty(), "worker pool must have at least one sender");
 
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(1);
         let boxed_job: BoxedWorkerJob = Box::new(move || {
             let _ = sender.send(job());
         });
@@ -498,7 +498,7 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
 
     let mut senders = Vec::with_capacity(worker_count as usize);
     for worker_index in 0..worker_count {
-        let (sender, receiver) = mpsc::channel::<BoxedWorkerJob>();
+        let (sender, receiver) = mpsc::sync_channel::<BoxedWorkerJob>(1);
         std::thread::Builder::new()
             .name(format!("crunch-eval-worker-{worker_count}-{worker_index}"))
             .spawn(move || {
