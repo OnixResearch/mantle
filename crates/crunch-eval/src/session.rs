@@ -6,9 +6,15 @@
 //! Individual roots are forced on demand through
 //! [`EvaluationSession::force_root`].
 
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 
 use nickel_lang::Context;
 use nickel_lang::Expr;
@@ -223,7 +229,7 @@ impl EvaluationSession {
     }
 
     /// Force a selected label set serially through isolated worker sessions.
-    pub fn force_selected_roots<T: DeserializeOwned + Send>(
+    pub fn force_selected_roots<T: DeserializeOwned + Send + 'static>(
         &self,
         labels: &[String],
     ) -> Result<Vec<(String, T)>, Error> {
@@ -231,7 +237,7 @@ impl EvaluationSession {
     }
 
     /// Force a selected label set through isolated worker sessions under a bounded cap.
-    pub fn force_selected_roots_bounded<T: DeserializeOwned + Send>(
+    pub fn force_selected_roots_bounded<T: DeserializeOwned + Send + 'static>(
         &self,
         labels: &[String],
         max_concurrency: u32,
@@ -241,7 +247,7 @@ impl EvaluationSession {
     }
 
     /// Force all discovered roots through isolated worker sessions under a bounded cap.
-    pub fn force_all_roots_bounded<T: DeserializeOwned + Send>(
+    pub fn force_all_roots_bounded<T: DeserializeOwned + Send + 'static>(
         &self,
         max_concurrency: u32,
     ) -> Result<Vec<(String, T)>, Error> {
@@ -395,9 +401,48 @@ struct WorkerFailure {
     detail: String,
 }
 
+trait WorkerJob {
+    fn run(self: Box<Self>);
+}
+
+impl<F> WorkerJob for F
+where
+    F: FnOnce(),
+{
+    fn run(self: Box<Self>) {
+        (*self)()
+    }
+}
+
+type BoxedWorkerJob = Box<dyn WorkerJob + Send + 'static>;
+
+struct BoundedWorkerPool {
+    senders: Vec<mpsc::Sender<BoxedWorkerJob>>,
+    next_worker: AtomicU32,
+}
+
+impl BoundedWorkerPool {
+    fn submit<T: Send + 'static>(
+        &self,
+        job: impl FnOnce() -> Result<Vec<IndexedRoot<T>>, WorkerFailure> + Send + 'static,
+    ) -> Result<mpsc::Receiver<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+        assert!(!self.senders.is_empty(), "worker pool must have at least one sender");
+
+        let (sender, receiver) = mpsc::channel();
+        let boxed_job: BoxedWorkerJob = Box::new(move || {
+            let _ = sender.send(job());
+        });
+        let worker_index = self.next_worker.fetch_add(1, Ordering::Relaxed) as usize % self.senders.len();
+        self.senders[worker_index]
+            .send(boxed_job)
+            .map_err(|_| Error::Boundary("bounded worker pool thread exited unexpectedly".to_string()))?;
+        Ok(receiver)
+    }
+}
+
 const MIN_ROOTS_PER_WORKER: usize = 8;
 
-fn force_selected_roots_with_workers<T: DeserializeOwned + Send>(
+fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
     labels: &[String],
     max_concurrency: u32,
@@ -410,35 +455,67 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send>(
     let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
     let effective_concurrency = clamp_parallel_workers(requested_root_count, concurrency_cap);
     let worker_assignments = build_worker_assignments(labels, effective_concurrency);
+    let worker_pool = bounded_worker_pool(effective_concurrency)?;
+    let mut worker_receivers = Vec::with_capacity(worker_assignments.len());
+    for assignment in worker_assignments {
+        let worker = worker_input.clone();
+        let receiver = worker_pool.submit(move || force_worker_assignment(&worker, assignment))?;
+        worker_receivers.push(receiver);
+    }
+
     let mut indexed_results = Vec::with_capacity(requested_root_count);
-
-    std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(worker_assignments.len());
-        for assignment in worker_assignments {
-            handles.push(scope.spawn(move || -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
-                force_worker_assignment(worker_input, assignment)
-            }));
-        }
-
-        for handle in handles {
-            let worker_result =
-                handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
-            match worker_result {
-                Ok(mut worker_values) => indexed_results.append(&mut worker_values),
-                Err(failure) => {
-                    return Err(Error::Boundary(format!(
-                        "root '{}' at request index {}: {}",
-                        failure.label, failure.index, failure.detail
-                    )));
-                }
+    for receiver in worker_receivers {
+        let worker_result = receiver
+            .recv()
+            .map_err(|_| Error::Boundary("bounded worker pool job dropped without a result".to_string()))?;
+        match worker_result {
+            Ok(mut worker_values) => indexed_results.append(&mut worker_values),
+            Err(failure) => {
+                return Err(Error::Boundary(format!(
+                    "root '{}' at request index {}: {}",
+                    failure.label, failure.index, failure.detail
+                )));
             }
         }
+    }
 
-        indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
-        let ordered_results =
-            indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
-        Ok(ordered_results)
-    })
+    indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
+    let ordered_results = indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
+    Ok(ordered_results)
+}
+
+fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Error> {
+    static WORKER_POOLS: OnceLock<Mutex<BTreeMap<u32, Arc<BoundedWorkerPool>>>> = OnceLock::new();
+
+    assert!(worker_count >= 1, "worker_count must be at least 1");
+    let worker_pools = WORKER_POOLS.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut worker_pools = worker_pools
+        .lock()
+        .map_err(|_| Error::Boundary("bounded worker pool mutex was poisoned".to_string()))?;
+    if let Some(worker_pool) = worker_pools.get(&worker_count) {
+        return Ok(worker_pool.clone());
+    }
+
+    let mut senders = Vec::with_capacity(worker_count as usize);
+    for worker_index in 0..worker_count {
+        let (sender, receiver) = mpsc::channel::<BoxedWorkerJob>();
+        std::thread::Builder::new()
+            .name(format!("crunch-eval-worker-{worker_count}-{worker_index}"))
+            .spawn(move || {
+                while let Ok(job) = receiver.recv() {
+                    job.run();
+                }
+            })
+            .map_err(|err| Error::Boundary(format!("failed to spawn bounded worker thread: {err}")))?;
+        senders.push(sender);
+    }
+
+    let worker_pool = Arc::new(BoundedWorkerPool {
+        senders,
+        next_worker: AtomicU32::new(0),
+    });
+    worker_pools.insert(worker_count, worker_pool.clone());
+    Ok(worker_pool)
 }
 
 fn clamp_parallel_workers(requested_root_count: usize, concurrency_cap: u32) -> u32 {

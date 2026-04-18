@@ -1,0 +1,3 @@
+- Try a purpose-built persistent bounded worker pool for `crunch-eval` instead of per-call thread spawn/join. Prior Rayon/cached-pool experiment regressed badly, so only a very thin custom path still looks worth trying.
+- If revisiting single-deep-export architecture, require a much cheaper `Send`-safe intermediate than JSON. Coordinator deep-export + JSON parse already regressed badly.
+- Expose actual effective bounded concurrency in benchmark metrics. Current clamp-to-2-worker optimization still records configured concurrency 4, which hides how much of the win comes from reduced worker fan-out.
