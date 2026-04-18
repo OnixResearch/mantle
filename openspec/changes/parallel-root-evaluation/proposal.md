@@ -14,9 +14,9 @@ serializes root forcing in the places that matter most:
   package set can spend time in a single-threaded eval/convert prefix while the
   worker has nothing to do yet.
 
-That means answer to "do we have parallel eval yet?" is still no. This change
-records how to add bounded parallel multi-root evaluation without undoing the
-new lazy selected-root boundary.
+That means the answer to "do we have parallel eval yet?" is still no. This
+change records how to add bounded parallel multi-root evaluation without
+undoing the new lazy selected-root boundary.
 
 ## What Changes
 

@@ -29,7 +29,9 @@ typed derivation value as the serial same-session forcing path for that label.
 
 If one requested root fails during forcing, the surfaced `crunch-eval` error
 MUST identify the failed label. The batch API MUST fail the whole request on
-that first labeled error rather than returning a partial success vector.
+that first labeled error rather than returning a partial success vector. That
+atomicity applies per batch request. Callers that need incremental delivery
+MUST issue smaller requests, including single-label requests.
 
 #### Scenario: Batch forcing preserves requested root order
 
@@ -60,7 +62,7 @@ session path.
 Cross-thread safety for any evaluator state that is driven concurrently MUST be
 proven by compile-time trait-bound evidence on the actual concurrently used
 state. Without that proof, the implementation MUST use isolated worker
- evaluation states derived from the same source text and import-path set rather
+evaluation states derived from the same source text and import-path set rather
 than sharing mutable evaluator state across threads.
 
 #### Scenario: Multi-root forcing honors a concurrency cap

@@ -31,6 +31,10 @@ configuration does not set `max_jobs`, the pipeline MUST derive its build and
 eval caps from the existing default build-parallelism resolution and still keep
 eval parallelism at least `1`.
 
+For streaming execution, the pipeline MUST treat each root-force request as an
+independent error-handling unit. It MUST NOT depend on partial success results
+from a failed multi-root request.
+
 #### Scenario: Multi-root build streams converted roots incrementally
 
 - GIVEN a `.ncl` file exporting multiple root derivations
@@ -52,7 +56,7 @@ eval parallelism at least `1`.
 #### Scenario: Root forcing failure stops later dispatch without losing prior labels
 
 - GIVEN the pipeline has already streamed one converted root to the worker
-- AND a later root fails during bounded multi-root forcing
+- AND a later independent root-force request fails during bounded evaluation
 - WHEN `build()` surfaces that evaluation failure
 - THEN the pipeline stops dispatching additional not-yet-converted roots
 - AND it preserves label association for any root already sent downstream

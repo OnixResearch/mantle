@@ -93,9 +93,11 @@ CrunchDerivation)>` before conversion and scheduling.
 if root forcing itself becomes parallel. The worker should start seeing roots as
 soon as each label is forced and converted.
 
-**Implementation:** after lazy discovery, pipeline requests roots in bounded
-parallel batches, converts each root as it lands, drains pending conversion
-cache entries, and sends `EvalMessage`s to the worker incrementally.
+**Implementation:** after lazy discovery, pipeline issues bounded independent
+root-force requests, potentially one label per request, converts each root as
+it lands, drains pending conversion cache entries, and sends `EvalMessage`s to
+the worker incrementally. This streaming path does not rely on partial success
+results from a failed multi-root request.
 
 ### 5. Determinism beats maximum throughput
 
