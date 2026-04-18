@@ -461,12 +461,18 @@ fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
     assignment: WorkerAssignment,
 ) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
+    let worker_labels =
+        select_worker_labels(&worker_input.labels, &assignment.labels).map_err(|detail| WorkerFailure {
+            index: assignment.start_index,
+            label: assignment.labels.first().cloned().unwrap_or_else(|| "<none>".to_string()),
+            detail,
+        })?;
     let mut session = EvaluationSession::open_worker_source(
         worker_input.source.clone(),
         &worker_input.import_paths,
         &worker_input.source_name,
         worker_input.shape.clone(),
-        worker_input.labels.clone(),
+        worker_labels,
     )
     .map_err(|err| WorkerFailure {
         index: assignment.start_index,
@@ -490,6 +496,22 @@ fn force_worker_assignment<T: DeserializeOwned + Send + 'static>(
     }
 
     Ok(results)
+}
+
+fn select_worker_labels(all_labels: &[RootLabel], requested_labels: &[String]) -> Result<Vec<RootLabel>, String> {
+    assert!(!requested_labels.is_empty(), "requested_labels must not be empty");
+    let mut selected_labels = Vec::with_capacity(requested_labels.len());
+    for requested_label in requested_labels {
+        let root_label =
+            all_labels.iter().find(|root_label| root_label.label == *requested_label).ok_or_else(|| {
+                format!(
+                    "no root with label '{requested_label}'; available roots: {}",
+                    all_labels.iter().map(|root_label| root_label.label.as_str()).collect::<Vec<_>>().join(", ")
+                )
+            })?;
+        selected_labels.push(root_label.clone());
+    }
+    Ok(selected_labels)
 }
 
 fn normalize_concurrency_cap(max_concurrency: u32, requested_root_count: usize) -> u32 {
@@ -602,6 +624,33 @@ mod tests {
         assert_eq!(normalize_concurrency_cap(0, 0), 1);
         assert_eq!(normalize_concurrency_cap(0, 1), 1);
         assert_eq!(normalize_concurrency_cap(0, 3), 1);
+    }
+
+    #[test]
+    fn select_worker_labels_keeps_requested_subset_and_indexes() {
+        let all_labels = vec![
+            RootLabel {
+                label: "alpha".to_string(),
+                index: 0,
+            },
+            RootLabel {
+                label: "beta".to_string(),
+                index: 7,
+            },
+            RootLabel {
+                label: "gamma".to_string(),
+                index: 11,
+            },
+        ];
+        let requested = vec!["gamma".to_string(), "alpha".to_string()];
+
+        let selected = select_worker_labels(&all_labels, &requested).unwrap();
+
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].label, "gamma");
+        assert_eq!(selected[0].index, 11);
+        assert_eq!(selected[1].label, "alpha");
+        assert_eq!(selected[1].index, 0);
     }
 
     #[test]
