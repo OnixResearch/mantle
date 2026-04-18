@@ -164,12 +164,22 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
     })
 }
 
+fn eval_error_is_build(err: &crunch_eval::Error) -> bool {
+    match err {
+        crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => false,
+        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => true,
+        crunch_eval::Error::Labeled { source, .. } => eval_error_is_build(source),
+    }
+}
+
 fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Result<Vec<PlannedRoot>, RunError> {
     let mut session = crunch_eval::session::EvaluationSession::open_file(file, import_paths)
         .map_err(|e| RunError::Eval(format!("{e}")))?;
-    let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| match e {
-        crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => RunError::Eval(format!("{e}")),
-        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => RunError::Build(format!("{e}")),
+    let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| {
+        if eval_error_is_build(&e) {
+            return RunError::Build(format!("{e}"));
+        }
+        RunError::Eval(format!("{e}"))
     })?;
     let mut cache = ConversionCache::new(store_dir);
     let mut roots = Vec::with_capacity(derivations.len());

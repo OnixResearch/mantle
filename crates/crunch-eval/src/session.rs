@@ -44,6 +44,27 @@ pub struct DiscoveryMetrics {
     pub name_fields_accessed: u32,
 }
 
+/// Immutable worker input for isolated root forcing.
+///
+/// This is the only state shared across threads for bounded multi-root
+/// forcing. Each worker opens its own `EvaluationSession` from this input
+/// instead of sharing a mutable Nickel `Context`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IsolatedWorkerInput {
+    source: String,
+    import_paths: Vec<OsString>,
+    source_name: String,
+}
+
+impl IsolatedWorkerInput {
+    /// Force one root through an isolated worker session.
+    pub fn force_root<T: DeserializeOwned>(&self, label: &str) -> Result<T, Error> {
+        let mut session = EvaluationSession::open_source(self.source.clone(), &self.import_paths, &self.source_name)?;
+        let value = session.force_root(label)?;
+        Ok(value)
+    }
+}
+
 /// A lazy evaluation session that separates root discovery from per-root forcing.
 ///
 /// The session keeps a Nickel `Context` alive so that shared thunks remain
@@ -52,6 +73,10 @@ pub struct EvaluationSession {
     ctx: Context,
     /// Original source text, kept for per-root deep evaluation.
     source: String,
+    /// Resolved import paths used to open this session.
+    import_paths: Vec<OsString>,
+    /// Source name used for diagnostics.
+    source_name: String,
     /// Discovered root shape.
     shape: RootShape,
     /// Discovered root labels, populated during construction.
@@ -67,6 +92,7 @@ pub struct EvaluationSession {
 impl std::fmt::Debug for EvaluationSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EvaluationSession")
+            .field("source_name", &self.source_name)
             .field("shape", &self.shape)
             .field("labels", &self.labels)
             .field("forced_root_count", &self.forced_root_count)
@@ -104,6 +130,8 @@ impl EvaluationSession {
         let mut session = EvaluationSession {
             ctx,
             source,
+            import_paths: import_paths.to_vec(),
+            source_name: source_name.to_string(),
             shape,
             labels: Vec::new(),
             deep_expr: None,
@@ -132,6 +160,51 @@ impl EvaluationSession {
     /// Discovery-phase metrics.
     pub fn discovery_metrics(&self) -> &DiscoveryMetrics {
         &self.discovery_metrics
+    }
+
+    /// Clone immutable worker input for isolated per-root forcing.
+    pub fn isolated_worker_input(&self) -> IsolatedWorkerInput {
+        IsolatedWorkerInput {
+            source: self.source.clone(),
+            import_paths: self.import_paths.clone(),
+            source_name: self.source_name.clone(),
+        }
+    }
+
+    /// Force one root through an isolated worker session.
+    pub fn force_root_isolated<T: DeserializeOwned>(&self, label: &str) -> Result<T, Error> {
+        let worker_input = self.isolated_worker_input();
+        match worker_input.force_root(label) {
+            Ok(value) => Ok(value),
+            Err(err) => Err(label_error(label, err)),
+        }
+    }
+
+    /// Force a selected label set serially through isolated worker sessions.
+    pub fn force_selected_roots<T: DeserializeOwned + Send + 'static>(
+        &self,
+        labels: &[String],
+    ) -> Result<Vec<(String, T)>, Error> {
+        self.force_selected_roots_bounded(labels, 1)
+    }
+
+    /// Force a selected label set through isolated worker sessions under a bounded cap.
+    pub fn force_selected_roots_bounded<T: DeserializeOwned + Send + 'static>(
+        &self,
+        labels: &[String],
+        max_concurrency: u32,
+    ) -> Result<Vec<(String, T)>, Error> {
+        let worker_input = self.isolated_worker_input();
+        force_selected_roots_with_workers(&worker_input, labels, max_concurrency)
+    }
+
+    /// Force all discovered roots through isolated worker sessions under a bounded cap.
+    pub fn force_all_roots_bounded<T: DeserializeOwned + Send + 'static>(
+        &self,
+        max_concurrency: u32,
+    ) -> Result<Vec<(String, T)>, Error> {
+        let labels = self.labels.iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
+        self.force_selected_roots_bounded(&labels, max_concurrency)
     }
 
     /// Force one root by label, deeply evaluating and deserializing into `T`.
@@ -260,6 +333,62 @@ impl EvaluationSession {
     }
 }
 
+fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
+    worker_input: &IsolatedWorkerInput,
+    labels: &[String],
+    max_concurrency: u32,
+) -> Result<Vec<(String, T)>, Error> {
+    let requested_root_count = labels.len();
+    let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
+    let mut results = Vec::with_capacity(requested_root_count);
+    if requested_root_count == 0 {
+        return Ok(results);
+    }
+
+    for batch_labels in labels.chunks(concurrency_cap as usize) {
+        let mut handles = Vec::with_capacity(batch_labels.len());
+        for label in batch_labels {
+            let worker = worker_input.clone();
+            let label = label.clone();
+            handles.push(std::thread::spawn(move || -> Result<(String, T), (String, String)> {
+                let value = worker.force_root(&label).map_err(|err| (label.clone(), err.to_string()))?;
+                Ok((label, value))
+            }));
+        }
+
+        for handle in handles {
+            let result =
+                handle.join().map_err(|_| Error::Boundary("isolated root forcing worker panicked".to_string()))?;
+            match result {
+                Ok(value) => results.push(value),
+                Err((label, detail)) => {
+                    return Err(Error::Boundary(format!("root '{label}': {detail}")));
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+fn normalize_concurrency_cap(max_concurrency: u32, requested_root_count: usize) -> u32 {
+    assert!(requested_root_count <= u32::MAX as usize, "requested root count must fit in u32");
+    if requested_root_count == 0 {
+        return 1;
+    }
+
+    let requested_root_count_u32 = requested_root_count as u32;
+    let normalized_cap = if max_concurrency == 0 { 1 } else { max_concurrency };
+    normalized_cap.min(requested_root_count_u32)
+}
+
+fn label_error(label: &str, err: Error) -> Error {
+    Error::Labeled {
+        label: label.to_string(),
+        source: Box::new(err),
+    }
+}
+
 /// Classify the top-level shape from a shallowly-evaluated expression.
 fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     if expr.is_array() {
@@ -337,12 +466,35 @@ mod tests {
         EvaluationSession {
             ctx: Context::new().with_source_name("<test>".to_string()),
             source: source.to_string(),
+            import_paths: Vec::new(),
+            source_name: "<test>".to_string(),
             shape,
             labels,
             deep_expr,
             forced_root_count: 0,
             discovery_metrics: DiscoveryMetrics::default(),
         }
+    }
+
+    #[test]
+    fn normalize_concurrency_cap_defaults_zero_to_one() {
+        assert_eq!(normalize_concurrency_cap(0, 0), 1);
+        assert_eq!(normalize_concurrency_cap(0, 1), 1);
+        assert_eq!(normalize_concurrency_cap(0, 3), 1);
+    }
+
+    #[test]
+    fn normalize_concurrency_cap_clamps_to_requested_roots() {
+        assert_eq!(normalize_concurrency_cap(4, 2), 2);
+        assert_eq!(normalize_concurrency_cap(2, 4), 2);
+        assert_eq!(normalize_concurrency_cap(1, 4), 1);
+    }
+
+    #[test]
+    fn isolated_worker_input_is_send() {
+        fn assert_send<T: Send>() {}
+
+        assert_send::<IsolatedWorkerInput>();
     }
 
     #[test]
@@ -382,5 +534,73 @@ mod tests {
         assert!(result.is_ok(), "discover_roots should not panic on stale record shape");
         let err = result.unwrap().unwrap_err();
         assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {err}");
+    }
+
+    #[test]
+    fn force_root_isolated_matches_same_session_force_root() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#;
+        let mut session = EvaluationSession::open_str(source, &[]).unwrap();
+
+        let serial: CrunchDerivation = session.force_root("alpha").unwrap();
+        let isolated: CrunchDerivation = session.force_root_isolated("alpha").unwrap();
+
+        assert_eq!(serial.name, isolated.name);
+        assert_eq!(serial.builder, isolated.builder);
+    }
+
+    #[test]
+    fn force_selected_roots_bounded_preserves_requested_order() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+  gamma = { name = "gamma", builder = "/bin/sh" },
+}"#;
+        let session = EvaluationSession::open_str(source, &[]).unwrap();
+        let labels = vec!["gamma".to_string(), "alpha".to_string(), "beta".to_string()];
+
+        let roots = session.force_selected_roots_bounded::<CrunchDerivation>(&labels, 3).unwrap();
+        let observed = roots.into_iter().map(|(label, _)| label).collect::<Vec<_>>();
+
+        assert_eq!(observed, labels);
+    }
+
+    #[test]
+    fn force_selected_roots_bounded_reports_failed_label() {
+        let source = r#"{
+  good = { name = "good", builder = "/bin/sh" },
+  bad = { builder = "/bin/sh" },
+}"#;
+        let session = EvaluationSession::open_str(source, &[]).unwrap();
+        let labels = vec!["good".to_string(), "missing".to_string()];
+
+        let err = session.force_selected_roots_bounded::<CrunchDerivation>(&labels, 2).unwrap_err();
+        let rendered = err.to_string();
+
+        assert!(matches!(err, Error::Boundary(_)), "expected boundary error, got: {rendered}");
+        assert!(rendered.contains("missing"), "error should mention failed label: {rendered}");
+    }
+
+    #[test]
+    fn force_all_roots_bounded_matches_serial_path() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+  gamma = { name = "gamma", builder = "/bin/sh" },
+}"#;
+        let mut serial_session = EvaluationSession::open_str(source, &[]).unwrap();
+        let bounded_session = EvaluationSession::open_str(source, &[]).unwrap();
+
+        let serial = serial_session.force_all_roots::<CrunchDerivation>().unwrap();
+        let bounded = bounded_session.force_all_roots_bounded::<CrunchDerivation>(3).unwrap();
+
+        assert_eq!(serial.len(), bounded.len());
+        for (serial_item, bounded_item) in serial.iter().zip(bounded.iter()) {
+            assert_eq!(serial_item.0, bounded_item.0);
+            assert_eq!(serial_item.1.name, bounded_item.1.name);
+            assert_eq!(serial_item.1.builder, bounded_item.1.builder);
+        }
     }
 }

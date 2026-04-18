@@ -23,6 +23,7 @@ schema `crunch-benchmark-bundle-v1`.
 | `lazy-root-discovery-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Measures lazy root label discovery on a 16-root package set without deep-forcing any root values. |
 | `lazy-selected-root-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Measures end-to-end latency to obtain one selected root through the lazy session API. Primary autoresearch target. |
 | `eager-all-roots-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Guardrail: measures all-roots eager path on the same fixture to detect regressions from lazy changes. |
+| `parallel-all-roots-wide-package-set` | lazy-eval | `tests/fixtures/wide_package_set.ncl` | Measures bounded parallel all-roots forcing on the same 16-root fixture and records the concurrency used for the run. |
 
 ## Notes
 
@@ -32,7 +33,7 @@ schema `crunch-benchmark-bundle-v1`.
 - The suite currently records named phase metrics for `evaluation_wall_ns`, `conversion_wall_ns`, `substitution_planning_wall_ns`, `build_graph_wall_ns`, `store_persistence_wall_ns`, and `store_lookup_wall_ns`.
 - `workflow-package-set-eval-build-graph` is the checked-in multi-phase workflow entry: its `evaluation_wall_ns` and `build_graph_wall_ns` metrics come from two real boundaries crossed in the same workload run.
 - `store-persist-lookup-blob` is the only workload that records store phase metrics. Other workloads omit those store metrics because they never cross that boundary honestly.
-- The three `lazy-eval` workloads share a single wide package-set fixture (`tests/fixtures/wide_package_set.ncl`). They emit `root_discovery_wall_ns`, `selected_root_total_wall_ns`, `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`, `explicit_nonselected_root_force_count`, and `all_roots_total_wall_ns`. The standalone lazy benchmark can also be run via `cargo run --example benchmark_lazy_eval -- --repeat-count 10`.
+- The four `lazy-eval` workloads share a single wide package-set fixture (`tests/fixtures/wide_package_set.ncl`). They emit `root_discovery_wall_ns`, `selected_root_total_wall_ns`, `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`, `explicit_nonselected_root_force_count`, `all_roots_total_wall_ns`, `parallel_all_roots_total_wall_ns`, and `parallel_root_eval_concurrency`. The standalone lazy benchmark can also be run via `cargo run --example benchmark_lazy_eval -- --repeat-count 10`.
 - If a workload can only report honest total wall time, the bundle keeps `total_wall_ns` and leaves `phase_metrics` empty rather than inventing a fake phase metric.
 - The comparison entry point matches workloads by stable `workload_name`, compares only the shared metric names in each workload, reports per-workload missing metrics explicitly, and reports the largest regression and largest win across the matched metrics.
 - `benchmark_compare` also accepts `--json` when you want machine-readable comparison output.
@@ -64,3 +65,4 @@ schema `crunch-benchmark-bundle-v1`.
 4. Read `missing_from_fresh` and `missing_from_baseline` as honest omission, not zero. Sparse metrics stay sparse on purpose.
 5. When a change is likely store-related, inspect `store-persist-lookup-blob` first. That is the only checked-in workload that should carry `store_persistence_wall_ns` or `store_lookup_wall_ns`.
 6. Treat small deltas as noise until the same workload and metric move in the same direction across repeated runs on the same host.
+7. For `parallel-all-roots-wide-package-set`, keep the run isolated: no concurrent Cargo build or test should share the same target directory during the measurement window.

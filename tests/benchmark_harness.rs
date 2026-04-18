@@ -143,7 +143,7 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     let bundle = run_suite_benchmark(&request).unwrap();
 
     assert!(bundle_path.exists(), "suite bundle must be written");
-    assert_eq!(bundle.results.len(), 9);
+    assert_eq!(bundle.results.len(), 10);
 
     let names: Vec<&str> = bundle.results.iter().map(|result| result.workload_name.as_str()).collect();
     assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME));
@@ -159,7 +159,7 @@ fn suite_benchmark_writes_full_workload_matrix_bundle() {
     let json = std::fs::read_to_string(&bundle_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let results = parsed["results"].as_array().unwrap();
-    assert_eq!(results.len(), 9);
+    assert_eq!(results.len(), 10);
     assert!(results.iter().any(|result| result["entry_point"] == SUITE_ENTRY_POINT));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&EVAL_PHASE_METRIC_NAME)));
     assert!(results.iter().any(|result| phase_metric_names(result).contains(&CONVERSION_PHASE_METRIC_NAME)));
@@ -276,7 +276,7 @@ fn suite_workload_descriptors_stay_deterministic() {
     let left = suite_workload_descriptors().unwrap();
     let right = suite_workload_descriptors().unwrap();
     assert_eq!(left, right);
-    assert_eq!(left.len(), 9);
+    assert_eq!(left.len(), 10);
 }
 
 #[test]
@@ -340,9 +340,12 @@ fn benchmark_docs_cover_all_workloads_and_entry_points() {
     assert!(docs.contains("lazy-root-discovery-wide-package-set"));
     assert!(docs.contains("lazy-selected-root-wide-package-set"));
     assert!(docs.contains("eager-all-roots-wide-package-set"));
+    assert!(docs.contains("parallel-all-roots-wide-package-set"));
     assert!(docs.contains("root_discovery_wall_ns"));
     assert!(docs.contains("selected_root_total_wall_ns"));
     assert!(docs.contains("explicit_nonselected_root_force_count"));
+    assert!(docs.contains("parallel_all_roots_total_wall_ns"));
+    assert!(docs.contains("parallel_root_eval_concurrency"));
     assert!(docs.contains("benchmark_lazy_eval"));
 }
 
@@ -378,6 +381,7 @@ fn benchmark_entry_points_are_checked_in_examples() {
     assert!(lazy_source.contains("LAZY_DISCOVERY_WORKLOAD"));
     assert!(lazy_source.contains("LAZY_SELECTED_ROOT_WORKLOAD"));
     assert!(lazy_source.contains("EAGER_ALL_ROOTS_WORKLOAD"));
+    assert!(lazy_source.contains("PARALLEL_ALL_ROOTS_WORKLOAD"));
 }
 
 #[test]

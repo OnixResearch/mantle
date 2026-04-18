@@ -39,14 +39,18 @@ pub const TOTAL_PHASE_METRIC_NAME: &str = "total_wall_ns";
 pub const LAZY_DISCOVERY_WORKLOAD_NAME: &str = "lazy-root-discovery-wide-package-set";
 pub const LAZY_SELECTED_ROOT_WORKLOAD_NAME: &str = "lazy-selected-root-wide-package-set";
 pub const EAGER_ALL_ROOTS_WORKLOAD_NAME: &str = "eager-all-roots-wide-package-set";
+pub const PARALLEL_ALL_ROOTS_WORKLOAD_NAME: &str = "parallel-all-roots-wide-package-set";
 pub const LAZY_DISCOVERY_METRIC_NAME: &str = "root_discovery_wall_ns";
 pub const LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME: &str = "selected_root_total_wall_ns";
 pub const LAZY_SELECTED_ROOT_FORCE_METRIC_NAME: &str = "selected_root_force_wall_ns";
 pub const LAZY_FORCE_COUNT_METRIC_NAME: &str = "explicit_top_level_root_force_count";
 pub const LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME: &str = "explicit_nonselected_root_force_count";
 pub const LAZY_ALL_ROOTS_METRIC_NAME: &str = "all_roots_total_wall_ns";
+pub const PARALLEL_ALL_ROOTS_METRIC_NAME: &str = "parallel_all_roots_total_wall_ns";
+pub const PARALLEL_ROOT_CONCURRENCY_METRIC_NAME: &str = "parallel_root_eval_concurrency";
 const WIDE_FIXTURE_PATH: &str = "tests/fixtures/wide_package_set.ncl";
 const LAZY_SELECTED_ROOT_LABEL: &str = "alpha";
+const DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY: u32 = 4;
 
 #[derive(Debug)]
 pub enum Error {
@@ -892,6 +896,23 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
                 "/nix/store",
             ),
             workload_path: repo_root.join(WIDE_FIXTURE_PATH),
+            import_paths: common_import_paths.clone(),
+            selected_root_label: String::new(),
+        }),
+        SuiteWorkload::LazyEval(LazyEvalWorkload {
+            descriptor: workload_descriptor(
+                PARALLEL_ALL_ROOTS_WORKLOAD_NAME,
+                "lazy-eval",
+                repo_root.join(WIDE_FIXTURE_PATH),
+                "Measures bounded parallel all-roots forcing on the same wide package-set fixture and records the concurrency used for the run.",
+                &format!(
+                    "EvaluationSession::open_file + force_all_roots_bounded(concurrency={DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY})"
+                ),
+                SUITE_ENTRY_POINT,
+                "cold-per-sample isolated benchmark run",
+                "/nix/store",
+            ),
+            workload_path: repo_root.join(WIDE_FIXTURE_PATH),
             import_paths: common_import_paths,
             selected_root_label: String::new(),
         }),
@@ -1209,6 +1230,45 @@ fn benchmark_lazy_eval_workload(
                 timed.total_wall_ns,
                 timed.sample_wall_ns,
                 vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, timed.total_wall_ns)],
+            )
+        }
+        PARALLEL_ALL_ROOTS_WORKLOAD_NAME => {
+            let timed =
+                time_repeated_operation_with_phase_metrics(repeat_count, || {
+                    let session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                        .map_err(|e| Error::Command {
+                            tool: "EvaluationSession".into(),
+                            detail: e.to_string(),
+                        })?;
+                    let roots = session
+                        .force_all_roots_bounded::<CrunchDerivation>(DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY)
+                        .map_err(|e| Error::Command {
+                            tool: "force_all_roots_bounded".into(),
+                            detail: e.to_string(),
+                        })?;
+                    let root_count = usize_to_u32(roots.len())?;
+                    Ok(PhasedSample {
+                        root_count,
+                        phase_metrics: vec![
+                            named_metric(PARALLEL_ALL_ROOTS_METRIC_NAME, 0),
+                            named_metric(
+                                PARALLEL_ROOT_CONCURRENCY_METRIC_NAME,
+                                DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64,
+                            ),
+                        ],
+                    })
+                })?;
+            build_result(
+                &workload.descriptor,
+                command_argv,
+                repeat_count,
+                timed.root_count,
+                timed.total_wall_ns,
+                timed.sample_wall_ns,
+                vec![
+                    named_metric(PARALLEL_ALL_ROOTS_METRIC_NAME, timed.total_wall_ns),
+                    named_metric(PARALLEL_ROOT_CONCURRENCY_METRIC_NAME, DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64),
+                ],
             )
         }
         _ => Err(Error::InvalidArgument(format!("unknown lazy-eval workload: {name}"))),
@@ -1650,7 +1710,7 @@ mod tests {
         let descriptors = suite_workload_descriptors().unwrap();
         let names: Vec<String> = descriptors.iter().map(|d| d.workload_name.clone()).collect();
         let kinds: Vec<String> = descriptors.iter().map(|d| d.workload_kind.clone()).collect();
-        assert_eq!(descriptors.len(), 9);
+        assert_eq!(descriptors.len(), 10);
         assert!(names.contains(&EVAL_SMOKE_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&CONVERSION_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&SUBSTITUTION_WORKLOAD_NAME.to_string()));
@@ -1660,6 +1720,7 @@ mod tests {
         assert!(names.contains(&LAZY_DISCOVERY_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&LAZY_SELECTED_ROOT_WORKLOAD_NAME.to_string()));
         assert!(names.contains(&EAGER_ALL_ROOTS_WORKLOAD_NAME.to_string()));
+        assert!(names.contains(&PARALLEL_ALL_ROOTS_WORKLOAD_NAME.to_string()));
         assert!(kinds.contains(&"evaluation".to_string()));
         assert!(kinds.contains(&"conversion".to_string()));
         assert!(kinds.contains(&"substitution".to_string()));

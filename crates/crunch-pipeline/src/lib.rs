@@ -21,6 +21,7 @@ use crunch_store::StoreMutationGuard;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use tracing::info;
 
 pub struct BuildConfig {
@@ -94,22 +95,28 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
     })
 }
 
+fn eval_error_is_deserialize(err: &crunch_eval::Error) -> bool {
+    match err {
+        crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => false,
+        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => true,
+        crunch_eval::Error::Labeled { source, .. } => eval_error_is_deserialize(source),
+    }
+}
+
+fn map_eval_error(err: crunch_eval::Error) -> Error {
+    if eval_error_is_deserialize(&err) {
+        return Error::Deserialize(err.to_string());
+    }
+    Error::Eval(err.to_string())
+}
+
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
     let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
         .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
 
-    let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths).map_err(
-        |e| match e {
-            crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
-            crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
-        },
-    )?;
-    let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| match e {
-        crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => Error::Eval(format!("{e}")),
-        crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => Error::Deserialize(format!("{e}")),
-    })?;
-    debug_assert!(!derivations.is_empty(), "must have at least one derivation");
+    let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths)
+        .map_err(map_eval_error)?;
 
     let store = match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: config.state_dir.clone(),
@@ -122,6 +129,8 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     {
         Ok(store) => store,
         Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
+            let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
+            debug_assert!(!derivations.is_empty(), "must have at least one derivation");
             return build_preflight_failure(config, &derivations, err.to_string());
         }
         Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
@@ -130,7 +139,7 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 
     #[cfg(target_os = "linux")]
     {
-        return build_linux(config, store, derivations, hermeticity_audit_events).await;
+        return build_linux(config, store, session, hermeticity_audit_events).await;
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -144,7 +153,7 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 async fn build_linux(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
-    derivations: Vec<(String, CrunchDerivation)>,
+    session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 ) -> Result<PipelineResult, Error> {
     use snix_build::buildservice::BubblewrapBuildService;
@@ -177,22 +186,31 @@ async fn build_linux(
     builder.set_root_retention_source(config.root_retention_source);
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
-    let store_dir = config.store_dir.clone();
-    let convert_handle = tokio::task::spawn_blocking(move || convert_all(derivations, &store_dir, tx));
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
     let mut worker = Worker::new(config.max_jobs);
-    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx).await;
-    let root_drv_paths =
-        convert_handle.await.map_err(|e| Error::Internal(format!("convert thread panicked: {e}")))??;
+    let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
+    let eval_stream = stream_roots_into_worker(config, &session, tx);
+    let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
     let mut worker_result = match worker_run {
         Ok(result) => result,
         Err(err) => return Err(Error::Build(format!("{err}"))),
     };
+    let eval_stream = eval_stream?;
     let mut hermeticity_audit_events = hermeticity_audit_events;
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
+    if let Some(eval_failure) = &eval_stream.eval_failure {
+        worker_result.failed.push(FailedGoal {
+            drv_key: eval_failure_key(&eval_failure.label),
+            error: eval_failure.error.clone(),
+        });
+    }
     normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
+    let mut root_labels = build_root_labels(&eval_stream.root_drv_paths, &config.store_dir);
+    if let Some(eval_failure) = &eval_stream.eval_failure {
+        root_labels.insert(eval_failure_key(&eval_failure.label), eval_failure.label.clone());
+    }
     Ok(PipelineResult {
-        root_labels: build_root_labels(&root_drv_paths, &config.store_dir),
+        root_labels,
         fod_mismatches: collect_fod_mismatches(&worker_result.failed),
         outcomes: worker_result.outcomes,
         failed: worker_result.failed,
@@ -231,33 +249,105 @@ fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
     Ok(())
 }
 
-fn convert_all(
-    derivations: Vec<(String, CrunchDerivation)>,
-    store_dir: &str,
+struct EvalStreamResult {
+    root_drv_paths: Vec<(String, StorePath<String>)>,
+    eval_failure: Option<EvalFailure>,
+}
+
+struct EvalFailure {
+    label: String,
+    error: String,
+}
+
+async fn stream_roots_into_worker(
+    config: &BuildConfig,
+    session: &crunch_eval::session::EvaluationSession,
     tx: mpsc::Sender<EvalMessage>,
-) -> Result<Vec<(String, StorePath<String>)>, Error> {
-    let mut cache = ConversionCache::new(store_dir);
-    let mut drv_paths = Vec::new();
+) -> Result<EvalStreamResult, Error> {
+    let requested_labels = session.root_labels().iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
+    debug_assert!(!requested_labels.is_empty(), "must have at least one root label");
 
-    for (label, drv) in &derivations {
-        let (drv_path, _nix_drv) =
-            crunch_glue::convert(drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
+    let eval_parallelism = resolve_eval_parallelism(config.max_jobs, requested_labels.len() as u32);
+    let worker_input = session.isolated_worker_input();
+    let mut join_set = JoinSet::new();
+    let mut next_label_index: usize = 0;
+    let mut cache = ConversionCache::new(&config.store_dir);
+    let mut root_drv_paths = Vec::with_capacity(requested_labels.len());
+    let mut first_failure: Option<EvalFailure> = None;
 
-        let new_entries = cache.drain_pending();
-        info!(drv = %drv_path, label = %label, entries = new_entries.len(), "converted, sending to worker");
+    spawn_eval_workers(&mut join_set, &worker_input, &requested_labels, &mut next_label_index, eval_parallelism);
+    while let Some(join_result) = join_set.join_next().await {
+        let worker_result = join_result.map_err(|e| Error::Internal(format!("eval worker panicked: {e}")))?;
 
-        tx.blocking_send(EvalMessage {
-            label: label.clone(),
-            drv_path: drv_path.clone(),
-            new_entries,
-        })
-        .map_err(|e| Error::Internal(format!("channel send: {e}")))?;
+        match worker_result {
+            Ok((label, drv)) => {
+                if first_failure.is_some() {
+                    continue;
+                }
+                let (drv_path, _nix_drv) =
+                    crunch_glue::convert(&drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
+                let new_entries = cache.drain_pending();
+                info!(drv = %drv_path, label = %label, entries = new_entries.len(), "converted, sending to worker");
+                tx.send(EvalMessage {
+                    label: label.clone(),
+                    drv_path: drv_path.clone(),
+                    new_entries,
+                })
+                .await
+                .map_err(|e| Error::Internal(format!("channel send: {e}")))?;
+                root_drv_paths.push((label, drv_path));
+            }
+            Err((label, error)) => {
+                if first_failure.is_none() {
+                    first_failure = Some(EvalFailure { label, error });
+                }
+            }
+        }
 
-        drv_paths.push((label.clone(), drv_path));
+        if first_failure.is_none() {
+            spawn_eval_workers(
+                &mut join_set,
+                &worker_input,
+                &requested_labels,
+                &mut next_label_index,
+                eval_parallelism,
+            );
+        }
     }
 
     drop(tx);
-    Ok(drv_paths)
+    Ok(EvalStreamResult {
+        root_drv_paths,
+        eval_failure: first_failure,
+    })
+}
+
+fn spawn_eval_workers(
+    join_set: &mut JoinSet<Result<(String, CrunchDerivation), (String, String)>>,
+    worker_input: &crunch_eval::session::IsolatedWorkerInput,
+    labels: &[String],
+    next_label_index: &mut usize,
+    eval_parallelism: u32,
+) {
+    while *next_label_index < labels.len() && join_set.len() < eval_parallelism as usize {
+        let worker_input = worker_input.clone();
+        let label = labels[*next_label_index].clone();
+        *next_label_index = next_label_index.saturating_add(1);
+        join_set.spawn_blocking(move || match worker_input.force_root::<CrunchDerivation>(&label) {
+            Ok(drv) => Ok((label, drv)),
+            Err(err) => Err((label.clone(), format!("root '{label}': {err}"))),
+        });
+    }
+}
+
+fn resolve_eval_parallelism(max_jobs: u32, requested_root_count: u32) -> u32 {
+    assert!(max_jobs >= 1, "max_jobs must be at least 1");
+    assert!(requested_root_count >= 1, "requested_root_count must be at least 1");
+    max_jobs.min(requested_root_count).max(1)
+}
+
+fn eval_failure_key(label: &str) -> String {
+    format!("eval-root:{label}")
 }
 
 fn build_root_labels(root_drv_paths: &[(String, StorePath<String>)], store_dir: &str) -> HashMap<String, String> {
@@ -350,6 +440,32 @@ mod tests {
         assert_eq!(resolve_max_jobs(Some(0)), 1);
         assert_eq!(resolve_max_jobs(Some(1)), 1);
         assert_eq!(resolve_max_jobs(Some(99)), 16);
+    }
+
+    #[test]
+    fn resolve_eval_parallelism_stays_within_requested_roots() {
+        assert_eq!(resolve_eval_parallelism(1, 4), 1);
+        assert_eq!(resolve_eval_parallelism(4, 1), 1);
+        assert_eq!(resolve_eval_parallelism(4, 3), 3);
+    }
+
+    #[test]
+    fn eval_failure_key_uses_stable_prefix() {
+        assert_eq!(eval_failure_key("alpha"), "eval-root:alpha");
+        assert_eq!(eval_failure_key("pkg"), "eval-root:pkg");
+    }
+
+    #[test]
+    fn map_eval_error_keeps_labeled_deserialize_failures_in_deserialize_class() {
+        let err = crunch_eval::Error::Labeled {
+            label: "alpha".to_string(),
+            source: Box::new(crunch_eval::Error::Serde("bad shape".to_string())),
+        };
+
+        let mapped = map_eval_error(err);
+
+        assert!(matches!(mapped, Error::Deserialize(_)), "expected deserialize mapping, got: {mapped}");
+        assert!(mapped.to_string().contains("alpha"));
     }
 
     #[test]

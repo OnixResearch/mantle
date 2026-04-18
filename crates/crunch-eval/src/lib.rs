@@ -38,6 +38,11 @@ pub enum Error {
     Boundary(String),
 
     Serde(String),
+
+    Labeled {
+        label: String,
+        source: Box<Error>,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -47,6 +52,7 @@ impl std::fmt::Display for Error {
             Error::Io(err) => write!(f, "reading source file: {err}"),
             Error::Boundary(err) => write!(f, "evaluation boundary error: {err}"),
             Error::Serde(err) => write!(f, "deserialization error: {err}"),
+            Error::Labeled { label, source } => write!(f, "root '{label}': {source}"),
         }
     }
 }
@@ -58,6 +64,7 @@ impl std::error::Error for Error {
             Error::Io(err) => Some(err),
             Error::Boundary(_) => None,
             Error::Serde(_) => None,
+            Error::Labeled { source, .. } => Some(source),
         }
     }
 }

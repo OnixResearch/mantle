@@ -1,0 +1,183 @@
+[
+  {
+    "workload_name": "lazy-root-discovery-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures lazy root label discovery without deep-forcing any root values",
+    "operation": "open_file + root_labels",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "/home/brittonr/.cargo-target/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/parallel-root-evaluation/evidence/parallel-root-benchmark.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 72637150,
+    "sample_wall_ns": [
+      48701312,
+      44766930,
+      44633831,
+      45253443,
+      47634531,
+      72637150,
+      112797868,
+      129686393,
+      737447946,
+      458668339
+    ],
+    "phase_metrics": [
+      {
+        "name": "root_discovery_wall_ns",
+        "unit": "ns",
+        "value": 72637150
+      }
+    ]
+  },
+  {
+    "workload_name": "lazy-selected-root-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures end-to-end latency to obtain one selected root from a wide package set",
+    "operation": "open_file + force_root(\"alpha\")",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "/home/brittonr/.cargo-target/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/parallel-root-evaluation/evidence/parallel-root-benchmark.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 1,
+    "total_wall_ns": 280872794,
+    "sample_wall_ns": [
+      304043988,
+      202052875,
+      215773478,
+      250665781,
+      222688201,
+      280872794,
+      375386317,
+      268821685,
+      413374420,
+      375607653
+    ],
+    "phase_metrics": [
+      {
+        "name": "selected_root_total_wall_ns",
+        "unit": "ns",
+        "value": 280872794
+      },
+      {
+        "name": "root_discovery_wall_ns",
+        "unit": "ns",
+        "value": 198254038
+      },
+      {
+        "name": "selected_root_force_wall_ns",
+        "unit": "ns",
+        "value": 70565643
+      },
+      {
+        "name": "explicit_top_level_root_force_count",
+        "unit": "count",
+        "value": 1
+      },
+      {
+        "name": "explicit_nonselected_root_force_count",
+        "unit": "count",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "workload_name": "eager-all-roots-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Guardrail: measures all-roots eager path to detect regressions from lazy changes",
+    "operation": "open_file + force_all_roots",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "/home/brittonr/.cargo-target/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/parallel-root-evaluation/evidence/parallel-root-benchmark.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 208601181,
+    "sample_wall_ns": [
+      315099389,
+      219453212,
+      204551142,
+      184692223,
+      173363730,
+      173801030,
+      199184524,
+      268901224,
+      215425505,
+      208601181
+    ],
+    "phase_metrics": [
+      {
+        "name": "all_roots_total_wall_ns",
+        "unit": "ns",
+        "value": 208601181
+      }
+    ]
+  },
+  {
+    "workload_name": "parallel-all-roots-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures bounded parallel all-roots forcing throughput on the same wide package-set fixture",
+    "operation": "open_file + force_all_roots_bounded(concurrency=4)",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "/home/brittonr/.cargo-target/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/parallel-root-evaluation/evidence/parallel-root-benchmark.json"
+    ],
+    "cache_mode": "cold-per-sample isolated benchmark run",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 803100983,
+    "sample_wall_ns": [
+      783154069,
+      760052567,
+      798089441,
+      805175695,
+      762784322,
+      795834870,
+      832225114,
+      993774168,
+      837496504,
+      803100983
+    ],
+    "phase_metrics": [
+      {
+        "name": "parallel_all_roots_total_wall_ns",
+        "unit": "ns",
+        "value": 803100983
+      },
+      {
+        "name": "parallel_root_eval_concurrency",
+        "unit": "count",
+        "value": 4
+      }
+    ]
+  }
+]

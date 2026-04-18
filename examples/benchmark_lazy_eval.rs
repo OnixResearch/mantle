@@ -20,10 +20,12 @@ use crunch_glue::CrunchDerivation;
 pub const LAZY_DISCOVERY_WORKLOAD: &str = "lazy-root-discovery-wide-package-set";
 pub const LAZY_SELECTED_ROOT_WORKLOAD: &str = "lazy-selected-root-wide-package-set";
 pub const EAGER_ALL_ROOTS_WORKLOAD: &str = "eager-all-roots-wide-package-set";
+pub const PARALLEL_ALL_ROOTS_WORKLOAD: &str = "parallel-all-roots-wide-package-set";
 
 const WIDE_FIXTURE_PATH: &str = "tests/fixtures/wide_package_set.ncl";
 const SELECTED_ROOT_LABEL: &str = "alpha";
 const DEFAULT_REPEAT_COUNT: u32 = 10;
+const DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY: u32 = 4;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -93,6 +95,14 @@ fn measure_eager_all_roots(path: &Path, import_paths: &[OsString]) -> Result<(u6
     Ok((elapsed_ns, roots.len() as u32))
 }
 
+fn measure_parallel_all_roots(path: &Path, import_paths: &[OsString], concurrency: u32) -> Result<(u64, u32), Error> {
+    let start = Instant::now();
+    let session = EvaluationSession::open_file(path, import_paths)?;
+    let roots = session.force_all_roots_bounded::<CrunchDerivation>(concurrency)?;
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
+    Ok((elapsed_ns, roots.len() as u32))
+}
+
 fn median(samples: &[u64]) -> u64 {
     assert!(!samples.is_empty(), "need at least one sample");
     let mut sorted = samples.to_vec();
@@ -103,7 +113,7 @@ fn median(samples: &[u64]) -> u64 {
 fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error> {
     let path = fixture_path();
     let imports = import_paths();
-    let mut results = Vec::with_capacity(3);
+    let mut results = Vec::with_capacity(4);
 
     // 1. Lazy root discovery
     {
@@ -228,6 +238,49 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
                 unit: "ns".to_string(),
                 value: med,
             }],
+        });
+    }
+
+    // 4. Parallel all-roots throughput path
+    {
+        let mut samples = Vec::with_capacity(repeat_count as usize);
+        let mut root_count = 0u32;
+        for _ in 0..repeat_count {
+            let (ns, count) = measure_parallel_all_roots(&path, &imports, DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY)?;
+            samples.push(ns);
+            root_count = count;
+        }
+        let med = median(&samples);
+        results.push(BenchmarkResult {
+            workload_name: PARALLEL_ALL_ROOTS_WORKLOAD.to_string(),
+            workload_kind: "lazy-eval".to_string(),
+            workload_path: WIDE_FIXTURE_PATH.to_string(),
+            rationale: "Measures bounded parallel all-roots forcing throughput on the same wide package-set fixture"
+                .to_string(),
+            operation: format!(
+                "open_file + force_all_roots_bounded(concurrency={DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY})"
+            ),
+            entry_point: "benchmark_lazy_eval".to_string(),
+            command_argv: std::env::args().collect(),
+            cache_mode: "cold-per-sample isolated benchmark run".to_string(),
+            repeat_count,
+            logical_store_prefix: "/nix/store".to_string(),
+            hermeticity_mode: None,
+            root_count,
+            total_wall_ns: med,
+            sample_wall_ns: samples,
+            phase_metrics: vec![
+                BenchmarkMetric {
+                    name: "parallel_all_roots_total_wall_ns".to_string(),
+                    unit: "ns".to_string(),
+                    value: med,
+                },
+                BenchmarkMetric {
+                    name: "parallel_root_eval_concurrency".to_string(),
+                    unit: "count".to_string(),
+                    value: DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64,
+                },
+            ],
         });
     }
 

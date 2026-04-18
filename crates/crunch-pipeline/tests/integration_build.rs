@@ -424,6 +424,128 @@ async fn pipeline_reports_fod_mismatch_without_aborting_other_roots() {
 }
 
 #[tokio::test]
+async fn pipeline_preserves_label_to_output_association_under_parallel_root_streaming() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let alpha_src = work.path().join("alpha.txt");
+    let beta_src = work.path().join("beta.txt");
+    let ncl_file = work.path().join("parallel-fetches.ncl");
+    let alpha_content = b"alpha payload\n";
+    let beta_content = b"beta payload\n";
+
+    std::fs::write(&alpha_src, alpha_content).unwrap();
+    std::fs::write(&beta_src, beta_content).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  alpha = crunch.fetchurl {{
+    name = "alpha-src",
+    url = "file://{}",
+    hash = "{}",
+  }},
+  beta = crunch.fetchurl {{
+    name = "beta-src",
+    url = "file://{}",
+    hash = "{}",
+  }},
+}}"#,
+            alpha_src.display(),
+            sha256_sri(alpha_content),
+            beta_src.display(),
+            sha256_sri(beta_content),
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.max_jobs = 2;
+
+    let result = build(&config).await.unwrap();
+    assert!(result.failed.is_empty(), "pipeline failures: {:?}", result.failed);
+    assert_eq!(result.outcomes.len(), 2, "parallel roots should both succeed");
+
+    let mut observed = std::collections::HashMap::new();
+    for outcome in &result.outcomes {
+        let drv_key = crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path);
+        let label = crunch_pipeline::label_for_key(&result, &drv_key).expect("label must exist");
+        let output_path = PathBuf::from(
+            outcome.outputs["out"].store_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()),
+        );
+        observed.insert(label.to_string(), std::fs::read(&output_path).unwrap());
+    }
+
+    assert_eq!(observed.get("alpha").map(Vec::as_slice), Some(alpha_content.as_slice()));
+    assert_eq!(observed.get("beta").map(Vec::as_slice), Some(beta_content.as_slice()));
+}
+
+#[tokio::test]
+async fn pipeline_reports_labeled_eval_failure_after_prior_root_dispatch() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let good_src = work.path().join("good.txt");
+    let ncl_file = work.path().join("eval-failure.ncl");
+    let good_content = b"good before eval failure\n";
+
+    std::fs::write(&good_src, good_content).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  good = crunch.fetchurl {{
+    name = "good-src",
+    url = "file://{}",
+    hash = "{}",
+  }},
+  bad = {{
+    name = ["not-a-string"],
+    builder = "/bin/sh",
+  }},
+}}"#,
+            good_src.display(),
+            sha256_sri(good_content),
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.max_jobs = 1;
+
+    let result = build(&config).await.unwrap();
+    assert_eq!(result.outcomes.len(), 1, "good root should finish before eval failure");
+    assert_eq!(result.failed.len(), 1, "expected one labeled eval failure");
+    assert_eq!(result.root_labels.get("eval-root:bad").map(String::as_str), Some("bad"));
+    assert!(result.failed[0].drv_key.starts_with("eval-root:"));
+    assert!(
+        result.failed[0].error.contains("root 'bad'"),
+        "error should retain label: {}",
+        result.failed[0].error
+    );
+
+    let outcome = &result.outcomes[0];
+    let drv_key = crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path);
+    assert_eq!(crunch_pipeline::label_for_key(&result, &drv_key), Some("good"));
+    let output_path = PathBuf::from(
+        outcome.outputs["out"].store_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()),
+    );
+    assert_eq!(std::fs::read(&output_path).unwrap(), good_content);
+}
+
+#[tokio::test]
 async fn pipeline_normalizes_runtime_environment_and_umask() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");
