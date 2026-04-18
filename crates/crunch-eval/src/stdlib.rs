@@ -85,10 +85,10 @@ fn force_embedded_stdlib_from_env() -> bool {
 /// writing embedded files. Set `CRUNCH_FORCE_EMBEDDED_STDLIB=1` to force the
 /// embedded path even in a source checkout.
 pub fn stdlib_import_path() -> Result<PathBuf, std::io::Error> {
-    if !force_embedded_stdlib_from_env() {
-        if let Some(source_dir) = source_stdlib_dir() {
-            return Ok(source_dir);
-        }
+    if !force_embedded_stdlib_from_env()
+        && let Some(source_dir) = source_stdlib_dir()
+    {
+        return Ok(source_dir);
     }
     write_stdlib(None)
 }

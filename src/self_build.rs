@@ -96,10 +96,8 @@ impl BwrapSource {
     pub fn parse(s: &str) -> Option<Self> {
         if let Some(rest) = s.strip_prefix("crunch-built:") {
             Some(BwrapSource::CrunchBuilt(PathBuf::from(rest)))
-        } else if let Some(rest) = s.strip_prefix("host-fallback:") {
-            Some(BwrapSource::HostFallback(PathBuf::from(rest)))
         } else {
-            None
+            s.strip_prefix("host-fallback:").map(|rest| BwrapSource::HostFallback(PathBuf::from(rest)))
         }
     }
 
@@ -957,10 +955,10 @@ fn build_bwrap_path_entries(wrapper_dir: Option<PathBuf>, bwrap_bin_dir: PathBuf
     assert!(!bwrap_bin_dir.as_os_str().is_empty(), "bwrap bin dir must not be empty",);
     let mut path_entries = Vec::with_capacity(2);
     path_entries.push(bwrap_bin_dir.clone());
-    if let Some(wrapper_dir) = wrapper_dir {
-        if wrapper_dir != bwrap_bin_dir {
-            path_entries.push(wrapper_dir);
-        }
+    if let Some(wrapper_dir) = wrapper_dir
+        && wrapper_dir != bwrap_bin_dir
+    {
+        path_entries.push(wrapper_dir);
     }
     assert!(!path_entries.is_empty(), "bwrap PATH entries must not be empty",);
     assert!(path_entries.len() <= 2, "bwrap PATH entries exceeded 2");
@@ -1347,6 +1345,7 @@ fn build_crunch_binary(
 /// This exports the tool's output to the `--store` directory on disk,
 /// making it available for subsequent self-build stages to discover
 /// via `find_crunch_bwrap` / `find_crunch_busybox`.
+#[allow(clippy::too_many_arguments)]
 fn build_bootstrap_tool(
     tool_ncl: &Path,
     import_paths: &[std::ffi::OsString],
@@ -1697,10 +1696,10 @@ fn initialize_self_build(
         None => resolve_bwrap_source(&output_dir, hermeticity_mode)?,
     };
     let mut fallback_events = Vec::new();
-    if explicit_bwrap_source.is_none() {
-        if let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap) {
-            fallback_events.push(event);
-        }
+    if explicit_bwrap_source.is_none()
+        && let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap)
+    {
+        fallback_events.push(event);
     }
     activate_bwrap_source(&initial_bwrap)?;
 
@@ -1765,6 +1764,7 @@ fn emit_self_build_completion(report: &SelfBuildReport) {
     eprintln!("\n=== self-build complete ===");
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn cmd_self_build(
     output_dir: &Path,
     state_dir: &Path,
@@ -2744,11 +2744,11 @@ mod tests {
 
         assert!(!dirs.is_empty(), "host fallback activation should prepend at least one dir",);
         assert_eq!(dirs[0], dir.path().to_path_buf());
-        if let Some(wrapper_dir) = find_nixos_wrapper_dir() {
-            if wrapper_dir != dir.path() {
-                assert!(dirs.len() >= 2, "wrapper dir should be present after source dir");
-                assert_eq!(dirs[1], wrapper_dir);
-            }
+        if let Some(wrapper_dir) = find_nixos_wrapper_dir()
+            && wrapper_dir != dir.path()
+        {
+            assert!(dirs.len() >= 2, "wrapper dir should be present after source dir");
+            assert_eq!(dirs[1], wrapper_dir);
         }
     }
 

@@ -1144,7 +1144,7 @@ fn git_symlink_target_path(target_bytes: &[u8]) -> Result<PathBuf, FetchError> {
     {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
-        return Ok(PathBuf::from(OsString::from_vec(target_bytes.to_vec())));
+        Ok(PathBuf::from(OsString::from_vec(target_bytes.to_vec())))
     }
     #[cfg(not(unix))]
     {

@@ -20,10 +20,10 @@ const BOOTSTRAP_ENTRYPOINTS: &[&str] = &[
 ];
 
 fn bootstrap_import_paths() -> Vec<OsString> {
-    let mut paths = Vec::new();
-    paths.push(crunch_eval::stdlib::stdlib_import_path().unwrap().into_os_string());
-    paths.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap").into_os_string());
-    paths
+    vec![
+        crunch_eval::stdlib::stdlib_import_path().unwrap().into_os_string(),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap").into_os_string(),
+    ]
 }
 
 fn bootstrap_path(name: &str) -> PathBuf {

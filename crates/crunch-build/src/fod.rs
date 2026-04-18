@@ -103,7 +103,7 @@ mod tests {
         writer.write_all(data).await.unwrap();
         let digest = writer.close().await.unwrap();
         let node = Node::File {
-            digest: digest.clone(),
+            digest,
             size: data.len() as u64,
             executable: false,
         };

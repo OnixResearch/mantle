@@ -87,7 +87,7 @@ impl BuildService for MockBuildService {
             .iter()
             .map(|_| BuildOutput {
                 node: Node::File {
-                    digest: digest.clone(),
+                    digest,
                     size: 11,
                     executable: false,
                 },
@@ -270,7 +270,7 @@ impl BuildService for DrvProducingMockBuildService {
             .iter()
             .map(|_| BuildOutput {
                 node: Node::File {
-                    digest: digest.clone(),
+                    digest,
                     size,
                     executable: false,
                 },
@@ -318,7 +318,7 @@ impl BuildService for FailingMockBuildService {
             .any(|marker| request.command_args.iter().any(|a| a.contains(marker.as_str())));
 
         if should_fail {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "simulated build failure"));
+            return Err(std::io::Error::other("simulated build failure"));
         }
 
         let mut writer = BlobService::open_write(&self.blob_service).await;
@@ -330,7 +330,7 @@ impl BuildService for FailingMockBuildService {
             .iter()
             .map(|_| BuildOutput {
                 node: Node::File {
-                    digest: digest.clone(),
+                    digest,
                     size: 11,
                     executable: false,
                 },

@@ -276,8 +276,37 @@ mod tests {
         std::fs::write(path, content).unwrap();
     }
 
+    fn find_git_binary() -> PathBuf {
+        for candidate in [
+            "/usr/bin/git",
+            "/bin/git",
+            "/usr/local/bin/git",
+            "/run/current-system/sw/bin/git",
+        ] {
+            let path = Path::new(candidate);
+            if path.exists() {
+                return path.to_path_buf();
+            }
+        }
+        if let Ok(user) = std::env::var("USER") {
+            let profile = PathBuf::from(format!("/etc/profiles/per-user/{user}/bin/git"));
+            if profile.exists() {
+                return profile;
+            }
+        }
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in path_var.split(':') {
+                let candidate = Path::new(dir).join("git");
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+        panic!("git not found for release_source tests");
+    }
+
     fn run_git(repo_root: &Path, args: &[&str]) -> Output {
-        Command::new("git").args(args).current_dir(repo_root).output().unwrap()
+        Command::new(find_git_binary()).args(args).current_dir(repo_root).output().unwrap()
     }
 
     fn assert_git_ok(repo_root: &Path, args: &[&str]) {
@@ -328,13 +357,13 @@ mod tests {
         for entry_result in tar.entries().unwrap() {
             let mut entry = entry_result.unwrap();
             let path = entry.path().unwrap().into_owned();
-            if path == PathBuf::from("src/main.rs") {
+            if path == std::path::Path::new("src/main.rs") {
                 let mut text = String::new();
                 entry.read_to_string(&mut text).unwrap();
                 assert!(text.contains("worktree"));
                 found_main = true;
             }
-            if path == PathBuf::from("src/untracked.txt") {
+            if path == std::path::Path::new("src/untracked.txt") {
                 found_untracked = true;
             }
         }

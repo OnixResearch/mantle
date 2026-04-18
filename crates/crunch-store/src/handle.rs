@@ -287,7 +287,7 @@ struct AppliedDeltaStreamWire {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DeltaAttemptResult {
     Accepted {
-        path_info: PathInfo,
+        path_info: Box<PathInfo>,
         report: OutputSubstitutionReport,
     },
     Fallback {
@@ -1637,7 +1637,7 @@ impl StoreHandle {
             "delta substitution accepted"
         );
         DeltaAttemptResult::Accepted {
-            path_info,
+            path_info: Box::new(path_info),
             report: OutputSubstitutionReport {
                 mode: OutputSubstitutionMode::Delta,
                 transferred_bytes: applied.transferred_bytes,
@@ -1680,7 +1680,7 @@ impl StoreHandle {
             {
                 DeltaAttemptResult::Accepted { path_info, report } => {
                     self.record_output_substitution_report(output_path, report);
-                    return Ok(Some(path_info));
+                    return Ok(Some(*path_info));
                 }
                 DeltaAttemptResult::Fallback { reason } => {
                     delta_fallback_reason = Some(reason);
@@ -3418,14 +3418,15 @@ mod tests {
         assert_eq!(report.transferred_bytes, final_bytes.len() as u64);
         assert_eq!(report.reused_bytes, 0);
         assert_eq!(report.fallback_reason.as_deref(), Some("stream_application_failed"));
-        let counts = counts.lock().unwrap();
-        assert_eq!(counts.delta.capability_gets, 1);
-        assert_eq!(counts.delta.candidate_posts, 1);
-        assert_eq!(counts.delta.has_set_posts, 1);
-        assert_eq!(counts.delta.stream_posts, 1);
-        assert_eq!(counts.narinfo_gets, 1);
-        assert_eq!(counts.nar_gets, 1);
-        drop(counts);
+        {
+            let counts = counts.lock().unwrap();
+            assert_eq!(counts.delta.capability_gets, 1);
+            assert_eq!(counts.delta.candidate_posts, 1);
+            assert_eq!(counts.delta.has_set_posts, 1);
+            assert_eq!(counts.delta.stream_posts, 1);
+            assert_eq!(counts.narinfo_gets, 1);
+            assert_eq!(counts.nar_gets, 1);
+        }
         assert!(handle.blob_service.has(&second_chunk_digest).await.unwrap());
         let exported_path = output_path.to_absolute_path_with_prefix(handle.output_dir_str());
         assert_eq!(std::fs::read(&exported_path).unwrap(), final_bytes);
@@ -3502,15 +3503,16 @@ mod tests {
             size: final_bytes.len() as u64,
             executable: false,
         });
-        let counts = counts.lock().unwrap();
-        assert_eq!(counts.capability_gets, 1);
-        assert_eq!(counts.candidate_posts, 1);
-        assert_eq!(counts.has_set_posts, 1);
-        assert_eq!(counts.stream_posts, 1);
-        let stream_body = counts.last_stream_body.as_ref().expect("stream body");
-        let stream_request: DeltaStreamRequestWire = serde_json::from_str(stream_body).unwrap();
-        assert_eq!(stream_request.session_id, "session-out");
-        drop(counts);
+        {
+            let counts = counts.lock().unwrap();
+            assert_eq!(counts.capability_gets, 1);
+            assert_eq!(counts.candidate_posts, 1);
+            assert_eq!(counts.has_set_posts, 1);
+            assert_eq!(counts.stream_posts, 1);
+            let stream_body = counts.last_stream_body.as_ref().expect("stream body");
+            let stream_request: DeltaStreamRequestWire = serde_json::from_str(stream_body).unwrap();
+            assert_eq!(stream_request.session_id, "session-out");
+        }
 
         let exported_path = output_path.to_absolute_path_with_prefix(handle.output_dir_str());
         assert_eq!(std::fs::read(&exported_path).unwrap(), final_bytes);
@@ -3617,12 +3619,13 @@ mod tests {
 
         assert_eq!(substituted.nar_sha256, fallback_path_info.nar_sha256);
         assert_ne!(substituted.nar_sha256, delta_path_info.nar_sha256);
-        let counts = counts.lock().unwrap();
-        assert_eq!(counts.capability_gets, 1);
-        assert_eq!(counts.candidate_posts, 1);
-        assert_eq!(counts.has_set_posts, 1);
-        assert_eq!(counts.stream_posts, 1);
-        drop(counts);
+        {
+            let counts = counts.lock().unwrap();
+            assert_eq!(counts.capability_gets, 1);
+            assert_eq!(counts.candidate_posts, 1);
+            assert_eq!(counts.has_set_posts, 1);
+            assert_eq!(counts.stream_posts, 1);
+        }
         let local_pathinfo = handle.pathinfo_service.get(*output_path.digest()).await.unwrap().unwrap();
         assert_eq!(local_pathinfo.nar_sha256, fallback_path_info.nar_sha256);
         assert!(handle.blob_service.has(&second_chunk_digest).await.unwrap());
@@ -3709,12 +3712,13 @@ mod tests {
         assert_eq!(substituted.nar_sha256, fallback_path_info.nar_sha256);
         assert_ne!(substituted.nar_sha256, delta_path_info.nar_sha256);
         assert!(handle.directory_service.get(&directory_digest).await.unwrap().is_none());
-        let counts = counts.lock().unwrap();
-        assert_eq!(counts.capability_gets, 1);
-        assert_eq!(counts.candidate_posts, 1);
-        assert_eq!(counts.has_set_posts, 1);
-        assert_eq!(counts.stream_posts, 1);
-        drop(counts);
+        {
+            let counts = counts.lock().unwrap();
+            assert_eq!(counts.capability_gets, 1);
+            assert_eq!(counts.candidate_posts, 1);
+            assert_eq!(counts.has_set_posts, 1);
+            assert_eq!(counts.stream_posts, 1);
+        }
         let local_pathinfo = handle.pathinfo_service.get(*output_path.digest()).await.unwrap().unwrap();
         assert_eq!(local_pathinfo.nar_sha256, fallback_path_info.nar_sha256);
         assert!(handle.blob_service.has(&child_digest).await.unwrap());

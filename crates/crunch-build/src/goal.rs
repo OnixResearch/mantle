@@ -749,7 +749,7 @@ mod tests {
         // which is a no-op — a second dep completing after the first
         // failed is harmless).
         assert!(g.inspect(vec![]).is_err());
-        assert_eq!(g.notify_dep_done().unwrap(), false);
+        assert!(!g.notify_dep_done().unwrap());
         assert!(g.notify_dep_failed().is_err());
         assert!(g.mark_building().is_err());
         assert!(g.mark_done().is_err());

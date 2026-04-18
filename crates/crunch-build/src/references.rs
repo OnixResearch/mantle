@@ -20,7 +20,7 @@ pub(crate) fn resolve_references(
     let output_paths: Vec<StorePath<String>> = derivation.outputs.values().filter_map(|o| o.path.clone()).collect();
     let input_paths: Vec<StorePath<String>> = inputs.keys().cloned().collect();
 
-    let all_paths: Vec<StorePath<String>> = output_paths.into_iter().chain(input_paths.into_iter()).collect();
+    let all_paths: Vec<StorePath<String>> = output_paths.into_iter().chain(input_paths).collect();
 
     found_needles.iter().filter_map(|&idx| all_paths.get(idx as usize).cloned()).collect()
 }

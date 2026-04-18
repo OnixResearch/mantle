@@ -14,6 +14,76 @@ Current operator-facing command families:
 Use `crunch --help` for the full command list. Use this page for the common
 operator loops.
 
+## Validation tiers
+
+Use the checked-in toolchain from `rust-toolchain.toml`.
+
+### Ordinary first-party gate
+
+Run the checked-in wrapper from the repo root:
+
+```bash
+./scripts/check-first-party-quality.sh
+```
+
+It runs three ordinary edit-time checks in order:
+
+```bash
+cargo fmt --check \
+  -p crunch \
+  -p crunch-attestation \
+  -p crunch-build \
+  -p crunch-delta \
+  -p crunch-eval \
+  -p crunch-glue \
+  -p crunch-pipeline \
+  -p crunch-project \
+  -p crunch-shell \
+  -p crunch-store
+./scripts/check-first-party-clippy.sh
+cargo test --workspace --lib --tests
+```
+
+Notes:
+
+- The root `-p crunch` rustfmt leg covers the root package's `src/`,
+  `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.
+- `./scripts/check-first-party-clippy.sh` excludes vendored workspace members
+  `fuse-backend-rs`, `nix-compat`, `nix-compat-derive`, `snix-build`,
+  `snix-castore`, `snix-store`, and `snix-tracing` so first-party warnings
+  fail cleanly.
+- The wrappers assume the documented build environment. If `clang`, `mold`,
+  `pkg-config`, or the OpenSSL pkg-config path are missing, fix the shell env
+  first instead of treating that as a code failure.
+
+### Heavyweight rails
+
+Keep these checks separate from the ordinary gate:
+
+```bash
+cargo test -p crunch-pipeline --test integration_build \
+  pipeline_determinism_probe_ -- --ignored --nocapture
+./scripts/prove-self-hosting.sh --check
+```
+
+- The determinism probe is an ignored integration rail, not part of every edit.
+- `./scripts/prove-self-hosting.sh --check` is only self-hosting preflight.
+- The full ignored proof remains a separate heavier run:
+
+```bash
+./scripts/prove-self-hosting.sh
+```
+
+### Vendored maintenance lane
+
+Workspace-wide vendored upkeep stays outside the first-party gate. Do not treat
+vendored clippy debt as an ordinary edit blocker for tracked crunch code.
+
+If you bypass the checked-in wrappers and run direct compile-heavy `cargo`
+commands, keep `TMPDIR` and `CARGO_TARGET_DIR` on disk-backed scratch and use
+the PATH / `PKG_CONFIG_PATH` / `SNIX_BUILD_SANDBOX_SHELL` prerequisites called
+out in the self-hosting workflow.
+
 ## Plan before building
 
 Start with the no-mutate preflight:

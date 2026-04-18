@@ -34,11 +34,7 @@ async fn main() {
     }
 
     let elapsed_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-    let ratio_ppm = if full_bytes == 0 {
-        0
-    } else {
-        wire_bytes.saturating_mul(1_000_000) / full_bytes
-    };
+    let ratio_ppm = wire_bytes.saturating_mul(1_000_000).checked_div(full_bytes).unwrap_or(0);
 
     println!("METRIC summary_wire_bytes={summary_wire_bytes}");
     println!("METRIC filter_bytes={filter_bytes}");

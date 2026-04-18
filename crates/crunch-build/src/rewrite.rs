@@ -75,6 +75,8 @@ use tokio::io::AsyncWriteExt;
 /// Maximum directory tree depth for rewrite traversal.
 /// Prevents runaway iteration from malformed castore data.
 pub const MAX_REWRITE_DEPTH: u32 = 256;
+const _: () = assert!(MAX_REWRITE_DEPTH >= 32);
+const _: () = assert!(MAX_REWRITE_DEPTH <= 1024);
 
 /// Maximum number of nodes in the rewrite worklist.
 /// Bounds memory usage against pathological tree structures.
@@ -230,7 +232,7 @@ async fn rewrite_file_node(
     if !found {
         return Ok((
             Node::File {
-                digest: digest.clone(),
+                digest: *digest,
                 size,
                 executable,
             },
@@ -354,7 +356,7 @@ mod tests {
 
     #[test]
     fn max_rewrite_depth_is_positive() {
-        assert!(MAX_REWRITE_DEPTH >= 32, "rewrite depth limit must be reasonable");
-        assert!(MAX_REWRITE_DEPTH <= 1024, "rewrite depth limit must not be unbounded");
+        let depth = std::hint::black_box(MAX_REWRITE_DEPTH);
+        assert!(depth > 0, "rewrite depth limit must be positive");
     }
 }

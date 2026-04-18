@@ -54,12 +54,17 @@ pub const DEFAULT_PROBABILISTIC_FILTER_CONFIG: ProbabilisticFilterConfig = Proba
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProbabilisticWireLayout {
+    #[expect(dead_code, reason = "sizing model keeps the naive layout as a comparison baseline")]
     NaivePerSummary,
     GroupedByOutput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GroupedOutputHeaderMode {
+    #[expect(
+        dead_code,
+        reason = "sizing model keeps the separate mode byte layout as a comparison baseline"
+    )]
     SeparateModeByte,
     PackedModeInSummaryCount,
 }
@@ -550,14 +555,15 @@ fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverPro
     ) {
         return 1;
     }
-    if DEFAULT_GROUPED_OUTPUT_HEADER_MODE == GroupedOutputHeaderMode::PackedModeInSummaryCount {
-        if packed_optional_filter_tag_bytes(summaries).is_some() && summaries.len() <= 2 {
-            return 1u64
-                .saturating_add(split_count_bytes)
-                .saturating_add(coverage_count_bytes)
-                .saturating_add(nested_parent_ref_bytes)
-                .saturating_add(nested_descendant_stream_mode_bytes);
-        }
+    if DEFAULT_GROUPED_OUTPUT_HEADER_MODE == GroupedOutputHeaderMode::PackedModeInSummaryCount
+        && packed_optional_filter_tag_bytes(summaries).is_some()
+        && summaries.len() <= 2
+    {
+        return 1u64
+            .saturating_add(split_count_bytes)
+            .saturating_add(coverage_count_bytes)
+            .saturating_add(nested_parent_ref_bytes)
+            .saturating_add(nested_descendant_stream_mode_bytes);
     }
     let tag_bytes = grouped_optional_filter_tag_bytes(summaries);
     mode_bytes
@@ -824,10 +830,11 @@ fn mixed_root_child_split_count_bytes(
     let Some(root_child_prefix_len) = complete_root_child_prefix_len(output, summaries) else {
         return 0;
     };
-    if DEFAULT_GROUPED_OUTPUT_HEADER_MODE == GroupedOutputHeaderMode::PackedModeInSummaryCount {
-        if summaries.len() <= 3 && root_child_prefix_len <= 3 {
-            return 0;
-        }
+    if DEFAULT_GROUPED_OUTPUT_HEADER_MODE == GroupedOutputHeaderMode::PackedModeInSummaryCount
+        && summaries.len() <= 3
+        && root_child_prefix_len <= 3
+    {
+        return 0;
     }
     1
 }

@@ -275,10 +275,10 @@ mod tests {
     use crunch_glue::CrunchDerivation;
     use crunch_glue::Input;
     use crunch_glue::OutputRef;
-
-    use super::*;
     use session::EvaluationSession;
     use session::RootShape;
+
+    use super::*;
 
     // ── Phase 1: File-based evaluation ──────────────────────────
 
@@ -823,11 +823,8 @@ mod tests {
 
     #[test]
     fn session_missing_root_returns_error() {
-        let mut session = EvaluationSession::open_str(
-            r#"{ hello = { name = "hello", builder = "/bin/sh" } }"#,
-            &[],
-        )
-        .unwrap();
+        let mut session =
+            EvaluationSession::open_str(r#"{ hello = { name = "hello", builder = "/bin/sh" } }"#, &[]).unwrap();
 
         let result = session.force_root::<CrunchDerivation>("nonexistent");
         assert!(result.is_err());
@@ -840,10 +837,7 @@ mod tests {
         let result = EvaluationSession::open_str("42", &[]);
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
-        assert!(
-            err.contains("neither a derivation"),
-            "error should describe invalid shape: {err}"
-        );
+        assert!(err.contains("neither a derivation"), "error should describe invalid shape: {err}");
     }
 
     #[test]
@@ -911,11 +905,7 @@ mod tests {
     fn session_file_based_evaluation() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("pkg.ncl");
-        std::fs::write(
-            &file,
-            r#"{ name = "filepkg", builder = "/bin/sh" }"#,
-        )
-        .unwrap();
+        std::fs::write(&file, r#"{ name = "filepkg", builder = "/bin/sh" }"#).unwrap();
 
         let mut session = EvaluationSession::open_file(&file, &[]).unwrap();
         assert_eq!(*session.shape(), RootShape::Single);
@@ -928,19 +918,10 @@ mod tests {
     #[test]
     fn session_file_with_imports() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("dep.ncl"),
-            r#"{ name = "dep", builder = "/bin/sh" }"#,
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("main.ncl"),
-            r#"{ mydep = import "dep.ncl" }"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("dep.ncl"), r#"{ name = "dep", builder = "/bin/sh" }"#).unwrap();
+        std::fs::write(dir.path().join("main.ncl"), r#"{ mydep = import "dep.ncl" }"#).unwrap();
 
-        let mut session =
-            EvaluationSession::open_file(&dir.path().join("main.ncl"), &[]).unwrap();
+        let mut session = EvaluationSession::open_file(&dir.path().join("main.ncl"), &[]).unwrap();
         assert_eq!(*session.shape(), RootShape::Record);
         assert_eq!(session.root_labels()[0].label, "mydep");
 
@@ -980,16 +961,9 @@ mod tests {
     #[test]
     fn session_import_heavy_fixture_matches_eager() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("base.ncl"),
-            r#"{ builder = "/bin/sh", args = ["-c", "echo base"] }"#,
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("helpers.ncl"),
-            r#"{ make_drv = fun n => (import "base.ncl") & { name = n } }"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("base.ncl"), r#"{ builder = "/bin/sh", args = ["-c", "echo base"] }"#).unwrap();
+        std::fs::write(dir.path().join("helpers.ncl"), r#"{ make_drv = fun n => (import "base.ncl") & { name = n } }"#)
+            .unwrap();
         std::fs::write(
             dir.path().join("main.ncl"),
             r#"let h = import "helpers.ncl" in {
@@ -1039,7 +1013,6 @@ mod tests {
         // This test exists solely as a compile-time boundary guard.
         // If EvaluationSession were moved to crunch-pipeline, this test
         // would need to be moved too, making the boundary violation visible.
-        let _: fn(&str, &[OsString]) -> Result<EvaluationSession, Error> =
-            EvaluationSession::open_str;
+        let _: fn(&str, &[OsString]) -> Result<EvaluationSession, Error> = EvaluationSession::open_str;
     }
 }

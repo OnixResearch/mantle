@@ -32,6 +32,15 @@ use crate::orchestrate::BuildOutcome;
 use crate::orchestrate::Builder;
 use crate::registry::DerivationRegistry;
 
+type PendingRegistryEntry = (
+    StorePath<String>,
+    [u8; 32],
+    nix_compat::derivation::Derivation,
+    bool,
+    Option<crunch_attestation::Claims>,
+);
+type CreatedGoal = (String, Vec<StorePath<String>>);
+
 /// A derivation arriving from the eval thread.
 ///
 /// Contains the root drv_path plus all newly-converted entries
@@ -50,13 +59,7 @@ pub struct EvalMessage {
     /// Inserted into `DerivationRegistry` before `want()` so deps
     /// are known. Diamond deps already in the registry are skipped
     /// (insert is idempotent by drv path).
-    pub new_entries: Vec<(
-        StorePath<String>,
-        [u8; 32],
-        nix_compat::derivation::Derivation,
-        bool,
-        Option<crunch_attestation::Claims>,
-    )>,
+    pub new_entries: Vec<PendingRegistryEntry>,
 }
 
 /// Maximum concurrent in-flight builds. Clamped by the semaphore but
@@ -141,11 +144,11 @@ impl Worker {
         drv_path: &StorePath<String>,
         known_paths: &DerivationRegistry,
         is_root: bool,
-    ) -> Result<Vec<(String, Vec<StorePath<String>>)>, Error> {
+    ) -> Result<Vec<CreatedGoal>, Error> {
         let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
         queue.push_back((drv_path.clone(), is_root));
 
-        let mut created: Vec<(String, Vec<StorePath<String>>)> = Vec::new();
+        let mut created: Vec<CreatedGoal> = Vec::new();
         // Tiger Style: fixed iteration limit.
         let limit: u32 = MAX_GOALS;
         let mut iterations: u32 = 0;
@@ -727,7 +730,7 @@ impl Worker {
             Ok(PrepareResult::NeedsBuild {
                 prepared,
                 build_request,
-            }) => self.spawn_prepared_build(drv_key, prepared, build_request, builder, sem, join_set, pending_meta),
+            }) => self.spawn_prepared_build(drv_key, prepared, *build_request, builder, sem, join_set, pending_meta),
         }
     }
 
@@ -995,10 +998,10 @@ mod tests {
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
 
-        let mid_drv = make_drv_with_deps(&[leaf_sp.clone()]);
+        let mid_drv = make_drv_with_deps(std::slice::from_ref(&leaf_sp));
         let mid_sp = register_drv(&mut kp, "mid.drv", &mid_drv);
 
-        let top_drv = make_drv_with_deps(&[mid_sp.clone()]);
+        let top_drv = make_drv_with_deps(std::slice::from_ref(&mid_sp));
         let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
 
         let mut w = Worker::new(1);
@@ -1030,10 +1033,10 @@ mod tests {
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
 
-        let left_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let left_drv = make_drv_with_deps(std::slice::from_ref(&shared_sp));
         let left_sp = register_drv(&mut kp, "left.drv", &left_drv);
 
-        let right_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let right_drv = make_drv_with_deps(std::slice::from_ref(&shared_sp));
         let right_sp = register_drv(&mut kp, "right.drv", &right_drv);
 
         let top_drv = make_drv_with_deps(&[left_sp.clone(), right_sp.clone()]);
@@ -1119,7 +1122,7 @@ mod tests {
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
 
-        let top_drv = make_drv_with_deps(&[leaf_sp.clone()]);
+        let top_drv = make_drv_with_deps(std::slice::from_ref(&leaf_sp));
         let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
 
         let mut w = Worker::new(1);
@@ -1204,10 +1207,10 @@ mod tests {
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
 
-        let left_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let left_drv = make_drv_with_deps(std::slice::from_ref(&shared_sp));
         let left_sp = register_drv(&mut kp, "left.drv", &left_drv);
 
-        let right_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let right_drv = make_drv_with_deps(std::slice::from_ref(&shared_sp));
         let right_sp = register_drv(&mut kp, "right.drv", &right_drv);
 
         let top_drv = make_drv_with_deps(&[left_sp.clone(), right_sp.clone()]);
@@ -1248,10 +1251,10 @@ mod tests {
         let leaf_drv = make_drv();
         let leaf_sp = register_drv(&mut kp, "leaf.drv", &leaf_drv);
 
-        let mid_drv = make_drv_with_deps(&[leaf_sp.clone()]);
+        let mid_drv = make_drv_with_deps(std::slice::from_ref(&leaf_sp));
         let mid_sp = register_drv(&mut kp, "mid.drv", &mid_drv);
 
-        let top_drv = make_drv_with_deps(&[mid_sp.clone()]);
+        let top_drv = make_drv_with_deps(std::slice::from_ref(&mid_sp));
         let top_sp = register_drv(&mut kp, "top.drv", &top_drv);
 
         let mut w = Worker::new(1);
@@ -1287,7 +1290,7 @@ mod tests {
         let shared_drv = make_drv();
         let shared_sp = register_drv(&mut kp, "shared.drv", &shared_drv);
 
-        let good_drv = make_drv_with_deps(&[shared_sp.clone()]);
+        let good_drv = make_drv_with_deps(std::slice::from_ref(&shared_sp));
         let good_sp = register_drv(&mut kp, "good.drv", &good_drv);
 
         let bad_drv = make_drv();

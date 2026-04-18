@@ -184,20 +184,15 @@ impl Default for GitReference {
 }
 
 /// Hash algorithm specification.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum HashAlgo {
+    #[default]
     #[serde(rename = "sha256")]
     Sha256,
     #[serde(rename = "sha512")]
     Sha512,
     #[serde(rename = "blake3")]
     Blake3,
-}
-
-impl Default for HashAlgo {
-    fn default() -> Self {
-        HashAlgo::Sha256
-    }
 }
 
 impl std::fmt::Display for HashAlgo {
@@ -211,7 +206,7 @@ impl std::fmt::Display for HashAlgo {
 }
 
 /// Hash specification: algorithm + optional expected hash value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct HashSpec {
     #[serde(default)]
     pub algo: HashAlgo,
@@ -219,15 +214,6 @@ pub struct HashSpec {
     /// Expected hash in SRI format (e.g. "sha256-..."). None means
     /// not yet computed (will be filled on first refresh).
     pub expected: Option<String>,
-}
-
-impl Default for HashSpec {
-    fn default() -> Self {
-        Self {
-            algo: HashAlgo::default(),
-            expected: None,
-        }
-    }
 }
 
 /// A global patch definition in the manifest.

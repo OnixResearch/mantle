@@ -215,7 +215,7 @@ pub fn compute_activation(
 }
 
 fn is_protected(key: &str) -> bool {
-    PROTECTED_VARS.iter().any(|&k| k == key)
+    PROTECTED_VARS.contains(&key)
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

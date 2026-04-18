@@ -28,10 +28,27 @@ name = "crunch"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+autoexamples = false
 
 [[bin]]
 name = "crunch"
 path = "src/main.rs"
+
+[[example]]
+name = "benchmark_compare"
+path = "examples/benchmark_compare.rs"
+
+[[example]]
+name = "benchmark_eval_smoke"
+path = "examples/benchmark_eval_smoke.rs"
+
+[[example]]
+name = "benchmark_lazy_eval"
+path = "examples/benchmark_lazy_eval.rs"
+
+[[example]]
+name = "benchmark_suite"
+path = "examples/benchmark_suite.rs"
 
 [dependencies]
 crunch-pipeline = { path = "crates/crunch-pipeline" }

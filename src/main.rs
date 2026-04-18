@@ -20,6 +20,7 @@ mod shell_cmd;
 mod store_cmd;
 
 use std::ffi::OsString;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -642,7 +643,7 @@ fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), Ru
     Err(RunError::Reported(3))
 }
 
-fn run_eval(file: &PathBuf, import_paths: &[PathBuf]) -> Result<(), RunError> {
+fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {
     let import_paths = build_import_paths(import_paths)?;
     let json = crunch_eval::evaluate_to_json(file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
     println!("{json}");
@@ -790,7 +791,7 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
     }
 }
 
-fn run_bootstrap_command(ctx: &RunContext, output: &PathBuf, fetch: bool, packages: &[String]) -> Result<(), RunError> {
+fn run_bootstrap_command(ctx: &RunContext, output: &Path, fetch: bool, packages: &[String]) -> Result<(), RunError> {
     if fetch {
         cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose)
     } else {
@@ -984,6 +985,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_self_build_command(
     ctx: &RunContext,
     jobs: Option<u32>,

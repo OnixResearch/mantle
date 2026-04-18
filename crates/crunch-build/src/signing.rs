@@ -143,10 +143,10 @@ pub fn build_trusted_keys(local: &KeyPair, user_keys: Option<&[VerifyingKey]>) -
         None => {
             let mut keys = Vec::with_capacity(2);
             keys.push(local.verifying_key.clone());
-            if let Ok(k) = VerifyingKey::parse(CACHE_NIXOS_ORG_PUBKEY) {
-                if k.name() != local.verifying_key.name() {
-                    keys.push(k);
-                }
+            if let Ok(k) = VerifyingKey::parse(CACHE_NIXOS_ORG_PUBKEY)
+                && k.name() != local.verifying_key.name()
+            {
+                keys.push(k);
             }
             keys
         }
@@ -260,7 +260,7 @@ mod tests {
         let mut pi = dummy_pathinfo();
 
         sign_pathinfo(&mut pi, &kp.signing_key);
-        let result = verify_pathinfo_signatures(&pi, &[kp.verifying_key.clone()]);
+        let result = verify_pathinfo_signatures(&pi, std::slice::from_ref(&kp.verifying_key));
         assert!(result.is_trusted());
         assert_eq!(result.trusted_count, 1);
         assert!(result.untrusted_names.is_empty());
@@ -295,7 +295,7 @@ mod tests {
     fn verify_no_signatures_is_untrusted() {
         let kp = test_keypair();
         let pi = dummy_pathinfo();
-        let result = verify_pathinfo_signatures(&pi, &[kp.verifying_key.clone()]);
+        let result = verify_pathinfo_signatures(&pi, std::slice::from_ref(&kp.verifying_key));
         assert!(!result.is_trusted());
         assert_eq!(result.total_sigs, 0);
     }
@@ -309,7 +309,7 @@ mod tests {
         sign_pathinfo(&mut pi, &kp1.signing_key);
 
         // Verify with a different key — should fail.
-        let result = verify_pathinfo_signatures(&pi, &[kp2.verifying_key.clone()]);
+        let result = verify_pathinfo_signatures(&pi, std::slice::from_ref(&kp2.verifying_key));
         assert!(!result.is_trusted());
         assert_eq!(result.trusted_count, 0);
         assert_eq!(result.untrusted_names.len(), 1);
@@ -324,7 +324,7 @@ mod tests {
         pi.references.push(ref_sp);
 
         sign_pathinfo(&mut pi, &kp.signing_key);
-        let result = verify_pathinfo_signatures(&pi, &[kp.verifying_key.clone()]);
+        let result = verify_pathinfo_signatures(&pi, std::slice::from_ref(&kp.verifying_key));
         assert!(result.is_trusted());
     }
 
@@ -348,7 +348,7 @@ mod tests {
         let mut pi = dummy_pathinfo();
 
         sign_pathinfo(&mut pi, &kp.signing_key);
-        let result = verify_pathinfo_signatures(&pi, &[kp.verifying_key.clone()]);
+        let result = verify_pathinfo_signatures(&pi, std::slice::from_ref(&kp.verifying_key));
         assert!(result.is_trusted());
     }
 
@@ -386,7 +386,7 @@ mod tests {
     fn user_keys_dedup_local() {
         let kp = test_keypair();
         // User lists the local key explicitly — should not duplicate.
-        let keys = build_trusted_keys(&kp, Some(&[kp.verifying_key.clone()]));
+        let keys = build_trusted_keys(&kp, Some(std::slice::from_ref(&kp.verifying_key)));
         let local_count = keys.iter().filter(|k| k.name() == "cache.example.com-1").count();
         assert_eq!(local_count, 1, "local key must appear exactly once");
     }
@@ -397,7 +397,7 @@ mod tests {
         let distinct_same_name =
             VerifyingKey::parse("cache.example.com-1:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=").unwrap();
 
-        let keys = build_trusted_keys(&kp, Some(&[distinct_same_name.clone()]));
+        let keys = build_trusted_keys(&kp, Some(std::slice::from_ref(&distinct_same_name)));
         let local_count = keys.iter().filter(|k| k.name() == "cache.example.com-1").count();
         assert_eq!(local_count, 2, "same-name keys with different bytes must both be kept");
         assert!(keys.iter().any(|k| k == &kp.verifying_key));

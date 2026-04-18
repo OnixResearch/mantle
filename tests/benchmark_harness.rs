@@ -10,9 +10,17 @@ use benchmark_support::CONVERSION_PHASE_METRIC_NAME;
 use benchmark_support::CONVERSION_WORKLOAD_NAME;
 use benchmark_support::DEFAULT_LOGICAL_STORE_PREFIX;
 use benchmark_support::DEFAULT_REPEAT_COUNT;
+use benchmark_support::EAGER_ALL_ROOTS_WORKLOAD_NAME;
 use benchmark_support::EVAL_PHASE_METRIC_NAME;
 use benchmark_support::EVAL_SMOKE_ENTRY_POINT;
 use benchmark_support::EVAL_SMOKE_WORKLOAD_NAME;
+use benchmark_support::LAZY_ALL_ROOTS_METRIC_NAME;
+use benchmark_support::LAZY_DISCOVERY_METRIC_NAME;
+use benchmark_support::LAZY_DISCOVERY_WORKLOAD_NAME;
+use benchmark_support::LAZY_FORCE_COUNT_METRIC_NAME;
+use benchmark_support::LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME;
+use benchmark_support::LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME;
+use benchmark_support::LAZY_SELECTED_ROOT_WORKLOAD_NAME;
 use benchmark_support::MULTI_PHASE_WORKFLOW_WORKLOAD_NAME;
 use benchmark_support::STORE_AWARE_WORKLOAD_NAME;
 use benchmark_support::STORE_LOOKUP_PHASE_METRIC_NAME;
@@ -21,15 +29,6 @@ use benchmark_support::SUBSTITUTION_PHASE_METRIC_NAME;
 use benchmark_support::SUBSTITUTION_WORKLOAD_NAME;
 use benchmark_support::SUITE_ENTRY_POINT;
 use benchmark_support::TOTAL_PHASE_METRIC_NAME;
-use benchmark_support::LAZY_DISCOVERY_WORKLOAD_NAME;
-use benchmark_support::LAZY_SELECTED_ROOT_WORKLOAD_NAME;
-use benchmark_support::EAGER_ALL_ROOTS_WORKLOAD_NAME;
-use benchmark_support::LAZY_DISCOVERY_METRIC_NAME;
-use benchmark_support::LAZY_SELECTED_ROOT_TOTAL_METRIC_NAME;
-use benchmark_support::LAZY_SELECTED_ROOT_FORCE_METRIC_NAME;
-use benchmark_support::LAZY_FORCE_COUNT_METRIC_NAME;
-use benchmark_support::LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME;
-use benchmark_support::LAZY_ALL_ROOTS_METRIC_NAME;
 use benchmark_support::eval_smoke_request;
 use benchmark_support::run_eval_smoke_benchmark;
 use benchmark_support::run_suite_benchmark;
@@ -410,18 +409,12 @@ fn lazy_selected_root_nonselected_force_count_is_zero() {
         .iter()
         .find(|m| m.name == LAZY_NONSELECTED_FORCE_COUNT_METRIC_NAME)
         .expect("explicit_nonselected_root_force_count metric must be present");
-    assert_eq!(
-        nonselected.value, 0,
-        "nonselected root force count must be 0 for single selected-root benchmark"
-    );
+    assert_eq!(nonselected.value, 0, "nonselected root force count must be 0 for single selected-root benchmark");
 
     let force_count = selected
         .phase_metrics
         .iter()
         .find(|m| m.name == LAZY_FORCE_COUNT_METRIC_NAME)
         .expect("explicit_top_level_root_force_count metric must be present");
-    assert_eq!(
-        force_count.value, 1,
-        "force count must be 1 for single selected-root benchmark"
-    );
+    assert_eq!(force_count.value, 1, "force count must be 1 for single selected-root benchmark");
 }

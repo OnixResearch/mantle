@@ -11,7 +11,7 @@ fn compile_check(
     directory_service: &(impl DirectoryService + Clone),
 ) {
     let future = export_castore_to_disk(node, dest, blob_service, directory_service);
-    let _ = future;
+    std::mem::drop(future);
 }
 
 #[test]

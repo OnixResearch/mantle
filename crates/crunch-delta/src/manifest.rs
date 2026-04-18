@@ -113,13 +113,13 @@ async fn build_receiver_manifest_with_store(
             continue;
         }
         let frontiers = frontier_index.get(output.output_id.as_str());
-        if case.frontier_complete_outputs.contains(&output.output_id) {
-            if let Some(frontiers) = frontiers {
-                for summary in frontiers.values() {
-                    apply_frontier_hits(summary, &candidates, &mut manifest);
-                }
-                continue;
+        if case.frontier_complete_outputs.contains(&output.output_id)
+            && let Some(frontiers) = frontiers
+        {
+            for summary in frontiers.values() {
+                apply_frontier_hits(summary, &candidates, &mut manifest);
             }
+            continue;
         }
         walk_local_node(&output.root, frontiers, services, &candidates, &chunk_profile, &mut traversal, &mut manifest)
             .await?;
@@ -166,21 +166,21 @@ async fn build_receiver_manifest_lossy_with_store(
             continue;
         }
         let lossy_frontiers = lossy_frontier_index.get(output.output_id.as_str());
-        if case.frontier_complete_outputs.contains(&output.output_id) {
-            if let Some(lossy_frontiers) = lossy_frontiers {
-                walk_local_nodes_lossy(
-                    frontier_seed_nodes_lossy(lossy_frontiers),
-                    Some(lossy_frontiers),
-                    services,
-                    &exact_candidates,
-                    &lossy_candidates,
-                    &chunk_profile,
-                    &mut traversal,
-                    &mut manifest,
-                )
-                .await?;
-                continue;
-            }
+        if case.frontier_complete_outputs.contains(&output.output_id)
+            && let Some(lossy_frontiers) = lossy_frontiers
+        {
+            walk_local_nodes_lossy(
+                frontier_seed_nodes_lossy(lossy_frontiers),
+                Some(lossy_frontiers),
+                services,
+                &exact_candidates,
+                &lossy_candidates,
+                &chunk_profile,
+                &mut traversal,
+                &mut manifest,
+            )
+            .await?;
+            continue;
         }
         walk_local_nodes_lossy(
             vec![seed_child_node(&output.root)],
@@ -235,21 +235,21 @@ async fn build_receiver_manifest_probabilistic_with_store(
             continue;
         }
         let probabilistic_frontiers = probabilistic_frontier_index.get(output.output_id.as_str());
-        if case.frontier_complete_outputs.contains(&output.output_id) {
-            if let Some(probabilistic_frontiers) = probabilistic_frontiers {
-                walk_local_nodes_probabilistic(
-                    frontier_seed_nodes_probabilistic(probabilistic_frontiers),
-                    Some(probabilistic_frontiers),
-                    services,
-                    &exact_candidates,
-                    &probabilistic_candidates,
-                    &chunk_profile,
-                    &mut traversal,
-                    &mut manifest,
-                )
-                .await?;
-                continue;
-            }
+        if case.frontier_complete_outputs.contains(&output.output_id)
+            && let Some(probabilistic_frontiers) = probabilistic_frontiers
+        {
+            walk_local_nodes_probabilistic(
+                frontier_seed_nodes_probabilistic(probabilistic_frontiers),
+                Some(probabilistic_frontiers),
+                services,
+                &exact_candidates,
+                &probabilistic_candidates,
+                &chunk_profile,
+                &mut traversal,
+                &mut manifest,
+            )
+            .await?;
+            continue;
         }
         walk_local_nodes_probabilistic(
             vec![seed_child_node(&output.root)],
@@ -459,13 +459,13 @@ fn probabilistic_frontier_has_overlap(
     }) {
         return true;
     }
-    if let Some(blob_filter_bits) = summary.blob_filter_bits {
-        if candidates.blob_digests.iter().any(|digest| {
+    if let Some(blob_filter_bits) = summary.blob_filter_bits
+        && candidates.blob_digests.iter().any(|digest| {
             let membership_bits = probabilistic_membership_bits(digest, summary);
             membership_bits & blob_filter_bits == membership_bits
-        }) {
-            return true;
-        }
+        })
+    {
+        return true;
     }
     let Some(chunk_filter_bits) = summary.chunk_filter_bits else {
         return false;
@@ -590,10 +590,10 @@ async fn walk_local_nodes_lossy(
                     manifest.known_directories.insert(digest);
                     continue;
                 }
-                if let Some(summary) = lossy_frontiers.and_then(|frontiers| frontiers.get(&digest)) {
-                    if !lossy_frontier_has_overlap(summary, lossy_candidates) {
-                        continue;
-                    }
+                if let Some(summary) = lossy_frontiers.and_then(|frontiers| frontiers.get(&digest))
+                    && !lossy_frontier_has_overlap(summary, lossy_candidates)
+                {
+                    continue;
                 }
                 if !traversal.seen_directories.insert(digest) {
                     continue;
@@ -650,10 +650,10 @@ async fn walk_local_nodes_probabilistic(
                     manifest.known_directories.insert(digest);
                     continue;
                 }
-                if let Some(summary) = probabilistic_frontiers.and_then(|frontiers| frontiers.get(&digest)) {
-                    if !probabilistic_frontier_has_overlap(summary, probabilistic_candidates) {
-                        continue;
-                    }
+                if let Some(summary) = probabilistic_frontiers.and_then(|frontiers| frontiers.get(&digest))
+                    && !probabilistic_frontier_has_overlap(summary, probabilistic_candidates)
+                {
+                    continue;
                 }
                 if !traversal.seen_directories.insert(digest) {
                     continue;
@@ -830,6 +830,7 @@ impl FixtureManifestStore {
         }
     }
 
+    #[cfg(test)]
     fn blob_read_opens(&self) -> u64 {
         self.blob_service.counters.blob_read_opens.load(Ordering::Relaxed)
     }

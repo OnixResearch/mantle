@@ -62,7 +62,7 @@ const ALLOWED_SANDBOX_ENV_OVERRIDES: [&str; 2] = ["NIX_BUILD_CORES", "SOURCE_DAT
 /// `known_paths` is used to look up nested derivation outputs when
 /// resolving `input_derivations`.
 /// Compile-time: sandbox env vars must not be empty.
-const _: () = assert!(SANDBOX_ENV_VARS.len() > 0);
+const _: () = assert!(!SANDBOX_ENV_VARS.is_empty());
 
 #[derive(Debug)]
 pub struct NormalizedBuildEnvironment {
@@ -184,23 +184,22 @@ fn overlay_derivation_environment(
     let mut audit_events = Vec::new();
     for (key, value) in &derivation.environment {
         let replaced = replace_placeholders_bstr(value, &derivation.outputs);
-        if let Some(sandbox_value) = environment_vars.get(key) {
-            if sandbox_value.as_slice() != <BString as AsRef<[u8]>>::as_ref(&replaced)
-                && is_protected_sandbox_env_key(key)
-            {
-                let sandbox_value = sandbox_value.clone();
-                if hermeticity_mode.is_strict() {
-                    return Err(crate::Error::UnsafeEnvOverride {
-                        key: key.clone(),
-                        sandbox_value: format_env_value(&sandbox_value),
-                        derivation_value: format_env_value(replaced.as_ref()),
-                    });
-                }
-                audit_events.push(HermeticityAuditEvent::new(
-                    HermeticityAuditKind::EnvironmentOverride,
-                    format_environment_override_detail(key, &sandbox_value, replaced.as_ref()),
-                ));
+        if let Some(sandbox_value) = environment_vars.get(key)
+            && sandbox_value.as_slice() != <BString as AsRef<[u8]>>::as_ref(&replaced)
+            && is_protected_sandbox_env_key(key)
+        {
+            let sandbox_value = sandbox_value.clone();
+            if hermeticity_mode.is_strict() {
+                return Err(crate::Error::UnsafeEnvOverride {
+                    key: key.clone(),
+                    sandbox_value: format_env_value(&sandbox_value),
+                    derivation_value: format_env_value(replaced.as_ref()),
+                });
             }
+            audit_events.push(HermeticityAuditEvent::new(
+                HermeticityAuditKind::EnvironmentOverride,
+                format_environment_override_detail(key, &sandbox_value, replaced.as_ref()),
+            ));
         }
         environment_vars.insert(key.clone(), Vec::from(replaced));
     }
@@ -212,7 +211,7 @@ fn is_protected_sandbox_env_key(key: &str) -> bool {
     if !is_sandbox_key {
         return false;
     }
-    !ALLOWED_SANDBOX_ENV_OVERRIDES.iter().any(|allowed_key| *allowed_key == key)
+    !ALLOWED_SANDBOX_ENV_OVERRIDES.contains(&key)
 }
 
 fn format_environment_override_detail(key: &str, sandbox_value: &[u8], derivation_value: &[u8]) -> String {
@@ -262,8 +261,8 @@ fn map_outputs_to_sandbox_paths(derivation: &Derivation, store_dir: &str) -> Vec
                     .get(output_name)
                     .map(|v| String::from_utf8_lossy(v).to_string())
                     .unwrap_or_default();
-                if placeholder.starts_with('/') {
-                    PathBuf::from(&placeholder[1..])
+                if let Some(stripped) = placeholder.strip_prefix('/') {
+                    PathBuf::from(stripped)
                 } else {
                     PathBuf::from(&placeholder)
                 }

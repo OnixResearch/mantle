@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crunch_store::persist_artifact_attestation;
-use nix_compat::narinfo::Signature;
-use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint;
-use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
 use snix_castore::B3Digest;
 use snix_castore::Node;
@@ -26,7 +23,9 @@ use crate::chunk_profile_wire_v1;
 use crate::negotiate_protocol;
 
 pub const MAX_ACTIVE_DIRECTORY_WINDOWS: u32 = 8;
+#[cfg(test)]
 pub const MAX_ACTIVE_BLOB_WINDOWS: u32 = 8;
+#[cfg(test)]
 pub const MAX_ACTIVE_CHUNK_WINDOWS: u32 = 32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,8 +298,10 @@ impl InMemoryDeltaAuthority {
         F: FnMut(DeltaTransferFrame) -> Result<(), DeltaSubstitutionError>,
     {
         assert!(!session_id.is_empty(), "session id must not be empty");
-        let mut stats = DeltaTransferStats::default();
-        stats.peak_active_directory_windows = 1.min(MAX_ACTIVE_DIRECTORY_WINDOWS);
+        let mut stats = DeltaTransferStats {
+            peak_active_directory_windows: 1.min(MAX_ACTIVE_DIRECTORY_WINDOWS),
+            ..DeltaTransferStats::default()
+        };
 
         for output in &self.sender.outputs {
             if has_set.manifest.known_outputs.contains(&output.output_id) {
@@ -569,9 +570,7 @@ where
 
 fn ensure_fixture_content_available(outputs: &[OutputFixture], retained: &RetainedContentStore) -> Option<()> {
     for output in outputs {
-        if ensure_node_content_available(&output.root, retained).is_none() {
-            return None;
-        }
+        ensure_node_content_available(&output.root, retained)?;
     }
     Some(())
 }
@@ -651,7 +650,10 @@ fn verify_pathinfo_trusted(path_info: &PathInfo, trusted_keys: &[VerifyingKey]) 
 mod tests {
     use std::path::PathBuf;
 
+    use nix_compat::narinfo::Signature;
+    use nix_compat::narinfo::SigningKey;
     use nix_compat::narinfo::parse_keypair;
+    use nix_compat::store_path::StorePath;
 
     use super::*;
     use crate::ArtifactNode;

@@ -18,6 +18,8 @@ use nix_compat::store_path::StorePath;
 /// Prevents unbounded memory growth if callers forget to drain.
 const MAX_PENDING: u32 = 16_384;
 
+pub type PendingEntry = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>);
+
 pub struct ConversionCache {
     /// derivation ATerm hash -> (drv store path, hash_derivation_modulo, Derivation)
     by_aterm_hash: HashMap<[u8; 32], ConversionEntry>,
@@ -32,7 +34,7 @@ pub struct ConversionCache {
     store_dir: String,
     /// Entries added since the last `drain_pending()`. Enables
     /// incremental bridging to DerivationRegistry while converting.
-    pending: Vec<(StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>)>,
+    pending: Vec<PendingEntry>,
 }
 
 /// A derivation entry produced during conversion.
@@ -136,9 +138,7 @@ impl ConversionCache {
     ///
     /// Yields `(drv_path, hdm, derivation, content_addressed)` for
     /// each registered derivation.
-    pub fn iter_entries(
-        &self,
-    ) -> impl Iterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>)> + '_ {
+    pub fn iter_entries(&self) -> impl Iterator<Item = PendingEntry> + '_ {
         self.by_aterm_hash.values().map(|e| {
             (
                 e.drv_path.clone(),
@@ -156,7 +156,7 @@ impl ConversionCache {
     ///
     /// Call after each `convert()` to get derivations produced by
     /// that root and its transitive deps.
-    pub fn drain_pending(&mut self) -> Vec<(StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>)> {
+    pub fn drain_pending(&mut self) -> Vec<PendingEntry> {
         std::mem::take(&mut self.pending)
     }
 

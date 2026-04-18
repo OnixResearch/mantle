@@ -104,19 +104,19 @@ fn check_kind_consistency(manifest: &ProjectManifest, lock: &Lockfile, issues: &
         if issues.len() as u64 >= MAX_ISSUES as u64 {
             break;
         }
-        if let Some(entry) = lock.inputs.get(&input.name) {
-            if !kinds_compatible(&input.kind, &entry.kind) {
-                issues.push(MergeIssue {
-                    severity: Severity::Error,
-                    input_name: Some(input.name.clone()),
-                    message: format!(
-                        "input '{}': manifest kind ({}) does not match lock kind ({})",
-                        input.name,
-                        kind_label(&input.kind),
-                        locked_kind_label(&entry.kind),
-                    ),
-                });
-            }
+        if let Some(entry) = lock.inputs.get(&input.name)
+            && !kinds_compatible(&input.kind, &entry.kind)
+        {
+            issues.push(MergeIssue {
+                severity: Severity::Error,
+                input_name: Some(input.name.clone()),
+                message: format!(
+                    "input '{}': manifest kind ({}) does not match lock kind ({})",
+                    input.name,
+                    kind_label(&input.kind),
+                    locked_kind_label(&entry.kind),
+                ),
+            });
         }
     }
 }
@@ -127,17 +127,17 @@ fn check_patch_consistency(manifest: &ProjectManifest, lock: &Lockfile, issues: 
         if issues.len() as u64 >= MAX_ISSUES as u64 {
             break;
         }
-        if let Some(entry) = lock.inputs.get(&input.name) {
-            if input.patches != entry.patches {
-                issues.push(MergeIssue {
-                    severity: Severity::Warning,
-                    input_name: Some(input.name.clone()),
-                    message: format!(
-                        "input '{}': manifest patches {:?} differ from lock patches {:?}",
-                        input.name, input.patches, entry.patches,
-                    ),
-                });
-            }
+        if let Some(entry) = lock.inputs.get(&input.name)
+            && input.patches != entry.patches
+        {
+            issues.push(MergeIssue {
+                severity: Severity::Warning,
+                input_name: Some(input.name.clone()),
+                message: format!(
+                    "input '{}': manifest patches {:?} differ from lock patches {:?}",
+                    input.name, input.patches, entry.patches,
+                ),
+            });
         }
     }
 }
@@ -215,10 +215,10 @@ pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Ve
             continue;
         }
         // If the kind changed, needs refresh
-        if let Some(entry) = lock.inputs.get(&input.name) {
-            if !kinds_compatible(&input.kind, &entry.kind) {
-                result.push(input.name.clone());
-            }
+        if let Some(entry) = lock.inputs.get(&input.name)
+            && !kinds_compatible(&input.kind, &entry.kind)
+        {
+            result.push(input.name.clone());
         }
     }
 
@@ -368,7 +368,7 @@ mod tests {
         let report = check_manifest_lock(&m, &l);
         assert!(report.has_errors());
         // Two errors: missing lock entry + frozen without lock
-        assert!(report.issues.len() >= 1);
+        assert!(!report.issues.is_empty());
     }
 
     #[test]

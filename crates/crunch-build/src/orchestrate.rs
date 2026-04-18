@@ -135,7 +135,7 @@ pub(crate) enum PrepareResult {
     Done(BuildOutcome),
     NeedsBuild {
         prepared: PreparedBuild,
-        build_request: snix_build::buildservice::BuildRequest,
+        build_request: Box<snix_build::buildservice::BuildRequest>,
     },
 }
 
@@ -216,6 +216,7 @@ where BServ: BuildService + 'static
     /// and an optional remote PathInfoService for binary cache substitution.
     ///
     /// Accepts pre-wrapped `Arc<dyn ...>` services (e.g., from a StoreHandle).
+    #[allow(clippy::too_many_arguments)]
     pub fn with_state_dir(
         blob_service: Arc<dyn BlobService>,
         directory_service: Arc<dyn DirectoryService>,
@@ -294,7 +295,7 @@ where BServ: BuildService + 'static
                 if *size > MAX_BLOB_READ {
                     return Err(Error::Store(format!("blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})")));
                 }
-                digest.clone()
+                *digest
             }
             other => {
                 return Err(Error::Store(format!("read_blob called on non-file node: {other:?}")));
@@ -326,7 +327,7 @@ where BServ: BuildService + 'static
         drv_path: &StorePath<String>,
         known_paths: &mut DerivationRegistry,
     ) -> Result<BuildOutcome, Error> {
-        let mut outcomes = self.build_all(&[drv_path.clone()], known_paths, 1).await?;
+        let mut outcomes = self.build_all(std::slice::from_ref(drv_path), known_paths, 1).await?;
         outcomes.pop().ok_or_else(|| Error::DerivationNotFound { path: drv_path.clone() })
     }
 
@@ -394,7 +395,7 @@ where BServ: BuildService + 'static
         }
 
         // 2. Ensure input derivation outputs are in castore.
-        for (input_drv_path, _output_names) in &derivation_ref.input_derivations {
+        for input_drv_path in derivation_ref.input_derivations.keys() {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
                 self.ensure_input_nodes(entry.derivation.as_ref()).await?;
@@ -442,7 +443,7 @@ where BServ: BuildService + 'static
                 is_ca,
                 is_root,
             },
-            build_request,
+            build_request: Box::new(build_request),
         })
     }
 
@@ -499,7 +500,7 @@ where BServ: BuildService + 'static
             outputs = ?output_names.iter()
                 .filter_map(|n| {
                     output_infos.get(n).map(|pi| {
-                        pi.store_path.to_absolute_path_with_prefix(&self.store.output_dir_str())
+                        pi.store_path.to_absolute_path_with_prefix(self.store.output_dir_str())
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -749,7 +750,7 @@ where BServ: BuildService + 'static
     }
 
     fn preferred_source_host_path(&self, source_path: &StorePath<String>) -> PathBuf {
-        let crunch_abs = PathBuf::from(source_path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
+        let crunch_abs = PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.output_dir_str()));
         if crunch_abs.exists() {
             return crunch_abs;
         }
@@ -830,7 +831,7 @@ where BServ: BuildService + 'static
         // When output_dir == /nix/store, we can't distinguish, so
         // fall through to Nix closure resolution (safe default).
         if self.store.output_dir_str() != self.store.store_dir() {
-            let custom_abs = path.to_absolute_path_with_prefix(&self.store.output_dir_str());
+            let custom_abs = path.to_absolute_path_with_prefix(self.store.output_dir_str());
             return PathBuf::from(&custom_abs).exists();
         }
         false
@@ -873,21 +874,21 @@ where BServ: BuildService + 'static
         let mut rewrites: Vec<(String, String)> = Vec::new();
         for (input_drv_path, output_names) in &derivation.input_derivations {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
-            if let Some(entry) = known_paths.get_by_drv_path(&input_abs) {
-                if entry.content_addressed {
-                    for on in output_names {
-                        let placeholder = entry
-                            .derivation
-                            .environment
-                            .get(on)
-                            .map(|v| String::from_utf8_lossy(v).to_string())
-                            .unwrap_or_default();
-                        if let Some(resolved) = entry.resolved_outputs.get(on) {
-                            // CA rewrites operate in sandbox space (logical prefix).
-                            let resolved_abs = resolved.to_absolute_path_with_prefix(self.store.store_dir());
-                            if placeholder.len() == resolved_abs.len() {
-                                rewrites.push((placeholder, resolved_abs));
-                            }
+            if let Some(entry) = known_paths.get_by_drv_path(&input_abs)
+                && entry.content_addressed
+            {
+                for on in output_names {
+                    let placeholder = entry
+                        .derivation
+                        .environment
+                        .get(on)
+                        .map(|v| String::from_utf8_lossy(v).to_string())
+                        .unwrap_or_default();
+                    if let Some(resolved) = entry.resolved_outputs.get(on) {
+                        // CA rewrites operate in sandbox space (logical prefix).
+                        let resolved_abs = resolved.to_absolute_path_with_prefix(self.store.store_dir());
+                        if placeholder.len() == resolved_abs.len() {
+                            rewrites.push((placeholder, resolved_abs));
                         }
                     }
                 }
@@ -957,6 +958,7 @@ where BServ: BuildService + 'static
 
     /// Resolve the final output path, node, and NAR hash for either a
     /// CA or input-addressed output.
+    #[allow(clippy::too_many_arguments)]
     async fn resolve_output_node(
         &mut self,
         drv_path: &StorePath<String>,
@@ -1102,6 +1104,7 @@ where BServ: BuildService + 'static
     }
 
     /// Build PathInfo, sign it, then delegate persistence to the StoreHandle.
+    #[allow(clippy::too_many_arguments)]
     async fn persist_and_export_output(
         &mut self,
         drv_path: &StorePath<String>,
@@ -1267,7 +1270,7 @@ where BServ: BuildService + 'static
         if is_source {
             PathBuf::from(path.to_absolute_path())
         } else {
-            PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()))
+            PathBuf::from(path.to_absolute_path_with_prefix(self.store.output_dir_str()))
         }
     }
 
@@ -1278,7 +1281,7 @@ where BServ: BuildService + 'static
             let Some(path) = &output.path else {
                 continue;
             };
-            let abs = PathBuf::from(path.to_absolute_path_with_prefix(&self.store.output_dir_str()));
+            let abs = PathBuf::from(path.to_absolute_path_with_prefix(self.store.output_dir_str()));
             let _ = self.cached_or_ingested_node_for_path(path, &abs).await?;
         }
         Ok(())
@@ -1390,7 +1393,7 @@ mod tests {
                 .iter()
                 .map(|_| BuildOutput {
                     node: Node::File {
-                        digest: digest.clone(),
+                        digest,
                         size: 11,
                         executable: false,
                     },
@@ -2340,7 +2343,7 @@ mod tests {
         let (dep_path, dep_drv) = build_and_register("dep-lib", &[], &mut kp);
         let (root_path, root_drv) = build_and_register("root-app", &[(dep_path.clone(), "out")], &mut kp);
 
-        let outcomes = builder.build_all(&[root_path.clone()], &mut kp, 1).await.unwrap();
+        let outcomes = builder.build_all(std::slice::from_ref(&root_path), &mut kp, 1).await.unwrap();
 
         assert_eq!(outcomes.len(), 1);
         assert!(!outcomes[0].cached);
@@ -2487,7 +2490,7 @@ mod tests {
         let (b_path, _) = build_and_register("mid-b", &[(a_path.clone(), "out")], &mut kp);
         let (c_path, _) = build_and_register("top-c", &[(b_path.clone(), "out")], &mut kp);
 
-        let outcomes = builder.build_all(&[c_path.clone()], &mut kp, 2).await.unwrap();
+        let outcomes = builder.build_all(std::slice::from_ref(&c_path), &mut kp, 2).await.unwrap();
 
         assert_eq!(outcomes.len(), 1, "one root");
         assert!(outcomes[0].drv_path.name().contains("top-c"));

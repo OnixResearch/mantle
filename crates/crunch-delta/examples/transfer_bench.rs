@@ -20,11 +20,7 @@ fn main() {
     }
 
     let elapsed_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-    let ratio_ppm = if full_bytes == 0 {
-        0
-    } else {
-        transferred_bytes.saturating_mul(1_000_000) / full_bytes
-    };
+    let ratio_ppm = transferred_bytes.saturating_mul(1_000_000).checked_div(full_bytes).unwrap_or(0);
 
     println!("METRIC wire_bytes={transferred_bytes}");
     println!("METRIC wall_ms={elapsed_ms}");

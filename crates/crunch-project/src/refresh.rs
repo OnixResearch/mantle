@@ -160,12 +160,12 @@ fn refresh_one(input: &ManifestInput, lock: &Lockfile, resolver: &dyn RefreshRes
     match resolve_input(input, resolver) {
         Ok(entry) => {
             // Compare with existing lock entry
-            if let Some(existing) = lock.inputs.get(&input.name) {
-                if existing == &entry {
-                    return RefreshOutcome::Unchanged {
-                        name: input.name.clone(),
-                    };
-                }
+            if let Some(existing) = lock.inputs.get(&input.name)
+                && existing == &entry
+            {
+                return RefreshOutcome::Unchanged {
+                    name: input.name.clone(),
+                };
             }
             RefreshOutcome::Updated(ResolvedInput {
                 name: input.name.clone(),
@@ -426,10 +426,10 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
             }
             // If the manifest declares an expected hash and it differs
             // from what we locked, the definition changed.
-            if let Some(ref expected) = def_hash.expected {
-                if locked.hash.value != *expected {
-                    return false;
-                }
+            if let Some(ref expected) = def_hash.expected
+                && locked.hash.value != *expected
+            {
+                return false;
             }
             true
         }

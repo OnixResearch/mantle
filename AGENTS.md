@@ -236,6 +236,7 @@ Building derivations (not just compiling crunch) requires:
 - **fetchGit remote transport coverage**: cheapest non-`file://` coverage is a local `git daemon` served through a test-owned `TcpListener` on `127.0.0.1:0`, with each accepted socket handed to `git daemon --inetd`. This avoids the bind-drop-rebind race from `reserve_local_port()` + later spawn and makes readiness the owned listener itself, not some unrelated process on the chosen port. Capture the real `git` executable path before poisoning `PATH`; otherwise the per-connection inetd child can accidentally run the fake `git` helper instead of the host git binary needed for the fixture server. Also bound inetd-child teardown: poll `try_wait()`, kill on shutdown/time budget expiry, then reap, or `GitDaemonGuard::drop()` can hang forever on a stuck child.
 - **OpenSpec MUST keyword gotcha**: `openspec validate` can reject a requirement when the first wrapped line of its prose lacks `MUST`/`SHALL`, even if the next physical line contains it. Keep the keyword on the first line of each requirement's opening sentence.
 - **`openspec status --change` is artifact-only**: it reports whether proposal/design/specs/tasks files exist, not whether `tasks.md` is fully checked. A change can show `Progress: 4/4 artifacts complete` while still having unchecked task boxes, so grep `tasks.md` before treating it as ready to archive.
+- **Archive OpenSpec only after implementation commit is ready**: if `openspec archive` lands before the code/docs/scripts commit, `openspec/specs/...` can assert requirements that no committed tree satisfies yet. Commit the implementation first, then archive (or squash/reorder before sharing history).
 - **PathInfoService list+put hazard**: `crunch-store::store_sign()` must not call `svc.put()` while iterating `svc.list()` on the same backend. `LruPathInfoService` can hang in that pattern. Collect matching `PathInfo`s first, then persist updates in a second pass.
 - **Store fallback policy is now mode-dependent**: `StoreConfig.fallback_mode` threads practical vs strict handling into `crunch-store`. If `pathinfo.redb` cannot be opened, practical mode falls back to in-memory PathInfo and reports `StoreAuditKind::PathInfoFallback`; strict mode raises `Error::PathInfoFallbackRejected`, and `crunch-pipeline` turns that into a preflight root failure with no degraded audit event. Closure walking now returns `ClosureResolution { paths, audit_events }`; practical mode records `StoreAuditKind::ClosureResolutionDegraded` for missing closure facts, while strict mode raises `Error::MissingClosureFacts` before sandbox start.
 - **Build-envelope hermeticity now lives in `crunch-build`**: `HermeticityMode`, `HermeticityAuditKind`, and `HermeticityAuditEvent` are defined in `crates/crunch-build/src/hermeticity.rs` and re-exported from `crunch-pipeline`. `derivation_to_build_request(...)` now takes `HermeticityMode` and returns a `BuildRequestEnvelope { build_request, audit_events }`, so public callers must choose a mode explicitly and audits are surfaced on the public API instead of being dropped inside the helper. `Builder` defaults to `Practical`; pipeline/CLI callers that want strict env enforcement must call `builder.set_hermeticity_mode(...)` and drain `builder.take_hermeticity_audit_events()` after the worker run. `normalize_build_environment()` in `crates/crunch-build/src/build_request.rs` is the enforcement hook for protected sandbox vars, and `vendor/snix-build/src/bwrap/mod.rs` now fixes the child umask to `0022` with a `pre_exec` hook.
@@ -407,6 +408,21 @@ When claiming test results in commit messages or completion summaries:
   `target/test-audit/<suite>/.../` with `meta.json`, `stdout.txt`,
   `stderr.txt`, and BLAKE3 digests for produced artifacts. Smoke tests
   and `tests/self_hosting.rs` both use `tests/audit_support.rs`.
+- `cargo clippy --workspace --all-targets -- -D warnings` is not a stable
+  first-party gate on this repo by itself: vendored workspace members like
+  `vendor/fuse-backend-rs` fail first. For first-party lint triage, add
+  `--no-deps`, exclude vendored members explicitly, then peel first-party
+  crates one by one.
+- `fuse-backend-rs` also needs to stay in the explicit first-party clippy
+  exclusion list alongside `nix-compat`, `nix-compat-derive`, `snix-build`,
+  `snix-castore`, `snix-store`, and `snix-tracing`.
+- `cargo fmt --check -p crunch -v` covers the root package's `src/`,
+  `examples/`, and `tests/`, including `tests/benchmark_harness.rs`. Use that
+  root package leg plus first-party crate package flags instead of
+  `cargo fmt --all --check` when vendor/ must stay out of scope.
+- The new first-party clippy helper assumes the documented build env. Without
+  the clang/mold/pkg-config PATH prefix and OpenSSL `PKG_CONFIG_PATH`, it fails
+  early with `linker 'clang' not found` before any first-party lint results.
 
 ## Self-Build and Self-Hosting Proof
 

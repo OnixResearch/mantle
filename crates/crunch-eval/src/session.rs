@@ -206,8 +206,7 @@ impl EvaluationSession {
             .value_by_name("name")
             .ok_or_else(|| Error::Serde("single derivation is missing 'name' field".to_string()))?;
         let name_value = self.ctx.eval_expr_shallow(name_expr).map_err(Error::Eval)?;
-        self.discovery_metrics.name_fields_accessed =
-            self.discovery_metrics.name_fields_accessed.saturating_add(1);
+        self.discovery_metrics.name_fields_accessed = self.discovery_metrics.name_fields_accessed.saturating_add(1);
         name_value
             .as_str()
             .map(str::to_owned)
@@ -230,16 +229,12 @@ impl EvaluationSession {
                 .and_then(|r| r.value_by_name("name"))
                 .ok_or_else(|| Error::Serde(format!("array element [{i}] is missing record 'name' field")))?;
             let name_value = self.ctx.eval_expr_shallow(name_expr).map_err(Error::Eval)?;
-            self.discovery_metrics.name_fields_accessed =
-                self.discovery_metrics.name_fields_accessed.saturating_add(1);
+            self.discovery_metrics.name_fields_accessed = self.discovery_metrics.name_fields_accessed.saturating_add(1);
             let label = name_value
                 .as_str()
                 .map(str::to_owned)
                 .ok_or_else(|| Error::Serde(format!("array element [{i}] 'name' field is not a string")))?;
-            self.labels.push(RootLabel {
-                label,
-                index: i as u32,
-            });
+            self.labels.push(RootLabel { label, index: i as u32 });
         }
         Ok(())
     }
@@ -277,10 +272,10 @@ fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     // For a record-of-derivations, individual fields don't have `name` at the top level.
     if let Some(name_expr) = record.value_by_name("name") {
         // Shallow-eval the name to check if it's a string.
-        if let Ok(name_value) = ctx.eval_expr_shallow(name_expr) {
-            if name_value.as_str().is_some() {
-                return Ok(RootShape::Single);
-            }
+        if let Ok(name_value) = ctx.eval_expr_shallow(name_expr)
+            && name_value.as_str().is_some()
+        {
+            return Ok(RootShape::Single);
         }
     }
 
@@ -295,20 +290,18 @@ fn extract_field_expr(expr: &Expr, shape: &RootShape, index: u32) -> Result<Expr
             Ok(expr.clone())
         }
         RootShape::Array => {
-            let array = expr.as_array().ok_or_else(|| {
-                Error::Serde("expected array expression for array shape".to_string())
-            })?;
-            array
-                .get(index as usize)
-                .ok_or_else(|| Error::Serde(format!("array index {index} out of bounds")))
+            let array = expr
+                .as_array()
+                .ok_or_else(|| Error::Serde("expected array expression for array shape".to_string()))?;
+            array.get(index as usize).ok_or_else(|| Error::Serde(format!("array index {index} out of bounds")))
         }
         RootShape::Record => {
-            let record = expr.as_record().ok_or_else(|| {
-                Error::Serde("expected record expression for record shape".to_string())
-            })?;
-            let (_key, value) = record.key_value_by_index(index as usize).ok_or_else(|| {
-                Error::Serde(format!("record field index {index} out of bounds"))
-            })?;
+            let record = expr
+                .as_record()
+                .ok_or_else(|| Error::Serde("expected record expression for record shape".to_string()))?;
+            let (_key, value) = record
+                .key_value_by_index(index as usize)
+                .ok_or_else(|| Error::Serde(format!("record field index {index} out of bounds")))?;
             value.ok_or_else(|| Error::Serde(format!("record field at index {index} has no value")))
         }
     }

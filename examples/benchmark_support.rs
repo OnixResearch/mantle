@@ -551,9 +551,9 @@ fn read_bundle_json(path: &Path) -> Result<BenchmarkBundle, Error> {
     Ok(bundle)
 }
 
-fn index_results_by_name<'a>(
-    results: &'a [BenchmarkResult],
-) -> Result<std::collections::BTreeMap<String, &'a BenchmarkResult>, Error> {
+fn index_results_by_name(
+    results: &[BenchmarkResult],
+) -> Result<std::collections::BTreeMap<String, &BenchmarkResult>, Error> {
     let mut index = std::collections::BTreeMap::new();
     for result in results {
         if index.insert(result.workload_name.clone(), result).is_some() {
@@ -1120,29 +1120,45 @@ fn benchmark_lazy_eval_workload(
     let name = workload.descriptor.workload_name.as_str();
     match name {
         LAZY_DISCOVERY_WORKLOAD_NAME => {
-            let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
-                let session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
-                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
-                let root_count = usize_to_u32(session.root_labels().len())?;
-                Ok(PhasedSample {
-                    root_count,
-                    phase_metrics: vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, 0)],
-                })
-            })?;
-            build_result(&workload.descriptor, command_argv, repeat_count,
-                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns,
-                vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, timed.total_wall_ns)])
+            let timed =
+                time_repeated_operation_with_phase_metrics(repeat_count, || {
+                    let session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                        .map_err(|e| Error::Command {
+                            tool: "EvaluationSession".into(),
+                            detail: e.to_string(),
+                        })?;
+                    let root_count = usize_to_u32(session.root_labels().len())?;
+                    Ok(PhasedSample {
+                        root_count,
+                        phase_metrics: vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, 0)],
+                    })
+                })?;
+            build_result(
+                &workload.descriptor,
+                command_argv,
+                repeat_count,
+                timed.root_count,
+                timed.total_wall_ns,
+                timed.sample_wall_ns,
+                vec![named_metric(LAZY_DISCOVERY_METRIC_NAME, timed.total_wall_ns)],
+            )
         }
         LAZY_SELECTED_ROOT_WORKLOAD_NAME => {
             let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
                 let total_start = Instant::now();
                 let discovery_start = Instant::now();
                 let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
-                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
+                    .map_err(|e| Error::Command {
+                        tool: "EvaluationSession".into(),
+                        detail: e.to_string(),
+                    })?;
                 let discovery_ns = duration_to_ns_u64(discovery_start.elapsed())?;
                 let force_start = Instant::now();
-                let _drv: CrunchDerivation = session.force_root(&workload.selected_root_label)
-                    .map_err(|e| Error::Command { tool: "force_root".into(), detail: e.to_string() })?;
+                let _drv: CrunchDerivation =
+                    session.force_root(&workload.selected_root_label).map_err(|e| Error::Command {
+                        tool: "force_root".into(),
+                        detail: e.to_string(),
+                    })?;
                 let force_ns = duration_to_ns_u64(force_start.elapsed())?;
                 let total_ns = duration_to_ns_u64(total_start.elapsed())?;
                 let force_count = session.explicit_force_count();
@@ -1158,24 +1174,42 @@ fn benchmark_lazy_eval_workload(
                     ],
                 })
             })?;
-            build_result(&workload.descriptor, command_argv, repeat_count,
-                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns, timed.phase_metrics)
+            build_result(
+                &workload.descriptor,
+                command_argv,
+                repeat_count,
+                timed.root_count,
+                timed.total_wall_ns,
+                timed.sample_wall_ns,
+                timed.phase_metrics,
+            )
         }
         EAGER_ALL_ROOTS_WORKLOAD_NAME => {
             let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
                 let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
-                    .map_err(|e| Error::Command { tool: "EvaluationSession".into(), detail: e.to_string() })?;
-                let roots = session.force_all_roots::<CrunchDerivation>()
-                    .map_err(|e| Error::Command { tool: "force_all_roots".into(), detail: e.to_string() })?;
+                    .map_err(|e| Error::Command {
+                        tool: "EvaluationSession".into(),
+                        detail: e.to_string(),
+                    })?;
+                let roots = session.force_all_roots::<CrunchDerivation>().map_err(|e| Error::Command {
+                    tool: "force_all_roots".into(),
+                    detail: e.to_string(),
+                })?;
                 let root_count = usize_to_u32(roots.len())?;
                 Ok(PhasedSample {
                     root_count,
                     phase_metrics: vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, 0)],
                 })
             })?;
-            build_result(&workload.descriptor, command_argv, repeat_count,
-                timed.root_count, timed.total_wall_ns, timed.sample_wall_ns,
-                vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, timed.total_wall_ns)])
+            build_result(
+                &workload.descriptor,
+                command_argv,
+                repeat_count,
+                timed.root_count,
+                timed.total_wall_ns,
+                timed.sample_wall_ns,
+                vec![named_metric(LAZY_ALL_ROOTS_METRIC_NAME, timed.total_wall_ns)],
+            )
         }
         _ => Err(Error::InvalidArgument(format!("unknown lazy-eval workload: {name}"))),
     }

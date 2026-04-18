@@ -21,6 +21,10 @@ use crate::types::Input;
 /// Prevents stack overflow from pathological or accidental deep graphs.
 const MAX_RECURSION_DEPTH: u32 = 512;
 
+type InputDerivationMap = BTreeMap<StorePath<String>, BTreeSet<String>>;
+type InputSourceSet = BTreeSet<StorePath<String>>;
+type ResolvedInputs = (InputDerivationMap, InputSourceSet);
+
 /// Convert a `CrunchDerivation` into a `nix_compat::Derivation` with
 /// computed BLAKE3 store paths.
 ///
@@ -87,9 +91,9 @@ fn resolve_inputs(
     known_paths: &mut ConversionCache,
     depth: u32,
     store_dir: &str,
-) -> Result<(BTreeMap<StorePath<String>, BTreeSet<String>>, BTreeSet<StorePath<String>>), Error> {
-    let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
-    let mut input_sources: BTreeSet<StorePath<String>> = BTreeSet::new();
+) -> Result<ResolvedInputs, Error> {
+    let mut input_derivations: InputDerivationMap = BTreeMap::new();
+    let mut input_sources: InputSourceSet = BTreeSet::new();
 
     for input in inputs {
         match input {
@@ -127,8 +131,8 @@ fn resolve_inputs(
 /// Output paths are not yet computed — that happens in `finalize_and_register`.
 fn build_nix_derivation(
     drv: &CrunchDerivation,
-    input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>>,
-    input_sources: BTreeSet<StorePath<String>>,
+    input_derivations: InputDerivationMap,
+    input_sources: InputSourceSet,
     ca_hash: Option<CAHash>,
 ) -> Derivation {
     let mut outputs = BTreeMap::new();
