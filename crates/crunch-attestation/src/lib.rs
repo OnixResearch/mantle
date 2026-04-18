@@ -1,12 +1,25 @@
 mod canonical;
 mod digest;
 mod error;
+pub mod release;
 mod schema;
 mod version;
 
 pub use canonical::Canonicalize;
 pub use digest::AttestationDigest;
 pub use error::Error;
+pub use release::BinaryDigest;
+pub use release::DetachedSignature;
+pub use release::FinalClass;
+pub use release::PolicyStatus;
+pub use release::RebuildEnvironmentSummary;
+pub use release::ReleaseAttestation;
+pub use release::SignatureSuite;
+pub use release::TechnicalClass;
+pub use release::TrustTier;
+pub use release::WitnessAttestation;
+pub use release::Workflow;
+pub use release::binary_digests_match;
 pub use schema::ArtifactAttestation;
 pub use schema::ArtifactFacts;
 pub use schema::ArtifactReference;

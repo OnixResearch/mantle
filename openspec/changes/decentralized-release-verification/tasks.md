@@ -2,23 +2,23 @@
 
 ## Phase 1: Technical attestation foundations
 
-- [ ] Define a canonical release-attestation schema that binds a release
+- [x] Define a canonical release-attestation schema that binds a release
       identifier to the verified release-evidence manifest digest, published
       binary digest set, proof identity, and workflow identity
-- [ ] Define a canonical witness-attestation schema that binds one witness
+- [x] Define a canonical witness-attestation schema that binds one witness
       result to one release-attestation digest, including the bounded
       `rebuild_environment_summary` field set and canonical key ordering from
       design decision 3
-- [ ] Define canonical compact-JSON and digest rules for both attestation
+- [x] Define canonical compact-JSON and digest rules for both attestation
       types
-- [ ] Define the versioned signature suite and detached-signature encoding for
+- [x] Define the versioned signature suite and detached-signature encoding for
       witness attestations and any signed release-attestation material,
       including the `<key-name>:<base64-ed25519-signature>` wire format from
       design decision 4
-- [ ] Define the published binary digest-set schema as deterministic per-output
+- [x] Define the published binary digest-set schema as deterministic per-output
       `(name, algorithm, digest)` tuples and define comparison semantics for
       witness results
-- [ ] Define trust-tier output fields that separate technical class, policy
+- [x] Define trust-tier output fields that separate technical class, policy
       status, and final class, and enumerate the initial technical classes
       `bundle-consistent`, `self-proof-valid`, `external-witness-match`, plus
       the policy-dependent final class `quorum-satisfied` (design decision 6)

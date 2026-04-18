@@ -275,7 +275,7 @@ fn node_id_set(nodes: &[Node]) -> BTreeSet<String> {
     nodes.iter().map(|node| node.node_id.clone()).collect()
 }
 
-fn to_canonical_bytes<T>(value: &T) -> Result<Vec<u8>, Error>
+pub(crate) fn to_canonical_bytes<T>(value: &T) -> Result<Vec<u8>, Error>
 where T: Serialize {
     serde_json::to_vec(value).map_err(|err| Error::Serialize {
         message: err.to_string(),

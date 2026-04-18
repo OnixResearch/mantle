@@ -38,4 +38,20 @@ pub enum Error {
 
     #[error("digest hex must be 64 lowercase characters: {value}")]
     InvalidDigestHex { value: String },
+
+    #[error("schema tag mismatch: expected {expected}, got {actual}")]
+    SchemaTagMismatch {
+        expected: &'static str,
+        actual: String,
+    },
+
+    #[error("field exceeds length limit: {field} ({actual} > {limit})")]
+    FieldTooLong {
+        field: &'static str,
+        limit: u32,
+        actual: u32,
+    },
+
+    #[error("detached signature parse error: {message}")]
+    InvalidDetachedSignature { message: String },
 }
