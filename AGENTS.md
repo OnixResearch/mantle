@@ -292,7 +292,13 @@ Building derivations (not just compiling crunch) requires:
   straight into the spawned build task, and drain waiter vectors with
   `mem::take()` instead of cloning them. Remaining hot spots are now outside
   those paths (for example deeper scheduler structure and remote metadata
-  transport itself), not the old clone-heavy ready/dispatch flow.
+  transport itself), not the old clone-heavy ready/dispatch flow. New parallel
+  root-forcing boundary: `crates/crunch-eval/src/session.rs` shares only
+  `IsolatedWorkerInput` (source text + import paths + source name) across
+  threads. Raw Nickel / `crunch_eval::Error` values are not `Send`, so worker
+  threads must stringify failures before crossing the thread boundary; do not
+  try to return raw `crunch_eval::Error` or share a live `EvaluationSession`
+  across threads.
 - **Delta substitution integration boundary**: `crates/crunch-store` cannot
   import `crates/crunch-delta` directly because `crunch-delta` already depends
   on `crunch-store`. The current runtime integration slice therefore lives in

@@ -37,6 +37,7 @@ for result in results:
     for metric in result["phase_metrics"]:
         if metric["name"] == "parallel_all_roots_total_wall_ns":
             print(f"parallel_all_roots_total_wall_ns = {metric['value']} ns")
+            print(f"METRIC parallel_all_roots_total_wall_ns={metric['value']}")
             sys.exit(0)
 print("metric not found", file=sys.stderr)
 sys.exit(1)
