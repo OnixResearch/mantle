@@ -262,9 +262,13 @@ pub fn verify_flat_hash(out_path: &str, expected: &NixHash, name: &str) -> Resul
     };
 
     if actual_bytes.as_slice() != expected.digest_as_bytes() {
-        // Clean up bad output.
-        let _ = std::fs::remove_file(out_path);
-        let _ = std::fs::remove_dir_all(out_path);
+        // Best-effort cleanup of bad output.
+        if let Err(e) = std::fs::remove_file(out_path) {
+            tracing::debug!(path = %out_path, error = %e, "cleanup after hash mismatch: remove_file failed");
+        }
+        if let Err(e) = std::fs::remove_dir_all(out_path) {
+            tracing::debug!(path = %out_path, error = %e, "cleanup after hash mismatch: remove_dir_all failed");
+        }
         return Err(FetchError::HashMismatch {
             name: name.to_string(),
             expected: nix_hash_to_sri(expected),
@@ -483,7 +487,9 @@ fn write_regular_tar_entry<R: Read>(entry: &mut tar::Entry<'_, R>, dest: &Path) 
     {
         use std::os::unix::fs::PermissionsExt;
         if let Ok(mode) = entry.header().mode() {
-            let _ = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode));
+            if let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode)) {
+                tracing::debug!(path = ?dest, error = %e, "set_permissions on tar entry failed");
+            }
         }
     }
     Ok(())
@@ -716,25 +722,20 @@ fn relative_path_between(from: &Path, to: &Path) -> PathBuf {
         })
         .collect();
 
-    let mut shared_prefix_len: u32 = 0;
+    let mut shared_prefix_len: usize = 0;
     let shared_depth_max = from_components.len().min(to_components.len());
-    while usize::try_from(shared_prefix_len).ok().is_some_and(|idx| idx < shared_depth_max) {
-        let idx = usize::try_from(shared_prefix_len).expect("shared prefix length index overflowed usize");
-        if from_components[idx] != to_components[idx] {
+    while shared_prefix_len < shared_depth_max {
+        if from_components[shared_prefix_len] != to_components[shared_prefix_len] {
             break;
         }
         shared_prefix_len = shared_prefix_len.saturating_add(1);
     }
 
     let mut relative = PathBuf::new();
-    for _ in from_components
-        .iter()
-        .skip(usize::try_from(shared_prefix_len).expect("skip index overflowed usize"))
-    {
+    for _ in from_components.iter().skip(shared_prefix_len) {
         relative.push("..");
     }
-    for component in to_components.iter().skip(usize::try_from(shared_prefix_len).expect("skip index overflowed usize"))
-    {
+    for component in to_components.iter().skip(shared_prefix_len) {
         relative.push(component);
     }
     if relative.as_os_str().is_empty() {

@@ -172,12 +172,15 @@ async fn rewrite_leaf_to_root(
                 let mut new_dir = snix_castore::Directory::new();
                 for (j, child_item) in worklist.iter().enumerate() {
                     if child_item.parent_idx == Some(i as u32) {
-                        let (child_node, child_found) =
-                            results[j].take().expect("child must be processed before parent");
+                        let (child_node, child_found) = results[j].take().ok_or_else(|| {
+                            crate::Error::Store(format!("rewrite: child {j} not processed before parent {i}"))
+                        })?;
                         if child_found {
                             has_any_rewrite = true;
                         }
-                        let child_name = child_item.name.clone().expect("directory child must have a name");
+                        let child_name = child_item.name.clone().ok_or_else(|| {
+                            crate::Error::Store(format!("rewrite: directory child {j} has no name"))
+                        })?;
                         new_dir
                             .add(child_name, child_node)
                             .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;

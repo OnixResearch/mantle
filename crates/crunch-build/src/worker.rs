@@ -246,7 +246,7 @@ impl Worker {
         debug_assert!(root_count > 0, "no root goals to build");
         debug_assert!(total_goals <= MAX_GOALS, "goal count exceeds limit");
 
-        let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
+        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?));
         let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
@@ -315,7 +315,7 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
+        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?));
         let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;

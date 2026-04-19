@@ -17,6 +17,7 @@ use nix_compat::store_path::StorePath;
 
 /// Maximum registry entries. Matches `goal::MAX_GOALS`.
 const MAX_ENTRIES: u32 = 16_384;
+const MAX_ENTRIES_USIZE: usize = MAX_ENTRIES as usize;
 
 /// A derivation registered for building.
 pub struct RegistryEntry {
@@ -88,8 +89,7 @@ impl DerivationRegistry {
     ) {
         let derivation = derivation.into();
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
-        // MAX_ENTRIES is u32, always fits in usize on 32-bit+ platforms.
-        debug_assert!(self.entries.len() < MAX_ENTRIES as usize, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
+        debug_assert!(self.entries.len() < MAX_ENTRIES_USIZE, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
 
         let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_abs.clone(), hdm);

@@ -18,6 +18,7 @@ use crate::error::Error;
 /// Maximum number of goals a Worker can track. Prevents runaway
 /// graphs from pathological inputs.
 pub const MAX_GOALS: u32 = 10_000;
+const MAX_GOALS_USIZE: usize = MAX_GOALS as usize;
 
 /// Lifecycle state of a build goal.
 ///
@@ -149,8 +150,7 @@ impl Goal {
         }
 
         let dep_count = unbuilt_dep_keys.len();
-        // MAX_GOALS is u32, always fits in usize on 32-bit+ platforms.
-        debug_assert!(dep_count <= MAX_GOALS as usize, "dep count exceeds MAX_GOALS");
+        debug_assert!(dep_count <= MAX_GOALS_USIZE, "dep count exceeds MAX_GOALS");
 
         self.waitees = unbuilt_dep_keys;
 
