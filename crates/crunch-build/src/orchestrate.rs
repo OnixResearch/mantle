@@ -190,12 +190,14 @@ where BServ: BuildService + 'static
     {
         let output_dir_str = output_dir.to_str().unwrap_or(store_dir).to_string();
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
-            Arc::new(blob_service) as Arc<dyn BlobService>,
-            Arc::new(directory_service) as Arc<dyn DirectoryService>,
-            Arc::new(pathinfo_service) as Arc<dyn PathInfoService>,
-            None,
-            PathBuf::from("/tmp/crunch-test"),
-            output_dir_str,
+            crunch_store::StoreHandleServices {
+                blob_service: Arc::new(blob_service) as Arc<dyn BlobService>,
+                directory_service: Arc::new(directory_service) as Arc<dyn DirectoryService>,
+                pathinfo_service: Arc::new(pathinfo_service) as Arc<dyn PathInfoService>,
+                remote_pathinfo: None,
+                state_dir: PathBuf::from("/tmp/crunch-test"),
+                output_dir_str,
+            },
             store_dir.to_string(),
         );
         Self {
@@ -234,12 +236,14 @@ where BServ: BuildService + 'static
         let output_dir_str = output_dir.to_str().unwrap_or(store_dir).to_string();
         let sd = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
-            blob_service,
-            directory_service,
-            pathinfo_service,
-            remote_pathinfo,
-            sd,
-            output_dir_str,
+            crunch_store::StoreHandleServices {
+                blob_service,
+                directory_service,
+                pathinfo_service,
+                remote_pathinfo,
+                state_dir: sd,
+                output_dir_str,
+            },
             store_dir.to_string(),
         );
         Self {
@@ -1134,15 +1138,15 @@ where BServ: BuildService + 'static
         signing::sign_pathinfo(&mut path_info, &self.keypair.signing_key);
 
         self.store
-            .persist_and_export_signed_output(
+            .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
                 output_name,
                 output_path,
                 path_info,
                 final_node,
                 provenance,
                 is_root,
-                self.root_retention_source,
-            )
+                root_source: self.root_retention_source,
+            })
             .await
             .map_err(|e| Error::Store(format!("{e}")))
     }

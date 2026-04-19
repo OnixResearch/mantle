@@ -47,11 +47,11 @@ pub struct StoredClosureAttestation {
 pub async fn persist_artifact_attestation(
     state_dir: &Path,
     store_dir: &str,
-    output_name: &str,
     path_info: &PathInfo,
+    output_name: &str,
     provenance: Option<&ArtifactProvenance>,
 ) -> Result<StoredArtifactAttestation, Error> {
-    let attestation = synthesize_artifact_attestation(store_dir, output_name, path_info, provenance);
+    let attestation = synthesize_artifact_attestation(store_dir, path_info, output_name, provenance);
     let digest = attestation.canonical_digest().map_err(|e| Error::Attestation(format!("artifact digest: {e}")))?;
     let path = artifact_attestation_path(state_dir, &attestation.facts.logical_path);
     write_canonical_artifact_file(&path, &attestation).await?;
@@ -101,10 +101,37 @@ pub async fn load_or_create_runtime_closure_attestation(
     Ok(fresh)
 }
 
+/// Mutable graph state accumulated while building an attestation.
+struct GraphBuilder {
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
+    node_ids: BTreeSet<String>,
+    edge_keys: BTreeSet<(String, EdgeKind, String)>,
+}
+
+impl GraphBuilder {
+    fn new() -> Self {
+        Self {
+            nodes: Vec::with_capacity(16),
+            edges: Vec::with_capacity(16),
+            node_ids: BTreeSet::new(),
+            edge_keys: BTreeSet::new(),
+        }
+    }
+
+    fn push_node(&mut self, node: Node) {
+        push_unique_node(&mut self.nodes, &mut self.node_ids, node);
+    }
+
+    fn push_edge(&mut self, edge: Edge) {
+        push_unique_edge(&mut self.edges, &mut self.edge_keys, edge);
+    }
+}
+
 fn synthesize_artifact_attestation(
     store_dir: &str,
-    output_name: &str,
     path_info: &PathInfo,
+    output_name: &str,
     provenance: Option<&ArtifactProvenance>,
 ) -> ArtifactAttestation {
     assert!(!output_name.is_empty(), "output_name must not be empty");
@@ -112,33 +139,12 @@ fn synthesize_artifact_attestation(
 
     let subject_path = logical_path(&path_info.store_path, store_dir);
     let subject_node_id = artifact_node_id(&subject_path);
-    let mut nodes = Vec::new();
-    let mut edges = Vec::new();
-    let mut node_ids = BTreeSet::new();
-    let mut edge_keys = BTreeSet::new();
+    let mut graph = GraphBuilder::new();
 
-    push_unique_node(&mut nodes, &mut node_ids, artifact_node(&subject_path));
-    let recipe_node_id =
-        add_recipe_node(store_dir, path_info, &subject_node_id, &mut nodes, &mut edges, &mut node_ids, &mut edge_keys);
-    add_provenance_edges(
-        store_dir,
-        provenance,
-        recipe_node_id.as_ref(),
-        &subject_node_id,
-        &mut nodes,
-        &mut edges,
-        &mut node_ids,
-        &mut edge_keys,
-    );
-    add_runtime_reference_edges(
-        store_dir,
-        &path_info.references,
-        &subject_node_id,
-        &mut nodes,
-        &mut edges,
-        &mut node_ids,
-        &mut edge_keys,
-    );
+    graph.push_node(artifact_node(&subject_path));
+    let recipe_node_id = add_recipe_node(store_dir, path_info, &subject_node_id, &mut graph);
+    add_provenance_edges(store_dir, provenance, recipe_node_id.as_ref(), &subject_node_id, &mut graph);
+    add_runtime_reference_edges(store_dir, &path_info.references, &subject_node_id, &mut graph);
 
     ArtifactAttestation {
         schema_version: SchemaVersion::V1,
@@ -149,8 +155,8 @@ fn synthesize_artifact_attestation(
             content_digest: nar_sha256_digest(&path_info.nar_sha256),
         },
         subject_node_id,
-        nodes,
-        edges,
+        nodes: graph.nodes,
+        edges: graph.edges,
     }
 }
 
@@ -158,17 +164,14 @@ fn add_recipe_node(
     store_dir: &str,
     path_info: &PathInfo,
     subject_node_id: &str,
-    nodes: &mut Vec<Node>,
-    edges: &mut Vec<Edge>,
-    node_ids: &mut BTreeSet<String>,
-    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+    graph: &mut GraphBuilder,
 ) -> Option<String> {
     path_info.deriver.as_ref().map(|deriver| {
         let deriver_path = logical_path(deriver, store_dir);
         let recipe_node = recipe_node(&deriver_path);
         let recipe_node_id = recipe_node.node_id.clone();
-        push_unique_node(nodes, node_ids, recipe_node);
-        push_unique_edge(edges, edge_keys, Edge {
+        graph.push_node(recipe_node);
+        graph.push_edge(Edge {
             from_node_id: subject_node_id.to_string(),
             kind: EdgeKind::ProducedBy,
             to_node_id: recipe_node_id.clone(),
@@ -182,10 +185,7 @@ fn add_provenance_edges(
     provenance: Option<&ArtifactProvenance>,
     recipe_node_id: Option<&String>,
     subject_node_id: &str,
-    nodes: &mut Vec<Node>,
-    edges: &mut Vec<Edge>,
-    node_ids: &mut BTreeSet<String>,
-    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+    graph: &mut GraphBuilder,
 ) {
     assert!(!subject_node_id.is_empty(), "subject_node_id must not be empty");
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
@@ -200,13 +200,13 @@ fn add_provenance_edges(
         let source_path = logical_path(source, store_dir);
         let source_node = source_node(&source_path);
         let source_node_id = source_node.node_id.clone();
-        push_unique_node(nodes, node_ids, source_node);
-        push_unique_edge(edges, edge_keys, Edge {
+        graph.push_node(source_node);
+        graph.push_edge(Edge {
             from_node_id: recipe_node_id.clone(),
             kind: EdgeKind::BuildInput,
             to_node_id: source_node_id.clone(),
         });
-        push_unique_edge(edges, edge_keys, Edge {
+        graph.push_edge(Edge {
             from_node_id: source_node_id,
             kind: EdgeKind::FetchedFrom,
             to_node_id: subject_node_id.to_string(),
@@ -216,8 +216,8 @@ fn add_provenance_edges(
         let input_path = logical_path(input_artifact, store_dir);
         let input_node = artifact_node(&input_path);
         let input_node_id = input_node.node_id.clone();
-        push_unique_node(nodes, node_ids, input_node);
-        push_unique_edge(edges, edge_keys, Edge {
+        graph.push_node(input_node);
+        graph.push_edge(Edge {
             from_node_id: recipe_node_id.clone(),
             kind: EdgeKind::BuildInput,
             to_node_id: input_node_id,
@@ -229,17 +229,14 @@ fn add_runtime_reference_edges(
     store_dir: &str,
     references: &[StorePath<String>],
     subject_node_id: &str,
-    nodes: &mut Vec<Node>,
-    edges: &mut Vec<Edge>,
-    node_ids: &mut BTreeSet<String>,
-    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
+    graph: &mut GraphBuilder,
 ) {
     for reference in references {
         let reference_path = logical_path(reference, store_dir);
         let reference_node = artifact_node(&reference_path);
         let reference_node_id = reference_node.node_id.clone();
-        push_unique_node(nodes, node_ids, reference_node);
-        push_unique_edge(edges, edge_keys, Edge {
+        graph.push_node(reference_node);
+        graph.push_edge(Edge {
             from_node_id: subject_node_id.to_string(),
             kind: EdgeKind::RuntimeReference,
             to_node_id: reference_node_id,
@@ -262,12 +259,11 @@ async fn synthesize_runtime_closure_attestation(
     let member_set: BTreeSet<String> = member_paths.iter().map(|path| logical_path(path, store_dir)).collect();
     let member_count = member_paths.len();
     let mut members = Vec::with_capacity(member_count);
-    let mut nodes = Vec::with_capacity(member_count.saturating_add(1));
-    let mut edges = Vec::with_capacity(member_count);
-    let mut node_ids = BTreeSet::new();
-    let mut edge_keys = BTreeSet::new();
+    let mut graph = GraphBuilder::new();
+    graph.nodes.reserve(member_count.saturating_add(1));
+    graph.edges.reserve(member_count);
 
-    push_unique_node(&mut nodes, &mut node_ids, Node {
+    graph.push_node(Node {
         node_id: closure_node_id.clone(),
         kind: NodeKind::Closure,
         attributes: BTreeMap::new(),
@@ -282,8 +278,8 @@ async fn synthesize_runtime_closure_attestation(
             logical_path: logical_member_path.clone(),
             attestation_digest: stored.digest,
         });
-        push_unique_node(&mut nodes, &mut node_ids, artifact_node(&logical_member_path));
-        push_unique_edge(&mut edges, &mut edge_keys, Edge {
+        graph.push_node(artifact_node(&logical_member_path));
+        graph.push_edge(Edge {
             from_node_id: member_node_id.clone(),
             kind: EdgeKind::MemberOfClosure,
             to_node_id: closure_node_id.clone(),
@@ -295,8 +291,8 @@ async fn synthesize_runtime_closure_attestation(
             if !member_set.contains(&reference_path) {
                 continue;
             }
-            push_unique_node(&mut nodes, &mut node_ids, artifact_node(&reference_path));
-            push_unique_edge(&mut edges, &mut edge_keys, Edge {
+            graph.push_node(artifact_node(&reference_path));
+            graph.push_edge(Edge {
                 from_node_id: member_node_id.clone(),
                 kind: EdgeKind::RuntimeReference,
                 to_node_id: artifact_node_id(&reference_path),
@@ -321,8 +317,8 @@ async fn synthesize_runtime_closure_attestation(
             semantics: ClosureSemantics::Runtime,
             members,
         },
-        nodes,
-        edges,
+        nodes: graph.nodes,
+        edges: graph.edges,
     })
 }
 
@@ -338,7 +334,7 @@ async fn load_or_synthesize_artifact_attestation(
     }
 
     let path_info = load_pathinfo(store_path, local, remote).await?;
-    persist_artifact_attestation(state_dir, store_dir, "_unknown", &path_info, None).await
+    persist_artifact_attestation(state_dir, store_dir, &path_info, "_unknown", None).await
 }
 
 async fn resolve_member_paths(
@@ -619,8 +615,8 @@ mod tests {
         let stored = persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(store_path.clone(), vec![input_artifact.clone()], Some(deriver)),
+            "out",
             Some(&ArtifactProvenance {
                 claims: Some(Claims {
                     supplier: Some("Example Supplier".to_string()),
@@ -650,8 +646,8 @@ mod tests {
         let stored = persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(store_path.clone(), vec![], None),
+            "out",
             None,
         )
         .await
@@ -678,8 +674,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(root.clone(), vec![dep.clone()], None),
+            "out",
             None,
         )
         .await
@@ -687,8 +683,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(dep.clone(), vec![], None),
+            "out",
             None,
         )
         .await
@@ -725,8 +721,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(root.clone(), vec![dep.clone()], None),
+            "out",
             None,
         )
         .await
@@ -758,8 +754,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(root.clone(), vec![dep.clone()], None),
+            "out",
             None,
         )
         .await
@@ -797,8 +793,8 @@ mod tests {
         let real_dep = persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(dep.clone(), vec![], None),
+            "out",
             None,
         )
         .await
@@ -839,8 +835,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(root.clone(), vec![dep.clone()], None),
+            "out",
             None,
         )
         .await
@@ -848,8 +844,8 @@ mod tests {
         persist_artifact_attestation(
             state_dir.path(),
             "/nix/store",
-            "out",
             &path_info(dep.clone(), vec![], None),
+            "out",
             None,
         )
         .await

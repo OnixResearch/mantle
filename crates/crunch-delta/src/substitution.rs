@@ -361,7 +361,7 @@ pub async fn substitute_from_authority(
             .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
         verify_pathinfo_trusted(&path_info, trusted_keys)
             .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-        let stored = persist_artifact_attestation(state_dir, store_dir, &request.output_name, &path_info, None)
+        let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
             .await
             .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
         return Ok(DeltaFetchOutcome {
@@ -385,7 +385,7 @@ pub async fn substitute_from_authority(
                 .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
             verify_pathinfo_trusted(&path_info, trusted_keys)
                 .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-            let stored = persist_artifact_attestation(state_dir, store_dir, &request.output_name, &path_info, None)
+            let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
                 .await
                 .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
             return Ok(DeltaFetchOutcome {
@@ -406,7 +406,7 @@ pub async fn substitute_from_authority(
                 .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
             verify_pathinfo_trusted(&path_info, trusted_keys)
                 .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-            let stored = persist_artifact_attestation(state_dir, store_dir, &request.output_name, &path_info, None)
+            let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
                 .await
                 .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
             return Ok(DeltaFetchOutcome {
@@ -463,7 +463,7 @@ pub async fn substitute_from_authority(
             .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
         verify_pathinfo_trusted(&fallback, trusted_keys)
             .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-        let stored = persist_artifact_attestation(state_dir, store_dir, &request.output_name, &fallback, None)
+        let stored = persist_artifact_attestation(state_dir, store_dir, &fallback, &request.output_name, None)
             .await
             .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
         return Ok(DeltaFetchOutcome {
@@ -479,7 +479,7 @@ pub async fn substitute_from_authority(
         });
     }
 
-    let stored = persist_artifact_attestation(state_dir, store_dir, &request.output_name, &path_info, None)
+    let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
         .await
         .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
     Ok(DeltaFetchOutcome {

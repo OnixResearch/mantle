@@ -298,6 +298,27 @@ enum DeltaAttemptResult {
 /// Bundles all store services behind `Arc<dyn ...>`. The single point of
 /// contact between crunch-build (or any consumer) and the storage layer.
 ///
+/// Pre-built services for constructing a StoreHandle in tests.
+pub struct StoreHandleServices {
+    pub blob_service: Arc<dyn BlobService>,
+    pub directory_service: Arc<dyn DirectoryService>,
+    pub pathinfo_service: Arc<dyn PathInfoService>,
+    pub remote_pathinfo: Option<Arc<dyn PathInfoService>>,
+    pub state_dir: PathBuf,
+    pub output_dir_str: String,
+}
+
+/// Grouped parameters for persisting a build output.
+pub struct PersistOutputRequest<'a> {
+    pub output_name: &'a str,
+    pub output_path: &'a StorePath<String>,
+    pub path_info: PathInfo,
+    pub final_node: Node,
+    pub provenance: Option<ArtifactProvenance>,
+    pub is_root: bool,
+    pub root_source: Option<GcRootSource>,
+}
+
 /// Dynamic dispatch via trait objects. Store operations are I/O-bound so
 /// the vtable cost is irrelevant.
 pub struct StoreHandle {
@@ -421,47 +442,24 @@ impl StoreHandle {
     }
 
     /// Construct a StoreHandle from pre-built services (for tests).
-    pub fn from_services(
-        blob_service: Arc<dyn BlobService>,
-        directory_service: Arc<dyn DirectoryService>,
-        pathinfo_service: Arc<dyn PathInfoService>,
-        remote_pathinfo: Option<Arc<dyn PathInfoService>>,
-        state_dir: PathBuf,
-        output_dir_str: String,
-    ) -> Self {
-        Self::from_services_with_store_dir(
-            blob_service,
-            directory_service,
-            pathinfo_service,
-            remote_pathinfo,
-            state_dir,
-            output_dir_str,
-            nix_compat::store_path::STORE_DIR.to_string(),
-        )
+    pub fn from_services(services: StoreHandleServices) -> Self {
+        Self::from_services_with_store_dir(services, nix_compat::store_path::STORE_DIR.to_string())
     }
 
     /// Like [StoreHandle::from_services] but with a custom store directory prefix.
-    pub fn from_services_with_store_dir(
-        blob_service: Arc<dyn BlobService>,
-        directory_service: Arc<dyn DirectoryService>,
-        pathinfo_service: Arc<dyn PathInfoService>,
-        remote_pathinfo: Option<Arc<dyn PathInfoService>>,
-        state_dir: PathBuf,
-        output_dir_str: String,
-        store_dir: String,
-    ) -> Self {
-        let ca_mappings = CaMappings::load(&state_dir);
+    pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
+        let ca_mappings = CaMappings::load(&services.state_dir);
         Self {
-            blob_service,
-            directory_service,
-            pathinfo_service,
-            remote_pathinfo,
+            blob_service: services.blob_service,
+            directory_service: services.directory_service,
+            pathinfo_service: services.pathinfo_service,
+            remote_pathinfo: services.remote_pathinfo,
             remote_cache_url: None,
             remote_trusted_public_keys: Vec::new(),
             remote_delta_capability: None,
             remote_delta_http_client: None,
-            state_dir,
-            output_dir_str,
+            state_dir: services.state_dir,
+            output_dir_str: services.output_dir_str,
             store_dir,
             startup_audit_events: Vec::new(),
             output_nodes: HashMap::new(),
@@ -533,17 +531,15 @@ impl StoreHandle {
     }
 
     pub async fn garbage_collect(&mut self, is_dry_run: bool) -> Result<GcReport, Error> {
-        gc::run_gc(
-            &self.state_dir,
-            &self.output_dir_str,
-            &self.store_dir,
-            self.pathinfo_service.as_ref(),
-            self.directory_service.as_ref(),
-            self.blob_service.as_ref(),
-            &mut self.ca_mappings,
-            is_dry_run,
-        )
-        .await
+        let ctx = gc::GcContext {
+            state_dir: &self.state_dir,
+            output_dir_str: &self.output_dir_str,
+            store_dir: &self.store_dir,
+            pathinfo: self.pathinfo_service.as_ref(),
+            directory_service: self.directory_service.as_ref(),
+            blob_service: self.blob_service.as_ref(),
+        };
+        gc::run_gc(&ctx, &mut self.ca_mappings, is_dry_run).await
     }
 
     /// Check whether the castore has the content referenced by a Node.
@@ -701,7 +697,7 @@ impl StoreHandle {
             match stored {
                 Some(path_info) => {
                     if self.castore_has_content(&path_info.node).await? {
-                        persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &path_info, None)
+                        persist_artifact_attestation(&self.state_dir, &self.store_dir, &path_info, output_name, None)
                             .await?;
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                         self.built_outputs
@@ -1604,15 +1600,15 @@ impl StoreHandle {
         }
 
         let path_info = match self
-            .persist_and_export_signed_output(
+            .persist_and_export_signed_output(PersistOutputRequest {
                 output_name,
                 output_path,
-                applied.final_path_info.clone(),
+                path_info: applied.final_path_info.clone(),
                 final_node,
-                None,
+                provenance: None,
                 is_root,
                 root_source,
-            )
+            })
             .await
         {
             Ok(path_info) => path_info,
@@ -1708,7 +1704,7 @@ impl StoreHandle {
                     .put(remote_pi.clone())
                     .await
                     .map_err(|e| Error::Cache(format!("persisting substituted PathInfo: {e}")))?;
-                persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &remote_pi, None).await?;
+                persist_artifact_attestation(&self.state_dir, &self.store_dir, &remote_pi, output_name, None).await?;
 
                 let transferred_bytes = match self.content_bytes_for_node(&remote_pi.node).await {
                     Ok(bytes) => bytes,
@@ -1759,25 +1755,43 @@ impl StoreHandle {
     /// even if a caller constructs the PathInfo itself.
     pub async fn persist_and_export_signed_output(
         &mut self,
-        output_name: &str,
-        output_path: &StorePath<String>,
-        path_info: PathInfo,
-        final_node: Node,
-        provenance: Option<ArtifactProvenance>,
-        is_root: bool,
-        root_source: Option<GcRootSource>,
+        req: PersistOutputRequest<'_>,
     ) -> Result<PathInfo, Error> {
-        assert!(!output_name.is_empty(), "output_name must not be empty");
-        self.persist_pathinfo_and_export(
-            output_name,
-            output_path,
-            path_info,
-            final_node,
-            provenance,
-            is_root,
-            root_source,
+        assert!(!req.output_name.is_empty(), "output_name must not be empty");
+
+        if req.path_info.store_path != *req.output_path {
+            return Err(Error::Store(format!(
+                "PathInfo store path mismatch: expected {}, got {}",
+                req.output_path, req.path_info.store_path,
+            )));
+        }
+
+        if req.path_info.signatures.is_empty() {
+            return Err(Error::Store(format!("refusing to persist unsigned PathInfo for {}", req.output_path)));
+        }
+
+        self.pathinfo_service
+            .put(req.path_info.clone())
+            .await
+            .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
+        persist_artifact_attestation(
+            &self.state_dir,
+            &self.store_dir,
+            &req.path_info,
+            req.output_name,
+            req.provenance.as_ref(),
         )
-        .await
+        .await?;
+
+        let abs_path = req.output_path.to_absolute_path_with_prefix(&self.output_dir_str);
+        self.built_outputs.insert(abs_path, req.path_info.clone());
+        self.output_nodes.insert(req.output_path.clone(), req.final_node.clone());
+        self.export_output_if_needed(req.output_path, &req.final_node, req.is_root).await?;
+        if req.is_root && let Some(source) = req.root_source {
+            self.register_retained_root(req.output_path, source).await?;
+        }
+
+        Ok(req.path_info)
     }
 
     async fn export_output_if_needed(
@@ -1809,45 +1823,7 @@ impl StoreHandle {
         }
     }
 
-    /// Common persistence + export logic.
-    async fn persist_pathinfo_and_export(
-        &mut self,
-        output_name: &str,
-        output_path: &StorePath<String>,
-        path_info: PathInfo,
-        final_node: Node,
-        provenance: Option<ArtifactProvenance>,
-        is_root: bool,
-        root_source: Option<GcRootSource>,
-    ) -> Result<PathInfo, Error> {
-        if path_info.store_path != *output_path {
-            return Err(Error::Store(format!(
-                "PathInfo store path mismatch: expected {}, got {}",
-                output_path, path_info.store_path,
-            )));
-        }
 
-        if path_info.signatures.is_empty() {
-            return Err(Error::Store(format!("refusing to persist unsigned PathInfo for {output_path}")));
-        }
-
-        self.pathinfo_service
-            .put(path_info.clone())
-            .await
-            .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
-        persist_artifact_attestation(&self.state_dir, &self.store_dir, output_name, &path_info, provenance.as_ref())
-            .await?;
-
-        let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
-        self.built_outputs.insert(abs_path, path_info.clone());
-        self.output_nodes.insert(output_path.clone(), final_node.clone());
-        self.export_output_if_needed(output_path, &final_node, is_root).await?;
-        if is_root && let Some(source) = root_source {
-            self.register_retained_root(output_path, source).await?;
-        }
-
-        Ok(path_info)
-    }
 
     pub async fn get_artifact_attestation(
         &self,
@@ -2191,12 +2167,14 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         StoreHandle::from_services_with_store_dir(
-            blob_service,
-            directory_service,
-            pathinfo_service,
-            None,
-            state_dir.to_path_buf(),
-            state_dir.display().to_string(),
+            StoreHandleServices {
+                blob_service,
+                directory_service,
+                pathinfo_service,
+                remote_pathinfo: None,
+                state_dir: state_dir.to_path_buf(),
+                output_dir_str: state_dir.display().to_string(),
+            },
             store_dir.to_string(),
         )
     }
@@ -2218,12 +2196,14 @@ mod tests {
                 as Arc<dyn PathInfoService>;
 
         let handle = StoreHandle::from_services_with_store_dir(
-            blob_service,
-            directory_service,
-            local,
-            Some(remote.clone()),
-            state_dir.to_path_buf(),
-            state_dir.display().to_string(),
+            StoreHandleServices {
+                blob_service,
+                directory_service,
+                pathinfo_service: local,
+                remote_pathinfo: Some(remote.clone()),
+                state_dir: state_dir.to_path_buf(),
+                output_dir_str: state_dir.display().to_string(),
+            },
             "/nix/store".to_string(),
         );
         (handle, remote)
@@ -2696,17 +2676,17 @@ mod tests {
         };
 
         let err = handle
-            .persist_and_export_signed_output(
-                "out",
-                &output_path,
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
                 path_info,
-                Node::Symlink {
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                false,
-                None,
-            )
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
             .await
             .unwrap_err();
 
@@ -2732,17 +2712,17 @@ mod tests {
         };
 
         let err = handle
-            .persist_and_export_signed_output(
-                "out",
-                &output_path,
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
                 path_info,
-                Node::Symlink {
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                true,
-                Some(crate::GcRootSource::Build),
-            )
+                provenance: None,
+                is_root: true,
+                root_source: Some(crate::GcRootSource::Build),
+            })
             .await
             .unwrap_err();
 
@@ -2759,17 +2739,17 @@ mod tests {
         let path_info = signed_pathinfo(actual);
 
         let err = handle
-            .persist_and_export_signed_output(
-                "out",
-                &expected,
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &expected,
                 path_info,
-                Node::Symlink {
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                false,
-                None,
-            )
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
             .await
             .unwrap_err();
 
@@ -2783,17 +2763,17 @@ mod tests {
         let output_path = test_output("rooted-build", 12);
 
         handle
-            .persist_and_export_signed_output(
-                "out",
-                &output_path,
-                signed_pathinfo(output_path.clone()),
-                Node::Symlink {
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                true,
-                Some(crate::GcRootSource::Build),
-            )
+                provenance: None,
+                is_root: true,
+                root_source: Some(crate::GcRootSource::Build),
+            })
             .await
             .unwrap();
 
@@ -2811,17 +2791,17 @@ mod tests {
         let output_path = test_output("rooted-self-build", 13);
 
         handle
-            .persist_and_export_signed_output(
-                "out",
-                &output_path,
-                signed_pathinfo(output_path.clone()),
-                Node::Symlink {
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                true,
-                Some(crate::GcRootSource::SelfBuild),
-            )
+                provenance: None,
+                is_root: true,
+                root_source: Some(crate::GcRootSource::SelfBuild),
+            })
             .await
             .unwrap();
 
@@ -2838,17 +2818,17 @@ mod tests {
         let output_path = test_output("built-path", 10);
 
         handle
-            .persist_and_export_signed_output(
-                "dev",
-                &output_path,
-                signed_pathinfo(output_path.clone()),
-                Node::Symlink {
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "dev",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
                     target: SymlinkTarget::try_from("target").unwrap(),
                 },
-                None,
-                false,
-                None,
-            )
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
             .await
             .unwrap();
 
@@ -3341,7 +3321,15 @@ mod tests {
                 &trusted_sign,
             );
             seeded_remote
-                .persist_and_export_signed_output("out", &output_path, path_info, node, None, false, None)
+                .persist_and_export_signed_output(PersistOutputRequest {
+                    output_name: "out",
+                    output_path: &output_path,
+                    path_info,
+                    final_node: node,
+                    provenance: None,
+                    is_root: false,
+                    root_source: None,
+                })
                 .await
                 .unwrap();
         }

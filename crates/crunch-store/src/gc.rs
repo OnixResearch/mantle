@@ -18,12 +18,21 @@ use snix_store::pathinfoservice::PathInfoService;
 use crate::CaMappings;
 use crate::Error;
 use crate::StoreFallbackMode;
+
+/// Services and paths needed for GC operations.
+pub struct GcContext<'a> {
+    pub state_dir: &'a Path,
+    pub output_dir_str: &'a str,
+    pub store_dir: &'a str,
+    pub pathinfo: &'a dyn PathInfoService,
+    pub directory_service: &'a dyn DirectoryService,
+    pub blob_service: &'a dyn BlobService,
+}
 use crate::artifact_attestation_file_path;
 use crate::closure::resolve_closure;
 use crate::roots;
 use crate::roots::GcRootRecord;
 
-const MAX_GC_BYTES_WALK_DEPTH: u32 = 128;
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
 
@@ -76,19 +85,14 @@ struct GcPlan {
 }
 
 pub async fn run_gc(
-    state_dir: &Path,
-    output_dir_str: &str,
-    store_dir: &str,
-    pathinfo: &dyn PathInfoService,
-    directory_service: &dyn DirectoryService,
-    blob_service: &dyn BlobService,
+    ctx: &GcContext<'_>,
     ca_mappings: &mut CaMappings,
     is_dry_run: bool,
 ) -> Result<GcReport, Error> {
-    assert!(!store_dir.is_empty(), "store_dir must not be empty");
-    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
+    assert!(!ctx.store_dir.is_empty(), "store_dir must not be empty");
+    assert!(ctx.store_dir.starts_with('/'), "store_dir must be absolute");
 
-    let plan = build_plan(state_dir, output_dir_str, store_dir, pathinfo, directory_service, blob_service).await?;
+    let plan = build_plan(ctx).await?;
     let mut gc_result = GcReport {
         is_dry_run,
         retained_root_count: saturating_u32(plan.retained_roots.len()),
@@ -109,7 +113,7 @@ pub async fn run_gc(
     remove_exported_outputs(&plan.orphaned_on_disk)?;
     gc_result.operations.push(GcOperationKind::ExportedOutputs);
 
-    rewrite_pathinfo_db(state_dir, &plan.live_pathinfos).await?;
+    rewrite_pathinfo_db(ctx.state_dir, &plan.live_pathinfos).await?;
     gc_result.operations.push(GcOperationKind::PathInfoRewrite);
 
     remove_files(&plan.artifact_attestation_paths)?;
@@ -118,7 +122,7 @@ pub async fn run_gc(
     remove_files(&plan.closure_attestation_paths)?;
     gc_result.operations.push(GcOperationKind::ClosureAttestations);
 
-    rewrite_directory_db(state_dir, plan.live_castore.directories.values()).await?;
+    rewrite_directory_db(ctx.state_dir, plan.live_castore.directories.values()).await?;
     gc_result.operations.push(GcOperationKind::DirectoryRewrite);
 
     remove_files(&plan.blob_index_paths)?;
@@ -130,37 +134,30 @@ pub async fn run_gc(
     let live_paths: BTreeSet<String> = plan
         .live_pathinfos
         .iter()
-        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(store_dir))
+        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
         .collect();
     ca_mappings.retain_output_paths(&live_paths);
-    ca_mappings.save_checked(state_dir).map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
+    ca_mappings.save_checked(ctx.state_dir).map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
     gc_result.operations.push(GcOperationKind::CaMappings);
 
     Ok(gc_result)
 }
 
-async fn build_plan(
-    state_dir: &Path,
-    output_dir_str: &str,
-    store_dir: &str,
-    pathinfo: &dyn PathInfoService,
-    directory_service: &dyn DirectoryService,
-    blob_service: &dyn BlobService,
-) -> Result<GcPlan, Error> {
-    assert!(!store_dir.is_empty(), "build_plan: store_dir must not be empty");
-    assert!(store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
+async fn build_plan(ctx: &GcContext<'_>) -> Result<GcPlan, Error> {
+    assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
+    assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
 
-    let retained_roots = roots::list_roots(state_dir)?;
-    let live_paths = mark_live_paths(&retained_roots, pathinfo, store_dir).await?;
-    let snapshot = snapshot_pathinfos(pathinfo).await?;
+    let retained_roots = roots::list_roots(ctx.state_dir)?;
+    let live_paths = mark_live_paths(&retained_roots, ctx.pathinfo, ctx.store_dir).await?;
+    let snapshot = snapshot_pathinfos(ctx.pathinfo).await?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths);
-    let live_castore = collect_live_castore_state(&live_pathinfos, directory_service, blob_service).await?;
-    let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, output_dir_str)?;
+    let live_castore = collect_live_castore_state(&live_pathinfos, ctx.directory_service, ctx.blob_service).await?;
+    let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
     let artifact_attestation_paths =
-        collect_existing_artifact_attestation_paths(state_dir, store_dir, &dead_pathinfos)?;
-    let closure_attestation_paths = collect_dead_closure_attestations(state_dir, &retained_roots)?;
-    let blob_index_paths = collect_dead_blob_files(state_dir, &live_castore.blob_index_digests, true)?;
-    let blob_chunk_paths = collect_dead_blob_files(state_dir, &live_castore.chunk_digests, false)?;
+        collect_existing_artifact_attestation_paths(ctx.state_dir, ctx.store_dir, &dead_pathinfos)?;
+    let closure_attestation_paths = collect_dead_closure_attestations(ctx.state_dir, &retained_roots)?;
+    let blob_index_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?;
+    let blob_chunk_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?;
     let reclaimable_bytes_total = compute_reclaimable_bytes(
         &orphaned_on_disk,
         &artifact_attestation_paths,
@@ -170,7 +167,7 @@ async fn build_plan(
     )?;
     let candidate_paths = dead_pathinfos
         .iter()
-        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(store_dir))
+        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
         .collect();
 
     Ok(GcPlan {
@@ -707,6 +704,7 @@ mod tests {
     use super::*;
     use crate::StoreConfig;
     use crate::StoreHandle;
+    use crate::handle::PersistOutputRequest;
     use crate::roots::GcRootSource;
 
     fn store_path(name: &str, seed: u8) -> StorePath<String> {
@@ -782,7 +780,15 @@ mod tests {
     ) {
         let path_info = signed_pathinfo(store_path.clone(), node.clone(), refs);
         store
-            .persist_and_export_signed_output(output_name, &store_path, path_info, node, None, is_root, source)
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name,
+                output_path: &store_path,
+                path_info,
+                final_node: node,
+                provenance: None,
+                is_root,
+                root_source: source,
+            })
             .await
             .unwrap();
     }
