@@ -171,6 +171,7 @@ where BServ: BuildService + 'static
     ///
     /// Accepts any types that implement the service traits. Internally
     /// wraps them in `Arc<dyn ...>` and constructs a StoreHandle.
+    #[allow(tigerstyle::too_many_parameters)] // constructor: services + config; already groups services into StoreHandleServices internally
     pub fn new<BS, DS, PIS>(
         blob_service: BS,
         directory_service: DS,
@@ -219,6 +220,7 @@ where BServ: BuildService + 'static
     ///
     /// Accepts pre-wrapped `Arc<dyn ...>` services (e.g., from a StoreHandle).
     #[allow(clippy::too_many_arguments)]
+    #[allow(tigerstyle::too_many_parameters)] // constructor: services + config; already groups services into StoreHandleServices internally
     pub fn with_state_dir(
         blob_service: Arc<dyn BlobService>,
         directory_service: Arc<dyn DirectoryService>,
@@ -616,6 +618,7 @@ where BServ: BuildService + 'static
 
     /// Pass 2: replace markers with final CA paths, register outputs,
     /// persist PathInfo.
+    #[allow(tigerstyle::too_many_parameters)] // multi-CA output pipeline: groups are structurally coupled
     async fn finalize_ca_outputs(
         &mut self,
         prepared: &PreparedBuild,
@@ -905,6 +908,7 @@ where BServ: BuildService + 'static
     /// Process a single build output: apply rewrites, compute paths,
     /// verify FOD hash, create PathInfo, persist, and export to disk.
     #[allow(clippy::too_many_arguments)]
+    #[allow(tigerstyle::too_many_parameters)] // output pipeline threading derivation context through stages
     async fn process_output(
         &mut self,
         drv_path: &StorePath<String>,
@@ -964,6 +968,7 @@ where BServ: BuildService + 'static
     /// Resolve the final output path, node, and NAR hash for either a
     /// CA or input-addressed output.
     #[allow(clippy::too_many_arguments)]
+    #[allow(tigerstyle::too_many_parameters)] // subset of process_output context
     async fn resolve_output_node(
         &mut self,
         drv_path: &StorePath<String>,
@@ -999,6 +1004,7 @@ where BServ: BuildService + 'static
     }
 
     /// Verify a fixed-output hash when the output declares one.
+    #[allow(tigerstyle::too_many_parameters)] // FOD verification threading hash context
     async fn verify_output_hash_if_needed(
         &self,
         drv_name: &str,
@@ -1031,6 +1037,7 @@ where BServ: BuildService + 'static
     /// 2. Hash the marker-replaced NAR for the content address
     /// 3. Compute the CA store path
     /// 4. Replace zero markers with the final path
+    #[allow(tigerstyle::too_many_parameters)] // CA self-reference rewrite pipeline threading derivation context
     async fn compute_ca_output(
         &mut self,
         drv_path: &StorePath<String>,
@@ -1110,6 +1117,7 @@ where BServ: BuildService + 'static
 
     /// Build PathInfo, sign it, then delegate persistence to the StoreHandle.
     #[allow(clippy::too_many_arguments)]
+    #[allow(tigerstyle::too_many_parameters)] // PathInfo assembly threading hash + reference context
     async fn persist_and_export_output(
         &mut self,
         drv_path: &StorePath<String>,

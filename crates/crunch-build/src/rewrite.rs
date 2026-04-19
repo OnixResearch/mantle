@@ -218,6 +218,7 @@ async fn rewrite_leaf_to_root(
 }
 
 /// Rewrite a single file blob. Extracted to keep the worklist loop readable.
+#[allow(tigerstyle::too_many_parameters)] // blob identity (digest, size, executable) + rewrite pair + service
 async fn rewrite_file_node(
     digest: &snix_castore::B3Digest,
     size: u64,

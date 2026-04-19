@@ -16,6 +16,7 @@ use crate::hash::nar_hash;
 /// NAR mode: hash the NAR serialization with the declared algorithm.
 /// Text mode: equivalent to NAR sha256 for verification purposes.
 #[allow(tigerstyle::ambiguous_params)] // drv_name vs output_name: distinct derivation fields
+#[allow(tigerstyle::too_many_parameters)] // FOD verification requires hash context + derivation context + castore services
 pub(crate) async fn verify_fod_hash(
     drv_name: &str,
     _output_name: &str,

@@ -529,6 +529,7 @@ fn create_tar_symlink<R: Read>(
     Ok(())
 }
 
+#[allow(tigerstyle::too_many_parameters)] // tar extraction context: entry, destination, and prefix state
 fn copy_tar_hardlink<R: Read>(
     entry: &mut tar::Entry<'_, R>,
     dest: &Path,
