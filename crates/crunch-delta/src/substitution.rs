@@ -345,6 +345,38 @@ pub enum DeltaSubstitutionError {
     Attestation(String),
 }
 
+async fn full_artifact_fallback(
+    authority: &InMemoryDeltaAuthority,
+    request: &DeltaFetchRequest,
+    trusted_keys: &[VerifyingKey],
+    state_dir: &Path,
+    store_dir: &str,
+    reason: DeltaFallbackReason,
+    full_transfer_bytes: u64,
+) -> Result<DeltaFetchOutcome, DeltaSubstitutionError> {
+    debug_assert!(full_transfer_bytes > 0);
+    let path_info = authority
+        .full_artifact_fetch(request)?
+        .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
+    verify_pathinfo_trusted(&path_info, trusted_keys)
+        .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
+    debug_assert!(!request.output_name.is_empty());
+    let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
+        .await
+        .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
+    Ok(DeltaFetchOutcome {
+        acceptance: DeltaAcceptanceMode::FullArtifactFallback(reason),
+        path_info,
+        transferred_bytes: full_transfer_bytes,
+        full_transfer_bytes,
+        attestation_digest: stored.digest.to_hex(),
+        stats: DeltaTransferStats {
+            transferred_bytes: full_transfer_bytes,
+            ..Default::default()
+        },
+    })
+}
+
 #[allow(tigerstyle::too_many_parameters)] // integration boundary threading protocol, trust, and storage context
 pub async fn substitute_from_authority(
     authority: &InMemoryDeltaAuthority,
@@ -356,79 +388,69 @@ pub async fn substitute_from_authority(
     store_dir: &str,
 ) -> Result<DeltaFetchOutcome, DeltaSubstitutionError> {
     let full_transfer_bytes = authority.sender.full_transfer_bytes();
+    debug_assert!(full_transfer_bytes > 0);
     let Some(_capabilities) = authority.capabilities() else {
-        let path_info = authority
-            .full_artifact_fetch(request)?
-            .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
-        verify_pathinfo_trusted(&path_info, trusted_keys)
-            .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-        let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
-            .await
-            .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
-        return Ok(DeltaFetchOutcome {
-            acceptance: DeltaAcceptanceMode::FullArtifactFallback(DeltaFallbackReason::LegacyCache),
-            path_info,
-            transferred_bytes: full_transfer_bytes,
-            full_transfer_bytes,
-            attestation_digest: stored.digest.to_hex(),
-            stats: DeltaTransferStats {
-                transferred_bytes: full_transfer_bytes,
-                ..Default::default()
-            },
-        });
+        return full_artifact_fallback(
+            authority, request, trusted_keys, state_dir, store_dir,
+            DeltaFallbackReason::LegacyCache, full_transfer_bytes,
+        ).await;
     };
 
     let candidate = match authority.request_candidates(request, client_offer) {
         Ok(Some(candidate)) => candidate,
-        Ok(None) => {
-            let path_info = authority
-                .full_artifact_fetch(request)?
-                .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
-            verify_pathinfo_trusted(&path_info, trusted_keys)
-                .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-            let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
-                .await
-                .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
-            return Ok(DeltaFetchOutcome {
-                acceptance: DeltaAcceptanceMode::FullArtifactFallback(DeltaFallbackReason::NegotiationFailed),
-                path_info,
-                transferred_bytes: full_transfer_bytes,
-                full_transfer_bytes,
-                attestation_digest: stored.digest.to_hex(),
-                stats: DeltaTransferStats {
-                    transferred_bytes: full_transfer_bytes,
-                    ..Default::default()
-                },
-            });
-        }
-        Err(DeltaSubstitutionError::Negotiation(_)) => {
-            let path_info = authority
-                .full_artifact_fetch(request)?
-                .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
-            verify_pathinfo_trusted(&path_info, trusted_keys)
-                .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-            let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
-                .await
-                .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
-            return Ok(DeltaFetchOutcome {
-                acceptance: DeltaAcceptanceMode::FullArtifactFallback(DeltaFallbackReason::NegotiationFailed),
-                path_info,
-                transferred_bytes: full_transfer_bytes,
-                full_transfer_bytes,
-                attestation_digest: stored.digest.to_hex(),
-                stats: DeltaTransferStats {
-                    transferred_bytes: full_transfer_bytes,
-                    ..Default::default()
-                },
-            });
+        Ok(None) | Err(DeltaSubstitutionError::Negotiation(_)) => {
+            return full_artifact_fallback(
+                authority, request, trusted_keys, state_dir, store_dir,
+                DeltaFallbackReason::NegotiationFailed, full_transfer_bytes,
+            ).await;
         }
         Err(err) => return Err(err),
     };
 
     let manifest = receiver.build_manifest_for(&candidate.sender).await.map_err(DeltaSubstitutionError::Manifest)?;
     let has_set = DeltaReceiverHasSet { manifest };
+    let (final_path_info, stats) = receive_delta_frames(authority, &candidate.session_id, &has_set, receiver)?;
+
+    let path_info = final_path_info.ok_or(DeltaSubstitutionError::MissingFinalPathInfo)?;
+    if ensure_fixture_content_available(&candidate.sender.outputs, &receiver.retained).is_none() {
+        return Err(DeltaSubstitutionError::MissingFinalPathInfo);
+    }
+    let expected_root = output_root_node(&candidate.sender.outputs, &candidate.output_name)
+        .ok_or(DeltaSubstitutionError::RootDigestMismatch)?;
+    if expected_root != path_info.node {
+        return Err(DeltaSubstitutionError::RootDigestMismatch);
+    }
+
+    if verify_pathinfo_trusted(&path_info, trusted_keys).is_err() {
+        return full_artifact_fallback(
+            authority, request, trusted_keys, state_dir, store_dir,
+            DeltaFallbackReason::UntrustedDeltaPathInfo, full_transfer_bytes,
+        ).await;
+    }
+
+    debug_assert!(!request.output_name.is_empty());
+    let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
+        .await
+        .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
+    Ok(DeltaFetchOutcome {
+        acceptance: DeltaAcceptanceMode::Delta,
+        path_info,
+        transferred_bytes: stats.transferred_bytes,
+        full_transfer_bytes,
+        attestation_digest: stored.digest.to_hex(),
+        stats,
+    })
+}
+
+fn receive_delta_frames(
+    authority: &InMemoryDeltaAuthority,
+    session_id: &str,
+    has_set: &DeltaReceiverHasSet,
+    receiver: &mut DeltaReceiverState,
+) -> Result<(Option<PathInfo>, DeltaTransferStats), DeltaSubstitutionError> {
     let mut final_path_info: Option<PathInfo> = None;
-    let stats = authority.stream_missing(&candidate.session_id, &has_set, |frame| {
+    debug_assert!(!session_id.is_empty());
+    let stats = authority.stream_missing(session_id, has_set, |frame| {
         match frame {
             DeltaTransferFrame::Blob { digest, bytes } => {
                 receiver.retained.retain_blob(digest, bytes);
@@ -447,50 +469,8 @@ pub async fn substitute_from_authority(
         }
         Ok(())
     })?;
-
-    let path_info = final_path_info.ok_or(DeltaSubstitutionError::MissingFinalPathInfo)?;
-    if ensure_fixture_content_available(&candidate.sender.outputs, &receiver.retained).is_none() {
-        return Err(DeltaSubstitutionError::MissingFinalPathInfo);
-    }
-    let expected_root = output_root_node(&candidate.sender.outputs, &candidate.output_name)
-        .ok_or(DeltaSubstitutionError::RootDigestMismatch)?;
-    if expected_root != path_info.node {
-        return Err(DeltaSubstitutionError::RootDigestMismatch);
-    }
-
-    if verify_pathinfo_trusted(&path_info, trusted_keys).is_err() {
-        let fallback = authority
-            .full_artifact_fetch(request)?
-            .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
-        verify_pathinfo_trusted(&fallback, trusted_keys)
-            .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
-        let stored = persist_artifact_attestation(state_dir, store_dir, &fallback, &request.output_name, None)
-            .await
-            .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
-        return Ok(DeltaFetchOutcome {
-            acceptance: DeltaAcceptanceMode::FullArtifactFallback(DeltaFallbackReason::UntrustedDeltaPathInfo),
-            path_info: fallback,
-            transferred_bytes: full_transfer_bytes,
-            full_transfer_bytes,
-            attestation_digest: stored.digest.to_hex(),
-            stats: DeltaTransferStats {
-                transferred_bytes: full_transfer_bytes,
-                ..Default::default()
-            },
-        });
-    }
-
-    let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
-        .await
-        .map_err(|e| DeltaSubstitutionError::Attestation(format!("{e}")))?;
-    Ok(DeltaFetchOutcome {
-        acceptance: DeltaAcceptanceMode::Delta,
-        path_info,
-        transferred_bytes: stats.transferred_bytes,
-        full_transfer_bytes,
-        attestation_digest: stored.digest.to_hex(),
-        stats,
-    })
+    debug_assert!(final_path_info.is_some(), "stream should contain FinalPathInfo frame");
+    Ok((final_path_info, stats))
 }
 
 #[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth

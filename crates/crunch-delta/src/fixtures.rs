@@ -185,6 +185,18 @@ fn whole_output_hit_case() -> BenchCase {
     build_case("whole-output-hit", sender, receiver, receiver_store, Vec::new(), HashSet::new(), 0)
 }
 
+fn subtree_unmatched_dirs() -> Vec<ArtifactNode> {
+    (b'a'..=b'h')
+        .map(|ch| {
+            let suffix = (ch as char).to_string();
+            dir_node(
+                &format!("subtree-unmatched-{suffix}"),
+                vec![blob_node(&format!("subtree-unmatched-{suffix}-blob"), 4_096)],
+            )
+        })
+        .collect()
+}
+
 fn subtree_hit_case() -> BenchCase {
     let shared_a_nested_dirs = numbered_leaf_dirs("subtree-shared-a-nested", 128, 512);
     let shared_b_nested_dirs = numbered_leaf_dirs("subtree-shared-b-nested", 128, 512);
@@ -192,14 +204,8 @@ fn subtree_hit_case() -> BenchCase {
     let shared_b = dir_node("subtree-shared-b", shared_b_nested_dirs.clone());
     let shared_a_digest = digest_of(&shared_a);
     let shared_b_digest = digest_of(&shared_b);
-    let unmatched_a = dir_node("subtree-unmatched-a", vec![blob_node("subtree-unmatched-a-blob", 4_096)]);
-    let unmatched_b = dir_node("subtree-unmatched-b", vec![blob_node("subtree-unmatched-b-blob", 4_096)]);
-    let unmatched_c = dir_node("subtree-unmatched-c", vec![blob_node("subtree-unmatched-c-blob", 4_096)]);
-    let unmatched_d = dir_node("subtree-unmatched-d", vec![blob_node("subtree-unmatched-d-blob", 4_096)]);
-    let unmatched_e = dir_node("subtree-unmatched-e", vec![blob_node("subtree-unmatched-e-blob", 4_096)]);
-    let unmatched_f = dir_node("subtree-unmatched-f", vec![blob_node("subtree-unmatched-f-blob", 4_096)]);
-    let unmatched_g = dir_node("subtree-unmatched-g", vec![blob_node("subtree-unmatched-g-blob", 4_096)]);
-    let unmatched_h = dir_node("subtree-unmatched-h", vec![blob_node("subtree-unmatched-h-blob", 4_096)]);
+    let unmatched = subtree_unmatched_dirs();
+    debug_assert_eq!(unmatched.len(), 8);
     let sender = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![OutputFixture {
@@ -214,37 +220,23 @@ fn subtree_hit_case() -> BenchCase {
     let mut receiver = ReceiverManifest::new("/crunch/store");
     receiver.known_directories.insert(shared_a_digest);
     receiver.known_directories.insert(shared_b_digest);
+    let mut local_children = unmatched.clone();
+    local_children.push(shared_a.clone());
+    local_children.push(shared_b.clone());
     let receiver_output = OutputFixture {
         output_id: "subtree-hit-local".to_owned(),
-        root: dir_node("subtree-local-root", vec![
-            unmatched_a.clone(),
-            unmatched_b.clone(),
-            unmatched_c.clone(),
-            unmatched_d.clone(),
-            unmatched_e.clone(),
-            unmatched_f.clone(),
-            unmatched_g.clone(),
-            unmatched_h.clone(),
-            shared_a.clone(),
-            shared_b.clone(),
-        ]),
+        root: dir_node("subtree-local-root", local_children),
     };
     let receiver_store = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![receiver_output.clone()],
     };
-    let mut receiver_frontiers = vec![
-        frontier_summary(&receiver_output.output_id, &unmatched_a),
-        frontier_summary(&receiver_output.output_id, &unmatched_b),
-        frontier_summary(&receiver_output.output_id, &unmatched_c),
-        frontier_summary(&receiver_output.output_id, &unmatched_d),
-        frontier_summary(&receiver_output.output_id, &unmatched_e),
-        frontier_summary(&receiver_output.output_id, &unmatched_f),
-        frontier_summary(&receiver_output.output_id, &unmatched_g),
-        frontier_summary(&receiver_output.output_id, &unmatched_h),
-        frontier_summary(&receiver_output.output_id, &shared_a),
-        frontier_summary(&receiver_output.output_id, &shared_b),
-    ];
+    let mut receiver_frontiers: Vec<ReceiverFrontierSummary> = unmatched
+        .iter()
+        .chain([&shared_a, &shared_b])
+        .map(|node| frontier_summary(&receiver_output.output_id, node))
+        .collect();
+    debug_assert!(!receiver_frontiers.is_empty());
     receiver_frontiers
         .extend(shared_a_nested_dirs.iter().map(|node| frontier_summary(&receiver_output.output_id, node)));
     receiver_frontiers
