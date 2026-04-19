@@ -149,7 +149,8 @@ impl Goal {
         }
 
         let dep_count = unbuilt_dep_keys.len();
-        debug_assert!(dep_count <= usize::try_from(MAX_GOALS).unwrap_or(usize::MAX), "dep count exceeds MAX_GOALS");
+        // MAX_GOALS is u32, always fits in usize on 32-bit+ platforms.
+        debug_assert!(dep_count <= MAX_GOALS as usize, "dep count exceeds MAX_GOALS");
 
         self.waitees = unbuilt_dep_keys;
 

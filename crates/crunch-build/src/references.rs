@@ -22,7 +22,13 @@ pub(crate) fn resolve_references(
 
     let all_paths: Vec<StorePath<String>> = output_paths.into_iter().chain(input_paths).collect();
 
-    found_needles.iter().filter_map(|&idx| all_paths.get(usize::try_from(idx).unwrap_or(usize::MAX)).cloned()).collect()
+    found_needles
+        .iter()
+        .filter_map(|&idx| {
+            let i = usize::try_from(idx).ok()?;
+            all_paths.get(i).cloned()
+        })
+        .collect()
 }
 
 #[cfg(test)]

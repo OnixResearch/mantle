@@ -88,7 +88,8 @@ impl DerivationRegistry {
     ) {
         let derivation = derivation.into();
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
-        debug_assert!(self.entries.len() < usize::try_from(MAX_ENTRIES).unwrap_or(usize::MAX), "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
+        // MAX_ENTRIES is u32, always fits in usize on 32-bit+ platforms.
+        debug_assert!(self.entries.len() < MAX_ENTRIES as usize, "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})");
 
         let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_abs.clone(), hdm);

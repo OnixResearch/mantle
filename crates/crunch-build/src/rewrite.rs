@@ -224,7 +224,9 @@ async fn rewrite_file_node(
         .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
     let reader = reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
 
-    let mut data = Vec::with_capacity(usize::try_from(size).unwrap_or(usize::MAX));
+    let capacity = usize::try_from(size)
+        .map_err(|_| crate::Error::Store(format!("blob size {size} exceeds platform address space")))?;
+    let mut data = Vec::with_capacity(capacity);
     reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
 
     let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);

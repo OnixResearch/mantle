@@ -54,7 +54,7 @@ pub struct VerifyResult {
     /// Key names that signed but are NOT in the trusted set.
     pub untrusted_names: Vec<String>,
     /// Total signature count on the PathInfo.
-    pub total_sigs: u32,
+    pub total_sigs: u64,
 }
 
 impl VerifyResult {
@@ -95,7 +95,7 @@ pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[Verifyin
         }
     }
 
-    let total_sigs = u32::try_from(path_info.signatures.len()).unwrap_or(u32::MAX);
+    let total_sigs = path_info.signatures.len() as u64;
 
     VerifyResult {
         trusted_count,
@@ -159,7 +159,6 @@ pub fn build_trusted_keys(local: &KeyPair, user_keys: Option<&[VerifyingKey]>) -
 /// The key name is `crunch-<hostname>-1`.
 pub fn generate_keypair() -> (KeyPair, String) {
     use data_encoding::BASE64;
-    use ed25519_dalek::PUBLIC_KEY_LENGTH;
     use ed25519_dalek::SECRET_KEY_LENGTH;
     use rand::RngCore;
 
