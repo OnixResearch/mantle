@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -96,6 +99,7 @@ pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
     })
 }
 
+#[allow(tigerstyle::no_recursion)]
 fn eval_error_is_deserialize(err: &crunch_eval::Error) -> bool {
     match err {
         crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => false,
@@ -158,6 +162,8 @@ async fn build_linux(
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
 ) -> Result<PipelineResult, Error> {
     use snix_build::buildservice::BubblewrapBuildService;
+    debug_assert!(!config.store_dir.is_empty());
+    debug_assert!(config.max_jobs >= 1);
 
     let blob_service = store.blob_service();
     let directory_service = store.directory_service();
@@ -339,6 +345,7 @@ async fn stream_roots_into_worker(
     })
 }
 
+#[allow(tigerstyle::too_many_parameters)]
 fn spawn_eval_workers(
     join_set: &mut JoinSet<Result<(String, CrunchDerivation), (String, String)>>,
     worker_input: &crunch_eval::session::IsolatedWorkerInput,
@@ -347,7 +354,11 @@ fn spawn_eval_workers(
     eval_parallelism: u32,
     root_force_policy: RootForceExecutionPolicy,
 ) {
-    while *next_label_index < labels.len() && join_set.len() < eval_parallelism as usize {
+    let max_inflight: usize = match usize::try_from(eval_parallelism) {
+        Ok(n) => n,
+        Err(_) => return, // u32 > usize only on 16-bit targets; nothing to spawn
+    };
+    while *next_label_index < labels.len() && join_set.len() < max_inflight {
         let worker_input = worker_input.clone();
         let label = labels[*next_label_index].clone();
         *next_label_index = next_label_index.saturating_add(1);
@@ -356,7 +367,9 @@ fn spawn_eval_workers(
             match worker_input.force_selected_roots_with_policy::<CrunchDerivation>(&labels, 1, root_force_policy) {
                 Ok(mut roots) => {
                     debug_assert_eq!(roots.len(), 1, "single-label request must return one root");
-                    let (_returned_label, drv) = roots.pop().expect("single-label request must return one root");
+                    let (_returned_label, drv) = roots
+                        .pop()
+                        .ok_or_else(|| (label.clone(), "single-label request returned zero roots".to_string()))?;
                     Ok((label, drv))
                 }
                 Err(err) => Err((label.clone(), format!("root '{label}': {err}"))),
@@ -365,6 +378,7 @@ fn spawn_eval_workers(
     }
 }
 
+#[allow(tigerstyle::ambiguous_params)]
 fn resolve_eval_parallelism(max_jobs: u32, requested_root_count: u32) -> u32 {
     assert!(max_jobs >= 1, "max_jobs must be at least 1");
     assert!(requested_root_count >= 1, "requested_root_count must be at least 1");
@@ -376,7 +390,7 @@ fn eval_failure_key(label: &str) -> String {
 }
 
 fn build_root_labels(root_drv_paths: &[(String, StorePath<String>)], store_dir: &str) -> HashMap<String, String> {
-    let mut labels = HashMap::new();
+    let mut labels = HashMap::with_capacity(root_drv_paths.len());
     for (label, drv_path) in root_drv_paths {
         let key = drv_path.to_absolute_path_with_prefix(store_dir);
         labels.insert(key, label.clone());
@@ -441,6 +455,7 @@ pub fn drv_key_for(store_dir: &str, drv_path: &StorePath<String>) -> String {
     drv_path.to_absolute_path_with_prefix(store_dir)
 }
 
+#[allow(tigerstyle::ambiguous_params)]
 pub fn parse_drv_key(store_dir: &str, drv_key: &str) -> Option<StorePath<String>> {
     StorePath::from_absolute_path_with_prefix(drv_key.as_bytes(), store_dir).ok()
 }
