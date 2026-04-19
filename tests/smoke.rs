@@ -752,7 +752,7 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
 
     for entry in &narinfo_entries {
         let narinfo_text = std::fs::read_to_string(entry.path()).unwrap();
-        let narinfo = nix_compat::narinfo::NarInfo::parse(&narinfo_text)
+        let narinfo = nix_compat::narinfo::NarInfo::parse_with_store_dir(&narinfo_text, "/crunch/store")
             .unwrap_or_else(|e| panic!("narinfo should parse: {e}\ncontent:\n{narinfo_text}"));
 
         let narinfo_store_name = narinfo.store_path.to_string();
@@ -808,4 +808,137 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
     }
 
     assert!(found_match, "should find a narinfo matching output '{output_name}'");
+}
+
+#[test]
+fn smoke_push_nix_store_prefix_consumable_by_nix() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    // Check that host nix is available.
+    let nix_ok = std::process::Command::new("nix")
+        .args(["path-info", "--version"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !nix_ok {
+        eprintln!("skipping: host `nix` CLI not available");
+        return;
+    }
+
+    // Step 1: build under /nix/store prefix.
+    let work = tempfile::tempdir().unwrap();
+    let store = work.path().join("store");
+    let state = work.path().join("state");
+    let cache = work.path().join("cache");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+
+    let ncl_file = work.path().join("test.ncl");
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "nix-compat-push",
+  builder = "/bin/sh",
+  args = ["-c", "echo 'nix compat test' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+    )
+    .unwrap();
+
+    let mut build_cmd = crunch_cmd();
+    build_cmd
+        .arg("--json")
+        .arg("--nix-compat")
+        .arg("--store")
+        .arg(&store)
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("build")
+        .arg("--no-substitute")
+        .arg("-I")
+        .arg(work.path())
+        .arg(&ncl_file);
+    let build_output = build_cmd.output().expect("build should execute");
+    let build_stderr = String::from_utf8_lossy(&build_output.stderr);
+    assert!(
+        build_output.status.success(),
+        "build failed (exit {}):\n{build_stderr}",
+        build_output.status.code().unwrap_or(-1),
+    );
+    let build_stdout = String::from_utf8_lossy(&build_output.stdout);
+    let report: BuildJsonReport = serde_json::from_str(&build_stdout).unwrap_or_else(|err| {
+        panic!("build stdout should be valid JSON: {err}\nstdout:\n{build_stdout}\nstderr:\n{build_stderr}")
+    });
+    assert_eq!(report.counts.succeeded_total, 1);
+
+    // Step 2: push to binary cache directory.
+    let mut push_cmd = crunch_cmd();
+    push_cmd
+        .arg("--nix-compat")
+        .arg("--store")
+        .arg(&store)
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("store")
+        .arg("push")
+        .arg("--to")
+        .arg(&cache)
+        .arg("--all");
+    let push_output = push_cmd.output().expect("push should execute");
+    assert!(
+        push_output.status.success(),
+        "push failed (exit {}):\n{}",
+        push_output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&push_output.stderr),
+    );
+
+    // Step 3: verify nix-cache-info has /nix/store.
+    let cache_info = std::fs::read_to_string(cache.join("nix-cache-info")).unwrap();
+    assert!(
+        cache_info.contains("StoreDir: /nix/store"),
+        "nix-cache-info must use /nix/store, got: {cache_info}",
+    );
+
+    // Step 4: ask host nix to query the cache — this proves Nix can parse
+    // the narinfo format, NAR URL, hash, and signatures.
+    let cache_url = format!("file://{}", cache.display());
+    let nix_query = std::process::Command::new("nix")
+        .args(["path-info", "--store", &cache_url, "--all", "--json"])
+        .output()
+        .expect("nix path-info should execute");
+    let nix_stdout = String::from_utf8_lossy(&nix_query.stdout);
+    let nix_stderr = String::from_utf8_lossy(&nix_query.stderr);
+    assert!(
+        nix_query.status.success(),
+        "nix path-info failed (exit {}):\nstdout: {nix_stdout}\nstderr: {nix_stderr}",
+        nix_query.status.code().unwrap_or(-1),
+    );
+
+    // The JSON output should contain at least one path under /nix/store.
+    let nix_info: serde_json::Value = serde_json::from_str(&nix_stdout).unwrap_or_else(|err| {
+        panic!("nix path-info --json should produce valid JSON: {err}\nstdout: {nix_stdout}")
+    });
+    let paths: Vec<&str> = match &nix_info {
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .filter_map(|v| v.get("path").and_then(|p| p.as_str()))
+            .collect(),
+        serde_json::Value::Object(map) => map.keys().map(|k| k.as_str()).collect(),
+        _ => panic!("unexpected nix path-info JSON shape: {nix_stdout}"),
+    };
+    assert!(
+        !paths.is_empty(),
+        "nix path-info should find at least one path in the pushed cache, got: {nix_stdout}",
+    );
+    assert!(
+        paths.iter().all(|p| p.starts_with("/nix/store/")),
+        "all paths should be under /nix/store/, got: {paths:?}",
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("nix-compat-push")),
+        "should find the 'nix-compat-push' path in nix output, got: {paths:?}",
+    );
 }

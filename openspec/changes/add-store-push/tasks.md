@@ -18,4 +18,4 @@
 
 - [x] Verify `NarInfo::Display` renders the correct `StorePath` for non-`/nix/store` prefixes — patch or document if needed
 - [x] Add test: push under `/crunch/store` prefix produces narinfo with `StorePath: /crunch/store/...`
-- [ ] Add test: push under `/nix/store` prefix produces narinfo consumable by `nix-store --verify-path` (if host nix available)
+- [x] Add test: push under `/nix/store` prefix produces narinfo consumable by host `nix path-info --store file://` (verified with host nix 2.33.3)
