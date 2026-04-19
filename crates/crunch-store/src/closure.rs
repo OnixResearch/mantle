@@ -47,16 +47,19 @@ pub async fn resolve_closure(
     fallback_mode: StoreFallbackMode,
     store_dir: &str,
 ) -> Result<ClosureResolution, Error> {
+    const MAX_CLOSURE_MEMBERS: usize = 100_000;
     let mut visited: BTreeSet<[u8; 20]> = BTreeSet::new();
-    let mut result: Vec<StorePath<String>> = Vec::new();
-    let mut audit_events: Vec<StoreAuditEvent> = Vec::new();
-    let mut stack: Vec<(StorePath<String>, u32)> = vec![(root.clone(), 0)];
+    let mut result: Vec<StorePath<String>> = Vec::with_capacity(64);
+    let mut audit_events: Vec<StoreAuditEvent> = Vec::with_capacity(4);
+    let mut stack: Vec<(StorePath<String>, u32)> = Vec::with_capacity(64);
+    stack.push((root.clone(), 0));
 
     while let Some((path, depth)) = stack.pop() {
         let digest = *path.digest();
         if !visited.insert(digest) {
             continue;
         }
+        assert!(result.len() < MAX_CLOSURE_MEMBERS, "closure exceeded {MAX_CLOSURE_MEMBERS} members");
         result.push(path.clone());
         if depth >= MAX_CLOSURE_DEPTH {
             warn!(path = %path, depth = depth, "closure depth limit ({MAX_CLOSURE_DEPTH}) reached, skipping deeper refs");

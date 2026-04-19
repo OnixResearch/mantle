@@ -260,9 +260,10 @@ async fn synthesize_runtime_closure_attestation(
     let member_paths = resolve_member_paths(local, remote, roots, store_dir).await?;
     let closure_node_id = closure_node_id(store_dir, roots, ClosureSemantics::Runtime);
     let member_set: BTreeSet<String> = member_paths.iter().map(|path| logical_path(path, store_dir)).collect();
-    let mut members = Vec::new();
-    let mut nodes = Vec::new();
-    let mut edges = Vec::new();
+    let member_count = member_paths.len();
+    let mut members = Vec::with_capacity(member_count);
+    let mut nodes = Vec::with_capacity(member_count.saturating_add(1));
+    let mut edges = Vec::with_capacity(member_count);
     let mut node_ids = BTreeSet::new();
     let mut edge_keys = BTreeSet::new();
 
@@ -305,7 +306,15 @@ async fn synthesize_runtime_closure_attestation(
 
     Ok(ClosureAttestation {
         schema_version: SchemaVersion::V1,
-        claims: Claims::default(),
+        claims: Claims {
+            component_name: None,
+            version_claim: None,
+            supplier: None,
+            homepage: None,
+            license: None,
+            source_aliases: Vec::new(),
+            extra: BTreeMap::new(),
+        },
         facts: ClosureFacts {
             closure_node_id,
             root_node_ids: roots.iter().map(|root| artifact_node_id(&logical_path(root, store_dir))).collect(),

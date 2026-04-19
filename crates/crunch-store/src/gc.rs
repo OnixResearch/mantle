@@ -208,9 +208,11 @@ async fn mark_live_paths(
 }
 
 pub(crate) async fn snapshot_pathinfos(pathinfo: &dyn PathInfoService) -> Result<Vec<PathInfo>, Error> {
-    let mut snapshot = Vec::new();
+    const MAX_PATHINFO_ENTRIES: usize = 1_000_000;
+    let mut snapshot = Vec::with_capacity(256);
     let mut stream = pathinfo.list();
-    while let Some(item) = stream.next().await {
+    for _ in 0..MAX_PATHINFO_ENTRIES {
+        let Some(item) = stream.next().await else { break };
         let path_info = item.map_err(|err| Error::Gc(format!("listing PathInfo rows: {err}")))?;
         snapshot.push(path_info);
     }
@@ -221,8 +223,8 @@ fn split_pathinfos(
     snapshot: Vec<PathInfo>,
     live_paths: &BTreeSet<StorePath<String>>,
 ) -> (Vec<PathInfo>, Vec<PathInfo>) {
-    let mut live = Vec::new();
-    let mut dead = Vec::new();
+    let mut live = Vec::with_capacity(snapshot.len());
+    let mut dead = Vec::with_capacity(snapshot.len());
     for path_info in snapshot {
         if live_paths.contains(&path_info.store_path) {
             live.push(path_info);
@@ -240,7 +242,11 @@ async fn collect_live_castore_state(
     directory_service: &dyn DirectoryService,
     blob_service: &dyn BlobService,
 ) -> Result<LiveCastoreState, Error> {
-    let mut state = LiveCastoreState::default();
+    let mut state = LiveCastoreState {
+        directories: HashMap::new(),
+        blob_index_digests: HashSet::new(),
+        chunk_digests: HashSet::new(),
+    };
     for path_info in live_pathinfos {
         collect_node_state(&path_info.node, directory_service, blob_service, &mut state).await?;
     }
@@ -309,9 +315,11 @@ async fn collect_directory_state(
         return Ok(());
     }
 
+    const MAX_DIR_ENTRIES: usize = 1_000_000;
     let mut stream = directory_service.get_recursive(&root_digest);
     let mut has_seen_root_digest = false;
-    while let Some(item) = stream.next().await {
+    for _ in 0..MAX_DIR_ENTRIES {
+        let Some(item) = stream.next().await else { break };
         let directory =
             item.map_err(|err| Error::Gc(format!("reading directory {}: {err}", encode_digest(&root_digest))))?;
         let digest = directory.digest();
@@ -341,7 +349,7 @@ async fn collect_directory_state(
 }
 
 fn collect_existing_exported_outputs(dead_pathinfos: &[PathInfo], output_dir_str: &str) -> Result<Vec<PathBuf>, Error> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(dead_pathinfos.len());
     for path_info in dead_pathinfos {
         let path = PathBuf::from(path_info.store_path.to_absolute_path_with_prefix(output_dir_str));
         if path.exists() || symlink_exists(&path)? {
@@ -356,7 +364,7 @@ fn collect_existing_artifact_attestation_paths(
     store_dir: &str,
     dead_pathinfos: &[PathInfo],
 ) -> Result<Vec<PathBuf>, Error> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(dead_pathinfos.len());
     for path_info in dead_pathinfos {
         let path = artifact_attestation_file_path(state_dir, store_dir, &path_info.store_path);
         if path.exists() {
@@ -374,7 +382,7 @@ fn collect_dead_closure_attestations(state_dir: &Path, retained_roots: &[GcRootR
 
     let live_roots: BTreeSet<String> = retained_roots.iter().map(|root| root.logical_path.clone()).collect();
     let closure_dir = state_dir.join("attestations").join("closures");
-    let mut dead_paths = Vec::new();
+    let mut dead_paths = Vec::with_capacity(64);
     if !closure_dir.exists() {
         return Ok(dead_paths);
     }
@@ -399,17 +407,22 @@ fn collect_dead_closure_attestations(state_dir: &Path, retained_roots: &[GcRootR
             Ok(closure) => closure,
             Err(_) => continue,
         };
-        let are_all_roots_live = closure
+        let is_closure_live = closure
             .facts
             .root_node_ids
             .iter()
             .filter_map(|node_id| node_id.strip_prefix("artifact:"))
             .all(|logical_path| live_roots.contains(logical_path));
-        if !are_all_roots_live {
+        if !is_closure_live {
             dead_paths.push(path);
         }
     }
-    assert!(dead_paths.len() <= usize::try_from(scanned_entries).unwrap(), "dead paths cannot exceed scanned entries");
+    // dead_paths.len() fits in u64 on any platform where usize <= u64.
+    let dead_count = u64::try_from(dead_paths.len());
+    debug_assert!(dead_count.is_ok(), "dead_paths.len() overflows u64");
+    if let Ok(n) = dead_count {
+        assert!(n <= u64::from(scanned_entries), "dead paths cannot exceed scanned entries");
+    }
     Ok(dead_paths)
 }
 
@@ -423,7 +436,7 @@ fn collect_dead_blob_files(
     } else {
         state_dir.join("blobs").join("chunks").join("b3")
     };
-    let mut dead_paths = Vec::new();
+    let mut dead_paths = Vec::with_capacity(256);
     if !root.exists() {
         return Ok(dead_paths);
     }
@@ -433,44 +446,55 @@ fn collect_dead_blob_files(
 }
 
 fn scan_blob_dir(
-    dir: &Path,
+    root: &Path,
     scanned_entries: &mut u32,
     live_digests: &HashSet<B3Digest>,
     dead_paths: &mut Vec<PathBuf>,
 ) -> Result<(), Error> {
-    assert!(dir.is_absolute(), "scan_blob_dir: dir must be absolute");
+    assert!(root.is_absolute(), "scan_blob_dir: root must be absolute");
     let dead_count_before = dead_paths.len();
 
-    for entry in std::fs::read_dir(dir).map_err(|err| Error::Gc(format!("reading {}: {err}", dir.display())))? {
-        let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", dir.display())))?;
-        *scanned_entries = scanned_entries.saturating_add(1);
-        if *scanned_entries > MAX_GC_FILE_SCAN_ENTRIES {
-            return Err(Error::Gc(format!("blob scan exceeded {} entries", MAX_GC_FILE_SCAN_ENTRIES)));
-        }
-        let path = entry.path();
-        let file_type =
-            entry.file_type().map_err(|err| Error::Gc(format!("reading {} file type: {err}", path.display())))?;
-        if file_type.is_dir() {
-            scan_blob_dir(&path, scanned_entries, live_digests, dead_paths)?;
-            continue;
-        }
-        if !file_type.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        if name.len() != B3Digest::LENGTH.saturating_mul(2) {
-            continue;
-        }
-        let Ok(decoded) = HEXLOWER.decode(name.as_bytes()) else {
-            continue;
-        };
-        let Ok(digest) = B3Digest::try_from(decoded) else {
-            continue;
-        };
-        if !live_digests.contains(&digest) {
-            dead_paths.push(path);
+    const MAX_SCAN_DEPTH: usize = 8;
+    let mut worklist = Vec::with_capacity(MAX_SCAN_DEPTH);
+    worklist.push(root.to_path_buf());
+
+    while let Some(current_dir) = worklist.pop() {
+        assert!(worklist.len() < MAX_SCAN_DEPTH, "blob scan directory nesting exceeded {MAX_SCAN_DEPTH}");
+        for entry in std::fs::read_dir(&current_dir)
+            .map_err(|err| Error::Gc(format!("reading {}: {err}", current_dir.display())))?
+        {
+            let entry =
+                entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current_dir.display())))?;
+            *scanned_entries = scanned_entries.saturating_add(1);
+            if *scanned_entries > MAX_GC_FILE_SCAN_ENTRIES {
+                return Err(Error::Gc(format!("blob scan exceeded {} entries", MAX_GC_FILE_SCAN_ENTRIES)));
+            }
+            let path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|err| Error::Gc(format!("reading {} file type: {err}", path.display())))?;
+            if file_type.is_dir() {
+                worklist.push(path);
+                continue;
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if name.len() != B3Digest::LENGTH.saturating_mul(2) {
+                continue;
+            };
+            let Ok(decoded) = HEXLOWER.decode(name.as_bytes()) else {
+                continue;
+            };
+            let Ok(digest) = B3Digest::try_from(decoded) else {
+                continue;
+            };
+            if !live_digests.contains(&digest) {
+                dead_paths.push(path);
+            }
         }
     }
     assert!(dead_paths.len() >= dead_count_before, "scan can only grow dead_paths, never shrink");
@@ -493,39 +517,49 @@ fn compute_reclaimable_bytes(
         .chain(blob_chunk_paths.iter())
     {
         total = total
-            .checked_add(path_size_bytes(path, 0, &mut 0u32)?)
+            .checked_add(path_size_bytes(path)?)
             .ok_or_else(|| Error::Gc("reclaimable byte total overflowed u64".to_string()))?;
     }
     Ok(total)
 }
 
-fn path_size_bytes(path: &Path, depth: u32, seen_entries: &mut u32) -> Result<u64, Error> {
-    assert!(depth <= MAX_GC_BYTES_WALK_DEPTH.saturating_add(1), "caller must respect depth bound");
-    assert!(*seen_entries <= MAX_GC_BYTES_WALK_ENTRIES.saturating_add(1), "caller must respect entry bound");
-
-    if depth > MAX_GC_BYTES_WALK_DEPTH {
-        return Err(Error::Gc(format!("path walk exceeded depth {} at {}", MAX_GC_BYTES_WALK_DEPTH, path.display())));
-    }
-    *seen_entries = seen_entries.saturating_add(1);
-    if *seen_entries > MAX_GC_BYTES_WALK_ENTRIES {
-        return Err(Error::Gc(format!("path walk exceeded {} entries", MAX_GC_BYTES_WALK_ENTRIES)));
-    }
-
-    let metadata = std::fs::symlink_metadata(path)
-        .map_err(|err| Error::Gc(format!("reading metadata for {}: {err}", path.display())))?;
-    if metadata.file_type().is_symlink() || metadata.is_file() {
-        return Ok(metadata.len());
-    }
-    if !metadata.is_dir() {
-        return Ok(0);
-    }
-
+fn path_size_bytes(root: &Path) -> Result<u64, Error> {
+    assert!(root.is_absolute(), "path_size_bytes: root must be absolute");
+    const MAX_WORKLIST: usize = 256;
     let mut total: u64 = 0;
-    for entry in std::fs::read_dir(path).map_err(|err| Error::Gc(format!("reading {}: {err}", path.display())))? {
-        let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", path.display())))?;
-        total = total
-            .checked_add(path_size_bytes(&entry.path(), depth.saturating_add(1), seen_entries)?)
-            .ok_or_else(|| Error::Gc(format!("byte total overflowed while walking {}", path.display())))?;
+    let mut seen_entries: u32 = 0;
+    let mut worklist = Vec::with_capacity(16);
+    worklist.push(root.to_path_buf());
+
+    while let Some(current) = worklist.pop() {
+        assert!(
+            worklist.len() < MAX_WORKLIST,
+            "path walk directory nesting exceeded {MAX_WORKLIST}"
+        );
+        seen_entries = seen_entries.saturating_add(1);
+        if seen_entries > MAX_GC_BYTES_WALK_ENTRIES {
+            return Err(Error::Gc(format!("path walk exceeded {} entries", MAX_GC_BYTES_WALK_ENTRIES)));
+        }
+
+        let metadata = std::fs::symlink_metadata(&current)
+            .map_err(|err| Error::Gc(format!("reading metadata for {}: {err}", current.display())))?;
+        if metadata.file_type().is_symlink() || metadata.is_file() {
+            total = total
+                .checked_add(metadata.len())
+                .ok_or_else(|| Error::Gc(format!("byte total overflowed while walking {}", root.display())))?;
+            continue;
+        }
+        if !metadata.is_dir() {
+            continue;
+        }
+
+        for entry in std::fs::read_dir(&current)
+            .map_err(|err| Error::Gc(format!("reading {}: {err}", current.display())))?
+        {
+            let entry =
+                entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current.display())))?;
+            worklist.push(entry.path());
+        }
     }
     Ok(total)
 }
@@ -651,7 +685,9 @@ fn symlink_exists(path: &Path) -> Result<bool, Error> {
     }
 }
 
+#[allow(tigerstyle::sentinel_fallback)]
 pub(crate) fn saturating_u32(len: usize) -> u32 {
+    // Intentional saturation: signature/scan counts above u32::MAX are clamped.
     u32::try_from(len).unwrap_or(u32::MAX)
 }
 

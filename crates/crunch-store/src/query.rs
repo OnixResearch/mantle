@@ -62,9 +62,11 @@ impl SignatureVerifyResult {
 ///
 /// Returns (store_path, deriver_name, nar_size) tuples.
 pub async fn store_list(svc: &dyn PathInfoService) -> Result<Vec<(String, String, u64)>, Error> {
+    const MAX_LIST_ENTRIES: usize = 1_000_000;
     let mut stream = svc.list();
-    let mut results = Vec::new();
-    while let Some(result) = stream.next().await {
+    let mut results = Vec::with_capacity(256);
+    for _ in 0..MAX_LIST_ENTRIES {
+        let Some(result) = stream.next().await else { break };
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let deriver_name = pi.deriver.as_ref().map(|d| d.name().to_string()).unwrap_or_else(|| "-".to_string());
         results.push((pi.store_path.to_string(), deriver_name, pi.nar_size));
@@ -76,10 +78,12 @@ pub async fn store_list(svc: &dyn PathInfoService) -> Result<Vec<(String, String
 pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<Vec<PathInfoDetail>, Error> {
     assert!(!path_filter.is_empty(), "store_info: empty path_filter would match everything");
 
+    const MAX_SCAN_ENTRIES: u32 = 1_000_000;
     let mut stream = svc.list();
     let mut scanned_count: u32 = 0;
-    let mut results = Vec::new();
-    while let Some(result) = stream.next().await {
+    let mut results = Vec::with_capacity(64);
+    for _ in 0..MAX_SCAN_ENTRIES {
+        let Some(result) = stream.next().await else { break };
         scanned_count = scanned_count.saturating_add(1);
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
@@ -97,7 +101,9 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
             node: format!("{:?}", pi.node),
         });
     }
-    assert!(results.len() <= usize::try_from(scanned_count).unwrap(), "results cannot exceed scanned paths");
+    if let Ok(n) = u64::try_from(results.len()) {
+        assert!(n <= u64::from(scanned_count), "results cannot exceed scanned paths");
+    }
     Ok(results)
 }
 
@@ -111,15 +117,22 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
         "store_verify: use None instead of empty filter"
     );
 
+    #[allow(tigerstyle::explicit_defaults)]
     let bs = MemoryBlobService::default();
-    let ds = RedbDirectoryService::new_temporary("verify".to_string(), RedbDirectoryServiceConfig::default())
+    let ds = RedbDirectoryService::new_temporary("verify".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        cache_size: None,
+        read_only: false,
+    })
         .map_err(|e| Error::DirectoryService(format!("{e}")))?;
 
+    const MAX_VERIFY_ENTRIES: u32 = 1_000_000;
     let mut stream = svc.list();
     let mut scanned_count: u32 = 0;
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(64);
 
-    while let Some(result) = stream.next().await {
+    for _ in 0..MAX_VERIFY_ENTRIES {
+        let Some(result) = stream.next().await else { break };
         scanned_count = scanned_count.saturating_add(1);
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
@@ -154,7 +167,9 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
             });
         }
     }
-    assert!(results.len() <= usize::try_from(scanned_count).unwrap(), "verify results cannot exceed scanned paths");
+    if let Ok(n) = u64::try_from(results.len()) {
+        assert!(n <= u64::from(scanned_count), "verify results cannot exceed scanned paths");
+    }
 
     Ok(results)
 }
@@ -170,10 +185,12 @@ pub async fn store_verify_signatures(
 
     assert!(!trusted_keys.is_empty(), "verify_signatures requires at least one trusted key");
 
+    const MAX_VERIFY_SIG_ENTRIES: usize = 1_000_000;
     let mut stream = svc.list();
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(64);
 
-    while let Some(result) = stream.next().await {
+    for _ in 0..MAX_VERIFY_SIG_ENTRIES {
+        let Some(result) = stream.next().await else { break };
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let path = pi.store_path.to_string();
 
@@ -188,7 +205,7 @@ pub async fn store_verify_signatures(
         let fp = fingerprint(&store_path_ref, &pi.nar_sha256, pi.nar_size, refs.iter());
 
         let mut trusted_count: u32 = 0;
-        let mut untrusted_names = Vec::new();
+        let mut untrusted_names = Vec::with_capacity(pi.signatures.len());
         for sig in &pi.signatures {
             let sig_ref = sig.as_ref();
             let is_trusted = trusted_keys.iter().any(|key| key.verify(&fp, &sig_ref));
@@ -243,16 +260,17 @@ pub async fn store_sign(
     use nix_compat::narinfo::fingerprint;
     use nix_compat::store_path::StorePathRef;
 
-    const SIGN_CANDIDATE_COUNT_LIMIT: u32 = 4096;
+    const SIGN_CANDIDATE_COUNT_LIMIT: usize = 4096;
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
 
     let mut stream = svc.list();
-    let mut to_update = Vec::with_capacity(usize::try_from(SIGN_CANDIDATE_COUNT_LIMIT).unwrap());
-    let mut scanned_count_u32: u32 = 0;
+    let mut to_update = Vec::with_capacity(SIGN_CANDIDATE_COUNT_LIMIT);
+    let mut scanned_count: usize = 0;
 
-    while let Some(result) = stream.next().await {
-        scanned_count_u32 = scanned_count_u32.saturating_add(1);
-        if scanned_count_u32 > SIGN_CANDIDATE_COUNT_LIMIT {
+    for _ in 0..=SIGN_CANDIDATE_COUNT_LIMIT {
+        let Some(result) = stream.next().await else { break };
+        scanned_count = scanned_count.saturating_add(1);
+        if scanned_count > SIGN_CANDIDATE_COUNT_LIMIT {
             return Err(Error::PathInfoService(format!(
                 "sign candidate scan exceeded limit {SIGN_CANDIDATE_COUNT_LIMIT}"
             )));

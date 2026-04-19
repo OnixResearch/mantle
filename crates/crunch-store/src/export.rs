@@ -25,7 +25,8 @@ pub async fn export_castore_to_disk(
     debug_assert!(dest.starts_with('/'), "export dest must be absolute path: {dest}");
 
     // Work items: (node, destination path, depth).
-    let mut worklist: Vec<(Node, String, u32)> = Vec::new();
+    const MAX_WORKLIST_ENTRIES: usize = 1_000_000;
+    let mut worklist: Vec<(Node, String, u32)> = Vec::with_capacity(64);
     worklist.push((node.clone(), dest.to_string(), 0));
 
     while let Some((current, current_dest, depth)) = worklist.pop() {
@@ -55,6 +56,7 @@ pub async fn export_castore_to_disk(
                     let name_str = std::str::from_utf8(name.as_ref())
                         .map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
                     let child_dest = format!("{current_dest}/{name_str}");
+                    assert!(worklist.len() < MAX_WORKLIST_ENTRIES, "export worklist exceeded {MAX_WORKLIST_ENTRIES} entries");
                     worklist.push((child_node.clone(), child_dest, depth.saturating_add(1)));
                 }
             }
@@ -83,12 +85,22 @@ async fn export_file_to_disk(
         std::fs::create_dir_all(parent).map_err(|e| format!("creating parent dir: {e}"))?;
     }
     let mut file = std::fs::File::create(dest).map_err(|e| format!("creating {dest}: {e}"))?;
-    let mut buf = vec![0u8; 64 * 1024];
-    loop {
+    const BUF_SIZE: usize = 65_536;
+    const MAX_BLOB_WRITE_BYTES: u64 = 4_294_967_296; // 4 GiB
+    let mut buf = vec![0u8; BUF_SIZE];
+    let mut written_bytes: u64 = 0;
+    const MAX_READ_ITERATIONS: u64 = 65_537; // MAX_BLOB_WRITE_BYTES / BUF_SIZE + 1
+    for _ in 0..MAX_READ_ITERATIONS {
         let n = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
         if n == 0 {
             break;
         }
+        let n_u64 = match u64::try_from(n) {
+            Ok(v) => v,
+            Err(_) => return Err(format!("read size {n} overflows u64")),
+        };
+        written_bytes = written_bytes.saturating_add(n_u64);
+        assert!(written_bytes <= MAX_BLOB_WRITE_BYTES, "blob write exceeded {MAX_BLOB_WRITE_BYTES} bytes");
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {dest}: {e}"))?;
     }
     #[cfg(unix)]

@@ -678,7 +678,7 @@ impl StoreHandle {
     ) -> Result<Option<HashMap<String, PathInfo>>, Error> {
         assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
 
-        let mut infos = HashMap::new();
+        let mut infos = HashMap::with_capacity(derivation.outputs.len());
         let drv_abs = drv_path.to_absolute_path_with_prefix(&self.store_dir);
 
         let is_fod = derivation.outputs.values().any(|o| o.ca_hash.is_some());
@@ -1945,11 +1945,13 @@ fn build_delta_http_client() -> Result<reqwest::Client, String> {
 async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec<DeltaTransferFrameWire>, String> {
     const MAX_FRAME_COUNT: usize = 100_000;
 
-    let mut frames = Vec::<DeltaTransferFrameWire>::new();
-    let mut buffered = Vec::<u8>::new();
+    const MAX_STREAM_CHUNKS: usize = 10_000_000;
+    let mut frames = Vec::<DeltaTransferFrameWire>::with_capacity(256);
+    let mut buffered = Vec::<u8>::with_capacity(4096);
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk_result) = stream.next().await {
+    for _ in 0..MAX_STREAM_CHUNKS {
+        let Some(chunk_result) = stream.next().await else { break };
         let chunk = chunk_result.map_err(|e| format!("reading delta stream chunk: {e}"))?;
         buffered.extend_from_slice(&chunk);
 
@@ -1993,7 +1995,7 @@ fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, 
     let nix_url_str = format!("nix+{url_str}");
     let nix_url: Url = nix_url_str.parse().map_err(|e| format!("invalid substituter URL '{url_str}': {e}"))?;
 
-    let mut indexed_keys = Vec::<(u32, String)>::new();
+    let mut indexed_keys = Vec::<(u32, String)>::with_capacity(16);
     for (key, value) in nix_url.query_pairs() {
         let Some(index_text) = key.strip_prefix("trusted_public_keys[").and_then(|rest| rest.strip_suffix(']')) else {
             continue;
@@ -2111,7 +2113,11 @@ async fn open_pathinfo_service(
                 err = %e,
                 "failed to open PathInfo database, using in-memory fallback"
             );
-            let svc = RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig::default())
+            let svc = RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig {
+                path: None,
+                cache_size: None,
+                read_only: false,
+            })
                 .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
             let detail = format!("{detail}; using in-memory fallback");
             Ok((Arc::new(svc), vec![StoreAuditEvent::new(StoreAuditKind::PathInfoFallback, detail)]))
