@@ -26,6 +26,12 @@ const STDLIB_FILES: &[(&str, &str)] = &[
 /// If `dir` is `None`, writes to a temporary directory under
 /// `$XDG_CACHE_HOME/crunch/stdlib/` (or `/tmp/crunch-stdlib/`).
 pub fn write_stdlib(dir: Option<&Path>) -> Result<PathBuf, std::io::Error> {
+    assert!(!STDLIB_FILES.is_empty(), "embedded stdlib must not be empty");
+    assert!(
+        STDLIB_FILES.iter().all(|(name, _contents)| !name.is_empty()),
+        "embedded stdlib file names must not be empty"
+    );
+
     let target = match dir {
         Some(d) => d.to_path_buf(),
         None => {

@@ -134,6 +134,7 @@ impl VerificationDirectory {
 
 fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryError> {
     let mut json_files: Vec<PathBuf> = Vec::new();
+    assert!(json_files.is_empty(), "json witness list must start empty");
     let entries = std::fs::read_dir(dir).map_err(|err| DiscoveryError::Io {
         path: dir.to_path_buf(),
         source: err,
@@ -160,6 +161,7 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
 
     json_files.sort();
     let mut witnesses = Vec::with_capacity(json_files.len());
+    assert!(witnesses.is_empty(), "witness output list must start empty");
 
     for json_path in &json_files {
         let sig_path = PathBuf::from(format!("{}.sig", json_path.display()));

@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
 /// Protected environment variables that must never be overwritten from sidecar data.
@@ -21,15 +22,35 @@ const MAX_WARNINGS: u32 = 256;
 // ── Sidecar ──────────────────────────────────────────────────────────────────
 
 /// Machine-readable metadata written by `mkShell` at `$out/.crunch-shell.json`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ShellSidecar {
     pub version: u32,
-    #[serde(default)]
     pub env: BTreeMap<String, String>,
-    #[serde(default)]
     pub path_entries: Vec<PathBuf>,
-    #[serde(default)]
     pub hook: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawShellSidecar {
+    version: u32,
+    env: Option<BTreeMap<String, String>>,
+    path_entries: Option<Vec<PathBuf>>,
+    hook: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for ShellSidecar {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawShellSidecar::deserialize(deserializer)?;
+        Ok(ShellSidecar {
+            version: raw.version,
+            env: raw.env.unwrap_or_else(BTreeMap::new),
+            path_entries: raw.path_entries.unwrap_or_else(Vec::new),
+            hook: raw.hook,
+        })
+    }
 }
 
 impl ShellSidecar {
@@ -128,81 +149,12 @@ pub fn compute_activation(
     exec_mode: &ExecMode,
 ) -> Result<ActivationPlan, ShellError> {
     debug_assert_eq!(sidecar.version, 1, "caller must validate sidecar version");
+    assert!(output_path.starts_with('/'), "output path must be absolute");
+    assert!(host_env.shell.is_absolute(), "host shell path must be absolute");
 
-    let mut env = BTreeMap::new();
-    let mut warnings = Vec::new();
-
-    // 1. Start with sidecar env, skipping protected vars.
-    for (key, value) in &sidecar.env {
-        if is_protected(key) {
-            if warnings.len() < MAX_WARNINGS as usize {
-                warnings.push(ShellWarning::ProtectedVarSkipped { key: key.clone() });
-            }
-        } else {
-            env.insert(key.clone(), value.clone());
-        }
-    }
-
-    // 2. Carry forward protected vars from host env.
-    for key in PROTECTED_VARS {
-        if let Some(value) = host_env.env.get(*key) {
-            env.insert((*key).to_string(), value.clone());
-        }
-    }
-
-    // 3. Always set CRUNCH_SHELL to the output path.
-    env.insert("CRUNCH_SHELL".to_string(), output_path.to_string());
-
-    // 4. Compose PATH: [--with bins] ++ [sidecar path_entries] ++ [host PATH].
-    let host_path_entries: Vec<PathBuf> =
-        host_env.env.get("PATH").map(|p| std::env::split_paths(p).collect()).unwrap_or_default();
-
-    let mut seen = std::collections::HashSet::new();
-    let mut path = Vec::new();
-
-    // --with bin dirs first
-    for p in with_paths {
-        let bin = p.join("bin");
-        if seen.insert(bin.clone()) {
-            path.push(bin);
-        }
-    }
-    // sidecar entries
-    for p in &sidecar.path_entries {
-        if seen.insert(p.clone()) {
-            path.push(p.clone());
-        }
-    }
-    // host entries
-    for p in &host_path_entries {
-        if seen.insert(p.clone()) {
-            path.push(p.clone());
-        }
-    }
-
-    if path.is_empty() {
-        return Err(ShellError::EmptyPath);
-    }
-    if path.len() as u32 > MAX_PATH_ENTRIES {
-        return Err(ShellError::TooManyPathEntries {
-            count: path.len() as u32,
-            limit: MAX_PATH_ENTRIES,
-        });
-    }
-
-    // 5. Resolve exec target.
-    let exec_target = match exec_mode {
-        ExecMode::Interactive => ExecTarget::Interactive {
-            shell: host_env.shell.clone(),
-        },
-        ExecMode::Command { argv } => ExecTarget::Command { argv: argv.clone() },
-        ExecMode::Run { script } => ExecTarget::Run {
-            shell: host_env.shell.clone(),
-            script: script.clone(),
-        },
-    };
-
-    // 6. Pass hook through as data.
+    let (env, warnings) = build_activation_env(sidecar, host_env, output_path)?;
+    let path = compose_activation_path(with_paths, &sidecar.path_entries, host_env.env.get("PATH"))?;
+    let exec_target = resolve_exec_target(exec_mode, &host_env.shell);
     let hook = sidecar.hook.clone();
 
     Ok(ActivationPlan {
@@ -216,6 +168,126 @@ pub fn compute_activation(
 
 fn is_protected(key: &str) -> bool {
     PROTECTED_VARS.contains(&key)
+}
+
+fn build_activation_env(
+    sidecar: &ShellSidecar,
+    host_env: &HostEnv,
+    output_path: &str,
+) -> Result<(BTreeMap<String, String>, Vec<ShellWarning>), ShellError> {
+    let mut env = BTreeMap::new();
+    let mut warnings = Vec::new();
+    let warning_count_limit = warning_count_limit();
+
+    assert!(output_path.starts_with('/'), "output path must be absolute");
+    assert!(warnings.is_empty(), "warnings must start empty");
+
+    for (key, value) in &sidecar.env {
+        if is_protected(key) {
+            if warnings.len() < warning_count_limit {
+                warnings.push(ShellWarning::ProtectedVarSkipped { key: key.clone() });
+            }
+            continue;
+        }
+        checked_insert_env(&mut env, key.clone(), value.clone())?;
+    }
+
+    for key in PROTECTED_VARS {
+        if let Some(value) = host_env.env.get(*key) {
+            checked_insert_env(&mut env, (*key).to_string(), value.clone())?;
+        }
+    }
+
+    checked_insert_env(&mut env, "CRUNCH_SHELL".to_string(), output_path.to_string())?;
+    Ok((env, warnings))
+}
+
+fn compose_activation_path(
+    with_paths: &[PathBuf],
+    sidecar_path_entries: &[PathBuf],
+    host_path: Option<&String>,
+) -> Result<Vec<PathBuf>, ShellError> {
+    let host_path_entries: Vec<PathBuf> = match host_path {
+        Some(path) => std::env::split_paths(path).collect(),
+        None => Vec::new(),
+    };
+    let mut seen = std::collections::HashSet::new();
+    let path_entry_count_estimate = with_paths
+        .len()
+        .saturating_add(sidecar_path_entries.len())
+        .saturating_add(host_path_entries.len());
+    let mut path = Vec::with_capacity(path_entry_count_estimate);
+
+    assert!(path.is_empty(), "activation path must start empty");
+    assert!(seen.is_empty(), "dedup set must start empty");
+
+    for root_path in with_paths {
+        let bin = root_path.join("bin");
+        if seen.insert(bin.clone()) {
+            path.push(bin);
+        }
+    }
+    for path_entry in sidecar_path_entries {
+        if seen.insert(path_entry.clone()) {
+            path.push(path_entry.clone());
+        }
+    }
+    for path_entry in &host_path_entries {
+        if seen.insert(path_entry.clone()) {
+            path.push(path_entry.clone());
+        }
+    }
+
+    if path.is_empty() {
+        return Err(ShellError::EmptyPath);
+    }
+    let path_entry_count = match u32::try_from(path.len()) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    };
+    if path_entry_count > MAX_PATH_ENTRIES {
+        return Err(ShellError::TooManyPathEntries {
+            count: path_entry_count,
+            limit: MAX_PATH_ENTRIES,
+        });
+    }
+    Ok(path)
+}
+
+fn resolve_exec_target(exec_mode: &ExecMode, shell_path: &PathBuf) -> ExecTarget {
+    match exec_mode {
+        ExecMode::Interactive => ExecTarget::Interactive {
+            shell: shell_path.clone(),
+        },
+        ExecMode::Command { argv } => ExecTarget::Command { argv: argv.clone() },
+        ExecMode::Run { script } => ExecTarget::Run {
+            shell: shell_path.clone(),
+            script: script.clone(),
+        },
+    }
+}
+
+fn warning_count_limit() -> usize {
+    match usize::try_from(MAX_WARNINGS) {
+        Ok(count) => count,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn checked_insert_env(env: &mut BTreeMap<String, String>, key: String, value: String) -> Result<(), ShellError> {
+    let env_var_count_limit = match usize::try_from(MAX_ENV_VARS) {
+        Ok(count) => count,
+        Err(_) => usize::MAX,
+    };
+    let is_new_key = !env.contains_key(&key);
+    if is_new_key && env.len() >= env_var_count_limit {
+        return Err(ShellError::TooManyEnvVars {
+            count: u32::try_from(env.len().saturating_add(1)).unwrap_or(u32::MAX),
+            limit: MAX_ENV_VARS,
+        });
+    }
+    env.insert(key, value);
+    Ok(())
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

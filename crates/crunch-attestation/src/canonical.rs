@@ -48,6 +48,8 @@ impl Canonicalize for ProjectAttestation {
 }
 
 fn canonical_artifact(value: &ArtifactAttestation) -> Result<ArtifactAttestation, Error> {
+    assert!(!value.subject_node_id.is_empty(), "subject node id must not be empty");
+    assert!(!value.facts.logical_path.is_empty(), "logical path must not be empty");
     validate_non_empty(&value.subject_node_id, "subject_node_id")?;
     validate_non_empty(&value.facts.logical_path, "logical_path")?;
     validate_non_empty(&value.facts.output_name, "output_name")?;
@@ -71,6 +73,8 @@ fn canonical_artifact(value: &ArtifactAttestation) -> Result<ArtifactAttestation
 }
 
 fn canonical_closure(value: &ClosureAttestation) -> Result<ClosureAttestation, Error> {
+    assert!(!value.facts.closure_node_id.is_empty(), "closure node id must not be empty");
+    assert!(!value.facts.root_node_ids.is_empty(), "closure roots must not be empty");
     validate_non_empty(&value.facts.closure_node_id, "closure_node_id")?;
     let claims = normalize_claims(&value.claims)?;
     let nodes = normalize_nodes(&value.nodes)?;
@@ -99,6 +103,8 @@ fn canonical_closure(value: &ClosureAttestation) -> Result<ClosureAttestation, E
 }
 
 fn canonical_project(value: &ProjectAttestation) -> Result<ProjectAttestation, Error> {
+    assert!(!value.facts.project_node_id.is_empty(), "project node id must not be empty");
+    assert!(!value.facts.manifest_digest.is_empty(), "manifest digest must not be empty");
     validate_non_empty(&value.facts.project_node_id, "project_node_id")?;
     validate_non_empty(&value.facts.manifest_digest, "manifest_digest")?;
     validate_non_empty(&value.facts.lockfile_digest, "lockfile_digest")?;

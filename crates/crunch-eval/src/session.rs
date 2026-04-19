@@ -143,8 +143,8 @@ impl EvaluationSession {
     /// and discover root labels without deep-forcing.
     pub fn open_file(path: &Path, import_paths: &[OsString]) -> Result<Self, Error> {
         let source = std::fs::read_to_string(path)?;
-        let resolved_imports = import_paths_for_file(path, import_paths);
-        Self::open_source(source, &resolved_imports, &path.display().to_string())
+        let resolved_import_context = import_paths_for_file(path, import_paths);
+        Self::open_source(source, &resolved_import_context, &path.display().to_string())
     }
 
     /// Open a session from a Nickel source string.
@@ -156,16 +156,22 @@ impl EvaluationSession {
         assert!(!source_name.is_empty(), "source name must not be empty");
 
         let source: Arc<str> = source.into();
-        let import_paths: Arc<[OsString]> = import_paths.to_vec().into();
+        let import_context: Arc<[OsString]> = import_paths.to_vec().into();
         let source_name: Arc<str> = source_name.to_string().into();
         let mut ctx = Context::new()
-            .with_added_import_paths(import_paths.to_vec())
+            .with_added_import_paths(import_context.to_vec())
             .with_source_name(source_name.to_string());
+
+        assert!(!source.is_empty(), "source must not be empty");
+        assert!(
+            !import_context.iter().any(|path| path.is_empty()),
+            "import paths must not contain empty entries"
+        );
 
         let shallow_expr = ctx.eval_shallow(&source).map_err(Error::Eval)?;
         let shape = classify_shape(&mut ctx, &shallow_expr)?;
 
-        let mut session = Self::new_session(ctx, source, import_paths, source_name, shape, Vec::new());
+        let mut session = Self::new_session(ctx, source, import_context, source_name, shape, Vec::new());
         session.discover_roots()?;
         Ok(session)
     }
@@ -642,6 +648,7 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
         senders.push(sender);
     }
 
+    assert_eq!(senders.len() as u32, worker_count, "worker pool must create one sender per worker");
     let worker_pool = Arc::new(BoundedWorkerPool {
         senders,
         next_worker: AtomicU32::new(0),
@@ -688,6 +695,12 @@ fn force_worker_assignment<T: DeserializeOwned + Send>(
     worker_input: &IsolatedWorkerInput,
     assignment: WorkerAssignment,
 ) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
+    assert!(!assignment.labels.is_empty(), "worker assignments must not be empty");
+    assert!(
+        u32::try_from(assignment.labels.len()).is_ok(),
+        "worker assignment length must fit in u32"
+    );
+
     let worker_labels =
         select_worker_labels(&worker_input.labels, &assignment.labels).map_err(|detail| WorkerFailure {
             index: assignment.start_index,
@@ -722,6 +735,7 @@ fn force_worker_assignment<T: DeserializeOwned + Send>(
         });
     }
 
+    assert_eq!(results.len(), assignment.labels.len(), "worker results must match requested labels");
     Ok(results)
 }
 
@@ -762,10 +776,13 @@ fn label_error(label: &str, err: Error) -> Error {
 /// Classify the top-level shape from a shallowly-evaluated expression.
 fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     if expr.is_array() {
+        assert!(expr.as_array().is_some(), "array expressions must expose array payloads");
         return Ok(RootShape::Array);
     }
 
-    let Some(record) = expr.as_record() else {
+    let record = expr.as_record();
+    assert!(record.is_some(), "non-array top-level values must be records");
+    let Some(record) = record else {
         return Err(Error::Boundary(
             "top-level value is neither a derivation, an array of derivations, \
              nor a record of derivations"

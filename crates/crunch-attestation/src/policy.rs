@@ -141,54 +141,25 @@ pub fn evaluate_policy(
     policy: &ReleasePolicy,
     revocations: &ReleaseRevocations,
 ) -> Result<PolicyEvaluation, Error> {
+    assert_policy_quorum(policy);
     validate_policy(policy)?;
     validate_revocations(revocations)?;
 
     let release_digest = release.canonical_digest()?;
     let release_binary_digests = normalize_for_comparison(&release.binary_digests);
+    let (revoked_count, active_witnesses) = filter_active_witnesses(witnesses, revocations);
+    let (matching_count, distinct_identities) =
+        count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses);
+    assert_matching_witness_counts(matching_count, active_witnesses.len(), distinct_identities);
+    assert!(policy.min_matching_witnesses >= 1, "policy quorum must be at least one witness");
+    let active_witness_count = u32::try_from(active_witnesses.len()).unwrap_or(u32::MAX);
+    assert!(matching_count <= active_witness_count, "matching count must fit active witnesses");
 
-    // Step 1: filter revoked witnesses.
-    let revoked_keys: BTreeSet<&str> = revocations.revoked_witness_keys.iter().map(|k| k.as_str()).collect();
-    let revoked_digests: BTreeSet<&str> =
-        revocations.revoked_witness_attestation_digests_blake3.iter().map(|d| d.as_str()).collect();
-
-    let mut revoked_count: u32 = 0;
-    let mut active_witnesses: Vec<&ValidatedWitness> = Vec::new();
-
-    for witness in witnesses {
-        let key_revoked = revoked_keys.contains(witness.signer_key_name.as_str());
-        let digest_revoked = revoked_digests.contains(witness.attestation_digest.to_hex().as_str());
-        if key_revoked || digest_revoked {
-            revoked_count = revoked_count.saturating_add(1);
-            continue;
-        }
-        active_witnesses.push(witness);
-    }
-
-    // Step 2-3: check active witnesses against release.
-    let mut matching_count: u32 = 0;
-    let mut matching_identities: BTreeSet<&str> = BTreeSet::new();
-
-    for witness in &active_witnesses {
-        let digest_matches = witness.attestation.release_attestation_digest_blake3 == release_digest;
-        let rebuilt = normalize_for_comparison(&witness.attestation.rebuilt_digests);
-        let outputs_match = binary_digests_match(&release_binary_digests, &rebuilt);
-
-        if digest_matches && outputs_match {
-            matching_count = matching_count.saturating_add(1);
-            matching_identities.insert(&witness.attestation.witness_identity);
-        }
-    }
-
-    // Step 4: technical class.
     let technical_class = if matching_count > 0 {
         TechnicalClass::ExternalWitnessMatch
     } else {
         TechnicalClass::SelfProofValid
     };
-
-    // Step 5: quorum + independence.
-    let distinct_identities = u32::try_from(matching_identities.len()).unwrap_or(u32::MAX);
     let quorum_met = matching_count >= policy.min_matching_witnesses;
     let independence_met = distinct_identities >= policy.min_matching_witnesses;
 
@@ -212,14 +183,11 @@ pub fn evaluate_policy(
         (PolicyStatus::Satisfied, None)
     };
 
-    // Step 6: final class.
-    let final_class = FinalClass::resolve(technical_class, policy_status);
-
     Ok(PolicyEvaluation {
         trust_tier: TrustTier {
             technical_class,
             policy_status,
-            final_class,
+            final_class: FinalClass::resolve(technical_class, policy_status),
         },
         matching_witness_count: matching_count,
         independent_witness_identities: distinct_identities,
@@ -231,6 +199,69 @@ pub fn evaluate_policy(
 // ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------
+
+fn filter_active_witnesses<'a>(
+    witnesses: &'a [ValidatedWitness],
+    revocations: &ReleaseRevocations,
+) -> (u32, Vec<&'a ValidatedWitness>) {
+    let revoked_keys: BTreeSet<&str> = revocations.revoked_witness_keys.iter().map(|key| key.as_str()).collect();
+    let revoked_digests: BTreeSet<&str> = revocations
+        .revoked_witness_attestation_digests_blake3
+        .iter()
+        .map(|digest| digest.as_str())
+        .collect();
+    let mut revoked_count: u32 = 0;
+    let mut active_witnesses: Vec<&ValidatedWitness> = Vec::new();
+
+    for witness in witnesses {
+        let key_revoked = revoked_keys.contains(witness.signer_key_name.as_str());
+        let digest_hex = witness.attestation_digest.to_hex();
+        let digest_revoked = revoked_digests.contains(digest_hex.as_str());
+        if key_revoked || digest_revoked {
+            revoked_count = revoked_count.saturating_add(1);
+            continue;
+        }
+        active_witnesses.push(witness);
+    }
+
+    (revoked_count, active_witnesses)
+}
+
+fn count_matching_witnesses(
+    release_digest: &AttestationDigest,
+    release_binary_digests: &[BinaryDigest],
+    active_witnesses: &[&ValidatedWitness],
+) -> (u32, u32) {
+    let mut matching_count: u32 = 0;
+    let mut matching_identities: BTreeSet<&str> = BTreeSet::new();
+
+    for witness in active_witnesses {
+        let digest_matches = witness.attestation.release_attestation_digest_blake3 == *release_digest;
+        let rebuilt = normalize_for_comparison(&witness.attestation.rebuilt_digests);
+        if !digest_matches || !binary_digests_match(release_binary_digests, &rebuilt) {
+            continue;
+        }
+        matching_count = matching_count.saturating_add(1);
+        matching_identities.insert(&witness.attestation.witness_identity);
+    }
+
+    let distinct_identities = u32::try_from(matching_identities.len()).unwrap_or(u32::MAX);
+    (matching_count, distinct_identities)
+}
+
+fn assert_policy_quorum(policy: &ReleasePolicy) {
+    assert!(policy.min_matching_witnesses >= 1, "policy quorum must be at least one witness");
+    assert!(
+        usize::try_from(policy.min_matching_witnesses).is_ok(),
+        "policy quorum must fit in usize"
+    );
+}
+
+fn assert_matching_witness_counts(matching_count: u32, active_witness_count: usize, distinct_identities: u32) {
+    let active_witness_count_u32 = u32::try_from(active_witness_count).unwrap_or(u32::MAX);
+    assert!(matching_count <= active_witness_count_u32, "matching witness count must stay bounded");
+    assert!(distinct_identities <= matching_count, "distinct witness identities must not exceed matches");
+}
 
 fn validate_policy(policy: &ReleasePolicy) -> Result<(), Error> {
     if policy.schema != RELEASE_POLICY_SCHEMA {
@@ -250,6 +281,8 @@ fn validate_policy(policy: &ReleasePolicy) -> Result<(), Error> {
 }
 
 fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
+    assert!(!RELEASE_REVOCATIONS_SCHEMA.is_empty(), "revocation schema tag must not be empty");
+    assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
     if revocations.schema != RELEASE_REVOCATIONS_SCHEMA {
         return Err(Error::SchemaTagMismatch {
             expected: RELEASE_REVOCATIONS_SCHEMA,
