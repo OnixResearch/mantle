@@ -255,6 +255,7 @@ fn subtree_hit_case() -> BenchCase {
 fn blob_hit_case() -> BenchCase {
     let shared_blob = blob_node("blob-hit-shared", 65_536);
     let shared_digest = digest_of(&shared_blob);
+    debug_assert!(!shared_digest.as_ref().is_empty());
     let shared_dir = dir_node("blob-hit-shared-dir", vec![shared_blob.clone()]);
     let unmatched_a = dir_node("blob-hit-unmatched-a", vec![blob_node("blob-hit-unmatched-a-blob", 4_096)]);
     let unmatched_b = dir_node("blob-hit-unmatched-b", vec![blob_node("blob-hit-unmatched-b-blob", 4_096)]);
@@ -290,6 +291,7 @@ fn blob_hit_case() -> BenchCase {
         frontier_summary(&receiver_output.output_id, &unmatched_c),
         frontier_summary(&receiver_output.output_id, &unmatched_d),
     ];
+    debug_assert_eq!(receiver_frontiers.len(), 5);
     build_case(
         "blob-hit",
         sender,
@@ -305,6 +307,7 @@ fn chunk_hit_case() -> BenchCase {
     let chunk_sizes_bytes = [262_144u64; 8];
     let sender_blob = chunked_blob("chunk-hit-large", &chunk_sizes_bytes);
     let sender_chunks = blob_chunks(&sender_blob);
+    debug_assert_eq!(sender_chunks.len(), 8);
     let sender = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![OutputFixture {
@@ -345,6 +348,7 @@ fn chunk_hit_case() -> BenchCase {
         frontier_summary(&receiver_output.output_id, &unmatched_b),
         frontier_summary(&receiver_output.output_id, &unmatched_c),
     ];
+    debug_assert_eq!(receiver_frontiers.len(), 4);
     build_case(
         "chunk-hit",
         sender,
@@ -358,6 +362,7 @@ fn chunk_hit_case() -> BenchCase {
 
 fn cross_output_case() -> BenchCase {
     let shared_blob = blob_node("cross-output-shared", 131_072);
+    debug_assert!(!digest_of(&shared_blob).as_ref().is_empty());
     let sender = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![
@@ -397,6 +402,7 @@ fn cross_output_case() -> BenchCase {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![output_a.clone(), output_b.clone()],
     };
+    debug_assert_eq!(receiver_store.outputs.len(), 2);
     let receiver_frontiers = vec![
         frontier_summary(&output_a.output_id, &local_shared_dir_a),
         frontier_summary(&output_a.output_id, &unmatched_a),
@@ -525,6 +531,8 @@ impl BenchCase {
 
 #[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
+    debug_assert!(!summaries.is_empty());
+    debug_assert!(!output.output_id.is_empty());
     let mode_bytes = match DEFAULT_GROUPED_OUTPUT_HEADER_MODE {
         GroupedOutputHeaderMode::SeparateModeByte => 1u64,
         GroupedOutputHeaderMode::PackedModeInSummaryCount => 0u64,
@@ -572,6 +580,8 @@ fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverPro
 #[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 #[allow(tigerstyle::raw_arithmetic_overflow)] // wire-size calculations with known-valid ordering
 fn grouped_output_entry_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
+    debug_assert!(!summaries.is_empty());
+    debug_assert!(!output.output_id.is_empty());
     if complete_root_child_ordinals(output, summaries).is_some() {
         return summaries
             .iter()
@@ -651,6 +661,8 @@ fn collect_nested_summary_relative_refs(
     descendant_ordinal: &mut u64,
     refs_by_digest: &mut HashMap<B3Digest, NestedSummaryRelativeRef>,
 ) -> Option<()> {
+    debug_assert!(*descendant_ordinal < u64::MAX);
+    debug_assert!(refs_by_digest.len() < 1_000_000);
     let ArtifactNode::Directory(directory) = node else {
         return Some(());
     };
@@ -723,6 +735,8 @@ fn delta_coded_nested_descendant_ref_bytes(
     summaries: &[&ReceiverProbabilisticFrontierSummary],
     root_child_prefix_len: usize,
 ) -> Option<u64> {
+    debug_assert!(root_child_prefix_len <= summaries.len());
+    debug_assert!(!relative_refs_by_digest.is_empty());
     let parent_ordinal = uniform_nested_parent_ordinal(relative_refs_by_digest, summaries, root_child_prefix_len)?;
     let mut total_ref_bytes = 0u64;
     let mut previous_descendant_ordinal = None;
@@ -752,6 +766,8 @@ fn run_coded_nested_descendant_ref_bytes(
     summaries: &[&ReceiverProbabilisticFrontierSummary],
     root_child_prefix_len: usize,
 ) -> Option<u64> {
+    debug_assert!(root_child_prefix_len <= summaries.len());
+    debug_assert!(!relative_refs_by_digest.is_empty());
     let mut total_ref_bytes = 0u64;
     let mut current_parent_ordinal = None;
     let mut previous_descendant_ordinal = None;
@@ -937,6 +953,8 @@ fn can_pack_large_uniform_optional_filter_tag_and_split_in_grouped_header(
     split_count_bytes: u64,
     coverage_count_bytes: u64,
 ) -> bool {
+    debug_assert!(!summaries.is_empty());
+    debug_assert!(!output.output_id.is_empty());
     if DEFAULT_GROUPED_OUTPUT_HEADER_MODE != GroupedOutputHeaderMode::PackedModeInSummaryCount {
         return false;
     }

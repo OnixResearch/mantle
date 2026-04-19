@@ -93,6 +93,8 @@ async fn build_receiver_manifest_with_store(
     case: &BenchCase,
     services: &FixtureManifestStore,
 ) -> Result<ManifestBuildOutcome, ManifestError> {
+    debug_assert!(!case.sender.outputs.is_empty());
+    debug_assert!(!case.sender.store_prefix.is_empty());
     let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
     let candidates = SenderCandidates::from_fixture(&case.sender);
     let chunk_profile = chunk_profile_for_manifest();
@@ -145,6 +147,8 @@ async fn build_receiver_manifest_lossy_with_store(
     case: &BenchCase,
     services: &FixtureManifestStore,
 ) -> Result<ManifestBuildOutcome, ManifestError> {
+    debug_assert!(!case.sender.outputs.is_empty());
+    debug_assert!(!case.sender.store_prefix.is_empty());
     let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
     let exact_candidates = SenderCandidates::from_fixture(&case.sender);
     let lossy_candidates = LossySenderCandidates::from_fixture(&case.sender);
@@ -215,6 +219,8 @@ async fn build_receiver_manifest_probabilistic_with_store(
     case: &BenchCase,
     services: &FixtureManifestStore,
 ) -> Result<ManifestBuildOutcome, ManifestError> {
+    debug_assert!(!case.sender.outputs.is_empty());
+    debug_assert!(!case.sender.store_prefix.is_empty());
     let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
     let exact_candidates = SenderCandidates::from_fixture(&case.sender);
     let probabilistic_candidates = ProbabilisticSenderCandidates::from_fixture(&case.sender);
@@ -455,6 +461,8 @@ fn probabilistic_frontier_has_overlap(
     summary: &ReceiverProbabilisticFrontierSummary,
     candidates: &ProbabilisticSenderCandidates,
 ) -> bool {
+    debug_assert!(summary.filter_config.slot_count > 0);
+    debug_assert!(summary.filter_config.tap_count > 0);
     if candidates.directory_digests.iter().any(|digest| {
         let membership_bits = probabilistic_membership_bits(digest, summary);
         membership_bits & summary.directory_filter_bits == membership_bits
@@ -508,6 +516,8 @@ async fn walk_local_node(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!manifest.store_prefix.is_empty());
     let mut pending = vec![seed_child_node(node)];
     while let Some(next) = pending.pop() {
         match next {
@@ -586,6 +596,8 @@ async fn walk_local_nodes_lossy(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!manifest.store_prefix.is_empty());
     let mut pending = seeds;
     while let Some(next) = pending.pop() {
         match next {
@@ -647,6 +659,8 @@ async fn walk_local_nodes_probabilistic(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!manifest.store_prefix.is_empty());
     let mut pending = seeds;
     while let Some(next) = pending.pop() {
         match next {
@@ -706,6 +720,8 @@ async fn record_local_blob(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!blob.digest.as_ref().is_empty());
     if candidates.blob_digests.contains(&blob.digest) {
         manifest.known_blobs.insert(blob.digest);
         return Ok(());
@@ -743,6 +759,8 @@ async fn record_local_blob_lossy(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!blob.digest.as_ref().is_empty());
     if exact_candidates.blob_digests.contains(&blob.digest) {
         manifest.known_blobs.insert(blob.digest);
         return Ok(());
@@ -780,6 +798,8 @@ async fn record_local_blob_probabilistic(
     traversal: &mut TraversalMemo,
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
+    debug_assert!(chunk_profile.min_chunk_bytes > 0);
+    debug_assert!(!blob.digest.as_ref().is_empty());
     if exact_candidates.blob_digests.contains(&blob.digest) {
         manifest.known_blobs.insert(blob.digest);
         return Ok(());

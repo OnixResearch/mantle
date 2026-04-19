@@ -152,6 +152,8 @@ pub fn negotiate_protocol(
 }
 
 fn validate_offer(offer: &NegotiationOffer) -> Result<(), NegotiationError> {
+    debug_assert!(MAX_NEGOTIATION_VERSIONS > 0);
+    debug_assert!(MAX_NEGOTIATION_CHUNK_PROFILES > 0);
     let version_count = offer.supported_versions.len() as u32;
     if version_count == 0 {
         return Err(NegotiationError::EmptyVersionSet);

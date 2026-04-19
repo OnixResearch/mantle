@@ -345,6 +345,7 @@ pub enum DeltaSubstitutionError {
     Attestation(String),
 }
 
+#[allow(tigerstyle::too_many_parameters)] // fallback path threading the same trust/storage context as the caller
 async fn full_artifact_fallback(
     authority: &InMemoryDeltaAuthority,
     request: &DeltaFetchRequest,

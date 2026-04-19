@@ -39,6 +39,7 @@ pub fn plan_transfer(sender: &ClosureFixture, receiver: &ReceiverManifest) -> Re
     }
 
     assert!(!sender.outputs.is_empty(), "sender fixture must have at least one output");
+    debug_assert!(!sender.store_prefix.is_empty());
     let full_transfer_bytes = sender.full_transfer_bytes();
     let mut available_blobs = HashSet::<B3Digest>::new();
     let mut transferred_bytes = 0u64;
@@ -97,6 +98,8 @@ fn plan_blob(
     tally: &mut TransferTally,
 ) -> u64 {
     blob.validate();
+    debug_assert!(!blob.digest.as_ref().is_empty());
+    debug_assert!(blob.size_bytes > 0 || blob.chunks.is_empty());
     if receiver.known_blobs.contains(&blob.digest) || available_blobs.contains(&blob.digest) {
         tally.reused_blobs = tally.reused_blobs.saturating_add(1);
         return 0;
