@@ -537,6 +537,61 @@ Current safety bounds are internal and fail closed rather than partially
 collect: exported-output byte walks stop at depth 128 or 100,000 visited
 entries, and filesystem/blob scans stop at 200,000 entries.
 
+## Binary Cache Sharing
+
+Share build results between machines using the Nix binary cache directory
+layout (`.narinfo` + `.nar` files). Push exports from the local store;
+pull imports into it.
+
+```bash
+# Push all signed paths to a cache directory
+crunch store push --all --to /srv/cache
+
+# Push specific paths
+crunch store push --to /srv/cache /nix/store/<hash>-hello
+
+# Include unsigned entries (normally skipped)
+crunch store push --all --to /srv/cache --trust-unsigned
+
+# Pull all paths from a cache directory
+crunch store pull --all --from /srv/cache
+
+# Pull specific paths
+crunch store pull --from /srv/cache /nix/store/<hash>-hello
+
+# Pull with explicit trust (signature verification)
+crunch store pull --all --from /srv/cache \
+  --trusted-public-keys "builder-1:base64pubkey..."
+
+# Accept unsigned narinfos
+crunch store pull --all --from /srv/cache --trust-unsigned
+```
+
+Push writes `nix-cache-info` into the target directory if absent, so the
+result is directly servable by `nix-serve`, `harmonia`, nginx, or S3
+sync. Paths already present in the target are skipped.
+
+Pull verifies narinfo signatures against the configured trusted keys
+(same trust set as `crunch build --substituters`). Paths that fail
+signature verification, have a store-directory prefix mismatch, or whose
+NAR content does not match the declared hash are skipped with a warning.
+
+Both commands acquire the store mutation lock, so they are safe alongside
+concurrent builds on the same state directory.
+
+Typical CI workflow:
+
+```bash
+# Builder machine: build and publish
+crunch build my-package.ncl
+crunch store push --all --to /shared/cache
+
+# Consumer machine: import pre-built results
+crunch store pull --all --from /shared/cache \
+  --trusted-public-keys "ci-builder-1:base64pubkey..."
+crunch build my-package.ncl   # cache hit, no rebuild
+```
+
 ## Bootstrap
 
 crunch needs some trusted inputs to build anything. The repo tracks four
@@ -876,7 +931,7 @@ crunch bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
 crunch self-build                Rebuild crunch from source
 
 # Store, logs, attestations, release evidence
-crunch store <subcommand>        List, inspect, verify, sign, pin, or GC store state
+crunch store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
 crunch log [query]               Show a stored build log
 crunch attest <subcommand>       Show, verify, diff, or synthesize attestations
 crunch release <subcommand>      Create or verify a release-evidence bundle
