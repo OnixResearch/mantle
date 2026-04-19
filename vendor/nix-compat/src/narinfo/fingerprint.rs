@@ -10,13 +10,23 @@ pub fn fingerprint<'a, R: Iterator<Item = &'a StorePathRef<'a>>>(
     nar_size: u64,
     references: R,
 ) -> String {
+    fingerprint_with_store_dir(store_path, nar_sha256, nar_size, references, crate::store_path::STORE_DIR)
+}
+
+/// Like [fingerprint], but with a custom store directory prefix.
+pub fn fingerprint_with_store_dir<'a, R: Iterator<Item = &'a StorePathRef<'a>>>(
+    store_path: &StorePathRef,
+    nar_sha256: &[u8; 32],
+    nar_size: u64,
+    references: R,
+    store_dir: &str,
+) -> String {
     format!(
         "1;{};sha256:{};{};{}",
-        store_path.to_absolute_path(),
+        store_path.to_absolute_path_with_prefix(store_dir),
         nixbase32::encode(nar_sha256),
         nar_size,
-        // references are absolute paths, joined with `,`.
-        references.map(|r| r.to_absolute_path()).collect::<Vec<String>>().join(",")
+        references.map(|r| r.to_absolute_path_with_prefix(store_dir)).collect::<Vec<String>>().join(",")
     )
 }
 

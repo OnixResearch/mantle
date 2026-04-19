@@ -72,7 +72,7 @@ pub async fn export_paths_to_cache_dir(
     };
 
     for pi in paths {
-        push_single_path(handle, pi, dest, &nar_dir, options, &mut report).await?;
+        push_single_path(handle, pi, dest, &nar_dir, options, &mut report, handle.store_dir()).await?;
     }
 
     Ok(report)
@@ -87,6 +87,7 @@ async fn push_single_path(
     nar_dir: &Path,
     options: &PushOptions,
     report: &mut PushReport,
+    store_dir: &str,
 ) -> Result<(), Error> {
     // Skip unsigned unless trusted.
     if pi.signatures.is_empty() && !options.trust_unsigned {
@@ -114,7 +115,7 @@ async fn push_single_path(
 
     // Build narinfo text.
     let nar_url = format!("nar/{nar_filename}");
-    let narinfo_text = build_narinfo_text(pi, &nar_url)?;
+    let narinfo_text = build_narinfo_text(pi, &nar_url, store_dir)?;
     let narinfo_bytes = narinfo_text.as_bytes();
 
     // Write narinfo atomically via temp + rename.
@@ -156,12 +157,12 @@ async fn render_nar_to_file(handle: &StoreHandle, pi: &PathInfo, nar_path: &Path
     Ok(())
 }
 
-fn build_narinfo_text(pi: &PathInfo, nar_url: &str) -> Result<String, Error> {
+fn build_narinfo_text(pi: &PathInfo, nar_url: &str, store_dir: &str) -> Result<String, Error> {
     let mut narinfo = pi.to_narinfo();
     narinfo.url = nar_url;
     narinfo.file_hash = Some(pi.nar_sha256);
     narinfo.file_size = Some(pi.nar_size);
-    Ok(narinfo.to_string())
+    Ok(narinfo.to_string_with_store_dir(store_dir))
 }
 
 fn narinfo_filename_for<S: AsRef<str>>(store_path: &nix_compat::store_path::StorePath<S>) -> String {
@@ -509,5 +510,59 @@ mod tests {
 
         let cache_info = std::fs::read_to_string(dest.join("nix-cache-info")).unwrap();
         assert_eq!(cache_info, existing, "existing nix-cache-info must be preserved");
+    }
+
+    async fn open_test_store_with_prefix(dir: &std::path::Path, store_dir: &str) -> StoreHandle {
+        let state_dir = dir.join("state");
+        let output_dir = dir.join("output");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::create_dir_all(&output_dir).unwrap();
+        StoreHandle::open(StoreConfig {
+            state_dir,
+            output_dir,
+            remote_cache_url: None,
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn push_custom_store_dir_narinfo_uses_correct_prefix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let handle = open_test_store_with_prefix(tmp.path(), "/crunch/store").await;
+        let pi = make_signed_pathinfo(&handle, "hello", b"hello world").await;
+
+        let dest = tmp.path().join("cache");
+        let report = export_paths_to_cache_dir(
+            &handle,
+            &[pi.clone()],
+            &dest,
+            &PushOptions { trust_unsigned: false },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.pushed_count, 1);
+
+        // nix-cache-info must reference the custom store dir.
+        let cache_info = std::fs::read_to_string(dest.join("nix-cache-info")).unwrap();
+        assert!(
+            cache_info.contains("StoreDir: /crunch/store"),
+            "nix-cache-info must use /crunch/store, got: {cache_info}"
+        );
+
+        // narinfo StorePath line must use the custom prefix.
+        let digest_str = nixbase32::encode(pi.store_path.digest());
+        let narinfo_text = std::fs::read_to_string(dest.join(format!("{digest_str}.narinfo"))).unwrap();
+        assert!(
+            narinfo_text.contains("StorePath: /crunch/store/"),
+            "narinfo must use /crunch/store prefix, got: {narinfo_text}"
+        );
+        assert!(
+            !narinfo_text.contains("/nix/store/"),
+            "narinfo must not contain /nix/store/, got: {narinfo_text}"
+        );
     }
 }

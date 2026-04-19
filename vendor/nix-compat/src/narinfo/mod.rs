@@ -34,6 +34,7 @@ mod signing_keys;
 mod verifying_keys;
 
 pub use fingerprint::fingerprint;
+pub use fingerprint::fingerprint_with_store_dir;
 pub use signature::Error as SignatureError;
 pub use signature::Signature;
 pub use signature::SignatureRef;
@@ -117,6 +118,12 @@ const TAG_CA: &str = "CA";
 
 impl<'a> NarInfo<'a> {
     pub fn parse(input: &'a str) -> Result<Self, Error> {
+        Self::parse_with_store_dir(input, crate::store_path::STORE_DIR)
+    }
+
+    /// Like [NarInfo::parse], but accepts a custom store directory prefix.
+    pub fn parse_with_store_dir(input: &'a str, store_dir: &str) -> Result<Self, Error> {
+        let store_dir_with_slash = format!("{store_dir}/");
         let mut flags = Flags::empty();
         let mut store_path = None;
         let mut url = None;
@@ -139,7 +146,7 @@ impl<'a> NarInfo<'a> {
             match tag {
                 TAG_STOREPATH => {
                     let val = val
-                        .strip_prefix("/nix/store/")
+                        .strip_prefix(&store_dir_with_slash)
                         .ok_or(Error::InvalidStorePath(crate::store_path::Error::MissingStoreDir))?;
                     let val = StorePathRef::from_bytes(val.as_bytes()).map_err(Error::InvalidStorePath)?;
 
@@ -314,23 +321,42 @@ impl<'a> NarInfo<'a> {
         fingerprint(&self.store_path, &self.nar_hash, self.nar_size, self.references.iter())
     }
 
+    /// Like [NarInfo::fingerprint], but with a custom store directory prefix.
+    pub fn fingerprint_with_store_dir(&self, store_dir: &str) -> String {
+        fingerprint_with_store_dir(&self.store_path, &self.nar_hash, self.nar_size, self.references.iter(), store_dir)
+    }
+
     /// Adds a signature, using the passed signer to sign.
     /// This is generic over algo implementations / providers,
     /// so users can bring their own signers.
     pub fn add_signature<S>(&mut self, signer: &'a SigningKey<S>)
     where S: ed25519::signature::Signer<ed25519::Signature> {
-        // calculate the fingerprint to sign
         let fp = self.fingerprint();
-
         let sig = signer.sign(fp.as_bytes());
-
         self.signatures.push(sig);
     }
-}
 
-impl Display for NarInfo<'_> {
-    fn fmt(&self, w: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(w, "StorePath: /nix/store/{}", self.store_path)?;
+    /// Like [NarInfo::add_signature], but uses a custom store directory in the fingerprint.
+    pub fn add_signature_with_store_dir<S>(&mut self, signer: &'a SigningKey<S>, store_dir: &str)
+    where S: ed25519::signature::Signer<ed25519::Signature> {
+        let fp = self.fingerprint_with_store_dir(store_dir);
+        let sig = signer.sign(fp.as_bytes());
+        self.signatures.push(sig);
+    }
+
+    /// Render this NarInfo with a custom store directory prefix.
+    pub fn to_string_with_store_dir(&self, store_dir: &str) -> String {
+        let mut buf = String::with_capacity(512);
+        self.write_with_store_dir(&mut buf, store_dir).expect("writing to String never fails");
+        buf
+    }
+
+    fn write_with_store_dir(&self, w: &mut impl fmt::Write, store_dir: &str) -> fmt::Result {
+        writeln!(w, "StorePath: {store_dir}/{}", self.store_path)?;
+        self.write_body(w)
+    }
+
+    fn write_body(&self, w: &mut impl fmt::Write) -> fmt::Result {
         writeln!(w, "URL: {}", self.url)?;
 
         if !self.flags.contains(Flags::COMPRESSION_DEFAULT) {
@@ -380,6 +406,13 @@ impl Display for NarInfo<'_> {
         }
 
         Ok(())
+    }
+}
+
+impl Display for NarInfo<'_> {
+    fn fmt(&self, w: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(w, "StorePath: /nix/store/{}", self.store_path)?;
+        self.write_body(w)
     }
 }
 
@@ -652,5 +685,73 @@ CA: fixed:r:sha1:1ak1ymbmsfx7z8kh09jzkr3a4dvkrfjw
             super::VerifyingKey::parse(super::DUMMY_VERIFYING_KEY).expect("parsing dummy verifying key");
 
         assert!(verifying_key.verify(&fp, new_sig), "expect signature to be valid");
+    }
+
+    #[test]
+    fn parse_with_custom_store_dir() {
+        let input = r#"StorePath: /crunch/store/syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin
+URL: nar/05ra3y72i3qjri7xskf9qj8kb29r6naqy1sqpbs3azi3xcigmj56.nar.xz
+Compression: xz
+FileHash: sha256:05ra3y72i3qjri7xskf9qj8kb29r6naqy1sqpbs3azi3xcigmj56
+FileSize: 68852
+NarHash: sha256:1b4sb93wp679q4zx9k1ignby1yna3z7c4c2ri3wphylbc2dwsys0
+NarSize: 196040
+References: 
+"#;
+        let parsed = NarInfo::parse_with_store_dir(input, "/crunch/store").expect("should parse");
+        assert_eq!(parsed.store_path.to_string(), "syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin");
+    }
+
+    #[test]
+    fn parse_with_custom_store_dir_rejects_wrong_prefix() {
+        let input = r#"StorePath: /nix/store/syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin
+URL: nar/test.nar
+NarHash: sha256:1b4sb93wp679q4zx9k1ignby1yna3z7c4c2ri3wphylbc2dwsys0
+NarSize: 196040
+References: 
+"#;
+        assert!(NarInfo::parse_with_store_dir(input, "/crunch/store").is_err());
+    }
+
+    #[test]
+    fn to_string_with_custom_store_dir() {
+        let input = r#"StorePath: /crunch/store/syd87l2rxw8cbsxmxl853h0r6pdwhwjr-curl-7.82.0-bin
+URL: nar/05ra3y72i3qjri7xskf9qj8kb29r6naqy1sqpbs3azi3xcigmj56.nar.xz
+Compression: xz
+FileHash: sha256:05ra3y72i3qjri7xskf9qj8kb29r6naqy1sqpbs3azi3xcigmj56
+FileSize: 68852
+NarHash: sha256:1b4sb93wp679q4zx9k1ignby1yna3z7c4c2ri3wphylbc2dwsys0
+NarSize: 196040
+References: 
+"#;
+        let parsed = NarInfo::parse_with_store_dir(input, "/crunch/store").expect("should parse");
+        let rendered = parsed.to_string_with_store_dir("/crunch/store");
+        assert_eq!(rendered, input, "roundtrip with custom store dir");
+    }
+
+    #[test]
+    fn to_string_default_matches_display() {
+        let input = *CASES.first().expect("test data");
+        let parsed = NarInfo::parse(input).expect("should parse");
+        assert_eq!(
+            parsed.to_string_with_store_dir("/nix/store"),
+            format!("{parsed}"),
+            "to_string_with_store_dir(/nix/store) must match Display"
+        );
+    }
+
+    #[test]
+    fn fingerprint_with_custom_store_dir() {
+        let input = *CASES.first().expect("test data");
+        let parsed = NarInfo::parse(input).expect("should parse");
+        assert_eq!(
+            parsed.fingerprint(),
+            parsed.fingerprint_with_store_dir("/nix/store"),
+            "default fingerprint must match store_dir=/nix/store"
+        );
+        let custom_fp = parsed.fingerprint_with_store_dir("/crunch/store");
+        assert!(custom_fp.contains("/crunch/store/"), "custom fingerprint must use custom prefix");
+        assert!(!custom_fp.contains("/nix/store/"), "custom fingerprint must not contain /nix/store/");
+        assert_ne!(parsed.fingerprint(), custom_fp, "different prefix must produce different fingerprint");
     }
 }
