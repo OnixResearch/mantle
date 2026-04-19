@@ -530,7 +530,7 @@ where
                 return Ok(());
             }
 
-            let mut sent_any_chunk = false;
+            let mut has_sent_any_chunk = false;
             for (chunk_index, chunk) in blob.chunks.iter().enumerate() {
                 if manifest.known_chunks.contains(&chunk.digest) {
                     continue;
@@ -548,9 +548,9 @@ where
                     chunk_index: chunk_index as u32,
                     bytes: chunk_bytes,
                 })?;
-                sent_any_chunk = true;
+                has_sent_any_chunk = true;
             }
-            if !sent_any_chunk && !manifest.known_blobs.contains(&blob.digest) {
+            if !has_sent_any_chunk && !manifest.known_blobs.contains(&blob.digest) {
                 let bytes = catalog
                     .full_blobs
                     .get(&blob.digest)
@@ -608,6 +608,7 @@ fn output_root_node(outputs: &[OutputFixture], output_name: &str) -> Option<Node
         .map(|output| fixture_node(&output.root))
 }
 
+#[allow(tigerstyle::expect_in_production)] // fixture construction with hardcoded valid values
 fn fixture_node(node: &crate::ArtifactNode) -> Node {
     match node {
         crate::ArtifactNode::Directory(directory) => Node::Directory {
@@ -639,11 +640,11 @@ fn verify_pathinfo_trusted(path_info: &PathInfo, trusted_keys: &[VerifyingKey]) 
         return Err(());
     }
     let fingerprint = compute_pathinfo_fingerprint(path_info);
-    let trusted = path_info.signatures.iter().any(|signature| {
+    let is_trusted = path_info.signatures.iter().any(|signature| {
         let signature_ref = signature.as_ref();
         trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature_ref))
     });
-    if trusted { Ok(()) } else { Err(()) }
+    if is_trusted { Ok(()) } else { Err(()) }
 }
 
 #[cfg(test)]

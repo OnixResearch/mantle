@@ -310,8 +310,8 @@ fn blob_hit_case() -> BenchCase {
 }
 
 fn chunk_hit_case() -> BenchCase {
-    let chunk_sizes = [262_144u64; 8];
-    let sender_blob = chunked_blob("chunk-hit-large", &chunk_sizes);
+    let chunk_sizes_bytes = [262_144u64; 8];
+    let sender_blob = chunked_blob("chunk-hit-large", &chunk_sizes_bytes);
     let sender_chunks = blob_chunks(&sender_blob);
     let sender = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
@@ -488,7 +488,7 @@ impl BenchCase {
                     3
                 };
                 let summarized_output_count = self.summarized_output_count();
-                let full_output_coverage = summarized_output_count == self.receiver_store.outputs.len() as u64;
+                let has_full_output_coverage = summarized_output_count == self.receiver_store.outputs.len() as u64;
                 let grouped_entry_bytes =
                     self.receiver_store.outputs.iter().enumerate().fold(0u64, |total, (index, output)| {
                         let output_summaries = self
@@ -499,7 +499,7 @@ impl BenchCase {
                         if output_summaries.is_empty() {
                             return total;
                         }
-                        let output_ref_bytes = if summarized_output_count == 1 || full_output_coverage {
+                        let output_ref_bytes = if summarized_output_count == 1 || has_full_output_coverage {
                             0
                         } else {
                             u64_varint_bytes(index as u64)
@@ -1144,9 +1144,9 @@ fn blob_node(label: &str, size_bytes: u64) -> ArtifactNode {
     ArtifactNode::Blob(blob)
 }
 
-fn chunked_blob(label: &str, chunk_sizes: &[u64]) -> ArtifactNode {
-    assert!(!chunk_sizes.is_empty(), "chunk_sizes must not be empty");
-    let chunks = chunk_sizes
+fn chunked_blob(label: &str, chunk_sizes_bytes: &[u64]) -> ArtifactNode {
+    assert!(!chunk_sizes_bytes.is_empty(), "chunk_sizes_bytes must not be empty");
+    let chunks = chunk_sizes_bytes
         .iter()
         .enumerate()
         .map(|(index, size_bytes)| ChunkRef {

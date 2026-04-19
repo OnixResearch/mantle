@@ -965,6 +965,7 @@ fn collect_recursive_directories(
     items.push(directory);
 }
 
+#[allow(tigerstyle::expect_in_production)] // fixture construction with hardcoded valid values
 fn seed_node(
     node: &ArtifactNode,
     directories: &mut HashMap<B3Digest, Directory>,

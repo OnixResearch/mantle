@@ -190,11 +190,11 @@ fn select_highest_common_version(sender_versions: &[u32], receiver_versions: &[u
     assert!(!sender_versions.is_empty(), "sender version list must not be empty");
     assert!(!receiver_versions.is_empty(), "receiver version list must not be empty");
 
-    let receiver_supported = receiver_versions.iter().copied().collect::<HashSet<_>>();
+    let receiver_version_set = receiver_versions.iter().copied().collect::<HashSet<_>>();
     let mut common_versions = sender_versions
         .iter()
         .copied()
-        .filter(|version| receiver_supported.contains(version))
+        .filter(|version| receiver_version_set.contains(version))
         .collect::<Vec<_>>();
     if common_versions.is_empty() {
         return Err(NegotiationError::VersionMismatch {
@@ -204,7 +204,10 @@ fn select_highest_common_version(sender_versions: &[u32], receiver_versions: &[u
     }
 
     common_versions.sort_unstable();
-    let agreed_version = *common_versions.last().expect("common version set must not be empty");
+    let agreed_version = *common_versions.last().ok_or(NegotiationError::VersionMismatch {
+        sender_versions: sender_versions.to_vec(),
+        receiver_versions: receiver_versions.to_vec(),
+    })?;
     assert!(agreed_version > 0, "protocol version must be positive");
     Ok(agreed_version)
 }
@@ -218,12 +221,12 @@ fn select_shared_chunk_profile(
     assert!(!receiver_profiles.is_empty(), "receiver chunk profile list must not be empty");
 
     let expected_profile = chunk_profile_for_version(version)?;
-    let receiver_supported = receiver_profiles.iter().copied().collect::<HashSet<_>>();
+    let receiver_profile_set = receiver_profiles.iter().copied().collect::<HashSet<_>>();
     let shared_profiles = sender_profiles
         .iter()
         .copied()
         .filter(|profile| *profile == expected_profile)
-        .filter(|profile| receiver_supported.contains(profile))
+        .filter(|profile| receiver_profile_set.contains(profile))
         .collect::<Vec<_>>();
     if shared_profiles.is_empty() {
         return Err(NegotiationError::ChunkProfileMismatch {

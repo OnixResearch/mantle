@@ -1,8 +1,20 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
+#[allow(tigerstyle::as_usize_conversion)] // fixture code: all values are known-bounded fixture constants
+#[allow(tigerstyle::unsigned_subtraction)] // fixture wire-size calculations with known-valid ordering
+#[allow(tigerstyle::panic_in_production)] // fixture construction panics on programmer error
+#[allow(tigerstyle::expect_in_production)] // fixture construction with hardcoded valid values
+#[allow(tigerstyle::recursive_function)] // fixture tree walks: bounded by fixture tree depth
+#[allow(tigerstyle::ambiguous_params)] // fixture functions: param names are descriptive
 mod fixtures;
+#[allow(tigerstyle::recursive_function)] // tree-walking traversals bounded by castore node depth
+#[allow(tigerstyle::expect_in_production)] // fixture seed construction with hardcoded valid values
 mod manifest;
 mod model;
 mod negotiation;
 mod planner;
+#[allow(tigerstyle::recursive_function)] // tree-walking traversals bounded by castore node depth
 mod substitution;
 
 pub use fixtures::BenchCase;
