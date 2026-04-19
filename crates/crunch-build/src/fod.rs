@@ -15,6 +15,7 @@ use crate::hash::nar_hash;
 /// Flat mode: hash the raw file bytes with the declared algorithm.
 /// NAR mode: hash the NAR serialization with the declared algorithm.
 /// Text mode: equivalent to NAR sha256 for verification purposes.
+#[allow(tigerstyle::ambiguous_params)] // drv_name vs output_name: distinct derivation fields
 pub(crate) async fn verify_fod_hash(
     drv_name: &str,
     _output_name: &str,

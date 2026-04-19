@@ -317,6 +317,7 @@ fn fetch_agent() -> ureq::Agent {
 
 /// Download a URL and write the raw content to a file.
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
+#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
 pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     let reader: Box<dyn Read + Send> = open_url_reader(url)?;
     let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
@@ -327,6 +328,7 @@ pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
 }
 
 /// Download a tarball, decompress, and extract to a directory.
+#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
     let reader = open_url_reader(url)?;
     let decompressed = decompress_reader(url, reader)?;
@@ -986,6 +988,7 @@ const MAX_GIT_PATH_COMPONENTS: u32 = 1024;
 
 /// Clone a git repository and materialize a specific revision without using
 /// any host `git` binary.
+#[allow(tigerstyle::ambiguous_params)] // url, rev, out: three distinct domains (origin, commit, filesystem)
 pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
     let out_path = Path::new(out);
     assert!(!url.is_empty(), "git url must not be empty");
@@ -1029,6 +1032,7 @@ fn local_git_repo_path(url: &str) -> Result<Option<PathBuf>, FetchError> {
     Ok(Some(local_path))
 }
 
+#[allow(tigerstyle::ambiguous_params)] // url vs git rev: distinct domains
 fn stage_local_git_tree(local_repo_path: &Path, url: &str, rev: &str, staged_out: &Path) -> Result<(), FetchError> {
     assert!(staged_out.file_name().is_some(), "staged output path must be named");
     let repo = gix::open_opts(local_repo_path, gix::open::Options::isolated())
@@ -1059,6 +1063,7 @@ fn fetch_git_repo(url: &str, repo_dir: &Path) -> Result<gix::Repository, FetchEr
     Ok(repo)
 }
 
+#[allow(tigerstyle::ambiguous_params)] // url vs git rev: distinct domains
 fn resolve_git_tree_id(repo: &gix::Repository, url: &str, rev: &str) -> Result<gix::hash::ObjectId, FetchError> {
     assert!(!url.is_empty(), "git url must not be empty");
     assert!(!rev.is_empty(), "git rev must not be empty");

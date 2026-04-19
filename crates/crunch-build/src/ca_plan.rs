@@ -38,6 +38,7 @@ pub fn generate_ca_marker(output_name: &str, provisional_len: usize) -> Vec<u8> 
 ///
 /// For the "out" output, returns the base derivation name (without ".drv").
 /// For other outputs, returns "{base_name}-{output_name}".
+#[allow(tigerstyle::ambiguous_params)] // drv_name vs output_name: distinct semantics validated by assertions
 pub fn ca_output_path_name(drv_name: &str, output_name: &str) -> String {
     assert!(!drv_name.is_empty(), "drv_name must not be empty");
     assert!(!output_name.is_empty(), "output_name must not be empty");

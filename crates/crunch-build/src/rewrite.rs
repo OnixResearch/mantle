@@ -32,6 +32,7 @@ pub fn replace_marker_with_final(data: &[u8], final_path: &str) -> Vec<u8> {
 ///
 /// Both paths MUST have the same byte length (store paths are fixed-width
 /// for a given name).
+#[allow(tigerstyle::ambiguous_params)] // old_path vs new_path: provisional→final store path rewrite
 pub fn replace_input_provisional(data: &[u8], old_path: &str, new_path: &str) -> Vec<u8> {
     assert_eq!(old_path.len(), new_path.len(), "old_path and new_path must have the same byte length");
     let (result, _) = replace_bytes(data, old_path.as_bytes(), new_path.as_bytes());
