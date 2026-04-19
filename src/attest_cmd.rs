@@ -8,6 +8,7 @@ use crunch_attestation::ClosureAttestation;
 use crunch_attestation::ClosureSemantics;
 use crunch_attestation::ProjectAttestation;
 use crunch_project::Lockfile;
+use crunch_project::ProjectAttestationInput;
 use crunch_project::ProjectManifest;
 use crunch_project::synthesize_project_attestation;
 use crunch_store::StoreConfig;
@@ -173,8 +174,14 @@ async fn load_project_document(
     let (manifest_text, manifest) = load_manifest(current_dir)?;
     let (lock_text, lock) = load_lockfile(current_dir)?;
     let selected_roots = load_selected_roots(store, roots).await?;
-    let attestation = synthesize_project_attestation(&manifest_text, &lock_text, &manifest, &lock, &selected_roots)
-        .map_err(|e| RunError::Internal(format!("project attestation: {e}")))?;
+    let attestation = synthesize_project_attestation(ProjectAttestationInput {
+        manifest_text: &manifest_text,
+        lock_text: &lock_text,
+        manifest: &manifest,
+        lock: &lock,
+        selected_roots: &selected_roots,
+    })
+    .map_err(|e| RunError::Internal(format!("project attestation: {e}")))?;
     Ok(AttestationDocument::Project(attestation))
 }
 

@@ -19,7 +19,7 @@ use crate::version::SchemaVersion;
 const MAX_LOCK_ENTRIES: u32 = 4096;
 
 /// Maximum number of locked patches.
-const MAX_LOCKED_PATCHES: u32 = 1024;
+pub(crate) const MAX_LOCKED_PATCHES: u32 = 1024;
 
 /// A resolved lockfile.
 #[derive(Debug, Clone, PartialEq, Serialize)]

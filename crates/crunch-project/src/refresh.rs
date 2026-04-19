@@ -151,6 +151,11 @@ fn select_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> Vec<
 
 /// Refresh a single input.
 fn refresh_one(input: &ManifestInput, lock: &Lockfile, resolver: &dyn RefreshResolver) -> RefreshOutcome {
+    assert!(!input.name.is_empty(), "input name must not be empty");
+    assert!(
+        input.mirrors.len() as u64 <= crate::manifest::MAX_MIRRORS_PER_INPUT as u64,
+        "mirror count must stay within manifest limit"
+    );
     if input.frozen {
         return RefreshOutcome::Frozen {
             name: input.name.clone(),
@@ -189,6 +194,11 @@ fn require_resolution(value: Option<String>, what: &str) -> Result<String, Error
 
 /// Resolve a manifest input to a lock entry.
 fn resolve_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> Result<LockEntry, Error> {
+    assert!(!input.name.is_empty(), "input name must not be empty");
+    assert!(
+        input.patches.len() as u64 <= crate::manifest::MAX_PATCHES_PER_INPUT as u64,
+        "patch count must stay within manifest limit"
+    );
     let (kind, hash) = match &input.kind {
         InputKind::File { url } => {
             let hash_value = require_resolution(
@@ -281,6 +291,14 @@ pub fn apply_outcomes(
     outcomes: &[RefreshOutcome],
     resolver: &dyn RefreshResolver,
 ) -> ApplyResult {
+    assert!(
+        outcomes.len() <= manifest.inputs.len(),
+        "refresh outcomes must not exceed manifest inputs"
+    );
+    assert!(
+        lock.inputs.len() as u64 <= crate::manifest::MAX_INPUTS as u64,
+        "lock inputs must stay within manifest limit"
+    );
     let mut new_lock = lock.clone();
     let mut inputs_changed: u32 = 0;
     for outcome in outcomes {
@@ -314,6 +332,14 @@ pub(crate) fn resolve_patches_into_lock(
     lock: &mut Lockfile,
     resolver: &dyn RefreshResolver,
 ) -> PatchResolutionResult {
+    assert!(
+        manifest.patches.len() as u64 <= crate::lock::MAX_LOCKED_PATCHES as u64,
+        "manifest patch count must stay within lock limit"
+    );
+    assert!(
+        lock.inputs.len() as u64 <= crate::manifest::MAX_INPUTS as u64,
+        "lock inputs must stay within manifest limit"
+    );
     let mut is_changed = false;
     let mut failures = Vec::with_capacity(manifest.patches.len());
     let needed = collect_needed_patches(lock);
@@ -370,6 +396,14 @@ fn remove_orphaned_patches(lock: &mut Lockfile) -> bool {
 }
 
 fn revert_failed_patch_inputs(old_lock: &Lockfile, new_lock: &mut Lockfile, failures: &[RefreshFailure]) -> u32 {
+    assert!(
+        old_lock.inputs.len() as u64 <= crate::manifest::MAX_INPUTS as u64,
+        "old lock input count must stay within manifest limit"
+    );
+    assert!(
+        new_lock.inputs.len() as u64 <= crate::manifest::MAX_INPUTS as u64,
+        "new lock input count must stay within manifest limit"
+    );
     if failures.is_empty() {
         return 0;
     }

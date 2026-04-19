@@ -12,6 +12,8 @@ const MAX_MIRRORS: u32 = 64;
 ///
 /// Returns issues found. Empty vec = valid.
 pub fn validate_mirrors(mirrors: &[String]) -> Vec<String> {
+    assert!(MAX_MIRRORS >= 1, "mirror limit must be positive");
+    assert!(MAX_MIRRORS <= 1024, "mirror limit must stay bounded");
     let mut issues = Vec::with_capacity(mirrors.len().saturating_mul(2));
 
     if mirrors.len() as u64 > MAX_MIRRORS as u64 {

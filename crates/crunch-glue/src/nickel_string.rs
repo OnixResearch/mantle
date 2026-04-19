@@ -60,8 +60,7 @@ impl<'de> Visitor<'de> for NickelStringVisitor {
     fn visit_enum<A>(self, data: A) -> Result<NickelString, A::Error>
     where A: EnumAccess<'de> {
         let (tag, variant): (String, _) = data.variant()?;
-        // Consume the variant value (unit variant — no data for bare tags)
-        let _ = variant.unit_variant();
+        variant.unit_variant()?;
         Ok(NickelString(tag))
     }
 }

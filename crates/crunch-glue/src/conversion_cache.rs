@@ -20,6 +20,15 @@ const MAX_PENDING: u32 = 16_384;
 
 pub type PendingEntry = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>);
 
+pub struct InsertCaEntry {
+    pub aterm_hash: [u8; 32],
+    pub drv_path: StorePath<String>,
+    pub hdm: [u8; 32],
+    pub derivation: Derivation,
+    pub content_addressed: bool,
+    pub provenance_claims: Option<Claims>,
+}
+
 pub struct ConversionCache {
     /// derivation ATerm hash -> (drv store path, hash_derivation_modulo, Derivation)
     by_aterm_hash: HashMap<[u8; 32], ConversionEntry>,
@@ -67,44 +76,48 @@ impl ConversionCache {
 
     /// Register a fully-converted derivation (input-addressed).
     pub fn insert(&mut self, aterm_hash: [u8; 32], drv_path: StorePath<String>, hdm: [u8; 32], derivation: Derivation) {
-        self.insert_ca(aterm_hash, drv_path, hdm, derivation, false, None);
+        self.insert_ca(InsertCaEntry {
+            aterm_hash,
+            drv_path,
+            hdm,
+            derivation,
+            content_addressed: false,
+            provenance_claims: None,
+        });
     }
 
     /// Register a derivation, optionally marking it as content-addressed.
-    pub fn insert_ca(
-        &mut self,
-        aterm_hash: [u8; 32],
-        drv_path: StorePath<String>,
-        hdm: [u8; 32],
-        derivation: Derivation,
-        content_addressed: bool,
-        provenance_claims: Option<Claims>,
-    ) {
-        debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
-        debug_assert!(aterm_hash != [0u8; 32], "aterm_hash must not be all zeros");
+    pub fn insert_ca(&mut self, entry: InsertCaEntry) {
+        debug_assert!(!entry.derivation.outputs.is_empty(), "derivation must have at least one output");
+        debug_assert!(entry.aterm_hash != [0u8; 32], "aterm_hash must not be all zeros");
 
-        let drv_path_str = drv_path.to_absolute_path_with_prefix(&self.store_dir);
-        self.hdm_by_drv_path.insert(drv_path_str.clone(), hdm);
-        self.drv_path_to_aterm.insert(drv_path_str.clone(), aterm_hash);
-        self.pending
-            .push((drv_path.clone(), hdm, derivation.clone(), content_addressed, provenance_claims.clone()));
+        let drv_path_str = entry.drv_path.to_absolute_path_with_prefix(&self.store_dir);
+        self.hdm_by_drv_path.insert(drv_path_str.clone(), entry.hdm);
+        self.drv_path_to_aterm.insert(drv_path_str.clone(), entry.aterm_hash);
+        self.pending.push((
+            entry.drv_path.clone(),
+            entry.hdm,
+            entry.derivation.clone(),
+            entry.content_addressed,
+            entry.provenance_claims.clone(),
+        ));
         debug_assert!(
             (self.pending.len() as u32) <= MAX_PENDING,
             "pending entries exceeded limit ({}); call drain_pending()",
             MAX_PENDING,
         );
 
-        self.by_aterm_hash.insert(aterm_hash, ConversionEntry {
-            drv_path,
-            hash_derivation_modulo: hdm,
-            derivation,
-            content_addressed,
-            provenance_claims,
+        self.by_aterm_hash.insert(entry.aterm_hash, ConversionEntry {
+            drv_path: entry.drv_path,
+            hash_derivation_modulo: entry.hdm,
+            derivation: entry.derivation,
+            content_addressed: entry.content_addressed,
+            provenance_claims: entry.provenance_claims,
         });
 
         debug_assert!(self.hdm_by_drv_path.contains_key(&drv_path_str));
         debug_assert!(self.drv_path_to_aterm.contains_key(&drv_path_str));
-        debug_assert!(self.by_aterm_hash.contains_key(&aterm_hash));
+        debug_assert!(self.by_aterm_hash.contains_key(&entry.aterm_hash));
     }
 
     /// Look up a derivation by its ATerm hash. Used for deduplication.
@@ -310,7 +323,14 @@ mod tests {
         let mut cc = ConversionCache::default();
 
         cc.insert([1u8; 32], fake_store_path("a.drv"), [10u8; 32], dummy_derivation("a"));
-        cc.insert_ca([2u8; 32], fake_store_path("b.drv"), [20u8; 32], dummy_derivation("b"), true, None);
+        cc.insert_ca(InsertCaEntry {
+            aterm_hash: [2u8; 32],
+            drv_path: fake_store_path("b.drv"),
+            hdm: [20u8; 32],
+            derivation: dummy_derivation("b"),
+            content_addressed: true,
+            provenance_claims: None,
+        });
 
         let entries: Vec<_> = cc.iter_entries().collect();
         assert_eq!(entries.len(), 2);
@@ -361,7 +381,14 @@ mod tests {
     fn drain_pending_ca_entries_marked() {
         let mut cc = ConversionCache::default();
 
-        cc.insert_ca([1u8; 32], fake_store_path("ca.drv"), [10u8; 32], dummy_derivation("ca"), true, None);
+        cc.insert_ca(InsertCaEntry {
+            aterm_hash: [1u8; 32],
+            drv_path: fake_store_path("ca.drv"),
+            hdm: [10u8; 32],
+            derivation: dummy_derivation("ca"),
+            content_addressed: true,
+            provenance_claims: None,
+        });
         let batch = cc.drain_pending();
         assert_eq!(batch.len(), 1);
         assert!(batch[0].3, "CA flag should be true");

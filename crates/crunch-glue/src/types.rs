@@ -3,8 +3,11 @@
 //! via JSON export. Fields that can be Nickel enum tags use
 //! `NickelString` deserialization to accept both strings and tags.
 
+use std::collections::HashMap;
+
 use crunch_attestation::Claims;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::de;
 use serde::de::MapAccess;
 use serde::de::Visitor;
@@ -22,26 +25,56 @@ fn deserialize_nickel_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<S
 /// This struct is the serde target for Nickel's `Derivation` contract.
 /// After deserialization, use `convert()` to turn it into a
 /// `nix_compat::Derivation` with computed store paths.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct CrunchDerivation {
     pub name: String,
     pub builder: String,
-    #[serde(default = "default_system", deserialize_with = "deserialize_nickel_string")]
     pub system: String,
-    #[serde(default)]
     pub args: Vec<String>,
-    #[serde(default = "default_outputs")]
     pub outputs: Vec<String>,
-    #[serde(default)]
-    pub env: std::collections::HashMap<String, String>,
-    #[serde(default)]
+    pub env: HashMap<String, String>,
     pub inputs: Vec<Input>,
-    #[serde(default)]
     pub fixed_output: Option<FixedOutput>,
-    #[serde(default = "default_addressing_mode", deserialize_with = "deserialize_nickel_string")]
     pub addressing_mode: String,
-    #[serde(default)]
     pub provenance: Option<Claims>,
+}
+
+#[derive(Deserialize)]
+struct RawCrunchDerivation {
+    name: String,
+    builder: String,
+    system: Option<NickelString>,
+    args: Option<Vec<String>>,
+    outputs: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    inputs: Option<Vec<Input>>,
+    fixed_output: Option<FixedOutput>,
+    addressing_mode: Option<NickelString>,
+    provenance: Option<Claims>,
+}
+
+impl<'de> Deserialize<'de> for CrunchDerivation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawCrunchDerivation::deserialize(deserializer)?;
+        Ok(Self {
+            name: raw.name,
+            builder: raw.builder,
+            system: raw.system.map(|value| value.0).unwrap_or_else(default_system),
+            args: raw.args.unwrap_or_else(Vec::new),
+            outputs: raw.outputs.unwrap_or_else(default_outputs),
+            env: raw.env.unwrap_or_else(HashMap::new),
+            inputs: raw.inputs.unwrap_or_else(Vec::new),
+            fixed_output: raw.fixed_output,
+            addressing_mode: raw
+                .addressing_mode
+                .map(|value| value.0)
+                .unwrap_or_else(default_addressing_mode),
+            provenance: raw.provenance,
+        })
+    }
 }
 
 fn default_addressing_mode() -> String {
@@ -72,32 +105,62 @@ pub enum Input {
     Derivation(Box<CrunchDerivation>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 struct RawInputRecord {
-    #[serde(default)]
     drv: Option<CrunchDerivation>,
-    #[serde(default)]
     output: Option<String>,
-    #[serde(default)]
     name: Option<String>,
-    #[serde(default)]
     builder: Option<String>,
-    #[serde(default = "default_system", deserialize_with = "deserialize_nickel_string")]
     system: String,
-    #[serde(default)]
     args: Vec<String>,
-    #[serde(default = "default_outputs")]
     outputs: Vec<String>,
-    #[serde(default)]
-    env: std::collections::HashMap<String, String>,
-    #[serde(default)]
+    env: HashMap<String, String>,
     inputs: Vec<Input>,
-    #[serde(default)]
     fixed_output: Option<FixedOutput>,
-    #[serde(default = "default_addressing_mode", deserialize_with = "deserialize_nickel_string")]
     addressing_mode: String,
-    #[serde(default)]
     provenance: Option<Claims>,
+}
+
+#[derive(Deserialize)]
+struct RawInputRecordFields {
+    drv: Option<CrunchDerivation>,
+    output: Option<String>,
+    name: Option<String>,
+    builder: Option<String>,
+    system: Option<NickelString>,
+    args: Option<Vec<String>>,
+    outputs: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    inputs: Option<Vec<Input>>,
+    fixed_output: Option<FixedOutput>,
+    addressing_mode: Option<NickelString>,
+    provenance: Option<Claims>,
+}
+
+impl<'de> Deserialize<'de> for RawInputRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawInputRecordFields::deserialize(deserializer)?;
+        Ok(Self {
+            drv: raw.drv,
+            output: raw.output,
+            name: raw.name,
+            builder: raw.builder,
+            system: raw.system.map(|value| value.0).unwrap_or_else(default_system),
+            args: raw.args.unwrap_or_else(Vec::new),
+            outputs: raw.outputs.unwrap_or_else(default_outputs),
+            env: raw.env.unwrap_or_else(HashMap::new),
+            inputs: raw.inputs.unwrap_or_else(Vec::new),
+            fixed_output: raw.fixed_output,
+            addressing_mode: raw
+                .addressing_mode
+                .map(|value| value.0)
+                .unwrap_or_else(default_addressing_mode),
+            provenance: raw.provenance,
+        })
+    }
 }
 
 impl RawInputRecord {

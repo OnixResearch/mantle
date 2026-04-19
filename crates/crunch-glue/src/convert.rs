@@ -25,6 +25,11 @@ type InputDerivationMap = BTreeMap<StorePath<String>, BTreeSet<String>>;
 type InputSourceSet = BTreeSet<StorePath<String>>;
 type ResolvedInputs = (InputDerivationMap, InputSourceSet);
 
+struct StorePathText<'a> {
+    path_text: &'a str,
+    store_dir: &'a str,
+}
+
 /// Convert a `CrunchDerivation` into a `nix_compat::Derivation` with
 /// computed BLAKE3 store paths.
 ///
@@ -92,13 +97,18 @@ fn resolve_inputs(
     depth: u32,
     store_dir: &str,
 ) -> Result<ResolvedInputs, Error> {
+    assert!(depth < MAX_RECURSION_DEPTH, "input resolution depth must stay within limit");
+    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
     let mut input_derivations: InputDerivationMap = BTreeMap::new();
     let mut input_sources: InputSourceSet = BTreeSet::new();
 
     for input in inputs {
         match input {
             Input::Source(path_str) => {
-                let store_path = parse_store_path(path_str, store_dir)?;
+                let store_path = parse_store_path(StorePathText {
+                    path_text: path_str,
+                    store_dir,
+                })?;
                 input_sources.insert(store_path);
             }
             Input::OutputSelection(output_ref) => {
@@ -135,27 +145,33 @@ fn build_nix_derivation(
     input_sources: InputSourceSet,
     ca_hash: Option<CAHash>,
 ) -> Derivation {
-    let mut outputs = BTreeMap::new();
-    for output_name in &drv.outputs {
-        outputs.insert(output_name.clone(), Output {
-            path: None,
-            ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
-        });
-    }
+    assert!(!drv.builder.is_empty(), "builder must not be empty");
+    assert!(!drv.outputs.is_empty(), "derivation must have at least one output");
+    let outputs: BTreeMap<String, Output> = drv
+        .outputs
+        .iter()
+        .map(|output_name| {
+            (
+                output_name.clone(),
+                Output {
+                    path: None,
+                    ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
+                },
+            )
+        })
+        .collect();
 
-    let mut environment: BTreeMap<String, BString> = BTreeMap::new();
-    for (k, v) in &drv.env {
-        environment.insert(k.clone(), v.as_bytes().into());
-    }
+    let mut environment: BTreeMap<String, BString> = drv
+        .env
+        .iter()
+        .map(|(key, value)| (key.clone(), value.as_bytes().into()))
+        .collect();
     environment.insert("system".to_string(), drv.system.as_bytes().into());
     environment.insert("builder".to_string(), drv.builder.as_bytes().into());
     environment.insert("name".to_string(), drv.name.as_bytes().into());
-    // Set individual output env vars ($out, $dev, $lib, etc.)
-    for output_name in &drv.outputs {
-        environment.entry(output_name.clone()).or_insert_with(|| "".into());
-    }
-    // Set $outputs listing all output names (Nix convention).
-    // Builder scripts use this to iterate: for o in $outputs; do ...
+    environment.extend(drv.outputs.iter().map(|output_name| {
+        (output_name.clone(), BString::from(""))
+    }));
     environment.insert("outputs".to_string(), drv.outputs.join(" ").as_bytes().into());
 
     Derivation {
@@ -189,10 +205,9 @@ fn finalize_and_register(
     }
 
     let hdm = nix_drv.hash_derivation_modulo(|parent_drv_path| {
-        // Safety: pre-validated above — all parents are present.
-        known_paths
-            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir))
-            .expect("pre-validated parent missing")
+        let parent_hdm = known_paths.get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir));
+        assert!(parent_hdm.is_some(), "pre-validated parent missing");
+        parent_hdm.unwrap_or([0u8; 32])
     });
 
     let is_ca = drv.addressing_mode == "content-addressed" && drv.fixed_output.is_none();
@@ -212,7 +227,14 @@ fn finalize_and_register(
     let aterm_bytes = nix_drv.to_aterm_bytes();
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
-    known_paths.insert_ca(aterm_hash, drv_path.clone(), hdm, nix_drv.clone(), is_ca, drv.provenance.clone());
+    known_paths.insert_ca(crate::conversion_cache::InsertCaEntry {
+        aterm_hash,
+        drv_path: drv_path.clone(),
+        hdm,
+        derivation: nix_drv.clone(),
+        content_addressed: is_ca,
+        provenance_claims: drv.provenance.clone(),
+    });
 
     // Tiger Style: assert postconditions.
     debug_assert!(
@@ -228,11 +250,11 @@ fn finalize_and_register(
 }
 
 /// Parse a store path string into a `StorePath` using the configured store prefix.
-fn parse_store_path(s: &str, store_dir: &str) -> Result<StorePath<String>, Error> {
-    assert!(!s.is_empty(), "store path string must not be empty");
-    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
-    StorePath::from_absolute_path_with_prefix(s.as_bytes(), store_dir)
-        .map_err(|_| Error::InvalidStorePath(s.to_string()))
+fn parse_store_path(path: StorePathText<'_>) -> Result<StorePath<String>, Error> {
+    assert!(!path.path_text.is_empty(), "store path string must not be empty");
+    assert!(path.store_dir.starts_with('/'), "store_dir must be absolute");
+    StorePath::from_absolute_path_with_prefix(path.path_text.as_bytes(), path.store_dir)
+        .map_err(|_| Error::InvalidStorePath(path.path_text.to_string()))
 }
 
 /// Parse a `FixedOutput` into a `CAHash`.
@@ -654,19 +676,33 @@ mod tests {
 
     #[test]
     fn parse_store_path_valid() {
-        let sp = parse_store_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash", "/nix/store").unwrap();
+        let sp = parse_store_path(StorePathText {
+            path_text: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash",
+            store_dir: "/nix/store",
+        })
+        .unwrap();
         assert!(sp.to_string().contains("bash"));
     }
 
     #[test]
     fn parse_store_path_accepts_custom_prefix() {
-        let sp = parse_store_path("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-busybox", "/crunch/store").unwrap();
+        let sp = parse_store_path(StorePathText {
+            path_text: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-busybox",
+            store_dir: "/crunch/store",
+        })
+        .unwrap();
         assert!(sp.to_string().contains("busybox"));
     }
 
     #[test]
     fn parse_store_path_invalid() {
-        assert!(parse_store_path("/tmp/not-a-store-path", "/nix/store").is_err());
+        assert!(
+            parse_store_path(StorePathText {
+                path_text: "/tmp/not-a-store-path",
+                store_dir: "/nix/store",
+            })
+            .is_err()
+        );
     }
 
     #[test]

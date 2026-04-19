@@ -21,56 +21,68 @@ use crate::Lockfile;
 use crate::ManifestInput;
 use crate::ProjectManifest;
 
-pub fn synthesize_project_attestation(
-    manifest_text: &str,
-    lock_text: &str,
-    manifest: &ProjectManifest,
-    lock: &Lockfile,
-    selected_roots: &[ArtifactReference],
-) -> Result<ProjectAttestation, Error> {
-    validate_project_inputs(manifest, lock)?;
-    let manifest_digest = text_digest(manifest_text.as_bytes());
-    let lockfile_digest = text_digest(lock_text.as_bytes());
-    let project_node_id = project_node_id(&manifest_digest, &lockfile_digest);
-    let manifest_inputs = manifest_inputs_by_name(manifest);
+pub struct ProjectAttestationInput<'a> {
+    pub manifest_text: &'a str,
+    pub lock_text: &'a str,
+    pub manifest: &'a ProjectManifest,
+    pub lock: &'a Lockfile,
+    pub selected_roots: &'a [ArtifactReference],
+}
 
-    let mut nodes = Vec::new();
-    let mut node_ids = BTreeSet::new();
-    let mut edges = Vec::new();
-    let mut edge_keys = BTreeSet::new();
+struct ProjectDigests {
+    manifest_digest: String,
+    lockfile_digest: String,
+}
 
-    push_unique_node(&mut nodes, &mut node_ids, project_node(&project_node_id, manifest, lock));
+struct GraphBuilder {
+    project_node_id: String,
+    nodes: Vec<Node>,
+    node_ids: BTreeSet<String>,
+    edges: Vec<Edge>,
+    edge_keys: BTreeSet<(String, EdgeKind, String)>,
+}
 
-    for (name, entry) in &lock.inputs {
+pub fn synthesize_project_attestation(input: ProjectAttestationInput<'_>) -> Result<ProjectAttestation, Error> {
+    assert!(!input.manifest_text.is_empty(), "manifest text must not be empty");
+    assert!(!input.lock_text.is_empty(), "lock text must not be empty");
+    validate_project_inputs(input.manifest, input.lock)?;
+    let digests = ProjectDigests {
+        manifest_digest: text_digest(input.manifest_text.as_bytes()),
+        lockfile_digest: text_digest(input.lock_text.as_bytes()),
+    };
+    let project_node_id = project_node_id(&digests);
+    let manifest_inputs = manifest_inputs_by_name(input.manifest);
+    let mut builder = GraphBuilder::new(project_node_id.clone(), input.manifest, input.lock);
+
+    for (name, entry) in &input.lock.inputs {
         let manifest_input = manifest_inputs
             .get(name.as_str())
             .copied()
             .ok_or_else(|| Error::Validation(format!("lock entry '{name}' missing from manifest")))?;
-        add_source_bundle(
-            &mut nodes,
-            &mut node_ids,
-            &mut edges,
-            &mut edge_keys,
-            &project_node_id,
-            name,
-            manifest_input,
-            entry,
-            lock,
-        )?;
+        builder.add_source_bundle(name, manifest_input, entry, input.lock)?;
     }
 
-    for root in selected_roots {
-        add_selected_root(&mut nodes, &mut node_ids, &mut edges, &mut edge_keys, &project_node_id, root);
+    for root in input.selected_roots {
+        builder.add_selected_root(root);
     }
 
+    let (nodes, edges) = builder.finish();
     let attestation = ProjectAttestation {
         schema_version: AttestationSchemaVersion::V1,
-        claims: Claims::default(),
+        claims: Claims {
+            component_name: None,
+            version_claim: None,
+            supplier: None,
+            homepage: None,
+            license: None,
+            source_aliases: Vec::new(),
+            extra: BTreeMap::new(),
+        },
         facts: ProjectFacts {
             project_node_id,
-            manifest_digest,
-            lockfile_digest,
-            selected_roots: selected_roots.to_vec(),
+            manifest_digest: digests.manifest_digest,
+            lockfile_digest: digests.lockfile_digest,
+            selected_roots: input.selected_roots.to_vec(),
         },
         nodes,
         edges,
@@ -101,64 +113,72 @@ fn manifest_inputs_by_name(manifest: &ProjectManifest) -> BTreeMap<&str, &Manife
     manifest.inputs.iter().map(|input| (input.name.as_str(), input)).collect()
 }
 
-fn add_source_bundle(
-    nodes: &mut Vec<Node>,
-    node_ids: &mut BTreeSet<String>,
-    edges: &mut Vec<Edge>,
-    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
-    project_node_id: &str,
-    input_name: &str,
-    manifest_input: &ManifestInput,
-    entry: &LockEntry,
-    lock: &Lockfile,
-) -> Result<(), Error> {
-    let source = source_node(input_name, manifest_input, entry)?;
-    let source_node_id = source.node_id.clone();
-    push_unique_node(nodes, node_ids, source);
-    push_unique_edge(edges, edge_keys, Edge {
-        from_node_id: source_node_id.clone(),
-        kind: EdgeKind::DeclaredByProject,
-        to_node_id: project_node_id.to_string(),
-    });
+impl GraphBuilder {
+    fn new(project_node_id: String, manifest: &ProjectManifest, lock: &Lockfile) -> Self {
+        let mut builder = Self {
+            project_node_id,
+            nodes: Vec::new(),
+            node_ids: BTreeSet::new(),
+            edges: Vec::new(),
+            edge_keys: BTreeSet::new(),
+        };
+        let project_node = project_node(&builder.project_node_id, manifest, lock);
+        push_unique_node(&mut builder.nodes, &mut builder.node_ids, project_node);
+        builder
+    }
 
-    for patch_name in &entry.patches {
-        let patch = lock.patches.get(patch_name).ok_or_else(|| {
-            Error::Validation(format!("lock entry '{input_name}' references missing patch '{patch_name}'"))
-        })?;
-        let patch_node = patch_node(patch_name, patch);
-        let patch_node_id = patch_node.node_id.clone();
-        push_unique_node(nodes, node_ids, patch_node);
-        push_unique_edge(edges, edge_keys, Edge {
-            from_node_id: source_node_id.clone(),
-            kind: EdgeKind::PatchedBy,
-            to_node_id: patch_node_id.clone(),
-        });
-        push_unique_edge(edges, edge_keys, Edge {
-            from_node_id: patch_node_id,
+    fn add_source_bundle(
+        &mut self,
+        input_name: &str,
+        manifest_input: &ManifestInput,
+        entry: &LockEntry,
+        lock: &Lockfile,
+    ) -> Result<(), Error> {
+        let source = source_node(input_name, manifest_input, entry)?;
+        let source_node_id = source.node_id.clone();
+        push_unique_node(&mut self.nodes, &mut self.node_ids, source);
+        self.add_declared_by_project_edge(&source_node_id);
+
+        for patch_name in &entry.patches {
+            let patch = lock.patches.get(patch_name).ok_or_else(|| {
+                Error::Validation(format!("lock entry '{input_name}' references missing patch '{patch_name}'"))
+            })?;
+            let patch_node = patch_node(patch_name, patch);
+            let patch_node_id = patch_node.node_id.clone();
+            push_unique_node(&mut self.nodes, &mut self.node_ids, patch_node);
+            self.add_edge(Edge {
+                from_node_id: source_node_id.clone(),
+                kind: EdgeKind::PatchedBy,
+                to_node_id: patch_node_id.clone(),
+            });
+            self.add_declared_by_project_edge(&patch_node_id);
+        }
+
+        Ok(())
+    }
+
+    fn add_selected_root(&mut self, root: &ArtifactReference) {
+        let root_node = artifact_node(&root.logical_path);
+        let root_node_id = root_node.node_id.clone();
+        push_unique_node(&mut self.nodes, &mut self.node_ids, root_node);
+        self.add_declared_by_project_edge(&root_node_id);
+    }
+
+    fn add_declared_by_project_edge(&mut self, from_node_id: &str) {
+        self.add_edge(Edge {
+            from_node_id: from_node_id.to_string(),
             kind: EdgeKind::DeclaredByProject,
-            to_node_id: project_node_id.to_string(),
+            to_node_id: self.project_node_id.clone(),
         });
     }
 
-    Ok(())
-}
+    fn add_edge(&mut self, edge: Edge) {
+        push_unique_edge(&mut self.edges, &mut self.edge_keys, edge);
+    }
 
-fn add_selected_root(
-    nodes: &mut Vec<Node>,
-    node_ids: &mut BTreeSet<String>,
-    edges: &mut Vec<Edge>,
-    edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
-    project_node_id: &str,
-    root: &ArtifactReference,
-) {
-    let root_node = artifact_node(&root.logical_path);
-    let root_node_id = root_node.node_id.clone();
-    push_unique_node(nodes, node_ids, root_node);
-    push_unique_edge(edges, edge_keys, Edge {
-        from_node_id: root_node_id,
-        kind: EdgeKind::DeclaredByProject,
-        to_node_id: project_node_id.to_string(),
-    });
+    fn finish(self) -> (Vec<Node>, Vec<Edge>) {
+        (self.nodes, self.edges)
+    }
 }
 
 fn project_node(project_node_id: &str, manifest: &ProjectManifest, lock: &Lockfile) -> Node {
@@ -176,6 +196,8 @@ fn project_node(project_node_id: &str, manifest: &ProjectManifest, lock: &Lockfi
 }
 
 fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEntry) -> Result<Node, Error> {
+    assert!(!input_name.is_empty(), "input name must not be empty");
+    assert!(!entry.hash.value.is_empty(), "entry hash must not be empty");
     let mut attributes = BTreeMap::new();
     attributes.insert("input_name".to_string(), input_name.to_string());
     attributes.insert("frozen".to_string(), manifest_input.frozen.to_string());
@@ -219,6 +241,8 @@ fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEnt
 }
 
 fn patch_node(patch_name: &str, patch: &LockedPatch) -> Node {
+    assert!(!patch_name.is_empty(), "patch name must not be empty");
+    assert!(!patch.hash.value.is_empty(), "patch hash must not be empty");
     let mut attributes = BTreeMap::new();
     attributes.insert("patch_name".to_string(), patch_name.to_string());
     attributes.insert("hash_algo".to_string(), patch.hash.algo.to_string());
@@ -250,11 +274,11 @@ fn artifact_node(logical_path: &str) -> Node {
     }
 }
 
-fn project_node_id(manifest_digest: &str, lockfile_digest: &str) -> String {
+fn project_node_id(digests: &ProjectDigests) -> String {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(manifest_digest.as_bytes());
+    bytes.extend_from_slice(digests.manifest_digest.as_bytes());
     bytes.push(b'\n');
-    bytes.extend_from_slice(lockfile_digest.as_bytes());
+    bytes.extend_from_slice(digests.lockfile_digest.as_bytes());
     format!("project:{}", blake3::hash(&bytes).to_hex())
 }
 
@@ -324,7 +348,14 @@ mod tests {
         let manifest_text = "{ version = \"1.0.0\", inputs = [], patches = [] }";
         let lock_text = lock.to_json().unwrap();
 
-        let attestation = synthesize_project_attestation(manifest_text, &lock_text, &manifest, &lock, &roots).unwrap();
+        let attestation = synthesize_project_attestation(ProjectAttestationInput {
+            manifest_text,
+            lock_text: &lock_text,
+            manifest: &manifest,
+            lock: &lock,
+            selected_roots: &roots,
+        })
+        .unwrap();
 
         assert_eq!(attestation.schema_version, AttestationSchemaVersion::V1);
         assert_eq!(attestation.facts.selected_roots.len(), 2);
@@ -370,9 +401,23 @@ mod tests {
         let manifest_text = "manifest";
         let lock_text = lock.to_json().unwrap();
         let mut roots = sample_roots();
-        let first = synthesize_project_attestation(manifest_text, &lock_text, &manifest, &lock, &roots).unwrap();
+        let first = synthesize_project_attestation(ProjectAttestationInput {
+            manifest_text,
+            lock_text: &lock_text,
+            manifest: &manifest,
+            lock: &lock,
+            selected_roots: &roots,
+        })
+        .unwrap();
         roots.reverse();
-        let second = synthesize_project_attestation(manifest_text, &lock_text, &manifest, &lock, &roots).unwrap();
+        let second = synthesize_project_attestation(ProjectAttestationInput {
+            manifest_text,
+            lock_text: &lock_text,
+            manifest: &manifest,
+            lock: &lock,
+            selected_roots: &roots,
+        })
+        .unwrap();
 
         assert_eq!(first.canonical_bytes().unwrap(), second.canonical_bytes().unwrap());
         assert_eq!(first.canonical_digest().unwrap(), second.canonical_digest().unwrap());
@@ -386,8 +431,15 @@ mod tests {
         let manifest_text = "manifest";
         let lock_text = lock.to_json().unwrap();
 
-        let err =
-            synthesize_project_attestation(manifest_text, &lock_text, &manifest, &lock, &sample_roots()).unwrap_err();
+        let roots = sample_roots();
+        let err = synthesize_project_attestation(ProjectAttestationInput {
+            manifest_text,
+            lock_text: &lock_text,
+            manifest: &manifest,
+            lock: &lock,
+            selected_roots: &roots,
+        })
+        .unwrap_err();
 
         assert!(
             matches!(err, Error::Validation(message) if message.contains("missing patch") || message.contains("unlocked patch"))

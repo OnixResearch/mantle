@@ -18,6 +18,7 @@ mod refresh;
 mod upgrade;
 mod version;
 
+pub use attestation::ProjectAttestationInput;
 pub use attestation::synthesize_project_attestation;
 pub use drift::DriftStatus;
 pub use drift::check_drift;
