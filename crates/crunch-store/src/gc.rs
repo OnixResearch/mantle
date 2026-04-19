@@ -41,7 +41,7 @@ pub enum GcOperationKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GcReport {
-    pub dry_run: bool,
+    pub is_dry_run: bool,
     pub retained_root_count: u32,
     pub candidate_path_count: u32,
     pub reclaimable_bytes_total: u64,
@@ -83,14 +83,14 @@ pub async fn run_gc(
     directory_service: &dyn DirectoryService,
     blob_service: &dyn BlobService,
     ca_mappings: &mut CaMappings,
-    dry_run: bool,
+    is_dry_run: bool,
 ) -> Result<GcReport, Error> {
     assert!(!store_dir.is_empty(), "store_dir must not be empty");
     assert!(store_dir.starts_with('/'), "store_dir must be absolute");
 
     let plan = build_plan(state_dir, output_dir_str, store_dir, pathinfo, directory_service, blob_service).await?;
     let mut gc_result = GcReport {
-        dry_run,
+        is_dry_run,
         retained_root_count: saturating_u32(plan.retained_roots.len()),
         candidate_path_count: saturating_u32(plan.dead_pathinfos.len()),
         reclaimable_bytes_total: plan.reclaimable_bytes_total,
@@ -102,7 +102,7 @@ pub async fn run_gc(
         candidate_exported_output_count: saturating_u32(plan.orphaned_on_disk.len()),
         operations: Vec::new(),
     };
-    if dry_run {
+    if is_dry_run {
         return Ok(gc_result);
     }
 
@@ -310,13 +310,13 @@ async fn collect_directory_state(
     }
 
     let mut stream = directory_service.get_recursive(&root_digest);
-    let mut saw_root = false;
+    let mut has_seen_root_digest = false;
     while let Some(item) = stream.next().await {
         let directory =
             item.map_err(|err| Error::Gc(format!("reading directory {}: {err}", encode_digest(&root_digest))))?;
         let digest = directory.digest();
         if digest == root_digest {
-            saw_root = true;
+            has_seen_root_digest = true;
         }
         if state.directories.insert(digest, directory.clone()).is_some() {
             continue;
@@ -329,13 +329,14 @@ async fn collect_directory_state(
             }
         }
     }
-    if !saw_root {
+    if !has_seen_root_digest {
         return Err(Error::Gc(format!(
             "missing directory metadata for reachable digest {}",
             encode_digest(&root_digest)
         )));
     }
     assert!(state.directories.contains_key(&root_digest), "root directory must be in state after walk");
+    assert!(has_seen_root_digest, "directory stream must include the root");
     Ok(())
 }
 
@@ -398,17 +399,17 @@ fn collect_dead_closure_attestations(state_dir: &Path, retained_roots: &[GcRootR
             Ok(closure) => closure,
             Err(_) => continue,
         };
-        let all_roots_live = closure
+        let are_all_roots_live = closure
             .facts
             .root_node_ids
             .iter()
             .filter_map(|node_id| node_id.strip_prefix("artifact:"))
             .all(|logical_path| live_roots.contains(logical_path));
-        if !all_roots_live {
+        if !are_all_roots_live {
             dead_paths.push(path);
         }
     }
-    assert!(dead_paths.len() <= scanned_entries as usize, "dead paths cannot exceed scanned entries");
+    assert!(dead_paths.len() <= usize::try_from(scanned_entries).unwrap(), "dead paths cannot exceed scanned entries");
     Ok(dead_paths)
 }
 
@@ -459,7 +460,7 @@ fn scan_blob_dir(
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        if name.len() != B3Digest::LENGTH * 2 {
+        if name.len() != B3Digest::LENGTH.saturating_mul(2) {
             continue;
         }
         let Ok(decoded) = HEXLOWER.decode(name.as_bytes()) else {
@@ -576,7 +577,9 @@ async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> R
     let final_path = state_dir.join("pathinfo.redb");
     let tmp_path = state_dir.join("pathinfo.redb.gc-tmp");
     if tmp_path.exists() {
-        let _ = std::fs::remove_file(&tmp_path);
+        if let Err(err) = std::fs::remove_file(&tmp_path) {
+            tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp pathinfo already cleaned");
+        }
     }
     let tmp_service = RedbPathInfoService::new("crunch-gc-pathinfo".to_string(), RedbPathInfoServiceConfig {
         path: Some(tmp_path.clone()),
@@ -609,7 +612,9 @@ async fn rewrite_directory_db<'a>(
     let final_path = state_dir.join("directories.redb");
     let tmp_path = state_dir.join("directories.redb.gc-tmp");
     if tmp_path.exists() {
-        let _ = std::fs::remove_file(&tmp_path);
+        if let Err(err) = std::fs::remove_file(&tmp_path) {
+            tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp directories already cleaned");
+        }
     }
     let tmp_service = RedbDirectoryService::new("crunch-gc-directories".to_string(), RedbDirectoryServiceConfig {
         path: Some(tmp_path.clone()),
@@ -646,8 +651,8 @@ fn symlink_exists(path: &Path) -> Result<bool, Error> {
     }
 }
 
-fn saturating_u32(len: usize) -> u32 {
-    len.min(u32::MAX as usize) as u32
+pub(crate) fn saturating_u32(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
@@ -771,12 +776,12 @@ mod tests {
         persist_output(&mut store, "out", keep_path.clone(), keep_node, vec![], true, Some(GcRootSource::Build)).await;
         persist_output(&mut store, "out", drop_path.clone(), drop_node, vec![], true, None).await;
 
-        let dry_run = store.garbage_collect(true).await.unwrap();
-        assert_eq!(dry_run.candidate_paths, vec![drop_path.to_absolute_path()]);
+        let is_dry_run = store.garbage_collect(true).await.unwrap();
+        assert_eq!(is_dry_run.candidate_paths, vec![drop_path.to_absolute_path()]);
         assert!(output_dir.path().join(drop_path.to_string()).exists());
 
         let real = store.garbage_collect(false).await.unwrap();
-        assert_eq!(real.candidate_paths, dry_run.candidate_paths);
+        assert_eq!(real.candidate_paths, is_dry_run.candidate_paths);
 
         let reopened = reopen_store(state_dir.path(), output_dir.path()).await;
         let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();

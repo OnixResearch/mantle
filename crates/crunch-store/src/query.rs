@@ -14,6 +14,8 @@ use snix_store::nar::NarCalculationService;
 use snix_store::nar::SimpleRenderer;
 use snix_store::pathinfoservice::PathInfoService;
 
+use crate::gc::saturating_u32;
+
 use crate::Error;
 
 /// Info for a single store path, returned by `store_info`.
@@ -95,7 +97,7 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
             node: format!("{:?}", pi.node),
         });
     }
-    assert!(results.len() <= scanned_count as usize, "results cannot exceed scanned paths");
+    assert!(results.len() <= usize::try_from(scanned_count).unwrap(), "results cannot exceed scanned paths");
     Ok(results)
 }
 
@@ -152,7 +154,7 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
             });
         }
     }
-    assert!(results.len() <= scanned_count as usize, "verify results cannot exceed scanned paths");
+    assert!(results.len() <= usize::try_from(scanned_count).unwrap(), "verify results cannot exceed scanned paths");
 
     Ok(results)
 }
@@ -197,7 +199,7 @@ pub async fn store_verify_signatures(
             }
         }
 
-        let total_signatures = pi.signatures.len().min(u32::MAX as usize) as u32;
+        let total_signatures = saturating_u32(pi.signatures.len());
         assert!(
             total_signatures >= trusted_count,
             "trusted count ({trusted_count}) cannot exceed total signatures ({total_signatures})"
@@ -228,14 +230,14 @@ pub struct SignResult {
 
 /// Sign PathInfo entries matching `path_filter`.
 ///
-/// When `sign_all` is true, only unsigned PathInfos are updated. If a
+/// When `is_sign_all` is true, only unsigned PathInfos are updated. If a
 /// PathInfo already has a signature from the same key name, it is replaced
 /// instead of duplicated. Returns one result per updated path.
 pub async fn store_sign(
     svc: &dyn PathInfoService,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
     path_filter: Option<&str>,
-    sign_all: bool,
+    is_sign_all: bool,
 ) -> Result<Vec<SignResult>, Error> {
     use nix_compat::narinfo::Signature;
     use nix_compat::narinfo::fingerprint;
@@ -245,7 +247,7 @@ pub async fn store_sign(
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
 
     let mut stream = svc.list();
-    let mut to_update = Vec::with_capacity(SIGN_CANDIDATE_COUNT_LIMIT as usize);
+    let mut to_update = Vec::with_capacity(usize::try_from(SIGN_CANDIDATE_COUNT_LIMIT).unwrap());
     let mut scanned_count_u32: u32 = 0;
 
     while let Some(result) = stream.next().await {
@@ -259,7 +261,7 @@ pub async fn store_sign(
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
 
-        if sign_all {
+        if is_sign_all {
             if !pi.signatures.is_empty() {
                 continue;
             }
@@ -302,7 +304,10 @@ pub async fn store_sign(
             replaced: is_signed_by_same_key,
         };
         assert!(
-            result.newly_signed as u8 + result.appended as u8 + result.replaced as u8 == 1,
+            (result.newly_signed as u8)
+                .saturating_add(result.appended as u8)
+                .saturating_add(result.replaced as u8)
+                == 1,
             "sign result must be exactly one of newly_signed, appended, or replaced"
         );
         results.push(result);

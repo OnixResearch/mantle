@@ -66,7 +66,7 @@ pub async fn export_castore_to_disk(
 /// Write a single file blob to disk.
 async fn export_file_to_disk(
     digest: &snix_castore::B3Digest,
-    executable: bool,
+    is_executable: bool,
     dest: &str,
     blob_service: &(impl BlobService + Clone),
 ) -> Result<(), String> {
@@ -92,10 +92,10 @@ async fn export_file_to_disk(
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {dest}: {e}"))?;
     }
     #[cfg(unix)]
-    if executable {
+    if is_executable {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o555))
-            .map_err(|e| format!("setting executable: {e}"))?;
+            .map_err(|e| format!("setting executable permission: {e}"))?;
     }
     Ok(())
 }

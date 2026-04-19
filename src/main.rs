@@ -471,8 +471,8 @@ pub enum StoreAction {
     /// Run manual garbage collection
     Gc {
         /// Preview removals without mutating state
-        #[arg(long)]
-        dry_run: bool,
+        #[arg(long = "dry-run")]
+        is_dry_run: bool,
     },
     /// Verify NAR hash and trusted signatures of stored paths
     Verify {

@@ -532,7 +532,7 @@ impl StoreHandle {
         roots::register_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), store_path, source).await
     }
 
-    pub async fn garbage_collect(&mut self, dry_run: bool) -> Result<GcReport, Error> {
+    pub async fn garbage_collect(&mut self, is_dry_run: bool) -> Result<GcReport, Error> {
         gc::run_gc(
             &self.state_dir,
             &self.output_dir_str,
@@ -541,7 +541,7 @@ impl StoreHandle {
             self.directory_service.as_ref(),
             self.blob_service.as_ref(),
             &mut self.ca_mappings,
-            dry_run,
+            is_dry_run,
         )
         .await
     }
@@ -576,10 +576,10 @@ impl StoreHandle {
 
         let digest = match node {
             Node::File { digest, size, .. } => {
-                const MAX_BLOB_READ: u64 = 8 * 1024 * 1024;
-                if *size > MAX_BLOB_READ {
+                const MAX_BLOB_READ_BYTES: u64 = 8_388_608;
+                if *size > MAX_BLOB_READ_BYTES {
                     return Err(Error::BlobService(format!(
-                        "blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})"
+                        "blob too large to read: {size} bytes (limit: {MAX_BLOB_READ_BYTES})"
                     )));
                 }
                 *digest
@@ -1114,7 +1114,9 @@ impl StoreHandle {
                 ));
             }
             for chunk in streamed_chunks.values() {
-                let expected_chunk = chunks.get(chunk.chunk_index as usize).ok_or_else(|| {
+                let chunk_idx = usize::try_from(chunk.chunk_index)
+                    .map_err(|_| format!("chunk index {} overflows usize", chunk.chunk_index))?;
+                let expected_chunk = chunks.get(chunk_idx).ok_or_else(|| {
                     format!("delta stream chunk index {} out of range for blob {}", chunk.chunk_index, blob_digest)
                 })?;
                 if expected_chunk.digest != chunk.digest {
@@ -1242,11 +1244,11 @@ impl StoreHandle {
             return Err(format!("delta PathInfo for {} had no signatures", path_info.store_path));
         }
         let fingerprint = compute_pathinfo_fingerprint(path_info);
-        let trusted = path_info.signatures.iter().any(|signature| {
+        let is_trusted = path_info.signatures.iter().any(|signature| {
             let signature_ref = signature.as_ref();
             self.remote_trusted_public_keys.iter().any(|key| key.verify(&fingerprint, &signature_ref))
         });
-        if trusted {
+        if is_trusted {
             Ok(())
         } else {
             Err(format!(
@@ -1676,7 +1678,7 @@ impl StoreHandle {
 
         let delta_cap = match self.remote_delta_capability.clone() {
             Some(RemoteDeltaCapability::Supported(capability)) => Some(capability),
-            _ => None,
+            Some(RemoteDeltaCapability::Unsupported) | None => None,
         };
         let mut delta_fallback_reason = None;
         if let Some(capability) = delta_cap.as_ref() {
@@ -1941,7 +1943,7 @@ fn build_delta_http_client() -> Result<reqwest::Client, String> {
 }
 
 async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec<DeltaTransferFrameWire>, String> {
-    const MAX_FRAME_COUNT: u32 = 100_000;
+    const MAX_FRAME_COUNT: usize = 100_000;
 
     let mut frames = Vec::<DeltaTransferFrameWire>::new();
     let mut buffered = Vec::<u8>::new();
@@ -1966,7 +1968,7 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
                 .map_err(|e| format!("decoding delta stream frame: {e}"))?;
             frames.push(frame);
             assert!(
-                frames.len() <= MAX_FRAME_COUNT as usize,
+                frames.len() <= MAX_FRAME_COUNT,
                 "delta transfer frame count exceeded {MAX_FRAME_COUNT}"
             );
         }
@@ -1978,7 +1980,7 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
         frames.push(frame);
     }
     assert!(
-        frames.len() <= MAX_FRAME_COUNT as usize,
+        frames.len() <= MAX_FRAME_COUNT,
         "final delta transfer frame count exceeded {MAX_FRAME_COUNT}"
     );
 

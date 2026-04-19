@@ -45,11 +45,11 @@ async fn cmd_store_async(
             let store = open_store(output_dir, state_dir, store_dir).await?;
             cmd_store_unpin(&store, &path)
         }
-        crate::StoreAction::Gc { dry_run } => {
+        crate::StoreAction::Gc { is_dry_run } => {
             let _guard = crunch_store::StoreMutationGuard::try_acquire(state_dir)
                 .map_err(|e| RunError::Build(format!("{e}")))?;
             let mut store = open_store(output_dir, state_dir, store_dir).await?;
-            cmd_store_gc(&mut store, dry_run).await
+            cmd_store_gc(&mut store, is_dry_run).await
         }
         crate::StoreAction::Verify {
             path,
@@ -191,11 +191,11 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
     Ok(())
 }
 
-async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, dry_run: bool) -> Result<(), RunError> {
-    let report = store.garbage_collect(dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
+async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -> Result<(), RunError> {
+    let report = store.garbage_collect(is_dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
     if report.candidate_paths.is_empty() {
         println!("retained_roots={}  candidate_paths=0  reclaimable_bytes=0", report.retained_root_count);
-        if dry_run {
+        if is_dry_run {
             eprintln!("dry-run: no changes made");
         } else {
             eprintln!("gc: nothing to do");
@@ -218,7 +218,7 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, dry_run: bool) -> R
     for path in &report.candidate_paths {
         println!("DELETE {path}");
     }
-    if dry_run {
+    if is_dry_run {
         eprintln!("dry-run: no changes made");
     } else {
         eprintln!("gc: removed {} candidate path(s)", report.candidate_path_count);
@@ -363,17 +363,17 @@ fn print_verified_ok(
 async fn cmd_store_sign(
     svc: &impl snix_store::pathinfoservice::PathInfoService,
     path_filter: Option<&str>,
-    sign_all: bool,
+    is_sign_all: bool,
     signing_key_path: Option<&std::path::Path>,
     state_dir: &Path,
 ) -> Result<(), RunError> {
-    if path_filter.is_none() && !sign_all {
+    if path_filter.is_none() && !is_sign_all {
         return Err(RunError::Internal("provide a store path or use --all to sign all entries".to_string()));
     }
 
     let keypair = crate::build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
 
-    let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, sign_all)
+    let results = crunch_store::store_sign(svc, &keypair.signing_key, path_filter, is_sign_all)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
 
