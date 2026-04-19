@@ -9,9 +9,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-utils.url = "github:numtide/flake-utils";
+    tigerstyle = {
+      url = "git+ssh://git@github.com/brittonr/tigerstyle-rs.git?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.crane.follows = "crane";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
-  outputs = { self, nixpkgs, crane, rust-overlay, flake-utils, ... }:
+  outputs = { self, nixpkgs, crane, rust-overlay, flake-utils, tigerstyle, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -49,6 +56,19 @@
         crunch = craneLib.buildPackage {
           inherit src cargoArtifacts nativeBuildInputs buildInputs;
         };
+
+        tigerstyleRunner = pkgs.writeShellApplication {
+          name = "crunch-tigerstyle";
+          runtimeInputs = nativeBuildInputs ++ [
+            rustToolchain
+            tigerstyle.packages.${system}.cargo-tigerstyle
+          ];
+          text = ''
+            export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPath "lib/pkgconfig" buildInputs}:''${PKG_CONFIG_PATH:-}"
+            export SNIX_BUILD_SANDBOX_SHELL="''${SNIX_BUILD_SANDBOX_SHELL:-/bin/sh}"
+            exec cargo-tigerstyle "$@"
+          '';
+        };
       in
       {
         packages = {
@@ -56,8 +76,23 @@
           crunch = crunch;
         };
 
+        apps = {
+          tigerstyle = flake-utils.lib.mkApp {
+            drv = tigerstyleRunner;
+            exePath = "/bin/crunch-tigerstyle";
+          };
+        };
+
         checks = {
           inherit crunch;
+
+          tigerstyle = (tigerstyle.lib.mkConsumerCheck {
+            inherit system nativeBuildInputs buildInputs;
+            src = ./.;
+            cargoLock = ./Cargo.lock;
+          }).overrideAttrs (_old: {
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          });
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
@@ -85,6 +120,8 @@
             cargo-nextest
             cargo-watch
             rust-analyzer
+          ] ++ [
+            tigerstyle.packages.${system}.cargo-tigerstyle
           ];
 
           # Ensure the nightly toolchain is available

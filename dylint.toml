@@ -1,0 +1,40 @@
+# Copy into the consumer workspace root as `dylint.toml`.
+#
+# Keep this file consumer-owned. Tigerstyle defaults stay in the lint crate;
+# workspace-specific thresholds, allowlists, and rollout controls live here.
+#
+# crunch starts with the documented boundary-first starter profile while it
+# proves the check path and burns down follow-up lint families.
+
+[tigerstyle]
+disabled_lints = [
+  "function_length",
+  "acronym_style",
+  "numeric_units",
+  "unbounded_loop",
+  "compound_condition",
+  "verified_purity",
+  "unjustified_allow",
+  "nested_conditionals",
+  "assertion_density",
+  "multi_lock_ordering",
+  "unbounded_collection_growth",
+  "sentinel_fallback",
+  "too_many_parameters",
+  "bool_naming",
+  "ignored_result",
+  "unchecked_narrowing",
+  "unchecked_division",
+  "catch_all_on_enum",
+  "platform_dependent_cast",
+  "float_for_currency",
+  "ambiguous_params",
+  "raw_arithmetic_overflow",
+  "no_unwrap",
+  "no_panic",
+  "no_todo",
+  "unjustified_no_todo_allow",
+  "no_recursion",
+]
+
+[tigerstyle.lint_levels]

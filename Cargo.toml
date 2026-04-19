@@ -23,6 +23,21 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
+[workspace.metadata.tigerstyle]
+default_scope = [
+  "-p", "crunch",
+  "-p", "crunch-attestation",
+  "-p", "crunch-build",
+  "-p", "crunch-delta",
+  "-p", "crunch-eval",
+  "-p", "crunch-glue",
+  "-p", "crunch-pipeline",
+  "-p", "crunch-project",
+  "-p", "crunch-shell",
+  "-p", "crunch-store",
+]
+cargo_check_args = ["--lib"]
+
 [package]
 name = "crunch"
 version.workspace = true

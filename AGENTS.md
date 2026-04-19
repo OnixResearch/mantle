@@ -439,6 +439,12 @@ When claiming test results in commit messages or completion summaries:
 - The new first-party clippy helper assumes the documented build env. Without
   the clang/mold/pkg-config PATH prefix and OpenSSL `PKG_CONFIG_PATH`, it fails
   early with `linker 'clang' not found` before any first-party lint results.
+- Tigerstyle consumer integration has two crunch-specific flake gotchas: use
+  `src = ./.` for the lint check (not `craneLib.cleanCargoSource ./.`) because
+  `crates/crunch-eval/src/stdlib.rs` `include_str!`s `lib/*.ncl`, and set
+  `SNIX_BUILD_SANDBOX_SHELL` in the check env (plain `/bin/sh` is enough for
+  linting) because vendored `snix-build` uses `env!("SNIX_BUILD_SANDBOX_SHELL")`
+  at compile time.
 
 ## Self-Build and Self-Hosting Proof
 

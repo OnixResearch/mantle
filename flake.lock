@@ -15,6 +15,23 @@
         "type": "github"
       }
     },
+    "dylint-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774225669,
+        "narHash": "sha256-3OkN9IX1ommW6JZlgOOalz8Zx8tQGNgjaM7LVMYFZVg=",
+        "owner": "trailofbits",
+        "repo": "dylint",
+        "rev": "0e0a71eefe6f01563d11acc6e1d7af1d505934a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "trailofbits",
+        "repo": "dylint",
+        "rev": "0e0a71eefe6f01563d11acc6e1d7af1d505934a9",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -54,7 +71,8 @@
         "crane": "crane",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "tigerstyle": "tigerstyle"
       }
     },
     "rust-overlay": {
@@ -90,6 +108,37 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
+      }
+    },
+    "tigerstyle": {
+      "inputs": {
+        "crane": [
+          "crane"
+        ],
+        "dylint-src": "dylint-src",
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ]
+      },
+      "locked": {
+        "lastModified": 1776562221,
+        "narHash": "sha256-Dvt2C0WZBrZf4RWEXCDX17UAsFmJ1EzlL9GffWi7aG0=",
+        "ref": "main",
+        "rev": "bbf5fbb60679668ca8c42593fd617db2d0f89b43",
+        "revCount": 91,
+        "type": "git",
+        "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
       }
     }
   },

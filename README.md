@@ -195,6 +195,25 @@ The strict clippy helper excludes vendored workspace members
 `snix-castore`, `snix-store`, and `snix-tracing` so first-party warnings fail
 cleanly.
 
+**Tigerstyle lane**
+
+Run the repo-pinned Tiger Style consumer check when you want the structural lint
+pass:
+
+```bash
+./scripts/check-first-party-tigerstyle.sh
+```
+
+That wrapper delegates to the flake-pinned `cargo-tigerstyle` runner:
+
+```bash
+nix run .#tigerstyle -- check
+```
+
+Default scope comes from `[workspace.metadata.tigerstyle]` in `Cargo.toml`, so
+vendored workspace members stay out of the lint pass. Workspace-specific lint
+rollout config lives in `dylint.toml`.
+
 **Heavyweight rails**
 
 Keep these heavier checks separate from the ordinary gate:

@@ -56,6 +56,28 @@ Notes:
   `pkg-config`, or the OpenSSL pkg-config path are missing, fix the shell env
   first instead of treating that as a code failure.
 
+### Tigerstyle lane
+
+Run the repo-pinned Tiger Style consumer check when you want the structural lint
+pass:
+
+```bash
+./scripts/check-first-party-tigerstyle.sh
+```
+
+That wrapper delegates to this flake entry point:
+
+```bash
+nix run .#tigerstyle -- check
+```
+
+Notes:
+
+- default package scope comes from `[workspace.metadata.tigerstyle]` in
+  `Cargo.toml`
+- workspace-specific lint rollout config lives in `dylint.toml`
+- vendored workspace members stay out of the default Tiger Style scope
+
 ### Heavyweight rails
 
 Keep these checks separate from the ordinary gate:
