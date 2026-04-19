@@ -341,6 +341,7 @@ impl ProbabilisticSenderCandidates {
     }
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn collect_sender_candidates(
     node: &ArtifactNode,
     directory_digests: &mut HashSet<B3Digest>,
@@ -396,6 +397,7 @@ fn apply_frontier_hits(
     }
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn collect_lossy_sender_candidates(
     node: &ArtifactNode,
     directory_buckets: &mut HashSet<u8>,
@@ -496,6 +498,7 @@ async fn load_seeded_chunk_metadata_if_present(
     services.blob_service.chunks(&digest).await.map_err(|_| ManifestError::MissingBlob(digest))
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn walk_local_node(
     node: &ArtifactNode,
     frontiers: Option<&HashMap<B3Digest, &ReceiverFrontierSummary>>,
@@ -572,6 +575,7 @@ fn frontier_seed_nodes_probabilistic(
     seeds
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn walk_local_nodes_lossy(
     seeds: Vec<Node>,
     lossy_frontiers: Option<&HashMap<B3Digest, &ReceiverLossyFrontierSummary>>,
@@ -632,6 +636,7 @@ async fn walk_local_nodes_lossy(
     Ok(())
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn walk_local_nodes_probabilistic(
     seeds: Vec<Node>,
     probabilistic_frontiers: Option<&HashMap<B3Digest, &ReceiverProbabilisticFrontierSummary>>,
@@ -692,6 +697,7 @@ async fn walk_local_nodes_probabilistic(
     Ok(())
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn record_local_blob(
     blob: &BlobNode,
     services: &FixtureManifestStore,
@@ -727,6 +733,7 @@ async fn record_local_blob(
     Ok(())
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn record_local_blob_lossy(
     blob: &BlobNode,
     services: &FixtureManifestStore,
@@ -763,6 +770,7 @@ async fn record_local_blob_lossy(
     Ok(())
 }
 
+#[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
 async fn record_local_blob_probabilistic(
     blob: &BlobNode,
     services: &FixtureManifestStore,
@@ -949,6 +957,7 @@ impl BlobWriter for FixtureBlobWriter {
     }
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn collect_recursive_directories(
     digest: &B3Digest,
     directories: &HashMap<B3Digest, Directory>,
@@ -965,7 +974,9 @@ fn collect_recursive_directories(
     items.push(directory);
 }
 
-#[allow(tigerstyle::expect_in_production)] // fixture construction with hardcoded valid values
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
+#[allow(tigerstyle::no_unwrap)] // fixture construction with hardcoded valid values
+#[allow(tigerstyle::unbounded_collection_growth)] // fixture maps bounded by fixture tree size
 fn seed_node(
     node: &ArtifactNode,
     directories: &mut HashMap<B3Digest, Directory>,
@@ -998,6 +1009,7 @@ fn seed_node(
     }
 }
 
+#[allow(tigerstyle::no_unwrap)] // fixture construction with hardcoded valid values
 fn seed_child_node(node: &ArtifactNode) -> Node {
     match node {
         ArtifactNode::Directory(directory) => Node::Directory {

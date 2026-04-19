@@ -424,6 +424,7 @@ fn cross_output_case() -> BenchCase {
     )
 }
 
+#[allow(tigerstyle::too_many_parameters)] // fixture constructor threading test scenario parts
 fn build_case(
     name: &'static str,
     sender: ClosureFixture,
@@ -530,6 +531,7 @@ impl BenchCase {
     }
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
     let mode_bytes = match DEFAULT_GROUPED_OUTPUT_HEADER_MODE {
         GroupedOutputHeaderMode::SeparateModeByte => 1u64,
@@ -575,6 +577,8 @@ fn grouped_output_header_bytes(output: &OutputFixture, summaries: &[&ReceiverPro
         .saturating_add(nested_descendant_stream_mode_bytes)
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
+#[allow(tigerstyle::raw_arithmetic_overflow)] // wire-size calculations with known-valid ordering
 fn grouped_output_entry_bytes(output: &OutputFixture, summaries: &[&ReceiverProbabilisticFrontierSummary]) -> u64 {
     if complete_root_child_ordinals(output, summaries).is_some() {
         return summaries
@@ -648,6 +652,7 @@ fn nested_summary_relative_refs(output: &OutputFixture) -> Option<HashMap<B3Dige
     Some(refs_by_digest)
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn collect_nested_summary_relative_refs(
     node: &ArtifactNode,
     root_child_ordinal: u64,
@@ -681,6 +686,7 @@ fn nested_summary_relative_ref_bytes(relative_ref: &NestedSummaryRelativeRef) ->
     u64_varint_bytes(relative_ref.root_child_ordinal).saturating_add(u64_varint_bytes(relative_ref.descendant_ordinal))
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 fn uniform_nested_parent_ordinal_bytes(
     output: &OutputFixture,
     summaries: &[&ReceiverProbabilisticFrontierSummary],
@@ -699,6 +705,7 @@ fn uniform_nested_parent_ordinal_bytes(
     u64_varint_bytes(parent_ordinal)
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 fn nested_descendant_stream_mode_bytes(
     output: &OutputFixture,
     summaries: &[&ReceiverProbabilisticFrontierSummary],
@@ -718,6 +725,7 @@ fn nested_descendant_stream_mode_bytes(
     )
 }
 
+#[allow(tigerstyle::raw_arithmetic_overflow)] // wire-size delta with known-valid ordering
 fn delta_coded_nested_descendant_ref_bytes(
     relative_refs_by_digest: &HashMap<B3Digest, NestedSummaryRelativeRef>,
     summaries: &[&ReceiverProbabilisticFrontierSummary],
@@ -746,6 +754,7 @@ fn delta_coded_nested_descendant_ref_bytes(
     Some(total_ref_bytes)
 }
 
+#[allow(tigerstyle::raw_arithmetic_overflow)] // wire-size delta with known-valid ordering
 fn run_coded_nested_descendant_ref_bytes(
     relative_refs_by_digest: &HashMap<B3Digest, NestedSummaryRelativeRef>,
     summaries: &[&ReceiverProbabilisticFrontierSummary],
@@ -802,6 +811,7 @@ fn uniform_nested_parent_ordinal(
     shared_parent_ordinal
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // known-bounded fixture values
 fn complete_root_child_prefix_len(
     output: &OutputFixture,
     summaries: &[&ReceiverProbabilisticFrontierSummary],
@@ -1089,6 +1099,7 @@ fn optional_probabilistic_filter_bits<'a>(
     Some(probabilistic_filter_bits(digest_list.into_iter(), filter_config))
 }
 
+#[allow(tigerstyle::no_panic)] // fixture-only invariant enforced by caller
 fn frontier_summary(owner_output_id: &str, node: &ArtifactNode) -> ReceiverFrontierSummary {
     let ArtifactNode::Directory(directory) = node else {
         panic!("frontier summaries require directory nodes");
@@ -1106,6 +1117,7 @@ fn frontier_summary(owner_output_id: &str, node: &ArtifactNode) -> ReceiverFront
     }
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn collect_summary_digests(
     node: &ArtifactNode,
     directory_digests: &mut HashSet<B3Digest>,
@@ -1177,6 +1189,7 @@ fn dir_node(label: &str, children: Vec<ArtifactNode>) -> ArtifactNode {
     })
 }
 
+#[allow(tigerstyle::platform_dependent_cast)] // count is u32, always fits in usize
 fn numbered_leaf_dirs(label_prefix: &str, count: u32, blob_size_bytes: u64) -> Vec<ArtifactNode> {
     assert!(count > 0, "count must be positive");
     assert!(blob_size_bytes > 0, "blob size must be positive");

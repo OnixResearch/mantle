@@ -345,6 +345,7 @@ pub enum DeltaSubstitutionError {
     Attestation(String),
 }
 
+#[allow(tigerstyle::too_many_parameters)] // integration boundary threading protocol, trust, and storage context
 pub async fn substitute_from_authority(
     authority: &InMemoryDeltaAuthority,
     request: &DeltaFetchRequest,
@@ -492,6 +493,7 @@ pub async fn substitute_from_authority(
     })
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn stream_missing_node<F>(
     node: &crate::ArtifactNode,
     manifest: &ReceiverManifest,
@@ -575,6 +577,7 @@ fn ensure_fixture_content_available(outputs: &[OutputFixture], retained: &Retain
     Some(())
 }
 
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
 fn ensure_node_content_available(node: &crate::ArtifactNode, retained: &RetainedContentStore) -> Option<()> {
     match node {
         crate::ArtifactNode::Directory(directory) => {
@@ -608,7 +611,7 @@ fn output_root_node(outputs: &[OutputFixture], output_name: &str) -> Option<Node
         .map(|output| fixture_node(&output.root))
 }
 
-#[allow(tigerstyle::expect_in_production)] // fixture construction with hardcoded valid values
+#[allow(tigerstyle::no_unwrap)] // fixture construction with hardcoded valid values
 fn fixture_node(node: &crate::ArtifactNode) -> Node {
     match node {
         crate::ArtifactNode::Directory(directory) => Node::Directory {
