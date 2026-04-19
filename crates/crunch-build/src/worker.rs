@@ -253,14 +253,8 @@ impl Worker {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
         let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
-        let mut iterations: u32 = 0;
 
-        loop {
-            iterations = iterations.saturating_add(1);
-            if iterations > iteration_count_max {
-                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")));
-            }
-
+        for _ in 0..iteration_count_max {
             let dispatched = self
                 .dispatch_ready(
                     builder,
@@ -274,7 +268,8 @@ impl Worker {
                 .await?;
 
             if self.registry.all_roots_terminal() {
-                break;
+                info!(completed = completed_count, succeeded = outcomes.len(), failed = failed.len(), "worker finished");
+                return Ok(WorkerResult { outcomes, failed });
             }
 
             if join_set.is_empty() {
@@ -291,9 +286,7 @@ impl Worker {
                 .await?;
             completed_count = completed_count.saturating_add(1);
         }
-
-        info!(completed = completed_count, succeeded = outcomes.len(), failed = failed.len(), "worker finished");
-        Ok(WorkerResult { outcomes, failed })
+        Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
 
     /// Run the build loop, receiving new roots from an eval channel.
@@ -323,16 +316,10 @@ impl Worker {
         let mut failed: Vec<FailedGoal> = Vec::new();
         let mut is_eval_done = false;
         let iteration_count_max: u32 = MAX_GOALS.saturating_mul(4);
-        let mut iterations: u32 = 0;
 
         info!(jobs = self.max_jobs, "worker streaming started");
 
-        loop {
-            iterations = iterations.saturating_add(1);
-            if iterations > iteration_count_max {
-                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")));
-            }
-
+        for _ in 0..iteration_count_max {
             if !is_eval_done {
                 self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
             }
@@ -349,7 +336,14 @@ impl Worker {
             .await?;
 
             if is_eval_done && self.registry.all_roots_terminal() {
-                break;
+                info!(
+                    completed = completed_count,
+                    succeeded = outcomes.len(),
+                    failed = failed.len(),
+                    roots = self.registry.root_count(),
+                    "worker streaming finished"
+                );
+                return Ok(WorkerResult { outcomes, failed });
             }
 
             self.wait_for_event(
@@ -365,15 +359,7 @@ impl Worker {
             )
             .await?;
         }
-
-        info!(
-            completed = completed_count,
-            succeeded = outcomes.len(),
-            failed = failed.len(),
-            roots = self.registry.root_count(),
-            "worker streaming finished"
-        );
-        Ok(WorkerResult { outcomes, failed })
+        Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
 
     /// Wait for either a build completion or an eval message.

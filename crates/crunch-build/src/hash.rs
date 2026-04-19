@@ -131,18 +131,23 @@ pub(crate) async fn hash_blob(
 }
 
 /// Stream a blob into a caller-provided hasher update closure.
+/// Maximum number of 64 KiB chunks we'll read from a single blob.
+/// 256 Ki chunks × 64 KiB = 16 GiB, well above any realistic NAR blob.
+const MAX_BLOB_CHUNKS: u32 = 256 * 1024;
+
 async fn update_blob_hasher(
     reader: &mut (impl tokio::io::AsyncRead + Unpin),
     buf: &mut [u8],
     mut update: impl FnMut(&[u8]),
 ) -> Result<(), Error> {
-    loop {
+    for _ in 0..MAX_BLOB_CHUNKS {
         let n = reader.read(buf).await.map_err(|e| Error::Store(format!("blob read: {e}")))?;
         if n == 0 {
             return Ok(());
         }
         update(&buf[..n]);
     }
+    Err(Error::Store(format!("blob exceeded {MAX_BLOB_CHUNKS} chunks")))
 }
 
 #[cfg(test)]
