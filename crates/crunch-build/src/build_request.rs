@@ -165,15 +165,19 @@ fn build_command_args(derivation: &Derivation) -> Vec<String> {
 }
 
 fn default_sandbox_environment(store_dir: &str) -> BTreeMap<String, Vec<u8>> {
-    let mut env: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    for (key, value) in &SANDBOX_ENV_VARS {
-        if *key == "NIX_STORE" {
-            env.insert(key.to_string(), store_dir.as_bytes().to_vec());
-        } else {
-            env.insert(key.to_string(), value.as_bytes().to_vec());
-        }
-    }
-    env
+    const MAX_SANDBOX_VARS: usize = 32;
+    assert!(SANDBOX_ENV_VARS.len() <= MAX_SANDBOX_VARS, "SANDBOX_ENV_VARS exceeds bound");
+    SANDBOX_ENV_VARS
+        .iter()
+        .map(|(key, value)| {
+            let val = if *key == "NIX_STORE" {
+                store_dir.as_bytes().to_vec()
+            } else {
+                value.as_bytes().to_vec()
+            };
+            (key.to_string(), val)
+        })
+        .collect()
 }
 
 fn overlay_derivation_environment(
@@ -181,7 +185,7 @@ fn overlay_derivation_environment(
     hermeticity_mode: HermeticityMode,
     environment_vars: &mut BTreeMap<String, Vec<u8>>,
 ) -> Result<Vec<HermeticityAuditEvent>, crate::Error> {
-    let mut audit_events = Vec::new();
+    let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
         let replaced = replace_placeholders_bstr(value, &derivation.outputs);
         if let Some(sandbox_value) = environment_vars.get(key)
@@ -277,16 +281,17 @@ fn map_outputs_to_sandbox_paths(derivation: &Derivation, store_dir: &str) -> Vec
 fn map_inputs_to_components(
     inputs: &BTreeMap<StorePath<String>, Node>,
 ) -> Result<BTreeMap<snix_castore::PathComponent, Node>, crate::Error> {
-    let mut input_map = BTreeMap::new();
-    for (path, node) in inputs {
-        let component = path
-            .to_string()
-            .as_str()
-            .try_into()
-            .map_err(|e| crate::Error::Store(format!("invalid store path component '{}': {e}", path)))?;
-        input_map.insert(component, node.clone());
-    }
-    Ok(input_map)
+    inputs
+        .iter()
+        .map(|(path, node)| {
+            let component = path
+                .to_string()
+                .as_str()
+                .try_into()
+                .map_err(|e| crate::Error::Store(format!("invalid store path component '{}': {e}", path)))?;
+            Ok((component, node.clone()))
+        })
+        .collect()
 }
 
 /// Collect all store paths that must be visible in the sandbox.

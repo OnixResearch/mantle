@@ -82,7 +82,7 @@ pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[Verifyin
     let fp = compute_fingerprint(path_info);
 
     let mut trusted_count: u32 = 0;
-    let mut untrusted_names: Vec<String> = Vec::new();
+    let mut untrusted_names: Vec<String> = Vec::with_capacity(path_info.signatures.len());
 
     for sig in &path_info.signatures {
         let sig_ref = sig.as_ref();

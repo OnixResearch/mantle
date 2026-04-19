@@ -148,7 +148,7 @@ impl Worker {
         let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
         queue.push_back((drv_path.clone(), is_root));
 
-        let mut created: Vec<CreatedGoal> = Vec::new();
+        let mut created: Vec<CreatedGoal> = Vec::with_capacity(64);
         // Tiger Style: fixed iteration limit.
         let goal_count_max: u32 = MAX_GOALS;
         let mut iterations: u32 = 0;
@@ -579,7 +579,7 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::new();
+        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::with_capacity(outcome.outputs.len());
         for (output_name, path_info) in &outcome.outputs {
             if !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node) {
                 continue;

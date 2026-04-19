@@ -111,8 +111,8 @@ async fn flatten_tree(
     root: &Node,
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<Vec<WorkItem>, crate::Error> {
-    let mut worklist: Vec<WorkItem> = Vec::new();
-    let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::new();
+    let mut worklist: Vec<WorkItem> = Vec::with_capacity(64);
+    let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::with_capacity(64);
     expand_stack.push((root.clone(), None, None, 0));
 
     while let Some((current, name, parent_idx, depth)) = expand_stack.pop() {

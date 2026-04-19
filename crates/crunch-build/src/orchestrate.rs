@@ -463,7 +463,7 @@ where BServ: BuildService + 'static
         build_result: snix_build::buildservice::BuildResult,
         known_paths: &mut DerivationRegistry,
     ) -> Result<BuildOutcome, Error> {
-        let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
+        let mut output_infos: HashMap<String, PathInfo> = HashMap::with_capacity(prepared.derivation.outputs.len());
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
         let is_multi_ca = prepared.is_ca && prepared.derivation.outputs.len() > 1;
         let artifact_provenance = self.build_artifact_provenance(&prepared.derivation, known_paths)?;
@@ -563,7 +563,7 @@ where BServ: BuildService + 'static
         ca_plans: &[crate::ca_plan::CaOutputPlan],
     ) -> Result<Vec<CaOutputIntermediate>, Error> {
         let nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
-        let mut intermediates: Vec<CaOutputIntermediate> = Vec::new();
+        let mut intermediates: Vec<CaOutputIntermediate> = Vec::with_capacity(prepared.derivation.outputs.len());
 
         for (i, (output_name, _output)) in prepared.derivation.outputs.iter().enumerate() {
             let build_output = build_result.outputs.get(i).ok_or_else(|| Error::OutputMissing {
@@ -635,7 +635,7 @@ where BServ: BuildService + 'static
             .collect();
 
         let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(self.store.store_dir());
-        let mut output_infos: HashMap<String, PathInfo> = HashMap::new();
+        let mut output_infos: HashMap<String, PathInfo> = HashMap::with_capacity(intermediates.len());
 
         for (idx, intermediate) in intermediates.iter().enumerate() {
             let final_node = self.rewrite_markers_to_final(&intermediate.marked_node, &final_rewrites).await?;
@@ -854,7 +854,7 @@ where BServ: BuildService + 'static
             input_paths.insert(sp.clone());
         }
 
-        let mut sandbox_inputs: BTreeMap<StorePath<String>, Node> = BTreeMap::new();
+        let mut pairs: Vec<(StorePath<String>, Node)> = Vec::with_capacity(input_paths.len());
         for input_path in &input_paths {
             let abs = self.resolve_host_path(input_path, derivation);
             let Some(node) = self.cached_or_ingested_node_for_path(input_path, &abs).await? else {
@@ -862,9 +862,9 @@ where BServ: BuildService + 'static
                     path: input_path.clone(),
                 });
             };
-            sandbox_inputs.insert(input_path.clone(), node);
+            pairs.push((input_path.clone(), node));
         }
-        Ok(sandbox_inputs)
+        Ok(pairs.into_iter().collect())
     }
 
     /// Collect (old, new) path pairs for transitive CA input rewriting.
@@ -875,7 +875,8 @@ where BServ: BuildService + 'static
         derivation: &Derivation,
         known_paths: &DerivationRegistry,
     ) -> Vec<(String, String)> {
-        let mut rewrites: Vec<(String, String)> = Vec::new();
+        let total_output_names: usize = derivation.input_derivations.values().map(|v| v.len()).sum();
+        let mut rewrites: Vec<(String, String)> = Vec::with_capacity(total_output_names);
         for (input_drv_path, output_names) in &derivation.input_derivations {
             let input_abs = input_drv_path.to_absolute_path_with_prefix(self.store.store_dir());
             if let Some(entry) = known_paths.get_by_drv_path(&input_abs)
@@ -1236,8 +1237,8 @@ where BServ: BuildService + 'static
         let declared_inputs = collect_input_paths(derivation, known_paths)?;
         let drv_abs = self.derivation_path_from_nix_derivation(derivation, known_paths.store_dir())?;
         let claims = known_paths.get_by_drv_path(&drv_abs).and_then(|entry| entry.provenance_claims.clone());
-        let mut input_sources = Vec::new();
-        let mut input_artifacts = Vec::new();
+        let mut input_sources = Vec::with_capacity(declared_inputs.len());
+        let mut input_artifacts = Vec::with_capacity(declared_inputs.len());
 
         for input_path in declared_inputs {
             if derivation.input_sources.contains(&input_path) {
