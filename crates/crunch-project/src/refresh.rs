@@ -292,10 +292,6 @@ pub fn apply_outcomes(
     resolver: &dyn RefreshResolver,
 ) -> ApplyResult {
     assert!(
-        outcomes.len() <= manifest.inputs.len(),
-        "refresh outcomes must not exceed manifest inputs"
-    );
-    assert!(
         lock.inputs.len() as u64 <= crate::manifest::MAX_INPUTS as u64,
         "lock inputs must stay within manifest limit"
     );

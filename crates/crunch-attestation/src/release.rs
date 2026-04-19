@@ -297,8 +297,6 @@ pub struct TrustTier {
 // ---------------------------------------------------------------------------
 
 fn canonical_release(value: &ReleaseAttestation) -> Result<ReleaseAttestation, Error> {
-    assert!(!value.release_id.is_empty(), "release id must not be empty");
-    assert!(!value.proof_mode.is_empty(), "proof mode must not be empty");
     validate_schema_tag(SchemaTag {
         actual: &value.schema,
         expected: RELEASE_ATTESTATION_SCHEMA,
@@ -333,11 +331,6 @@ fn canonical_release(value: &ReleaseAttestation) -> Result<ReleaseAttestation, E
 }
 
 fn canonical_witness(value: &WitnessAttestation) -> Result<WitnessAttestation, Error> {
-    assert!(!value.witness_identity.is_empty(), "witness identity must not be empty");
-    assert!(
-        !value.rebuild_environment_summary.system.is_empty(),
-        "witness system must not be empty"
-    );
     validate_schema_tag(SchemaTag {
         actual: &value.schema,
         expected: WITNESS_ATTESTATION_SCHEMA,

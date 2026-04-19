@@ -2,6 +2,7 @@ use std::path::Path;
 
 use assert_cmd::Command;
 use crunch_store::GcRootSource;
+use crunch_store::PersistOutputRequest;
 use crunch_store::StoreConfig;
 use crunch_store::StoreFallbackMode;
 use crunch_store::StoreHandle;
@@ -82,7 +83,15 @@ async fn persist_output(
 ) {
     let path_info = signed_pathinfo(store_path.clone(), node.clone(), refs);
     store
-        .persist_and_export_signed_output(output_name, &store_path, path_info, node, None, is_root, source)
+        .persist_and_export_signed_output(PersistOutputRequest {
+            output_name,
+            output_path: &store_path,
+            path_info,
+            final_node: node,
+            provenance: None,
+            is_root,
+            root_source: source,
+        })
         .await
         .unwrap();
 }

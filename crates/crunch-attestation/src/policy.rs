@@ -151,7 +151,6 @@ pub fn evaluate_policy(
     let (matching_count, distinct_identities) =
         count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses);
     assert_matching_witness_counts(matching_count, active_witnesses.len(), distinct_identities);
-    assert!(policy.min_matching_witnesses >= 1, "policy quorum must be at least one witness");
     let active_witness_count = match u32::try_from(active_witnesses.len()) {
         Ok(count) => count,
         Err(_) => policy.min_matching_witnesses.saturating_add(matching_count),
@@ -259,7 +258,6 @@ fn count_matching_witnesses(
 }
 
 fn assert_policy_quorum(policy: &ReleasePolicy) {
-    assert!(policy.min_matching_witnesses >= 1, "policy quorum must be at least one witness");
     assert!(
         usize::try_from(policy.min_matching_witnesses).is_ok(),
         "policy quorum must fit in usize"

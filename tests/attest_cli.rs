@@ -30,6 +30,7 @@ use crunch_project::PatchDef;
 use crunch_project::PatchSource;
 use crunch_project::ProjectManifest;
 use crunch_project::SchemaVersion;
+use crunch_store::PersistOutputRequest;
 use crunch_store::StoreConfig;
 use crunch_store::StoreHandle;
 use nix_compat::nixbase32;
@@ -271,19 +272,27 @@ fn seed_store() -> SeededStore {
         };
 
         store
-            .persist_and_export_signed_output("out", &root_path, root_info, node.clone(), None, true, None)
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &root_path,
+                path_info: root_info,
+                final_node: node.clone(),
+                provenance: None,
+                is_root: true,
+                root_source: None,
+            })
             .await
             .unwrap();
         store
-            .persist_and_export_signed_output(
-                "out",
-                &StorePath::from_name_and_digest_fixed("attest-dep", [1u8; 20]).unwrap(),
-                dep_info,
-                node,
-                None,
-                false,
-                None,
-            )
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &StorePath::from_name_and_digest_fixed("attest-dep", [1u8; 20]).unwrap(),
+                path_info: dep_info,
+                final_node: node,
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
             .await
             .unwrap();
     });

@@ -822,7 +822,6 @@ fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     }
 
     let record = expr.as_record();
-    assert!(record.is_some(), "non-array top-level values must be records");
     let Some(record) = record else {
         return Err(Error::Boundary(
             "top-level value is neither a derivation, an array of derivations, \

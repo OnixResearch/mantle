@@ -1509,7 +1509,15 @@ fn run_store_aware_sample(runtime: &tokio::runtime::Runtime, store_prefix: &str)
 
         let persistence_started_at = Instant::now();
         let persisted_path_info = store
-            .persist_and_export_signed_output("out", &output_path, path_info, node, None, true, None)
+            .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info,
+                final_node: node,
+                provenance: None,
+                is_root: true,
+                root_source: None,
+            })
             .await?;
         assert_eq!(persisted_path_info.store_path, output_path, "persisted path must stay stable");
         let store_persistence_wall_ns = duration_to_ns_u64(persistence_started_at.elapsed())?;

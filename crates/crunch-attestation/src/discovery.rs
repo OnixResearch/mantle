@@ -329,6 +329,7 @@ mod tests {
     use crate::Canonicalize;
     use crate::release::BinaryDigest;
     use crate::release::RebuildEnvironmentSummary;
+    use crate::release::ReleaseAttestationInit;
     use crate::release::Workflow;
 
     // -- Discovery from verification directory -----------------------------
