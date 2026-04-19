@@ -90,6 +90,7 @@ pub fn plan_ca_outputs(
     environment: &std::collections::BTreeMap<String, bstr::BString>,
 ) -> Vec<CaOutputPlan> {
     assert!(!outputs.is_empty(), "derivation must have at least one output");
+    assert!(!drv_name.is_empty(), "drv_name must not be empty");
 
     outputs
         .keys()

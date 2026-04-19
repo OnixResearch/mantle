@@ -111,6 +111,8 @@ async fn flatten_tree(
     root: &Node,
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<Vec<WorkItem>, crate::Error> {
+    assert!(!matches!(root, Node::Symlink { target, .. } if target.as_ref().is_empty()), "root symlink target must not be empty");
+    debug_assert!(MAX_REWRITE_NODES > 0, "rewrite node limit must be positive");
     let mut worklist: Vec<WorkItem> = Vec::with_capacity(64);
     let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::with_capacity(64);
     expand_stack.push((root.clone(), None, None, 0));
@@ -155,6 +157,8 @@ async fn rewrite_leaf_to_root(
     blob_service: &(impl BlobService + Clone),
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<(Node, bool), crate::Error> {
+    assert!(!worklist.is_empty(), "worklist must not be empty");
+    assert_eq!(old_bytes.len(), new_bytes.len(), "replacement byte lengths must match");
     let len = worklist.len();
     let mut results: Vec<Option<(Node, bool)>> = vec![None; len];
 
@@ -221,15 +225,18 @@ async fn rewrite_file_node(
     new_bytes: &[u8],
     blob_service: &(impl BlobService + Clone),
 ) -> Result<(Node, bool), crate::Error> {
+    assert!(!digest.as_slice().is_empty(), "blob digest must not be empty");
+    assert!(!old_bytes.is_empty(), "rewrite needle must not be empty");
+    assert!(old_bytes.len() == new_bytes.len(), "rewrite needle and replacement must be same length");
     let mut reader = blob_service
         .open_read(digest)
         .await
         .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
     let reader = reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
 
-    let capacity = usize::try_from(size)
+    let capacity_bytes = usize::try_from(size)
         .map_err(|_| crate::Error::Store(format!("blob size {size} exceeds platform address space")))?;
-    let mut data = Vec::with_capacity(capacity);
+    let mut data = Vec::with_capacity(capacity_bytes);
     reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
 
     let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);

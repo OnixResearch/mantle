@@ -20,6 +20,8 @@ pub(crate) async fn nar_hash(
     directory_service: impl DirectoryService,
 ) -> Result<NixHash, Error> {
     use nix_compat::nixhash::HashAlgo;
+    assert!(!matches!(node, Node::Symlink { target, .. } if target.as_ref().is_empty()), "symlink node target must not be empty");
+    assert!(matches!(node, Node::Symlink { .. } | Node::File { .. } | Node::Directory { .. }), "node must be a known variant");
 
     match algo {
         HashAlgo::Md5 => {
@@ -72,6 +74,8 @@ pub(crate) async fn hash_blob(
     algo: nix_compat::nixhash::HashAlgo,
 ) -> Result<NixHash, Error> {
     use nix_compat::nixhash::HashAlgo;
+    assert!(!digest.as_slice().is_empty(), "blob digest must not be empty");
+    assert!(digest.as_slice().len() == 32, "BLAKE3 digest must be 32 bytes");
 
     let mut reader = blob_service
         .open_read(digest)

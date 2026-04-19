@@ -107,6 +107,8 @@ pub fn is_builtin_fetcher(derivation: &Derivation) -> bool {
 /// Expects `builder = "builtin:fetchurl"` and the derivation's env to
 /// contain `url` (plus optional `unpack`, `type`, `rev`, `executable`).
 pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
+    assert!(!derivation.builder.is_empty(), "derivation builder must not be empty");
+    assert!(!derivation.outputs.is_empty(), "derivation must have outputs");
     if !is_builtin_fetcher(derivation) {
         return Err(FetchError::NotFetcher(derivation.builder.clone()));
     }
@@ -187,6 +189,8 @@ fn extract_expected_hash(derivation: &Derivation) -> Option<NixHash> {
 ///
 /// This is a blocking (sync) function — call from `spawn_blocking`.
 pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
+    assert!(!out_path.is_empty(), "output path must not be empty");
+    debug_assert!(!Path::new(out_path).as_os_str().is_empty(), "output path must be valid");
     if let Some(parent) = Path::new(out_path).parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -235,6 +239,8 @@ pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
 /// For flat hashes, this function reads the file directly.
 pub fn verify_flat_hash(out_path: &str, expected: &NixHash, name: &str) -> Result<(), FetchError> {
     use sha2::Digest;
+    assert!(!out_path.is_empty(), "output path must not be empty");
+    assert!(!name.is_empty(), "name must not be empty for hash verification");
 
     let content = std::fs::read(out_path)?;
 
@@ -350,6 +356,8 @@ fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
 /// Select a decompressor based on URL suffix. Falls back to gzip magic
 /// detection, then raw read.
 pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Result<Box<dyn Read + Send>, FetchError> {
+    assert!(!url.is_empty(), "url must not be empty for decompression");
+    debug_assert!(url.contains('.') || url.contains('/'), "url should contain a path separator or extension");
     if url.ends_with(".gz") || url.ends_with(".tgz") {
         return Ok(Box::new(flate2::read::GzDecoder::new(reader)));
     }
@@ -386,7 +394,9 @@ pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Resul
 /// component (GitHub-style tarballs where all entries are under
 /// `project-v1.0/`).
 pub fn extract_tar<R: Read>(mut reader: R, out: &str) -> Result<(), FetchError> {
+    assert!(!out.is_empty(), "output path must not be empty");
     let out_path = Path::new(out);
+    assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
     std::fs::create_dir_all(out_path)?;
 
     let mut staged_tar = tempfile::tempfile()?;
@@ -419,6 +429,7 @@ fn validate_tar_entry_count(entry_count: u32) -> Result<(), FetchError> {
 }
 
 fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std::path::PathBuf>, FetchError> {
+    assert!(reader.seek(SeekFrom::Start(0)).is_ok(), "reader must be seekable");
     reader.seek(SeekFrom::Start(0))?;
     let mut archive = tar::Archive::new(reader);
     archive.set_preserve_mtime(false);
@@ -448,6 +459,7 @@ fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std
     }
 
     if has_multi_component_entry {
+        debug_assert!(common_prefix.is_some(), "multi-component entries imply a prefix was found");
         return Ok(common_prefix);
     }
     Ok(None)
@@ -631,6 +643,8 @@ fn validate_entry_not_absolute(entry_path: &Path) -> Result<(), FetchError> {
 
 /// Reject stripped tar entry paths with anything other than Normal components.
 fn validate_relative_path(relative: &Path) -> Result<(), FetchError> {
+    assert!(!relative.as_os_str().is_empty(), "relative path must not be empty");
+    debug_assert!(!relative.has_root(), "validate_relative_path expects a relative path");
     for component in relative.components() {
         match component {
             std::path::Component::Normal(_) => {}
@@ -686,6 +700,7 @@ fn rooted_tar_symlink_target(
 
 fn strip_rooted_symlink_target(target_path: &Path, relative: &Path) -> Result<PathBuf, FetchError> {
     assert!(target_path.has_root(), "rooted symlink target must be absolute");
+    assert!(!relative.as_os_str().is_empty(), "relative path must not be empty");
     let mut stripped = PathBuf::new();
     let mut has_root_component = false;
     for component in target_path.components() {
@@ -707,6 +722,8 @@ fn strip_rooted_symlink_target(target_path: &Path, relative: &Path) -> Result<Pa
 }
 
 fn relative_path_between(from: &Path, to: &Path) -> PathBuf {
+    assert!(!from.as_os_str().is_empty(), "from path must not be empty");
+    assert!(!to.as_os_str().is_empty(), "to path must not be empty");
     let from_components: Vec<std::ffi::OsString> = from
         .components()
         .filter_map(|component| match component {
@@ -795,6 +812,8 @@ fn resolve_relative_within_root(
     candidate_path: &Path,
     context: &str,
 ) -> Result<PathBuf, FetchError> {
+    assert!(!context.is_empty(), "context must describe the operation");
+    assert!(!candidate_path.as_os_str().is_empty(), "candidate path must not be empty");
     let mut resolved = PathBuf::new();
     for component in base_relative.components() {
         match component {
@@ -893,6 +912,8 @@ fn resolve_existing_path_contained(
     context: &str,
     remaining_symlink_expansions: u32,
 ) -> Result<PathBuf, FetchError> {
+    assert!(!out_path.as_os_str().is_empty(), "out_path must not be empty");
+    assert!(!context.is_empty(), "context must describe the operation");
     let mut work = candidate_relative.to_path_buf();
     let mut expansions_left = remaining_symlink_expansions;
 
@@ -901,7 +922,7 @@ fn resolve_existing_path_contained(
     for _ in 0..=MAX_TAR_SYMLINK_EXPANSIONS {
         let components: Vec<std::path::Component<'_>> = work.components().collect();
         let mut current = PathBuf::new();
-        let mut redirected = false;
+        let mut was_redirected = false;
 
         for (ci, component) in components.iter().enumerate() {
             match component {
@@ -931,7 +952,7 @@ fn resolve_existing_path_contained(
                         next.push(remaining.as_os_str());
                     }
                     work = next;
-                    redirected = true;
+                    was_redirected = true;
                     break;
                 }
                 std::path::Component::ParentDir => {
@@ -950,7 +971,7 @@ fn resolve_existing_path_contained(
                 }
             }
         }
-        if !redirected {
+        if !was_redirected {
             return Ok(current);
         }
     }
@@ -1082,6 +1103,8 @@ fn stage_git_tree(repo: &gix::Repository, tree_id: gix::hash::ObjectId, staged_o
 }
 
 fn materialize_git_relative_path(staged_out: &Path, relative: &gix::bstr::BStr) -> Result<PathBuf, FetchError> {
+    assert!(!staged_out.as_os_str().is_empty(), "staged_out must not be empty");
+    assert!(!relative.is_empty(), "git entry relative path must not be empty");
     let relative_path = gix::path::try_from_bstr(relative).map_err(|err| {
         FetchError::GitError(format!("git entry path '{relative}' is not valid on this platform: {err}"))
     })?;

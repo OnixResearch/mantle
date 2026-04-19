@@ -185,6 +185,8 @@ fn overlay_derivation_environment(
     hermeticity_mode: HermeticityMode,
     environment_vars: &mut BTreeMap<String, Vec<u8>>,
 ) -> Result<Vec<HermeticityAuditEvent>, crate::Error> {
+    assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
+    assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
         let replaced = replace_placeholders_bstr(value, &derivation.outputs);
@@ -303,6 +305,8 @@ pub fn collect_input_paths(
     derivation: &Derivation,
     known_paths: &DerivationRegistry,
 ) -> Result<BTreeSet<StorePath<String>>, crate::Error> {
+    assert!(!derivation.outputs.is_empty(), "derivation must have outputs");
+    assert!(!known_paths.store_dir().is_empty(), "store dir must not be empty");
     let mut paths = BTreeSet::new();
 
     // Source inputs

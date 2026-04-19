@@ -168,8 +168,10 @@ pub fn generate_keypair() -> (KeyPair, String) {
     // Generate 32 random bytes and construct the signing key.
     let mut secret_bytes = [0u8; SECRET_KEY_LENGTH];
     rand::thread_rng().fill_bytes(&mut secret_bytes);
+    assert!(secret_bytes.iter().any(|&b| b != 0), "RNG must produce non-zero secret key material");
     let dalek_signing = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
     let dalek_verifying = dalek_signing.verifying_key();
+    assert!(!name.is_empty(), "keypair name must not be empty");
 
     // Nix format: name:base64(secret_32 ++ public_32)
     // SECRET_KEY_LENGTH (32) + PUBLIC_KEY_LENGTH (32)

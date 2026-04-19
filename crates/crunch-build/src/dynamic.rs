@@ -91,6 +91,8 @@ pub fn register_dynamic_drv(
     known_paths: &mut DerivationRegistry,
     store_dir: &str,
 ) -> Result<StorePath<String>, Error> {
+    assert!(!drv.outputs.is_empty(), "dynamic derivation must have outputs");
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
     let aterm_bytes = drv.to_aterm_bytes();
     let _aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
 
