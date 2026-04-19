@@ -22,7 +22,7 @@ use crate::errors::RunError;
 /// `resolve` takes a package name and returns its store path or an error.
 pub fn resolve_packages<F>(packages: &[String], resolve: F) -> Result<Vec<(String, String)>, RunError>
 where F: Fn(&str) -> Result<String, RunError> {
-    let mut entries = Vec::new();
+    let mut entries = Vec::with_capacity(packages.len());
     for pkg in packages {
         let store_path = resolve(pkg)?;
         if store_path.is_empty() {
@@ -57,6 +57,8 @@ pub fn generate_seed_ncl(entries: &[(String, String)]) -> String {
 /// Resolve a package using nix-build, falling back to `nix build`.
 pub fn nix_resolve(pkg: &str) -> Result<String, RunError> {
     use std::process::Command as Cmd;
+    debug_assert!(!pkg.is_empty());
+    debug_assert!(!pkg.contains('/'));
 
     let result = Cmd::new("nix-build").args(["<nixpkgs>", "-A", pkg, "--no-out-link"]).output();
 
@@ -159,6 +161,8 @@ struct FetchSeedProvider {
 }
 
 fn make_raw_fetch_derivation(raw: &FetchSeedRawArtifact) -> crunch_glue::CrunchDerivation {
+    debug_assert!(!raw.url.is_empty());
+    debug_assert!(!raw.hash.is_empty());
     let mut env = std::collections::HashMap::new();
     env.insert("url".to_string(), raw.url.clone());
     env.insert("unpack".to_string(), "1".to_string());
@@ -185,13 +189,15 @@ fn fetch_seed_provider_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap").join("seed.ncl")
 }
 
-fn fetch_seed_import_paths() -> Result<Vec<OsString>, RunError> {
+fn nickel_search_entries() -> Result<Vec<OsString>, RunError> {
     let stdlib = crunch_eval::stdlib::stdlib_import_path()
         .map_err(|e| RunError::Internal(format!("resolving stdlib import path: {e}")))?;
     Ok(vec![stdlib.into_os_string()])
 }
 
 fn validate_fetch_seed_provider(provider: &FetchSeedProvider) -> Result<(), RunError> {
+    debug_assert!(!provider.target.is_empty());
+    debug_assert!(!provider.provider.id.is_empty());
     if provider.name.is_empty() {
         return Err(RunError::Internal("bootstrap seed provider name is empty".to_string()));
     }
@@ -241,8 +247,8 @@ fn validate_fetch_seed_provider(provider: &FetchSeedProvider) -> Result<(), RunE
 
 fn load_fetch_seed_provider() -> Result<FetchSeedProvider, RunError> {
     let path = fetch_seed_provider_path();
-    let import_paths = fetch_seed_import_paths()?;
-    let provider: FetchSeedProvider = crunch_eval::evaluate_and_deserialize(&path, &import_paths)
+    let search = nickel_search_entries()?;
+    let provider: FetchSeedProvider = crunch_eval::evaluate_and_deserialize(&path, &search)
         .map_err(|e| RunError::Eval(format!("loading {}: {e}", path.display())))?;
     validate_fetch_seed_provider(&provider)?;
     Ok(provider)
@@ -342,7 +348,10 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+#[allow(tigerstyle::no_recursion)] // filesystem tree walk bounded by actual directory depth
 fn copy_path_recursively(src: &Path, dst: &Path) -> Result<(), RunError> {
+    debug_assert!(src.is_absolute() || !src.as_os_str().is_empty());
+    debug_assert!(dst.is_absolute() || !dst.as_os_str().is_empty());
     let metadata =
         std::fs::symlink_metadata(src).map_err(|e| RunError::Internal(format!("stat {}: {e}", src.display())))?;
     let file_type = metadata.file_type();
@@ -387,6 +396,7 @@ fn remove_path_if_exists(path: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
+#[allow(tigerstyle::no_recursion)] // filesystem tree walk bounded by actual directory depth
 fn directory_size_bytes(path: &Path) -> Result<u64, RunError> {
     let metadata =
         std::fs::symlink_metadata(path).map_err(|e| RunError::Internal(format!("stat {}: {e}", path.display())))?;
@@ -417,6 +427,8 @@ fn stage_reduced_seed_provider(
     stage_root: &Path,
     provider: &FetchSeedProvider,
 ) -> Result<(), RunError> {
+    debug_assert!(raw_root.exists());
+    debug_assert!(!provider.target.is_empty());
     let target_dir = stage_root.join(&provider.target);
     std::fs::create_dir_all(stage_root)
         .map_err(|e| RunError::Internal(format!("creating {}: {e}", stage_root.display())))?;
@@ -476,21 +488,35 @@ fn stage_reduced_seed_provider(
         copy_path_recursively(&target_dir.join("sys-include"), &normalized_include)?;
     }
 
-    for lib_name in [
-        "libgcc_s.so",
-        "libgcc_s.so.1",
-        "libc.so",
-        "libstdc++.a",
-        "libstdc++.so",
-        "libstdc++.so.6",
-        "libsupc++.a",
-    ] {
+    copy_runtime_libs(stage_root, &target_dir)?;
+    strip_dropped_components(stage_root, &provider.target)
+}
+
+const RUNTIME_LIB_NAMES: &[&str] = &[
+    "libgcc_s.so",
+    "libgcc_s.so.1",
+    "libc.so",
+    "libstdc++.a",
+    "libstdc++.so",
+    "libstdc++.so.6",
+    "libsupc++.a",
+];
+
+fn copy_runtime_libs(stage_root: &Path, target_dir: &Path) -> Result<(), RunError> {
+    debug_assert!(stage_root.exists());
+    debug_assert!(target_dir.exists());
+    for lib_name in RUNTIME_LIB_NAMES {
         let src = stage_root.join("lib").join(lib_name);
         if src.exists() {
             copy_path_recursively(&src, &target_dir.join("lib").join(lib_name))?;
         }
     }
+    Ok(())
+}
 
+fn strip_dropped_components(stage_root: &Path, target: &str) -> Result<(), RunError> {
+    debug_assert!(!target.is_empty());
+    debug_assert!(stage_root.exists());
     remove_path_if_exists(&stage_root.join("share"))?;
     for name in DROPPED_BIN_NAMES {
         remove_path_if_exists(&stage_root.join("bin").join(name))?;
@@ -499,7 +525,7 @@ fn stage_reduced_seed_provider(
         remove_path_if_exists(&stage_root.join("lib").join(name))?;
     }
 
-    let gcc_internal_root = stage_root.join("libexec").join("gcc").join(&provider.target);
+    let gcc_internal_root = stage_root.join("libexec").join("gcc").join(target);
     if gcc_internal_root.exists() {
         for entry in std::fs::read_dir(&gcc_internal_root)
             .map_err(|e| RunError::Internal(format!("reading {}: {e}", gcc_internal_root.display())))?
@@ -523,6 +549,8 @@ fn write_provider_metadata(
     stage_root: &Path,
     metadata_path: &Path,
 ) -> Result<(), RunError> {
+    debug_assert!(!provider.provider.id.is_empty());
+    debug_assert!(metadata_path.extension().map_or(false, |ext| ext == "json"));
     let raw_size_bytes = directory_size_bytes(raw_root)?;
     let reduced_size_bytes = directory_size_bytes(stage_root)?;
     if raw_size_bytes == 0 {
@@ -593,6 +621,8 @@ fn materialize_reduced_seed_provider(
     raw_root: &Path,
     store_dir: &Path,
 ) -> Result<(String, String, bool), RunError> {
+    debug_assert!(!provider.name.is_empty());
+    debug_assert!(raw_root.exists(), "raw root must exist before reduction");
     let store_name = reduced_seed_store_name(provider)?;
     let logical_path = format!("{LOGICAL_STORE_DIR}/{store_name}");
     let physical_path = store_dir.join(&store_name);
@@ -635,37 +665,23 @@ fn resolve_state_dir() -> PathBuf {
     })
 }
 
-/// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
-///
-/// This is the `crunch bootstrap --fetch` implementation. It evaluates the
-/// checked-in `bootstrap/seed.ncl`, fetches the pinned raw tarball through the
-/// normal fixed-output pipeline, reduces that raw tree on the host into the
-/// normalized provider shape, and writes a small generated `seed.ncl` that
-/// points at the resulting store path.
-pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> Result<(), RunError> {
+async fn fetch_raw_seed(
+    drv_path: &nix_compat::store_path::StorePath<String>,
+    cache: &crunch_glue::ConversionCache,
+    store_dir: &Path,
+    is_verbose: bool,
+    display_prefix: &str,
+) -> Result<String, RunError> {
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+    debug_assert!(store_dir.is_absolute());
+    debug_assert!(!display_prefix.is_empty());
 
-    let provider = load_fetch_seed_provider()?;
-    let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
-
-    eprintln!("Fetching bootstrap seed provider {}...", provider.provider.id);
-
-    // 1. Convert the raw fetch derivation and download it through the normal fetch pipeline.
-    let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
-    let (drv_path, nix_drv) = crunch_glue::convert(&raw_fetch, &mut cache)
-        .map_err(|e| RunError::Build(format!("converting {}: {e}", raw_fetch.name)))?;
-
-    let display_prefix = store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
-    if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
-        eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
-    }
-
-    // 2. Set up services for the fetch-only Builder.
     let state_dir = resolve_state_dir();
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&state_dir)
         .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
-    let _ = std::fs::create_dir_all(&state_dir);
+    std::fs::create_dir_all(&state_dir)
+        .map_err(|e| RunError::Internal(format!("creating state dir {}: {e}", state_dir.display())))?;
 
     let blob_service = {
         use snix_castore::blobservice::ObjectStoreBlobService;
@@ -686,7 +702,6 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
     let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
 
-    // Generate an ephemeral signing keypair for bootstrap fetches.
     let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
     let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);
 
@@ -702,15 +717,14 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
         bootstrap_keypair,
         bootstrap_trusted,
         false,
-        verbose,
+        is_verbose,
     );
     builder.set_root_retention_source(Some(crunch_store::GcRootSource::Bootstrap));
 
-    // 3. Build the raw fetched tarball output.
     let mut known_paths = crunch_build::DerivationRegistry::new(LOGICAL_STORE_DIR);
     crunch_build::populate_registry(&mut known_paths, cache.iter_entries());
 
-    let root_paths = vec![drv_path];
+    let root_paths = vec![drv_path.clone()];
     let outcomes = builder
         .build_all(&root_paths, &mut known_paths, 1)
         .await
@@ -732,6 +746,36 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, verbose: bool) -> 
     } else {
         eprintln!("  {} (fetched)", raw_display_path);
     }
+    Ok(raw_display_path)
+}
+
+/// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
+///
+/// This is the `crunch bootstrap --fetch` implementation. It evaluates the
+/// checked-in `bootstrap/seed.ncl`, fetches the pinned raw tarball through the
+/// normal fixed-output pipeline, reduces that raw tree on the host into the
+/// normalized provider shape, and writes a small generated `seed.ncl` that
+/// points at the resulting store path.
+pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, is_verbose: bool) -> Result<(), RunError> {
+    debug_assert!(store_dir.is_absolute());
+    debug_assert!(!output.as_os_str().is_empty());
+    let provider = load_fetch_seed_provider()?;
+    let raw_fetch = make_raw_fetch_derivation(&provider.provider.raw);
+
+    eprintln!("Fetching bootstrap seed provider {}...", provider.provider.id);
+
+    // 1. Convert the raw fetch derivation and download it through the normal fetch pipeline.
+    let mut cache = crunch_glue::ConversionCache::new(LOGICAL_STORE_DIR);
+    let (drv_path, nix_drv) = crunch_glue::convert(&raw_fetch, &mut cache)
+        .map_err(|e| RunError::Build(format!("converting {}: {e}", raw_fetch.name)))?;
+
+    let display_prefix = store_dir.to_str().unwrap_or(LOGICAL_STORE_DIR);
+    if let Some(planned_output) = nix_drv.outputs.get("out").and_then(|o| o.path.as_ref()) {
+        eprintln!("  raw {} -> {}", raw_fetch.name, planned_output.to_absolute_path_with_prefix(display_prefix));
+    }
+
+    // 2-3. Set up services, build the raw tarball, and extract its output path.
+    let raw_display_path = fetch_raw_seed(&drv_path, &cache, store_dir, is_verbose, display_prefix).await?;
 
     // 4. Reduce the raw tree on the host into the normalized provider layout.
     let (logical_path, physical_path, reduced_cached) =
@@ -757,6 +801,8 @@ async fn open_bootstrap_pathinfo(
 ) -> Result<snix_store::pathinfoservice::RedbPathInfoService, RunError> {
     use snix_store::pathinfoservice::RedbPathInfoService;
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+    debug_assert!(!state_dir.as_os_str().is_empty());
+    debug_assert!(state_dir.is_absolute());
 
     let db_path = state_dir.join("pathinfo.redb");
     match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
@@ -773,7 +819,11 @@ async fn open_bootstrap_pathinfo(
                 err = %e,
                 "failed to open PathInfo database, using in-memory fallback"
             );
-            RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig::default())
+            RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig {
+                path: None,
+                read_only: false,
+                cache_size: None,
+            })
                 .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
         }
     }

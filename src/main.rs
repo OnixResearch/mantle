@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 mod attest_cmd;
 mod bootstrap;
 mod build_cmd;

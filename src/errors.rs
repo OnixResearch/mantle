@@ -98,7 +98,7 @@ impl RunError {
             RunError::Eval(_) => 2,
             RunError::Build(_) => 1,
             RunError::Internal(_) => 3,
-            RunError::Reported(_) => unreachable!("reported errors already returned early"),
+            RunError::Reported(_) => 4, // reported errors should have been handled before JSON formatting
         };
         format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind())
     }
@@ -135,9 +135,12 @@ fn extract_build_body(msg: &str) -> &str {
 }
 
 /// Produce newline-separated suggestions for common build failures.
+#[allow(tigerstyle::unbounded_collection_growth)] // bounded by fixed number of pattern matches below
 fn build_suggestions(msg: &str) -> String {
-    let mut suggestions = Vec::new();
+    debug_assert!(!msg.is_empty());
+    let mut suggestions = Vec::with_capacity(8);
     let lower = msg.to_lowercase();
+    debug_assert_eq!(lower.len(), msg.len());
 
     if lower.contains("nonzero exit code") {
         suggestions.push("  - Check the build log: ls $XDG_STATE_HOME/crunch/logs/ (or ~/.local/state/crunch/logs/)");
