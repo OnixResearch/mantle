@@ -542,6 +542,39 @@ impl StoreHandle {
         gc::run_gc(&ctx, &mut self.ca_mappings, is_dry_run).await
     }
 
+    /// Render a NAR archive from a castore node into an arbitrary writer.
+    ///
+    /// Streams the archive without buffering the full content in memory.
+    /// The writer receives the raw (uncompressed) NAR byte stream.
+    pub async fn render_nar<W: tokio::io::AsyncWrite + Unpin + Send>(
+        &self,
+        node: &Node,
+        dest: &mut W,
+    ) -> Result<(), Error> {
+        use snix_store::nar::write_nar;
+
+        const NAR_DUPLEX_BUF_BYTES: usize = 64 * 1024;
+
+        let (mut reader, writer) = tokio::io::duplex(NAR_DUPLEX_BUF_BYTES);
+        let node = node.clone();
+        let blob_service = self.blob_service();
+        let directory_service = self.directory_service();
+
+        let write_task =
+            tokio::spawn(async move { write_nar(writer, &node, blob_service, directory_service).await });
+
+        tokio::io::copy(&mut reader, dest)
+            .await
+            .map_err(|e| Error::Export(format!("streaming NAR: {e}")))?;
+
+        write_task
+            .await
+            .map_err(|e| Error::Export(format!("NAR writer task panicked: {e}")))?  
+            .map_err(|e| Error::Export(format!("rendering NAR: {e}")))?;
+
+        Ok(())
+    }
+
     /// Check whether the castore has the content referenced by a Node.
     ///
     /// Files: probe blob_service. Directories: probe directory_service.

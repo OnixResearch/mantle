@@ -16,6 +16,7 @@ mod gc;
 mod handle;
 mod mutation_lock;
 mod policy;
+mod push;
 mod query;
 mod roots;
 
@@ -56,5 +57,9 @@ pub use query::store_list;
 pub use query::store_sign;
 pub use query::store_verify;
 pub use query::store_verify_signatures;
+pub use push::PushOptions;
+pub use push::PushReport;
+pub use push::PushedPath;
+pub use push::export_paths_to_cache_dir;
 pub use roots::GcRootRecord;
 pub use roots::GcRootSource;

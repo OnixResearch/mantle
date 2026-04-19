@@ -506,6 +506,23 @@ pub enum StoreAction {
         #[arg(long)]
         signing_key: Option<std::path::PathBuf>,
     },
+    /// Push store paths to a binary cache directory
+    Push {
+        /// Target directory for the binary cache
+        #[arg(long)]
+        to: std::path::PathBuf,
+
+        /// Push all signed paths
+        #[arg(long)]
+        all: bool,
+
+        /// Include unsigned PathInfo entries
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Store paths to push (full or fragment)
+        paths: Vec<String>,
+    },
 }
 
 fn main() -> ExitCode {

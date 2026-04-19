@@ -74,6 +74,17 @@ async fn cmd_store_async(
             let svc = open_pathinfo_service(state_dir, false).await?;
             cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), state_dir).await
         }
+        crate::StoreAction::Push {
+            to,
+            all,
+            trust_unsigned,
+            paths,
+        } => {
+            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
+            let store = open_store(output_dir, state_dir, store_dir).await?;
+            cmd_store_push(&store, &to, all, trust_unsigned, &paths).await
+        }
     }
 }
 
@@ -401,4 +412,89 @@ async fn cmd_store_sign(
 
     eprintln!("{} signed, {} appended, {} replaced, {} total", signed, appended, replaced, results.len());
     Ok(())
+}
+
+async fn cmd_store_push(
+    store: &crunch_store::StoreHandle,
+    dest: &Path,
+    is_push_all: bool,
+    trust_unsigned: bool,
+    path_selectors: &[String],
+) -> Result<(), RunError> {
+    if path_selectors.is_empty() && !is_push_all {
+        return Err(RunError::Internal("provide store paths or use --all".to_string()));
+    }
+
+    // Collect matching PathInfo entries.
+    let selected = if is_push_all {
+        collect_all_pathinfos(store).await?
+    } else {
+        collect_matching_pathinfos(store, path_selectors).await?
+    };
+
+    if selected.is_empty() {
+        eprintln!("no matching paths found");
+        return Ok(());
+    }
+
+    let options = crunch_store::PushOptions { trust_unsigned };
+    let report = crunch_store::export_paths_to_cache_dir(store, &selected, dest, &options)
+        .await
+        .map_err(|e| RunError::Internal(format!("push: {e}")))?;
+
+    for pushed in &report.paths {
+        println!("PUSH {}", pushed.store_path);
+    }
+
+    if report.skipped_unsigned_count > 0 {
+        eprintln!("warning: {} unsigned path(s) skipped (use --trust-unsigned to include)", report.skipped_unsigned_count);
+    }
+
+    eprintln!(
+        "pushed={} skipped_unsigned={} skipped_present={} nar_bytes={} narinfo_bytes={}",
+        report.pushed_count,
+        report.skipped_unsigned_count,
+        report.skipped_already_present_count,
+        report.total_nar_bytes,
+        report.total_narinfo_bytes,
+    );
+    Ok(())
+}
+
+async fn collect_all_pathinfos(
+    store: &crunch_store::StoreHandle,
+) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
+    use futures::StreamExt;
+    use snix_store::pathinfoservice::PathInfoService;
+
+    const MAX_PUSH_SCAN: usize = 1_000_000;
+    let mut stream = store.pathinfo_service().list();
+    let mut results = Vec::with_capacity(256);
+    for _ in 0..MAX_PUSH_SCAN {
+        let Some(result) = stream.next().await else { break };
+        let pi = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
+        results.push(pi);
+    }
+    Ok(results)
+}
+
+async fn collect_matching_pathinfos(
+    store: &crunch_store::StoreHandle,
+    selectors: &[String],
+) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
+    use futures::StreamExt;
+    use snix_store::pathinfoservice::PathInfoService;
+
+    const MAX_PUSH_SCAN: usize = 1_000_000;
+    let mut stream = store.pathinfo_service().list();
+    let mut results = Vec::with_capacity(selectors.len());
+    for _ in 0..MAX_PUSH_SCAN {
+        let Some(result) = stream.next().await else { break };
+        let pi = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
+        let sp_str = pi.store_path.to_string();
+        if selectors.iter().any(|sel| sp_str.contains(sel.as_str())) {
+            results.push(pi);
+        }
+    }
+    Ok(results)
 }
