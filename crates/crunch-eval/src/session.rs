@@ -1062,6 +1062,25 @@ mod tests {
     }
 
     #[test]
+    fn inline_executor_executes_assignments_without_threaded_backend_help() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#;
+        let session = EvaluationSession::open_str(source, &[]).unwrap();
+        let worker_input = session.isolated_worker_input();
+        let labels = vec!["beta".to_string(), "alpha".to_string()];
+        let assignments = build_worker_assignments(&labels, 2);
+        let inline_executor = InlineExecutor;
+
+        let assignment_results = inline_executor.execute::<CrunchDerivation>(&worker_input, &assignments).unwrap();
+        let merged = merge_assignment_results(assignment_results).unwrap();
+        let observed = merged.into_iter().map(|(label, _)| label).collect::<Vec<_>>();
+
+        assert_eq!(observed, labels);
+    }
+
+    #[test]
     fn prefer_threaded_falls_back_to_inline_when_threaded_executor_is_unavailable() {
         let source = r#"{
   alpha = { name = "alpha", builder = "/bin/sh" },
