@@ -78,8 +78,8 @@ fn push_unique_store_paths(
     new_paths: impl IntoIterator<Item = StorePath<String>>,
 ) {
     for path in new_paths {
-        let inserted = seen_paths.insert(path.clone());
-        if inserted {
+        let was_inserted = seen_paths.insert(path.clone());
+        if was_inserted {
             ordered_paths.push(path);
         }
     }
@@ -295,7 +295,7 @@ where BServ: BuildService + 'static
         let digest = match node {
             snix_castore::Node::File { digest, size, .. } => {
                 // Tiger Style: fixed limit.
-                const MAX_BLOB_READ: u64 = 8 * 1024 * 1024;
+                const MAX_BLOB_READ: u64 = 8_388_608;
                 if *size > MAX_BLOB_READ {
                     return Err(Error::Store(format!("blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})")));
                 }

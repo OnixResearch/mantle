@@ -18,7 +18,7 @@ use crate::registry::DerivationRegistry;
 
 /// Maximum size in bytes for a `.drv` file we'll attempt to parse.
 /// Derivation files are small text — anything over 4 MiB is suspicious.
-const MAX_DRV_SIZE_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_DRV_SIZE_BYTES: u64 = 4_194_304;
 
 /// ATerm magic prefix. All valid derivation files start with this.
 const ATERM_PREFIX: &[u8] = b"Derive(";
@@ -41,8 +41,8 @@ pub struct DynamicDrv {
 /// 2. The node is a regular file (not directory/symlink)
 /// 3. The file is under `MAX_DRV_SIZE_BYTES`
 pub fn is_drv_output(output_path: &StorePath<String>, node: &Node) -> bool {
-    let name_ends_drv = output_path.name().ends_with(".drv");
-    if !name_ends_drv {
+    let has_drv_suffix = output_path.name().ends_with(".drv");
+    if !has_drv_suffix {
         return false;
     }
 

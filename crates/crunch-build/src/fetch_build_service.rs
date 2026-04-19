@@ -61,7 +61,7 @@ fn parse_fetch_kind(request: &BuildRequest) -> Result<FetchKind, FetchError> {
 
     if !is_fetch_request(request) {
         let builder = request.command_args.first().map(|s| s.as_str()).unwrap_or("(none)");
-        return Err(FetchError::NotAFetcher(builder.to_string()));
+        return Err(FetchError::NotFetcher(builder.to_string()));
     }
 
     // Helper: find a string env var.
@@ -327,7 +327,7 @@ mod tests {
     fn parse_rejects_non_fetcher() {
         let req = sandbox_request();
         let err = parse_fetch_kind(&req).unwrap_err();
-        assert!(matches!(err, FetchError::NotAFetcher(_)));
+        assert!(matches!(err, FetchError::NotFetcher(_)));
     }
 
     #[test]

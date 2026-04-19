@@ -156,7 +156,7 @@ pub(crate) fn build_request_from_environment(
 
 /// Build command args with placeholders expanded.
 fn build_command_args(derivation: &Derivation) -> Vec<String> {
-    let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len() + 1);
+    let mut command_args: Vec<String> = Vec::with_capacity(derivation.arguments.len().saturating_add(1));
     command_args.push(derivation.builder.clone());
     for arg in &derivation.arguments {
         command_args.push(replace_placeholders(arg, &derivation.outputs));

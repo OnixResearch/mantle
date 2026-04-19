@@ -21,7 +21,7 @@ use url::Url;
 
 /// Maximum download size: 4 GiB. Prevents unbounded memory/disk use
 /// from a misbehaving or malicious server.
-const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_DOWNLOAD_BYTES: u64 = 4_294_967_296;
 
 /// Maximum number of entries to extract from a tar archive.
 /// Prevents zip-bomb style attacks and accidental extraction of
@@ -58,7 +58,7 @@ pub enum Fetch {
 #[derive(Debug, thiserror::Error)]
 pub enum FetchError {
     #[error("not a builtin fetcher: builder = {0:?}")]
-    NotAFetcher(String),
+    NotFetcher(String),
 
     #[error("fetcher derivation missing 'url' in environment")]
     MissingUrl,
@@ -108,7 +108,7 @@ pub fn is_builtin_fetcher(derivation: &Derivation) -> bool {
 /// contain `url` (plus optional `unpack`, `type`, `rev`, `executable`).
 pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
     if !is_builtin_fetcher(derivation) {
-        return Err(FetchError::NotAFetcher(derivation.builder.clone()));
+        return Err(FetchError::NotFetcher(derivation.builder.clone()));
     }
 
     let env = &derivation.environment;
@@ -125,14 +125,14 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
     let url_str = env_str(env, "url").ok_or(FetchError::MissingUrl)?;
     let url = Url::parse(&url_str).map_err(|e| FetchError::InvalidUrl(format!("{url_str}: {e}")))?;
 
-    let unpack = env.get("unpack").is_some_and(|v| v == "1");
-    let executable = env.get("executable").is_some_and(|v| v == "1");
+    let should_unpack = env.get("unpack").is_some_and(|v| v == "1");
+    let is_executable = env.get("executable").is_some_and(|v| v == "1");
 
     // Determine fetch variant from derivation's ca_hash and flags.
     let ca_hash = derivation.outputs.get("out").and_then(|o| o.ca_hash.as_ref());
 
     match ca_hash {
-        Some(CAHash::Flat(hash)) if executable => Ok(Fetch::Executable {
+        Some(CAHash::Flat(hash)) if is_executable => Ok(Fetch::Executable {
             url,
             hash: hash.clone(),
         }),
@@ -140,7 +140,7 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
             url,
             exp_hash: Some(hash.clone()),
         }),
-        Some(CAHash::Nar(hash)) if unpack => Ok(Fetch::Tarball {
+        Some(CAHash::Nar(hash)) if should_unpack => Ok(Fetch::Tarball {
             url,
             exp_nar_sha256: expected_nar_sha256(hash),
         }),
@@ -150,7 +150,7 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
         }),
         None => {
             // No ca_hash — treat as plain URL fetch without hash verification.
-            if unpack {
+            if should_unpack {
                 Ok(Fetch::Tarball {
                     url,
                     exp_nar_sha256: None,
@@ -309,9 +309,9 @@ fn fetch_agent() -> ureq::Agent {
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
     let reader: Box<dyn Read + Send> = open_url_reader(url)?;
-    let mut limited = reader.take(MAX_DOWNLOAD_BYTES);
+    let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(out)?;
-    let bytes_written = io::copy(&mut limited, &mut file)?;
+    let bytes_written = io::copy(&mut bounded_reader, &mut file)?;
     debug_assert!(bytes_written <= MAX_DOWNLOAD_BYTES);
     Ok(())
 }
@@ -418,7 +418,7 @@ fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std
     archive.set_preserve_mtime(false);
 
     let mut common_prefix: Option<std::path::PathBuf> = None;
-    let mut saw_multi_component_entry = false;
+    let mut has_multi_component_entry = false;
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
         let entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
@@ -437,11 +437,11 @@ fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std
             common_prefix = Some(prefix_component);
         }
         if components.next().is_some() {
-            saw_multi_component_entry = true;
+            has_multi_component_entry = true;
         }
     }
 
-    if saw_multi_component_entry {
+    if has_multi_component_entry {
         return Ok(common_prefix);
     }
     Ok(None)
@@ -679,16 +679,16 @@ fn rooted_tar_symlink_target(
 fn strip_rooted_symlink_target(target_path: &Path, relative: &Path) -> Result<PathBuf, FetchError> {
     assert!(target_path.has_root(), "rooted symlink target must be absolute");
     let mut stripped = PathBuf::new();
-    let mut saw_root = false;
+    let mut has_root_component = false;
     for component in target_path.components() {
         match component {
-            std::path::Component::RootDir | std::path::Component::Prefix(_) => saw_root = true,
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => has_root_component = true,
             std::path::Component::CurDir => {}
             std::path::Component::Normal(name) => stripped.push(name),
             std::path::Component::ParentDir => stripped.push(".."),
         }
     }
-    if !saw_root {
+    if !has_root_component {
         return Err(FetchError::TarError(format!(
             "tar symlink target is not rooted: {} -> {}",
             relative.display(),
@@ -717,8 +717,8 @@ fn relative_path_between(from: &Path, to: &Path) -> PathBuf {
         .collect();
 
     let mut shared_prefix_len: u32 = 0;
-    let shared_limit = from_components.len().min(to_components.len());
-    while usize::try_from(shared_prefix_len).ok().is_some_and(|idx| idx < shared_limit) {
+    let shared_depth_max = from_components.len().min(to_components.len());
+    while usize::try_from(shared_prefix_len).ok().is_some_and(|idx| idx < shared_depth_max) {
         let idx = usize::try_from(shared_prefix_len).expect("shared prefix length index overflowed usize");
         if from_components[idx] != to_components[idx] {
             break;
@@ -1585,7 +1585,7 @@ mod tests {
     fn parse_fetch_not_a_fetcher() {
         let drv = make_drv("/bin/sh", vec![], None);
         let err = parse_fetch(&drv).unwrap_err();
-        assert!(matches!(err, FetchError::NotAFetcher(_)));
+        assert!(matches!(err, FetchError::NotFetcher(_)));
     }
 
     #[test]

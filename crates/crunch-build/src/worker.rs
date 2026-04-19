@@ -150,13 +150,13 @@ impl Worker {
 
         let mut created: Vec<CreatedGoal> = Vec::new();
         // Tiger Style: fixed iteration limit.
-        let limit: u32 = MAX_GOALS;
+        let goal_count_max: u32 = MAX_GOALS;
         let mut iterations: u32 = 0;
 
         while let Some((sp, root)) = queue.pop_front() {
             iterations = iterations.saturating_add(1);
-            if iterations > limit {
-                return Err(Error::Store(format!("want() BFS exceeded iteration limit ({limit})")));
+            if iterations > goal_count_max {
+                return Err(Error::Store(format!("want() BFS exceeded iteration limit ({goal_count_max})")));
             }
 
             let key = sp.to_absolute_path();
@@ -194,7 +194,7 @@ impl Worker {
             created.push((key, dep_drv_paths));
         }
 
-        debug_assert!(iterations <= limit);
+        debug_assert!(iterations <= goal_count_max);
         Ok(created)
     }
 
@@ -246,19 +246,19 @@ impl Worker {
         debug_assert!(root_count > 0, "no root goals to build");
         debug_assert!(total_goals <= MAX_GOALS, "goal count exceeds limit");
 
-        let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
+        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).unwrap_or(usize::MAX)));
         let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
-        let iteration_limit: u32 = total_goals.saturating_mul(4).max(16);
+        let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
         let mut iterations: u32 = 0;
 
         loop {
             iterations = iterations.saturating_add(1);
-            if iterations > iteration_limit {
-                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_limit})")));
+            if iterations > iteration_count_max {
+                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")));
             }
 
             let dispatched = self
@@ -315,26 +315,26 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let sem = Arc::new(Semaphore::new(self.max_jobs as usize));
+        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).unwrap_or(usize::MAX)));
         let mut join_set = JoinSet::new();
         let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
         let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
-        let mut eval_done = false;
-        let iteration_limit: u32 = MAX_GOALS.saturating_mul(4);
+        let mut is_eval_done = false;
+        let iteration_count_max: u32 = MAX_GOALS.saturating_mul(4);
         let mut iterations: u32 = 0;
 
         info!(jobs = self.max_jobs, "worker streaming started");
 
         loop {
             iterations = iterations.saturating_add(1);
-            if iterations > iteration_limit {
-                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_limit})")));
+            if iterations > iteration_count_max {
+                return Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")));
             }
 
-            if !eval_done {
-                self.drain_eval_messages(rx, known_paths, &mut eval_done)?;
+            if !is_eval_done {
+                self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
             }
 
             self.dispatch_ready(
@@ -348,12 +348,12 @@ impl Worker {
             )
             .await?;
 
-            if eval_done && self.registry.all_roots_terminal() {
+            if is_eval_done && self.registry.all_roots_terminal() {
                 break;
             }
 
             self.wait_for_event(
-                &mut eval_done,
+                &mut is_eval_done,
                 rx,
                 &mut join_set,
                 builder,
@@ -381,7 +381,7 @@ impl Worker {
     #[allow(clippy::too_many_arguments)]
     async fn wait_for_event<BServ>(
         &mut self,
-        eval_done: &mut bool,
+        is_eval_done: &mut bool,
         rx: &mut mpsc::Receiver<EvalMessage>,
         join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         builder: &mut Builder<BServ>,
@@ -394,7 +394,7 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        if *eval_done {
+        if *is_eval_done {
             let Some(join_result) = join_set.join_next().await else {
                 return Ok(());
             };
@@ -403,7 +403,7 @@ impl Worker {
         } else if join_set.is_empty() {
             match rx.recv().await {
                 Some(msg) => self.accept_eval_message(msg, known_paths)?,
-                None => *eval_done = true,
+                None => *is_eval_done = true,
             }
         } else {
             tokio::select! {
@@ -415,7 +415,7 @@ impl Worker {
                 msg = rx.recv() => {
                     match msg {
                         Some(msg) => self.accept_eval_message(msg, known_paths)?,
-                        None => *eval_done = true,
+                        None => *is_eval_done = true,
                     }
                 }
             }
@@ -429,17 +429,17 @@ impl Worker {
         &mut self,
         rx: &mut mpsc::Receiver<EvalMessage>,
         known_paths: &mut DerivationRegistry,
-        eval_done: &mut bool,
+        is_eval_done: &mut bool,
     ) -> Result<(), Error> {
-        let drain_limit: u32 = 256;
-        for _ in 0..drain_limit {
+        let drain_count_max: u32 = 256;
+        for _ in 0..drain_count_max {
             match rx.try_recv() {
                 Ok(msg) => {
                     self.accept_eval_message(msg, known_paths)?;
                 }
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    *eval_done = true;
+                    *is_eval_done = true;
                     break;
                 }
             }
@@ -816,8 +816,8 @@ impl Worker {
                 .get_mut(waiter_key)
                 .ok_or_else(|| Error::Store(format!("waiter goal missing: {waiter_key}")))?;
 
-            let became_ready = waiter.notify_dep_done()?;
-            if became_ready {
+            let is_now_ready = waiter.notify_dep_done()?;
+            if is_now_ready {
                 self.ready_queue.push_back(waiter_key.clone());
             }
         }

@@ -95,7 +95,7 @@ pub fn verify_pathinfo_signatures(path_info: &PathInfo, trusted_keys: &[Verifyin
         }
     }
 
-    let total_sigs = path_info.signatures.len().min(u32::MAX as usize) as u32;
+    let total_sigs = u32::try_from(path_info.signatures.len()).unwrap_or(u32::MAX);
 
     VerifyResult {
         trusted_count,
@@ -173,7 +173,8 @@ pub fn generate_keypair() -> (KeyPair, String) {
     let dalek_verifying = dalek_signing.verifying_key();
 
     // Nix format: name:base64(secret_32 ++ public_32)
-    let mut combined = [0u8; SECRET_KEY_LENGTH + PUBLIC_KEY_LENGTH];
+    // SECRET_KEY_LENGTH (32) + PUBLIC_KEY_LENGTH (32)
+    let mut combined = [0u8; 64];
     combined[..SECRET_KEY_LENGTH].copy_from_slice(dalek_signing.as_bytes());
     combined[SECRET_KEY_LENGTH..].copy_from_slice(dalek_verifying.as_bytes());
     let line = format!("{}:{}", name, BASE64.encode(&combined));

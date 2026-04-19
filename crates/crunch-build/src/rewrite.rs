@@ -49,13 +49,13 @@ fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> (Vec<u8>
 
     let nlen = needle.len();
     let mut result = Vec::with_capacity(haystack.len());
-    let mut found = false;
+    let mut was_found = false;
     let mut i: usize = 0;
 
     while i < haystack.len() {
-        if i + nlen <= haystack.len() && &haystack[i..i + nlen] == needle {
+        if i.saturating_add(nlen) <= haystack.len() && &haystack[i..i.saturating_add(nlen)] == needle {
             result.extend_from_slice(replacement);
-            found = true;
+            was_found = true;
             i += nlen;
         } else {
             result.push(haystack[i]);
@@ -63,7 +63,7 @@ fn replace_bytes(haystack: &[u8], needle: &[u8], replacement: &[u8]) -> (Vec<u8>
         }
     }
 
-    (result, found)
+    (result, was_found)
 }
 
 use snix_castore::Node;
@@ -168,14 +168,14 @@ async fn rewrite_leaf_to_root(
             } => rewrite_file_node(digest, *size, *executable, old_bytes, new_bytes, blob_service).await?,
             Node::Symlink { .. } => (item.node.clone(), false),
             Node::Directory { .. } => {
-                let mut any_found = false;
+                let mut has_any_rewrite = false;
                 let mut new_dir = snix_castore::Directory::new();
                 for (j, child_item) in worklist.iter().enumerate() {
                     if child_item.parent_idx == Some(i as u32) {
                         let (child_node, child_found) =
                             results[j].take().expect("child must be processed before parent");
                         if child_found {
-                            any_found = true;
+                            has_any_rewrite = true;
                         }
                         let child_name = child_item.name.clone().expect("directory child must have a name");
                         new_dir
@@ -184,11 +184,11 @@ async fn rewrite_leaf_to_root(
                     }
                 }
 
-                if !any_found {
+                if !has_any_rewrite {
                     (item.node.clone(), false)
                 } else {
                     let new_digest = new_dir.digest();
-                    let new_size = new_dir.size();
+                    let new_entry_count = new_dir.size();
                     directory_service
                         .put(new_dir)
                         .await
@@ -196,7 +196,7 @@ async fn rewrite_leaf_to_root(
                     (
                         Node::Directory {
                             digest: new_digest,
-                            size: new_size,
+                            size: new_entry_count,
                         },
                         true,
                     )
@@ -213,7 +213,7 @@ async fn rewrite_leaf_to_root(
 async fn rewrite_file_node(
     digest: &snix_castore::B3Digest,
     size: u64,
-    executable: bool,
+    is_executable: bool,
     old_bytes: &[u8],
     new_bytes: &[u8],
     blob_service: &(impl BlobService + Clone),
@@ -224,7 +224,7 @@ async fn rewrite_file_node(
         .map_err(|e| crate::Error::Store(format!("blob read for rewrite: {e}")))?;
     let reader = reader.as_mut().ok_or_else(|| crate::Error::Store(format!("blob {digest} not found for rewrite")))?;
 
-    let mut data = Vec::with_capacity(size as usize);
+    let mut data = Vec::with_capacity(usize::try_from(size).unwrap_or(usize::MAX));
     reader.read_to_end(&mut data).await.map_err(|e| crate::Error::Store(format!("reading blob: {e}")))?;
 
     let (rewritten, found) = replace_bytes(&data, old_bytes, new_bytes);
@@ -234,7 +234,7 @@ async fn rewrite_file_node(
             Node::File {
                 digest: *digest,
                 size,
-                executable,
+                executable: is_executable,
             },
             false,
         ));
@@ -251,7 +251,7 @@ async fn rewrite_file_node(
         Node::File {
             digest: new_digest,
             size,
-            executable,
+            executable: is_executable,
         },
         true,
     ))

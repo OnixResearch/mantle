@@ -149,7 +149,7 @@ impl Goal {
         }
 
         let dep_count = unbuilt_dep_keys.len();
-        debug_assert!(dep_count <= MAX_GOALS as usize, "dep count exceeds MAX_GOALS");
+        debug_assert!(dep_count <= usize::try_from(MAX_GOALS).unwrap_or(usize::MAX), "dep count exceeds MAX_GOALS");
 
         self.waitees = unbuilt_dep_keys;
 
@@ -303,7 +303,7 @@ impl GoalRegistry {
         // Tiger Style: assert postcondition.
         let old_len = self.goals.len();
         self.goals.insert(key, goal);
-        debug_assert_eq!(self.goals.len(), old_len + 1);
+        debug_assert_eq!(self.goals.len(), old_len.saturating_add(1));
 
         Ok(())
     }
