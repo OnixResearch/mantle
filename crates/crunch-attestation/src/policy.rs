@@ -152,7 +152,10 @@ pub fn evaluate_policy(
         count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses);
     assert_matching_witness_counts(matching_count, active_witnesses.len(), distinct_identities);
     assert!(policy.min_matching_witnesses >= 1, "policy quorum must be at least one witness");
-    let active_witness_count = u32::try_from(active_witnesses.len()).unwrap_or(u32::MAX);
+    let active_witness_count = match u32::try_from(active_witnesses.len()) {
+        Ok(count) => count,
+        Err(_) => policy.min_matching_witnesses.saturating_add(matching_count),
+    };
     assert!(matching_count <= active_witness_count, "matching count must fit active witnesses");
 
     let technical_class = if matching_count > 0 {
@@ -160,10 +163,10 @@ pub fn evaluate_policy(
     } else {
         TechnicalClass::SelfProofValid
     };
-    let quorum_met = matching_count >= policy.min_matching_witnesses;
-    let independence_met = distinct_identities >= policy.min_matching_witnesses;
+    let is_quorum_met = matching_count >= policy.min_matching_witnesses;
+    let is_independence_met = distinct_identities >= policy.min_matching_witnesses;
 
-    let (policy_status, failure_reason) = if !quorum_met {
+    let (policy_status, failure_reason) = if !is_quorum_met {
         (
             PolicyStatus::Insufficient,
             Some(PolicyFailureReason::InsufficientQuorum {
@@ -171,7 +174,7 @@ pub fn evaluate_policy(
                 matched: matching_count,
             }),
         )
-    } else if !independence_met {
+    } else if !is_independence_met {
         (
             PolicyStatus::Insufficient,
             Some(PolicyFailureReason::InsufficientIndependence {
@@ -204,6 +207,8 @@ fn filter_active_witnesses<'a>(
     witnesses: &'a [ValidatedWitness],
     revocations: &ReleaseRevocations,
 ) -> (u32, Vec<&'a ValidatedWitness>) {
+    assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
+    assert!(revocations.revoked_witness_keys.len() <= witnesses.len().saturating_add(revocations.revoked_witness_keys.len()));
     let revoked_keys: BTreeSet<&str> = revocations.revoked_witness_keys.iter().map(|key| key.as_str()).collect();
     let revoked_digests: BTreeSet<&str> = revocations
         .revoked_witness_attestation_digests_blake3
@@ -211,19 +216,23 @@ fn filter_active_witnesses<'a>(
         .map(|digest| digest.as_str())
         .collect();
     let mut revoked_count: u32 = 0;
-    let mut active_witnesses: Vec<&ValidatedWitness> = Vec::new();
+    let mut active_witnesses: Vec<&ValidatedWitness> = Vec::with_capacity(witnesses.len());
+    assert!(active_witnesses.is_empty(), "active witness list must start empty");
+    assert!(revoked_keys.len() <= revocations.revoked_witness_keys.len(), "revoked key set must deduplicate only");
 
     for witness in witnesses {
-        let key_revoked = revoked_keys.contains(witness.signer_key_name.as_str());
+        let is_key_revoked = revoked_keys.contains(witness.signer_key_name.as_str());
         let digest_hex = witness.attestation_digest.to_hex();
-        let digest_revoked = revoked_digests.contains(digest_hex.as_str());
-        if key_revoked || digest_revoked {
+        let is_digest_revoked = revoked_digests.contains(digest_hex.as_str());
+        if is_key_revoked || is_digest_revoked {
             revoked_count = revoked_count.saturating_add(1);
             continue;
         }
         active_witnesses.push(witness);
     }
 
+    let witness_total = count_with_overflow_marker(witnesses.len(), revoked_count);
+    assert!(revoked_count <= witness_total, "revoked count must stay bounded");
     (revoked_count, active_witnesses)
 }
 
@@ -236,16 +245,16 @@ fn count_matching_witnesses(
     let mut matching_identities: BTreeSet<&str> = BTreeSet::new();
 
     for witness in active_witnesses {
-        let digest_matches = witness.attestation.release_attestation_digest_blake3 == *release_digest;
+        let is_release_digest_match = witness.attestation.release_attestation_digest_blake3 == *release_digest;
         let rebuilt = normalize_for_comparison(&witness.attestation.rebuilt_digests);
-        if !digest_matches || !binary_digests_match(release_binary_digests, &rebuilt) {
+        if !is_release_digest_match || !binary_digests_match(release_binary_digests, &rebuilt) {
             continue;
         }
         matching_count = matching_count.saturating_add(1);
         matching_identities.insert(&witness.attestation.witness_identity);
     }
 
-    let distinct_identities = u32::try_from(matching_identities.len()).unwrap_or(u32::MAX);
+    let distinct_identities = count_with_overflow_marker(matching_identities.len(), matching_count);
     (matching_count, distinct_identities)
 }
 
@@ -258,8 +267,8 @@ fn assert_policy_quorum(policy: &ReleasePolicy) {
 }
 
 fn assert_matching_witness_counts(matching_count: u32, active_witness_count: usize, distinct_identities: u32) {
-    let active_witness_count_u32 = u32::try_from(active_witness_count).unwrap_or(u32::MAX);
-    assert!(matching_count <= active_witness_count_u32, "matching witness count must stay bounded");
+    let active_witness_total = count_with_overflow_marker(active_witness_count, matching_count);
+    assert!(matching_count <= active_witness_total, "matching witness count must stay bounded");
     assert!(distinct_identities <= matching_count, "distinct witness identities must not exceed matches");
 }
 
@@ -289,14 +298,17 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
             actual: revocations.schema.clone(),
         });
     }
-    let key_count = u32::try_from(revocations.revoked_witness_keys.len()).unwrap_or(u32::MAX);
+    let key_count = count_with_overflow_marker(revocations.revoked_witness_keys.len(), MAX_REVOCATION_COUNT);
     if key_count > MAX_REVOCATION_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_REVOCATION_COUNT,
             actual: key_count,
         });
     }
-    let digest_count = u32::try_from(revocations.revoked_witness_attestation_digests_blake3.len()).unwrap_or(u32::MAX);
+    let digest_count = count_with_overflow_marker(
+        revocations.revoked_witness_attestation_digests_blake3.len(),
+        MAX_REVOCATION_COUNT,
+    );
     if digest_count > MAX_REVOCATION_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_REVOCATION_COUNT,
@@ -307,7 +319,7 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
 }
 
 fn validate_signer_list(signers: &[String], _field: &'static str) -> Result<(), Error> {
-    let count = u32::try_from(signers.len()).unwrap_or(u32::MAX);
+    let count = count_with_overflow_marker(signers.len(), MAX_SIGNER_COUNT);
     if count > MAX_SIGNER_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_SIGNER_COUNT,
@@ -315,6 +327,13 @@ fn validate_signer_list(signers: &[String], _field: &'static str) -> Result<(), 
         });
     }
     Ok(())
+}
+
+fn count_with_overflow_marker(value_count: usize, overflow_floor: u32) -> u32 {
+    match u32::try_from(value_count) {
+        Ok(value) => value,
+        Err(_) => overflow_floor.saturating_add(1),
+    }
 }
 
 fn normalize_for_comparison(digests: &[BinaryDigest]) -> Vec<BinaryDigest> {
@@ -650,21 +669,21 @@ mod tests {
     // -- Helpers -----------------------------------------------------------
 
     fn sample_release() -> ReleaseAttestation {
-        ReleaseAttestation::new(
-            "crunch-0.1.0".to_string(),
-            AttestationDigest::from_canonical_bytes(b"manifest"),
-            AttestationDigest::from_canonical_bytes(b"proof"),
-            "fixed-point".to_string(),
-            Workflow {
+        ReleaseAttestation::new(crate::release::ReleaseAttestationInit {
+            release_id: "crunch-0.1.0".to_string(),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            proof_mode: "fixed-point".to_string(),
+            workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
             },
-            vec![crate::release::BinaryDigest {
+            binary_digests: vec![crate::release::BinaryDigest {
                 name: "crunch".to_string(),
                 algorithm: "blake3".to_string(),
                 digest: "aa".repeat(32),
             }],
-        )
+        })
     }
 
     fn sample_policy() -> ReleasePolicy {

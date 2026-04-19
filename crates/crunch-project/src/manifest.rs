@@ -5,6 +5,7 @@
 //! and deserialization. The types here are pure data — no I/O, no eval.
 
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
 use crate::version::SchemaVersion;
@@ -20,7 +21,7 @@ pub const MAX_MIRRORS_PER_INPUT: u32 = 64;
 pub const MAX_PATCHES_PER_INPUT: u32 = 256;
 
 /// A project manifest deserialized from `crunch-project.ncl`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ProjectManifest {
     /// Schema version of the manifest format (as string for Nickel compat).
     pub version: String,
@@ -29,8 +30,28 @@ pub struct ProjectManifest {
     pub inputs: Vec<ManifestInput>,
 
     /// Global patch definitions.
-    #[serde(default)]
     pub patches: Vec<PatchDef>,
+}
+
+#[derive(Deserialize)]
+struct RawProjectManifest {
+    version: String,
+    inputs: Vec<ManifestInput>,
+    patches: Option<Vec<PatchDef>>,
+}
+
+impl<'de> Deserialize<'de> for ProjectManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawProjectManifest::deserialize(deserializer)?;
+        Ok(Self {
+            version: raw.version,
+            inputs: raw.inputs,
+            patches: raw.patches.unwrap_or_else(Vec::new),
+        })
+    }
 }
 
 impl ProjectManifest {
@@ -46,7 +67,7 @@ impl ProjectManifest {
     ///
     /// Returns a list of problems. Empty vec = valid.
     pub fn validate(&self) -> Vec<String> {
-        let mut problems = Vec::new();
+        let mut problems = Vec::with_capacity(self.inputs.len().saturating_mul(2).saturating_add(self.patches.len()));
 
         // Validate version string
         match parse_version(&self.version) {
@@ -91,7 +112,7 @@ impl ProjectManifest {
 }
 
 /// A named input in the project manifest.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ManifestInput {
     /// Unique name for this input (used as key in the lockfile).
     pub name: String,
@@ -100,20 +121,43 @@ pub struct ManifestInput {
     pub kind: InputKind,
 
     /// Hash specification (algorithm + optional expected hash).
-    #[serde(default)]
     pub hash: HashSpec,
 
     /// Whether this input is frozen (skip on refresh).
-    #[serde(default)]
     pub frozen: bool,
 
     /// Mirror URLs for this input.
-    #[serde(default)]
     pub mirrors: Vec<String>,
 
     /// Names of patches to apply to this input.
-    #[serde(default)]
     pub patches: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct RawManifestInput {
+    name: String,
+    kind: InputKind,
+    hash: Option<HashSpec>,
+    frozen: Option<bool>,
+    mirrors: Option<Vec<String>>,
+    patches: Option<Vec<String>>,
+}
+
+impl<'de> Deserialize<'de> for ManifestInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawManifestInput::deserialize(deserializer)?;
+        Ok(Self {
+            name: raw.name,
+            kind: raw.kind,
+            hash: raw.hash.unwrap_or_default(),
+            frozen: raw.frozen.unwrap_or(false),
+            mirrors: raw.mirrors.unwrap_or_else(Vec::new),
+            patches: raw.patches.unwrap_or_else(Vec::new),
+        })
+    }
 }
 
 impl ManifestInput {
@@ -145,7 +189,7 @@ impl ManifestInput {
 }
 
 /// The kind of a project input.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum InputKind {
     /// A single file download.
@@ -160,9 +204,42 @@ pub enum InputKind {
     #[serde(rename = "git")]
     Git {
         repository: String,
-        #[serde(default)]
         reference: GitReference,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum RawInputKind {
+    #[serde(rename = "file")]
+    File { url: String },
+    #[serde(rename = "tarball")]
+    Tarball { url: String },
+    #[serde(rename = "git")]
+    Git {
+        repository: String,
+        reference: Option<GitReference>,
+    },
+}
+
+impl<'de> Deserialize<'de> for InputKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawInputKind::deserialize(deserializer)?;
+        Ok(match raw {
+            RawInputKind::File { url } => Self::File { url },
+            RawInputKind::Tarball { url } => Self::Tarball { url },
+            RawInputKind::Git {
+                repository,
+                reference,
+            } => Self::Git {
+                repository,
+                reference: reference.unwrap_or_else(GitReference::default),
+            },
+        })
+    }
 }
 
 /// A git reference specification.
@@ -206,14 +283,32 @@ impl std::fmt::Display for HashAlgo {
 }
 
 /// Hash specification: algorithm + optional expected hash value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct HashSpec {
-    #[serde(default)]
     pub algo: HashAlgo,
 
     /// Expected hash in SRI format (e.g. "sha256-..."). None means
     /// not yet computed (will be filled on first refresh).
     pub expected: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawHashSpec {
+    algo: Option<HashAlgo>,
+    expected: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for HashSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawHashSpec::deserialize(deserializer)?;
+        Ok(Self {
+            algo: raw.algo.unwrap_or_default(),
+            expected: raw.expected,
+        })
+    }
 }
 
 /// A global patch definition in the manifest.

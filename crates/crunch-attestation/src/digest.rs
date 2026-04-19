@@ -7,7 +7,7 @@ use serde::Serializer;
 use crate::Error;
 
 const DIGEST_BYTES_LEN: usize = 32;
-const DIGEST_HEX_LEN: usize = DIGEST_BYTES_LEN * 2;
+const DIGEST_HEX_LEN: usize = DIGEST_BYTES_LEN.saturating_mul(2);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct AttestationDigest([u8; DIGEST_BYTES_LEN]);

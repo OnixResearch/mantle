@@ -293,12 +293,12 @@ pub fn apply_outcomes(
     let patch_result = resolve_patches_into_lock(manifest, &mut new_lock, resolver);
     let reverted = revert_failed_patch_inputs(lock, &mut new_lock, &patch_result.failures);
     inputs_changed = inputs_changed.saturating_sub(reverted);
-    let orphan_changed = remove_orphaned_patches(&mut new_lock);
+    let is_orphan_changed = remove_orphaned_patches(&mut new_lock);
 
     ApplyResult {
         lock: new_lock,
         inputs_changed,
-        patches_changed: patch_result.changed || orphan_changed,
+        patches_changed: patch_result.changed || is_orphan_changed,
         failures: patch_result.failures,
     }
 }
@@ -314,8 +314,8 @@ pub(crate) fn resolve_patches_into_lock(
     lock: &mut Lockfile,
     resolver: &dyn RefreshResolver,
 ) -> PatchResolutionResult {
-    let mut changed = false;
-    let mut failures = Vec::new();
+    let mut is_changed = false;
+    let mut failures = Vec::with_capacity(manifest.patches.len());
     let needed = collect_needed_patches(lock);
 
     let defs: std::collections::HashMap<&str, &PatchDef> =
@@ -336,7 +336,7 @@ pub(crate) fn resolve_patches_into_lock(
         match resolve_patch(def, resolver) {
             Ok(locked) => {
                 lock.patches.insert(name.clone(), locked);
-                changed = true;
+                is_changed = true;
             }
             Err(err) => failures.push(RefreshFailure {
                 name: name.clone(),
@@ -345,9 +345,9 @@ pub(crate) fn resolve_patches_into_lock(
         }
     }
 
-    let orphan_changed = remove_orphaned_patches(lock);
+    let is_orphan_changed = remove_orphaned_patches(lock);
     PatchResolutionResult {
-        changed: changed || orphan_changed,
+        changed: is_changed || is_orphan_changed,
         failures,
     }
 }

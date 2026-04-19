@@ -133,7 +133,7 @@ impl VerificationDirectory {
 }
 
 fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryError> {
-    let mut json_files: Vec<PathBuf> = Vec::new();
+    let mut json_files: Vec<PathBuf> = Vec::with_capacity(usize_limit_from_u32(MAX_WITNESS_FILES));
     assert!(json_files.is_empty(), "json witness list must start empty");
     let entries = std::fs::read_dir(dir).map_err(|err| DiscoveryError::Io {
         path: dir.to_path_buf(),
@@ -151,7 +151,10 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
         }
     }
 
-    let count = u32::try_from(json_files.len()).unwrap_or(u32::MAX);
+    let count = match u32::try_from(json_files.len()) {
+        Ok(count) => count,
+        Err(_) => MAX_WITNESS_FILES.saturating_add(1),
+    };
     if count > MAX_WITNESS_FILES {
         return Err(DiscoveryError::TooManyWitnesses {
             limit: MAX_WITNESS_FILES,
@@ -207,6 +210,13 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
 ///
 /// Witnesses whose signatures were already validated externally can
 /// use this to bridge discovery into policy evaluation.
+fn usize_limit_from_u32(limit: u32) -> usize {
+    match usize::try_from(limit) {
+        Ok(value) => value,
+        Err(_) => usize::MAX,
+    }
+}
+
 pub fn to_validated_witnesses(discovered: &[DiscoveredWitness]) -> Result<Vec<ValidatedWitness>, Error> {
     let mut validated = Vec::with_capacity(discovered.len());
     for witness in discovered {
@@ -542,20 +552,20 @@ mod tests {
     }
 
     fn sample_release() -> ReleaseAttestation {
-        ReleaseAttestation::new(
-            "crunch-0.1.0".to_string(),
-            AttestationDigest::from_canonical_bytes(b"manifest"),
-            AttestationDigest::from_canonical_bytes(b"proof"),
-            "fixed-point".to_string(),
-            Workflow {
+        ReleaseAttestation::new(ReleaseAttestationInit {
+            release_id: "crunch-0.1.0".to_string(),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            proof_mode: "fixed-point".to_string(),
+            workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
             },
-            vec![BinaryDigest {
+            binary_digests: vec![BinaryDigest {
                 name: "crunch".to_string(),
                 algorithm: "blake3".to_string(),
                 digest: "aa".repeat(32),
             }],
-        )
+        })
     }
 }

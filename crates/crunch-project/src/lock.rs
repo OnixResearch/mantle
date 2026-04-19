@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
 use crate::manifest::HashAlgo;
@@ -21,7 +22,7 @@ const MAX_LOCK_ENTRIES: u32 = 4096;
 const MAX_LOCKED_PATCHES: u32 = 1024;
 
 /// A resolved lockfile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Lockfile {
     /// Schema version.
     pub version: SchemaVersion,
@@ -30,8 +31,28 @@ pub struct Lockfile {
     pub inputs: BTreeMap<String, LockEntry>,
 
     /// Resolved patches keyed by name.
-    #[serde(default)]
     pub patches: BTreeMap<String, LockedPatch>,
+}
+
+#[derive(Deserialize)]
+struct RawLockfile {
+    version: SchemaVersion,
+    inputs: BTreeMap<String, LockEntry>,
+    patches: Option<BTreeMap<String, LockedPatch>>,
+}
+
+impl<'de> Deserialize<'de> for Lockfile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawLockfile::deserialize(deserializer)?;
+        Ok(Self {
+            version: raw.version,
+            inputs: raw.inputs,
+            patches: raw.patches.unwrap_or_else(BTreeMap::new),
+        })
+    }
 }
 
 impl Lockfile {
@@ -56,7 +77,7 @@ impl Lockfile {
 
     /// Validate internal consistency.
     pub fn validate(&self) -> Vec<String> {
-        let mut problems = Vec::new();
+        let mut problems = Vec::with_capacity(self.inputs.len().saturating_add(self.patches.len()));
 
         if self.inputs.len() as u64 > MAX_LOCK_ENTRIES as u64 {
             problems.push(format!("too many lock entries: {} (max {MAX_LOCK_ENTRIES})", self.inputs.len()));
@@ -92,7 +113,7 @@ impl Default for Lockfile {
 }
 
 /// A resolved input in the lockfile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LockEntry {
     /// Resolved input kind with concrete URLs.
     pub kind: LockedKind,
@@ -101,16 +122,37 @@ pub struct LockEntry {
     pub hash: LockedHash,
 
     /// Names of patches applied to this input.
-    #[serde(default)]
     pub patches: Vec<String>,
 
     /// Mirror URLs that were resolved for this input.
-    #[serde(default)]
     pub mirrors: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct RawLockEntry {
+    kind: LockedKind,
+    hash: LockedHash,
+    patches: Option<Vec<String>>,
+    mirrors: Option<Vec<String>>,
+}
+
+impl<'de> Deserialize<'de> for LockEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawLockEntry::deserialize(deserializer)?;
+        Ok(Self {
+            kind: raw.kind,
+            hash: raw.hash,
+            patches: raw.patches.unwrap_or_else(Vec::new),
+            mirrors: raw.mirrors.unwrap_or_else(Vec::new),
+        })
+    }
+}
+
 /// Resolved input kind with all template variables expanded.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum LockedKind {
     /// A single file at a resolved URL.
@@ -129,9 +171,45 @@ pub enum LockedKind {
         rev: String,
         /// The reference that was resolved to get this rev
         /// (informational, for display).
-        #[serde(default)]
         ref_name: Option<String>,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum RawLockedKind {
+    #[serde(rename = "file")]
+    File { url: String },
+    #[serde(rename = "tarball")]
+    Tarball { url: String },
+    #[serde(rename = "git")]
+    Git {
+        repository: String,
+        rev: String,
+        ref_name: Option<String>,
+    },
+}
+
+impl<'de> Deserialize<'de> for LockedKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawLockedKind::deserialize(deserializer)?;
+        Ok(match raw {
+            RawLockedKind::File { url } => Self::File { url },
+            RawLockedKind::Tarball { url } => Self::Tarball { url },
+            RawLockedKind::Git {
+                repository,
+                rev,
+                ref_name,
+            } => Self::Git {
+                repository,
+                rev,
+                ref_name,
+            },
+        })
+    }
 }
 
 /// A verified hash in the lockfile.

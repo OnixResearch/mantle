@@ -99,7 +99,7 @@ impl DetachedSignature {
             message: "missing colon separator".to_string(),
         })?;
         let key_name = &line[..colon_pos];
-        let sig_b64 = &line[colon_pos + 1..];
+        let sig_b64 = &line[colon_pos.saturating_add(1)..];
 
         if key_name.is_empty() {
             return Err(Error::InvalidDetachedSignature {
@@ -157,23 +157,25 @@ pub struct ReleaseAttestation {
     pub binary_digests: Vec<BinaryDigest>,
 }
 
+pub struct ReleaseAttestationInit {
+    pub release_id: String,
+    pub release_evidence_manifest_digest_blake3: AttestationDigest,
+    pub proof_bundle_digest_blake3: AttestationDigest,
+    pub proof_mode: String,
+    pub workflow: Workflow,
+    pub binary_digests: Vec<BinaryDigest>,
+}
+
 impl ReleaseAttestation {
-    pub fn new(
-        release_id: String,
-        release_evidence_manifest_digest_blake3: AttestationDigest,
-        proof_bundle_digest_blake3: AttestationDigest,
-        proof_mode: String,
-        workflow: Workflow,
-        binary_digests: Vec<BinaryDigest>,
-    ) -> Self {
+    pub fn new(init: ReleaseAttestationInit) -> Self {
         Self {
             schema: RELEASE_ATTESTATION_SCHEMA.to_string(),
-            release_id,
-            release_evidence_manifest_digest_blake3,
-            proof_bundle_digest_blake3,
-            proof_mode,
-            workflow,
-            binary_digests,
+            release_id: init.release_id,
+            release_evidence_manifest_digest_blake3: init.release_evidence_manifest_digest_blake3,
+            proof_bundle_digest_blake3: init.proof_bundle_digest_blake3,
+            proof_mode: init.proof_mode,
+            workflow: init.workflow,
+            binary_digests: init.binary_digests,
         }
     }
 }
@@ -295,11 +297,28 @@ pub struct TrustTier {
 // ---------------------------------------------------------------------------
 
 fn canonical_release(value: &ReleaseAttestation) -> Result<ReleaseAttestation, Error> {
-    validate_schema_tag(&value.schema, RELEASE_ATTESTATION_SCHEMA)?;
-    validate_non_empty(&value.release_id, "release_id")?;
-    validate_non_empty(&value.proof_mode, "proof_mode")?;
-    validate_non_empty(&value.workflow.command, "workflow.command")?;
-    validate_non_empty(&value.workflow.version, "workflow.version")?;
+    assert!(!value.release_id.is_empty(), "release id must not be empty");
+    assert!(!value.proof_mode.is_empty(), "proof mode must not be empty");
+    validate_schema_tag(SchemaTag {
+        actual: &value.schema,
+        expected: RELEASE_ATTESTATION_SCHEMA,
+    })?;
+    validate_non_empty(NamedField {
+        name: "release_id",
+        value: &value.release_id,
+    })?;
+    validate_non_empty(NamedField {
+        name: "proof_mode",
+        value: &value.proof_mode,
+    })?;
+    validate_non_empty(NamedField {
+        name: "workflow.command",
+        value: &value.workflow.command,
+    })?;
+    validate_non_empty(NamedField {
+        name: "workflow.version",
+        value: &value.workflow.version,
+    })?;
     let binary_digests = normalize_binary_digests(&value.binary_digests)?;
 
     Ok(ReleaseAttestation {
@@ -314,11 +333,31 @@ fn canonical_release(value: &ReleaseAttestation) -> Result<ReleaseAttestation, E
 }
 
 fn canonical_witness(value: &WitnessAttestation) -> Result<WitnessAttestation, Error> {
-    validate_schema_tag(&value.schema, WITNESS_ATTESTATION_SCHEMA)?;
-    validate_non_empty(&value.witness_identity, "witness_identity")?;
-    validate_env_field(&value.rebuild_environment_summary.system, "system")?;
-    validate_env_field(&value.rebuild_environment_summary.toolchain, "toolchain")?;
-    validate_env_field(&value.rebuild_environment_summary.host_class, "host_class")?;
+    assert!(!value.witness_identity.is_empty(), "witness identity must not be empty");
+    assert!(
+        !value.rebuild_environment_summary.system.is_empty(),
+        "witness system must not be empty"
+    );
+    validate_schema_tag(SchemaTag {
+        actual: &value.schema,
+        expected: WITNESS_ATTESTATION_SCHEMA,
+    })?;
+    validate_non_empty(NamedField {
+        name: "witness_identity",
+        value: &value.witness_identity,
+    })?;
+    validate_env_field(NamedField {
+        name: "system",
+        value: &value.rebuild_environment_summary.system,
+    })?;
+    validate_env_field(NamedField {
+        name: "toolchain",
+        value: &value.rebuild_environment_summary.toolchain,
+    })?;
+    validate_env_field(NamedField {
+        name: "host_class",
+        value: &value.rebuild_environment_summary.host_class,
+    })?;
     let rebuilt_digests = normalize_binary_digests(&value.rebuilt_digests)?;
 
     Ok(WitnessAttestation {
@@ -332,7 +371,9 @@ fn canonical_witness(value: &WitnessAttestation) -> Result<WitnessAttestation, E
 }
 
 fn normalize_binary_digests(digests: &[BinaryDigest]) -> Result<Vec<BinaryDigest>, Error> {
-    let actual = u32::try_from(digests.len()).unwrap_or(u32::MAX);
+    assert!(MAX_BINARY_DIGEST_COUNT >= 1, "binary digest limit must be positive");
+    assert!(digests.len() <= usize::MAX, "binary digest slice length must fit in usize");
+    let actual = count_with_overflow_marker(digests.len(), MAX_BINARY_DIGEST_COUNT);
     if actual > MAX_BINARY_DIGEST_COUNT {
         return Err(Error::CollectionTooLarge {
             limit: MAX_BINARY_DIGEST_COUNT,
@@ -340,43 +381,72 @@ fn normalize_binary_digests(digests: &[BinaryDigest]) -> Result<Vec<BinaryDigest
         });
     }
     for digest in digests {
-        validate_non_empty(&digest.name, "binary_digest.name")?;
-        validate_non_empty(&digest.algorithm, "binary_digest.algorithm")?;
-        validate_non_empty(&digest.digest, "binary_digest.digest")?;
+        validate_non_empty(NamedField {
+            name: "binary_digest.name",
+            value: &digest.name,
+        })?;
+        validate_non_empty(NamedField {
+            name: "binary_digest.algorithm",
+            value: &digest.algorithm,
+        })?;
+        validate_non_empty(NamedField {
+            name: "binary_digest.digest",
+            value: &digest.digest,
+        })?;
     }
     let mut sorted = digests.to_vec();
     sorted.sort();
     Ok(sorted)
 }
 
-fn validate_schema_tag(actual: &str, expected: &'static str) -> Result<(), Error> {
-    if actual == expected {
+struct SchemaTag<'a> {
+    actual: &'a str,
+    expected: &'static str,
+}
+
+struct NamedField<'a> {
+    name: &'static str,
+    value: &'a str,
+}
+
+fn validate_schema_tag(tag: SchemaTag<'_>) -> Result<(), Error> {
+    if tag.actual == tag.expected {
         return Ok(());
     }
     Err(Error::SchemaTagMismatch {
-        expected,
-        actual: actual.to_string(),
+        expected: tag.expected,
+        actual: tag.actual.to_string(),
     })
 }
 
-fn validate_non_empty(value: &str, field: &'static str) -> Result<(), Error> {
-    if !value.is_empty() {
+fn validate_non_empty(field: NamedField<'_>) -> Result<(), Error> {
+    if !field.value.is_empty() {
         return Ok(());
     }
-    Err(Error::EmptyField { field })
+    Err(Error::EmptyField { field: field.name })
 }
 
-fn validate_env_field(value: &str, field: &'static str) -> Result<(), Error> {
-    validate_non_empty(value, field)?;
-    let actual = u32::try_from(value.len()).unwrap_or(u32::MAX);
+fn validate_env_field(field: NamedField<'_>) -> Result<(), Error> {
+    validate_non_empty(NamedField {
+        name: field.name,
+        value: field.value,
+    })?;
+    let actual = count_with_overflow_marker(field.value.len(), MAX_ENV_FIELD_LEN);
     if actual > MAX_ENV_FIELD_LEN {
         return Err(Error::FieldTooLong {
-            field,
+            field: field.name,
             limit: MAX_ENV_FIELD_LEN,
             actual,
         });
     }
     Ok(())
+}
+
+fn count_with_overflow_marker(value_count: usize, overflow_floor: u32) -> u32 {
+    match u32::try_from(value_count) {
+        Ok(value) => value,
+        Err(_) => overflow_floor.saturating_add(1),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -423,21 +493,21 @@ mod tests {
     fn release_attestation_binds_manifest_and_binary_digests() {
         let manifest_digest = AttestationDigest::from_canonical_bytes(b"manifest-content");
         let proof_digest = AttestationDigest::from_canonical_bytes(b"proof-bundle");
-        let attestation = ReleaseAttestation::new(
-            "crunch-0.1.0".to_string(),
-            manifest_digest,
-            proof_digest,
-            "fixed-point".to_string(),
-            Workflow {
+        let attestation = ReleaseAttestation::new(ReleaseAttestationInit {
+            release_id: "crunch-0.1.0".to_string(),
+            release_evidence_manifest_digest_blake3: manifest_digest,
+            proof_bundle_digest_blake3: proof_digest,
+            proof_mode: "fixed-point".to_string(),
+            workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
             },
-            vec![BinaryDigest {
+            binary_digests: vec![BinaryDigest {
                 name: "crunch".to_string(),
                 algorithm: "blake3".to_string(),
                 digest: manifest_digest.to_hex(),
             }],
-        );
+        });
 
         assert_eq!(attestation.release_evidence_manifest_digest_blake3, manifest_digest);
         assert_eq!(attestation.proof_bundle_digest_blake3, proof_digest);
@@ -787,21 +857,21 @@ mod tests {
     // -- Helpers -----------------------------------------------------------
 
     fn sample_release() -> ReleaseAttestation {
-        ReleaseAttestation::new(
-            "crunch-0.1.0".to_string(),
-            AttestationDigest::from_canonical_bytes(b"manifest"),
-            AttestationDigest::from_canonical_bytes(b"proof"),
-            "fixed-point".to_string(),
-            Workflow {
+        ReleaseAttestation::new(ReleaseAttestationInit {
+            release_id: "crunch-0.1.0".to_string(),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            proof_mode: "fixed-point".to_string(),
+            workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
             },
-            vec![BinaryDigest {
+            binary_digests: vec![BinaryDigest {
                 name: "crunch".to_string(),
                 algorithm: "blake3".to_string(),
                 digest: "aa".repeat(32),
             }],
-        )
+        })
     }
 
     fn sample_witness() -> WitnessAttestation {
@@ -820,16 +890,16 @@ mod tests {
     }
 
     fn release_with_digests(digests: Vec<BinaryDigest>) -> ReleaseAttestation {
-        ReleaseAttestation::new(
-            "crunch-0.1.0".to_string(),
-            AttestationDigest::from_canonical_bytes(b"manifest"),
-            AttestationDigest::from_canonical_bytes(b"proof"),
-            "fixed-point".to_string(),
-            Workflow {
+        ReleaseAttestation::new(ReleaseAttestationInit {
+            release_id: "crunch-0.1.0".to_string(),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            proof_mode: "fixed-point".to_string(),
+            workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
             },
-            digests,
-        )
+            binary_digests: digests,
+        })
     }
 }

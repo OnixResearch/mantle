@@ -124,6 +124,15 @@ pub struct EvaluationSession {
     discovery_metrics: DiscoveryMetrics,
 }
 
+struct SessionInit {
+    ctx: Context,
+    source: Arc<str>,
+    import_paths: Arc<[OsString]>,
+    source_name: Arc<str>,
+    shape: RootShape,
+    labels: Vec<RootLabel>,
+}
+
 impl std::fmt::Debug for EvaluationSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EvaluationSession")
@@ -143,8 +152,8 @@ impl EvaluationSession {
     /// and discover root labels without deep-forcing.
     pub fn open_file(path: &Path, import_paths: &[OsString]) -> Result<Self, Error> {
         let source = std::fs::read_to_string(path)?;
-        let resolved_import_context = import_paths_for_file(path, import_paths);
-        Self::open_source(source, &resolved_import_context, &path.display().to_string())
+        let resolved_scope = import_paths_for_file(path, import_paths);
+        Self::open_source(source, &resolved_scope, &path.display().to_string())
     }
 
     /// Open a session from a Nickel source string.
@@ -156,22 +165,30 @@ impl EvaluationSession {
         assert!(!source_name.is_empty(), "source name must not be empty");
 
         let source: Arc<str> = source.into();
-        let import_context: Arc<[OsString]> = import_paths.to_vec().into();
+        let scope: Arc<[OsString]> = import_paths.to_vec().into();
         let source_name: Arc<str> = source_name.to_string().into();
         let mut ctx = Context::new()
-            .with_added_import_paths(import_context.to_vec())
+            .with_added_import_paths(scope.to_vec())
             .with_source_name(source_name.to_string());
 
         assert!(!source.is_empty(), "source must not be empty");
         assert!(
-            !import_context.iter().any(|path| path.is_empty()),
+            !scope.iter().any(|path| path.is_empty()),
             "import paths must not contain empty entries"
         );
 
         let shallow_expr = ctx.eval_shallow(&source).map_err(Error::Eval)?;
         let shape = classify_shape(&mut ctx, &shallow_expr)?;
 
-        let mut session = Self::new_session(ctx, source, import_context, source_name, shape, Vec::new());
+        let init = SessionInit {
+            ctx,
+            source,
+            import_paths: scope,
+            source_name,
+            shape,
+            labels: Vec::new(),
+        };
+        let mut session = Self::new_session(init);
         session.discover_roots()?;
         Ok(session)
     }
@@ -189,25 +206,26 @@ impl EvaluationSession {
         let ctx = Context::new()
             .with_added_import_paths(import_paths.to_vec())
             .with_source_name(source_name.to_string());
-        let session = Self::new_session(ctx, source, import_paths, source_name, shape, labels);
-        Ok(session)
-    }
-
-    fn new_session(
-        ctx: Context,
-        source: Arc<str>,
-        import_paths: Arc<[OsString]>,
-        source_name: Arc<str>,
-        shape: RootShape,
-        labels: Vec<RootLabel>,
-    ) -> Self {
-        EvaluationSession {
+        let init = SessionInit {
             ctx,
             source,
             import_paths,
             source_name,
             shape,
             labels,
+        };
+        let session = Self::new_session(init);
+        Ok(session)
+    }
+
+    fn new_session(init: SessionInit) -> Self {
+        EvaluationSession {
+            ctx: init.ctx,
+            source: init.source,
+            import_paths: init.import_paths,
+            source_name: init.source_name,
+            shape: init.shape,
+            labels: init.labels,
             deep_expr: None,
             forced_root_count: 0,
             discovery_metrics: DiscoveryMetrics::default(),
@@ -389,7 +407,7 @@ impl EvaluationSession {
             .as_array()
             .ok_or_else(|| Error::Boundary("array shape requires an array expression".to_string()))?;
         let count = array.len();
-        assert!(count <= u32::MAX as usize, "array root count exceeds u32::MAX");
+        assert!(count <= usize_limit_from_u32_max(), "array root count exceeds u32::MAX");
 
         for (i, item) in array.iter().enumerate() {
             let item_value = self.ctx.eval_expr_shallow(item).map_err(Error::Eval)?;
@@ -403,7 +421,10 @@ impl EvaluationSession {
                 .as_str()
                 .map(str::to_owned)
                 .ok_or_else(|| Error::Boundary(format!("array element [{i}] 'name' field is not a string")))?;
-            self.labels.push(RootLabel { label, index: i as u32 });
+            self.labels.push(RootLabel {
+                label,
+                index: u32_from_usize(i),
+            });
         }
         Ok(())
     }
@@ -416,10 +437,10 @@ impl EvaluationSession {
             .as_record()
             .ok_or_else(|| Error::Boundary("record shape requires a record expression".to_string()))?;
         for (i, (key, _value)) in record.iter().enumerate() {
-            assert!(i <= u32::MAX as usize, "record root count exceeds u32::MAX");
+            assert!(i <= usize_limit_from_u32_max(), "record root count exceeds u32::MAX");
             self.labels.push(RootLabel {
                 label: key.to_string(),
-                index: i as u32,
+                index: u32_from_usize(i),
             });
         }
         Ok(())
@@ -473,10 +494,14 @@ impl BoundedWorkerPool {
         assert!(!self.senders.is_empty(), "worker pool must have at least one sender");
 
         let (sender, receiver) = mpsc::sync_channel(1);
-        let boxed_job: BoxedWorkerJob = Box::new(move || {
-            let _ = sender.send(job());
+        let boxed_job: BoxedWorkerJob = Box::new(move || match sender.send(job()) {
+            Ok(()) => {}
+            Err(_send_err) => {}
         });
-        let worker_index = self.next_worker.fetch_add(1, Ordering::Relaxed) as usize % self.senders.len();
+        let sender_count = self.senders.len();
+        assert!(sender_count != 0, "worker pool must have at least one sender");
+        let next_worker = usize_from_u32(self.next_worker.fetch_add(1, Ordering::Relaxed));
+        let worker_index = next_worker % sender_count;
         self.senders[worker_index]
             .send(boxed_job)
             .map_err(|_| Error::Boundary("bounded worker pool thread exited unexpectedly".to_string()))?;
@@ -518,7 +543,7 @@ impl AssignmentExecutor for ThreadedExecutor {
         worker_input: &IsolatedWorkerInput,
         assignments: &[WorkerAssignment],
     ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
-        let worker_pool = bounded_worker_pool(assignments.len() as u32)?;
+        let worker_pool = bounded_worker_pool(u32_from_usize(assignments.len()))?;
         let mut worker_receivers = Vec::with_capacity(assignments.len());
         for assignment in assignments {
             let worker = worker_input.clone();
@@ -531,6 +556,24 @@ impl AssignmentExecutor for ThreadedExecutor {
 }
 
 const MIN_ROOTS_PER_WORKER: usize = 8;
+
+fn usize_from_u32(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(converted) => converted,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn u32_from_usize(value: usize) -> u32 {
+    match u32::try_from(value) {
+        Ok(converted) => converted,
+        Err(_) => u32::MAX,
+    }
+}
+
+fn usize_limit_from_u32_max() -> usize {
+    usize_from_u32(u32::MAX)
+}
 
 fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
@@ -634,7 +677,7 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
         return Ok(worker_pool.clone());
     }
 
-    let mut senders = Vec::with_capacity(worker_count as usize);
+    let mut senders = Vec::with_capacity(usize_from_u32(worker_count));
     for worker_index in 0..worker_count {
         let (sender, receiver) = mpsc::sync_channel::<BoxedWorkerJob>(1);
         std::thread::Builder::new()
@@ -648,7 +691,7 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
         senders.push(sender);
     }
 
-    assert_eq!(senders.len() as u32, worker_count, "worker pool must create one sender per worker");
+    assert_eq!(u32_from_usize(senders.len()), worker_count, "worker pool must create one sender per worker");
     let worker_pool = Arc::new(BoundedWorkerPool {
         senders,
         next_worker: AtomicU32::new(0),
@@ -663,26 +706,24 @@ fn clamp_parallel_workers(requested_root_count: usize, concurrency_cap: u32) -> 
 
     let max_workers_from_chunking = requested_root_count.div_ceil(MIN_ROOTS_PER_WORKER);
     let max_workers_from_chunking = max_workers_from_chunking.max(1);
-    let max_workers_from_chunking = u32::try_from(max_workers_from_chunking).expect("worker count must fit in u32");
+    let max_workers_from_chunking = u32_from_usize(max_workers_from_chunking);
     concurrency_cap.min(max_workers_from_chunking)
 }
 
 fn build_worker_assignments(labels: &[String], concurrency_cap: u32) -> Vec<WorkerAssignment> {
     assert!(concurrency_cap >= 1, "concurrency_cap must be at least 1");
-    assert!(labels.len() <= u32::MAX as usize, "label count must fit in u32");
+    assert!(labels.len() <= usize_limit_from_u32_max(), "label count must fit in u32");
     if labels.is_empty() {
         return Vec::new();
     }
 
-    let chunk_len = labels.len().div_ceil(concurrency_cap as usize);
+    let chunk_len = labels.len().div_ceil(usize_from_u32(concurrency_cap));
     assert!(chunk_len >= 1, "chunk_len must be at least 1");
 
-    let mut assignments = Vec::new();
+    let assignment_count = labels.len().div_ceil(chunk_len);
+    let mut assignments = Vec::with_capacity(assignment_count);
     for (chunk_index, chunk_labels) in labels.chunks(chunk_len).enumerate() {
-        let start_index = chunk_index
-            .checked_mul(chunk_len)
-            .and_then(|value| u32::try_from(value).ok())
-            .expect("worker assignment start index must fit in u32");
+        let start_index = u32_from_usize(chunk_index.saturating_mul(chunk_len));
         assignments.push(WorkerAssignment {
             start_index,
             labels: chunk_labels.to_vec(),
@@ -756,7 +797,7 @@ fn select_worker_labels(all_labels: &[RootLabel], requested_labels: &[String]) -
 }
 
 fn normalize_concurrency_cap(max_concurrency: u32, requested_root_count: usize) -> u32 {
-    assert!(requested_root_count <= u32::MAX as usize, "requested root count must fit in u32");
+    assert!(requested_root_count <= usize_limit_from_u32_max(), "requested root count must fit in u32");
     if requested_root_count == 0 {
         return 1;
     }
@@ -816,7 +857,7 @@ fn extract_field_expr(expr: &Expr, shape: &RootShape, index: u32) -> Result<Expr
                 .as_array()
                 .ok_or_else(|| Error::Boundary("expected array expression for array shape".to_string()))?;
             array
-                .get(index as usize)
+                .get(usize_from_u32(index))
                 .ok_or_else(|| Error::Boundary(format!("array index {index} out of bounds")))
         }
         RootShape::Record => {
@@ -824,7 +865,7 @@ fn extract_field_expr(expr: &Expr, shape: &RootShape, index: u32) -> Result<Expr
                 .as_record()
                 .ok_or_else(|| Error::Boundary("expected record expression for record shape".to_string()))?;
             let (_key, value) = record
-                .key_value_by_index(index as usize)
+                .key_value_by_index(usize_from_u32(index))
                 .ok_or_else(|| Error::Boundary(format!("record field index {index} out of bounds")))?;
             value.ok_or_else(|| Error::Boundary(format!("record field at index {index} has no value")))
         }

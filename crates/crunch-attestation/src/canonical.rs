@@ -50,10 +50,22 @@ impl Canonicalize for ProjectAttestation {
 fn canonical_artifact(value: &ArtifactAttestation) -> Result<ArtifactAttestation, Error> {
     assert!(!value.subject_node_id.is_empty(), "subject node id must not be empty");
     assert!(!value.facts.logical_path.is_empty(), "logical path must not be empty");
-    validate_non_empty(&value.subject_node_id, "subject_node_id")?;
-    validate_non_empty(&value.facts.logical_path, "logical_path")?;
-    validate_non_empty(&value.facts.output_name, "output_name")?;
-    validate_non_empty(&value.facts.content_digest, "content_digest")?;
+    validate_non_empty(NamedField {
+        name: "subject_node_id",
+        value: &value.subject_node_id,
+    })?;
+    validate_non_empty(NamedField {
+        name: "logical_path",
+        value: &value.facts.logical_path,
+    })?;
+    validate_non_empty(NamedField {
+        name: "output_name",
+        value: &value.facts.output_name,
+    })?;
+    validate_non_empty(NamedField {
+        name: "content_digest",
+        value: &value.facts.content_digest,
+    })?;
     let claims = normalize_claims(&value.claims)?;
     let nodes = normalize_nodes(&value.nodes)?;
     let node_ids = node_id_set(&nodes);
@@ -75,7 +87,10 @@ fn canonical_artifact(value: &ArtifactAttestation) -> Result<ArtifactAttestation
 fn canonical_closure(value: &ClosureAttestation) -> Result<ClosureAttestation, Error> {
     assert!(!value.facts.closure_node_id.is_empty(), "closure node id must not be empty");
     assert!(!value.facts.root_node_ids.is_empty(), "closure roots must not be empty");
-    validate_non_empty(&value.facts.closure_node_id, "closure_node_id")?;
+    validate_non_empty(NamedField {
+        name: "closure_node_id",
+        value: &value.facts.closure_node_id,
+    })?;
     let claims = normalize_claims(&value.claims)?;
     let nodes = normalize_nodes(&value.nodes)?;
     let node_ids = node_id_set(&nodes);
@@ -105,9 +120,18 @@ fn canonical_closure(value: &ClosureAttestation) -> Result<ClosureAttestation, E
 fn canonical_project(value: &ProjectAttestation) -> Result<ProjectAttestation, Error> {
     assert!(!value.facts.project_node_id.is_empty(), "project node id must not be empty");
     assert!(!value.facts.manifest_digest.is_empty(), "manifest digest must not be empty");
-    validate_non_empty(&value.facts.project_node_id, "project_node_id")?;
-    validate_non_empty(&value.facts.manifest_digest, "manifest_digest")?;
-    validate_non_empty(&value.facts.lockfile_digest, "lockfile_digest")?;
+    validate_non_empty(NamedField {
+        name: "project_node_id",
+        value: &value.facts.project_node_id,
+    })?;
+    validate_non_empty(NamedField {
+        name: "manifest_digest",
+        value: &value.facts.manifest_digest,
+    })?;
+    validate_non_empty(NamedField {
+        name: "lockfile_digest",
+        value: &value.facts.lockfile_digest,
+    })?;
     let claims = normalize_claims(&value.claims)?;
     let nodes = normalize_nodes(&value.nodes)?;
     let node_ids = node_id_set(&nodes);
@@ -149,7 +173,10 @@ fn normalize_nodes(nodes: &[Node]) -> Result<Vec<Node>, Error> {
     validate_len(nodes.len(), MAX_NODE_COUNT)?;
     let mut normalized = nodes.to_vec();
     for node in &normalized {
-        validate_non_empty(&node.node_id, "node_id")?;
+        validate_non_empty(NamedField {
+            name: "node_id",
+            value: &node.node_id,
+        })?;
     }
     normalized.sort();
     reject_duplicate_nodes(&normalized)?;
@@ -160,8 +187,14 @@ fn normalize_edges(edges: &[Edge], node_ids: &BTreeSet<String>) -> Result<Vec<Ed
     validate_len(edges.len(), MAX_EDGE_COUNT)?;
     let mut normalized = edges.to_vec();
     for edge in &normalized {
-        validate_non_empty(&edge.from_node_id, "from_node_id")?;
-        validate_non_empty(&edge.to_node_id, "to_node_id")?;
+        validate_non_empty(NamedField {
+            name: "from_node_id",
+            value: &edge.from_node_id,
+        })?;
+        validate_non_empty(NamedField {
+            name: "to_node_id",
+            value: &edge.to_node_id,
+        })?;
         validate_edge_endpoint(&edge.from_node_id, node_ids)?;
         validate_edge_endpoint(&edge.to_node_id, node_ids)?;
     }
@@ -173,8 +206,14 @@ fn normalize_references(values: &[ArtifactReference]) -> Result<Vec<ArtifactRefe
     validate_len(values.len(), MAX_REFERENCE_COUNT)?;
     let mut normalized = values.to_vec();
     for value in &normalized {
-        validate_non_empty(&value.node_id, "reference.node_id")?;
-        validate_non_empty(&value.logical_path, "reference.logical_path")?;
+        validate_non_empty(NamedField {
+            name: "reference.node_id",
+            value: &value.node_id,
+        })?;
+        validate_non_empty(NamedField {
+            name: "reference.logical_path",
+            value: &value.logical_path,
+        })?;
     }
     normalized.sort();
     Ok(normalized)
@@ -184,7 +223,7 @@ fn normalize_strings(values: &[String], limit: u32, field: &'static str) -> Resu
     validate_len(values.len(), limit)?;
     let mut normalized = values.to_vec();
     for value in &normalized {
-        validate_non_empty(value, field)?;
+        validate_non_empty(NamedField { name: field, value })?;
     }
     normalized.sort();
     normalized.dedup();
@@ -262,15 +301,23 @@ fn validate_edge_endpoint(node_id: &str, node_ids: &BTreeSet<String>) -> Result<
     })
 }
 
-fn validate_non_empty(value: &str, field: &'static str) -> Result<(), Error> {
-    if !value.is_empty() {
+struct NamedField<'a> {
+    name: &'static str,
+    value: &'a str,
+}
+
+fn validate_non_empty(field: NamedField<'_>) -> Result<(), Error> {
+    if !field.value.is_empty() {
         return Ok(());
     }
-    Err(Error::EmptyField { field })
+    Err(Error::EmptyField { field: field.name })
 }
 
 fn validate_len(actual_usize: usize, limit: u32) -> Result<(), Error> {
-    let actual = u32::try_from(actual_usize).unwrap_or(u32::MAX);
+    let actual = match u32::try_from(actual_usize) {
+        Ok(value) => value,
+        Err(_) => limit.saturating_add(1),
+    };
     if actual <= limit {
         return Ok(());
     }

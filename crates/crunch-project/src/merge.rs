@@ -204,7 +204,7 @@ fn locked_kind_label(kind: &crate::lock::LockedKind) -> &'static str {
 /// Returns names of inputs that have no lock entry or whose lock entry
 /// is stale. Frozen inputs are excluded.
 pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Vec<String> {
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(manifest.inputs.len());
 
     for input in &manifest.inputs {
         if input.frozen {
@@ -230,8 +230,8 @@ pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Ve
 /// Returns an error message for any name in `selected` that does not
 /// exist in the manifest.
 pub fn filter_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> (Vec<&'a ManifestInput>, Vec<String>) {
-    let mut found = Vec::new();
-    let mut not_found = Vec::new();
+    let mut found = Vec::with_capacity(selected.len());
+    let mut not_found = Vec::with_capacity(selected.len());
 
     let manifest_names: std::collections::HashMap<&str, &ManifestInput> =
         manifest.inputs.iter().map(|i| (i.name.as_str(), i)).collect();

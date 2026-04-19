@@ -12,7 +12,7 @@ const MAX_MIRRORS: u32 = 64;
 ///
 /// Returns issues found. Empty vec = valid.
 pub fn validate_mirrors(mirrors: &[String]) -> Vec<String> {
-    let mut issues = Vec::new();
+    let mut issues = Vec::with_capacity(mirrors.len().saturating_mul(2));
 
     if mirrors.len() as u64 > MAX_MIRRORS as u64 {
         issues.push(format!("too many mirrors: {} (max {MAX_MIRRORS})", mirrors.len()));
@@ -42,7 +42,7 @@ pub fn validate_mirrors(mirrors: &[String]) -> Vec<String> {
 ///
 /// Primary URL comes first, mirrors follow in order.
 pub fn url_with_mirrors(primary: &str, mirrors: &[String]) -> Vec<String> {
-    let mut urls = Vec::with_capacity(1 + mirrors.len());
+    let mut urls = Vec::with_capacity(1usize.saturating_add(mirrors.len()));
     urls.push(primary.to_string());
     urls.extend(mirrors.iter().cloned());
     urls

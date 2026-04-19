@@ -176,15 +176,14 @@ fn build_activation_env(
     output_path: &str,
 ) -> Result<(BTreeMap<String, String>, Vec<ShellWarning>), ShellError> {
     let mut env = BTreeMap::new();
-    let mut warnings = Vec::new();
-    let warning_count_limit = warning_count_limit();
+    let mut warnings = Vec::with_capacity(usize_limit_from_u32(MAX_WARNINGS));
 
     assert!(output_path.starts_with('/'), "output path must be absolute");
     assert!(warnings.is_empty(), "warnings must start empty");
 
     for (key, value) in &sidecar.env {
         if is_protected(key) {
-            if warnings.len() < warning_count_limit {
+            if warning_slot_available(warnings.len()) {
                 warnings.push(ShellWarning::ProtectedVarSkipped { key: key.clone() });
             }
             continue;
@@ -267,27 +266,31 @@ fn resolve_exec_target(exec_mode: &ExecMode, shell_path: &PathBuf) -> ExecTarget
     }
 }
 
-fn warning_count_limit() -> usize {
-    match usize::try_from(MAX_WARNINGS) {
-        Ok(count) => count,
-        Err(_) => usize::MAX,
-    }
+fn warning_slot_available(current_warning_count: usize) -> bool {
+    current_warning_count < usize_limit_from_u32(MAX_WARNINGS)
 }
 
 fn checked_insert_env(env: &mut BTreeMap<String, String>, key: String, value: String) -> Result<(), ShellError> {
-    let env_var_count_limit = match usize::try_from(MAX_ENV_VARS) {
-        Ok(count) => count,
-        Err(_) => usize::MAX,
-    };
     let is_new_key = !env.contains_key(&key);
-    if is_new_key && env.len() >= env_var_count_limit {
+    if is_new_key && env.len() >= usize_limit_from_u32(MAX_ENV_VARS) {
+        let next_env_var_count = match u32::try_from(env.len()) {
+            Ok(count) => count.saturating_add(1),
+            Err(_) => MAX_ENV_VARS.saturating_add(1),
+        };
         return Err(ShellError::TooManyEnvVars {
-            count: u32::try_from(env.len().saturating_add(1)).unwrap_or(u32::MAX),
+            count: next_env_var_count,
             limit: MAX_ENV_VARS,
         });
     }
     env.insert(key, value);
     Ok(())
+}
+
+fn usize_limit_from_u32(limit: u32) -> usize {
+    match usize::try_from(limit) {
+        Ok(count) => count,
+        Err(_) => usize::MAX,
+    }
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

@@ -188,8 +188,8 @@ fn needs_quoting(name: &str) -> bool {
         return true;
     }
     let first = name.as_bytes()[0];
-    let valid_start = first.is_ascii_alphabetic() || first == b'_';
-    if !valid_start {
+    let is_valid_start = first.is_ascii_alphabetic() || first == b'_';
+    if !is_valid_start {
         return true;
     }
     !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
