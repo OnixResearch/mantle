@@ -523,6 +523,27 @@ pub enum StoreAction {
         /// Store paths to push (full or fragment)
         paths: Vec<String>,
     },
+    /// Pull (import) store paths from a binary cache directory
+    Pull {
+        /// Source binary cache directory
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Import all paths from the cache directory
+        #[arg(long)]
+        all: bool,
+
+        /// Accept unsigned/unverified narinfos
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Trusted public keys for signature verification (name:base64)
+        #[arg(long, value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
+
+        /// Store paths to import (full or fragment)
+        paths: Vec<String>,
+    },
 }
 
 fn main() -> ExitCode {

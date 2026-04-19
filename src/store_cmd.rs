@@ -85,6 +85,18 @@ async fn cmd_store_async(
             let store = open_store(output_dir, state_dir, store_dir).await?;
             cmd_store_push(&store, &to, all, trust_unsigned, &paths).await
         }
+        crate::StoreAction::Pull {
+            from,
+            all,
+            trust_unsigned,
+            trusted_public_keys,
+            paths,
+        } => {
+            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
+            let store = open_store(output_dir, state_dir, store_dir).await?;
+            cmd_store_pull(&store, &from, all, trust_unsigned, &trusted_public_keys, &paths, state_dir).await
+        }
     }
 }
 
@@ -457,6 +469,82 @@ async fn cmd_store_push(
         report.skipped_already_present_count,
         report.total_nar_bytes,
         report.total_narinfo_bytes,
+    );
+    Ok(())
+}
+
+async fn cmd_store_pull(
+    store: &crunch_store::StoreHandle,
+    source: &Path,
+    is_pull_all: bool,
+    trust_unsigned: bool,
+    explicit_trusted_public_keys: &[String],
+    path_selectors: &[String],
+    state_dir: &Path,
+) -> Result<(), RunError> {
+    if path_selectors.is_empty() && !is_pull_all {
+        return Err(RunError::Internal("provide store paths or use --all".to_string()));
+    }
+
+    if !source.exists() {
+        return Err(RunError::Internal(format!(
+            "pull source directory does not exist: {}",
+            source.display()
+        )));
+    }
+
+    // Resolve trusted keys: explicit CLI keys + store-configured keys.
+    let parsed_explicit = parse_trusted_public_keys(explicit_trusted_public_keys)?;
+    let keypair = load_or_generate_signing_keypair(None, state_dir, true)?;
+    let configured_keys = load_configured_trusted_public_keys(parsed_explicit.as_deref(), state_dir)?;
+    let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_keys.as_deref());
+
+    let paths_filter = if is_pull_all {
+        None
+    } else {
+        Some(path_selectors.to_vec())
+    };
+
+    let options = crunch_store::PullOptions {
+        trust_unsigned,
+        trusted_public_keys: trusted_keys,
+    };
+
+    let report = crunch_store::import_paths_from_cache_dir(
+        store,
+        source,
+        paths_filter.as_deref(),
+        &options,
+    )
+    .await
+    .map_err(|e| RunError::Internal(format!("pull: {e}")))?;
+
+    for pulled in &report.paths {
+        println!("PULL {}", pulled.store_path);
+    }
+
+    if report.skipped_untrusted_count > 0 {
+        eprintln!(
+            "warning: {} path(s) skipped (untrusted signature, use --trust-unsigned to include)",
+            report.skipped_untrusted_count
+        );
+    }
+    if report.skipped_store_dir_mismatch_count > 0 {
+        eprintln!(
+            "warning: {} path(s) skipped (store directory prefix mismatch)",
+            report.skipped_store_dir_mismatch_count
+        );
+    }
+
+    eprintln!(
+        "imported={} skipped_present={} skipped_untrusted={} skipped_hash_mismatch={} skipped_missing_nar={} skipped_parse_error={} nar_bytes={}",
+        report.imported_count,
+        report.skipped_already_present_count,
+        report.skipped_untrusted_count,
+        report.skipped_hash_mismatch_count,
+        report.skipped_missing_nar_count,
+        report.skipped_parse_error_count,
+        report.total_nar_bytes,
     );
     Ok(())
 }

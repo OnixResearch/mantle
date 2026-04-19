@@ -942,3 +942,110 @@ fn smoke_push_nix_store_prefix_consumable_by_nix() {
         "should find the 'nix-compat-push' path in nix output, got: {paths:?}",
     );
 }
+
+#[test]
+fn smoke_build_push_pull_round_trip() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    // Step 1: build a derivation.
+    let work = tempfile::tempdir().unwrap();
+    let store_a = work.path().join("store-a");
+    let state_a = work.path().join("state-a");
+    let cache = work.path().join("cache");
+    std::fs::create_dir_all(&store_a).unwrap();
+    std::fs::create_dir_all(&state_a).unwrap();
+
+    let run = build_ncl_with_state(
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "pull-hello",
+  builder = "/bin/sh",
+  args = ["-c", "echo 'pull test content' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        &store_a,
+        Some(&state_a),
+    );
+    assert_eq!(run.report.counts.succeeded_total, 1);
+    let out = first_output_path(&run);
+    assert!(out.exists(), "build output should exist: {}", out.display());
+
+    // Step 2: push to binary cache directory.
+    let mut push_cmd = crunch_cmd();
+    push_cmd
+        .arg("--store").arg(&store_a)
+        .arg("--state-dir").arg(&state_a)
+        .arg("store").arg("push")
+        .arg("--to").arg(&cache)
+        .arg("--all");
+    let push_output = push_cmd.output().expect("push should execute");
+    assert!(
+        push_output.status.success(),
+        "push failed (exit {}):\n{}",
+        push_output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&push_output.stderr),
+    );
+
+    // Step 3: pull into a fresh store.
+    let store_b = work.path().join("store-b");
+    let state_b = work.path().join("state-b");
+    std::fs::create_dir_all(&store_b).unwrap();
+    std::fs::create_dir_all(&state_b).unwrap();
+
+    let mut pull_cmd = crunch_cmd();
+    pull_cmd
+        .arg("--store").arg(&store_b)
+        .arg("--state-dir").arg(&state_b)
+        .arg("store").arg("pull")
+        .arg("--from").arg(&cache)
+        .arg("--all")
+        .arg("--trust-unsigned");
+    let pull_output = pull_cmd.output().expect("pull should execute");
+    let pull_stdout = String::from_utf8_lossy(&pull_output.stdout);
+    let pull_stderr = String::from_utf8_lossy(&pull_output.stderr);
+    assert!(
+        pull_output.status.success(),
+        "pull failed (exit {}):\nstdout: {pull_stdout}\nstderr: {pull_stderr}",
+        pull_output.status.code().unwrap_or(-1),
+    );
+    assert!(
+        pull_stdout.contains("PULL "),
+        "pull should report at least one imported path, got: {pull_stdout}",
+    );
+    assert!(
+        pull_stderr.contains("imported="),
+        "pull should print summary, got: {pull_stderr}",
+    );
+
+    // Step 4: verify the output exists in store-b.
+    // The output name in store-a should appear in store-b with the same hash.
+    let out_name = out.file_name().unwrap().to_str().unwrap();
+    let pulled_path = store_b.join(out_name);
+    assert!(
+        pulled_path.exists(),
+        "pulled output should exist on disk: {}",
+        pulled_path.display(),
+    );
+
+    // Step 5: verify PathInfo is queryable.
+    let mut info_cmd = crunch_cmd();
+    info_cmd
+        .arg("--store").arg(&store_b)
+        .arg("--state-dir").arg(&state_b)
+        .arg("store").arg("info")
+        .arg(out_name);
+    let info_output = info_cmd.output().expect("store info should execute");
+    assert!(
+        info_output.status.success(),
+        "store info failed: {}",
+        String::from_utf8_lossy(&info_output.stderr),
+    );
+    let info_stdout = String::from_utf8_lossy(&info_output.stdout);
+    assert!(
+        info_stdout.contains("store_path:"),
+        "store info should show store_path, got: {info_stdout}",
+    );
+}
