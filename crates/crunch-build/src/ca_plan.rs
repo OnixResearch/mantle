@@ -16,6 +16,7 @@ const MAX_PROVISIONAL_LEN: usize = 4096;
 /// against zero-padded ELF sections or BSS regions.
 ///
 /// Panics if `provisional_len` is 0 or exceeds `MAX_PROVISIONAL_LEN`.
+#[allow(tigerstyle::usize_in_public_api)] // crate-internal; callers pass Vec::len()
 pub fn generate_ca_marker(output_name: &str, provisional_len: usize) -> Vec<u8> {
     assert!(provisional_len > 0, "provisional length must be > 0");
     assert!(
@@ -24,9 +25,10 @@ pub fn generate_ca_marker(output_name: &str, provisional_len: usize) -> Vec<u8> 
     );
     assert!(!output_name.is_empty(), "output name must not be empty");
 
+    let len = provisional_len;
     let hash = *blake3::hash(format!("crunch-ca-marker:{output_name}").as_bytes()).as_bytes();
-    let mut marker = vec![0u8; provisional_len];
-    for (i, b) in hash.iter().cycle().enumerate().take(provisional_len) {
+    let mut marker = vec![0u8; len];
+    for (i, b) in hash.iter().cycle().enumerate().take(len) {
         marker[i] = *b;
     }
     marker

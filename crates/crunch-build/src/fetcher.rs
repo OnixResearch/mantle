@@ -351,31 +351,33 @@ fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
 /// detection, then raw read.
 pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Result<Box<dyn Read + Send>, FetchError> {
     if url.ends_with(".gz") || url.ends_with(".tgz") {
-        Ok(Box::new(flate2::read::GzDecoder::new(reader)))
-    } else if url.ends_with(".xz") || url.ends_with(".txz") {
+        return Ok(Box::new(flate2::read::GzDecoder::new(reader)));
+    }
+    if url.ends_with(".xz") || url.ends_with(".txz") {
         let mut input = io::BufReader::new(reader);
         let mut output = Vec::new();
         lzma_rs::xz_decompress(&mut input, &mut output).map_err(|e| FetchError::DecompressError(format!("xz: {e}")))?;
-        Ok(Box::new(io::Cursor::new(output)))
-    } else if url.ends_with(".bz2") || url.ends_with(".tbz2") {
-        Ok(Box::new(bzip2_rs::DecoderReader::new(reader)))
-    } else if url.ends_with(".zst") || url.ends_with(".zstd") {
-        Ok(Box::new(
+        return Ok(Box::new(io::Cursor::new(output)));
+    }
+    if url.ends_with(".bz2") || url.ends_with(".tbz2") {
+        return Ok(Box::new(bzip2_rs::DecoderReader::new(reader)));
+    }
+    if url.ends_with(".zst") || url.ends_with(".zstd") {
+        return Ok(Box::new(
             ruzstd::decoding::StreamingDecoder::new(reader)
                 .map_err(|e| FetchError::DecompressError(format!("zstd: {e}")))?,
-        ))
-    } else if url.ends_with(".tar") || url.ends_with(".nar") {
-        Ok(Box::new(reader))
-    } else {
-        // Unknown suffix — try gzip magic, fall back to raw.
-        let mut compressed = Vec::new();
-        io::BufReader::new(reader).read_to_end(&mut compressed)?;
-        if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
-            Ok(Box::new(flate2::read::GzDecoder::new(io::Cursor::new(compressed))))
-        } else {
-            Ok(Box::new(io::Cursor::new(compressed)))
-        }
+        ));
     }
+    if url.ends_with(".tar") || url.ends_with(".nar") {
+        return Ok(Box::new(reader));
+    }
+    // Unknown suffix — try gzip magic, fall back to raw.
+    let mut compressed = Vec::new();
+    io::BufReader::new(reader).read_to_end(&mut compressed)?;
+    if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
+        return Ok(Box::new(flate2::read::GzDecoder::new(io::Cursor::new(compressed))));
+    }
+    Ok(Box::new(io::Cursor::new(compressed)))
 }
 
 // ── Tar extraction ─────────────────────────────────────────────────────
@@ -709,16 +711,20 @@ fn relative_path_between(from: &Path, to: &Path) -> PathBuf {
         .components()
         .filter_map(|component| match component {
             std::path::Component::Normal(name) => Some(name.to_os_string()),
-            std::path::Component::CurDir => None,
-            _ => None,
+            std::path::Component::CurDir
+            | std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::ParentDir => None,
         })
         .collect();
     let to_components: Vec<std::ffi::OsString> = to
         .components()
         .filter_map(|component| match component {
             std::path::Component::Normal(name) => Some(name.to_os_string()),
-            std::path::Component::CurDir => None,
-            _ => None,
+            std::path::Component::CurDir
+            | std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::ParentDir => None,
         })
         .collect();
 
@@ -887,50 +893,70 @@ fn resolve_existing_path_contained(
     context: &str,
     remaining_symlink_expansions: u32,
 ) -> Result<PathBuf, FetchError> {
-    let mut current = PathBuf::new();
-    for component in candidate_relative.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::Normal(name) => {
-                current.push(name);
-                let host_path = out_path.join(&current);
-                let metadata = match std::fs::symlink_metadata(&host_path) {
-                    Ok(metadata) => metadata,
-                    Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
-                    Err(err) => return Err(FetchError::TarError(format!("{context}: {err}"))),
-                };
-                if !metadata.file_type().is_symlink() {
-                    continue;
+    let mut work = candidate_relative.to_path_buf();
+    let mut expansions_left = remaining_symlink_expansions;
+
+    // Outer loop: restarts resolution when a symlink redirects the path.
+    // Bounded by the expansion limit plus one (for the initial non-symlink pass).
+    for _ in 0..=MAX_TAR_SYMLINK_EXPANSIONS {
+        let components: Vec<std::path::Component<'_>> = work.components().collect();
+        let mut current = PathBuf::new();
+        let mut redirected = false;
+
+        for (ci, component) in components.iter().enumerate() {
+            match component {
+                std::path::Component::CurDir => {}
+                std::path::Component::Normal(name) => {
+                    current.push(name);
+                    let host_path = out_path.join(&current);
+                    let metadata = match std::fs::symlink_metadata(&host_path) {
+                        Ok(metadata) => metadata,
+                        Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+                        Err(err) => return Err(FetchError::TarError(format!("{context}: {err}"))),
+                    };
+                    if !metadata.file_type().is_symlink() {
+                        continue;
+                    }
+                    if expansions_left == 0 {
+                        return Err(FetchError::TarError(format!(
+                            "{context} exceeds {MAX_TAR_SYMLINK_EXPANSIONS} symlink expansions"
+                        )));
+                    }
+                    expansions_left = expansions_left.saturating_sub(1);
+                    let link_target = std::fs::read_link(&host_path)?;
+                    let base_relative = current.parent().unwrap_or(Path::new(""));
+                    let mut next = base_relative.join(&link_target);
+                    // Append remaining unprocessed components.
+                    for remaining in &components[ci.saturating_add(1)..] {
+                        next.push(remaining.as_os_str());
+                    }
+                    work = next;
+                    redirected = true;
+                    break;
                 }
-                if remaining_symlink_expansions == 0 {
-                    return Err(FetchError::TarError(format!(
-                        "{context} exceeds {MAX_TAR_SYMLINK_EXPANSIONS} symlink expansions"
-                    )));
+                std::path::Component::ParentDir => {
+                    if !current.pop() {
+                        return Err(FetchError::TarError(format!(
+                            "{context} escapes output dir: {}",
+                            candidate_relative.display()
+                        )));
+                    }
                 }
-                let link_target = std::fs::read_link(&host_path)?;
-                let base_relative = current.parent().unwrap_or(Path::new(""));
-                let raw_target = base_relative.join(&link_target);
-                current = resolve_existing_path_contained(
-                    out_path,
-                    &raw_target,
-                    context,
-                    remaining_symlink_expansions.saturating_sub(1),
-                )?;
-            }
-            std::path::Component::ParentDir => {
-                if !current.pop() {
+                std::path::Component::RootDir | std::path::Component::Prefix(_) => {
                     return Err(FetchError::TarError(format!(
-                        "{context} escapes output dir: {}",
+                        "{context} is absolute: {}",
                         candidate_relative.display()
                     )));
                 }
             }
-            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                return Err(FetchError::TarError(format!("{context} is absolute: {}", candidate_relative.display())));
-            }
+        }
+        if !redirected {
+            return Ok(current);
         }
     }
-    Ok(current)
+    Err(FetchError::TarError(format!(
+        "{context} exceeds {MAX_TAR_SYMLINK_EXPANSIONS} symlink expansions"
+    )))
 }
 
 // ── Git fetch ──────────────────────────────────────────────────────────
@@ -996,7 +1022,10 @@ fn fetch_git_repo(url: &str, repo_dir: &Path) -> Result<gix::Repository, FetchEr
         url,
         repo_dir,
         gix::create::Kind::Bare,
-        gix::create::Options::default(),
+        gix::create::Options {
+            destination_must_be_empty: false,
+            fs_capabilities: None,
+        },
         gix::open::Options::isolated(),
     )
     .map_err(|err| FetchError::GitError(format!("failed to initialize isolated git fetch for '{url}': {err}")))?;

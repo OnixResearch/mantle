@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 //! crunch-build: Build pipeline for crunch.
 //!
 //! Translates `nix_compat::Derivation` structs into `snix_build::BuildRequest`,
