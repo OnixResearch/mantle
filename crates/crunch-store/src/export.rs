@@ -70,6 +70,9 @@ async fn export_file_to_disk(
     dest: &str,
     blob_service: &(impl BlobService + Clone),
 ) -> Result<(), String> {
+    assert!(!dest.is_empty(), "export dest must not be empty");
+    assert!(dest.starts_with('/'), "export dest must be absolute path: {dest}");
+
     let mut reader = blob_service
         .open_read(digest)
         .await

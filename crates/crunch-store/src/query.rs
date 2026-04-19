@@ -72,9 +72,13 @@ pub async fn store_list(svc: &dyn PathInfoService) -> Result<Vec<(String, String
 
 /// Get detailed PathInfo for paths matching a substring filter.
 pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<Vec<PathInfoDetail>, Error> {
+    assert!(!path_filter.is_empty(), "store_info: empty path_filter would match everything");
+
     let mut stream = svc.list();
+    let mut scanned_count: u32 = 0;
     let mut results = Vec::new();
     while let Some(result) = stream.next().await {
+        scanned_count = scanned_count.saturating_add(1);
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
         if !sp_str.contains(path_filter) {
@@ -91,6 +95,7 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
             node: format!("{:?}", pi.node),
         });
     }
+    assert!(results.len() <= scanned_count as usize, "results cannot exceed scanned paths");
     Ok(results)
 }
 
@@ -99,14 +104,21 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
 /// Optionally filters to paths matching `path_filter`. Returns per-path
 /// results (Ok, Missing, or Mismatch).
 pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) -> Result<Vec<VerifyResult>, Error> {
+    assert!(
+        path_filter.map_or(true, |f| !f.is_empty()),
+        "store_verify: use None instead of empty filter"
+    );
+
     let bs = MemoryBlobService::default();
     let ds = RedbDirectoryService::new_temporary("verify".to_string(), RedbDirectoryServiceConfig::default())
         .map_err(|e| Error::DirectoryService(format!("{e}")))?;
 
     let mut stream = svc.list();
+    let mut scanned_count: u32 = 0;
     let mut results = Vec::new();
 
     while let Some(result) = stream.next().await {
+        scanned_count = scanned_count.saturating_add(1);
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
 
@@ -140,6 +152,7 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
             });
         }
     }
+    assert!(results.len() <= scanned_count as usize, "verify results cannot exceed scanned paths");
 
     Ok(results)
 }
@@ -152,6 +165,8 @@ pub async fn store_verify_signatures(
 ) -> Result<Vec<SignatureVerifyResult>, Error> {
     use nix_compat::narinfo::fingerprint;
     use nix_compat::store_path::StorePathRef;
+
+    assert!(!trusted_keys.is_empty(), "verify_signatures requires at least one trusted key");
 
     let mut stream = svc.list();
     let mut results = Vec::new();
@@ -183,6 +198,10 @@ pub async fn store_verify_signatures(
         }
 
         let total_signatures = pi.signatures.len().min(u32::MAX as usize) as u32;
+        assert!(
+            total_signatures >= trusted_count,
+            "trusted count ({trusted_count}) cannot exceed total signatures ({total_signatures})"
+        );
         results.push(SignatureVerifyResult {
             path,
             trusted_count,
@@ -222,10 +241,21 @@ pub async fn store_sign(
     use nix_compat::narinfo::fingerprint;
     use nix_compat::store_path::StorePathRef;
 
+    const SIGN_CANDIDATE_COUNT_LIMIT: u32 = 4096;
+    assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
+
     let mut stream = svc.list();
-    let mut to_update = Vec::new();
+    let mut to_update = Vec::with_capacity(SIGN_CANDIDATE_COUNT_LIMIT as usize);
+    let mut scanned_count_u32: u32 = 0;
 
     while let Some(result) = stream.next().await {
+        scanned_count_u32 = scanned_count_u32.saturating_add(1);
+        if scanned_count_u32 > SIGN_CANDIDATE_COUNT_LIMIT {
+            return Err(Error::PathInfoService(format!(
+                "sign candidate scan exceeded limit {SIGN_CANDIDATE_COUNT_LIMIT}"
+            )));
+        }
+
         let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
         let sp_str = pi.store_path.to_string();
 
@@ -244,7 +274,7 @@ pub async fn store_sign(
         to_update.push((sp_str, pi));
     }
 
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(to_update.len());
     for (sp_str, mut pi) in to_update {
         let sp_ref: StorePathRef = pi.store_path.as_ref();
         let refs: Vec<StorePathRef> = pi.references.iter().map(|r| r.as_ref()).collect();
@@ -254,8 +284,8 @@ pub async fn store_sign(
         let sig_owned: Signature<String> = sig_ref.to_owned();
         let key_name = signing_key.name();
 
-        let had_any_signature = !pi.signatures.is_empty();
-        let had_sig_from_same_key = pi.signatures.iter().any(|s| s.name().as_str() == key_name);
+        let is_already_signed = !pi.signatures.is_empty();
+        let is_signed_by_same_key = pi.signatures.iter().any(|s| s.name().as_str() == key_name);
 
         if let Some(pos) = pi.signatures.iter().position(|s| s.name().as_str() == key_name) {
             pi.signatures[pos] = sig_owned;
@@ -265,12 +295,17 @@ pub async fn store_sign(
 
         svc.put(pi).await.map_err(|e| Error::PathInfoService(format!("persisting signed PathInfo: {e}")))?;
 
-        results.push(SignResult {
+        let result = SignResult {
             store_path: sp_str,
-            newly_signed: !had_any_signature,
-            appended: had_any_signature && !had_sig_from_same_key,
-            replaced: had_sig_from_same_key,
-        });
+            newly_signed: !is_already_signed,
+            appended: is_already_signed && !is_signed_by_same_key,
+            replaced: is_signed_by_same_key,
+        };
+        assert!(
+            result.newly_signed as u8 + result.appended as u8 + result.replaced as u8 == 1,
+            "sign result must be exactly one of newly_signed, appended, or replaced"
+        );
+        results.push(result);
     }
 
     Ok(results)

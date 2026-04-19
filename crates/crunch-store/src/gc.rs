@@ -66,7 +66,7 @@ struct GcPlan {
     live_pathinfos: Vec<PathInfo>,
     dead_pathinfos: Vec<PathInfo>,
     live_castore: LiveCastoreState,
-    exported_output_paths: Vec<PathBuf>,
+    orphaned_on_disk: Vec<PathBuf>,
     artifact_attestation_paths: Vec<PathBuf>,
     closure_attestation_paths: Vec<PathBuf>,
     blob_index_paths: Vec<PathBuf>,
@@ -85,8 +85,11 @@ pub async fn run_gc(
     ca_mappings: &mut CaMappings,
     dry_run: bool,
 ) -> Result<GcReport, Error> {
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    assert!(store_dir.starts_with('/'), "store_dir must be absolute");
+
     let plan = build_plan(state_dir, output_dir_str, store_dir, pathinfo, directory_service, blob_service).await?;
-    let mut report = GcReport {
+    let mut gc_result = GcReport {
         dry_run,
         retained_root_count: saturating_u32(plan.retained_roots.len()),
         candidate_path_count: saturating_u32(plan.dead_pathinfos.len()),
@@ -96,33 +99,33 @@ pub async fn run_gc(
         candidate_blob_chunk_count: saturating_u32(plan.blob_chunk_paths.len()),
         candidate_artifact_attestation_count: saturating_u32(plan.artifact_attestation_paths.len()),
         candidate_closure_attestation_count: saturating_u32(plan.closure_attestation_paths.len()),
-        candidate_exported_output_count: saturating_u32(plan.exported_output_paths.len()),
+        candidate_exported_output_count: saturating_u32(plan.orphaned_on_disk.len()),
         operations: Vec::new(),
     };
     if dry_run {
-        return Ok(report);
+        return Ok(gc_result);
     }
 
-    remove_exported_outputs(&plan.exported_output_paths)?;
-    report.operations.push(GcOperationKind::ExportedOutputs);
+    remove_exported_outputs(&plan.orphaned_on_disk)?;
+    gc_result.operations.push(GcOperationKind::ExportedOutputs);
 
     rewrite_pathinfo_db(state_dir, &plan.live_pathinfos).await?;
-    report.operations.push(GcOperationKind::PathInfoRewrite);
+    gc_result.operations.push(GcOperationKind::PathInfoRewrite);
 
     remove_files(&plan.artifact_attestation_paths)?;
-    report.operations.push(GcOperationKind::ArtifactAttestations);
+    gc_result.operations.push(GcOperationKind::ArtifactAttestations);
 
     remove_files(&plan.closure_attestation_paths)?;
-    report.operations.push(GcOperationKind::ClosureAttestations);
+    gc_result.operations.push(GcOperationKind::ClosureAttestations);
 
     rewrite_directory_db(state_dir, plan.live_castore.directories.values()).await?;
-    report.operations.push(GcOperationKind::DirectoryRewrite);
+    gc_result.operations.push(GcOperationKind::DirectoryRewrite);
 
     remove_files(&plan.blob_index_paths)?;
-    report.operations.push(GcOperationKind::BlobIndexFiles);
+    gc_result.operations.push(GcOperationKind::BlobIndexFiles);
 
     remove_files(&plan.blob_chunk_paths)?;
-    report.operations.push(GcOperationKind::BlobChunkFiles);
+    gc_result.operations.push(GcOperationKind::BlobChunkFiles);
 
     let live_paths: BTreeSet<String> = plan
         .live_pathinfos
@@ -131,9 +134,9 @@ pub async fn run_gc(
         .collect();
     ca_mappings.retain_output_paths(&live_paths);
     ca_mappings.save_checked(state_dir).map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
-    report.operations.push(GcOperationKind::CaMappings);
+    gc_result.operations.push(GcOperationKind::CaMappings);
 
-    Ok(report)
+    Ok(gc_result)
 }
 
 async fn build_plan(
@@ -144,19 +147,22 @@ async fn build_plan(
     directory_service: &dyn DirectoryService,
     blob_service: &dyn BlobService,
 ) -> Result<GcPlan, Error> {
+    assert!(!store_dir.is_empty(), "build_plan: store_dir must not be empty");
+    assert!(store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
+
     let retained_roots = roots::list_roots(state_dir)?;
     let live_paths = mark_live_paths(&retained_roots, pathinfo, store_dir).await?;
     let snapshot = snapshot_pathinfos(pathinfo).await?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths);
     let live_castore = collect_live_castore_state(&live_pathinfos, directory_service, blob_service).await?;
-    let exported_output_paths = collect_existing_exported_outputs(&dead_pathinfos, output_dir_str)?;
+    let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, output_dir_str)?;
     let artifact_attestation_paths =
         collect_existing_artifact_attestation_paths(state_dir, store_dir, &dead_pathinfos)?;
     let closure_attestation_paths = collect_dead_closure_attestations(state_dir, &retained_roots)?;
     let blob_index_paths = collect_dead_blob_files(state_dir, &live_castore.blob_index_digests, true)?;
     let blob_chunk_paths = collect_dead_blob_files(state_dir, &live_castore.chunk_digests, false)?;
     let reclaimable_bytes_total = compute_reclaimable_bytes(
-        &exported_output_paths,
+        &orphaned_on_disk,
         &artifact_attestation_paths,
         &closure_attestation_paths,
         &blob_index_paths,
@@ -172,7 +178,7 @@ async fn build_plan(
         live_pathinfos,
         dead_pathinfos,
         live_castore,
-        exported_output_paths,
+        orphaned_on_disk,
         artifact_attestation_paths,
         closure_attestation_paths,
         blob_index_paths,
@@ -189,7 +195,10 @@ async fn mark_live_paths(
 ) -> Result<BTreeSet<StorePath<String>>, Error> {
     let mut live_paths = BTreeSet::new();
     for root in retained_roots {
-        let store_path = roots::parse_logical_store_path(&root.logical_path, store_dir)?;
+        let store_path = roots::parse_logical_store_path(roots::LogicalStorePathRef {
+            logical_path: &root.logical_path,
+            store_dir,
+        })?;
         let closure = resolve_closure(&store_path, pathinfo, None, StoreFallbackMode::Strict, store_dir).await?;
         for member in closure.paths {
             live_paths.insert(member);
@@ -258,6 +267,8 @@ async fn collect_blob_state(
     blob_service: &dyn BlobService,
     state: &mut LiveCastoreState,
 ) -> Result<(), Error> {
+    assert!(!digest.as_ref().is_empty(), "blob digest must not be empty");
+
     if state.blob_index_digests.contains(&digest) || state.chunk_digests.contains(&digest) {
         return Ok(());
     }
@@ -281,6 +292,8 @@ async fn collect_blob_state(
             .map_err(|err| Error::Gc(format!("invalid chunk digest in blob {}: {err}", encode_digest(&digest))))?;
         state.chunk_digests.insert(chunk_digest);
     }
+    let is_blob_recorded = state.blob_index_digests.contains(&digest) || state.chunk_digests.contains(&digest);
+    assert!(is_blob_recorded, "processed blob must be recorded in state");
     Ok(())
 }
 
@@ -290,6 +303,8 @@ async fn collect_directory_state(
     blob_service: &dyn BlobService,
     state: &mut LiveCastoreState,
 ) -> Result<(), Error> {
+    assert!(!root_digest.as_ref().is_empty(), "directory digest must not be empty");
+
     if state.directories.contains_key(&root_digest) {
         return Ok(());
     }
@@ -320,6 +335,7 @@ async fn collect_directory_state(
             encode_digest(&root_digest)
         )));
     }
+    assert!(state.directories.contains_key(&root_digest), "root directory must be in state after walk");
     Ok(())
 }
 
@@ -350,6 +366,11 @@ fn collect_existing_artifact_attestation_paths(
 }
 
 fn collect_dead_closure_attestations(state_dir: &Path, retained_roots: &[GcRootRecord]) -> Result<Vec<PathBuf>, Error> {
+    assert!(
+        retained_roots.iter().all(|root| !root.logical_path.is_empty()),
+        "gc root logical paths must not be empty"
+    );
+
     let live_roots: BTreeSet<String> = retained_roots.iter().map(|root| root.logical_path.clone()).collect();
     let closure_dir = state_dir.join("attestations").join("closures");
     let mut dead_paths = Vec::new();
@@ -387,6 +408,7 @@ fn collect_dead_closure_attestations(state_dir: &Path, retained_roots: &[GcRootR
             dead_paths.push(path);
         }
     }
+    assert!(dead_paths.len() <= scanned_entries as usize, "dead paths cannot exceed scanned entries");
     Ok(dead_paths)
 }
 
@@ -415,6 +437,9 @@ fn scan_blob_dir(
     live_digests: &HashSet<B3Digest>,
     dead_paths: &mut Vec<PathBuf>,
 ) -> Result<(), Error> {
+    assert!(dir.is_absolute(), "scan_blob_dir: dir must be absolute");
+    let dead_count_before = dead_paths.len();
+
     for entry in std::fs::read_dir(dir).map_err(|err| Error::Gc(format!("reading {}: {err}", dir.display())))? {
         let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", dir.display())))?;
         *scanned_entries = scanned_entries.saturating_add(1);
@@ -447,18 +472,19 @@ fn scan_blob_dir(
             dead_paths.push(path);
         }
     }
+    assert!(dead_paths.len() >= dead_count_before, "scan can only grow dead_paths, never shrink");
     Ok(())
 }
 
 fn compute_reclaimable_bytes(
-    exported_output_paths: &[PathBuf],
+    orphaned_on_disk: &[PathBuf],
     artifact_attestation_paths: &[PathBuf],
     closure_attestation_paths: &[PathBuf],
     blob_index_paths: &[PathBuf],
     blob_chunk_paths: &[PathBuf],
 ) -> Result<u64, Error> {
     let mut total: u64 = 0;
-    for path in exported_output_paths
+    for path in orphaned_on_disk
         .iter()
         .chain(artifact_attestation_paths.iter())
         .chain(closure_attestation_paths.iter())
@@ -473,6 +499,9 @@ fn compute_reclaimable_bytes(
 }
 
 fn path_size_bytes(path: &Path, depth: u32, seen_entries: &mut u32) -> Result<u64, Error> {
+    assert!(depth <= MAX_GC_BYTES_WALK_DEPTH.saturating_add(1), "caller must respect depth bound");
+    assert!(*seen_entries <= MAX_GC_BYTES_WALK_ENTRIES.saturating_add(1), "caller must respect entry bound");
+
     if depth > MAX_GC_BYTES_WALK_DEPTH {
         return Err(Error::Gc(format!("path walk exceeded depth {} at {}", MAX_GC_BYTES_WALK_DEPTH, path.display())));
     }
@@ -538,6 +567,12 @@ async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> R
     use snix_store::pathinfoservice::RedbPathInfoService;
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
+    assert!(state_dir.is_dir(), "rewrite_pathinfo_db: state_dir must exist");
+    assert!(
+        live_pathinfos.iter().all(|pi| !pi.signatures.is_empty()),
+        "all retained PathInfos must be signed"
+    );
+
     let final_path = state_dir.join("pathinfo.redb");
     let tmp_path = state_dir.join("pathinfo.redb.gc-tmp");
     if tmp_path.exists() {
@@ -569,6 +604,8 @@ async fn rewrite_directory_db<'a>(
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
+    assert!(state_dir.is_dir(), "rewrite_directory_db: state_dir must exist");
+
     let final_path = state_dir.join("directories.redb");
     let tmp_path = state_dir.join("directories.redb.gc-tmp");
     if tmp_path.exists() {
@@ -588,6 +625,10 @@ async fn rewrite_directory_db<'a>(
             .map_err(|err| Error::Gc(format!("writing rewritten directory DB: {err}")))?;
     }
     drop(tmp_service);
+    assert!(
+        tmp_path.exists(),
+        "rewrite_directory_db: tmp file must exist before rename"
+    );
     std::fs::rename(&tmp_path, &final_path)
         .map_err(|err| Error::Gc(format!("renaming {} -> {}: {err}", tmp_path.display(), final_path.display())))?;
     Ok(())

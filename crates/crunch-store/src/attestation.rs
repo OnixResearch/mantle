@@ -75,6 +75,9 @@ pub async fn load_or_create_runtime_closure_attestation(
     remote: Option<&dyn PathInfoService>,
     roots: &[StorePath<String>],
 ) -> Result<StoredClosureAttestation, Error> {
+    assert!(!roots.is_empty(), "closure roots must not be empty");
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+
     let path = closure_attestation_path(state_dir, store_dir, roots, ClosureSemantics::Runtime);
     let existing = read_canonical_closure_file(&path).await?;
     let fresh_attestation = synthesize_runtime_closure_attestation(state_dir, store_dir, local, remote, roots).await?;
@@ -104,6 +107,9 @@ fn synthesize_artifact_attestation(
     path_info: &PathInfo,
     provenance: Option<&ArtifactProvenance>,
 ) -> ArtifactAttestation {
+    assert!(!output_name.is_empty(), "output_name must not be empty");
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+
     let subject_path = logical_path(&path_info.store_path, store_dir);
     let subject_node_id = artifact_node_id(&subject_path);
     let mut nodes = Vec::new();
@@ -181,6 +187,9 @@ fn add_provenance_edges(
     node_ids: &mut BTreeSet<String>,
     edge_keys: &mut BTreeSet<(String, EdgeKind, String)>,
 ) {
+    assert!(!subject_node_id.is_empty(), "subject_node_id must not be empty");
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+
     let Some(recipe_node_id) = recipe_node_id else {
         return;
     };
@@ -245,6 +254,9 @@ async fn synthesize_runtime_closure_attestation(
     remote: Option<&dyn PathInfoService>,
     roots: &[StorePath<String>],
 ) -> Result<ClosureAttestation, Error> {
+    assert!(!roots.is_empty(), "closure roots must not be empty");
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+
     let member_paths = resolve_member_paths(local, remote, roots, store_dir).await?;
     let closure_node_id = closure_node_id(store_dir, roots, ClosureSemantics::Runtime);
     let member_set: BTreeSet<String> = member_paths.iter().map(|path| logical_path(path, store_dir)).collect();

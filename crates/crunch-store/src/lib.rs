@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 //! crunch-store: Store operations for crunch.
 //!
 //! Owns service construction, cache checking, realization (castore -> disk

@@ -13,6 +13,12 @@ use crate::Error;
 
 const ROOTS_FILE_NAME: &str = "gc-roots.json";
 
+#[derive(Clone, Copy)]
+pub struct LogicalStorePathRef<'a> {
+    pub logical_path: &'a str,
+    pub store_dir: &'a str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GcRootSource {
@@ -84,12 +90,15 @@ pub async fn pin_root(
     pathinfo: &dyn PathInfoService,
     logical_path: &str,
 ) -> Result<GcRootRecord, Error> {
-    let store_path = parse_logical_store_path(logical_path, store_dir)?;
+    let store_path = parse_logical_store_path(LogicalStorePathRef {
+        logical_path,
+        store_dir,
+    })?;
     register_root(state_dir, store_dir, pathinfo, &store_path, GcRootSource::Pin).await
 }
 
-pub fn unpin_root(state_dir: &Path, store_dir: &str, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
-    let normalized_path = normalize_logical_path(logical_path, store_dir)?;
+pub fn unpin_root(state_dir: &Path, path: LogicalStorePathRef<'_>) -> Result<Option<GcRootRecord>, Error> {
+    let normalized_path = normalize_logical_path(path)?;
     let mut registry = load_registry(state_dir)?;
     let removed = registry.remove(&normalized_path);
     save_registry(state_dir, &registry)?;
@@ -115,15 +124,18 @@ pub(crate) fn roots_path(state_dir: &Path) -> PathBuf {
     state_dir.join(ROOTS_FILE_NAME)
 }
 
-pub(crate) fn parse_logical_store_path(logical_path: &str, store_dir: &str) -> Result<StorePath<String>, Error> {
-    StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), store_dir).map_err(|_| {
-        Error::RootRegistry(format!("path is not under configured store prefix {store_dir}: {logical_path}"))
+pub(crate) fn parse_logical_store_path(path: LogicalStorePathRef<'_>) -> Result<StorePath<String>, Error> {
+    StorePath::from_absolute_path_with_prefix(path.logical_path.as_bytes(), path.store_dir).map_err(|_| {
+        Error::RootRegistry(format!(
+            "path is not under configured store prefix {}: {}",
+            path.store_dir, path.logical_path
+        ))
     })
 }
 
-fn normalize_logical_path(logical_path: &str, store_dir: &str) -> Result<String, Error> {
-    let store_path = parse_logical_store_path(logical_path, store_dir)?;
-    Ok(store_path.to_absolute_path_with_prefix(store_dir))
+fn normalize_logical_path(path: LogicalStorePathRef<'_>) -> Result<String, Error> {
+    let store_path = parse_logical_store_path(path)?;
+    Ok(store_path.to_absolute_path_with_prefix(path.store_dir))
 }
 
 async fn ensure_pathinfo_exists(pathinfo: &dyn PathInfoService, store_path: &StorePath<String>) -> Result<(), Error> {
@@ -177,11 +189,12 @@ fn validate_registry(registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Er
     Ok(())
 }
 
+#[allow(tigerstyle::ambient_clock, reason = "shell boundary clock read for persisted GC root metadata")]
 fn current_unix_seconds() -> Result<i64, Error> {
-    let duration = SystemTime::now()
+    let since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| Error::RootRegistry(format!("system clock before unix epoch: {err}")))?;
-    i64::try_from(duration.as_secs()).map_err(|_| Error::RootRegistry("unix timestamp exceeds i64 range".to_string()))
+    i64::try_from(since_epoch.as_secs()).map_err(|_| Error::RootRegistry("unix timestamp exceeds i64 range".to_string()))
 }
 
 #[cfg(test)]
@@ -316,7 +329,14 @@ mod tests {
         });
         save_registry(state_dir.path(), &registry).unwrap();
 
-        let removed = unpin_root(state_dir.path(), "/nix/store", &path).unwrap();
+        let removed = unpin_root(
+            state_dir.path(),
+            LogicalStorePathRef {
+                logical_path: &path,
+                store_dir: "/nix/store",
+            },
+        )
+        .unwrap();
         let listed = list_roots(state_dir.path()).unwrap();
 
         assert!(removed.is_some());

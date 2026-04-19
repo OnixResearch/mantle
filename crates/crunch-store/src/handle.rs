@@ -515,7 +515,13 @@ impl StoreHandle {
     }
 
     pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
-        roots::unpin_root(&self.state_dir, &self.store_dir, logical_path)
+        roots::unpin_root(
+            &self.state_dir,
+            roots::LogicalStorePathRef {
+                logical_path,
+                store_dir: &self.store_dir,
+            },
+        )
     }
 
     pub async fn register_retained_root(
@@ -1668,12 +1674,12 @@ impl StoreHandle {
 
         self.probe_remote_delta_capability_if_needed(output_path, output_name).await;
 
-        let supported_capability = match self.remote_delta_capability.clone() {
+        let delta_cap = match self.remote_delta_capability.clone() {
             Some(RemoteDeltaCapability::Supported(capability)) => Some(capability),
             _ => None,
         };
         let mut delta_fallback_reason = None;
-        if let Some(capability) = supported_capability.as_ref() {
+        if let Some(capability) = delta_cap.as_ref() {
             match self
                 .attempt_delta_candidate_negotiation(output_path, output_name, capability, is_root, root_source)
                 .await
@@ -1935,6 +1941,8 @@ fn build_delta_http_client() -> Result<reqwest::Client, String> {
 }
 
 async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec<DeltaTransferFrameWire>, String> {
+    const MAX_FRAME_COUNT: u32 = 100_000;
+
     let mut frames = Vec::<DeltaTransferFrameWire>::new();
     let mut buffered = Vec::<u8>::new();
     let mut stream = response.bytes_stream();
@@ -1957,6 +1965,10 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
             let frame = serde_json::from_slice::<DeltaTransferFrameWire>(&line)
                 .map_err(|e| format!("decoding delta stream frame: {e}"))?;
             frames.push(frame);
+            assert!(
+                frames.len() <= MAX_FRAME_COUNT as usize,
+                "delta transfer frame count exceeded {MAX_FRAME_COUNT}"
+            );
         }
     }
 
@@ -1965,11 +1977,17 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
             .map_err(|e| format!("decoding trailing delta stream frame: {e}"))?;
         frames.push(frame);
     }
+    assert!(
+        frames.len() <= MAX_FRAME_COUNT as usize,
+        "final delta transfer frame count exceeded {MAX_FRAME_COUNT}"
+    );
 
     Ok(frames)
 }
 
 fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, String> {
+    assert!(!url_str.is_empty(), "substituter URL must not be empty");
+
     let nix_url_str = format!("nix+{url_str}");
     let nix_url: Url = nix_url_str.parse().map_err(|e| format!("invalid substituter URL '{url_str}': {e}"))?;
 
@@ -1985,12 +2003,18 @@ fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, 
     }
     indexed_keys.sort_by_key(|(index, _)| *index);
 
-    let mut trusted_public_keys = Vec::with_capacity(indexed_keys.len());
+    let expected_key_count = indexed_keys.len();
+    let mut trusted_public_keys = Vec::with_capacity(expected_key_count);
     for (_index, key_text) in indexed_keys {
         let key =
             VerifyingKey::parse(&key_text).map_err(|e| format!("parsing trusted public key '{key_text}': {e}"))?;
         trusted_public_keys.push(key);
     }
+    assert_eq!(
+        trusted_public_keys.len(),
+        expected_key_count,
+        "every indexed key must produce a verifying key"
+    );
     Ok(trusted_public_keys)
 }
 
@@ -2004,6 +2028,10 @@ async fn probe_remote_delta_capability(
     client: &reqwest::Client,
     cache_url: &Url,
 ) -> Result<RemoteDeltaCapability, String> {
+    assert!(!cache_url.as_str().is_empty(), "cache_url must not be empty");
+    let is_http_scheme = matches!(cache_url.scheme(), "http" | "https");
+    assert!(is_http_scheme, "cache_url must use http or https scheme");
+
     let capability_url = delta_capability_url(cache_url)?;
     let response = client
         .get(capability_url)
@@ -2056,6 +2084,9 @@ async fn open_pathinfo_service(
     state_dir: &Path,
     fallback_mode: StoreFallbackMode,
 ) -> Result<(Arc<dyn PathInfoService>, Vec<StoreAuditEvent>), Error> {
+    assert!(state_dir.is_absolute(), "state_dir must be absolute");
+    assert!(state_dir.is_dir(), "state_dir must exist");
+
     let db_path = state_dir.join("pathinfo.redb");
     match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
         path: Some(db_path.clone()),
