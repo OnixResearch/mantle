@@ -14,6 +14,7 @@ pub use crunch_build::HermeticityAuditKind;
 pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
 use crunch_build::Worker;
+use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
 use crunch_store::GcRootSource;
@@ -189,7 +190,13 @@ async fn build_linux(
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
     let mut worker = Worker::new(config.max_jobs);
     let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
-    let eval_stream = stream_roots_into_worker(config, &session, tx);
+    let eval_stream = stream_roots_into_worker(
+        config.max_jobs,
+        &config.store_dir,
+        RootForceExecutionPolicy::PreferThreaded,
+        &session,
+        tx,
+    );
     let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
     let mut worker_result = match worker_run {
         Ok(result) => result,
@@ -260,22 +267,31 @@ struct EvalFailure {
 }
 
 async fn stream_roots_into_worker(
-    config: &BuildConfig,
+    max_jobs: u32,
+    store_dir: &str,
+    root_force_policy: RootForceExecutionPolicy,
     session: &crunch_eval::session::EvaluationSession,
     tx: mpsc::Sender<EvalMessage>,
 ) -> Result<EvalStreamResult, Error> {
     let requested_labels = session.root_labels().iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
     debug_assert!(!requested_labels.is_empty(), "must have at least one root label");
 
-    let eval_parallelism = resolve_eval_parallelism(config.max_jobs, requested_labels.len() as u32);
+    let eval_parallelism = resolve_eval_parallelism(max_jobs, requested_labels.len() as u32);
     let worker_input = session.isolated_worker_input();
     let mut join_set = JoinSet::new();
     let mut next_label_index: usize = 0;
-    let mut cache = ConversionCache::new(&config.store_dir);
+    let mut cache = ConversionCache::new(store_dir);
     let mut root_drv_paths = Vec::with_capacity(requested_labels.len());
     let mut first_failure: Option<EvalFailure> = None;
 
-    spawn_eval_workers(&mut join_set, &worker_input, &requested_labels, &mut next_label_index, eval_parallelism);
+    spawn_eval_workers(
+        &mut join_set,
+        &worker_input,
+        &requested_labels,
+        &mut next_label_index,
+        eval_parallelism,
+        root_force_policy,
+    );
     while let Some(join_result) = join_set.join_next().await {
         let worker_result = join_result.map_err(|e| Error::Internal(format!("eval worker panicked: {e}")))?;
 
@@ -311,6 +327,7 @@ async fn stream_roots_into_worker(
                 &requested_labels,
                 &mut next_label_index,
                 eval_parallelism,
+                root_force_policy,
             );
         }
     }
@@ -328,14 +345,22 @@ fn spawn_eval_workers(
     labels: &[String],
     next_label_index: &mut usize,
     eval_parallelism: u32,
+    root_force_policy: RootForceExecutionPolicy,
 ) {
     while *next_label_index < labels.len() && join_set.len() < eval_parallelism as usize {
         let worker_input = worker_input.clone();
         let label = labels[*next_label_index].clone();
         *next_label_index = next_label_index.saturating_add(1);
-        join_set.spawn_blocking(move || match worker_input.force_root::<CrunchDerivation>(&label) {
-            Ok(drv) => Ok((label, drv)),
-            Err(err) => Err((label.clone(), format!("root '{label}': {err}"))),
+        join_set.spawn_blocking(move || {
+            let labels = vec![label.clone()];
+            match worker_input.force_selected_roots_with_policy::<CrunchDerivation>(&labels, 1, root_force_policy) {
+                Ok(mut roots) => {
+                    debug_assert_eq!(roots.len(), 1, "single-label request must return one root");
+                    let (_returned_label, drv) = roots.pop().expect("single-label request must return one root");
+                    Ok((label, drv))
+                }
+                Err(err) => Err((label.clone(), format!("root '{label}': {err}"))),
+            }
         });
     }
 }
@@ -426,7 +451,17 @@ pub fn label_for_key<'a>(result: &'a PipelineResult, drv_key: &str) -> Option<&'
 
 #[cfg(test)]
 mod tests {
+    use tokio::sync::mpsc;
+
     use super::*;
+
+    async fn collect_eval_message_labels(mut rx: mpsc::Receiver<EvalMessage>) -> Vec<String> {
+        let mut labels = Vec::new();
+        while let Some(message) = rx.recv().await {
+            labels.push(message.label);
+        }
+        labels
+    }
 
     #[test]
     fn resolve_max_jobs_default_in_range() {
@@ -571,5 +606,78 @@ mod tests {
     fn store_fallback_mode_matches_hermeticity_mode() {
         assert_eq!(store_fallback_mode(HermeticityMode::Practical), crunch_store::StoreFallbackMode::Practical);
         assert_eq!(store_fallback_mode(HermeticityMode::Strict), crunch_store::StoreFallbackMode::Strict);
+    }
+
+    #[tokio::test]
+    async fn stream_roots_into_worker_matches_across_root_force_policies() {
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
+        let inline_result =
+            stream_roots_into_worker(4, "/crunch/store", RootForceExecutionPolicy::Inline, &session, inline_tx)
+                .await
+                .unwrap();
+        let inline_labels = collect_eval_message_labels(inline_rx).await;
+
+        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
+        let preferred_result = stream_roots_into_worker(
+            4,
+            "/crunch/store",
+            RootForceExecutionPolicy::PreferThreaded,
+            &session,
+            preferred_tx,
+        )
+        .await
+        .unwrap();
+        let preferred_labels = collect_eval_message_labels(preferred_rx).await;
+
+        assert_eq!(inline_labels, preferred_labels);
+        assert_eq!(inline_result.root_drv_paths, preferred_result.root_drv_paths);
+        assert!(inline_result.eval_failure.is_none());
+        assert!(preferred_result.eval_failure.is_none());
+    }
+
+    #[tokio::test]
+    async fn stream_roots_into_worker_reports_same_labeled_failure_across_policies() {
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  good = { name = "good", builder = "/bin/sh" },
+  bad = { builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(16);
+        let inline_result =
+            stream_roots_into_worker(4, "/crunch/store", RootForceExecutionPolicy::Inline, &session, inline_tx)
+                .await
+                .unwrap();
+        let inline_labels = collect_eval_message_labels(inline_rx).await;
+
+        let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(16);
+        let preferred_result = stream_roots_into_worker(
+            4,
+            "/crunch/store",
+            RootForceExecutionPolicy::PreferThreaded,
+            &session,
+            preferred_tx,
+        )
+        .await
+        .unwrap();
+        let preferred_labels = collect_eval_message_labels(preferred_rx).await;
+
+        assert_eq!(inline_labels, preferred_labels);
+        assert!(inline_labels.len() <= 1, "stream should dispatch at most one root before failure");
+        let inline_failure = inline_result.eval_failure.expect("inline policy must report failure");
+        let preferred_failure = preferred_result.eval_failure.expect("preferred policy must report failure");
+        assert_eq!(inline_failure.label, preferred_failure.label);
+        assert_eq!(inline_failure.label, "bad");
+        assert_eq!(inline_failure.error, preferred_failure.error);
     }
 }

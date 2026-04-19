@@ -6,9 +6,7 @@ Defines how crunch avoids platform lock-in. The core (evaluation, derivation
 construction, store) MUST be OS-agnostic. Platform-specific code (sandbox,
 filesystem) MUST be behind trait abstractions so new platforms can be added
 without modifying the core.
-
 ## Requirements
-
 ### Requirement: Layered platform abstraction
 
 The system MUST stay structured in three layers:
@@ -182,6 +180,13 @@ let System = [|
 |] in
 ```
 
+#### Scenario: Adding a new target extends the system enum only
+
+- GIVEN crunch adds support for a new host target such as `x86_64-redox`
+- WHEN the Nickel stdlib target contract is updated
+- THEN support is added by extending the `System` enum
+- AND the record contract structure does not need OS-specific rewrites
+
 ### Requirement: v0 targets Linux, architecture supports all
 
 v0 MUST work on Linux (x86_64 and aarch64). The architecture MUST NOT
@@ -193,3 +198,44 @@ Adding macOS, BSD, or Redox support SHOULD require only:
 3. Platform-specific store considerations (if any)
 
 No changes to evaluation, derivation construction, or the CLI.
+
+#### Scenario: New platform support stays outside eval and CLI core
+
+- GIVEN crunch adds support for a non-Linux host such as BSD or Redox
+- WHEN that platform work is implemented
+- THEN the new work is confined to the sandbox/runtime portability boundary
+- AND evaluation, derivation construction, and CLI command structure remain unchanged
+
+### Requirement: Eval execution strategy stays outside the portable core
+
+The portable evaluation core MUST NOT require OS process management, daemon
+lifecycle, or mandatory global thread-pool state in order to evaluate Nickel or
+force roots.
+
+`crunch-eval` MUST remain usable with its required serial inline backend alone.
+Threaded and subprocess execution strategies MAY be shipped as host-specific
+optimizations, but they MUST stay optional layers above the portable forcing
+core.
+
+If a subprocess backend is shipped, it MUST NOT require a resident service and
+MUST NOT make library callers or non-process targets spawn another `crunch`
+binary in order to use the eval core.
+
+#### Scenario: Portable eval core works without host process helpers
+
+- GIVEN a host or embedding target that does not want subprocess spawning or a
+  resident worker service
+- WHEN it uses the `crunch-eval` lazy forcing APIs through the required inline
+  backend
+- THEN evaluation and root forcing still work
+- AND the portable core does not require daemon lifecycle management
+
+#### Scenario: Subprocess backend remains optional host policy
+
+- GIVEN a host runtime that adds a local subprocess backend for eval work
+- WHEN that backend is available
+- THEN it is selected as an optional host policy choice
+- AND the portable eval core still remains usable without subprocess support
+- AND the architecture does not require a resident daemon or cross-command
+  worker service
+

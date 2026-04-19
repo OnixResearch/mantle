@@ -27,9 +27,10 @@ current thread-pool shape.
 - define a backend-neutral execution boundary for bounded multi-root forcing
   semantics in `crunch-eval`
 - require a serial inline backend as the canonical portable fallback
-- move threaded and subprocess worker strategies into host-owned backend policy
-  layers instead of making either strategy a semantic requirement of the eval
-  core
+- keep shipped inline and threaded root-force backend implementations in
+  `crunch-eval` backend-adapter code while moving runtime selection and
+  fallback into host-owned policy layers instead of making either strategy a
+  semantic requirement of the eval core
 - keep daemon-free operation as a non-negotiable constraint: any subprocess
   path must stay optional and command-scoped rather than requiring a resident
   service
@@ -68,9 +69,10 @@ current thread-pool shape.
   - optional new backend-local modules under `crates/crunch-eval/src/`
   - `crates/crunch-pipeline/src/lib.rs`
   - optional CLI/runtime wiring if a non-inline backend is selected by default
-- **APIs**: future implementation may add internal backend traits or execution
-  policy carriers, but the main change is architectural separation, not a new
-  daemon or required CLI flag
+- **APIs**: first iteration may add a `crunch-eval` execution-policy carrier
+  for inline vs preferred threaded forcing, while `crunch-pipeline` owns the
+  shipped runtime selection and inline fallback surface; the main change is
+  architectural separation, not a new daemon or required CLI flag
 - **Testing**: equivalence tests across inline and any shipped host backends,
   plus portability proof that eval-core still works without thread/process
   helpers
@@ -92,6 +94,12 @@ Implementation acceptance MUST include:
   daemon lifecycle, or subprocess self-spawn
 - pipeline proof that converted root outputs stay label-stable regardless of
   which shipped eval execution backend is selected
+- pipeline proof that any shipped runtime entrypoint can fall back to the
+  required inline backend when a preferred non-inline backend is unavailable,
+  unsupported, or not selected
+- proof that streaming root forcing still treats each root-force request as an
+  independent error-handling unit and does not depend on partial success from a
+  failed multi-root request
 - if a subprocess backend ships, proof that it remains optional and
   command-scoped rather than becoming a required resident service
 

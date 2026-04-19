@@ -51,6 +51,16 @@ pub struct DiscoveryMetrics {
     pub name_fields_accessed: u32,
 }
 
+/// Host execution policy for isolated multi-root forcing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootForceExecutionPolicy {
+    /// Run worker assignments inline in the current thread.
+    Inline,
+    /// Prefer the threaded executor and fall back to inline when it is not selected
+    /// or cannot be initialized.
+    PreferThreaded,
+}
+
 /// Immutable worker input for isolated root forcing.
 ///
 /// This is the only state shared across threads for bounded multi-root
@@ -77,6 +87,16 @@ impl IsolatedWorkerInput {
         )?;
         let value = session.force_root(label)?;
         Ok(value)
+    }
+
+    /// Force a selected label set through the requested host execution policy.
+    pub fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
+        &self,
+        labels: &[String],
+        max_concurrency: u32,
+        policy: RootForceExecutionPolicy,
+    ) -> Result<Vec<(String, T)>, Error> {
+        force_selected_roots_with_policy(self, labels, max_concurrency, policy)
     }
 }
 
@@ -233,7 +253,7 @@ impl EvaluationSession {
         &self,
         labels: &[String],
     ) -> Result<Vec<(String, T)>, Error> {
-        self.force_selected_roots_bounded(labels, 1)
+        self.force_selected_roots_with_policy(labels, 1, RootForceExecutionPolicy::Inline)
     }
 
     /// Force a selected label set through isolated worker sessions under a bounded cap.
@@ -242,8 +262,18 @@ impl EvaluationSession {
         labels: &[String],
         max_concurrency: u32,
     ) -> Result<Vec<(String, T)>, Error> {
+        self.force_selected_roots_with_policy(labels, max_concurrency, RootForceExecutionPolicy::PreferThreaded)
+    }
+
+    /// Force a selected label set through an explicit host execution policy.
+    pub fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
+        &self,
+        labels: &[String],
+        max_concurrency: u32,
+        policy: RootForceExecutionPolicy,
+    ) -> Result<Vec<(String, T)>, Error> {
         let worker_input = self.isolated_worker_input();
-        force_selected_roots_with_workers(&worker_input, labels, max_concurrency)
+        worker_input.force_selected_roots_with_policy(labels, max_concurrency, policy)
     }
 
     /// Force all discovered roots through isolated worker sessions under a bounded cap.
@@ -251,8 +281,17 @@ impl EvaluationSession {
         &self,
         max_concurrency: u32,
     ) -> Result<Vec<(String, T)>, Error> {
+        self.force_all_roots_with_policy(max_concurrency, RootForceExecutionPolicy::PreferThreaded)
+    }
+
+    /// Force all discovered roots through an explicit host execution policy.
+    pub fn force_all_roots_with_policy<T: DeserializeOwned + Send + 'static>(
+        &self,
+        max_concurrency: u32,
+        policy: RootForceExecutionPolicy,
+    ) -> Result<Vec<(String, T)>, Error> {
         let labels = self.labels.iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
-        self.force_selected_roots_bounded(&labels, max_concurrency)
+        self.force_selected_roots_with_policy(&labels, max_concurrency, policy)
     }
 
     /// Force one root by label, deeply evaluating and deserializing into `T`.
@@ -388,7 +427,7 @@ struct IndexedRoot<T> {
     value: T,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct WorkerAssignment {
     start_index: u32,
     labels: Vec<String>,
@@ -406,8 +445,7 @@ trait WorkerJob {
 }
 
 impl<F> WorkerJob for F
-where
-    F: FnOnce(),
+where F: FnOnce()
 {
     fn run(self: Box<Self>) {
         (*self)()
@@ -440,12 +478,59 @@ impl BoundedWorkerPool {
     }
 }
 
+trait AssignmentExecutor {
+    fn execute<T: DeserializeOwned + Send + 'static>(
+        &self,
+        worker_input: &IsolatedWorkerInput,
+        assignments: &[WorkerAssignment],
+    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error>;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct InlineExecutor;
+
+impl AssignmentExecutor for InlineExecutor {
+    fn execute<T: DeserializeOwned + Send + 'static>(
+        &self,
+        worker_input: &IsolatedWorkerInput,
+        assignments: &[WorkerAssignment],
+    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+        let mut results = Vec::with_capacity(assignments.len());
+        for assignment in assignments {
+            results.push(force_worker_assignment(worker_input, assignment.clone()));
+        }
+        Ok(results)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ThreadedExecutor;
+
+impl AssignmentExecutor for ThreadedExecutor {
+    fn execute<T: DeserializeOwned + Send + 'static>(
+        &self,
+        worker_input: &IsolatedWorkerInput,
+        assignments: &[WorkerAssignment],
+    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+        let worker_pool = bounded_worker_pool(assignments.len() as u32)?;
+        let mut worker_receivers = Vec::with_capacity(assignments.len());
+        for assignment in assignments {
+            let worker = worker_input.clone();
+            let assignment = assignment.clone();
+            let receiver = worker_pool.submit(move || force_worker_assignment(&worker, assignment))?;
+            worker_receivers.push(receiver);
+        }
+        collect_threaded_results(worker_receivers)
+    }
+}
+
 const MIN_ROOTS_PER_WORKER: usize = 8;
 
-fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
+fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
     worker_input: &IsolatedWorkerInput,
     labels: &[String],
     max_concurrency: u32,
+    policy: RootForceExecutionPolicy,
 ) -> Result<Vec<(String, T)>, Error> {
     let requested_root_count = labels.len();
     if requested_root_count == 0 {
@@ -454,21 +539,49 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
 
     let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
     let effective_concurrency = clamp_parallel_workers(requested_root_count, concurrency_cap);
-    let worker_assignments = build_worker_assignments(labels, effective_concurrency);
-    let worker_pool = bounded_worker_pool(effective_concurrency)?;
-    let mut worker_receivers = Vec::with_capacity(worker_assignments.len());
-    for assignment in worker_assignments {
-        let worker = worker_input.clone();
-        let receiver = worker_pool.submit(move || force_worker_assignment(&worker, assignment))?;
-        worker_receivers.push(receiver);
-    }
+    let assignments = build_worker_assignments(labels, effective_concurrency);
+    let inline_executor = InlineExecutor;
+    let threaded_executor = ThreadedExecutor;
+    force_selected_roots_with_executors(worker_input, &assignments, policy, &inline_executor, &threaded_executor)
+}
 
-    let mut indexed_results = Vec::with_capacity(requested_root_count);
+fn force_selected_roots_with_executors<T: DeserializeOwned + Send + 'static>(
+    worker_input: &IsolatedWorkerInput,
+    assignments: &[WorkerAssignment],
+    policy: RootForceExecutionPolicy,
+    inline_executor: &impl AssignmentExecutor,
+    threaded_executor: &impl AssignmentExecutor,
+) -> Result<Vec<(String, T)>, Error> {
+    let inline_results = || inline_executor.execute(worker_input, assignments);
+    let assignment_results = match resolve_execution_backend(policy, assignments.len() as u32) {
+        ResolvedExecutionBackend::Inline => inline_results()?,
+        ResolvedExecutionBackend::Threaded => match threaded_executor.execute(worker_input, assignments) {
+            Ok(results) => results,
+            Err(_) => inline_results()?,
+        },
+    };
+    merge_assignment_results(assignment_results)
+}
+
+fn collect_threaded_results<T: Send + 'static>(
+    worker_receivers: Vec<mpsc::Receiver<Result<Vec<IndexedRoot<T>>, WorkerFailure>>>,
+) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+    let mut results = Vec::with_capacity(worker_receivers.len());
     for receiver in worker_receivers {
         let worker_result = receiver
             .recv()
             .map_err(|_| Error::Boundary("bounded worker pool job dropped without a result".to_string()))?;
-        match worker_result {
+        results.push(worker_result);
+    }
+    Ok(results)
+}
+
+fn merge_assignment_results<T: Send + 'static>(
+    assignment_results: Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>,
+) -> Result<Vec<(String, T)>, Error> {
+    let mut indexed_results = Vec::new();
+    for assignment_result in assignment_results {
+        match assignment_result {
             Ok(mut worker_values) => indexed_results.append(&mut worker_values),
             Err(failure) => {
                 return Err(Error::Boundary(format!(
@@ -478,10 +591,29 @@ fn force_selected_roots_with_workers<T: DeserializeOwned + Send + 'static>(
             }
         }
     }
-
     indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
-    let ordered_results = indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
+    let ordered_results =
+        indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
     Ok(ordered_results)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResolvedExecutionBackend {
+    Inline,
+    Threaded,
+}
+
+fn resolve_execution_backend(policy: RootForceExecutionPolicy, effective_concurrency: u32) -> ResolvedExecutionBackend {
+    assert!(effective_concurrency >= 1, "effective_concurrency must be at least 1");
+    match policy {
+        RootForceExecutionPolicy::Inline => ResolvedExecutionBackend::Inline,
+        RootForceExecutionPolicy::PreferThreaded => {
+            if effective_concurrency <= 1 {
+                return ResolvedExecutionBackend::Inline;
+            }
+            ResolvedExecutionBackend::Threaded
+        }
+    }
 }
 
 fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Error> {
@@ -876,5 +1008,80 @@ mod tests {
             assert_eq!(serial_item.1.name, bounded_item.1.name);
             assert_eq!(serial_item.1.builder, bounded_item.1.builder);
         }
+    }
+
+    #[derive(Clone, Copy, Debug, Default)]
+    struct FailingThreadedExecutor;
+
+    impl AssignmentExecutor for FailingThreadedExecutor {
+        fn execute<T: DeserializeOwned + Send + 'static>(
+            &self,
+            _worker_input: &IsolatedWorkerInput,
+            _assignments: &[WorkerAssignment],
+        ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+            Err(Error::Boundary("synthetic threaded executor unavailable".to_string()))
+        }
+    }
+
+    #[test]
+    fn resolve_execution_backend_uses_inline_for_single_worker_requests() {
+        assert_eq!(resolve_execution_backend(RootForceExecutionPolicy::Inline, 3), ResolvedExecutionBackend::Inline);
+        assert_eq!(
+            resolve_execution_backend(RootForceExecutionPolicy::PreferThreaded, 1),
+            ResolvedExecutionBackend::Inline
+        );
+        assert_eq!(
+            resolve_execution_backend(RootForceExecutionPolicy::PreferThreaded, 2),
+            ResolvedExecutionBackend::Threaded
+        );
+    }
+
+    #[test]
+    fn force_selected_roots_policy_inline_matches_prefer_threaded() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+  gamma = { name = "gamma", builder = "/bin/sh" },
+}"#;
+        let session = EvaluationSession::open_str(source, &[]).unwrap();
+        let labels = vec!["gamma".to_string(), "alpha".to_string(), "beta".to_string()];
+
+        let inline = session
+            .force_selected_roots_with_policy::<CrunchDerivation>(&labels, 3, RootForceExecutionPolicy::Inline)
+            .unwrap();
+        let threaded = session
+            .force_selected_roots_with_policy::<CrunchDerivation>(&labels, 3, RootForceExecutionPolicy::PreferThreaded)
+            .unwrap();
+
+        assert_eq!(inline.len(), threaded.len());
+        for (inline_item, threaded_item) in inline.iter().zip(threaded.iter()) {
+            assert_eq!(inline_item.0, threaded_item.0);
+            assert_eq!(inline_item.1.name, threaded_item.1.name);
+            assert_eq!(inline_item.1.builder, threaded_item.1.builder);
+        }
+    }
+
+    #[test]
+    fn prefer_threaded_falls_back_to_inline_when_threaded_executor_is_unavailable() {
+        let source = r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#;
+        let session = EvaluationSession::open_str(source, &[]).unwrap();
+        let worker_input = session.isolated_worker_input();
+        let labels = vec!["beta".to_string(), "alpha".to_string()];
+        let assignments = build_worker_assignments(&labels, 2);
+        let inline_executor = InlineExecutor;
+        let fallback = force_selected_roots_with_executors::<CrunchDerivation>(
+            &worker_input,
+            &assignments,
+            RootForceExecutionPolicy::PreferThreaded,
+            &inline_executor,
+            &FailingThreadedExecutor,
+        )
+        .unwrap();
+
+        let observed = fallback.into_iter().map(|(label, _)| label).collect::<Vec<_>>();
+        assert_eq!(observed, labels);
     }
 }

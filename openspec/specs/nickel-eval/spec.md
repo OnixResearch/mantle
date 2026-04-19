@@ -275,28 +275,43 @@ after user-reachable failures have already been converted into typed errors.
 
 ### Requirement: Parallel multi-root forcing uses only bounded safe concurrency
 
-The system MUST bound concurrent root-force jobs for the multi-root lazy
-session path.
+The system MUST separate multi-root forcing semantics from the concrete local
+execution backend used to run root-force assignments.
 
-Cross-thread safety for any evaluator state that is driven concurrently MUST be
-proven by compile-time trait-bound evidence on the actual concurrently used
-state. Without that proof, the implementation MUST use isolated worker
-evaluation states derived from the same source text and import-path set rather
-than sharing mutable evaluator state across threads.
+The `crunch-eval` core MUST provide one backend-neutral bounded multi-root
+forcing interface whose semantics stay the same across inline and any shipped
+non-inline backends.
 
-#### Scenario: Multi-root forcing honors a concurrency cap
+The `crunch-eval` core MUST provide a serial inline backend that can execute a
+bounded multi-root request without background worker threads, subprocesses,
+daemon lifecycle, or binary self-spawn.
 
-- GIVEN a multi-root forcing request with more requested labels than the chosen
-  eval parallelism cap
-- WHEN crunch-eval materializes that batch
-- THEN it runs at most the bounded number of root-force jobs at once
-- AND the remaining labels wait until one in-flight job finishes
+Any shipped threaded or subprocess backend MUST remain optional and MUST
+preserve the same typed derivation values, requested-label ordering, and
+labeled failure semantics as the serial inline backend for the same requested
+roots.
 
-#### Scenario: Isolated-worker forcing matches serial same-session results
+Any backend that evaluates more than one root concurrently MUST still use
+bounded concurrency and MUST drive only immutable worker input across the
+concurrency boundary unless stronger compile-time safety evidence exists for the
+actual concurrently used evaluator state.
 
-- GIVEN a `.ncl` file exporting named derivations
-- WHEN crunch-eval forces one label through the serial same-session path and
-  the same label through the multi-root worker path
-- THEN both paths produce the same typed derivation value
-- AND the worker path does not change label semantics for that root
+#### Scenario: Portable inline backend forces multiple roots without host worker helpers
+
+- GIVEN a multi-root forcing request on a host or embedding target that does
+  not want background worker threads or subprocesses
+- WHEN `crunch-eval` materializes that request through its required inline
+  backend
+- THEN it returns the requested typed derivation values
+- AND it preserves the requested label order
+- AND it does not require a daemon, global worker pool, or binary self-spawn
+
+#### Scenario: Optional non-inline backend matches inline semantics
+
+- GIVEN the same source input and requested root labels
+- WHEN `crunch-eval` forces them through the serial inline backend and through
+  any shipped threaded or subprocess backend
+- THEN both paths produce the same typed derivation values for each label
+- AND both paths preserve the same requested-label ordering
+- AND a failure in either path identifies the same failed label
 

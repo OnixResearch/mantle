@@ -637,6 +637,8 @@ When claiming test results in commit messages or completion summaries:
 
 - Cheapest honest store-aware benchmark path so far is a fresh temp `StoreHandle` per sample: write one deterministic blob to castore, build a signed `PathInfo`, `persist_and_export_signed_output(...)`, reopen the store, then time `cached_node_for_path(...)`.
 - That persistence boundary only requires a non-empty `PathInfo.signatures` list. For local benchmark fixtures, a parsed fixed narinfo signature string is enough; trust verification is not part of `persist_and_export_signed_output()`.
+- Root `Cargo.toml` sets `autoexamples = false`. New checked-in benchmark examples must get an explicit `[[example]]` entry or `cargo run --example ...` fails with "no example target named ...".
+- The wide package-set fixture (`tests/fixtures/wide_package_set.ncl`) needs the Nickel stdlib import path. Benchmark examples opening it directly should pass `crunch_eval::stdlib::stdlib_import_path()` or evaluation fails on missing `lib.ncl`.
 
 ## Coding Style: Tiger Style
 

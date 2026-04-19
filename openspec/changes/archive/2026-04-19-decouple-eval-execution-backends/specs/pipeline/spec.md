@@ -15,6 +15,10 @@ or subprocess mechanism a semantic requirement of `crunch-eval` itself.
 The pipeline MUST preserve root-label association, conversion semantics, and
 failure reporting across every shipped eval execution backend.
 
+If the pipeline prefers a shipped non-inline backend on one host, it MUST still
+fall back to the required inline backend when that non-inline backend is
+unavailable, unsupported, or not selected.
+
 For streaming execution, the pipeline MUST treat each root-force request as an
 independent error-handling unit. It MUST NOT depend on partial success results
 from a failed multi-root request.
@@ -35,3 +39,13 @@ from a failed multi-root request.
 - THEN the pipeline may use that host policy choice
 - AND the portable eval-core contract still remains valid with the required
   inline backend alone
+
+#### Scenario: Preferred non-inline backend falls back to inline
+
+- GIVEN the runtime prefers a shipped non-inline eval backend on one host
+- AND that backend is unavailable, unsupported, or not selected for the current
+  request
+- WHEN `build()` invokes `crunch-eval`
+- THEN the pipeline falls back to the required inline backend
+- AND root-label association, conversion semantics, and labeled failure
+  reporting remain unchanged

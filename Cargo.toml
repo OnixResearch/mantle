@@ -43,6 +43,10 @@ name = "benchmark_eval_smoke"
 path = "examples/benchmark_eval_smoke.rs"
 
 [[example]]
+name = "benchmark_eval_backends"
+path = "examples/benchmark_eval_backends.rs"
+
+[[example]]
 name = "benchmark_lazy_eval"
 path = "examples/benchmark_lazy_eval.rs"
 
