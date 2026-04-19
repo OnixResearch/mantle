@@ -677,3 +677,135 @@ fn smoke_deterministic_output_path() {
     let name2 = path2.file_name().unwrap();
     assert_eq!(name1, name2, "same derivation should produce same hash-name");
 }
+
+#[test]
+fn smoke_build_then_push_narinfo_and_nar_match() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    // Step 1: build a hello derivation with a shared state dir.
+    let work = tempfile::tempdir().unwrap();
+    let store = work.path().join("store");
+    let state = work.path().join("state");
+    let cache = work.path().join("cache");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+
+    let run = build_ncl_with_state(
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "push-hello",
+  builder = "/bin/sh",
+  args = ["-c", "echo 'push test content' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        &store,
+        Some(&state),
+    );
+    assert_eq!(run.report.counts.succeeded_total, 1);
+    let out = first_output_path(&run);
+    assert!(out.exists(), "build output should exist: {}", out.display());
+
+    // Step 2: push all paths to a binary cache directory.
+    let mut push_cmd = crunch_cmd();
+    push_cmd
+        .arg("--store").arg(&store)
+        .arg("--state-dir").arg(&state)
+        .arg("store").arg("push")
+        .arg("--to").arg(&cache)
+        .arg("--all");
+    let push_output = push_cmd.output().expect("push should execute");
+    let push_stderr = String::from_utf8_lossy(&push_output.stderr);
+    assert!(
+        push_output.status.success(),
+        "push failed (exit {}):\n{push_stderr}",
+        push_output.status.code().unwrap_or(-1),
+    );
+    let push_stdout = String::from_utf8_lossy(&push_output.stdout);
+    assert!(push_stdout.contains("PUSH "), "push should report at least one pushed path, got: {push_stdout}");
+
+    // Step 3: verify nix-cache-info.
+    let cache_info = std::fs::read_to_string(cache.join("nix-cache-info")).unwrap();
+    assert!(cache_info.contains("StoreDir:"), "nix-cache-info must contain StoreDir");
+    assert!(cache_info.contains("WantMassQuery: 1"), "nix-cache-info must set WantMassQuery");
+
+    // Step 4: find and parse the narinfo file.
+    let narinfo_entries: Vec<_> = std::fs::read_dir(&cache)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map_or(false, |ext| ext == "narinfo")
+        })
+        .collect();
+    assert!(
+        !narinfo_entries.is_empty(),
+        "cache dir should contain at least one .narinfo file",
+    );
+
+    // Find the narinfo for the output we built (match by store path name).
+    let output_name = out.file_name().unwrap().to_str().unwrap();
+    let mut found_match = false;
+
+    for entry in &narinfo_entries {
+        let narinfo_text = std::fs::read_to_string(entry.path()).unwrap();
+        let narinfo = nix_compat::narinfo::NarInfo::parse(&narinfo_text)
+            .unwrap_or_else(|e| panic!("narinfo should parse: {e}\ncontent:\n{narinfo_text}"));
+
+        let narinfo_store_name = narinfo.store_path.to_string();
+        if !narinfo_store_name.contains(output_name) {
+            continue;
+        }
+        found_match = true;
+
+        // Step 5: read the NAR file referenced by the narinfo.
+        let nar_path = cache.join(narinfo.url);
+        assert!(nar_path.exists(), "NAR file should exist: {}", nar_path.display());
+        let nar_bytes = std::fs::read(&nar_path).unwrap();
+
+        // Verify NAR sha256 matches the narinfo NarHash.
+        let actual_sha256: [u8; 32] = {
+            use sha2::Digest;
+            sha2::Sha256::digest(&nar_bytes).into()
+        };
+        assert_eq!(
+            actual_sha256, narinfo.nar_hash,
+            "NAR file sha256 must match narinfo NarHash",
+        );
+
+        // Verify NarSize matches actual file size.
+        assert_eq!(
+            nar_bytes.len() as u64, narinfo.nar_size,
+            "NAR file size must match narinfo NarSize",
+        );
+
+        // Verify FileHash matches if present.
+        if let Some(file_hash) = narinfo.file_hash {
+            assert_eq!(
+                actual_sha256, file_hash,
+                "FileHash must match actual NAR sha256 (uncompressed)",
+            );
+        }
+
+        // Verify FileSize matches if present.
+        if let Some(file_size) = narinfo.file_size {
+            assert_eq!(
+                nar_bytes.len() as u64, file_size,
+                "FileSize must match actual NAR file size",
+            );
+        }
+
+        // Verify at least one signature is present.
+        assert!(
+            !narinfo.signatures.is_empty(),
+            "pushed narinfo should have at least one signature",
+        );
+
+        break;
+    }
+
+    assert!(found_match, "should find a narinfo matching output '{output_name}'");
+}

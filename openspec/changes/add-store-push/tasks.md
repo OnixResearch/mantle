@@ -12,7 +12,7 @@
 - [x] Add `Push` variant to `StoreAction` enum in `src/main.rs` with `--to`, `--all`, `--trust-unsigned`, and positional path args
 - [x] Implement `cmd_store_push()` in `src/store_cmd.rs`: resolve selectors, acquire store mutation lock, call `export_paths_to_cache_dir`, print summary
 - [x] Add path selector resolution: match positional args against PathInfo store paths (full or fragment match, same pattern as `crunch store info`)
-- [ ] Add integration test: build a hello derivation, push it, verify narinfo parses and NAR sha256 matches
+- [x] Add integration test: build a hello derivation, push it, verify narinfo parses and NAR sha256 matches
 
 ## Phase 3: Store prefix and cross-compat validation
 
