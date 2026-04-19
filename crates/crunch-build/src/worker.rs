@@ -30,6 +30,8 @@ use crate::goal::GoalState;
 use crate::goal::MAX_GOALS;
 use crate::orchestrate::BuildOutcome;
 use crate::orchestrate::Builder;
+use crate::orchestrate::PrepareResult;
+use crate::orchestrate::PreparedBuild;
 use crate::registry::DerivationRegistry;
 
 type PendingRegistryEntry = (
@@ -82,6 +84,20 @@ pub struct WorkerResult {
     pub outcomes: Vec<BuildOutcome>,
     /// Root goals that failed (build error or dep failure).
     pub failed: Vec<FailedGoal>,
+}
+
+/// Mutable loop state shared across worker helper methods.
+///
+/// Groups the recurring `&mut` references that flow through
+/// dispatch, completion, and wait helpers. Keeps the method
+/// signatures under the 5-parameter limit.
+struct WorkerLoopState<'a> {
+    sem: Arc<Semaphore>,
+    join_set: JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
+    pending_meta: HashMap<String, PreparedBuild>,
+    outcomes: &'a mut Vec<BuildOutcome>,
+    failed: &'a mut Vec<FailedGoal>,
+    completed_count: u32,
 }
 
 /// Build scheduler that drives Goal state machines.
@@ -246,45 +262,38 @@ impl Worker {
         debug_assert!(root_count > 0, "no root goals to build");
         debug_assert!(total_goals <= MAX_GOALS, "goal count exceeds limit");
 
-        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?));
-        let mut join_set = JoinSet::new();
-        let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
-        let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            failed: &mut failed,
+            completed_count: 0,
+        };
         let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
 
         for _ in 0..iteration_count_max {
-            let dispatched = self
-                .dispatch_ready(
-                    builder,
-                    known_paths,
-                    &sem,
-                    &mut join_set,
-                    &mut pending_meta,
-                    &mut outcomes,
-                    &mut failed,
-                )
-                .await?;
+            let dispatched = self.dispatch_ready(builder, known_paths, &mut state).await?;
 
             if self.registry.all_roots_terminal() {
-                info!(completed = completed_count, succeeded = outcomes.len(), failed = failed.len(), "worker finished");
+                info!(completed = state.completed_count, succeeded = state.outcomes.len(), failed = state.failed.len(), "worker finished");
                 return Ok(WorkerResult { outcomes, failed });
             }
 
-            if join_set.is_empty() {
+            if state.join_set.is_empty() {
                 if dispatched == 0 {
                     return Err(Error::Store("worker deadlock: no ready goals and no in-flight builds".into()));
                 }
                 continue;
             }
 
-            let Some(join_result) = join_set.join_next().await else {
+            let Some(join_result) = state.join_set.join_next().await else {
                 continue;
             };
-            self.process_join_result(join_result, builder, known_paths, &mut pending_meta, &mut outcomes, &mut failed)
-                .await?;
-            completed_count = completed_count.saturating_add(1);
+            self.process_join_result(join_result, builder, known_paths, &mut state).await?;
+            state.completed_count = state.completed_count.saturating_add(1);
         }
         Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
@@ -308,12 +317,16 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let sem = Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?));
-        let mut join_set = JoinSet::new();
-        let mut pending_meta: HashMap<String, PreparedBuild> = HashMap::new();
-        let mut completed_count: u32 = 0;
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            failed: &mut failed,
+            completed_count: 0,
+        };
         let mut is_eval_done = false;
         let iteration_count_max: u32 = MAX_GOALS.saturating_mul(4);
 
@@ -324,79 +337,54 @@ impl Worker {
                 self.drain_eval_messages(rx, known_paths, &mut is_eval_done)?;
             }
 
-            self.dispatch_ready(
-                builder,
-                known_paths,
-                &sem,
-                &mut join_set,
-                &mut pending_meta,
-                &mut outcomes,
-                &mut failed,
-            )
-            .await?;
+            self.dispatch_ready(builder, known_paths, &mut state).await?;
 
             if is_eval_done && self.registry.all_roots_terminal() {
                 info!(
-                    completed = completed_count,
-                    succeeded = outcomes.len(),
-                    failed = failed.len(),
+                    completed = state.completed_count,
+                    succeeded = state.outcomes.len(),
+                    failed = state.failed.len(),
                     roots = self.registry.root_count(),
                     "worker streaming finished"
                 );
                 return Ok(WorkerResult { outcomes, failed });
             }
 
-            self.wait_for_event(
-                &mut is_eval_done,
-                rx,
-                &mut join_set,
-                builder,
-                known_paths,
-                &mut pending_meta,
-                &mut outcomes,
-                &mut failed,
-                &mut completed_count,
-            )
-            .await?;
+            self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
         }
         Err(Error::Store(format!("worker loop exceeded iteration limit ({iteration_count_max})")))
     }
 
     /// Wait for either a build completion or an eval message.
     /// Centralized select! to avoid duplicating handle_build_completion.
-    #[allow(clippy::too_many_arguments)]
     async fn wait_for_event<BServ>(
         &mut self,
         is_eval_done: &mut bool,
         rx: &mut mpsc::Receiver<EvalMessage>,
-        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
-        outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<FailedGoal>,
-        completed_count: &mut u32,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
         if *is_eval_done {
-            let Some(join_result) = join_set.join_next().await else {
+            let Some(join_result) = state.join_set.join_next().await else {
                 return Ok(());
             };
-            self.process_join_result(join_result, builder, known_paths, pending_meta, outcomes, failed).await?;
-            *completed_count = completed_count.saturating_add(1);
-        } else if join_set.is_empty() {
+            self.process_join_result(join_result, builder, known_paths, state).await?;
+            state.completed_count = state.completed_count.saturating_add(1);
+        } else if state.join_set.is_empty() {
             match rx.recv().await {
                 Some(msg) => self.accept_eval_message(msg, known_paths)?,
                 None => *is_eval_done = true,
             }
         } else {
             tokio::select! {
-                result = join_set.join_next() => {
+                result = state.join_set.join_next() => {
                     let Some(join_result) = result else { return Ok(()); };
-                    self.process_join_result(join_result, builder, known_paths, pending_meta, outcomes, failed).await?;
-                    *completed_count = completed_count.saturating_add(1);
+                    self.process_join_result(join_result, builder, known_paths, state).await?;
+                    state.completed_count = state.completed_count.saturating_add(1);
                 }
                 msg = rx.recv() => {
                     match msg {
@@ -462,34 +450,20 @@ impl Worker {
         join_result: Result<(String, Result<snix_build::buildservice::BuildResult, Error>), tokio::task::JoinError>,
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
-        outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<FailedGoal>,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
-                self.handle_build_completion(
-                    &drv_key,
-                    build_result,
-                    builder,
-                    known_paths,
-                    pending_meta,
-                    outcomes,
-                    failed,
-                )
-                .await
+                self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
-                // The sandbox build failed. Route to fail_goal so
-                // other independent roots can continue.
                 let err_msg = format!("{build_err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
-                // Remove pending metadata (won't be used).
-                pending_meta.remove(&drv_key);
-                self.fail_goal(&drv_key, &err_msg, failed)?;
+                state.pending_meta.remove(&drv_key);
+                self.fail_goal(&drv_key, &err_msg, state.failed)?;
                 Ok(())
             }
             Err(join_err) => {
@@ -508,14 +482,13 @@ impl Worker {
         build_result: snix_build::buildservice::BuildResult,
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
-        outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<FailedGoal>,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
-        let prepared = pending_meta
+        let prepared = state
+            .pending_meta
             .remove(drv_key)
             .ok_or_else(|| Error::Store(format!("BUG: completed build has no pending metadata: {drv_key}")))?;
 
@@ -524,15 +497,14 @@ impl Worker {
             Err(e) => {
                 let err_msg = format!("{e}");
                 tracing::warn!(drv = drv_key, err = %err_msg, "build failed, marking goal as failed");
-                self.fail_goal(drv_key, &err_msg, failed)?;
+                self.fail_goal(drv_key, &err_msg, state.failed)?;
                 return Ok(());
             }
         };
 
-        // Check for dynamic derivation outputs (.drv files).
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths).await?;
 
-        self.complete_goal(drv_key, outcome, outcomes, failed)
+        self.complete_goal(drv_key, outcome, state.outcomes, state.failed)
     }
 
     /// Inspect build outputs for `.drv` files. If found, parse and
@@ -647,11 +619,7 @@ impl Worker {
         &mut self,
         builder: &mut Builder<BServ>,
         known_paths: &mut DerivationRegistry,
-        sem: &Arc<Semaphore>,
-        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
-        outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<FailedGoal>,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<u32, Error>
     where
         BServ: BuildService + 'static,
@@ -660,16 +628,7 @@ impl Worker {
         while let Some(drv_key) = self.ready_queue.pop_front() {
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
-            self.handle_prepare_result(
-                &drv_key,
-                prepare_result,
-                builder,
-                sem,
-                join_set,
-                pending_meta,
-                outcomes,
-                failed,
-            )?;
+            self.handle_prepare_result(&drv_key, prepare_result, builder, state)?;
             dispatched = dispatched.saturating_add(1);
         }
         Ok(dispatched)
@@ -697,26 +656,22 @@ impl Worker {
         drv_key: &str,
         prepare_result: Result<PrepareResult, Error>,
         builder: &Builder<BServ>,
-        sem: &Arc<Semaphore>,
-        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
-        outcomes: &mut Vec<BuildOutcome>,
-        failed: &mut Vec<FailedGoal>,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
         match prepare_result {
-            Ok(PrepareResult::Done(outcome)) => self.complete_goal(drv_key, outcome, outcomes, failed),
+            Ok(PrepareResult::Done(outcome)) => self.complete_goal(drv_key, outcome, state.outcomes, state.failed),
             Err(err) => {
                 let err_msg = format!("{err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
-                self.fail_goal(drv_key, &err_msg, failed)
+                self.fail_goal(drv_key, &err_msg, state.failed)
             }
             Ok(PrepareResult::NeedsBuild {
                 prepared,
                 build_request,
-            }) => self.spawn_prepared_build(drv_key, prepared, *build_request, builder, sem, join_set, pending_meta),
+            }) => self.spawn_prepared_build(drv_key, prepared, *build_request, builder, state),
         }
     }
 
@@ -726,9 +681,7 @@ impl Worker {
         prepared: PreparedBuild,
         build_request: snix_build::buildservice::BuildRequest,
         builder: &Builder<BServ>,
-        sem: &Arc<Semaphore>,
-        join_set: &mut JoinSet<(String, Result<snix_build::buildservice::BuildResult, Error>)>,
-        pending_meta: &mut HashMap<String, PreparedBuild>,
+        state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
@@ -739,13 +692,13 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("worker: goal vanished during dispatch: {drv_key}")))?;
         goal.mark_building()?;
 
-        let replaced = pending_meta.insert(drv_key.to_string(), prepared);
+        let replaced = state.pending_meta.insert(drv_key.to_string(), prepared);
         debug_assert!(replaced.is_none(), "pending_meta already had entry for {drv_key}");
 
         let bs = builder.build_service();
-        let sem = sem.clone();
+        let sem = state.sem.clone();
         let key = drv_key.to_string();
-        join_set.spawn(async move {
+        state.join_set.spawn(async move {
             let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
             let build_result = match _permit {
                 Ok(_p) => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
@@ -892,11 +845,7 @@ impl Worker {
     }
 }
 
-// ── Type alias for PreparedBuild to avoid reaching into orchestrate internals ──
-// The Worker needs PreparedBuild and PrepareResult from orchestrate.rs.
-// For now we re-export them. Phase 4 cleanup will move them to a shared module.
-use crate::orchestrate::PrepareResult;
-use crate::orchestrate::PreparedBuild;
+
 
 #[cfg(test)]
 mod tests {
