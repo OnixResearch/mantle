@@ -1453,7 +1453,7 @@ fn run_command_live_writes_stage_stream_files() {
     let mut command = std::process::Command::new("/bin/sh");
     command
         .arg("-c")
-        .arg("printf 'stdout-1\n'; printf 'stderr-1\n' >&2; sleep 0.05; printf 'stdout-2\n'; printf 'stderr-2\n' >&2");
+        .arg("printf 'stdout-1\n'; printf 'stderr-1\n' >&2; printf 'stdout-2\n'; printf 'stderr-2\n' >&2");
 
     let captured = run_command_live(proof_dir.path(), "live-stage", &mut command).unwrap();
     let stdout = String::from_utf8_lossy(&captured.output.stdout);
