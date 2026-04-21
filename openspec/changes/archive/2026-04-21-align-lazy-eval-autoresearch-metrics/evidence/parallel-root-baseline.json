@@ -1,0 +1,183 @@
+[
+  {
+    "workload_name": "lazy-root-discovery-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures lazy root label discovery without deep-forcing any root values",
+    "operation": "open_file + root_labels",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 44587698,
+    "sample_wall_ns": [
+      47340684,
+      44782594,
+      46415598,
+      43202509,
+      44304897,
+      44320566,
+      44587698,
+      44840432,
+      43371105,
+      44311770
+    ],
+    "phase_metrics": [
+      {
+        "name": "root_discovery_wall_ns",
+        "unit": "ns",
+        "value": 44587698
+      }
+    ]
+  },
+  {
+    "workload_name": "lazy-selected-root-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures end-to-end latency to obtain one selected root from a wide package set",
+    "operation": "open_file + force_root(\"alpha\")",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 1,
+    "total_wall_ns": 60086922,
+    "sample_wall_ns": [
+      58690532,
+      59474773,
+      60594785,
+      61163753,
+      57831049,
+      60955051,
+      60086922,
+      60093655,
+      58318815,
+      55989383
+    ],
+    "phase_metrics": [
+      {
+        "name": "selected_root_total_wall_ns",
+        "unit": "ns",
+        "value": 60086922
+      },
+      {
+        "name": "root_discovery_wall_ns",
+        "unit": "ns",
+        "value": 43871554
+      },
+      {
+        "name": "selected_root_force_wall_ns",
+        "unit": "ns",
+        "value": 15738483
+      },
+      {
+        "name": "explicit_top_level_root_force_count",
+        "unit": "count",
+        "value": 1
+      },
+      {
+        "name": "explicit_nonselected_root_force_count",
+        "unit": "count",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "workload_name": "eager-all-roots-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Guardrail: measures all-roots eager path to detect regressions from lazy changes",
+    "operation": "open_file + force_all_roots",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+    ],
+    "cache_mode": "cold-per-sample",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 61013110,
+    "sample_wall_ns": [
+      63130223,
+      63230040,
+      59770519,
+      59674157,
+      61013110,
+      60570489,
+      60838222,
+      61505675,
+      61327561,
+      60936346
+    ],
+    "phase_metrics": [
+      {
+        "name": "all_roots_total_wall_ns",
+        "unit": "ns",
+        "value": 61013110
+      }
+    ]
+  },
+  {
+    "workload_name": "parallel-all-roots-wide-package-set",
+    "workload_kind": "lazy-eval",
+    "workload_path": "tests/fixtures/wide_package_set.ncl",
+    "rationale": "Measures bounded parallel all-roots forcing throughput on the same wide package-set fixture",
+    "operation": "open_file + force_all_roots_bounded(concurrency=4)",
+    "entry_point": "benchmark_lazy_eval",
+    "command_argv": [
+      "target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval",
+      "--repeat-count",
+      "10",
+      "--bundle-out",
+      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+    ],
+    "cache_mode": "cold-per-sample isolated benchmark run",
+    "repeat_count": 10,
+    "logical_store_prefix": "/nix/store",
+    "root_count": 16,
+    "total_wall_ns": 106820627,
+    "sample_wall_ns": [
+      109474648,
+      110026413,
+      107846552,
+      108443863,
+      100821760,
+      100096820,
+      106820627,
+      103268983,
+      105734198,
+      105554421
+    ],
+    "phase_metrics": [
+      {
+        "name": "parallel_all_roots_total_wall_ns",
+        "unit": "ns",
+        "value": 106820627
+      },
+      {
+        "name": "parallel_root_eval_concurrency",
+        "unit": "count",
+        "value": 4
+      }
+    ]
+  }
+]

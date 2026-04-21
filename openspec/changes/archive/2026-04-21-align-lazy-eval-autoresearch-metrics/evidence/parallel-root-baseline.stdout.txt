@@ -1,0 +1,6 @@
+BASELINE_BUNDLE_OUT=openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json
+BASELINE_CARGO_TARGET_DIR=target/autoresearch-parallel-root-baseline/run-ttWuLH
+
+=== Primary metric ===
+parallel_all_roots_total_wall_ns = 106820627 ns
+METRIC parallel_all_roots_total_wall_ns=106820627
