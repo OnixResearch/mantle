@@ -519,5 +519,5 @@
    Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/crunch/crunch/crates/crunch-pipeline)
    Compiling crunch v0.1.0 (/home/brittonr/git/crunch/crunch)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 35.32s
-     Running `target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval --repeat-count 10 --bundle-out openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
-wrote benchmark results to openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json
+     Running `target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval --repeat-count 10 --bundle-out openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
+wrote benchmark results to openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json

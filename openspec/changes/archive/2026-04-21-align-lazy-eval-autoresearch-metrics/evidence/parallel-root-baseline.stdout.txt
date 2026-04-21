@@ -1,4 +1,4 @@
-BASELINE_BUNDLE_OUT=openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json
+BASELINE_BUNDLE_OUT=openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json
 BASELINE_CARGO_TARGET_DIR=target/autoresearch-parallel-root-baseline/run-ttWuLH
 
 === Primary metric ===

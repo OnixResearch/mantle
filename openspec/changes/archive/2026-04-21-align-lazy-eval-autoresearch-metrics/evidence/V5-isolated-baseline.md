@@ -8,7 +8,7 @@ Reviewed-At: 2026-04-21
 
 Fresh isolated baseline run evidence:
 - stdout prints:
-  - `BASELINE_BUNDLE_OUT=openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
+  - `BASELINE_BUNDLE_OUT=openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
   - `BASELINE_CARGO_TARGET_DIR=target/autoresearch-parallel-root-baseline/run-ttWuLH`
 - stderr confirms the same run-specific target dir was used for the benchmark binary:
   - `Running 'target/autoresearch-parallel-root-baseline/run-ttWuLH/debug/examples/benchmark_lazy_eval ...'`

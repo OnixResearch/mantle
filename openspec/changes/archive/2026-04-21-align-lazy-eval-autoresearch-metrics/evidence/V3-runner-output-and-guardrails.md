@@ -7,9 +7,9 @@ Verdict: pass
 Reviewed-At: 2026-04-21
 
 Fresh isolated baseline artifacts:
-- stdout: `openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.stdout.txt`
-- stderr: `openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.stderr.txt`
-- bundle: `openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
+- stdout: `openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.stdout.txt`
+- stderr: `openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.stderr.txt`
+- bundle: `openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json`
 
 Runner-output proof:
 - stdout primary section prints only the parallel-root primary metric:

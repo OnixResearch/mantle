@@ -11,7 +11,7 @@
       "--repeat-count",
       "10",
       "--bundle-out",
-      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+      "openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
     ],
     "cache_mode": "cold-per-sample",
     "repeat_count": 10,
@@ -50,7 +50,7 @@
       "--repeat-count",
       "10",
       "--bundle-out",
-      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+      "openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
     ],
     "cache_mode": "cold-per-sample",
     "repeat_count": 10,
@@ -109,7 +109,7 @@
       "--repeat-count",
       "10",
       "--bundle-out",
-      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+      "openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
     ],
     "cache_mode": "cold-per-sample",
     "repeat_count": 10,
@@ -148,7 +148,7 @@
       "--repeat-count",
       "10",
       "--bundle-out",
-      "openspec/changes/align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
+      "openspec/changes/archive/2026-04-21-align-lazy-eval-autoresearch-metrics/evidence/parallel-root-baseline.json"
     ],
     "cache_mode": "cold-per-sample isolated benchmark run",
     "repeat_count": 10,

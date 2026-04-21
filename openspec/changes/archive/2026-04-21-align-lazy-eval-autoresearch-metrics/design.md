@@ -76,18 +76,19 @@ keeping both metrics under one config header makes the history ambiguous and
 breaks baseline comparisons. Appending a new segment preserves old runs without
 mixing metric identities.
 
-**Implementation:** the implementation phase will update the checked-in
-`autoresearch.jsonl` file in place by appending a new config record with at
-least `"type":"config"` and
-`"metricName":"parallel_all_roots_total_wall_ns"`, then checking in the first
-parallel-root baseline run record under that segment. That keeps the latest
-checked-in segment aligned with the active repo-root session, and the first
-non-config run after that config header will already use
-`parallel_all_roots_total_wall_ns` as its top-level `metric` value.
+**Implementation:** the implementation phase will inspect the checked-in
+`autoresearch.jsonl` file and keep the latest active segment aligned with the
+repo-root parallel-root session. If the active parallel-root config record were
+missing, the workflow would need to append one with at least
+`"type":"config"` and `"metricName":"parallel_all_roots_total_wall_ns"`
+before any later run under that metric. On the current tree, that config
+record and its first following run were already present, so this change keeps
+that latest checked-in segment in place, proves its ownership with archived
+inspection evidence, and avoids appending a redundant same-metric segment.
 `autoresearch.md` will document that segment rollover is an operator step
 performed before the first new-metric run. `./autoresearch.sh` will then
-capture a fresh isolated baseline against that already-active segment before
-logging later parallel-root experiments.
+capture a fresh isolated baseline against that already-active segment for
+review evidence.
 
 ### 4. Baseline isolation must be visible in runner output
 

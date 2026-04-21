@@ -13,4 +13,4 @@ Reviewed-At: 2026-04-21
 - first non-config run after that latest config record is line 29 (`run":26`)
 - that first run record keeps the segment-owned top-level `metric` field for the active parallel-root segment (`803100983` under the `parallel_all_roots_total_wall_ns` config segment)
 
-This preserves older selected-root history in the same file while keeping the latest checked-in config segment aligned with the active repo-root parallel-root session. The required parallel-root config segment and first following run record were already present in the checked-in file, so this change did not append a redundant same-metric segment.
+This preserves older selected-root history in the same file while keeping the latest checked-in config segment aligned with the active repo-root parallel-root session. The required parallel-root config segment and first following run record were already present in the checked-in file, so this change confirmed and relied on that active segment instead of appending a redundant same-metric segment.
