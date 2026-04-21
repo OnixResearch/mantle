@@ -1,14 +1,15 @@
 ## Phase 1: Crate scaffold and core types
 
 - [ ] Create `crates/crunch-system/Cargo.toml` with deps on `crunch-eval`, `crunch-glue`, `crunch-pipeline`, `serde`, `serde_json`; add to workspace `Cargo.toml`
-- [ ] Define `SystemConfigError` enum in `crates/crunch-system/src/error.rs` with variants: `Loader`, `Inventory`, `CrossRef`, `Eval`, `Fragment`, `Assembler` (ERR-1)
+- [ ] Define `SystemConfigError` enum in `crates/crunch-system/src/error.rs` with variants: `Cli`, `Loader`, `Inventory`, `CrossRef`, `Eval`, `Fragment`, `Assembler` (ERR-1)
+- [ ] Define `SystemConfigWarning` enum in `crates/crunch-system/src/error.rs` for non-fatal warnings such as orphan provider consumption (ERR-1, EVAL-6e)
 - [ ] Define `EvalError` enum in `crates/crunch-system/src/eval_trait.rs` with variants: `NickelError(String)`, `Timeout`, `ImportDenied` (TRAIT-5)
 - [ ] Define `EvalOptions` struct with `timeout: Option<Duration>`, `import_paths: Vec<PathBuf>` (TRAIT-3)
 - [ ] Define `NickelEvaluator` trait with `evaluate_file`, `merge`, `call`, `get_field`, `is_function`, `to_json` methods (TRAIT-1)
 - [ ] Define `NickelValue` type alias for `crunch_eval::Expr` (TRAIT-2); re-export from `crates/crunch-system/src/lib.rs`
 - [ ] Define cross-layer types: `ValidatedModule`, `EvaluatedFragment`, `MergedConfig`, `FragmentSource` in `crates/crunch-system/src/lib.rs`
 - [ ] Define `Inventory`, `MachineRecord`, `ServiceRecord`, `InstanceRecord` structs in `crates/crunch-system/src/inventory.rs` with `serde::Deserialize` (INV-1, INV-2)
-- [ ] Define `SystemPipelineResult`, `MachineOutcome` result types (ERR-4)
+- [ ] Define `SystemPipelineResult`, `MachineOutcome` result types with separate `errors` and `warnings` collections (ERR-4)
 - [ ] Verify: `cargo check -p crunch-system` compiles with all type definitions
 
 ## Phase 2: Nickel contracts
@@ -25,7 +26,7 @@
 - [ ] Implement duplicate-name detection in `discover_module_files` — error naming both files (LOADER-3)
 - [ ] Implement module count limit check (default 1024, configurable) (LOADER-5)
 - [ ] Implement `validate_module(name: &str, value_id: ValueId, handle: &EvalThreadHandle) -> Result<ValidatedModule, SystemConfigError>` — checks structural shape via `get_field` and `is_function` on the eval thread handle (LOADER-2). Uses `ValueId` because validation runs on the async side, not on the eval thread directly.
-- [ ] Extract module metadata during validation: `inputs`, `consumes_providers`, `produces_providers`, `priority` (default 1000) (LOADER-2)
+- [ ] Extract module metadata during validation: declared role names plus `inputs`, `consumes_providers`, `produces_providers`, `priority` (default 1000) (LOADER-2, EVAL-12)
 - [ ] Unit test: discover 3 `.ncl` files in tempdir, verify stems
 - [ ] Unit test: discover ignores subdirectories
 - [ ] Unit test: duplicate stem detection
@@ -42,7 +43,7 @@
 - [ ] Implement on-thread evaluator struct wrapping `crunch_eval` APIs and `nickel_lang::Context` — handles `EvalRequest` dispatch, calls `crunch_eval::evaluate()` for files, Nickel `Context` for merge/call/get_field, `Expr` type inspection for `is_function`
 - [ ] Implement `EvalThread::spawn(import_paths: Vec<PathBuf>) -> EvalThreadHandle` — spawns dedicated OS thread running the on-thread evaluator, returns handle with request channel and `tokio::sync::oneshot` per-request responses
 - [ ] Implement `EvalThreadHandle` methods: `evaluate_file`, `get_field`, `is_function`, `merge`, `call`, `to_json`, `drop_value`, `shutdown` — each sends request and awaits response with configurable timeout
-- [ ] Implement concrete `NickelEvaluator` backed by `EvalThreadHandle` — adapts channel protocol to trait interface
+- [ ] Implement the concrete on-thread `NickelEvaluator` using `crunch_eval` APIs; keep `EvalThreadHandle` as the async `ValueId`/JSON bridge rather than the trait implementation (TRAIT-1, TRAIT-7)
 - [ ] Implement import path sandboxing: configure Nickel `Context` import paths to module dir + stdlib only (TRAIT-4)
 - [ ] Unit test: spawn eval thread, evaluate a simple `.ncl` file, get JSON back
 - [ ] Unit test: eval thread `get_field` — evaluate a Nickel record, extract a field by key via channel
@@ -82,12 +83,12 @@
 - [ ] Unit test: cross-reference validation — service references nonexistent module, verify CrossRef error
 - [ ] Unit test: cross-reference validation — instance references nonexistent role, verify CrossRef error
 - [ ] Unit test: cross-reference validation — instance references nonexistent machine, verify CrossRef error
-- [ ] Unit test: settings merge with mock evaluator — valid settings returns merged value
-- [ ] Unit test: impl invocation with mock evaluator — verify args record shape
+- [ ] Unit test: settings merge with fake handle-compatible boundary — valid settings returns merged value
+- [ ] Unit test: impl invocation with fake handle-compatible boundary — verify args record shape
 - [ ] Unit test: export threading — module A exports, module B sees upstream.A
 - [ ] Unit test: provider merging — two modules produce same type, consumer gets ordered array
 - [ ] Unit test: fail-open — module A fails, independent module B succeeds, B's result present
-- [ ] Unit test: orphan provider warning — module consumes type no module produces, verify warning in errors and empty providers array (EVAL-6e)
+- [ ] Unit test: orphan provider warning — module consumes type no module produces, verify warning in `warnings` and empty providers array (EVAL-6e)
 - [ ] Unit test: fail-open — module A fails, dependent module C also fails with chained diagnostic
 - [ ] Unit test: determinism — run same modules+inventory twice through the evaluator, verify identical `EvaluatedFragment` output (EVAL-7)
 - [ ] Call `handle.drop_value()` for consumed `ValidatedModule` value IDs after `impl` invocation and JSON serialization to prevent value table growth
@@ -136,23 +137,23 @@
 - [ ] Add `System { action: SystemAction }` variant to `Command` enum in `src/main.rs` with `Eval` and `Build` subcommands (CLI-1, CLI-2)
 - [ ] Add `--modules <dir>` flag, default `./modules/` relative to inventory file (CLI-3)
 - [ ] Add `--machine <name>` repeatable flag for machine filter (CLI-4)
-- [ ] Add `--assembler <name>` flag for backend override (CLI-5)
+- [ ] Add `--assembler <name>` flag for backend override on both `crunch system eval` and `crunch system build` (CLI-5)
 - [ ] Add `--stop-after fragments|derivations` flag for eval (CLI-1)
 - [ ] Add `--format json|nickel` flag for eval output (CLI-6)
 - [ ] Implement `src/system_cmd.rs`: wire inventory deserialization → loader → evaluator thread → evaluator → collector → assembler → pipeline
 - [ ] Add `crunch-system` and `crunch-pipeline` deps to the binary crate's Cargo.toml
-- [ ] Structured JSON error output when `--json` is active (ERR-3)
+- [ ] Structured JSON warning/error output on stderr when `--json` is active (ERR-3)
 - [ ] `--format nickel` returns clear "not yet implemented" error message (CLI-6, design Decision 15)
 
 ## Phase 11: Integration tests
 
 - [ ] Write example modules: `sshd.ncl` (no deps), `firewall.ncl` (provider: firewall), `nginx.ncl` (consumes: firewall, inputs: sshd), in `examples/system-config/modules/`
 - [ ] Write example inventory: 2 machines, instances of all 3 modules, in `examples/system-config/inventory.ncl`
-- [ ] Integration test: `crunch system eval examples/system-config/inventory.ncl` produces correct derivation JSON for both machines
+- [ ] Integration test: `crunch system eval examples/system-config/inventory.ncl` produces the expected per-machine dry-run result envelope for both machines
 - [ ] Integration test: `crunch system eval --stop-after=fragments` produces merged config trees
 - [ ] Integration test: `crunch system eval --machine=server1` only evaluates server1
 - [ ] Integration test: `crunch system build` (gated by `can_build()`) builds derivations and produces store output
-- [ ] Integration test: partial failure — inventory with bad settings on one machine, verify other machine succeeds and error is reported
+- [ ] Integration test: partial failure — inventory with bad settings on one machine, verify the other machine succeeds, stdout keeps the successful machine result, and stderr reports the error
 - [ ] Integration test: module with contract violation produces Nickel blame error with module name and field path
 
 ## Phase 12: Documentation
