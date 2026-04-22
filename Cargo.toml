@@ -12,6 +12,7 @@ members = [
   "crates/crunch-attestation-core",
   "crates/crunch-delta",
   "crates/crunch-shell",
+  "crates/crunch-shell-core",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -38,6 +39,7 @@ default_scope = [
   "-p", "crunch-project",
   "-p", "crunch-project-core",
   "-p", "crunch-shell",
+  "-p", "crunch-shell-core",
   "-p", "crunch-store",
 ]
 cargo_check_args = ["--lib"]

@@ -355,6 +355,11 @@ Building derivations (not just compiling crunch) requires:
   Directory digests use postcard encoding (not protobuf canonical form).
   Existing redb databases are incompatible after this change.
 
+## crunch-shell Crate (2026-04-22)
+- `crates/crunch-shell-core/` is the second-wave no-std shell activation core: sidecar JSON validation plus env/path/hook planning over plain `String`/`BTreeMap` data.
+- `crates/crunch-shell/` is now the std adapter: it keeps `PathBuf`/`OsString` shell-facing types, derives host PATH entries with `split_paths`, maps them into the core, then restores `ExecTarget` and `PathBuf` plans for `src/shell_cmd.rs`.
+- The compiler-enforced boundary is intentionally UTF-8-only at the core edge. Adapter tests prove non-UTF-8 `--with` paths fail loudly with `ShellError::NonUtf8Path` instead of silently lossy-converting them.
+
 ## crunch-project Crate (2026-04-07)
 - `crates/crunch-project/` owns manifest, lock, refresh, stale detection, upgrade, drift, mirrors, and generated inputs.
 - No Nickel dep — the binary crate uses `crunch-eval::evaluate_and_deserialize()` to load `crunch-project.ncl` into `ProjectManifest`.

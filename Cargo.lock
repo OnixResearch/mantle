@@ -1393,10 +1393,19 @@ dependencies = [
 name = "crunch-shell"
 version = "0.1.0"
 dependencies = [
+ "crunch-shell-core",
  "pretty_assertions",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+]
+
+[[package]]
+name = "crunch-shell-core"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
