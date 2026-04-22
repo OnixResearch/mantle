@@ -1237,12 +1237,22 @@ name = "crunch-attestation"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "crunch-attestation-core",
  "data-encoding",
  "pretty_assertions",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "crunch-attestation-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "data-encoding",
+ "serde",
 ]
 
 [[package]]
@@ -1360,11 +1370,20 @@ dependencies = [
  "blake3",
  "crunch-attestation",
  "crunch-eval",
+ "crunch-project-core",
  "pretty_assertions",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "crunch-project-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

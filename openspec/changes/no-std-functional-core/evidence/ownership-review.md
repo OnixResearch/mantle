@@ -1,12 +1,38 @@
 # Ownership Review
 
-Status: placeholder for implementation-time validation
+Status: partial implementation review for first-wave extraction scaffolding
+Date: 2026-04-22
 
-## Required Contents
+## Legacy std paths reduced to adapter-only form
 
-When implementation lands, update this file with:
+### `crunch-attestation`
 
-- touched std workspace source files outside the legacy paths
-- classification for each file: `adapter-only` or `unrelated`
-- review verdict that no first-wave business logic was reintroduced there
-- reviewer/date
+- `crates/crunch-attestation/src/error.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/digest.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/schema.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/version.rs` → adapter-only re-export
+
+### `crunch-project`
+
+- `crates/crunch-project/src/manifest.rs` → adapter-only re-export
+- `crates/crunch-project/src/lock.rs` → adapter-only re-export
+- `crates/crunch-project/src/version.rs` → adapter-only re-export
+
+## Touched std workspace source files outside the legacy paths
+
+- `crates/crunch-project/src/refresh.rs` → `unrelated`
+  - removed one now-unused test import after moving foundational types to
+    `crunch-project-core`
+
+## Review verdict
+
+- No first-wave attestation foundational business logic remains in the reduced
+  std legacy files listed above.
+- No first-wave project foundational business logic remains in the reduced std
+  legacy files listed above.
+- Remaining first-wave business logic still intentionally lives in std-owned
+  files called out by `workspace-inventory.md` (`canonical.rs`, `policy.rs`,
+  `release.rs`, `refresh.rs`, and related adapters) until their APIs are
+  reshaped for the stricter core boundary rules.
+
+Reviewer: pi session

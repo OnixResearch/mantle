@@ -2,14 +2,14 @@
 
 ## Phase 1: Boundary inventory and scaffolding
 
-- [ ] Inventory workspace crates into three buckets: `no_std now`, `split now`,
+- [x] Inventory workspace crates into three buckets: `no_std now`, `split now`,
       and `shell only`, then record the std-only reasons for every non-core
       bucketed crate
-- [ ] Add workspace members `crunch-attestation-core` and
+- [x] Add workspace members `crunch-attestation-core` and
       `crunch-project-core` with `#![no_std]` + `extern crate alloc`
-- [ ] Wire Cargo manifests so the new core crates use only no-std-compatible
+- [x] Wire Cargo manifests so the new core crates use only no-std-compatible
       dependencies and the existing std crates depend on the new core crates
-- [ ] Document which APIs remain on the std-facing `crunch-attestation` and
+- [x] Document which APIs remain on the std-facing `crunch-attestation` and
       `crunch-project` crates versus which APIs move into the new core crates
 
 ## Phase 2: Extract `crunch-attestation-core`

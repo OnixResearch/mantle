@@ -532,7 +532,6 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::lock::*;
     use crate::manifest::*;
     use crate::version::SchemaVersion;
 
