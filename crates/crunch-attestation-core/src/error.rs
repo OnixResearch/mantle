@@ -50,6 +50,10 @@ pub enum Error {
         limit: u32,
         actual: u32,
     },
+    UnsupportedPolicyField {
+        field: &'static str,
+        value: String,
+    },
     InvalidDetachedSignature {
         message: String,
     },
@@ -86,6 +90,9 @@ impl fmt::Display for Error {
             }
             Error::FieldTooLong { field, limit, actual } => {
                 write!(f, "field exceeds length limit: {field} ({actual} > {limit})")
+            }
+            Error::UnsupportedPolicyField { field, value } => {
+                write!(f, "unsupported policy field value: {field}={value}")
             }
             Error::InvalidDetachedSignature { message } => write!(f, "detached signature parse error: {message}"),
         }

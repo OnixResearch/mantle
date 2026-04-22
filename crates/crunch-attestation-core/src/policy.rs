@@ -24,6 +24,16 @@ pub const RELEASE_REVOCATIONS_SCHEMA: &str = "crunch-release-revocations-v1";
 
 const MAX_SIGNER_COUNT: u32 = 256;
 const MAX_REVOCATION_COUNT: u32 = 4_096;
+const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
+const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
+const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IndependenceSelector {
+    WitnessIdentity,
+    SignerKeyName,
+    RebuildHostClass,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReleasePolicy {
@@ -105,14 +115,14 @@ pub struct PolicyEvaluationInput {
 
 pub fn evaluate_policy(input: PolicyEvaluationInput) -> Result<PolicyEvaluation, Error> {
     assert_policy_quorum(&input.policy);
-    validate_policy(&input.policy)?;
+    let independence_selector = validate_policy(&input.policy)?;
     validate_revocations(&input.revocations)?;
 
     let release_digest = release_attestation_canonical_digest(input.release.clone())?;
     let release_binary_digests = normalize_for_comparison(input.release.binary_digests);
     let (revoked_count, active_witnesses) = filter_active_witnesses(input.witnesses, &input.revocations);
     let (matching_count, distinct_identities) =
-        count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses);
+        count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses, independence_selector);
     assert_matching_witness_counts(matching_count, active_witnesses.len(), distinct_identities);
     let active_witness_count = match u32::try_from(active_witnesses.len()) {
         Ok(count) => count,
@@ -205,9 +215,10 @@ fn count_matching_witnesses(
     release_digest: &AttestationDigest,
     release_binary_digests: &[BinaryDigest],
     active_witnesses: &[ValidatedWitness],
+    independence_selector: IndependenceSelector,
 ) -> (u32, u32) {
     let mut matching_count: u32 = 0;
-    let mut matching_identities: BTreeSet<&str> = BTreeSet::new();
+    let mut matching_domains: BTreeSet<&str> = BTreeSet::new();
 
     for witness in active_witnesses {
         let is_release_digest_match = witness.attestation.release_attestation_digest_blake3 == *release_digest;
@@ -221,11 +232,34 @@ fn count_matching_witnesses(
             continue;
         }
         matching_count = matching_count.saturating_add(1);
-        matching_identities.insert(&witness.attestation.witness_identity);
+        matching_domains.insert(independence_domain(witness, independence_selector));
     }
 
-    let distinct_identities = count_with_overflow_marker(matching_identities.len(), matching_count);
+    let distinct_identities = count_with_overflow_marker(matching_domains.len(), matching_count);
     (matching_count, distinct_identities)
+}
+
+fn independence_domain<'a>(witness: &'a ValidatedWitness, selector: IndependenceSelector) -> &'a str {
+    let domain = match selector {
+        IndependenceSelector::WitnessIdentity => witness.attestation.witness_identity.as_str(),
+        IndependenceSelector::SignerKeyName => witness.signer_key_name.as_str(),
+        IndependenceSelector::RebuildHostClass => witness.attestation.rebuild_environment_summary.host_class.as_str(),
+    };
+    assert!(!domain.is_empty(), "validated witness independence domain must not be empty");
+    domain
+}
+
+fn parse_independence_selector(field: &str) -> Result<IndependenceSelector, Error> {
+    assert!(!field.is_empty(), "policy independence field must not be empty before parsing");
+    match field {
+        INDEPENDENCE_FIELD_WITNESS_IDENTITY => Ok(IndependenceSelector::WitnessIdentity),
+        INDEPENDENCE_FIELD_SIGNER_KEY_NAME => Ok(IndependenceSelector::SignerKeyName),
+        INDEPENDENCE_FIELD_REBUILD_HOST_CLASS => Ok(IndependenceSelector::RebuildHostClass),
+        _ => Err(Error::UnsupportedPolicyField {
+            field: "independence_field",
+            value: field.to_string(),
+        }),
+    }
 }
 
 fn assert_policy_quorum(policy: &ReleasePolicy) {
@@ -238,7 +272,7 @@ fn assert_matching_witness_counts(matching_count: u32, active_witness_count: usi
     assert!(distinct_identities <= matching_count, "distinct witness identities must not exceed matches");
 }
 
-fn validate_policy(policy: &ReleasePolicy) -> Result<(), Error> {
+fn validate_policy(policy: &ReleasePolicy) -> Result<IndependenceSelector, Error> {
     if policy.schema != RELEASE_POLICY_SCHEMA {
         return Err(Error::SchemaTagMismatch {
             expected: RELEASE_POLICY_SCHEMA,
@@ -252,7 +286,7 @@ fn validate_policy(policy: &ReleasePolicy) -> Result<(), Error> {
             field: "independence_field",
         });
     }
-    Ok(())
+    parse_independence_selector(&policy.independence_field)
 }
 
 fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
@@ -447,23 +481,17 @@ mod tests {
     fn same_identity_cannot_satisfy_independence() {
         let release = sample_release();
         let w1 = make_matching_witness(&release, "witness-a");
-        let w2 = ValidatedWitness {
-            attestation: WitnessAttestation::new(
-                release_attestation_canonical_digest(release.clone()).unwrap(),
+        let w2 = make_matching_witness_with_details(
+            &release,
+            "witness-a",
+            "witness-a-key-2",
+            "other-host",
+            b"witness-a-second",
+        );
+        let policy =
+            ReleasePolicy::new(2, INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string(), vec!["signer-1".to_string()], vec![
                 "witness-a".to_string(),
-                release.binary_digests.clone(),
-                RebuildEnvironmentSummary {
-                    system: "x86_64-linux".to_string(),
-                    toolchain: "rust-1.91.1".to_string(),
-                    host_class: "other-host".to_string(),
-                },
-            ),
-            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-second".to_vec()),
-            signer_key_name: "witness-a-key-2".to_string(),
-        };
-        let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
-            "witness-a".to_string(),
-        ]);
+            ]);
         let revocations = ReleaseRevocations::empty();
 
         let result = evaluate_policy(PolicyEvaluationInput {
@@ -471,6 +499,81 @@ mod tests {
             witnesses: vec![w1, w2],
             policy,
             revocations,
+        })
+        .unwrap();
+
+        assert_eq!(result.matching_witness_count, 2);
+        assert_eq!(result.independent_witness_identities, 1);
+        assert_eq!(result.trust_tier.policy_status, PolicyStatus::Insufficient);
+        assert_eq!(
+            result.policy_failure_reason,
+            Some(PolicyFailureReason::InsufficientIndependence {
+                distinct_identities: 1,
+                required: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn same_signer_key_cannot_satisfy_signer_key_independence() {
+        let release = sample_release();
+        let w_a = make_matching_witness_with_details(&release, "witness-a", "shared-key", "org-a", b"witness-a");
+        let w_b = make_matching_witness_with_details(&release, "witness-b", "shared-key", "org-b", b"witness-b");
+        let policy = ReleasePolicy::new(2, INDEPENDENCE_FIELD_SIGNER_KEY_NAME.to_string(), Vec::new(), Vec::new());
+
+        let result = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: vec![w_a, w_b],
+            policy,
+            revocations: ReleaseRevocations::empty(),
+        })
+        .unwrap();
+
+        assert_eq!(result.matching_witness_count, 2);
+        assert_eq!(result.independent_witness_identities, 1);
+        assert_eq!(result.trust_tier.policy_status, PolicyStatus::Insufficient);
+        assert_eq!(
+            result.policy_failure_reason,
+            Some(PolicyFailureReason::InsufficientIndependence {
+                distinct_identities: 1,
+                required: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn distinct_signer_keys_can_satisfy_signer_key_independence() {
+        let release = sample_release();
+        let w_a = make_matching_witness_with_details(&release, "shared-identity", "key-a", "org-a", b"key-a");
+        let w_b = make_matching_witness_with_details(&release, "shared-identity", "key-b", "org-a", b"key-b");
+        let policy = ReleasePolicy::new(2, INDEPENDENCE_FIELD_SIGNER_KEY_NAME.to_string(), Vec::new(), Vec::new());
+
+        let result = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: vec![w_a, w_b],
+            policy,
+            revocations: ReleaseRevocations::empty(),
+        })
+        .unwrap();
+
+        assert_eq!(result.matching_witness_count, 2);
+        assert_eq!(result.independent_witness_identities, 2);
+        assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
+        assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
+    }
+
+    #[test]
+    fn shared_host_class_cannot_satisfy_host_class_independence() {
+        let release = sample_release();
+        let w_a = make_matching_witness_with_details(&release, "witness-a", "key-a", "shared-org", b"org-a");
+        let w_b = make_matching_witness_with_details(&release, "witness-b", "key-b", "shared-org", b"org-b");
+        let policy = ReleasePolicy::new(2, INDEPENDENCE_FIELD_REBUILD_HOST_CLASS.to_string(), Vec::new(), Vec::new());
+
+        let result = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: vec![w_a, w_b],
+            policy,
+            revocations: ReleaseRevocations::empty(),
         })
         .unwrap();
 
@@ -670,6 +773,25 @@ mod tests {
         });
     }
 
+    #[test]
+    fn policy_rejects_unsupported_independence_field() {
+        let release = sample_release();
+        let mut policy = sample_policy();
+        policy.independence_field = "rebuild_environment_summary.system".to_string();
+
+        let err = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: Vec::new(),
+            policy,
+            revocations: ReleaseRevocations::empty(),
+        })
+        .unwrap_err();
+        assert_eq!(err, Error::UnsupportedPolicyField {
+            field: "independence_field",
+            value: "rebuild_environment_summary.system".to_string(),
+        });
+    }
+
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(crate::release::ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
@@ -689,10 +811,12 @@ mod tests {
     }
 
     fn sample_policy() -> ReleasePolicy {
-        ReleasePolicy::new(2, "witness_identity".to_string(), vec!["release-signer-1".to_string()], vec![
-            "witness-a".to_string(),
-            "witness-b".to_string(),
-        ])
+        ReleasePolicy::new(
+            2,
+            INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string(),
+            vec!["release-signer-1".to_string()],
+            vec!["witness-a".to_string(), "witness-b".to_string()],
+        )
     }
 
     fn sample_revocations() -> ReleaseRevocations {
@@ -700,22 +824,46 @@ mod tests {
     }
 
     fn sample_env() -> RebuildEnvironmentSummary {
+        sample_env_with_host_class("nixos-25.05")
+    }
+
+    fn sample_env_with_host_class(host_class: &str) -> RebuildEnvironmentSummary {
         RebuildEnvironmentSummary {
             system: "x86_64-linux".to_string(),
             toolchain: "rust-1.91.1".to_string(),
-            host_class: "nixos-25.05".to_string(),
+            host_class: host_class.to_string(),
         }
     }
 
     fn make_matching_witness(release: &ReleaseAttestation, identity: &str) -> ValidatedWitness {
+        make_matching_witness_with_details(
+            release,
+            identity,
+            &alloc::format!("{identity}-key"),
+            "nixos-25.05",
+            identity.as_bytes(),
+        )
+    }
+
+    fn make_matching_witness_with_details(
+        release: &ReleaseAttestation,
+        identity: &str,
+        signer_key_name: &str,
+        host_class: &str,
+        digest_seed: &[u8],
+    ) -> ValidatedWitness {
         let release_digest = release_attestation_canonical_digest(release.clone()).unwrap();
-        let attestation =
-            WitnessAttestation::new(release_digest, identity.to_string(), release.binary_digests.clone(), sample_env());
-        let attestation_digest = crate::release::witness_attestation_canonical_digest(attestation.clone()).unwrap();
+        let attestation = WitnessAttestation::new(
+            release_digest,
+            identity.to_string(),
+            release.binary_digests.clone(),
+            sample_env_with_host_class(host_class),
+        );
+        let attestation_digest = AttestationDigest::from_canonical_bytes(digest_seed.to_vec());
         ValidatedWitness {
             attestation,
             attestation_digest,
-            signer_key_name: alloc::format!("{identity}-key"),
+            signer_key_name: signer_key_name.to_string(),
         }
     }
 }
