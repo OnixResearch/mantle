@@ -3,19 +3,23 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
+#[cfg(test)]
 pub(crate) use crunch_release_core::BLAKE3_HEX_LENGTH_CHARS as BLAKE3_HEX_LEN;
 pub(crate) use crunch_release_core::BundledArtifact;
 pub(crate) use crunch_release_core::BundledArtifactKind;
 pub(crate) use crunch_release_core::CLAIM_SCOPE_PACKAGED_INTEGRITY;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
+#[cfg(test)]
 pub(crate) use crunch_release_core::FULL_SELF_HOSTING_PROOF_SCHEMA;
 pub(crate) use crunch_release_core::RELEASE_EVIDENCE_SCHEMA;
 use crunch_release_core::ReleaseEvidenceError;
 pub(crate) use crunch_release_core::ReleaseEvidenceManifest;
 pub(crate) use crunch_release_core::ReleaseProofLinkage;
 pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
+use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
+use crunch_release_core::validate_bundled_artifact_record;
 
 use crate::errors::RunError;
 
@@ -66,7 +70,7 @@ impl ReleaseBundleCreateRequest {
 }
 
 fn core_error_to_run_error(err: ReleaseEvidenceError) -> RunError {
-    RunError::Internal(err.message().to_string())
+    RunError::Internal(err.to_string())
 }
 
 pub(crate) fn create_release_evidence_bundle(
@@ -122,7 +126,7 @@ pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<Releas
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", manifest_path.display())))?;
     let manifest: ReleaseEvidenceManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|err| RunError::Internal(format!("parsing {}: {err}", manifest_path.display())))?;
-    let expected_canonical = manifest.canonical_bytes().map_err(core_error_to_run_error)?;
+    let expected_canonical = canonical_release_evidence_manifest(manifest.clone()).map_err(core_error_to_run_error)?;
     if manifest_bytes != expected_canonical {
         return Err(RunError::Internal("release evidence manifest.json is not canonical compact JSON".to_string()));
     }
@@ -145,9 +149,8 @@ pub(crate) fn load_full_self_hosting_proof_identity(
     let manifest_path = bundle_dir.join("manifest.json");
     let manifest_bytes = std::fs::read(&manifest_path)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", manifest_path.display())))?;
-    let manifest = extract_full_self_hosting_proof_identity_fields(&manifest_bytes).map_err(core_error_to_run_error)?;
-
     let proof_manifest_digest_blake3 = blake3::hash(&manifest_bytes).to_hex().to_string();
+    let manifest = extract_full_self_hosting_proof_identity_fields(manifest_bytes).map_err(core_error_to_run_error)?;
     Ok(FullSelfHostingProofIdentity {
         schema: manifest.schema,
         proof_mode: manifest.proof_mode,
@@ -361,8 +364,7 @@ fn build_artifact_record(
         size_bytes,
         digest_blake3,
     };
-    artifact.validate("artifact").map_err(core_error_to_run_error)?;
-    Ok(artifact)
+    validate_bundled_artifact_record(artifact, "artifact".to_string()).map_err(core_error_to_run_error)
 }
 
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
@@ -485,7 +487,7 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
 }
 
 fn write_manifest_file(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
-    let manifest_bytes = manifest.canonical_bytes().map_err(core_error_to_run_error)?;
+    let manifest_bytes = canonical_release_evidence_manifest(manifest.clone()).map_err(core_error_to_run_error)?;
     let manifest_path = bundle_dir.join("manifest.json");
     std::fs::write(&manifest_path, manifest_bytes)
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", manifest_path.display())))
@@ -511,7 +513,7 @@ fn verify_artifact_matches_bundle(
 ) -> Result<(), RunError> {
     let artifact_path = bundle_dir.join(&artifact.relative_path);
     let actual = build_artifact_record(&artifact_path, Path::new(&artifact.relative_path), artifact.kind)
-        .map_err(|err| RunError::Internal(format!("verifying {field_name}: {}", err.message())))?;
+        .map_err(|err| RunError::Internal(format!("verifying {field_name}: {err}")))?;
     if artifact != &actual {
         return Err(RunError::Internal(format!(
             "release evidence {field_name} does not match manifest: expected {} {} got {} {}",
@@ -693,8 +695,8 @@ mod tests {
     #[test]
     fn canonical_bytes_are_stable_and_compact() {
         let manifest = sample_manifest();
-        let first = manifest.canonical_bytes().unwrap();
-        let second = manifest.canonical_bytes().unwrap();
+        let first = canonical_release_evidence_manifest(manifest.clone()).unwrap();
+        let second = canonical_release_evidence_manifest(manifest.clone()).unwrap();
         assert_eq!(first, second);
         assert!(!first.contains(&b'\n'));
     }
@@ -703,24 +705,24 @@ mod tests {
     fn validate_rejects_absolute_member_path() {
         let mut manifest = sample_manifest();
         manifest.source_archive.relative_path = "/tmp/source.tar".to_string();
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("must be relative"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("must be relative"));
     }
 
     #[test]
     fn validate_rejects_prerequisite_inventory_linkage_mismatch() {
         let mut manifest = sample_manifest();
         manifest.proof_linkage.prerequisite_inventory_digest_blake3 = sample_digest(8);
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("prerequisite inventory digest does not match"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("prerequisite inventory digest does not match"));
     }
 
     #[test]
     fn validate_rejects_stage2_digest_not_present_in_binaries() {
         let mut manifest = sample_manifest();
         manifest.proof_linkage.stage2_binary_digest_blake3 = sample_digest(4);
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("does not match any bundled binary artifact"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("does not match any bundled binary artifact"));
     }
 
     #[test]
@@ -741,7 +743,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_file(&dir.path().join("manifest.json"), br#"{"schema":"fake-proof"}"#);
         let err = load_full_self_hosting_proof_identity(dir.path()).unwrap_err();
-        assert!(err.message().contains("full proof artifact required"));
+        assert!(err.to_string().contains("full proof artifact required"));
     }
 
     #[test]
@@ -801,7 +803,7 @@ mod tests {
         write_file(&output_bundle_dir.join("manifest.json"), pretty_json.as_bytes());
 
         let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
-        assert!(err.message().contains("not canonical compact JSON"));
+        assert!(err.to_string().contains("not canonical compact JSON"));
     }
 
     #[test]
@@ -829,6 +831,6 @@ mod tests {
         write_file(&output_bundle_dir.join("binaries/01-crunch"), b"tampered-binary");
 
         let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
-        assert!(err.message().contains("binaries[0] does not match manifest"));
+        assert!(err.to_string().contains("binaries[0] does not match manifest"));
     }
 }

@@ -8,7 +8,7 @@ pub enum ReleaseEvidenceError {
 }
 
 impl ReleaseEvidenceError {
-    pub fn message(&self) -> &str {
+    fn message(&self) -> &str {
         match self {
             Self::Parse(message) | Self::Validation(message) => message,
         }

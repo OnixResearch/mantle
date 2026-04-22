@@ -6,6 +6,8 @@ cfg-if
 constant_time_eq
 crunch-attestation-core
 crunch-project-core
+crunch-release-core
+crunch-shell-core
 data-encoding
 itoa
 memchr

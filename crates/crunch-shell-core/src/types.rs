@@ -30,7 +30,9 @@ struct RawShellSidecar {
 
 impl<'de> Deserialize<'de> for ShellSidecar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let raw = RawShellSidecar::deserialize(deserializer)?;
         Ok(Self {
             version: raw.version,
@@ -41,26 +43,26 @@ impl<'de> Deserialize<'de> for ShellSidecar {
     }
 }
 
-impl ShellSidecar {
-    pub fn from_json(json: &str) -> Result<Self, ShellError> {
-        let sidecar: Self = serde_json::from_str(json).map_err(|err| ShellError::SidecarParse(err.to_string()))?;
-        sidecar.validate()?;
-        Ok(sidecar)
-    }
+pub fn parse_shell_sidecar_json(json: String) -> Result<ShellSidecar, ShellError> {
+    let sidecar: ShellSidecar = serde_json::from_str(&json).map_err(|err| ShellError::SidecarParse(err.to_string()))?;
+    validate_shell_sidecar(&sidecar)?;
+    Ok(sidecar)
+}
 
-    pub fn validate(&self) -> Result<(), ShellError> {
-        if self.version != SUPPORTED_SIDECAR_VERSION {
-            return Err(ShellError::UnsupportedSidecarVersion { version: self.version });
-        }
-        let env_var_count = u32_count(self.env.len());
-        if env_var_count > MAX_ENV_VARS {
-            return Err(ShellError::TooManyEnvVars {
-                count: env_var_count,
-                limit: MAX_ENV_VARS,
-            });
-        }
-        Ok(())
+fn validate_shell_sidecar(sidecar: &ShellSidecar) -> Result<(), ShellError> {
+    if sidecar.version != SUPPORTED_SIDECAR_VERSION {
+        return Err(ShellError::UnsupportedSidecarVersion {
+            version: sidecar.version,
+        });
     }
+    let env_var_count = u32_count(sidecar.env.len());
+    if env_var_count > MAX_ENV_VARS {
+        return Err(ShellError::TooManyEnvVars {
+            count: env_var_count,
+            limit: MAX_ENV_VARS,
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,34 +101,34 @@ mod tests {
 
     use pretty_assertions::assert_eq;
 
-    use super::ShellSidecar;
+    use super::parse_shell_sidecar_json;
     use crate::ShellError;
 
     #[test]
     fn unsupported_version() {
         let json = r#"{"version": 2, "env": {}, "path_entries": []}"#;
-        let err = ShellSidecar::from_json(json).unwrap_err();
+        let err = parse_shell_sidecar_json(json.to_string()).unwrap_err();
         assert_eq!(err, ShellError::UnsupportedSidecarVersion { version: 2 });
     }
 
     #[test]
     fn missing_version() {
         let json = r#"{"env": {}, "path_entries": []}"#;
-        let err = ShellSidecar::from_json(json).unwrap_err();
+        let err = parse_shell_sidecar_json(json.to_string()).unwrap_err();
         assert!(matches!(err, ShellError::SidecarParse(_)));
     }
 
     #[test]
     fn version_zero_rejected() {
         let json = r#"{"version": 0, "env": {}, "path_entries": []}"#;
-        let err = ShellSidecar::from_json(json).unwrap_err();
+        let err = parse_shell_sidecar_json(json.to_string()).unwrap_err();
         assert_eq!(err, ShellError::UnsupportedSidecarVersion { version: 0 });
     }
 
     #[test]
     fn empty_sidecar_defaults() {
         let json = r#"{"version": 1}"#;
-        let sidecar = ShellSidecar::from_json(json).unwrap();
+        let sidecar = parse_shell_sidecar_json(json.to_string()).unwrap();
         assert_eq!(sidecar.env, BTreeMap::new());
         assert_eq!(sidecar.path_entries, Vec::<String>::new());
         assert_eq!(sidecar.hook, None);
@@ -135,7 +137,7 @@ mod tests {
     #[test]
     fn unknown_fields_ignored() {
         let json = r#"{"version": 1, "env": {}, "path_entries": [], "future_field": true}"#;
-        let sidecar = ShellSidecar::from_json(json).unwrap();
+        let sidecar = parse_shell_sidecar_json(json.to_string()).unwrap();
         assert_eq!(sidecar.version, 1);
     }
 
@@ -147,7 +149,7 @@ mod tests {
             "path_entries": ["/crunch/store/rg/bin", "/crunch/store/fd/bin"],
             "hook": "echo welcome"
         }"#;
-        let sidecar = ShellSidecar::from_json(json).unwrap();
+        let sidecar = parse_shell_sidecar_json(json.to_string()).unwrap();
         assert_eq!(sidecar.env.len(), 2);
         assert_eq!(sidecar.path_entries, vec!["/crunch/store/rg/bin".to_string(), "/crunch/store/fd/bin".to_string()]);
         assert_eq!(sidecar.hook.as_deref(), Some("echo welcome"));

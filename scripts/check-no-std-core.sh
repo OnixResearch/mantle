@@ -107,27 +107,43 @@ ensure_toolchain_environment
 ensure_wasm_target
 
 note "toolchain: $ACTIVE_TOOLCHAIN"
-note "[1/10] openspec validate functional-core"
+note "[1/12] openspec validate functional-core"
 run_step openspec validate functional-core
-note "[2/10] host cargo checks"
+note "[2/12] host cargo checks"
 run_cargo_step check -p crunch-attestation-core
 run_cargo_step check -p crunch-project-core
-note "[3/10] wasm cargo checks"
+run_cargo_step check -p crunch-shell-core
+run_cargo_step check -p crunch-release-core
+note "[3/12] wasm cargo checks"
 run_cargo_step check -p crunch-attestation-core --target "$WASM_TARGET"
 run_cargo_step check -p crunch-project-core --target "$WASM_TARGET"
-note "[4/10] core tests"
+run_cargo_step check -p crunch-shell-core --target "$WASM_TARGET"
+run_cargo_step check -p crunch-release-core --target "$WASM_TARGET"
+note "[4/12] core tests"
 run_cargo_step test -p crunch-attestation-core
 run_cargo_step test -p crunch-project-core
-note "[5/10] std adapter tests"
+run_cargo_step test -p crunch-shell-core
+run_cargo_step test -p crunch-release-core
+note "[5/12] first-wave std adapter tests"
 run_cargo_step test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
 run_cargo_step test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
-note "[6/10] dependency boundary"
+note "[6/12] shell activation boundary tests"
+run_cargo_step test -p crunch-shell adapter_preserves_path_order_and_appends_bin
+run_cargo_step test -p crunch-shell non_utf8_with_path_is_rejected
+note "[7/12] release boundary tests"
+run_cargo_step test -p crunch --bin crunch create_and_verify_release_bundle_round_trip
+run_cargo_step test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
+run_cargo_step test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch
+run_cargo_step test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance
+run_cargo_step test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation
+run_cargo_step test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
+note "[8/12] dependency boundary"
 run_step ./scripts/check-no-std-core-deps.sh
-note "[7/10] purity"
+note "[9/12] purity"
 run_step ./scripts/check-no-std-core-purity.sh
-note "[8/10] scope"
+note "[10/12] scope"
 run_step ./scripts/check-no-std-core-scope.sh
-note "[9/10] API shape"
+note "[11/12] API shape"
 run_step ./scripts/check-no-std-core-api-shape.sh
-note "[10/10] ownership"
+note "[12/12] ownership"
 run_step ./scripts/check-no-std-core-ownership.sh

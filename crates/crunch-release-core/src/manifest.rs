@@ -34,15 +34,21 @@ pub struct BundledArtifact {
     pub digest_blake3: String,
 }
 
-impl BundledArtifact {
-    pub fn validate(&self, field_name: &str) -> Result<(), ReleaseEvidenceError> {
-        validate_relative_member_path(&self.relative_path, field_name)?;
-        if self.size_bytes == 0 {
-            return Err(validation_error(format!("release evidence {field_name}.size_bytes must be non-zero")));
-        }
-        validate_blake3_hex(&self.digest_blake3, &format!("{field_name}.digest_blake3"))?;
-        Ok(())
+pub fn validate_bundled_artifact_record(
+    artifact: BundledArtifact,
+    field_name: String,
+) -> Result<BundledArtifact, ReleaseEvidenceError> {
+    validate_bundled_artifact(&artifact, &field_name)?;
+    Ok(artifact)
+}
+
+fn validate_bundled_artifact(artifact: &BundledArtifact, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    validate_relative_member_path(&artifact.relative_path, field_name)?;
+    if artifact.size_bytes == 0 {
+        return Err(validation_error(format!("release evidence {field_name}.size_bytes must be non-zero")));
     }
+    validate_blake3_hex(&artifact.digest_blake3, &format!("{field_name}.digest_blake3"))?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,18 +82,18 @@ pub struct ReleaseEvidenceManifest {
     pub proof_linkage: ReleaseProofLinkage,
 }
 
-impl ReleaseEvidenceManifest {
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, ReleaseEvidenceError> {
-        self.validate()?;
-        serde_json::to_vec(self).map_err(|err| parse_error(format!("serializing release evidence manifest: {err}")))
-    }
+pub fn canonical_release_evidence_manifest(
+    manifest: ReleaseEvidenceManifest,
+) -> Result<Vec<u8>, ReleaseEvidenceError> {
+    validate_release_evidence_manifest(&manifest)?;
+    serde_json::to_vec(&manifest).map_err(|err| parse_error(format!("serializing release evidence manifest: {err}")))
+}
 
-    pub fn validate(&self) -> Result<(), ReleaseEvidenceError> {
-        validate_manifest_header(self)?;
-        validate_manifest_artifacts(self)?;
-        validate_manifest_linkage(self)?;
-        Ok(())
-    }
+fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    validate_manifest_header(manifest)?;
+    validate_manifest_artifacts(manifest)?;
+    validate_manifest_linkage(manifest)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,9 +106,9 @@ pub struct FullSelfHostingProofIdentityFields {
 }
 
 pub fn extract_full_self_hosting_proof_identity_fields(
-    manifest_bytes: &[u8],
+    manifest_bytes: Vec<u8>,
 ) -> Result<FullSelfHostingProofIdentityFields, ReleaseEvidenceError> {
-    let manifest: SelfHostingProofManifestView = serde_json::from_slice(manifest_bytes).map_err(|err| {
+    let manifest: SelfHostingProofManifestView = serde_json::from_slice(&manifest_bytes).map_err(|err| {
         parse_error(format!("full proof artifact required: parsing full proof manifest failed: {err}"))
     })?;
     validate_full_proof_manifest(&manifest)?;
@@ -225,7 +231,7 @@ fn validate_and_record_path(
     field_name: &str,
     seen_paths: &mut BTreeSet<String>,
 ) -> Result<(), ReleaseEvidenceError> {
-    artifact.validate(field_name)?;
+    validate_bundled_artifact(artifact, field_name)?;
     if !seen_paths.insert(artifact.relative_path.clone()) {
         return Err(validation_error(format!(
             "release evidence contains duplicate bundle member path {}",
@@ -546,8 +552,8 @@ mod tests {
     #[test]
     fn canonical_bytes_are_stable_and_compact() {
         let manifest = sample_manifest();
-        let first = manifest.canonical_bytes().unwrap();
-        let second = manifest.canonical_bytes().unwrap();
+        let first = canonical_release_evidence_manifest(manifest.clone()).unwrap();
+        let second = canonical_release_evidence_manifest(manifest.clone()).unwrap();
         assert_eq!(first, second);
         assert!(!first.contains(&b'\n'));
     }
@@ -556,30 +562,30 @@ mod tests {
     fn validate_rejects_absolute_member_path() {
         let mut manifest = sample_manifest();
         manifest.source_archive.relative_path = "/tmp/source.tar".to_string();
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("must be relative"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("must be relative"));
     }
 
     #[test]
     fn validate_rejects_prerequisite_inventory_linkage_mismatch() {
         let mut manifest = sample_manifest();
         manifest.proof_linkage.prerequisite_inventory_digest_blake3 = sample_digest(8);
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("prerequisite inventory digest does not match"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("prerequisite inventory digest does not match"));
     }
 
     #[test]
     fn validate_rejects_stage2_digest_not_present_in_binaries() {
         let mut manifest = sample_manifest();
         manifest.proof_linkage.stage2_binary_digest_blake3 = sample_digest(4);
-        let err = manifest.validate().unwrap_err();
-        assert!(err.message().contains("does not match any bundled binary artifact"));
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("does not match any bundled binary artifact"));
     }
 
     #[test]
     fn extract_full_proof_identity_fields_accepts_valid_manifest() {
         let manifest_bytes = sample_full_proof_manifest(&sample_digest(9), &sample_digest(11));
-        let identity = extract_full_self_hosting_proof_identity_fields(&manifest_bytes).unwrap();
+        let identity = extract_full_self_hosting_proof_identity_fields(manifest_bytes).unwrap();
         assert_eq!(identity.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
         assert_eq!(identity.proof_mode, "fixed-point");
         assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-crunch-src");
@@ -589,8 +595,8 @@ mod tests {
 
     #[test]
     fn extract_full_proof_identity_fields_rejects_wrong_schema() {
-        let manifest_bytes = br#"{"schema":"fake-proof"}"#;
+        let manifest_bytes = br#"{"schema":"fake-proof"}"#.to_vec();
         let err = extract_full_self_hosting_proof_identity_fields(manifest_bytes).unwrap_err();
-        assert!(err.message().contains("full proof artifact required"));
+        assert!(err.to_string().contains("full proof artifact required"));
     }
 }

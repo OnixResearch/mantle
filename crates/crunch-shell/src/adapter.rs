@@ -31,8 +31,12 @@ pub fn compute_activation(
     let core_sidecar = sidecar_to_core(sidecar)?;
     let core_host_env = host_env_to_core(host_env)?;
     let core_with_paths = with_paths_to_core(with_paths)?;
-    let core_plan =
-        crunch_shell_core::compute_activation(&core_sidecar, &core_host_env, output_path, &core_with_paths)?;
+    let core_plan = crunch_shell_core::compute_activation(
+        core_sidecar,
+        core_host_env,
+        output_path.to_string(),
+        core_with_paths,
+    )?;
     let path = path_entries_from_core(&core_plan);
     let exec_target = resolve_exec_target(exec_mode, &host_env.shell);
 

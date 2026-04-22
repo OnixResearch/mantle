@@ -17,4 +17,6 @@ pub use manifest::RELEASE_EVIDENCE_SCHEMA;
 pub use manifest::ReleaseEvidenceManifest;
 pub use manifest::ReleaseProofLinkage;
 pub use manifest::ReleaseWorkflowIdentity;
+pub use manifest::canonical_release_evidence_manifest;
 pub use manifest::extract_full_self_hosting_proof_identity_fields;
+pub use manifest::validate_bundled_artifact_record;

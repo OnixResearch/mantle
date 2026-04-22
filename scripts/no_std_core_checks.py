@@ -8,11 +8,15 @@ import subprocess
 import sys
 import tomllib
 from collections import defaultdict
+from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FUNCTIONAL_CORE_SPEC_ROOT = REPO_ROOT / "openspec" / "specs" / "functional-core"
-ALLOWLIST_PATH = FUNCTIONAL_CORE_SPEC_ROOT / "validation" / "deps-allowlist.txt"
+VALIDATION_ROOT = FUNCTIONAL_CORE_SPEC_ROOT / "validation"
+ALLOWLIST_PATH = VALIDATION_ROOT / "deps-allowlist.txt"
+INVENTORY_PATH = VALIDATION_ROOT / "adopted-core-inventory.toml"
 OWNERSHIP_REVIEW_PATH = FUNCTIONAL_CORE_SPEC_ROOT / "evidence" / "ownership-review.md"
 NO_STD_CHANGE_NAME = "no-std-functional-core"
 ACTIVE_CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / NO_STD_CHANGE_NAME
@@ -20,81 +24,26 @@ ARCHIVE_CHANGES_ROOT = REPO_ROOT / "openspec" / "changes" / "archive"
 EMPTY_TREE_OBJECT_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 TOP_LEVEL_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
 CRATE_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
-CORE_CRATE_DIRECTORIES = {
-    REPO_ROOT / "crates" / "crunch-attestation-core",
-    REPO_ROOT / "crates" / "crunch-project-core",
-}
-
-CORE_PACKAGES = ("crunch-attestation-core", "crunch-project-core")
-CORE_SOURCE_DIRS = (
-    REPO_ROOT / "crates" / "crunch-attestation-core" / "src",
-    REPO_ROOT / "crates" / "crunch-project-core" / "src",
-)
-CORE_LIB_FILES = {
-    "crunch-attestation-core": REPO_ROOT / "crates" / "crunch-attestation-core" / "src" / "lib.rs",
-    "crunch-project-core": REPO_ROOT / "crates" / "crunch-project-core" / "src" / "lib.rs",
-}
-CORE_MANIFEST_FILES = {
-    "crunch-attestation-core": REPO_ROOT / "crates" / "crunch-attestation-core" / "Cargo.toml",
-    "crunch-project-core": REPO_ROOT / "crates" / "crunch-project-core" / "Cargo.toml",
-}
-CORE_SCOPE_FILES = {
-    "crunch-attestation-core": (
-        "canonical.rs",
-        "digest.rs",
-        "error.rs",
-        "policy.rs",
-        "release.rs",
-        "schema.rs",
-        "version.rs",
-    ),
-    "crunch-project-core": (
-        "manifest.rs",
-        "lock.rs",
-        "merge.rs",
-        "drift.rs",
-        "upgrade.rs",
-        "version.rs",
-        "generate.rs",
-        "refresh.rs",
-    ),
-}
-REQUIRED_EXPORT_SNIPPETS = {
-    "crunch-attestation-core": (
-        "pub use policy::evaluate_policy;",
-        "pub use release::binary_digests_match;",
-    ),
-    "crunch-project-core": (
-        "pub use refresh::ResolvedInput;",
-        "pub use refresh::HashResolutionMode;",
-        "pub use refresh::RefreshFailure;",
-        "pub use refresh::StaleReport;",
-        "pub use refresh::RefreshOutcome;",
-        "pub use refresh::ApplyResult;",
-        "pub use refresh::refresh_inputs;",
-        "pub use refresh::apply_outcomes;",
-        "pub use refresh::list_stale;",
-    ),
-}
-LEGACY_STD_FILES = (
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "canonical.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "digest.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "error.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "policy.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "release.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "schema.rs",
-    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "version.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "manifest.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "lock.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "merge.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "drift.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "upgrade.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "version.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "generate.rs",
-    REPO_ROOT / "crates" / "crunch-project" / "src" / "refresh.rs",
-)
+ADOPTED_CORE_INVENTORY_VERSION = 1
+REQUIRED_OWNERSHIP_REVIEW_MARKERS = ("## Review verdict", "Reviewer:", "adapter-only", "unrelated")
+SECOND_WAVE_VERDICT_MARKER = "shell/release business logic remains in `crunch-shell-core` and `crunch-release-core`"
 ALLOWED_LEGACY_PREFIXES = ("use ", "pub use ", "type ", "pub type ")
 COMMENT_PREFIXES = ("//", "///", "//!", "/*", "*", "*/")
+
+
+@dataclass(frozen=True)
+class AdoptedCore:
+    package: str
+    crate_dir: Path
+    lib_path: Path
+    manifest_path: Path
+    required_exports: tuple[str, ...]
+    legacy_std_files: tuple[Path, ...]
+    required_std_adapter_files: tuple[Path, ...]
+
+    @property
+    def source_dir(self) -> Path:
+        return self.crate_dir / "src"
 TREE_PACKAGE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) v[0-9]")
 TREE_FEATURE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) feature \"([^\"]+)\"")
 IMPL_KEYWORD_RE = re.compile(r"(?m)^[ \t]*impl\b")
@@ -154,6 +103,108 @@ class CheckFailure(Exception):
 
 class ValidationError(Exception):
     pass
+
+
+def read_inventory_text() -> str:
+    if not INVENTORY_PATH.exists():
+        raise CheckFailure(f"missing adopted-core inventory: {INVENTORY_PATH.relative_to(REPO_ROOT)}")
+    return INVENTORY_PATH.read_text()
+
+
+def resolve_inventory_path(raw_value: object, field_name: str) -> Path:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise CheckFailure(f"inventory field {field_name} must be a non-empty string")
+    resolved_path = REPO_ROOT / raw_value
+    if not resolved_path.exists():
+        raise CheckFailure(f"inventory path for {field_name} is missing: {raw_value}")
+    return resolved_path
+
+
+def resolve_inventory_paths(raw_value: object, field_name: str) -> tuple[Path, ...]:
+    if not isinstance(raw_value, list):
+        raise CheckFailure(f"inventory field {field_name} must be a list")
+    resolved_paths: list[Path] = []
+    for index_u32, path_value in enumerate(raw_value, 1):
+        resolved_paths.append(resolve_inventory_path(path_value, f"{field_name}[{index_u32}]"))
+    return tuple(resolved_paths)
+
+
+def resolve_required_exports(raw_value: object, package_name: str) -> tuple[str, ...]:
+    if not isinstance(raw_value, list) or not raw_value:
+        raise CheckFailure(f"inventory package {package_name} must declare required_exports")
+    exports: list[str] = []
+    for index_u32, export_value in enumerate(raw_value, 1):
+        if not isinstance(export_value, str) or not export_value.strip():
+            raise CheckFailure(
+                f"inventory package {package_name} required_exports[{index_u32}] must be a non-empty string"
+            )
+        exports.append(export_value)
+    return tuple(exports)
+
+
+def parse_adopted_core(raw_entry: object) -> AdoptedCore:
+    if not isinstance(raw_entry, dict):
+        raise CheckFailure("inventory core entry must be a table")
+    raw_package = raw_entry.get("package")
+    if not isinstance(raw_package, str) or not raw_package.strip():
+        raise CheckFailure("inventory core entry missing package name")
+    package_name = raw_package.strip()
+    crate_dir = resolve_inventory_path(raw_entry.get("crate_dir"), f"{package_name}.crate_dir")
+    lib_path = resolve_inventory_path(raw_entry.get("lib_path"), f"{package_name}.lib_path")
+    manifest_path = resolve_inventory_path(raw_entry.get("manifest_path"), f"{package_name}.manifest_path")
+    return AdoptedCore(
+        package=package_name,
+        crate_dir=crate_dir,
+        lib_path=lib_path,
+        manifest_path=manifest_path,
+        required_exports=resolve_required_exports(raw_entry.get("required_exports"), package_name),
+        legacy_std_files=resolve_inventory_paths(raw_entry.get("legacy_std_files", []), f"{package_name}.legacy_std_files"),
+        required_std_adapter_files=resolve_inventory_paths(
+            raw_entry.get("required_std_adapter_files", []), f"{package_name}.required_std_adapter_files"
+        ),
+    )
+
+
+@cache
+def adopted_cores() -> tuple[AdoptedCore, ...]:
+    data = tomllib.loads(read_inventory_text())
+    version = data.get("version")
+    if version != ADOPTED_CORE_INVENTORY_VERSION:
+        raise CheckFailure(
+            f"unexpected adopted-core inventory version {version!r}; expected {ADOPTED_CORE_INVENTORY_VERSION}"
+        )
+    raw_entries = data.get("core")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        raise CheckFailure(f"inventory has no [[core]] entries: {INVENTORY_PATH.relative_to(REPO_ROOT)}")
+    parsed_cores: list[AdoptedCore] = []
+    seen_packages: set[str] = set()
+    for raw_entry in raw_entries:
+        core = parse_adopted_core(raw_entry)
+        if core.package in seen_packages:
+            raise CheckFailure(f"duplicate inventory package entry: {core.package}")
+        seen_packages.add(core.package)
+        parsed_cores.append(core)
+    return tuple(parsed_cores)
+
+
+def core_crate_directories() -> set[Path]:
+    return {core.crate_dir for core in adopted_cores()}
+
+
+def core_packages() -> tuple[str, ...]:
+    return tuple(core.package for core in adopted_cores())
+
+
+def core_source_dirs() -> tuple[Path, ...]:
+    return tuple(core.source_dir for core in adopted_cores())
+
+
+def legacy_std_files() -> tuple[Path, ...]:
+    return tuple(path for core in adopted_cores() for path in core.legacy_std_files)
+
+
+def required_std_adapter_files() -> tuple[Path, ...]:
+    return tuple(path for core in adopted_cores() for path in core.required_std_adapter_files)
 
 
 def run_command(command: list[str]) -> str:
@@ -221,7 +272,7 @@ def is_std_workspace_rust_source(relative_path: str) -> bool:
     if path.parts[0] != "crates":
         return False
     crate_dir = REPO_ROOT / path.parts[0] / path.parts[1]
-    if crate_dir in CORE_CRATE_DIRECTORIES:
+    if crate_dir in core_crate_directories():
         return False
     return path.parts[2] in CRATE_WORKSPACE_RUST_DIRS
 
@@ -256,7 +307,7 @@ def touched_std_workspace_source_files() -> list[str]:
         if line.strip()
     ]
     derived = []
-    legacy_relative_paths = {str(path.relative_to(REPO_ROOT)) for path in LEGACY_STD_FILES}
+    legacy_relative_paths = {str(path.relative_to(REPO_ROOT)) for path in legacy_std_files()}
     for relative_path in touched_paths:
         if relative_path in legacy_relative_paths:
             continue
@@ -814,7 +865,7 @@ def command_deps() -> None:
     feature_definitions = read_workspace_feature_definitions()
     closure_packages: set[str] = set()
     package_features: dict[str, set[str]] = defaultdict(set)
-    for package in CORE_PACKAGES:
+    for package in core_packages():
         output = run_command(
             [
                 "cargo",
@@ -855,7 +906,7 @@ def command_deps() -> None:
 
 def command_purity() -> None:
     failures: list[str] = []
-    for source_dir in CORE_SOURCE_DIRS:
+    for source_dir in core_source_dirs():
         for path in sorted(source_dir.glob("*.rs")):
             text = production_text(path)
             for label, pattern in BANNED_PURITY_PATTERNS:
@@ -870,26 +921,22 @@ def command_purity() -> None:
 
 def command_scope() -> None:
     failures: list[str] = []
-    for package, lib_path in CORE_LIB_FILES.items():
-        text = lib_path.read_text()
+    for core in adopted_cores():
+        text = core.lib_path.read_text()
         if "#![no_std]" not in text:
-            failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing #![no_std]")
+            failures.append(f"{core.lib_path.relative_to(REPO_ROOT)} missing #![no_std]")
         if "extern crate alloc;" not in text:
-            failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing extern crate alloc;")
-        for required_export in REQUIRED_EXPORT_SNIPPETS[package]:
+            failures.append(f"{core.lib_path.relative_to(REPO_ROOT)} missing extern crate alloc;")
+        for required_export in core.required_exports:
             if required_export not in text:
-                failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing required export: {required_export}")
-        cargo_manifest = tomllib.loads(CORE_MANIFEST_FILES[package].read_text())
+                failures.append(f"{core.lib_path.relative_to(REPO_ROOT)} missing required export: {required_export}")
+        cargo_manifest = tomllib.loads(core.manifest_path.read_text())
         features = cargo_manifest.get("features", {})
         if "std" in features:
-            failures.append(f"{CORE_MANIFEST_FILES[package].relative_to(REPO_ROOT)} defines forbidden std feature")
+            failures.append(f"{core.manifest_path.relative_to(REPO_ROOT)} defines forbidden std feature")
         default_features = features.get("default", [])
         if isinstance(default_features, list) and "std" in default_features:
-            failures.append(f"{CORE_MANIFEST_FILES[package].relative_to(REPO_ROOT)} default features include std")
-        crate_source_dir = lib_path.parent
-        for relative_name in CORE_SCOPE_FILES[package]:
-            if not (crate_source_dir / relative_name).exists():
-                failures.append(f"{crate_source_dir.relative_to(REPO_ROOT)}/{relative_name} missing")
+            failures.append(f"{core.manifest_path.relative_to(REPO_ROOT)} default features include std")
     if failures:
         raise CheckFailure("\n".join(failures))
     print("scope check OK")
@@ -897,7 +944,7 @@ def command_scope() -> None:
 
 def command_api_shape() -> None:
     failures: list[str] = []
-    for source_dir in CORE_SOURCE_DIRS:
+    for source_dir in core_source_dirs():
         for path in sorted(source_dir.glob("*.rs")):
             text = production_api_text(path)
             for match in PUBLIC_TRAIT_RE.finditer(text):
@@ -931,7 +978,11 @@ def command_api_shape() -> None:
 def command_ownership() -> None:
     failures: list[str] = []
     derived_touched_std_paths = touched_std_workspace_source_files()
-    for path in LEGACY_STD_FILES:
+    required_adapter_review_paths = sorted(
+        {str(path.relative_to(REPO_ROOT)) for path in required_std_adapter_files()}
+    )
+    required_classified_paths = sorted(set(derived_touched_std_paths) | set(required_adapter_review_paths))
+    for path in legacy_std_files():
         for index, raw_line in enumerate(path.read_text().splitlines(), 1):
             stripped = raw_line.strip()
             if not stripped:
@@ -947,25 +998,32 @@ def command_ownership() -> None:
         failures.append(f"missing ownership review artifact: {OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)}")
     else:
         artifact_text = OWNERSHIP_REVIEW_PATH.read_text()
-        for required_text in ("## Review verdict", "Reviewer:", "adapter-only", "unrelated"):
+        for required_text in REQUIRED_OWNERSHIP_REVIEW_MARKERS:
             if required_text not in artifact_text:
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing required review marker: {required_text}"
                 )
-        for legacy_path in LEGACY_STD_FILES:
+        if SECOND_WAVE_VERDICT_MARKER not in artifact_text:
+            failures.append(
+                f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing second-wave review verdict: {SECOND_WAVE_VERDICT_MARKER}"
+            )
+        for legacy_path in legacy_std_files():
             relative_text = str(legacy_path.relative_to(REPO_ROOT))
             if relative_text not in artifact_text:
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing legacy path review entry: {relative_text}"
                 )
-        for reviewed_path in derived_touched_std_paths:
+        for reviewed_path in required_classified_paths:
             if not ownership_review_has_classification(artifact_text, reviewed_path):
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing touched std classification entry: {reviewed_path}"
                 )
     if failures:
         raise CheckFailure("\n".join(failures))
-    print("ownership check OK:", ", ".join(derived_touched_std_paths) if derived_touched_std_paths else "no touched std files")
+    print(
+        "ownership check OK:",
+        ", ".join(required_classified_paths) if required_classified_paths else "no touched std files outside legacy paths",
+    )
 
 
 def main() -> None:

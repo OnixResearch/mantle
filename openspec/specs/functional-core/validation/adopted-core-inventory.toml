@@ -1,0 +1,90 @@
+version = 1
+
+[[core]]
+package = "crunch-attestation-core"
+crate_dir = "crates/crunch-attestation-core"
+lib_path = "crates/crunch-attestation-core/src/lib.rs"
+manifest_path = "crates/crunch-attestation-core/Cargo.toml"
+required_exports = [
+  "pub use policy::evaluate_policy;",
+  "pub use release::binary_digests_match;",
+]
+legacy_std_files = [
+  "crates/crunch-attestation/src/canonical.rs",
+  "crates/crunch-attestation/src/digest.rs",
+  "crates/crunch-attestation/src/error.rs",
+  "crates/crunch-attestation/src/policy.rs",
+  "crates/crunch-attestation/src/release.rs",
+  "crates/crunch-attestation/src/schema.rs",
+  "crates/crunch-attestation/src/version.rs",
+]
+required_std_adapter_files = []
+
+[[core]]
+package = "crunch-project-core"
+crate_dir = "crates/crunch-project-core"
+lib_path = "crates/crunch-project-core/src/lib.rs"
+manifest_path = "crates/crunch-project-core/Cargo.toml"
+required_exports = [
+  "pub use refresh::ResolvedInput;",
+  "pub use refresh::HashResolutionMode;",
+  "pub use refresh::RefreshFailure;",
+  "pub use refresh::StaleReport;",
+  "pub use refresh::RefreshOutcome;",
+  "pub use refresh::ApplyResult;",
+  "pub use refresh::refresh_inputs;",
+  "pub use refresh::apply_outcomes;",
+  "pub use refresh::list_stale;",
+]
+legacy_std_files = [
+  "crates/crunch-project/src/manifest.rs",
+  "crates/crunch-project/src/lock.rs",
+  "crates/crunch-project/src/merge.rs",
+  "crates/crunch-project/src/drift.rs",
+  "crates/crunch-project/src/upgrade.rs",
+  "crates/crunch-project/src/version.rs",
+  "crates/crunch-project/src/generate.rs",
+  "crates/crunch-project/src/refresh.rs",
+]
+required_std_adapter_files = []
+
+[[core]]
+package = "crunch-shell-core"
+crate_dir = "crates/crunch-shell-core"
+lib_path = "crates/crunch-shell-core/src/lib.rs"
+manifest_path = "crates/crunch-shell-core/Cargo.toml"
+required_exports = [
+  "pub use error::ShellError;",
+  "pub use plan::compute_activation;",
+  "pub use types::ActivationPlan;",
+  "pub use types::HostEnv;",
+  "pub use types::ShellSidecar;",
+  "pub use types::ShellWarning;",
+]
+legacy_std_files = []
+required_std_adapter_files = [
+  "crates/crunch-shell/src/lib.rs",
+  "crates/crunch-shell/src/adapter.rs",
+  "crates/crunch-shell/src/types.rs",
+]
+
+[[core]]
+package = "crunch-release-core"
+crate_dir = "crates/crunch-release-core"
+lib_path = "crates/crunch-release-core/src/lib.rs"
+manifest_path = "crates/crunch-release-core/Cargo.toml"
+required_exports = [
+  "pub use error::ReleaseEvidenceError;",
+  "pub use manifest::BundledArtifact;",
+  "pub use manifest::BundledArtifactKind;",
+  "pub use manifest::FullSelfHostingProofIdentityFields;",
+  "pub use manifest::ReleaseEvidenceManifest;",
+  "pub use manifest::ReleaseProofLinkage;",
+  "pub use manifest::ReleaseWorkflowIdentity;",
+  "pub use manifest::extract_full_self_hosting_proof_identity_fields;",
+]
+legacy_std_files = []
+required_std_adapter_files = [
+  "src/release_evidence.rs",
+  "src/release_cmd.rs",
+]

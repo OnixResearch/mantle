@@ -60,11 +60,28 @@ Date: 2026-04-22
 - `crates/crunch-project/tests/integration_nickel.rs` → `unrelated`
   - integration coverage for generated Nickel/import behavior; no first-wave
     business logic moved back into std production code
+- `crates/crunch-shell/src/adapter.rs` → `adapter-only`
+  - std-facing shell activation translation keeps `PathBuf`, `split_paths(...)`,
+    non-UTF-8 rejection, and `ExecTarget` reconstruction outside
+    `crunch-shell-core`
+- `crates/crunch-shell/src/lib.rs` → `adapter-only`
+  - crate-root re-exports and std shell wiring remain thin adapters around
+    `crunch-shell-core`
+- `crates/crunch-shell/src/types.rs` → `adapter-only`
+  - std-owned path and `OsString` shell-facing types stay here while
+    `crunch-shell-core` public APIs stay on owned UTF-8 data
 - `src/attest_cmd.rs` → `unrelated`
   - root CLI shell for attestation commands, store access, and output formatting
 - `src/project_cmd.rs` → `unrelated`
   - root CLI shell still owns manifest/lock file I/O, user-facing output, and
     command orchestration around the std `crunch-project` API
+- `src/release_evidence.rs` → `adapter-only`
+  - proof-bundle loading, file copying, directory hashing, manifest I/O, and
+    digesting remain in the std shell while canonical manifest/proof validation
+    stays in `crunch-release-core`
+- `src/release_cmd.rs` → `adapter-only`
+  - release CLI path resolution and output formatting stay in the std shell
+    around `crunch-release-core`
 - `tests/attest_cli.rs` → `unrelated`
   - CLI integration coverage only; no first-wave core logic reintroduced
 - `tests/project_cli.rs` → `unrelated`
@@ -84,5 +101,6 @@ Date: 2026-04-22
   called out by `workspace-inventory.md` (`discovery.rs`, `refresh_adapter.rs`,
   CLI shells, and related adapters) until a later extraction wave explicitly
   reshapes those APIs.
+- shell/release business logic remains in `crunch-shell-core` and `crunch-release-core` rather than drifting back into the reviewed std adapter files.
 
 Reviewer: pi session

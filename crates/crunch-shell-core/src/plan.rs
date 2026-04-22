@@ -16,18 +16,18 @@ const MAX_ENV_VARS: u32 = 4096;
 const MAX_WARNINGS: u32 = 256;
 
 pub fn compute_activation(
-    sidecar: &ShellSidecar,
-    host_env: &HostEnv,
-    output_path: &str,
-    with_paths: &[String],
+    sidecar: ShellSidecar,
+    host_env: HostEnv,
+    output_path: String,
+    with_paths: Vec<String>,
 ) -> Result<ActivationPlan, ShellError> {
     debug_assert_eq!(sidecar.version, 1, "caller must validate sidecar version");
     assert!(!output_path.is_empty(), "output path must not be empty");
     assert!(output_path.starts_with('/'), "output path must be absolute");
-    assert!(entries_are_non_empty(with_paths), "with path entries must not be empty");
+    assert!(entries_are_non_empty(&with_paths), "with path entries must not be empty");
 
-    let (env, warnings) = build_activation_env(sidecar, host_env, output_path)?;
-    let path_entries = compose_activation_path(with_paths, &sidecar.path_entries, &host_env.path_entries)?;
+    let (env, warnings) = build_activation_env(&sidecar, &host_env, &output_path)?;
+    let path_entries = compose_activation_path(&with_paths, &sidecar.path_entries, &host_env.path_entries)?;
     let hook = sidecar.hook.clone();
 
     Ok(ActivationPlan {
@@ -181,7 +181,7 @@ mod tests {
     fn env_merge_basic() {
         let sidecar = sidecar_v1([("RUST_LOG".into(), "debug".into())].into(), vec!["/store/tool/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin"), ("HOME", "/home/user")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/store/myshell", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/store/myshell".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.env.get("RUST_LOG").unwrap(), "debug");
         assert_eq!(plan.env.get("HOME").unwrap(), "/home/user");
         assert_eq!(plan.env.get("CRUNCH_SHELL").unwrap(), "/store/myshell");
@@ -196,7 +196,7 @@ mod tests {
             None,
         );
         let host_env = host(&[("PATH", "/usr/bin"), ("HOME", "/home/user"), ("USER", "alice")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/store/sh", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/store/sh".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.env.get("HOME").unwrap(), "/home/user");
         assert_eq!(plan.env.get("USER").unwrap(), "alice");
         assert_eq!(plan.warnings.len(), 2);
@@ -209,7 +209,7 @@ mod tests {
         for &protected_var in super::PROTECTED_VARS {
             let sidecar = sidecar_v1([(protected_var.to_string(), "bad".into())].into(), vec!["/bin".into()], None);
             let host_env = host(&[("PATH", "/usr/bin"), (protected_var, "good")], &["/usr/bin"]);
-            let plan = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap();
+            let plan = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap();
             assert_eq!(plan.env.get(protected_var).unwrap(), "good", "protected var {protected_var} was overwritten");
             assert!(
                 plan.warnings.contains(&ShellWarning::ProtectedVarSkipped {
@@ -225,7 +225,7 @@ mod tests {
         let sidecar = sidecar_v1(BTreeMap::new(), vec!["/store/C/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin:/bin")], &["/usr/bin", "/bin"]);
         let with_paths = vec!["/store/A/bin".into(), "/store/B/bin".into()];
-        let plan = compute_activation(&sidecar, &host_env, "/out", &with_paths).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/out".to_string(), with_paths).unwrap();
         assert_eq!(plan.path_entries, vec![
             "/store/A/bin".to_string(),
             "/store/B/bin".to_string(),
@@ -239,7 +239,7 @@ mod tests {
     fn path_dedup_first_wins() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec!["/usr/bin".into(), "/foo/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin:/bar/bin")], &["/usr/bin", "/bar/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.path_entries, vec!["/usr/bin".to_string(), "/foo/bin".to_string(), "/bar/bin".to_string(),]);
     }
 
@@ -247,7 +247,7 @@ mod tests {
     fn empty_path_is_error() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec![], None);
         let host_env = host(&[], &[]);
-        let err = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap_err();
+        let err = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap_err();
         assert_eq!(err, ShellError::EmptyPath);
     }
 
@@ -255,7 +255,7 @@ mod tests {
     fn hook_passthrough() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec!["/bin".into()], Some("echo hello".into()));
         let host_env = host(&[("PATH", "/usr/bin")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.hook, Some("echo hello".into()));
     }
 
@@ -263,7 +263,7 @@ mod tests {
     fn no_hook() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec!["/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.hook, None);
     }
 
@@ -271,7 +271,7 @@ mod tests {
     fn crunch_shell_always_set() {
         let sidecar = sidecar_v1(BTreeMap::new(), vec!["/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/store/myshell", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/store/myshell".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.env.get("CRUNCH_SHELL").unwrap(), "/store/myshell");
     }
 
@@ -279,7 +279,7 @@ mod tests {
     fn crunch_shell_overrides_sidecar() {
         let sidecar = sidecar_v1([("CRUNCH_SHELL".into(), "wrong".into())].into(), vec!["/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/store/correct", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/store/correct".to_string(), Vec::new()).unwrap();
         assert_eq!(plan.env.get("CRUNCH_SHELL").unwrap(), "/store/correct");
     }
 
@@ -287,7 +287,7 @@ mod tests {
     fn protected_var_absent_from_host_not_injected() {
         let sidecar = sidecar_v1([("DISPLAY".into(), ":1".into())].into(), vec!["/bin".into()], None);
         let host_env = host(&[("PATH", "/usr/bin")], &["/usr/bin"]);
-        let plan = compute_activation(&sidecar, &host_env, "/out", &[]).unwrap();
+        let plan = compute_activation(sidecar, host_env, "/out".to_string(), Vec::new()).unwrap();
         assert!(!plan.env.contains_key("DISPLAY"));
         assert!(plan.warnings.contains(&ShellWarning::ProtectedVarSkipped { key: "DISPLAY".into() }));
     }
