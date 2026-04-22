@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -13,6 +14,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / "no-std-functional-core"
 ALLOWLIST_PATH = CHANGE_ROOT / "validation" / "deps-allowlist.txt"
 OWNERSHIP_REVIEW_PATH = CHANGE_ROOT / "evidence" / "ownership-review.md"
+TOUCHED_STD_REVIEW_PATHS = (
+    "crates/crunch-project/src/lib.rs",
+    "crates/crunch-project/src/refresh.rs",
+    "crates/crunch-project/src/upgrade_adapter.rs",
+    "src/project_cmd.rs",
+)
 
 CORE_PACKAGES = ("crunch-attestation-core", "crunch-project-core")
 CORE_SOURCE_DIRS = (
@@ -86,6 +93,7 @@ ALLOWED_LEGACY_PREFIXES = ("use ", "pub use ", "type ", "pub type ")
 COMMENT_PREFIXES = ("//", "///", "//!", "/*", "*", "*/")
 TREE_PACKAGE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) v[0-9]")
 TREE_FEATURE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) feature \"([^\"]+)\"")
+IMPL_KEYWORD_RE = re.compile(r"(?m)^[ \t]*impl\b")
 PUBLIC_FN_RE = re.compile(r"\bpub\s+fn\b")
 PUBLIC_STRUCT_RE = re.compile(r"\bpub\s+struct\b")
 PUBLIC_ENUM_RE = re.compile(r"\bpub\s+enum\b")
@@ -93,6 +101,7 @@ PUBLIC_TYPE_RE = re.compile(r"\bpub\s+type\b")
 PUBLIC_TRAIT_RE = re.compile(r"\bpub\s+trait\b")
 CFG_TEST_ATTR = "#[cfg(test)]"
 WASM_TARGET = "wasm32-unknown-unknown"
+CARGO_METADATA_FORMAT_VERSION = "1"
 SCALAR_TYPES = {"bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"}
 CONTAINER_TYPES = {"String", "Box", "Vec", "Option", "Result", "BTreeMap", "BTreeSet"}
 BANNED_TYPE_PATTERNS = (
@@ -176,6 +185,62 @@ def parse_tree(output: str) -> tuple[set[str], dict[str, set[str]]]:
         if package_match is not None:
             packages.add(package_match.group(1))
     return packages, features
+
+
+def read_workspace_feature_definitions() -> dict[str, dict[str, set[str]]]:
+    metadata = json.loads(
+        run_command(
+            [
+                "cargo",
+                "metadata",
+                "--format-version",
+                CARGO_METADATA_FORMAT_VERSION,
+                "--filter-platform",
+                WASM_TARGET,
+            ]
+        )
+    )
+    package_features: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    for package in metadata.get("packages", []):
+        package_name = package.get("name")
+        if not package_name:
+            continue
+        feature_map = package.get("features", {})
+        for feature_name, members in feature_map.items():
+            package_features[package_name][feature_name].update(str(member) for member in members)
+    return {name: dict(features) for name, features in package_features.items()}
+
+
+def feature_definition_requires_std(
+    package_name: str,
+    feature_name: str,
+    package_definitions: dict[str, dict[str, set[str]]],
+    stack: tuple[str, ...] = (),
+) -> bool:
+    if feature_name == "std":
+        return True
+    if feature_name in stack:
+        return False
+    feature_map = package_definitions.get(package_name, {})
+    members = feature_map.get(feature_name, set())
+    for member in members:
+        normalized = member.strip()
+        if not normalized:
+            continue
+        if normalized == "std":
+            return True
+        if normalized.endswith("/std") or normalized.endswith("?/std"):
+            return True
+        if normalized.startswith("dep:"):
+            continue
+        if "/" in normalized:
+            dependency_feature = normalized.split("/", 1)[1]
+            if dependency_feature == "std":
+                return True
+            continue
+        if feature_definition_requires_std(package_name, normalized, package_definitions, stack + (feature_name,)):
+            return True
+    return False
 
 
 def remove_cfg_test_items(text: str) -> str:
@@ -563,8 +628,106 @@ def production_text(path: Path) -> str:
     return remove_cfg_test_items(path.read_text())
 
 
+def find_top_level_keyword_offset(text: str, keyword: str) -> int:
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}":
+            brace_depth -= 1
+        elif char == "<":
+            angle_depth += 1
+        elif char == ">":
+            if angle_depth > 0:
+                angle_depth -= 1
+        if paren_depth != 0 or bracket_depth != 0 or brace_depth != 0 or angle_depth != 0:
+            continue
+        if not text.startswith(keyword, index):
+            continue
+        before_ok = index == 0 or not (text[index - 1].isalnum() or text[index - 1] == "_")
+        after_index = index + len(keyword)
+        after_ok = after_index >= len(text) or not (text[after_index].isalnum() or text[after_index] == "_")
+        if before_ok and after_ok:
+            return index
+    return -1
+
+
+def find_item_body_start(text: str, start: int) -> int:
+    cursor = start
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    while cursor < len(text):
+        char = text[cursor]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "<":
+            angle_depth += 1
+        elif char == ">":
+            if angle_depth > 0:
+                angle_depth -= 1
+        elif char == "{" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 and angle_depth == 0:
+            return cursor
+        cursor += 1
+    raise ValidationError("unterminated impl item")
+
+
+def trait_impl_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    cursor = 0
+    while True:
+        match = IMPL_KEYWORD_RE.search(text, cursor)
+        if match is None:
+            return ranges
+        body_start = find_item_body_start(text, match.start())
+        header = text[match.start() : body_start]
+        where_index = find_top_level_keyword_offset(header, "where")
+        header_prefix = header if where_index == -1 else header[:where_index]
+        if find_top_level_keyword_offset(header_prefix, "for") != -1:
+            body_end = find_matching_delimiter(text, body_start, "{", "}")
+            ranges.append((match.start(), body_end + 1))
+            cursor = body_end + 1
+            continue
+        cursor = body_start + 1
+
+
+def mask_ranges(text: str, ranges: list[tuple[int, int]]) -> str:
+    if not ranges:
+        return text
+    characters = list(text)
+    for start, end in ranges:
+        for index in range(start, end):
+            if characters[index] != "\n":
+                characters[index] = " "
+    return "".join(characters)
+
+
+def production_api_text(path: Path) -> str:
+    text = production_text(path)
+    return mask_ranges(text, trait_impl_ranges(text))
+
+
 def command_deps() -> None:
     allowlist = read_allowlist()
+    feature_definitions = read_workspace_feature_definitions()
     closure_packages: set[str] = set()
     package_features: dict[str, set[str]] = defaultdict(set)
     for package in CORE_PACKAGES:
@@ -594,8 +757,13 @@ def command_deps() -> None:
     if stale:
         failures.append(f"stale allowlist entries: {', '.join(stale)}")
     for package_name in sorted(closure_packages):
-        if "std" in package_features.get(package_name, set()):
+        enabled_features = package_features.get(package_name, set())
+        if "std" in enabled_features:
             failures.append(f"std feature enabled in no-std closure: {package_name}")
+        if "default" in enabled_features and feature_definition_requires_std(
+            package_name, "default", feature_definitions
+        ):
+            failures.append(f"default feature set requires std in no-std closure: {package_name}")
     if failures:
         raise CheckFailure("\n".join(failures))
     print("dependency allowlist OK:", ", ".join(sorted(closure_packages)))
@@ -647,7 +815,7 @@ def command_api_shape() -> None:
     failures: list[str] = []
     for source_dir in CORE_SOURCE_DIRS:
         for path in sorted(source_dir.glob("*.rs")):
-            text = production_text(path)
+            text = production_api_text(path)
             for match in PUBLIC_TRAIT_RE.finditer(text):
                 failures.append(f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}: public trait is forbidden")
             try:
@@ -704,6 +872,11 @@ def command_ownership() -> None:
             if relative_text not in artifact_text:
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing legacy path review entry: {relative_text}"
+                )
+        for reviewed_path in TOUCHED_STD_REVIEW_PATHS:
+            if reviewed_path not in artifact_text:
+                failures.append(
+                    f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing touched std review entry: {reviewed_path}"
                 )
     if failures:
         raise CheckFailure("\n".join(failures))

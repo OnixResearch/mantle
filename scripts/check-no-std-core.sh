@@ -5,6 +5,10 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly WASM_TARGET="wasm32-unknown-unknown"
 
+ACTIVE_TOOLCHAIN=""
+RUSTUP_CARGO_PATH=""
+RUSTUP_TOOLCHAIN_BIN=""
+
 note() {
   printf '%s\n' "$*" >&2
 }
@@ -23,19 +27,35 @@ print_command() {
   printf '\n' >&2
 }
 
-ensure_rustup_target() {
-  if rustc --print target-libdir --target "$WASM_TARGET" >/dev/null 2>&1; then
-    return 0
-  fi
+ensure_rustup_environment() {
   if ! command -v rustup >/dev/null 2>&1; then
-    die "rustup not found on PATH and target $WASM_TARGET is unavailable"
+    die "rustup not found on PATH; run this validation in the repo's rustup-managed toolchain environment"
   fi
-  if rustup target list --installed | grep -qx "$WASM_TARGET"; then
+
+  local active_line
+  active_line="$(rustup show active-toolchain 2>/dev/null)" || die "rustup has no active toolchain; activate the repo's rustup-managed toolchain first"
+  ACTIVE_TOOLCHAIN="${active_line%% *}"
+  if [[ -z "$ACTIVE_TOOLCHAIN" ]]; then
+    die "rustup returned an empty active toolchain; activate the repo's rustup-managed toolchain first"
+  fi
+
+  RUSTUP_CARGO_PATH="$(rustup which cargo --toolchain "$ACTIVE_TOOLCHAIN" 2>/dev/null)" \
+    || die "rustup could not resolve cargo for toolchain $ACTIVE_TOOLCHAIN"
+  RUSTUP_TOOLCHAIN_BIN="$(cd -- "$(dirname -- "$RUSTUP_CARGO_PATH")" && pwd)"
+  export PATH="$RUSTUP_TOOLCHAIN_BIN:$PATH"
+  export RUSTUP_TOOLCHAIN="$ACTIVE_TOOLCHAIN"
+}
+
+ensure_rustup_target() {
+  if rustup target list --installed --toolchain "$ACTIVE_TOOLCHAIN" | grep -qx "$WASM_TARGET"; then
     return 0
   fi
-  note "installing missing rustup target: $WASM_TARGET"
-  print_command rustup target add "$WASM_TARGET"
-  rustup target add "$WASM_TARGET" || die "failed to install required target $WASM_TARGET"
+  note "installing missing rustup target for $ACTIVE_TOOLCHAIN: $WASM_TARGET"
+  print_command rustup target add --toolchain "$ACTIVE_TOOLCHAIN" "$WASM_TARGET"
+  rustup target add --toolchain "$ACTIVE_TOOLCHAIN" "$WASM_TARGET" \
+    || die "failed to install required target $WASM_TARGET for toolchain $ACTIVE_TOOLCHAIN"
+  rustup target list --installed --toolchain "$ACTIVE_TOOLCHAIN" | grep -qx "$WASM_TARGET" \
+    || die "rustup did not report target $WASM_TARGET as installed for toolchain $ACTIVE_TOOLCHAIN"
 }
 
 run_step() {
@@ -43,23 +63,30 @@ run_step() {
   "$@"
 }
 
+run_cargo_step() {
+  print_command rustup run "$ACTIVE_TOOLCHAIN" cargo "$@"
+  rustup run "$ACTIVE_TOOLCHAIN" cargo "$@"
+}
+
 cd -- "$REPO_ROOT"
+ensure_rustup_environment
 ensure_rustup_target
 
+note "rustup toolchain: $ACTIVE_TOOLCHAIN"
 note "[1/10] openspec validate"
 run_step openspec validate no-std-functional-core
 note "[2/10] host cargo checks"
-run_step cargo check -p crunch-attestation-core
-run_step cargo check -p crunch-project-core
+run_cargo_step check -p crunch-attestation-core
+run_cargo_step check -p crunch-project-core
 note "[3/10] wasm cargo checks"
-run_step cargo check -p crunch-attestation-core --target "$WASM_TARGET"
-run_step cargo check -p crunch-project-core --target "$WASM_TARGET"
+run_cargo_step check -p crunch-attestation-core --target "$WASM_TARGET"
+run_cargo_step check -p crunch-project-core --target "$WASM_TARGET"
 note "[4/10] core tests"
-run_step cargo test -p crunch-attestation-core
-run_step cargo test -p crunch-project-core
+run_cargo_step test -p crunch-attestation-core
+run_cargo_step test -p crunch-project-core
 note "[5/10] std adapter tests"
-run_step cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
-run_step cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
+run_cargo_step test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
+run_cargo_step test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
 note "[6/10] dependency boundary"
 run_step ./scripts/check-no-std-core-deps.sh
 note "[7/10] purity"

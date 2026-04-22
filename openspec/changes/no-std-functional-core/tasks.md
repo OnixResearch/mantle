@@ -1,71 +1,27 @@
 # Tasks: no-std functional core
 
-## Phase 1: Boundary inventory and scaffolding
+## Phase 1: Workspace tier and first-wave inventory
 
-- [x] Inventory workspace crates into three buckets: `no_std now`, `split now`,
-      and `shell only`, then record the std-only reasons for every non-core
-      bucketed crate
-- [x] Add workspace members `crunch-attestation-core` and
-      `crunch-project-core` with `#![no_std]` + `extern crate alloc`
-- [x] Wire Cargo manifests so the new core crates use only no-std-compatible
-      dependencies and the existing std crates depend on the new core crates
-- [x] Document which APIs remain on the std-facing `crunch-attestation` and
-      `crunch-project` crates versus which APIs move into the new core crates
+- [x] I1 Update the workspace manifests and `openspec/changes/no-std-functional-core/evidence/workspace-inventory.md` so the first wave explicitly contains `crunch-attestation-core` and `crunch-project-core` as dedicated no-std crates while `crunch-attestation` and `crunch-project` remain std shell/adaptor layers with documented ownership. [covers=architecture.nostd.core.workspace.tier,architecture.nostd.core.workspace.tier.visible,functional.core.dedicated.nostd.crates,functional.core.dedicated.nostd.crates.first.wave]
+- [x] V1 Run `openspec validate no-std-functional-core` and inspect `Cargo.toml`, `crates/crunch-attestation-core/src/lib.rs`, `crates/crunch-project-core/src/lib.rs`, and `openspec/changes/no-std-functional-core/evidence/workspace-inventory.md` to confirm the first-wave workspace tier and dedicated core ownership remain explicit and aligned. [covers=architecture.nostd.core.workspace.tier.visible,functional.core.dedicated.nostd.crates.first.wave] [evidence=openspec/changes/no-std-functional-core/evidence/V1-workspace-tier.md]
 
-## Phase 2: Extract `crunch-attestation-core`
+## Phase 2: Attestation-core extraction and shell boundary
 
-- [x] Move schema types, canonicalization, digesting, versioning, and pure
-      validation/policy transforms into `crunch-attestation-core`
-- [x] Keep discovery, file loading, release-bundle scanning, and any other
-      filesystem-facing logic in the std `crunch-attestation` crate
-- [x] Replace any std-only inputs in moved code with plain owned data types
-      that the shell adapter constructs before calling the core
-- [x] Add positive tests for canonicalization, digest stability, and valid
-      policy evaluation inside `crunch-attestation-core`
-- [x] Add negative tests for malformed attestations, duplicate nodes, invalid
-      roots, oversized collections, and other failure cases inside
-      `crunch-attestation-core`
-- [x] Add std-adapter tests proving file-system discovery happens outside the
-      no-std core boundary
+- [x] I2 Move attestation schema, canonicalization, digesting, release/witness transforms, and policy evaluation into `crunch-attestation-core`; keep discovery, file loading, release-bundle scanning, and borrowed std-facing wrappers in `crunch-attestation`; and reduce the legacy first-wave std files to adapter-only forms. [covers=architecture.nostd.core.crate.boundary,architecture.nostd.core.crate.boundary.effectful.dependency.outside,functional.core.shell.adapters.effect.translation,functional.core.shell.adapters.effect.translation.attestation.file.discovery.in.shell]
+- [x] V2 Run `cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core` and inspect `crates/crunch-attestation/src/{adapter.rs,discovery.rs}` plus the legacy shim files to confirm file discovery stays in the std shell, the core receives only parsed attestation values / normalized witness inputs, and no ambient reads were pushed back into the core boundary. [covers=architecture.nostd.core.crate.boundary.effectful.dependency.outside,functional.core.apis.plain.data.typed.results.normalized.request.no.ambient.reads,functional.core.shell.adapters.effect.translation.attestation.file.discovery.in.shell] [evidence=openspec/changes/no-std-functional-core/evidence/V2-attestation-shell-boundary.md]
 
-## Phase 3: Extract `crunch-project-core`
+## Phase 3: Project-core extraction and shell boundary
 
-- [x] Move manifest/lock models, versioning, merge/drift logic, refresh
-      planning, outcome application, and generated-input planning into
-      `crunch-project-core`
-- [x] Keep git subprocess execution, URL/file hashing I/O, tempdirs, and file
-      reads/writes in std shell adapters outside the no-std core crate
-- [x] Replace any std-only error payloads or input types in moved code with
-      plain data that can cross the core boundary without `std`
-- [x] Add positive tests for manifest validation, lock upgrades, refresh
-      planning, stale detection, and generated-input planning inside
-      `crunch-project-core`
-- [x] Add negative tests for version mismatch, invalid manifests, missing patch
-      references, stale/refresh failure propagation, and other malformed inputs
-      inside `crunch-project-core`
-- [x] Add std-adapter tests proving shell layers do the file/process/network
-      work and pass only normalized data into the no-std core
+- [x] I3 Move manifest, lock, versioning, merge/drift, refresh planning/application, and project-attestation synthesis into `crunch-project-core`; keep `RefreshResolver` implementations, lock/input file writes, CLI orchestration, and std error translation in adapters or the root CLI shell; and keep the core boundary on owned normalized data. [covers=architecture.nostd.core.crate.boundary,architecture.nostd.core.crate.boundary.effectful.dependency.outside,functional.core.apis.plain.data.typed.results,functional.core.apis.plain.data.typed.results.normalized.request.no.ambient.reads,functional.core.shell.adapters.effect.translation,functional.core.shell.adapters.effect.translation.project.refresh.io.in.shell]
+- [x] V3 Run `cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core` and inspect `crates/crunch-project/src/{refresh_adapter.rs,attestation_adapter.rs,upgrade_adapter.rs,lib.rs}` plus `src/project_cmd.rs` and `openspec/changes/no-std-functional-core/evidence/ownership-review.md` to confirm resolver/file I/O stays in shell code, touched std files outside the legacy paths are classified, and the core boundary uses only owned normalized data. [covers=architecture.nostd.core.crate.boundary.effectful.dependency.outside,functional.core.apis.plain.data.typed.results.normalized.request.no.ambient.reads,functional.core.shell.adapters.effect.translation.project.refresh.io.in.shell] [evidence=openspec/changes/no-std-functional-core/evidence/V3-project-shell-boundary.md]
 
-## Phase 4: Verification and boundary hardening
+## Phase 4: Continuous validation, portability, and regression rails
 
-- [x] Add `cargo check -p crunch-attestation-core --target
-      wasm32-unknown-unknown` to the validation path
-- [x] Add `cargo check -p crunch-project-core --target
-      wasm32-unknown-unknown` to the validation path
-- [x] Add a dependency-boundary check that fails if no-std core crates pull in
-      std-only runtime crates such as `tokio`, `reqwest`, `ureq`, `tempfile`,
-      or `clap`
-- [x] Confirm existing std-facing crates preserve behavior while delegating pure
-      transforms to the new core crates
-- [x] Record second-wave candidates (`crunch-glue`, `crunch-build`,
-      `crunch-store`, `crunch-shell`) and their blocking std dependencies so
-      later no-std extraction work starts from an explicit backlog
+- [x] I4 Add deterministic no-std boundary validation rails (`scripts/check-no-std-core.sh`, the deps/purity/scope/api-shape/ownership checks, the dependency allowlist, and the ownership review artifact) so the umbrella runner first ensures `rustup target add wasm32-unknown-unknown` succeeds for the active rustup toolchain or fails with a clear prerequisite error, then executes the exact required command set named in `functional.core.nostd.boundary.continuously.verified`. [covers=functional.core.nostd.boundary.continuously.verified,functional.core.nostd.boundary.continuously.verified.regression.introduces.std.leak,portability.nostd.core.compiles.without.std,portability.nostd.core.compiles.without.std.target,portability.nostd.core.dependency.allowlist,portability.nostd.core.dependency.allowlist.catches.std.leak]
+- [x] V4 Run `./scripts/check-no-std-core.sh` from the repo's rustup-managed toolchain environment and record that it provisions or checks `wasm32-unknown-unknown` through rustup before running these exact validations: `cargo check -p crunch-attestation-core`, `cargo check -p crunch-project-core`, `cargo check -p crunch-attestation-core --target wasm32-unknown-unknown`, `cargo check -p crunch-project-core --target wasm32-unknown-unknown`, `cargo test -p crunch-attestation-core`, `cargo test -p crunch-project-core`, `cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core`, `cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core`, `scripts/check-no-std-core-deps.sh`, `scripts/check-no-std-core-purity.sh`, `scripts/check-no-std-core-scope.sh`, `scripts/check-no-std-core-api-shape.sh`, and `scripts/check-no-std-core-ownership.sh`. [covers=functional.core.nostd.boundary.continuously.verified.regression.introduces.std.leak,portability.nostd.core.compiles.without.std.target,portability.nostd.core.dependency.allowlist.catches.std.leak] [evidence=openspec/changes/no-std-functional-core/evidence/V4-no-std-boundary-runner.md]
+  - Evidence summary: runner output included `rustup toolchain: nightly-x86_64-unknown-linux-gnu`, `Change 'no-std-functional-core' is valid`, both core `cargo check` host runs, both `--target wasm32-unknown-unknown` checks, `test discovery::tests::shell_adapter_keeps_discovery_outside_core ... ok`, `test refresh_adapter::tests::shell_adapter_keeps_refresh_io_outside_core ... ok`, `dependency allowlist OK: ...`, `purity check OK`, `scope check OK`, `API shape check OK`, and `ownership check OK`.
 
-## Validation
+## Phase 5: Typed task traceability
 
-- [x] Run `openspec validate no-std-functional-core`
-- [x] Run no-std target checks for both new core crates
-- [x] Run focused tests for `crunch-attestation-core`, `crunch-project-core`,
-      and their std adapters
-- [x] Run the dependency-boundary check and confirm it fails closed on std-only
-      core dependencies
+- [x] V5 Run `openspec_gate stage=tasks change=no-std-functional-core` after updating typed task coverage and evidence links, and confirm the tasks-stage gate passes. [covers=architecture.nostd.core.workspace.tier.visible,architecture.nostd.core.crate.boundary.effectful.dependency.outside,functional.core.dedicated.nostd.crates.first.wave,functional.core.apis.plain.data.typed.results.normalized.request.no.ambient.reads,functional.core.shell.adapters.effect.translation.project.refresh.io.in.shell,functional.core.shell.adapters.effect.translation.attestation.file.discovery.in.shell,functional.core.nostd.boundary.continuously.verified.regression.introduces.std.leak,portability.nostd.core.compiles.without.std.target,portability.nostd.core.dependency.allowlist.catches.std.leak] [evidence=openspec/changes/no-std-functional-core/evidence/V5-tasks-gate.md]
+  - Evidence summary: the final tasks-stage gate returned `VERDICT: PASS` after the typed `I*`/`V*` coverage map and evidence files were present.
