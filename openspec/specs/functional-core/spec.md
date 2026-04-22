@@ -1,7 +1,9 @@
 # functional-core Specification
 
 ## Purpose
-TBD - created by archiving change no-std-functional-core. Update Purpose after archive.
+Define the first-wave no-std functional-core boundaries for crunch so pure
+attestation and project-management logic stays in dedicated `#![no_std]`
+crates while std crates remain thin effect-translation shells.
 ## Requirements
 ### Requirement: Dedicated no-std core crates
 
@@ -153,7 +155,7 @@ Validation MUST then include these exact commands:
 The dependency-boundary checker MUST operate as an allowlist, not a denylist.
 It MUST fail if the dependency closure of either first-wave core crate includes
 any crate not named in the checked-in allowlist
-`openspec/changes/no-std-functional-core/validation/deps-allowlist.txt`.
+`openspec/specs/functional-core/validation/deps-allowlist.txt`.
 
 The checker MUST also verify enabled features with `cargo tree -e features` or
 an equivalent metadata source. It MUST fail if an allowlisted crate enables a
@@ -227,10 +229,13 @@ those allowed forms, including these minimum forbidden patterns:
 
 Because semantic duplicate-logic detection outside the legacy paths is not
 fully automatable, final validation MUST also update the checked-in review
-artifact `openspec/changes/no-std-functional-core/evidence/ownership-review.md`.
+artifact `openspec/specs/functional-core/evidence/ownership-review.md`.
 That artifact MUST list every touched std workspace source file outside the
-legacy paths, classify each one as `adapter-only` or `unrelated`, and record a
-review verdict that no first-wave business logic was reintroduced there.
+legacy paths, where "touched" is derived from the git history of the first-wave
+`no-std-functional-core` change directory whether that change is still active
+or already archived. It MUST classify each touched path as `adapter-only` or
+`unrelated`, and record a review verdict that no first-wave business logic was
+reintroduced there.
 
 #### Scenario: Regression introduces std leak
 ID: functional.core.nostd.boundary.continuously.verified.regression.introduces.std.leak

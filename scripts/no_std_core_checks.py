@@ -11,10 +11,12 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / "no-std-functional-core"
-ALLOWLIST_PATH = CHANGE_ROOT / "validation" / "deps-allowlist.txt"
-OWNERSHIP_REVIEW_PATH = CHANGE_ROOT / "evidence" / "ownership-review.md"
-CHANGE_ROOT_RELATIVE = CHANGE_ROOT.relative_to(REPO_ROOT)
+FUNCTIONAL_CORE_SPEC_ROOT = REPO_ROOT / "openspec" / "specs" / "functional-core"
+ALLOWLIST_PATH = FUNCTIONAL_CORE_SPEC_ROOT / "validation" / "deps-allowlist.txt"
+OWNERSHIP_REVIEW_PATH = FUNCTIONAL_CORE_SPEC_ROOT / "evidence" / "ownership-review.md"
+NO_STD_CHANGE_NAME = "no-std-functional-core"
+ACTIVE_CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / NO_STD_CHANGE_NAME
+ARCHIVE_CHANGES_ROOT = REPO_ROOT / "openspec" / "changes" / "archive"
 EMPTY_TREE_OBJECT_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 TOP_LEVEL_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
 CRATE_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
@@ -224,10 +226,28 @@ def is_std_workspace_rust_source(relative_path: str) -> bool:
     return path.parts[2] in CRATE_WORKSPACE_RUST_DIRS
 
 
+def resolve_change_history_root() -> Path:
+    if ACTIVE_CHANGE_ROOT.exists():
+        return ACTIVE_CHANGE_ROOT
+    archived_matches = sorted(ARCHIVE_CHANGES_ROOT.glob(f"*-{NO_STD_CHANGE_NAME}"))
+    if len(archived_matches) == 1:
+        return archived_matches[0]
+    if len(archived_matches) > 1:
+        matches = ", ".join(str(path.relative_to(REPO_ROOT)) for path in archived_matches)
+        raise CheckFailure(f"multiple archived change roots found for {NO_STD_CHANGE_NAME}: {matches}")
+    raise CheckFailure(f"missing active or archived change root for {NO_STD_CHANGE_NAME}")
+
+
 def touched_std_workspace_source_files() -> list[str]:
-    history = [line.strip() for line in run_git_command(["log", "--format=%H", "--reverse", "--", str(CHANGE_ROOT_RELATIVE)]).splitlines() if line.strip()]
+    change_root = resolve_change_history_root()
+    change_root_relative = change_root.relative_to(REPO_ROOT)
+    history = [
+        line.strip()
+        for line in run_git_command(["log", "--format=%H", "--reverse", "--", str(change_root_relative)]).splitlines()
+        if line.strip()
+    ]
     if not history:
-        raise CheckFailure(f"no git history found for change path: {CHANGE_ROOT_RELATIVE}")
+        raise CheckFailure(f"no git history found for change path: {change_root_relative}")
     diff_base = git_revision_parent(history[0])
     touched_paths = [
         line.strip()
