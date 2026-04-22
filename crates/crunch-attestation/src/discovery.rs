@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use crate::Canonicalize;
 use crate::Error;
+use crate::encode_detached_signature;
+use crate::parse_detached_signature;
 use crate::policy::ReleasePolicy;
 use crate::policy::ReleaseRevocations;
 use crate::policy::ValidatedWitness;
@@ -94,7 +96,7 @@ impl VerificationDirectory {
         // Load release signature.
         let release_sig_text = read_file_text(&release_sig_path)?;
         let release_signature =
-            DetachedSignature::parse(release_sig_text.trim()).map_err(|err| DiscoveryError::Validation {
+            parse_detached_signature(release_sig_text.trim()).map_err(|err| DiscoveryError::Validation {
                 path: release_sig_path,
                 source: err,
             })?;
@@ -185,7 +187,7 @@ fn discover_witnesses(dir: &Path) -> Result<Vec<DiscoveredWitness>, DiscoveryErr
         }
 
         let sig_text = read_file_text(&sig_path)?;
-        let signature = DetachedSignature::parse(sig_text.trim()).map_err(|err| DiscoveryError::Validation {
+        let signature = parse_detached_signature(sig_text.trim()).map_err(|err| DiscoveryError::Validation {
             path: sig_path,
             source: err,
         })?;
@@ -333,6 +335,21 @@ mod tests {
     use crate::release::Workflow;
 
     // -- Discovery from verification directory -----------------------------
+
+    #[test]
+    fn shell_adapter_keeps_discovery_outside_core() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = write_full_layout(dir.path(), 2);
+
+        let vdir = VerificationDirectory::new(dir.path().to_path_buf());
+        let material = vdir.discover().unwrap();
+        let validated = to_validated_witnesses(&material.witnesses).unwrap();
+
+        assert_eq!(material.release_attestation.release_id, "crunch-0.1.0");
+        assert_eq!(validated.len(), 2);
+        assert_eq!(validated[0].signer_key_name, layout.witness_keys[0]);
+        assert_eq!(validated[1].signer_key_name, layout.witness_keys[1]);
+    }
 
     #[test]
     fn discovers_release_and_witnesses_from_directory() {
@@ -502,7 +519,7 @@ mod tests {
             key_name: "release-signer-1".to_string(),
             signature_bytes: [0xab; 64],
         };
-        fs::write(dir.join("release-attestation.json.sig"), release_sig.encode()).unwrap();
+        fs::write(dir.join("release-attestation.json.sig"), encode_detached_signature(&release_sig)).unwrap();
 
         let release_digest = AttestationDigest::from_canonical_bytes(&release_bytes);
 
@@ -532,7 +549,8 @@ mod tests {
                 key_name: key_name.clone(),
                 signature_bytes: [0xcd; 64],
             };
-            fs::write(witnesses_dir.join(format!("{identity}.json.sig")), witness_sig.encode()).unwrap();
+            fs::write(witnesses_dir.join(format!("{identity}.json.sig")), encode_detached_signature(&witness_sig))
+                .unwrap();
             witness_keys.push(key_name);
         }
 

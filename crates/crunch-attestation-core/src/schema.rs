@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -39,9 +40,7 @@ struct RawClaims {
 
 impl<'de> Deserialize<'de> for Claims {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawClaims::deserialize(deserializer)?;
         Ok(Self {
             component_name: raw.component_name,
@@ -83,9 +82,7 @@ struct RawNode {
 
 impl<'de> Deserialize<'de> for Node {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawNode::deserialize(deserializer)?;
         Ok(Self {
             node_id: raw.node_id,
@@ -143,9 +140,7 @@ struct RawArtifactAttestation {
 
 impl<'de> Deserialize<'de> for ArtifactAttestation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawArtifactAttestation::deserialize(deserializer)?;
         Ok(Self {
             schema_version: raw.schema_version,
@@ -201,9 +196,7 @@ struct RawClosureAttestation {
 
 impl<'de> Deserialize<'de> for ClosureAttestation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawClosureAttestation::deserialize(deserializer)?;
         Ok(Self {
             schema_version: raw.schema_version,
@@ -243,9 +236,7 @@ struct RawProjectAttestation {
 
 impl<'de> Deserialize<'de> for ProjectAttestation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawProjectAttestation::deserialize(deserializer)?;
         Ok(Self {
             schema_version: raw.schema_version,

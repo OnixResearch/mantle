@@ -1,6 +1,5 @@
-pub use crunch_project_core::OLDEST_SUPPORTED;
-
 use crunch_project_core::Lockfile;
+pub use crunch_project_core::OLDEST_SUPPORTED;
 
 use crate::Error;
 

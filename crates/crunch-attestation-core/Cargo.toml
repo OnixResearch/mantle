@@ -8,3 +8,4 @@ license.workspace = true
 blake3 = { version = "=1.8.2", default-features = false }
 data-encoding = "2.6"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

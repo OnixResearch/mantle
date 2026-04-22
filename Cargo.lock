@@ -1253,6 +1253,7 @@ dependencies = [
  "blake3",
  "data-encoding",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1382,6 +1383,8 @@ dependencies = [
 name = "crunch-project-core"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "crunch-attestation-core",
  "serde",
  "serde_json",
 ]

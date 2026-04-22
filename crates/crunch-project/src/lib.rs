@@ -7,6 +7,7 @@
 //! execution stays in the build pipeline.
 
 mod attestation;
+mod attestation_adapter;
 mod drift;
 mod error;
 mod generate;
@@ -15,6 +16,7 @@ mod manifest;
 mod merge;
 mod mirrors;
 mod refresh;
+mod refresh_adapter;
 mod upgrade;
 mod version;
 

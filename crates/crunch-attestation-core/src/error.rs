@@ -3,26 +3,56 @@ use core::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
-    CollectionTooLarge { limit: u32, actual: u32 },
-    EmptyField { field: &'static str },
-    DuplicateNodeId { node_id: String },
-    MissingNode { node_id: String },
-    InvalidArtifactSubject { node_id: String },
-    InvalidClosureNode { node_id: String },
+    CollectionTooLarge {
+        limit: u32,
+        actual: u32,
+    },
+    EmptyField {
+        field: &'static str,
+    },
+    DuplicateNodeId {
+        node_id: String,
+    },
+    MissingNode {
+        node_id: String,
+    },
+    InvalidArtifactSubject {
+        node_id: String,
+    },
+    InvalidClosureNode {
+        node_id: String,
+    },
     EmptyClosureRoots,
-    InvalidClosureRoot { node_id: String },
-    MissingClosureRoot { node_id: String },
-    InvalidProjectNode { node_id: String },
-    InvalidProjectRoot { node_id: String },
-    Serialize { message: String },
-    InvalidDigestHex { value: String },
-    SchemaTagMismatch { expected: &'static str, actual: String },
+    InvalidClosureRoot {
+        node_id: String,
+    },
+    MissingClosureRoot {
+        node_id: String,
+    },
+    InvalidProjectNode {
+        node_id: String,
+    },
+    InvalidProjectRoot {
+        node_id: String,
+    },
+    Serialize {
+        message: String,
+    },
+    InvalidDigestHex {
+        value: String,
+    },
+    SchemaTagMismatch {
+        expected: &'static str,
+        actual: String,
+    },
     FieldTooLong {
         field: &'static str,
         limit: u32,
         actual: u32,
     },
-    InvalidDetachedSignature { message: String },
+    InvalidDetachedSignature {
+        message: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -43,7 +73,9 @@ impl fmt::Display for Error {
                 write!(f, "selected closure root must exist and be an artifact node: {node_id}")
             }
             Error::MissingClosureRoot { node_id } => write!(f, "closure root missing from members: {node_id}"),
-            Error::InvalidProjectNode { node_id } => write!(f, "project node must exist and be a project node: {node_id}"),
+            Error::InvalidProjectNode { node_id } => {
+                write!(f, "project node must exist and be a project node: {node_id}")
+            }
             Error::InvalidProjectRoot { node_id } => {
                 write!(f, "selected project root must exist and be an artifact node: {node_id}")
             }
@@ -52,11 +84,9 @@ impl fmt::Display for Error {
             Error::SchemaTagMismatch { expected, actual } => {
                 write!(f, "schema tag mismatch: expected {expected}, got {actual}")
             }
-            Error::FieldTooLong {
-                field,
-                limit,
-                actual,
-            } => write!(f, "field exceeds length limit: {field} ({actual} > {limit})"),
+            Error::FieldTooLong { field, limit, actual } => {
+                write!(f, "field exceeds length limit: {field} ({actual} > {limit})")
+            }
             Error::InvalidDetachedSignature { message } => write!(f, "detached signature parse error: {message}"),
         }
     }

@@ -35,6 +35,9 @@ pub enum Error {
 impl From<crunch_project_core::Error> for Error {
     fn from(value: crunch_project_core::Error) -> Self {
         match value {
+            crunch_project_core::Error::Manifest(message) => Error::Manifest(message),
+            crunch_project_core::Error::Lockfile(message) => Error::Lockfile(message),
+            crunch_project_core::Error::Validation(message) => Error::Validation(message),
             crunch_project_core::Error::Upgrade(message) => Error::Upgrade(message),
         }
     }

@@ -1,5 +1,6 @@
 use alloc::string::String;
 use alloc::string::ToString;
+
 use data_encoding::HEXLOWER;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -42,18 +43,14 @@ impl AttestationDigest {
 
 impl Serialize for AttestationDigest {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         serializer.serialize_str(&self.to_hex())
     }
 }
 
 impl<'de> Deserialize<'de> for AttestationDigest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let value = String::deserialize(deserializer)?;
         Self::parse_hex(&value).map_err(serde::de::Error::custom)
     }
