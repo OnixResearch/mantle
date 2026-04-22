@@ -119,13 +119,14 @@ change only owns crunch-maintained crate boundaries.
   - `check_drift(...)`
   - `validate_mirrors(...)`
   - `url_with_mirrors(...)`
+  - `OLDEST_SUPPORTED`
+  - `upgrade_lockfile(...)`
 
 ### `crunch-project` still owns
 
 - `refresh.rs` resolver traits, git/url/local-file hashing boundary, and refresh outcome application
 - `attestation.rs` project-attestation synthesis
-- `upgrade.rs` until its API is reshaped for core rules
-- std-facing re-export/adaptor modules in `src/{manifest,lock,version,merge,generate,drift,mirrors}.rs`
+- std-facing re-export/adaptor modules in `src/{manifest,lock,version,merge,generate,drift,mirrors,upgrade}.rs`
 
 ## Immediate Extraction Notes
 

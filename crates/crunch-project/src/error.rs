@@ -31,3 +31,11 @@ pub enum Error {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 }
+
+impl From<crunch_project_core::Error> for Error {
+    fn from(value: crunch_project_core::Error) -> Self {
+        match value {
+            crunch_project_core::Error::Upgrade(message) => Error::Upgrade(message),
+        }
+    }
+}

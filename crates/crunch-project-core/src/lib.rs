@@ -13,15 +13,18 @@ extern crate alloc;
 extern crate std;
 
 mod drift;
+mod error;
 mod generate;
 mod lock;
 mod manifest;
 mod merge;
 mod mirrors;
+mod upgrade;
 mod version;
 
 pub use drift::DriftStatus;
 pub use drift::check_drift;
+pub use error::Error;
 pub use generate::content_fingerprint;
 pub use generate::generate_inputs_ncl;
 pub use lock::LockEntry;
@@ -51,5 +54,7 @@ pub use merge::inputs_needing_refresh;
 pub use merge::orphaned_lock_entries;
 pub use mirrors::url_with_mirrors;
 pub use mirrors::validate_mirrors;
+pub use upgrade::OLDEST_SUPPORTED;
+pub use upgrade::upgrade_lockfile;
 pub use version::SchemaVersion;
 pub use version::parse_version;

@@ -21,6 +21,7 @@ Date: 2026-04-22
 - `crates/crunch-project/src/generate.rs` → adapter-only re-export
 - `crates/crunch-project/src/drift.rs` → adapter-only re-export
 - `crates/crunch-project/src/mirrors.rs` → adapter-only re-export
+- `crates/crunch-project/src/upgrade.rs` → adapter-only wrapper over core upgrade error/result
 
 ## Touched std workspace source files outside the legacy paths
 
@@ -36,7 +37,7 @@ Date: 2026-04-22
   legacy files listed above.
 - Remaining first-wave business logic still intentionally lives in std-owned
   files called out by `workspace-inventory.md` (`canonical.rs`, `policy.rs`,
-  `release.rs`, `refresh.rs`, `upgrade.rs`, and related
+  `release.rs`, `refresh.rs`, and related
   adapters) until their APIs are reshaped for the stricter core boundary
   rules.
 
