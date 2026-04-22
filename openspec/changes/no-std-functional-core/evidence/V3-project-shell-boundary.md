@@ -16,6 +16,6 @@ Code inspection confirmed:
 - `crates/crunch-project/src/attestation_adapter.rs` translates borrowed manifest/lock/root inputs into owned `ProjectAttestationRequest` before calling `crunch-project-core`
 - `crates/crunch-project/src/upgrade_adapter.rs` keeps std error translation outside the core crate, while `crates/crunch-project/src/lib.rs` is only module wiring + re-exports
 - `src/project_cmd.rs` remains the root CLI shell for manifest/lock file I/O, generated-input writes, and user-facing formatting
-- `openspec/changes/no-std-functional-core/evidence/ownership-review.md` now classifies every touched std workspace source file outside the legacy paths, including `crates/crunch-project/src/lib.rs` and `src/project_cmd.rs`
+- `openspec/changes/no-std-functional-core/evidence/ownership-review.md` now classifies every touched std workspace source file outside the legacy paths derived from the change history, including `crates/crunch-project/src/lib.rs`, `crates/crunch-project/src/attestation_adapter.rs`, `crates/crunch-project/src/refresh_adapter.rs`, and `src/project_cmd.rs`
 
 Result: project refresh and project-file I/O remain in shell code, and the `crunch-project-core` boundary stays on owned normalized data rather than ambient resolver or filesystem types.

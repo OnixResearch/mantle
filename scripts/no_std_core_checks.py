@@ -14,12 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / "no-std-functional-core"
 ALLOWLIST_PATH = CHANGE_ROOT / "validation" / "deps-allowlist.txt"
 OWNERSHIP_REVIEW_PATH = CHANGE_ROOT / "evidence" / "ownership-review.md"
-TOUCHED_STD_REVIEW_PATHS = (
-    "crates/crunch-project/src/lib.rs",
-    "crates/crunch-project/src/refresh.rs",
-    "crates/crunch-project/src/upgrade_adapter.rs",
-    "src/project_cmd.rs",
-)
+CHANGE_ROOT_RELATIVE = CHANGE_ROOT.relative_to(REPO_ROOT)
+EMPTY_TREE_OBJECT_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+TOP_LEVEL_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
+CRATE_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
+CORE_CRATE_DIRECTORIES = {
+    REPO_ROOT / "crates" / "crunch-attestation-core",
+    REPO_ROOT / "crates" / "crunch-project-core",
+}
 
 CORE_PACKAGES = ("crunch-attestation-core", "crunch-project-core")
 CORE_SOURCE_DIRS = (
@@ -185,6 +187,67 @@ def parse_tree(output: str) -> tuple[set[str], dict[str, set[str]]]:
         if package_match is not None:
             packages.add(package_match.group(1))
     return packages, features
+
+
+def run_git_command(args: list[str]) -> str:
+    return run_command(["git", *args])
+
+
+def git_revision_parent(revision: str) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", f"{revision}^"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return EMPTY_TREE_OBJECT_HASH
+
+
+def is_std_workspace_rust_source(relative_path: str) -> bool:
+    path = Path(relative_path)
+    if path.suffix != ".rs":
+        return False
+    if path.parts and path.parts[0] == "vendor":
+        return False
+    if path.parts and path.parts[0] in TOP_LEVEL_WORKSPACE_RUST_DIRS:
+        return True
+    if len(path.parts) < 4:
+        return False
+    if path.parts[0] != "crates":
+        return False
+    crate_dir = REPO_ROOT / path.parts[0] / path.parts[1]
+    if crate_dir in CORE_CRATE_DIRECTORIES:
+        return False
+    return path.parts[2] in CRATE_WORKSPACE_RUST_DIRS
+
+
+def touched_std_workspace_source_files() -> list[str]:
+    history = [line.strip() for line in run_git_command(["log", "--format=%H", "--reverse", "--", str(CHANGE_ROOT_RELATIVE)]).splitlines() if line.strip()]
+    if not history:
+        raise CheckFailure(f"no git history found for change path: {CHANGE_ROOT_RELATIVE}")
+    diff_base = git_revision_parent(history[0])
+    touched_paths = [
+        line.strip()
+        for line in run_git_command(["diff", "--name-only", "--diff-filter=ACMR", f"{diff_base}..HEAD", "--", "*.rs"]).splitlines()
+        if line.strip()
+    ]
+    derived = []
+    legacy_relative_paths = {str(path.relative_to(REPO_ROOT)) for path in LEGACY_STD_FILES}
+    for relative_path in touched_paths:
+        if relative_path in legacy_relative_paths:
+            continue
+        if not is_std_workspace_rust_source(relative_path):
+            continue
+        derived.append(relative_path)
+    return sorted(set(derived))
+
+
+def ownership_review_has_classification(artifact_text: str, relative_path: str) -> bool:
+    pattern = re.compile(rf"^- `{re.escape(relative_path)}` → `(adapter-only|unrelated)`$", re.MULTILINE)
+    return pattern.search(artifact_text) is not None
 
 
 def read_workspace_feature_definitions() -> dict[str, dict[str, set[str]]]:
@@ -846,6 +909,7 @@ def command_api_shape() -> None:
 
 def command_ownership() -> None:
     failures: list[str] = []
+    derived_touched_std_paths = touched_std_workspace_source_files()
     for path in LEGACY_STD_FILES:
         for index, raw_line in enumerate(path.read_text().splitlines(), 1):
             stripped = raw_line.strip()
@@ -873,14 +937,14 @@ def command_ownership() -> None:
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing legacy path review entry: {relative_text}"
                 )
-        for reviewed_path in TOUCHED_STD_REVIEW_PATHS:
-            if reviewed_path not in artifact_text:
+        for reviewed_path in derived_touched_std_paths:
+            if not ownership_review_has_classification(artifact_text, reviewed_path):
                 failures.append(
-                    f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing touched std review entry: {reviewed_path}"
+                    f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing touched std classification entry: {reviewed_path}"
                 )
     if failures:
         raise CheckFailure("\n".join(failures))
-    print("ownership check OK")
+    print("ownership check OK:", ", ".join(derived_touched_std_paths) if derived_touched_std_paths else "no touched std files")
 
 
 def main() -> None:

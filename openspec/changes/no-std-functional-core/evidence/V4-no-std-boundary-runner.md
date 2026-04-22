@@ -19,6 +19,6 @@ Validation command:
 - Output: `purity check OK`
 - Output: `scope check OK`
 - Output: `API shape check OK`
-- Output: `ownership check OK`
+- Output: `ownership check OK: crates/crunch-attestation/src/adapter.rs, crates/crunch-attestation/src/discovery.rs, crates/crunch-attestation/src/lib.rs, crates/crunch-project/src/attestation.rs, crates/crunch-project/src/attestation_adapter.rs, crates/crunch-project/src/error.rs, crates/crunch-project/src/lib.rs, crates/crunch-project/src/mirrors.rs, crates/crunch-project/src/refresh_adapter.rs, crates/crunch-project/src/upgrade_adapter.rs, crates/crunch-project/tests/integration_nickel.rs, src/attest_cmd.rs, src/project_cmd.rs, tests/attest_cli.rs, tests/project_cli.rs, tests/project_refresh_cli.rs`
 
-Result: the rustup-managed umbrella runner now enforces the wasm target prerequisite, executes the required host + `wasm32-unknown-unknown` checks, runs the focused adapter tests, and proves the dependency allowlist / portability / regression rails all pass together.
+Result: the rustup-managed umbrella runner now enforces the wasm target prerequisite, executes the required host + `wasm32-unknown-unknown` checks, runs the focused adapter tests, and proves the dependency allowlist / portability / regression rails all pass together. The ownership rail now derives every touched std Rust file outside the legacy paths from the change-history diff and requires `ownership-review.md` to classify each one.
