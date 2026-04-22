@@ -1,0 +1,596 @@
+use alloc::collections::BTreeSet;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::ReleaseEvidenceError;
+
+pub const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
+pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "crunch-self-hosting-proof-v2";
+pub const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
+pub const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
+pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "crunch-self-hosting-proof-v2";
+pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+
+const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
+const MAX_RELATIVE_PATH_BYTES_COUNT: u32 = 4096;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BundledArtifactKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BundledArtifact {
+    pub kind: BundledArtifactKind,
+    pub relative_path: String,
+    pub size_bytes: u64,
+    pub digest_blake3: String,
+}
+
+impl BundledArtifact {
+    pub fn validate(&self, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+        validate_relative_member_path(&self.relative_path, field_name)?;
+        if self.size_bytes == 0 {
+            return Err(validation_error(format!("release evidence {field_name}.size_bytes must be non-zero")));
+        }
+        validate_blake3_hex(&self.digest_blake3, &format!("{field_name}.digest_blake3"))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseWorkflowIdentity {
+    pub command: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseProofLinkage {
+    pub release_id: String,
+    pub source_archive_digest_blake3: String,
+    pub proof_bundle_schema: String,
+    pub proof_mode: String,
+    pub staged_source: String,
+    pub stage2_binary_digest_blake3: String,
+    pub prerequisite_inventory_digest_blake3: String,
+    pub proof_manifest_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseEvidenceManifest {
+    pub schema: String,
+    pub release_id: String,
+    pub claim_scope: String,
+    pub workflow: ReleaseWorkflowIdentity,
+    pub source_archive: BundledArtifact,
+    pub binaries: Vec<BundledArtifact>,
+    pub proof_bundle: BundledArtifact,
+    pub prerequisite_inventory: BundledArtifact,
+    pub proof_linkage: ReleaseProofLinkage,
+}
+
+impl ReleaseEvidenceManifest {
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, ReleaseEvidenceError> {
+        self.validate()?;
+        serde_json::to_vec(self).map_err(|err| parse_error(format!("serializing release evidence manifest: {err}")))
+    }
+
+    pub fn validate(&self) -> Result<(), ReleaseEvidenceError> {
+        validate_manifest_header(self)?;
+        validate_manifest_artifacts(self)?;
+        validate_manifest_linkage(self)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FullSelfHostingProofIdentityFields {
+    pub schema: String,
+    pub proof_mode: String,
+    pub staged_source: String,
+    pub stage2_binary_digest_blake3: String,
+    pub prerequisite_inventory_digest_blake3: String,
+}
+
+pub fn extract_full_self_hosting_proof_identity_fields(
+    manifest_bytes: &[u8],
+) -> Result<FullSelfHostingProofIdentityFields, ReleaseEvidenceError> {
+    let manifest: SelfHostingProofManifestView = serde_json::from_slice(manifest_bytes).map_err(|err| {
+        parse_error(format!("full proof artifact required: parsing full proof manifest failed: {err}"))
+    })?;
+    validate_full_proof_manifest(&manifest)?;
+    Ok(FullSelfHostingProofIdentityFields {
+        schema: manifest.schema,
+        proof_mode: manifest.prerequisites.mode,
+        staged_source: manifest.staged_source,
+        stage2_binary_digest_blake3: manifest.binaries.stage2.digest_blake3,
+        prerequisite_inventory_digest_blake3: manifest.prerequisites.inventory_doc.digest_blake3,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofManifestView {
+    schema: String,
+    staged_source: String,
+    prerequisites: SelfHostingProofPrerequisitesView,
+    binaries: SelfHostingProofBinariesView,
+    tools: SelfHostingProofToolsView,
+    fixed_point: SelfHostingProofFixedPointView,
+    stage0: SelfHostingProofStageView,
+    stage2: SelfHostingProofStageView,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofPrerequisitesView {
+    mode: String,
+    inventory_doc: SelfHostingProofHashedPath,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofBinariesView {
+    stage1: SelfHostingProofHashedPath,
+    stage2: SelfHostingProofHashedPath,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofToolsView {
+    stage0_bwrap: SelfHostingProofHashedPath,
+    stage0_busybox: SelfHostingProofHashedPath,
+    stage2_bwrap: SelfHostingProofHashedPath,
+    stage2_busybox: SelfHostingProofHashedPath,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofFixedPointView {
+    stage1_equals_stage2: bool,
+    stage0_bwrap_equals_stage2_bwrap: bool,
+    stage0_busybox_equals_stage2_busybox: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofStageView {
+    report: SelfHostingProofReportView,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofReportView {
+    staged_source: String,
+    output_binary: String,
+    busybox_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SelfHostingProofHashedPath {
+    path: String,
+    size_bytes: u64,
+    digest_blake3: String,
+}
+
+fn validate_manifest_header(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    if manifest.schema != RELEASE_EVIDENCE_SCHEMA {
+        return Err(validation_error(format!(
+            "release evidence schema must be {RELEASE_EVIDENCE_SCHEMA}, got {}",
+            manifest.schema
+        )));
+    }
+    if manifest.release_id.trim().is_empty() {
+        return Err(validation_error("release evidence release_id must not be empty".to_string()));
+    }
+    if manifest.claim_scope != CLAIM_SCOPE_PACKAGED_INTEGRITY {
+        return Err(validation_error(format!(
+            "release evidence claim_scope must be {CLAIM_SCOPE_PACKAGED_INTEGRITY}, got {}",
+            manifest.claim_scope
+        )));
+    }
+    if manifest.workflow.command.trim().is_empty() {
+        return Err(validation_error("release evidence workflow.command must not be empty".to_string()));
+    }
+    if manifest.workflow.version.trim().is_empty() {
+        return Err(validation_error("release evidence workflow.version must not be empty".to_string()));
+    }
+    Ok(())
+}
+
+fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let binary_count = u32_count(manifest.binaries.len(), "release evidence binary artifact count overflowed u32")?;
+    if binary_count == 0 {
+        return Err(validation_error("release evidence must record at least one binary artifact".to_string()));
+    }
+    if binary_count > MAX_BINARY_ARTIFACTS_COUNT {
+        return Err(validation_error(format!(
+            "release evidence records {binary_count} binary artifacts, limit is {MAX_BINARY_ARTIFACTS_COUNT}"
+        )));
+    }
+
+    let mut seen_paths = BTreeSet::new();
+    validate_and_record_path(&manifest.source_archive, "source_archive", &mut seen_paths)?;
+    validate_and_record_path(&manifest.proof_bundle, "proof_bundle", &mut seen_paths)?;
+    validate_and_record_path(&manifest.prerequisite_inventory, "prerequisite_inventory", &mut seen_paths)?;
+    for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
+        validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
+    }
+    Ok(())
+}
+
+fn validate_and_record_path(
+    artifact: &BundledArtifact,
+    field_name: &str,
+    seen_paths: &mut BTreeSet<String>,
+) -> Result<(), ReleaseEvidenceError> {
+    artifact.validate(field_name)?;
+    if !seen_paths.insert(artifact.relative_path.clone()) {
+        return Err(validation_error(format!(
+            "release evidence contains duplicate bundle member path {}",
+            artifact.relative_path
+        )));
+    }
+    Ok(())
+}
+
+fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    if manifest.proof_linkage.release_id != manifest.release_id {
+        return Err(validation_error("release evidence proof linkage release_id must match release_id".to_string()));
+    }
+    validate_blake3_hex(
+        &manifest.proof_linkage.source_archive_digest_blake3,
+        "proof_linkage.source_archive_digest_blake3",
+    )?;
+    validate_blake3_hex(
+        &manifest.proof_linkage.stage2_binary_digest_blake3,
+        "proof_linkage.stage2_binary_digest_blake3",
+    )?;
+    validate_blake3_hex(
+        &manifest.proof_linkage.prerequisite_inventory_digest_blake3,
+        "proof_linkage.prerequisite_inventory_digest_blake3",
+    )?;
+    validate_blake3_hex(
+        &manifest.proof_linkage.proof_manifest_digest_blake3,
+        "proof_linkage.proof_manifest_digest_blake3",
+    )?;
+    if manifest.proof_linkage.proof_bundle_schema != FULL_SELF_HOSTING_PROOF_SCHEMA {
+        return Err(validation_error(format!(
+            "release evidence proof_bundle_schema must be {FULL_SELF_HOSTING_PROOF_SCHEMA}, got {}",
+            manifest.proof_linkage.proof_bundle_schema
+        )));
+    }
+    if manifest.proof_linkage.proof_mode.trim().is_empty() {
+        return Err(validation_error("release evidence proof_mode must not be empty".to_string()));
+    }
+    if manifest.proof_linkage.staged_source.trim().is_empty() {
+        return Err(validation_error("release evidence staged_source must not be empty".to_string()));
+    }
+    if manifest.proof_bundle.kind != BundledArtifactKind::Directory {
+        return Err(validation_error(
+            "release evidence proof_bundle must be recorded as a directory artifact".to_string(),
+        ));
+    }
+    if manifest.prerequisite_inventory.kind != BundledArtifactKind::File {
+        return Err(validation_error(
+            "release evidence prerequisite_inventory must be recorded as a file artifact".to_string(),
+        ));
+    }
+    if manifest.proof_linkage.source_archive_digest_blake3 != manifest.source_archive.digest_blake3 {
+        return Err(validation_error(
+            "release evidence proof linkage source archive digest does not match bundled source archive".to_string(),
+        ));
+    }
+    if manifest.proof_linkage.prerequisite_inventory_digest_blake3 != manifest.prerequisite_inventory.digest_blake3 {
+        return Err(validation_error(
+            "release evidence proof linkage prerequisite inventory digest does not match bundled prerequisite inventory"
+                .to_string(),
+        ));
+    }
+    if !manifest
+        .binaries
+        .iter()
+        .any(|artifact| artifact.digest_blake3 == manifest.proof_linkage.stage2_binary_digest_blake3)
+    {
+        return Err(validation_error(
+            "release evidence proof linkage stage2 digest does not match any bundled binary artifact".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Result<(), ReleaseEvidenceError> {
+    if manifest.schema != FULL_SELF_HOSTING_PROOF_SCHEMA {
+        return Err(validation_error(format!(
+            "full proof artifact required: expected schema {FULL_SELF_HOSTING_PROOF_SCHEMA}, got {}",
+            manifest.schema
+        )));
+    }
+    if manifest.staged_source.trim().is_empty() {
+        return Err(validation_error("full proof artifact required: staged_source is missing".to_string()));
+    }
+    if manifest.prerequisites.mode.trim().is_empty() {
+        return Err(validation_error("full proof artifact required: proof mode is missing".to_string()));
+    }
+
+    validate_hashed_path(&manifest.prerequisites.inventory_doc, "prerequisites.inventory_doc")?;
+    validate_hashed_path(&manifest.binaries.stage1, "binaries.stage1")?;
+    validate_hashed_path(&manifest.binaries.stage2, "binaries.stage2")?;
+    validate_hashed_path(&manifest.tools.stage0_bwrap, "tools.stage0_bwrap")?;
+    validate_hashed_path(&manifest.tools.stage0_busybox, "tools.stage0_busybox")?;
+    validate_hashed_path(&manifest.tools.stage2_bwrap, "tools.stage2_bwrap")?;
+    validate_hashed_path(&manifest.tools.stage2_busybox, "tools.stage2_busybox")?;
+
+    if !manifest.fixed_point.stage1_equals_stage2 {
+        return Err(validation_error("full proof artifact required: stage1_equals_stage2 must be true".to_string()));
+    }
+    if !manifest.fixed_point.stage0_bwrap_equals_stage2_bwrap {
+        return Err(validation_error(
+            "full proof artifact required: stage0_bwrap_equals_stage2_bwrap must be true".to_string(),
+        ));
+    }
+    if !manifest.fixed_point.stage0_busybox_equals_stage2_busybox {
+        return Err(validation_error(
+            "full proof artifact required: stage0_busybox_equals_stage2_busybox must be true".to_string(),
+        ));
+    }
+
+    validate_stage_report(&manifest.stage0.report, &manifest.staged_source, "stage0.report")?;
+    validate_stage_report(&manifest.stage2.report, &manifest.staged_source, "stage2.report")?;
+    if manifest.stage2.report.output_binary != manifest.binaries.stage2.path {
+        return Err(validation_error(
+            "full proof artifact required: stage2 report output_binary must match binaries.stage2.path".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_hashed_path(hashed: &SelfHostingProofHashedPath, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if hashed.path.trim().is_empty() {
+        return Err(validation_error(format!("full proof artifact required: {field_name}.path is missing")));
+    }
+    if hashed.size_bytes == 0 {
+        return Err(validation_error(format!(
+            "full proof artifact required: {field_name}.size_bytes must be non-zero"
+        )));
+    }
+    validate_blake3_hex(&hashed.digest_blake3, &format!("{field_name}.digest_blake3"))
+}
+
+fn validate_stage_report(
+    report: &SelfHostingProofReportView,
+    expected_staged_source: &str,
+    field_name: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    if report.staged_source != expected_staged_source {
+        return Err(validation_error(format!(
+            "full proof artifact required: {field_name}.staged_source does not match top-level staged_source"
+        )));
+    }
+    if report.output_binary.trim().is_empty() {
+        return Err(validation_error(format!("full proof artifact required: {field_name}.output_binary is missing")));
+    }
+    if report.busybox_path.is_none() {
+        return Err(validation_error(format!("full proof artifact required: {field_name}.busybox_path is missing")));
+    }
+    Ok(())
+}
+
+fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if path.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+    }
+    if path.starts_with('/') {
+        return Err(validation_error(format!(
+            "release evidence {field_name} must be relative, got absolute path {path}"
+        )));
+    }
+    if path.split('/').any(|component| component == "..") {
+        return Err(validation_error(format!("release evidence {field_name} must not escape the bundle root: {path}")));
+    }
+    let path_len_bytes = u32_count(path.len(), &format!("release evidence {field_name} length overflowed u32"))?;
+    if path_len_bytes > MAX_RELATIVE_PATH_BYTES_COUNT {
+        return Err(validation_error(format!(
+            "release evidence {field_name} exceeds {MAX_RELATIVE_PATH_BYTES_COUNT} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_blake3_hex(digest_hex: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if digest_hex.len() != BLAKE3_HEX_LENGTH_CHARS {
+        return Err(validation_error(format!(
+            "{field_name} must be {BLAKE3_HEX_LENGTH_CHARS} lowercase hex chars, got {}",
+            digest_hex.len()
+        )));
+    }
+    if !digest_hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return Err(validation_error(format!("{field_name} must contain lowercase hex only")));
+    }
+    Ok(())
+}
+
+fn parse_error(message: String) -> ReleaseEvidenceError {
+    ReleaseEvidenceError::Parse(message)
+}
+
+fn validation_error(message: String) -> ReleaseEvidenceError {
+    ReleaseEvidenceError::Validation(message)
+}
+
+fn u32_count(count: usize, overflow_message: &str) -> Result<u32, ReleaseEvidenceError> {
+    u32::try_from(count).map_err(|_| validation_error(overflow_message.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use pretty_assertions::assert_eq;
+    use serde_json::json;
+
+    use super::*;
+
+    fn sample_digest(seed: u8) -> String {
+        let byte = format!("{:x}", seed % 16);
+        byte.repeat(BLAKE3_HEX_LENGTH_CHARS)
+    }
+
+    fn sample_artifact(kind: BundledArtifactKind, relative_path: &str, seed: u8) -> BundledArtifact {
+        BundledArtifact {
+            kind,
+            relative_path: relative_path.to_string(),
+            size_bytes: 123,
+            digest_blake3: sample_digest(seed),
+        }
+    }
+
+    fn sample_manifest() -> ReleaseEvidenceManifest {
+        let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-crunch", 3);
+        let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
+        ReleaseEvidenceManifest {
+            schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
+            release_id: "crunch-0.1.0-rc1".to_string(),
+            claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
+            workflow: ReleaseWorkflowIdentity {
+                command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
+                version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
+            },
+            source_archive: sample_artifact(BundledArtifactKind::File, "source/crunch-src.tar", 1),
+            binaries: vec![stage2_binary.clone()],
+            proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
+            prerequisite_inventory: inventory.clone(),
+            proof_linkage: ReleaseProofLinkage {
+                release_id: "crunch-0.1.0-rc1".to_string(),
+                source_archive_digest_blake3: sample_digest(1),
+                proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
+                proof_mode: "fixed-point".to_string(),
+                staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),
+                stage2_binary_digest_blake3: stage2_binary.digest_blake3,
+                prerequisite_inventory_digest_blake3: inventory.digest_blake3,
+                proof_manifest_digest_blake3: sample_digest(9),
+            },
+        }
+    }
+
+    fn sample_full_proof_manifest(inventory_digest: &str, stage2_digest: &str) -> Vec<u8> {
+        serde_json::to_vec(&json!({
+            "schema": FULL_SELF_HOSTING_PROOF_SCHEMA,
+            "staged_source": "/tmp/proof-store/abcd-crunch-src",
+            "prerequisites": {
+                "mode": "fixed-point",
+                "inventory_doc": {
+                    "path": "/tmp/proof-bundle/stage0-prerequisites/inventory.md",
+                    "size_bytes": 9,
+                    "digest_blake3": inventory_digest
+                }
+            },
+            "binaries": {
+                "stage1": {
+                    "path": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "size_bytes": 20,
+                    "digest_blake3": sample_digest(10)
+                },
+                "stage2": {
+                    "path": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "size_bytes": 13,
+                    "digest_blake3": stage2_digest
+                }
+            },
+            "tools": {
+                "stage0_bwrap": {
+                    "path": "/tmp/proof-store/stage0-bwrap/bin/bwrap",
+                    "size_bytes": 22,
+                    "digest_blake3": sample_digest(12)
+                },
+                "stage0_busybox": {
+                    "path": "/tmp/proof-store/stage0-busybox/bin/busybox",
+                    "size_bytes": 23,
+                    "digest_blake3": sample_digest(13)
+                },
+                "stage2_bwrap": {
+                    "path": "/tmp/proof-store/stage2-bwrap/bin/bwrap",
+                    "size_bytes": 24,
+                    "digest_blake3": sample_digest(14)
+                },
+                "stage2_busybox": {
+                    "path": "/tmp/proof-store/stage2-busybox/bin/busybox",
+                    "size_bytes": 25,
+                    "digest_blake3": sample_digest(15)
+                }
+            },
+            "fixed_point": {
+                "stage1_equals_stage2": true,
+                "stage0_bwrap_equals_stage2_bwrap": true,
+                "stage0_busybox_equals_stage2_busybox": true
+            },
+            "stage0": {
+                "report": {
+                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
+                    "output_binary": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "busybox_path": "/tmp/proof-store/stage0-busybox/bin/busybox"
+                }
+            },
+            "stage2": {
+                "report": {
+                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
+                    "output_binary": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "busybox_path": "/tmp/proof-store/stage2-busybox/bin/busybox"
+                }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn canonical_bytes_are_stable_and_compact() {
+        let manifest = sample_manifest();
+        let first = manifest.canonical_bytes().unwrap();
+        let second = manifest.canonical_bytes().unwrap();
+        assert_eq!(first, second);
+        assert!(!first.contains(&b'\n'));
+    }
+
+    #[test]
+    fn validate_rejects_absolute_member_path() {
+        let mut manifest = sample_manifest();
+        manifest.source_archive.relative_path = "/tmp/source.tar".to_string();
+        let err = manifest.validate().unwrap_err();
+        assert!(err.message().contains("must be relative"));
+    }
+
+    #[test]
+    fn validate_rejects_prerequisite_inventory_linkage_mismatch() {
+        let mut manifest = sample_manifest();
+        manifest.proof_linkage.prerequisite_inventory_digest_blake3 = sample_digest(8);
+        let err = manifest.validate().unwrap_err();
+        assert!(err.message().contains("prerequisite inventory digest does not match"));
+    }
+
+    #[test]
+    fn validate_rejects_stage2_digest_not_present_in_binaries() {
+        let mut manifest = sample_manifest();
+        manifest.proof_linkage.stage2_binary_digest_blake3 = sample_digest(4);
+        let err = manifest.validate().unwrap_err();
+        assert!(err.message().contains("does not match any bundled binary artifact"));
+    }
+
+    #[test]
+    fn extract_full_proof_identity_fields_accepts_valid_manifest() {
+        let manifest_bytes = sample_full_proof_manifest(&sample_digest(9), &sample_digest(11));
+        let identity = extract_full_self_hosting_proof_identity_fields(&manifest_bytes).unwrap();
+        assert_eq!(identity.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
+        assert_eq!(identity.proof_mode, "fixed-point");
+        assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-crunch-src");
+        assert_eq!(identity.stage2_binary_digest_blake3, sample_digest(11));
+        assert_eq!(identity.prerequisite_inventory_digest_blake3, sample_digest(9));
+    }
+
+    #[test]
+    fn extract_full_proof_identity_fields_rejects_wrong_schema() {
+        let manifest_bytes = br#"{"schema":"fake-proof"}"#;
+        let err = extract_full_self_hosting_proof_identity_fields(manifest_bytes).unwrap_err();
+        assert!(err.message().contains("full proof artifact required"));
+    }
+}

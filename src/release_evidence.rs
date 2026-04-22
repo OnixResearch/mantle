@@ -1,96 +1,27 @@
-use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Deserialize;
-use serde::Serialize;
+pub(crate) use crunch_release_core::BLAKE3_HEX_LENGTH_CHARS as BLAKE3_HEX_LEN;
+pub(crate) use crunch_release_core::BundledArtifact;
+pub(crate) use crunch_release_core::BundledArtifactKind;
+pub(crate) use crunch_release_core::CLAIM_SCOPE_PACKAGED_INTEGRITY;
+pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
+pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
+pub(crate) use crunch_release_core::FULL_SELF_HOSTING_PROOF_SCHEMA;
+pub(crate) use crunch_release_core::RELEASE_EVIDENCE_SCHEMA;
+use crunch_release_core::ReleaseEvidenceError;
+pub(crate) use crunch_release_core::ReleaseEvidenceManifest;
+pub(crate) use crunch_release_core::ReleaseProofLinkage;
+pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
+use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 
 use crate::errors::RunError;
 
-pub(crate) const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
-const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "crunch-self-hosting-proof-v2";
-const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
-pub(crate) const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
-pub(crate) const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "crunch-self-hosting-proof-v2";
 const PROOF_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/inventory.md";
 const MAX_BINARY_ARTIFACTS: u32 = 16;
-const MAX_RELATIVE_PATH_BYTES: u32 = 4096;
 const MAX_BUNDLE_TREE_ENTRIES: u32 = 4096;
-const BLAKE3_HEX_LEN: usize = 64;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum BundledArtifactKind {
-    File,
-    Directory,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct BundledArtifact {
-    pub kind: BundledArtifactKind,
-    pub relative_path: String,
-    pub size_bytes: u64,
-    pub digest_blake3: String,
-}
-
-impl BundledArtifact {
-    fn validate(&self, field_name: &str) -> Result<(), RunError> {
-        validate_relative_member_path(&self.relative_path, field_name)?;
-        if self.size_bytes == 0 {
-            return Err(RunError::Internal(format!("release evidence {field_name}.size_bytes must be non-zero")));
-        }
-        validate_blake3_hex(&self.digest_blake3, &format!("{field_name}.digest_blake3"))?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ReleaseWorkflowIdentity {
-    pub command: String,
-    pub version: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ReleaseProofLinkage {
-    pub release_id: String,
-    pub source_archive_digest_blake3: String,
-    pub proof_bundle_schema: String,
-    pub proof_mode: String,
-    pub staged_source: String,
-    pub stage2_binary_digest_blake3: String,
-    pub prerequisite_inventory_digest_blake3: String,
-    pub proof_manifest_digest_blake3: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ReleaseEvidenceManifest {
-    pub schema: String,
-    pub release_id: String,
-    pub claim_scope: String,
-    pub workflow: ReleaseWorkflowIdentity,
-    pub source_archive: BundledArtifact,
-    pub binaries: Vec<BundledArtifact>,
-    pub proof_bundle: BundledArtifact,
-    pub prerequisite_inventory: BundledArtifact,
-    pub proof_linkage: ReleaseProofLinkage,
-}
-
-impl ReleaseEvidenceManifest {
-    pub(crate) fn canonical_bytes(&self) -> Result<Vec<u8>, RunError> {
-        self.validate()?;
-        serde_json::to_vec(self)
-            .map_err(|err| RunError::Internal(format!("serializing release evidence manifest: {err}")))
-    }
-
-    pub(crate) fn validate(&self) -> Result<(), RunError> {
-        validate_manifest_header(self)?;
-        validate_manifest_artifacts(self)?;
-        validate_manifest_linkage(self)?;
-        Ok(())
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FullSelfHostingProofIdentity {
@@ -132,6 +63,10 @@ impl ReleaseBundleCreateRequest {
             workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
         }
     }
+}
+
+fn core_error_to_run_error(err: ReleaseEvidenceError) -> RunError {
+    RunError::Internal(err.message().to_string())
 }
 
 pub(crate) fn create_release_evidence_bundle(
@@ -187,7 +122,7 @@ pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<Releas
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", manifest_path.display())))?;
     let manifest: ReleaseEvidenceManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|err| RunError::Internal(format!("parsing {}: {err}", manifest_path.display())))?;
-    let expected_canonical = manifest.canonical_bytes()?;
+    let expected_canonical = manifest.canonical_bytes().map_err(core_error_to_run_error)?;
     if manifest_bytes != expected_canonical {
         return Err(RunError::Internal("release evidence manifest.json is not canonical compact JSON".to_string()));
     }
@@ -210,78 +145,17 @@ pub(crate) fn load_full_self_hosting_proof_identity(
     let manifest_path = bundle_dir.join("manifest.json");
     let manifest_bytes = std::fs::read(&manifest_path)
         .map_err(|err| RunError::Internal(format!("reading {}: {err}", manifest_path.display())))?;
-    let manifest: SelfHostingProofManifestView = serde_json::from_slice(&manifest_bytes).map_err(|err| {
-        RunError::Internal(format!("full proof artifact required: parsing {} failed: {err}", manifest_path.display()))
-    })?;
-    validate_full_proof_manifest(&manifest)?;
+    let manifest = extract_full_self_hosting_proof_identity_fields(&manifest_bytes).map_err(core_error_to_run_error)?;
 
     let proof_manifest_digest_blake3 = blake3::hash(&manifest_bytes).to_hex().to_string();
     Ok(FullSelfHostingProofIdentity {
         schema: manifest.schema,
-        proof_mode: manifest.prerequisites.mode,
+        proof_mode: manifest.proof_mode,
         staged_source: manifest.staged_source,
-        stage2_binary_digest_blake3: manifest.binaries.stage2.digest_blake3,
-        prerequisite_inventory_digest_blake3: manifest.prerequisites.inventory_doc.digest_blake3,
+        stage2_binary_digest_blake3: manifest.stage2_binary_digest_blake3,
+        prerequisite_inventory_digest_blake3: manifest.prerequisite_inventory_digest_blake3,
         proof_manifest_digest_blake3,
     })
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofManifestView {
-    schema: String,
-    staged_source: String,
-    prerequisites: SelfHostingProofPrerequisitesView,
-    binaries: SelfHostingProofBinariesView,
-    tools: SelfHostingProofToolsView,
-    fixed_point: SelfHostingProofFixedPointView,
-    stage0: SelfHostingProofStageView,
-    stage2: SelfHostingProofStageView,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofPrerequisitesView {
-    mode: String,
-    inventory_doc: SelfHostingProofHashedPath,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofBinariesView {
-    stage1: SelfHostingProofHashedPath,
-    stage2: SelfHostingProofHashedPath,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofToolsView {
-    stage0_bwrap: SelfHostingProofHashedPath,
-    stage0_busybox: SelfHostingProofHashedPath,
-    stage2_bwrap: SelfHostingProofHashedPath,
-    stage2_busybox: SelfHostingProofHashedPath,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofFixedPointView {
-    stage1_equals_stage2: bool,
-    stage0_bwrap_equals_stage2_bwrap: bool,
-    stage0_busybox_equals_stage2_busybox: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofStageView {
-    report: SelfHostingProofReportView,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofReportView {
-    staged_source: String,
-    output_binary: String,
-    busybox_path: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SelfHostingProofHashedPath {
-    path: String,
-    size_bytes: u64,
-    digest_blake3: String,
 }
 
 fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {
@@ -487,7 +361,7 @@ fn build_artifact_record(
         size_bytes,
         digest_blake3,
     };
-    artifact.validate("artifact")?;
+    artifact.validate("artifact").map_err(core_error_to_run_error)?;
     Ok(artifact)
 }
 
@@ -611,7 +485,7 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
 }
 
 fn write_manifest_file(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
-    let manifest_bytes = manifest.canonical_bytes()?;
+    let manifest_bytes = manifest.canonical_bytes().map_err(core_error_to_run_error)?;
     let manifest_path = bundle_dir.join("manifest.json");
     std::fs::write(&manifest_path, manifest_bytes)
         .map_err(|err| RunError::Internal(format!("writing {}: {err}", manifest_path.display())))
@@ -677,255 +551,6 @@ fn verify_manifest_proof_linkage(manifest: &ReleaseEvidenceManifest, bundle_dir:
     }
     if proof_identity.proof_manifest_digest_blake3 != manifest.proof_linkage.proof_manifest_digest_blake3 {
         return Err(RunError::Internal("release evidence proof linkage proof manifest digest mismatch".to_string()));
-    }
-    Ok(())
-}
-
-fn validate_manifest_header(manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
-    if manifest.schema != RELEASE_EVIDENCE_SCHEMA {
-        return Err(RunError::Internal(format!(
-            "release evidence schema must be {RELEASE_EVIDENCE_SCHEMA}, got {}",
-            manifest.schema
-        )));
-    }
-    if manifest.release_id.trim().is_empty() {
-        return Err(RunError::Internal("release evidence release_id must not be empty".to_string()));
-    }
-    if manifest.claim_scope != CLAIM_SCOPE_PACKAGED_INTEGRITY {
-        return Err(RunError::Internal(format!(
-            "release evidence claim_scope must be {CLAIM_SCOPE_PACKAGED_INTEGRITY}, got {}",
-            manifest.claim_scope
-        )));
-    }
-    if manifest.workflow.command.trim().is_empty() {
-        return Err(RunError::Internal("release evidence workflow.command must not be empty".to_string()));
-    }
-    if manifest.workflow.version.trim().is_empty() {
-        return Err(RunError::Internal("release evidence workflow.version must not be empty".to_string()));
-    }
-    Ok(())
-}
-
-fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
-    let binary_count: u32 = manifest
-        .binaries
-        .len()
-        .try_into()
-        .map_err(|_| RunError::Internal("release evidence binary artifact count overflowed u32".to_string()))?;
-    if binary_count == 0 {
-        return Err(RunError::Internal("release evidence must record at least one binary artifact".to_string()));
-    }
-    if binary_count > MAX_BINARY_ARTIFACTS {
-        return Err(RunError::Internal(format!(
-            "release evidence records {binary_count} binary artifacts, limit is {MAX_BINARY_ARTIFACTS}"
-        )));
-    }
-
-    let mut seen_paths = BTreeSet::new();
-    validate_and_record_path(&manifest.source_archive, "source_archive", &mut seen_paths)?;
-    validate_and_record_path(&manifest.proof_bundle, "proof_bundle", &mut seen_paths)?;
-    validate_and_record_path(&manifest.prerequisite_inventory, "prerequisite_inventory", &mut seen_paths)?;
-    for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
-        let index_u32: u32 = index_usize
-            .try_into()
-            .map_err(|_| RunError::Internal("release evidence binary index overflowed u32".to_string()))?;
-        validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
-    }
-    Ok(())
-}
-
-fn validate_and_record_path(
-    artifact: &BundledArtifact,
-    field_name: &str,
-    seen_paths: &mut BTreeSet<String>,
-) -> Result<(), RunError> {
-    artifact.validate(field_name)?;
-    if !seen_paths.insert(artifact.relative_path.clone()) {
-        return Err(RunError::Internal(format!(
-            "release evidence contains duplicate bundle member path {}",
-            artifact.relative_path
-        )));
-    }
-    Ok(())
-}
-
-fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
-    if manifest.proof_linkage.release_id != manifest.release_id {
-        return Err(RunError::Internal("release evidence proof linkage release_id must match release_id".to_string()));
-    }
-    validate_blake3_hex(
-        &manifest.proof_linkage.source_archive_digest_blake3,
-        "proof_linkage.source_archive_digest_blake3",
-    )?;
-    validate_blake3_hex(
-        &manifest.proof_linkage.stage2_binary_digest_blake3,
-        "proof_linkage.stage2_binary_digest_blake3",
-    )?;
-    validate_blake3_hex(
-        &manifest.proof_linkage.prerequisite_inventory_digest_blake3,
-        "proof_linkage.prerequisite_inventory_digest_blake3",
-    )?;
-    validate_blake3_hex(
-        &manifest.proof_linkage.proof_manifest_digest_blake3,
-        "proof_linkage.proof_manifest_digest_blake3",
-    )?;
-    if manifest.proof_linkage.proof_bundle_schema != FULL_SELF_HOSTING_PROOF_SCHEMA {
-        return Err(RunError::Internal(format!(
-            "release evidence proof_bundle_schema must be {FULL_SELF_HOSTING_PROOF_SCHEMA}, got {}",
-            manifest.proof_linkage.proof_bundle_schema
-        )));
-    }
-    if manifest.proof_linkage.proof_mode.trim().is_empty() {
-        return Err(RunError::Internal("release evidence proof_mode must not be empty".to_string()));
-    }
-    if manifest.proof_linkage.staged_source.trim().is_empty() {
-        return Err(RunError::Internal("release evidence staged_source must not be empty".to_string()));
-    }
-    if manifest.proof_bundle.kind != BundledArtifactKind::Directory {
-        return Err(RunError::Internal(
-            "release evidence proof_bundle must be recorded as a directory artifact".to_string(),
-        ));
-    }
-    if manifest.prerequisite_inventory.kind != BundledArtifactKind::File {
-        return Err(RunError::Internal(
-            "release evidence prerequisite_inventory must be recorded as a file artifact".to_string(),
-        ));
-    }
-    if manifest.proof_linkage.source_archive_digest_blake3 != manifest.source_archive.digest_blake3 {
-        return Err(RunError::Internal(
-            "release evidence proof linkage source archive digest does not match bundled source archive".to_string(),
-        ));
-    }
-    if manifest.proof_linkage.prerequisite_inventory_digest_blake3 != manifest.prerequisite_inventory.digest_blake3 {
-        return Err(RunError::Internal(
-            "release evidence proof linkage prerequisite inventory digest does not match bundled prerequisite inventory"
-                .to_string(),
-        ));
-    }
-    if !manifest
-        .binaries
-        .iter()
-        .any(|artifact| artifact.digest_blake3 == manifest.proof_linkage.stage2_binary_digest_blake3)
-    {
-        return Err(RunError::Internal(
-            "release evidence proof linkage stage2 digest does not match any bundled binary artifact".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Result<(), RunError> {
-    if manifest.schema != FULL_SELF_HOSTING_PROOF_SCHEMA {
-        return Err(RunError::Internal(format!(
-            "full proof artifact required: expected schema {FULL_SELF_HOSTING_PROOF_SCHEMA}, got {}",
-            manifest.schema
-        )));
-    }
-    if manifest.staged_source.trim().is_empty() {
-        return Err(RunError::Internal("full proof artifact required: staged_source is missing".to_string()));
-    }
-    if manifest.prerequisites.mode.trim().is_empty() {
-        return Err(RunError::Internal("full proof artifact required: proof mode is missing".to_string()));
-    }
-
-    validate_hashed_path(&manifest.prerequisites.inventory_doc, "prerequisites.inventory_doc")?;
-    validate_hashed_path(&manifest.binaries.stage1, "binaries.stage1")?;
-    validate_hashed_path(&manifest.binaries.stage2, "binaries.stage2")?;
-    validate_hashed_path(&manifest.tools.stage0_bwrap, "tools.stage0_bwrap")?;
-    validate_hashed_path(&manifest.tools.stage0_busybox, "tools.stage0_busybox")?;
-    validate_hashed_path(&manifest.tools.stage2_bwrap, "tools.stage2_bwrap")?;
-    validate_hashed_path(&manifest.tools.stage2_busybox, "tools.stage2_busybox")?;
-
-    if !manifest.fixed_point.stage1_equals_stage2 {
-        return Err(RunError::Internal("full proof artifact required: stage1_equals_stage2 must be true".to_string()));
-    }
-    if !manifest.fixed_point.stage0_bwrap_equals_stage2_bwrap {
-        return Err(RunError::Internal(
-            "full proof artifact required: stage0_bwrap_equals_stage2_bwrap must be true".to_string(),
-        ));
-    }
-    if !manifest.fixed_point.stage0_busybox_equals_stage2_busybox {
-        return Err(RunError::Internal(
-            "full proof artifact required: stage0_busybox_equals_stage2_busybox must be true".to_string(),
-        ));
-    }
-
-    validate_stage_report(&manifest.stage0.report, &manifest.staged_source, "stage0.report")?;
-    validate_stage_report(&manifest.stage2.report, &manifest.staged_source, "stage2.report")?;
-    if manifest.stage2.report.output_binary != manifest.binaries.stage2.path {
-        return Err(RunError::Internal(
-            "full proof artifact required: stage2 report output_binary must match binaries.stage2.path".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_hashed_path(hashed: &SelfHostingProofHashedPath, field_name: &str) -> Result<(), RunError> {
-    if hashed.path.trim().is_empty() {
-        return Err(RunError::Internal(format!("full proof artifact required: {field_name}.path is missing")));
-    }
-    if hashed.size_bytes == 0 {
-        return Err(RunError::Internal(format!(
-            "full proof artifact required: {field_name}.size_bytes must be non-zero"
-        )));
-    }
-    validate_blake3_hex(&hashed.digest_blake3, &format!("{field_name}.digest_blake3"))
-}
-
-fn validate_stage_report(
-    report: &SelfHostingProofReportView,
-    expected_staged_source: &str,
-    field_name: &str,
-) -> Result<(), RunError> {
-    if report.staged_source != expected_staged_source {
-        return Err(RunError::Internal(format!(
-            "full proof artifact required: {field_name}.staged_source does not match top-level staged_source"
-        )));
-    }
-    if report.output_binary.trim().is_empty() {
-        return Err(RunError::Internal(format!("full proof artifact required: {field_name}.output_binary is missing")));
-    }
-    if report.busybox_path.is_none() {
-        return Err(RunError::Internal(format!("full proof artifact required: {field_name}.busybox_path is missing")));
-    }
-    Ok(())
-}
-
-fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), RunError> {
-    if path.trim().is_empty() {
-        return Err(RunError::Internal(format!("release evidence {field_name} must not be empty")));
-    }
-    if path.starts_with('/') {
-        return Err(RunError::Internal(format!(
-            "release evidence {field_name} must be relative, got absolute path {path}"
-        )));
-    }
-    if path.split('/').any(|component| component == "..") {
-        return Err(RunError::Internal(format!(
-            "release evidence {field_name} must not escape the bundle root: {path}"
-        )));
-    }
-    let path_len_bytes: u32 = path
-        .len()
-        .try_into()
-        .map_err(|_| RunError::Internal(format!("release evidence {field_name} length overflowed u32")))?;
-    if path_len_bytes > MAX_RELATIVE_PATH_BYTES {
-        return Err(RunError::Internal(format!(
-            "release evidence {field_name} exceeds {MAX_RELATIVE_PATH_BYTES} bytes"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_blake3_hex(digest_hex: &str, field_name: &str) -> Result<(), RunError> {
-    if digest_hex.len() != BLAKE3_HEX_LEN {
-        return Err(RunError::Internal(format!(
-            "{field_name} must be {BLAKE3_HEX_LEN} lowercase hex chars, got {}",
-            digest_hex.len()
-        )));
-    }
-    if !digest_hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-        return Err(RunError::Internal(format!("{field_name} must contain lowercase hex only")));
     }
     Ok(())
 }

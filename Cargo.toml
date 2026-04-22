@@ -13,6 +13,7 @@ members = [
   "crates/crunch-delta",
   "crates/crunch-shell",
   "crates/crunch-shell-core",
+  "crates/crunch-release-core",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -38,6 +39,7 @@ default_scope = [
   "-p", "crunch-pipeline",
   "-p", "crunch-project",
   "-p", "crunch-project-core",
+  "-p", "crunch-release-core",
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
@@ -84,6 +86,7 @@ crunch-store = { path = "crates/crunch-store" }
 crunch-project = { path = "crates/crunch-project" }
 crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
+crunch-release-core = { path = "crates/crunch-release-core" }
 nix-compat = { path = "vendor/nix-compat" }
 snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }

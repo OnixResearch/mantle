@@ -1207,6 +1207,7 @@ dependencies = [
  "crunch-glue",
  "crunch-pipeline",
  "crunch-project",
+ "crunch-release-core",
  "crunch-shell",
  "crunch-store",
  "data-encoding",
@@ -1385,6 +1386,15 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "crunch-attestation-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "crunch-release-core"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
  "serde",
  "serde_json",
 ]

@@ -360,6 +360,11 @@ Building derivations (not just compiling crunch) requires:
 - `crates/crunch-shell/` is now the std adapter: it keeps `PathBuf`/`OsString` shell-facing types, derives host PATH entries with `split_paths`, maps them into the core, then restores `ExecTarget` and `PathBuf` plans for `src/shell_cmd.rs`.
 - The compiler-enforced boundary is intentionally UTF-8-only at the core edge. Adapter tests prove non-UTF-8 `--with` paths fail loudly with `ShellError::NonUtf8Path` instead of silently lossy-converting them.
 
+## crunch-release-core Crate (2026-04-22)
+- `crates/crunch-release-core/` is the no-std functional core for release-evidence manifests: canonical compact JSON, bundle-member/path validation, proof-linkage validation, and full-proof manifest parsing all live on owned `String`/`Vec` data with `serde`/`serde_json` in `alloc` mode.
+- `src/release_evidence.rs` is now the std shell/adaptor: it keeps file copying, directory hashing, bundle I/O, and proof-manifest digesting on the shell side, then delegates manifest/proof validation to `crunch-release-core`.
+- Cheap validation rail for this slice: `cargo test -p crunch-release-core`, `cargo check -p crunch-release-core --target wasm32-unknown-unknown`, and `cargo test -p crunch --bin crunch release_evidence::` with an isolated `CARGO_TARGET_DIR` under `/tmp`.
+
 ## crunch-project Crate (2026-04-07)
 - `crates/crunch-project/` owns manifest, lock, refresh, stale detection, upgrade, drift, mirrors, and generated inputs.
 - No Nickel dep — the binary crate uses `crunch-eval::evaluate_and_deserialize()` to load `crunch-project.ncl` into `ProjectManifest`.
