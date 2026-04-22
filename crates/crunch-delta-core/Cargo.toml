@@ -1,0 +1,8 @@
+[package]
+name = "crunch-delta-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dev-dependencies]
+pretty_assertions = "1.0"

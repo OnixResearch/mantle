@@ -1,6 +1,6 @@
 # Ownership Review
 
-Status: first-wave boundary review synchronized to main spec assets
+Status: adopted-core boundary review synchronized to main spec assets
 Date: 2026-04-22
 
 ## Legacy std paths reduced to adapter-only form
@@ -70,6 +70,15 @@ Date: 2026-04-22
 - `crates/crunch-shell/src/types.rs` → `adapter-only`
   - std-owned path and `OsString` shell-facing types stay here while
     `crunch-shell-core` public APIs stay on owned UTF-8 data
+- `crates/crunch-delta/src/lib.rs` → `adapter-only`
+  - crate-root re-exports and std-facing compatibility wiring stay thin around
+    `crunch-delta-core`
+- `crates/crunch-delta/src/manifest.rs` → `adapter-only`
+  - castore probing and receiver-manifest construction remain std-owned shell
+    work before the core boundary
+- `crates/crunch-delta/src/substitution.rs` → `adapter-only`
+  - async store/network/session orchestration and attestation integration stay
+    in the std adaptor around `crunch-delta-core`
 - `src/attest_cmd.rs` → `unrelated`
   - root CLI shell for attestation commands, store access, and output formatting
 - `src/project_cmd.rs` → `unrelated`
@@ -101,6 +110,6 @@ Date: 2026-04-22
   called out by `workspace-inventory.md` (`discovery.rs`, `refresh_adapter.rs`,
   CLI shells, and related adapters) until a later extraction wave explicitly
   reshapes those APIs.
-- shell/release business logic remains in `crunch-shell-core` and `crunch-release-core` rather than drifting back into the reviewed std adapter files.
+- shell/release business logic remains in `crunch-shell-core` and `crunch-release-core`, while delta planning/protocol business logic remains in `crunch-delta-core` rather than drifting back into the reviewed std adapter files.
 
 Reviewer: pi session

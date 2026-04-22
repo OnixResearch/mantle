@@ -5,6 +5,7 @@ blake3
 cfg-if
 constant_time_eq
 crunch-attestation-core
+crunch-delta-core
 crunch-project-core
 crunch-release-core
 crunch-shell-core

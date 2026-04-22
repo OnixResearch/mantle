@@ -1,11 +1,7 @@
-use std::collections::HashSet;
-
 use crate::model::ChunkProfile;
-use crate::model::chunk_profile_v1;
+use crate::model::core_chunk_profile;
 
 pub const PROTOCOL_VERSION_V1: u32 = 1;
-pub const MAX_NEGOTIATION_VERSIONS: u32 = 8;
-pub const MAX_NEGOTIATION_CHUNK_PROFILES: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChunkingAlgorithmWire {
@@ -28,32 +24,16 @@ pub struct ChunkProfileWire {
 
 impl ChunkProfileWire {
     pub fn validate(self) {
-        assert!(self.min_chunk_bytes > 0, "chunk profile min must be positive");
-        assert!(self.min_chunk_bytes < self.avg_chunk_bytes, "chunk profile avg must exceed min");
-        assert!(self.avg_chunk_bytes < self.max_chunk_bytes, "chunk profile max must exceed avg");
+        validate_chunk_profile_wire(self);
     }
 
     pub fn matches_runtime_profile(self, runtime: &ChunkProfile) -> bool {
-        self.validate();
-        assert!(runtime.min_chunk_bytes > 0, "runtime chunk profile min must be positive");
-        assert!(runtime.min_chunk_bytes < runtime.avg_chunk_bytes, "runtime chunk profile avg must exceed min");
-        self.chunking == ChunkingAlgorithmWire::FastCdc
-            && self.chunk_digest == ChunkDigestAlgorithmWire::Blake3
-            && self.min_chunk_bytes == runtime.min_chunk_bytes
-            && self.avg_chunk_bytes == runtime.avg_chunk_bytes
-            && self.max_chunk_bytes == runtime.max_chunk_bytes
+        matches_runtime_profile(self, runtime)
     }
 }
 
 pub fn chunk_profile_wire_v1() -> ChunkProfileWire {
-    let runtime = chunk_profile_v1();
-    ChunkProfileWire {
-        chunking: ChunkingAlgorithmWire::FastCdc,
-        chunk_digest: ChunkDigestAlgorithmWire::Blake3,
-        min_chunk_bytes: runtime.min_chunk_bytes,
-        avg_chunk_bytes: runtime.avg_chunk_bytes,
-        max_chunk_bytes: runtime.max_chunk_bytes,
-    }
+    chunk_profile_wire_from_core(crunch_delta_core::chunk_profile_wire_v1())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +51,7 @@ impl NegotiationOffer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NegotiatedProtocol {
     pub version: u32,
     pub chunk_profile: ChunkProfileWire,
@@ -131,204 +111,172 @@ impl std::fmt::Display for NegotiationError {
 
 impl std::error::Error for NegotiationError {}
 
+impl From<crunch_delta_core::NegotiationError> for NegotiationError {
+    fn from(value: crunch_delta_core::NegotiationError) -> Self {
+        match value {
+            crunch_delta_core::NegotiationError::EmptyVersionSet => Self::EmptyVersionSet,
+            crunch_delta_core::NegotiationError::EmptyChunkProfileSet => Self::EmptyChunkProfileSet,
+            crunch_delta_core::NegotiationError::TooManyVersions(count) => Self::TooManyVersions(count),
+            crunch_delta_core::NegotiationError::TooManyChunkProfiles(count) => Self::TooManyChunkProfiles(count),
+            crunch_delta_core::NegotiationError::DuplicateVersion(version) => Self::DuplicateVersion(version),
+            crunch_delta_core::NegotiationError::DuplicateChunkProfile(profile) => {
+                Self::DuplicateChunkProfile(chunk_profile_wire_from_core(profile))
+            }
+            crunch_delta_core::NegotiationError::VersionMismatch {
+                sender_versions,
+                receiver_versions,
+            } => Self::VersionMismatch {
+                sender_versions,
+                receiver_versions,
+            },
+            crunch_delta_core::NegotiationError::ChunkProfileMismatch {
+                version,
+                sender_chunk_profiles,
+                receiver_chunk_profiles,
+            } => Self::ChunkProfileMismatch {
+                version,
+                sender_chunk_profiles: sender_chunk_profiles
+                    .into_iter()
+                    .map(chunk_profile_wire_from_core)
+                    .collect::<Vec<_>>(),
+                receiver_chunk_profiles: receiver_chunk_profiles
+                    .into_iter()
+                    .map(chunk_profile_wire_from_core)
+                    .collect::<Vec<_>>(),
+            },
+        }
+    }
+}
+
+pub(crate) fn validate_chunk_profile_wire(profile: ChunkProfileWire) {
+    crunch_delta_core::validate_chunk_profile_wire(core_chunk_profile_wire(profile));
+}
+
+pub(crate) fn matches_runtime_profile(profile: ChunkProfileWire, runtime: &ChunkProfile) -> bool {
+    core_chunk_profile_wire(profile).matches_runtime_profile(core_chunk_profile(runtime))
+}
+
 pub fn negotiate_protocol(
     sender: &NegotiationOffer,
     receiver: &NegotiationOffer,
 ) -> Result<NegotiatedProtocol, NegotiationError> {
-    validate_offer(sender)?;
-    validate_offer(receiver)?;
-
-    let agreed_version = select_highest_common_version(&sender.supported_versions, &receiver.supported_versions)?;
-    let agreed_profile = select_shared_chunk_profile(
-        agreed_version,
-        &sender.supported_chunk_profiles,
-        &receiver.supported_chunk_profiles,
-    )?;
-
-    Ok(NegotiatedProtocol {
-        version: agreed_version,
-        chunk_profile: agreed_profile,
-    })
+    let negotiated =
+        crunch_delta_core::negotiate_protocol(core_negotiation_offer(sender), core_negotiation_offer(receiver))
+            .map_err(NegotiationError::from)?;
+    Ok(negotiated_protocol_from_core(negotiated))
 }
 
-fn validate_offer(offer: &NegotiationOffer) -> Result<(), NegotiationError> {
-    debug_assert!(MAX_NEGOTIATION_VERSIONS > 0);
-    debug_assert!(MAX_NEGOTIATION_CHUNK_PROFILES > 0);
-    let version_count = offer.supported_versions.len() as u32;
-    if version_count == 0 {
-        return Err(NegotiationError::EmptyVersionSet);
+fn negotiated_protocol_from_core(protocol: crunch_delta_core::NegotiatedProtocol) -> NegotiatedProtocol {
+    NegotiatedProtocol {
+        version: protocol.version,
+        chunk_profile: chunk_profile_wire_from_core(protocol.chunk_profile),
     }
-    if version_count > MAX_NEGOTIATION_VERSIONS {
-        return Err(NegotiationError::TooManyVersions(version_count));
-    }
-
-    let profile_count = offer.supported_chunk_profiles.len() as u32;
-    if profile_count == 0 {
-        return Err(NegotiationError::EmptyChunkProfileSet);
-    }
-    if profile_count > MAX_NEGOTIATION_CHUNK_PROFILES {
-        return Err(NegotiationError::TooManyChunkProfiles(profile_count));
-    }
-
-    let mut seen_versions = HashSet::<u32>::new();
-    for version in &offer.supported_versions {
-        if !seen_versions.insert(*version) {
-            return Err(NegotiationError::DuplicateVersion(*version));
-        }
-    }
-
-    let mut seen_profiles = HashSet::<ChunkProfileWire>::new();
-    for profile in &offer.supported_chunk_profiles {
-        profile.validate();
-        if !seen_profiles.insert(*profile) {
-            return Err(NegotiationError::DuplicateChunkProfile(*profile));
-        }
-    }
-
-    Ok(())
 }
 
-fn select_highest_common_version(sender_versions: &[u32], receiver_versions: &[u32]) -> Result<u32, NegotiationError> {
-    assert!(!sender_versions.is_empty(), "sender version list must not be empty");
-    assert!(!receiver_versions.is_empty(), "receiver version list must not be empty");
-
-    let receiver_version_set = receiver_versions.iter().copied().collect::<HashSet<_>>();
-    let mut common_versions = sender_versions
-        .iter()
-        .copied()
-        .filter(|version| receiver_version_set.contains(version))
-        .collect::<Vec<_>>();
-    if common_versions.is_empty() {
-        return Err(NegotiationError::VersionMismatch {
-            sender_versions: sender_versions.to_vec(),
-            receiver_versions: receiver_versions.to_vec(),
-        });
+fn chunk_profile_wire_from_core(profile: crunch_delta_core::ChunkProfileWire) -> ChunkProfileWire {
+    ChunkProfileWire {
+        chunking: chunking_algorithm_from_core(profile.chunking),
+        chunk_digest: chunk_digest_algorithm_from_core(profile.chunk_digest),
+        min_chunk_bytes: profile.min_chunk_bytes,
+        avg_chunk_bytes: profile.avg_chunk_bytes,
+        max_chunk_bytes: profile.max_chunk_bytes,
     }
-
-    common_versions.sort_unstable();
-    let agreed_version = *common_versions.last().ok_or(NegotiationError::VersionMismatch {
-        sender_versions: sender_versions.to_vec(),
-        receiver_versions: receiver_versions.to_vec(),
-    })?;
-    assert!(agreed_version > 0, "protocol version must be positive");
-    Ok(agreed_version)
 }
 
-fn select_shared_chunk_profile(
-    version: u32,
-    sender_profiles: &[ChunkProfileWire],
-    receiver_profiles: &[ChunkProfileWire],
-) -> Result<ChunkProfileWire, NegotiationError> {
-    assert!(!sender_profiles.is_empty(), "sender chunk profile list must not be empty");
-    assert!(!receiver_profiles.is_empty(), "receiver chunk profile list must not be empty");
-
-    let expected_profile = chunk_profile_for_version(version)?;
-    let receiver_profile_set = receiver_profiles.iter().copied().collect::<HashSet<_>>();
-    let shared_profiles = sender_profiles
-        .iter()
-        .copied()
-        .filter(|profile| *profile == expected_profile)
-        .filter(|profile| receiver_profile_set.contains(profile))
-        .collect::<Vec<_>>();
-    if shared_profiles.is_empty() {
-        return Err(NegotiationError::ChunkProfileMismatch {
-            version,
-            sender_chunk_profiles: sender_profiles.to_vec(),
-            receiver_chunk_profiles: receiver_profiles.to_vec(),
-        });
+fn core_negotiation_offer(offer: &NegotiationOffer) -> crunch_delta_core::NegotiationOffer {
+    crunch_delta_core::NegotiationOffer {
+        supported_versions: offer.supported_versions.clone(),
+        supported_chunk_profiles: offer
+            .supported_chunk_profiles
+            .iter()
+            .copied()
+            .map(core_chunk_profile_wire)
+            .collect::<Vec<_>>(),
     }
-
-    assert_eq!(shared_profiles[0], expected_profile, "shared chunk profile must match version pin");
-    Ok(shared_profiles[0])
 }
 
-fn chunk_profile_for_version(version: u32) -> Result<ChunkProfileWire, NegotiationError> {
-    if version == PROTOCOL_VERSION_V1 {
-        return Ok(chunk_profile_wire_v1());
+fn core_chunk_profile_wire(profile: ChunkProfileWire) -> crunch_delta_core::ChunkProfileWire {
+    crunch_delta_core::ChunkProfileWire {
+        chunking: core_chunking_algorithm(profile.chunking),
+        chunk_digest: core_chunk_digest_algorithm(profile.chunk_digest),
+        min_chunk_bytes: profile.min_chunk_bytes,
+        avg_chunk_bytes: profile.avg_chunk_bytes,
+        max_chunk_bytes: profile.max_chunk_bytes,
     }
+}
 
-    Err(NegotiationError::ChunkProfileMismatch {
-        version,
-        sender_chunk_profiles: Vec::new(),
-        receiver_chunk_profiles: Vec::new(),
-    })
+fn chunking_algorithm_from_core(value: crunch_delta_core::ChunkingAlgorithmWire) -> ChunkingAlgorithmWire {
+    match value {
+        crunch_delta_core::ChunkingAlgorithmWire::FastCdc => ChunkingAlgorithmWire::FastCdc,
+    }
+}
+
+fn chunk_digest_algorithm_from_core(value: crunch_delta_core::ChunkDigestAlgorithmWire) -> ChunkDigestAlgorithmWire {
+    match value {
+        crunch_delta_core::ChunkDigestAlgorithmWire::Blake3 => ChunkDigestAlgorithmWire::Blake3,
+    }
+}
+
+fn core_chunking_algorithm(value: ChunkingAlgorithmWire) -> crunch_delta_core::ChunkingAlgorithmWire {
+    match value {
+        ChunkingAlgorithmWire::FastCdc => crunch_delta_core::ChunkingAlgorithmWire::FastCdc,
+    }
+}
+
+fn core_chunk_digest_algorithm(value: ChunkDigestAlgorithmWire) -> crunch_delta_core::ChunkDigestAlgorithmWire {
+    match value {
+        ChunkDigestAlgorithmWire::Blake3 => crunch_delta_core::ChunkDigestAlgorithmWire::Blake3,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chunk_profile_v1;
 
     #[test]
     fn protocol_v1_wire_profile_matches_spec() {
-        let wire = chunk_profile_wire_v1();
         let runtime = chunk_profile_v1();
-
-        assert_eq!(wire.chunking, ChunkingAlgorithmWire::FastCdc);
-        assert_eq!(wire.chunk_digest, ChunkDigestAlgorithmWire::Blake3);
-        assert!(wire.matches_runtime_profile(&runtime));
+        let wire = chunk_profile_wire_v1();
+        validate_chunk_profile_wire(wire);
+        assert!(matches_runtime_profile(wire, &runtime));
     }
 
     #[test]
     fn negotiation_agrees_on_protocol_version_one() {
         let sender = NegotiationOffer::protocol_v1();
-        let receiver = NegotiationOffer {
-            supported_versions: vec![7, PROTOCOL_VERSION_V1],
-            supported_chunk_profiles: vec![chunk_profile_wire_v1()],
-        };
-
-        let negotiated = negotiate_protocol(&sender, &receiver).expect("protocol version one should negotiate");
-
+        let receiver = NegotiationOffer::protocol_v1();
+        let negotiated = negotiate_protocol(&sender, &receiver).expect("protocol v1 negotiation");
         assert_eq!(negotiated.version, PROTOCOL_VERSION_V1);
         assert_eq!(negotiated.chunk_profile, chunk_profile_wire_v1());
-    }
-
-    #[test]
-    fn negotiation_agrees_on_protocol_v1_chunk_profile() {
-        let sender = NegotiationOffer::protocol_v1();
-        let receiver = NegotiationOffer::protocol_v1();
-
-        let negotiated = negotiate_protocol(&sender, &receiver).expect("protocol v1 chunk profile should negotiate");
-
-        assert_eq!(negotiated.chunk_profile, chunk_profile_wire_v1());
-        assert!(negotiated.chunk_profile.matches_runtime_profile(&chunk_profile_v1()));
     }
 
     #[test]
     fn negotiation_rejects_version_mismatch() {
         let sender = NegotiationOffer::protocol_v1();
         let receiver = NegotiationOffer {
-            supported_versions: vec![2],
+            supported_versions: vec![PROTOCOL_VERSION_V1.saturating_add(1)],
             supported_chunk_profiles: vec![chunk_profile_wire_v1()],
         };
-
         let err = negotiate_protocol(&sender, &receiver).expect_err("version mismatch must fail");
-
         assert_eq!(err, NegotiationError::VersionMismatch {
             sender_versions: vec![PROTOCOL_VERSION_V1],
-            receiver_versions: vec![2],
+            receiver_versions: vec![PROTOCOL_VERSION_V1.saturating_add(1)],
         });
     }
 
     #[test]
-    fn negotiation_rejects_chunk_profile_mismatch() {
-        let sender = NegotiationOffer::protocol_v1();
-        let receiver = NegotiationOffer {
-            supported_versions: vec![PROTOCOL_VERSION_V1],
-            supported_chunk_profiles: vec![ChunkProfileWire {
-                chunking: ChunkingAlgorithmWire::FastCdc,
-                chunk_digest: ChunkDigestAlgorithmWire::Blake3,
-                min_chunk_bytes: 65_536,
-                avg_chunk_bytes: 131_072,
-                max_chunk_bytes: 262_144,
-            }],
-        };
+    fn negotiation_error_keeps_std_error_in_facade() {
+        fn assert_error<E: std::error::Error>() {}
+        assert_error::<NegotiationError>();
+    }
 
-        let err = negotiate_protocol(&sender, &receiver).expect_err("chunk profile mismatch must fail");
-
-        assert_eq!(err, NegotiationError::ChunkProfileMismatch {
-            version: PROTOCOL_VERSION_V1,
-            sender_chunk_profiles: vec![chunk_profile_wire_v1()],
-            receiver_chunk_profiles: receiver.supported_chunk_profiles,
-        });
+    #[test]
+    fn validate_method_matches_free_function() {
+        let mut seen = std::collections::HashSet::new();
+        let wire = chunk_profile_wire_v1();
+        wire.validate();
+        assert!(seen.insert(wire));
+        assert!(wire.matches_runtime_profile(&chunk_profile_v1()));
     }
 }

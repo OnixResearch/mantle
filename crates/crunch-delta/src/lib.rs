@@ -1,6 +1,10 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 
+//! Std-facing delta adaptor and compatibility façade around `crunch-delta-core`.
+//! This crate still owns manifest probing, substitution orchestration, and
+//! runtime/store/network conversion while the no-std core crate grows under it.
+
 #[allow(tigerstyle::platform_dependent_cast)] // fixture code: all values are known-bounded fixture constants
 #[allow(tigerstyle::raw_arithmetic_overflow)] // fixture wire-size calculations with known-valid ordering
 #[allow(tigerstyle::no_panic)] // fixture construction panics on programmer error

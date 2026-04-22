@@ -20,6 +20,14 @@ use crate::OutputFixture;
 use crate::ReceiverManifest;
 use crate::build_receiver_manifest;
 use crate::chunk_profile_wire_v1;
+use crate::model::b3_digest_from_delta;
+use crate::model::closure_full_transfer_bytes;
+use crate::model::manifest_has_known_blob;
+use crate::model::manifest_has_known_chunk;
+use crate::model::manifest_has_known_directory;
+use crate::model::manifest_insert_known_blob;
+use crate::model::manifest_insert_known_chunk;
+use crate::model::new_receiver_manifest;
 use crate::negotiate_protocol;
 
 pub const MAX_ACTIVE_DIRECTORY_WINDOWS: u32 = 8;
@@ -201,21 +209,21 @@ impl DeltaReceiverState {
         let case = BenchCase {
             name: "delta-substitution",
             sender: sender.clone(),
-            receiver: ReceiverManifest::new(&sender.store_prefix),
+            receiver: new_receiver_manifest(&sender.store_prefix),
             receiver_store: self.receiver_store.clone(),
             receiver_frontiers: Vec::new(),
             receiver_lossy_frontiers: Vec::new(),
             receiver_probabilistic_frontiers: Vec::new(),
             frontier_complete_outputs: std::collections::HashSet::new(),
-            expected_full_bytes: sender.full_transfer_bytes(),
-            expected_coarse_bytes: sender.full_transfer_bytes(),
+            expected_full_bytes: closure_full_transfer_bytes(sender),
+            expected_coarse_bytes: closure_full_transfer_bytes(sender),
         };
         let mut manifest = build_receiver_manifest(&case).await?.manifest;
         for digest in self.retained.full_blobs.keys() {
-            manifest.known_blobs.insert(*digest);
+            manifest_insert_known_blob(&mut manifest, *digest);
         }
         for digest in self.retained.chunks.keys() {
-            manifest.known_chunks.insert(*digest);
+            manifest_insert_known_chunk(&mut manifest, *digest);
         }
         Ok(manifest)
     }
@@ -359,8 +367,7 @@ async fn full_artifact_fallback(
     let path_info = authority
         .full_artifact_fetch(request)?
         .ok_or_else(|| DeltaSubstitutionError::MissingFallback(request.output_name.clone()))?;
-    verify_pathinfo_trusted(&path_info, trusted_keys)
-        .map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
+    verify_pathinfo_trusted(&path_info, trusted_keys).map_err(|_| DeltaSubstitutionError::UntrustedFallbackPathInfo)?;
     debug_assert!(!request.output_name.is_empty());
     let stored = persist_artifact_attestation(state_dir, store_dir, &path_info, &request.output_name, None)
         .await
@@ -388,22 +395,34 @@ pub async fn substitute_from_authority(
     state_dir: &Path,
     store_dir: &str,
 ) -> Result<DeltaFetchOutcome, DeltaSubstitutionError> {
-    let full_transfer_bytes = authority.sender.full_transfer_bytes();
+    let full_transfer_bytes = closure_full_transfer_bytes(&authority.sender);
     debug_assert!(full_transfer_bytes > 0);
     let Some(_capabilities) = authority.capabilities() else {
         return full_artifact_fallback(
-            authority, request, trusted_keys, state_dir, store_dir,
-            DeltaFallbackReason::LegacyCache, full_transfer_bytes,
-        ).await;
+            authority,
+            request,
+            trusted_keys,
+            state_dir,
+            store_dir,
+            DeltaFallbackReason::LegacyCache,
+            full_transfer_bytes,
+        )
+        .await;
     };
 
     let candidate = match authority.request_candidates(request, client_offer) {
         Ok(Some(candidate)) => candidate,
         Ok(None) | Err(DeltaSubstitutionError::Negotiation(_)) => {
             return full_artifact_fallback(
-                authority, request, trusted_keys, state_dir, store_dir,
-                DeltaFallbackReason::NegotiationFailed, full_transfer_bytes,
-            ).await;
+                authority,
+                request,
+                trusted_keys,
+                state_dir,
+                store_dir,
+                DeltaFallbackReason::NegotiationFailed,
+                full_transfer_bytes,
+            )
+            .await;
         }
         Err(err) => return Err(err),
     };
@@ -424,9 +443,15 @@ pub async fn substitute_from_authority(
 
     if verify_pathinfo_trusted(&path_info, trusted_keys).is_err() {
         return full_artifact_fallback(
-            authority, request, trusted_keys, state_dir, store_dir,
-            DeltaFallbackReason::UntrustedDeltaPathInfo, full_transfer_bytes,
-        ).await;
+            authority,
+            request,
+            trusted_keys,
+            state_dir,
+            store_dir,
+            DeltaFallbackReason::UntrustedDeltaPathInfo,
+            full_transfer_bytes,
+        )
+        .await;
     }
 
     debug_assert!(!request.output_name.is_empty());
@@ -487,7 +512,8 @@ where
 {
     match node {
         crate::ArtifactNode::Directory(directory) => {
-            if manifest.known_directories.contains(&directory.digest) {
+            let directory_digest = b3_digest_from_delta(directory.digest);
+            if manifest_has_known_directory(manifest, directory_digest) {
                 return Ok(());
             }
             for child in &directory.children {
@@ -496,18 +522,19 @@ where
             Ok(())
         }
         crate::ArtifactNode::Blob(blob) => {
-            if manifest.known_blobs.contains(&blob.digest) {
+            let blob_digest = b3_digest_from_delta(blob.digest);
+            if manifest_has_known_blob(manifest, blob_digest) {
                 return Ok(());
             }
             if blob.chunks.is_empty() {
                 let bytes = catalog
                     .full_blobs
-                    .get(&blob.digest)
+                    .get(&blob_digest)
                     .cloned()
-                    .ok_or(DeltaSubstitutionError::MissingSenderBlob(blob.digest))?;
+                    .ok_or(DeltaSubstitutionError::MissingSenderBlob(blob_digest))?;
                 stats.record_blob(bytes.len());
                 on_frame(DeltaTransferFrame::Blob {
-                    digest: blob.digest,
+                    digest: blob_digest,
                     bytes,
                 })?;
                 return Ok(());
@@ -515,33 +542,34 @@ where
 
             let mut has_sent_any_chunk = false;
             for (chunk_index, chunk) in blob.chunks.iter().enumerate() {
-                if manifest.known_chunks.contains(&chunk.digest) {
+                let chunk_digest = b3_digest_from_delta(chunk.digest);
+                if manifest_has_known_chunk(manifest, chunk_digest) {
                     continue;
                 }
                 let chunk_bytes = catalog
                     .chunks
-                    .get(&blob.digest)
+                    .get(&blob_digest)
                     .and_then(|chunks| chunks.get(chunk_index))
                     .cloned()
-                    .ok_or(DeltaSubstitutionError::MissingSenderChunk(chunk.digest))?;
+                    .ok_or(DeltaSubstitutionError::MissingSenderChunk(chunk_digest))?;
                 stats.record_chunk(chunk_bytes.len());
                 on_frame(DeltaTransferFrame::Chunk {
-                    parent_digest: blob.digest,
-                    chunk_digest: chunk.digest,
+                    parent_digest: blob_digest,
+                    chunk_digest,
                     chunk_index: chunk_index as u32,
                     bytes: chunk_bytes,
                 })?;
                 has_sent_any_chunk = true;
             }
-            if !has_sent_any_chunk && !manifest.known_blobs.contains(&blob.digest) {
+            if !has_sent_any_chunk && !manifest_has_known_blob(manifest, blob_digest) {
                 let bytes = catalog
                     .full_blobs
-                    .get(&blob.digest)
+                    .get(&blob_digest)
                     .cloned()
-                    .ok_or(DeltaSubstitutionError::MissingSenderBlob(blob.digest))?;
+                    .ok_or(DeltaSubstitutionError::MissingSenderBlob(blob_digest))?;
                 stats.record_blob(bytes.len());
                 on_frame(DeltaTransferFrame::Blob {
-                    digest: blob.digest,
+                    digest: blob_digest,
                     bytes,
                 })?;
             }
@@ -568,14 +596,16 @@ fn ensure_node_content_available(node: &crate::ArtifactNode, retained: &Retained
             Some(())
         }
         crate::ArtifactNode::Blob(blob) => {
-            if retained.has_blob(&blob.digest) {
+            let blob_digest = b3_digest_from_delta(blob.digest);
+            if retained.has_blob(&blob_digest) {
                 return Some(());
             }
             if blob.chunks.is_empty() {
                 return None;
             }
             for chunk in &blob.chunks {
-                if !retained.has_chunk(&chunk.digest) {
+                let chunk_digest = b3_digest_from_delta(chunk.digest);
+                if !retained.has_chunk(&chunk_digest) {
                     return None;
                 }
             }
@@ -596,11 +626,11 @@ fn output_root_node(outputs: &[OutputFixture], output_name: &str) -> Option<Node
 fn fixture_node(node: &crate::ArtifactNode) -> Node {
     match node {
         crate::ArtifactNode::Directory(directory) => Node::Directory {
-            digest: directory.digest,
+            digest: b3_digest_from_delta(directory.digest),
             size: directory.children.len() as u64,
         },
         crate::ArtifactNode::Blob(blob) => Node::File {
-            digest: blob.digest,
+            digest: b3_digest_from_delta(blob.digest),
             size: blob.size_bytes,
             executable: false,
         },
@@ -663,12 +693,12 @@ mod tests {
     }
 
     fn digest_for(label: &str) -> B3Digest {
-        blake3::hash(label.as_bytes()).as_bytes().into()
+        blake3::hash(label.as_bytes()).into()
     }
 
     fn chunk(bytes: &[u8]) -> ChunkRef {
         ChunkRef {
-            digest: blake3::hash(bytes).as_bytes().into(),
+            digest: blake3::hash(bytes).into(),
             size_bytes: bytes.len() as u64,
         }
     }
@@ -678,7 +708,7 @@ mod tests {
         let refs = parts.iter().map(|part| chunk(part)).collect::<Vec<_>>();
         (
             ArtifactNode::Blob(BlobNode {
-                digest: blake3::hash(&full).as_bytes().into(),
+                digest: blake3::hash(&full).into(),
                 size_bytes: full.len() as u64,
                 chunks: refs,
             }),
@@ -688,7 +718,7 @@ mod tests {
 
     fn flat_blob(bytes: &[u8]) -> ArtifactNode {
         ArtifactNode::Blob(BlobNode {
-            digest: blake3::hash(bytes).as_bytes().into(),
+            digest: blake3::hash(bytes).into(),
             size_bytes: bytes.len() as u64,
             chunks: Vec::new(),
         })
@@ -724,7 +754,7 @@ mod tests {
             store_path,
             node: fixture_node(root),
             references: vec![],
-            nar_size: root.full_transfer_bytes(),
+            nar_size: crate::model::artifact_full_transfer_bytes(root),
             nar_sha256: [7u8; 32],
             signatures: vec![],
             deriver: None,
@@ -792,8 +822,9 @@ mod tests {
             ArtifactNode::Blob(blob) => blob.digest,
             _ => unreachable!(),
         };
-        catalog.insert_chunks(final_blob_digest, final_chunk_bytes);
-        catalog.insert_blob(final_blob_digest, final_parts.concat());
+        let final_blob_b3_digest = b3_digest_from_delta(final_blob_digest);
+        catalog.insert_chunks(final_blob_b3_digest, final_chunk_bytes);
+        catalog.insert_blob(final_blob_b3_digest, final_parts.concat());
         let authority = authority_for_sender(
             "out",
             sender.clone(),
@@ -806,9 +837,9 @@ mod tests {
         // Seed retained store with provisional chunks only. If planning used pre-rewrite bytes,
         // it would incorrectly reuse them and transfer zero bytes.
         if let ArtifactNode::Blob(blob) = provisional_blob {
-            receiver.retained.retain_blob(blob.digest, provisional_parts.concat());
+            receiver.retained.retain_blob(b3_digest_from_delta(blob.digest), provisional_parts.concat());
             for (index, part) in provisional_chunk_bytes.into_iter().enumerate() {
-                receiver.retained.retain_chunk(blob.chunks[index].digest, part);
+                receiver.retained.retain_chunk(b3_digest_from_delta(blob.chunks[index].digest), part);
             }
         }
 
@@ -846,11 +877,12 @@ mod tests {
             retained: RetainedContentStore::default(),
         };
         if let ArtifactNode::Blob(blob) = receiver_blob {
-            receiver
-                .retained
-                .retain_blob(blob.digest, [shared.clone(), b"old-old-old-old".repeat(8192)].concat());
+            receiver.retained.retain_blob(
+                b3_digest_from_delta(blob.digest),
+                [shared.clone(), b"old-old-old-old".repeat(8192)].concat(),
+            );
             for (index, part) in receiver_chunk_bytes.into_iter().enumerate() {
-                receiver.retained.retain_chunk(blob.chunks[index].digest, part);
+                receiver.retained.retain_chunk(b3_digest_from_delta(blob.chunks[index].digest), part);
             }
         }
 
@@ -860,8 +892,9 @@ mod tests {
             ArtifactNode::Blob(blob) => blob.digest,
             _ => unreachable!(),
         };
-        catalog.insert_chunks(sender_blob_digest, sender_chunk_bytes.clone());
-        catalog.insert_blob(sender_blob_digest, [shared.clone(), changed.clone()].concat());
+        let sender_blob_b3_digest = b3_digest_from_delta(sender_blob_digest);
+        catalog.insert_chunks(sender_blob_b3_digest, sender_chunk_bytes.clone());
+        catalog.insert_blob(sender_blob_b3_digest, [shared.clone(), changed.clone()].concat());
         let authority =
             authority_for_sender("out", sender.clone(), &sender_root, catalog, &trusted_signing, &trusted_signing);
 
@@ -895,7 +928,7 @@ mod tests {
         let (untrusted_signing, _) = generated_untrusted_keypair();
         let mut catalog = ContentCatalog::default();
         if let ArtifactNode::Blob(blob) = &blob {
-            catalog.insert_blob(blob.digest, b"trusted fallback body".to_vec());
+            catalog.insert_blob(b3_digest_from_delta(blob.digest), b"trusted fallback body".to_vec());
         }
         let authority =
             authority_for_sender("out", sender, &sender_root, catalog, &untrusted_signing, &trusted_signing);
@@ -931,7 +964,7 @@ mod tests {
         let (trusted_signing, trusted_verify) = parse_test_keypair(TRUSTED_KEYPAIR);
         let mut catalog = ContentCatalog::default();
         if let ArtifactNode::Blob(blob) = &blob {
-            catalog.insert_blob(blob.digest, b"legacy-cache-body".to_vec());
+            catalog.insert_blob(b3_digest_from_delta(blob.digest), b"legacy-cache-body".to_vec());
         }
         let mut authority =
             authority_for_sender("out", sender, &sender_root, catalog, &trusted_signing, &trusted_signing);
@@ -970,8 +1003,9 @@ mod tests {
             ArtifactNode::Blob(blob) => blob.digest,
             _ => unreachable!(),
         };
-        catalog.insert_chunks(sender_blob_digest, sender_chunks.clone());
-        catalog.insert_blob(sender_blob_digest, [first.clone(), second.clone()].concat());
+        let sender_blob_b3_digest = b3_digest_from_delta(sender_blob_digest);
+        catalog.insert_chunks(sender_blob_b3_digest, sender_chunks.clone());
+        catalog.insert_blob(sender_blob_b3_digest, [first.clone(), second.clone()].concat());
         let authority =
             authority_for_sender("out", sender.clone(), &sender_root, catalog, &trusted_signing, &trusted_signing);
         let mut receiver = DeltaReceiverState::default();
@@ -1023,8 +1057,9 @@ mod tests {
             let part_b = vec![index.saturating_add(1) as u8; 262_144];
             let (blob, chunks) = chunked_blob(&format!("large-{index}"), &[part_a.as_slice(), part_b.as_slice()]);
             if let ArtifactNode::Blob(blob_node) = &blob {
-                catalog.insert_chunks(blob_node.digest, chunks.clone());
-                catalog.insert_blob(blob_node.digest, [part_a, part_b].concat());
+                let blob_b3_digest = b3_digest_from_delta(blob_node.digest);
+                catalog.insert_chunks(blob_b3_digest, chunks.clone());
+                catalog.insert_blob(blob_b3_digest, [part_a, part_b].concat());
             }
             children.push(blob);
         }
@@ -1054,5 +1089,44 @@ mod tests {
         assert!(outcome.stats.peak_active_blob_windows <= MAX_ACTIVE_BLOB_WINDOWS);
         assert!(outcome.stats.peak_active_chunk_windows <= MAX_ACTIVE_CHUNK_WINDOWS);
         assert!(outcome.stats.peak_memory_bytes < outcome.full_transfer_bytes);
+    }
+
+    #[tokio::test]
+    async fn substitution_adapter_keeps_async_store_and_network_in_shell() {
+        let body = b"adapter-boundary-body";
+        let blob = flat_blob(body);
+        let sender_root = dir("adapter-root", vec![blob.clone()]);
+        let sender = fixture("out", sender_root.clone());
+        let (trusted_signing, trusted_verify) = parse_test_keypair(TRUSTED_KEYPAIR);
+        let sender_blob_b3_digest = match &blob {
+            ArtifactNode::Blob(blob_node) => b3_digest_from_delta(blob_node.digest),
+            _ => unreachable!(),
+        };
+        let mut catalog = ContentCatalog::default();
+        catalog.insert_blob(sender_blob_b3_digest, body.to_vec());
+        let authority =
+            authority_for_sender("out", sender.clone(), &sender_root, catalog, &trusted_signing, &trusted_signing);
+        let mut receiver = DeltaReceiverState::default();
+
+        let manifest = receiver.build_manifest_for(&sender).await.expect("manifest build should succeed");
+        assert!(!manifest_has_known_blob(&manifest, sender_blob_b3_digest));
+
+        let outcome = substitute_from_authority(
+            &authority,
+            &DeltaFetchRequest {
+                logical_path: "/nix/store/out".to_owned(),
+                output_name: "out".to_owned(),
+            },
+            &mut receiver,
+            &client_offer_v1(),
+            std::slice::from_ref(&trusted_verify),
+            &temp_state_dir("adapter-boundary"),
+            "/nix/store",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(outcome.acceptance, DeltaAcceptanceMode::Delta);
+        assert_eq!(receiver.retained.full_blobs.get(&sender_blob_b3_digest), Some(&body.to_vec()));
     }
 }

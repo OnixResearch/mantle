@@ -18,15 +18,18 @@ VALIDATION_ROOT = FUNCTIONAL_CORE_SPEC_ROOT / "validation"
 ALLOWLIST_PATH = VALIDATION_ROOT / "deps-allowlist.txt"
 INVENTORY_PATH = VALIDATION_ROOT / "adopted-core-inventory.toml"
 OWNERSHIP_REVIEW_PATH = FUNCTIONAL_CORE_SPEC_ROOT / "evidence" / "ownership-review.md"
-NO_STD_CHANGE_NAME = "no-std-functional-core"
-ACTIVE_CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / NO_STD_CHANGE_NAME
-ARCHIVE_CHANGES_ROOT = REPO_ROOT / "openspec" / "changes" / "archive"
+ACTIVE_CHANGES_ROOT = REPO_ROOT / "openspec" / "changes"
+ARCHIVE_CHANGES_ROOT = ACTIVE_CHANGES_ROOT / "archive"
+OWNERSHIP_CHANGE_NAMES = ("no-std-functional-core", "delta-functional-core")
 EMPTY_TREE_OBJECT_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 TOP_LEVEL_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
 CRATE_WORKSPACE_RUST_DIRS = {"src", "tests", "examples", "benches"}
 ADOPTED_CORE_INVENTORY_VERSION = 1
 REQUIRED_OWNERSHIP_REVIEW_MARKERS = ("## Review verdict", "Reviewer:", "adapter-only", "unrelated")
-SECOND_WAVE_VERDICT_MARKER = "shell/release business logic remains in `crunch-shell-core` and `crunch-release-core`"
+ADOPTED_CORE_VERDICT_MARKER = (
+    "shell/release business logic remains in `crunch-shell-core` and `crunch-release-core`, "
+    "while delta planning/protocol business logic remains in `crunch-delta-core`"
+)
 ALLOWED_LEGACY_PREFIXES = ("use ", "pub use ", "type ", "pub type ")
 COMMENT_PREFIXES = ("//", "///", "//!", "/*", "*", "*/")
 
@@ -277,20 +280,32 @@ def is_std_workspace_rust_source(relative_path: str) -> bool:
     return path.parts[2] in CRATE_WORKSPACE_RUST_DIRS
 
 
-def resolve_change_history_paths() -> list[Path]:
-    archived_matches = sorted(ARCHIVE_CHANGES_ROOT.glob(f"*-{NO_STD_CHANGE_NAME}"))
+def resolve_change_history_paths(change_name: str) -> list[Path]:
+    active_change_root = ACTIVE_CHANGES_ROOT / change_name
+    archived_matches = sorted(ARCHIVE_CHANGES_ROOT.glob(f"*-{change_name}"))
     if len(archived_matches) > 1:
         matches = ", ".join(str(path.relative_to(REPO_ROOT)) for path in archived_matches)
-        raise CheckFailure(f"multiple archived change roots found for {NO_STD_CHANGE_NAME}: {matches}")
-    if ACTIVE_CHANGE_ROOT.exists():
-        return [ACTIVE_CHANGE_ROOT]
+        raise CheckFailure(f"multiple archived change roots found for {change_name}: {matches}")
+    resolved_paths: list[Path] = []
+    if active_change_root.exists():
+        resolved_paths.append(active_change_root)
     if len(archived_matches) == 1:
-        return [ACTIVE_CHANGE_ROOT, archived_matches[0]]
-    raise CheckFailure(f"missing active or archived change root for {NO_STD_CHANGE_NAME}")
+        resolved_paths.append(archived_matches[0])
+    if resolved_paths:
+        return resolved_paths
+    raise CheckFailure(f"missing active or archived change root for {change_name}")
+
+
+def ownership_history_paths() -> list[Path]:
+    resolved_paths: list[Path] = []
+    for change_name in OWNERSHIP_CHANGE_NAMES:
+        resolved_paths.extend(resolve_change_history_paths(change_name))
+    unique_paths = sorted(set(resolved_paths), key=lambda path: str(path.relative_to(REPO_ROOT)))
+    return unique_paths
 
 
 def touched_std_workspace_source_files() -> list[str]:
-    change_paths = resolve_change_history_paths()
+    change_paths = ownership_history_paths()
     change_pathspecs = [str(path.relative_to(REPO_ROOT)) for path in change_paths]
     history = [
         line.strip()
@@ -1003,9 +1018,9 @@ def command_ownership() -> None:
                 failures.append(
                     f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing required review marker: {required_text}"
                 )
-        if SECOND_WAVE_VERDICT_MARKER not in artifact_text:
+        if ADOPTED_CORE_VERDICT_MARKER not in artifact_text:
             failures.append(
-                f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing second-wave review verdict: {SECOND_WAVE_VERDICT_MARKER}"
+                f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing adopted-core review verdict: {ADOPTED_CORE_VERDICT_MARKER}"
             )
         for legacy_path in legacy_std_files():
             relative_text = str(legacy_path.relative_to(REPO_ROOT))

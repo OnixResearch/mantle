@@ -1306,6 +1306,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "bytes",
+ "crunch-delta-core",
  "crunch-store",
  "ed25519-dalek",
  "futures",
@@ -1314,6 +1315,13 @@ dependencies = [
  "snix-store",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "crunch-delta-core"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
 ]
 
 [[package]]

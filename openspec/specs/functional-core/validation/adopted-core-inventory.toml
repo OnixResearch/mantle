@@ -88,3 +88,38 @@ required_std_adapter_files = [
   "src/release_evidence.rs",
   "src/release_cmd.rs",
 ]
+
+[[core]]
+package = "crunch-delta-core"
+crate_dir = "crates/crunch-delta-core"
+lib_path = "crates/crunch-delta-core/src/lib.rs"
+manifest_path = "crates/crunch-delta-core/Cargo.toml"
+required_exports = [
+  "pub use model::ArtifactNode;",
+  "pub use model::BlobNode;",
+  "pub use model::ChunkProfile;",
+  "pub use model::ChunkRef;",
+  "pub use model::ClosureFixture;",
+  "pub use model::DeltaDigest;",
+  "pub use model::DirectoryNode;",
+  "pub use model::ReceiverManifest;",
+  "pub use model::TransferPlan;",
+  "pub use model::TransferTally;",
+  "pub use model::chunk_profile_v1;",
+  "pub use negotiation::ChunkDigestAlgorithmWire;",
+  "pub use negotiation::ChunkProfileWire;",
+  "pub use negotiation::ChunkingAlgorithmWire;",
+  "pub use negotiation::NegotiatedProtocol;",
+  "pub use negotiation::NegotiationError;",
+  "pub use negotiation::NegotiationOffer;",
+  "pub use negotiation::chunk_profile_wire_v1;",
+  "pub use negotiation::negotiate_protocol;",
+  "pub use planner::PlanError;",
+  "pub use planner::plan_transfer;",
+]
+legacy_std_files = []
+required_std_adapter_files = [
+  "crates/crunch-delta/src/lib.rs",
+  "crates/crunch-delta/src/manifest.rs",
+  "crates/crunch-delta/src/substitution.rs",
+]

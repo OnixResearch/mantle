@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use snix_castore::B3Digest;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+const DIGEST_BYTES_LEN: usize = B3Digest::LENGTH;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChunkProfile {
     pub min_chunk_bytes: u32,
     pub avg_chunk_bytes: u32,
@@ -10,14 +12,7 @@ pub struct ChunkProfile {
 }
 
 pub fn chunk_profile_v1() -> ChunkProfile {
-    let profile = ChunkProfile {
-        min_chunk_bytes: 131_072,
-        avg_chunk_bytes: 262_144,
-        max_chunk_bytes: 524_288,
-    };
-    assert!(profile.min_chunk_bytes < profile.avg_chunk_bytes);
-    assert!(profile.avg_chunk_bytes < profile.max_chunk_bytes);
-    profile
+    chunk_profile_from_core(crunch_delta_core::chunk_profile_v1())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +38,7 @@ impl ReceiverManifest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChunkRef {
     pub digest: B3Digest,
     pub size_bytes: u64,
@@ -58,15 +53,11 @@ pub struct BlobNode {
 
 impl BlobNode {
     pub fn chunked_size_bytes(&self) -> u64 {
-        self.chunks.iter().fold(0u64, |total, chunk| total.saturating_add(chunk.size_bytes))
+        blob_chunked_size_bytes(self)
     }
 
     pub fn validate(&self) {
-        assert!(self.size_bytes > 0, "blob size must be positive");
-        if self.chunks.is_empty() {
-            return;
-        }
-        assert_eq!(self.chunked_size_bytes(), self.size_bytes, "chunk sizes must sum to blob size");
+        validate_blob(self)
     }
 }
 
@@ -78,7 +69,7 @@ pub struct DirectoryNode {
 
 impl DirectoryNode {
     pub fn full_transfer_bytes(&self) -> u64 {
-        self.children.iter().fold(0u64, |total, child| total.saturating_add(child.full_transfer_bytes()))
+        artifact_full_transfer_bytes(&ArtifactNode::Directory(self.clone()))
     }
 }
 
@@ -91,11 +82,7 @@ pub enum ArtifactNode {
 
 impl ArtifactNode {
     pub fn full_transfer_bytes(&self) -> u64 {
-        match self {
-            Self::Directory(directory) => directory.full_transfer_bytes(),
-            Self::Blob(blob) => blob.size_bytes,
-            Self::Symlink { .. } => 0,
-        }
+        artifact_full_transfer_bytes(self)
     }
 }
 
@@ -107,7 +94,7 @@ pub struct OutputFixture {
 
 impl OutputFixture {
     pub fn full_transfer_bytes(&self) -> u64 {
-        self.root.full_transfer_bytes()
+        output_full_transfer_bytes(self)
     }
 }
 
@@ -119,7 +106,7 @@ pub struct ClosureFixture {
 
 impl ClosureFixture {
     pub fn full_transfer_bytes(&self) -> u64 {
-        self.outputs.iter().fold(0u64, |total, output| total.saturating_add(output.full_transfer_bytes()))
+        closure_full_transfer_bytes(self)
     }
 }
 
@@ -140,9 +127,202 @@ pub struct TransferPlan {
     pub tally: TransferTally,
 }
 
+pub(crate) fn new_receiver_manifest(store_prefix: &str) -> ReceiverManifest {
+    ReceiverManifest::new(store_prefix)
+}
+
+pub(crate) fn artifact_full_transfer_bytes(node: &ArtifactNode) -> u64 {
+    crunch_delta_core::artifact_full_transfer_bytes(core_artifact_node(node))
+}
+
+pub(crate) fn blob_chunked_size_bytes(blob: &BlobNode) -> u64 {
+    crunch_delta_core::blob_chunked_size_bytes(core_blob_node(blob))
+}
+
+pub(crate) fn closure_full_transfer_bytes(fixture: &ClosureFixture) -> u64 {
+    crunch_delta_core::closure_full_transfer_bytes(core_closure_fixture(fixture))
+}
+
+pub(crate) fn output_full_transfer_bytes(output: &OutputFixture) -> u64 {
+    crunch_delta_core::output_full_transfer_bytes(core_output_fixture(output))
+}
+
+pub(crate) fn validate_blob(blob: &BlobNode) {
+    crunch_delta_core::validate_blob(core_blob_node(blob));
+}
+
+pub(crate) fn delta_digest_from_b3(digest: B3Digest) -> crunch_delta_core::DeltaDigest {
+    let digest_bytes: [u8; DIGEST_BYTES_LEN] = digest.into();
+    crunch_delta_core::DeltaDigest(digest_bytes)
+}
+
+pub(crate) trait IntoB3Digest {
+    fn into_b3_digest(self) -> B3Digest;
+}
+
+impl IntoB3Digest for B3Digest {
+    fn into_b3_digest(self) -> B3Digest {
+        self
+    }
+}
+
+impl IntoB3Digest for crunch_delta_core::DeltaDigest {
+    fn into_b3_digest(self) -> B3Digest {
+        B3Digest::from(&self.0)
+    }
+}
+
+pub(crate) fn b3_digest_from_delta<D>(digest: D) -> B3Digest
+where D: IntoB3Digest {
+    digest.into_b3_digest()
+}
+
+pub(crate) fn manifest_insert_known_directory(manifest: &mut ReceiverManifest, digest: B3Digest) {
+    manifest.known_directories.insert(digest);
+}
+
+pub(crate) fn manifest_insert_known_blob(manifest: &mut ReceiverManifest, digest: B3Digest) {
+    manifest.known_blobs.insert(digest);
+}
+
+pub(crate) fn manifest_insert_known_chunk(manifest: &mut ReceiverManifest, digest: B3Digest) {
+    manifest.known_chunks.insert(digest);
+}
+
+pub(crate) fn manifest_has_known_directory(manifest: &ReceiverManifest, digest: B3Digest) -> bool {
+    manifest.known_directories.contains(&digest)
+}
+
+pub(crate) fn manifest_has_known_blob(manifest: &ReceiverManifest, digest: B3Digest) -> bool {
+    manifest.known_blobs.contains(&digest)
+}
+
+pub(crate) fn manifest_has_known_chunk(manifest: &ReceiverManifest, digest: B3Digest) -> bool {
+    manifest.known_chunks.contains(&digest)
+}
+
+#[cfg(test)]
+pub(crate) fn manifest_known_chunks_as_b3(manifest: &ReceiverManifest) -> HashSet<B3Digest> {
+    manifest.known_chunks.clone()
+}
+
+pub(crate) fn chunk_profile_from_core(profile: crunch_delta_core::ChunkProfile) -> ChunkProfile {
+    ChunkProfile {
+        min_chunk_bytes: profile.min_chunk_bytes,
+        avg_chunk_bytes: profile.avg_chunk_bytes,
+        max_chunk_bytes: profile.max_chunk_bytes,
+    }
+}
+
+pub(crate) fn core_chunk_profile(profile: &ChunkProfile) -> crunch_delta_core::ChunkProfile {
+    crunch_delta_core::ChunkProfile {
+        min_chunk_bytes: profile.min_chunk_bytes,
+        avg_chunk_bytes: profile.avg_chunk_bytes,
+        max_chunk_bytes: profile.max_chunk_bytes,
+    }
+}
+
+pub(crate) fn core_receiver_manifest(manifest: &ReceiverManifest) -> crunch_delta_core::ReceiverManifest {
+    let known_directories = manifest
+        .known_directories
+        .iter()
+        .copied()
+        .map(delta_digest_from_b3)
+        .collect::<std::collections::BTreeSet<_>>();
+    let known_blobs = manifest
+        .known_blobs
+        .iter()
+        .copied()
+        .map(delta_digest_from_b3)
+        .collect::<std::collections::BTreeSet<_>>();
+    let known_chunks = manifest
+        .known_chunks
+        .iter()
+        .copied()
+        .map(delta_digest_from_b3)
+        .collect::<std::collections::BTreeSet<_>>();
+    let known_outputs = manifest.known_outputs.iter().cloned().collect::<std::collections::BTreeSet<_>>();
+
+    crunch_delta_core::ReceiverManifest {
+        store_prefix: manifest.store_prefix.clone(),
+        known_outputs,
+        known_directories,
+        known_blobs,
+        known_chunks,
+    }
+}
+
+pub(crate) fn core_closure_fixture(fixture: &ClosureFixture) -> crunch_delta_core::ClosureFixture {
+    crunch_delta_core::ClosureFixture {
+        store_prefix: fixture.store_prefix.clone(),
+        outputs: fixture.outputs.iter().map(core_output_fixture).collect::<Vec<_>>(),
+    }
+}
+
+pub(crate) fn transfer_plan_from_core(plan: crunch_delta_core::TransferPlan) -> TransferPlan {
+    TransferPlan {
+        transferred_bytes: plan.transferred_bytes,
+        full_transfer_bytes: plan.full_transfer_bytes,
+        tally: TransferTally {
+            reused_outputs: plan.tally.reused_outputs,
+            reused_directories: plan.tally.reused_directories,
+            reused_blobs: plan.tally.reused_blobs,
+            reused_chunks: plan.tally.reused_chunks,
+            sent_blobs: plan.tally.sent_blobs,
+            sent_chunks: plan.tally.sent_chunks,
+        },
+    }
+}
+
+fn core_output_fixture(output: &OutputFixture) -> crunch_delta_core::OutputFixture {
+    crunch_delta_core::OutputFixture {
+        output_id: output.output_id.clone(),
+        root: core_artifact_node(&output.root),
+    }
+}
+
+fn core_artifact_node(node: &ArtifactNode) -> crunch_delta_core::ArtifactNode {
+    match node {
+        ArtifactNode::Directory(directory) => {
+            crunch_delta_core::ArtifactNode::Directory(core_directory_node(directory))
+        }
+        ArtifactNode::Blob(blob) => crunch_delta_core::ArtifactNode::Blob(core_blob_node(blob)),
+        ArtifactNode::Symlink { target } => crunch_delta_core::ArtifactNode::Symlink { target: target.clone() },
+    }
+}
+
+fn core_directory_node(directory: &DirectoryNode) -> crunch_delta_core::DirectoryNode {
+    crunch_delta_core::DirectoryNode {
+        digest: delta_digest_from_b3(directory.digest),
+        children: directory.children.iter().map(core_artifact_node).collect::<Vec<_>>(),
+    }
+}
+
+fn core_blob_node(blob: &BlobNode) -> crunch_delta_core::BlobNode {
+    crunch_delta_core::BlobNode {
+        digest: delta_digest_from_b3(blob.digest),
+        size_bytes: blob.size_bytes,
+        chunks: blob.chunks.iter().map(core_chunk_ref).collect::<Vec<_>>(),
+    }
+}
+
+fn core_chunk_ref(chunk: &ChunkRef) -> crunch_delta_core::ChunkRef {
+    crunch_delta_core::ChunkRef {
+        digest: delta_digest_from_b3(chunk.digest),
+        size_bytes: chunk.size_bytes,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const INVALID_BLOB_SIZE_BYTES: u64 = 16;
+    const INVALID_CHUNK_SIZE_BYTES: u64 = 8;
+
+    fn test_digest(label: &str) -> B3Digest {
+        blake3::hash(label.as_bytes()).into()
+    }
 
     #[test]
     fn chunk_profile_v1_matches_spec() {
@@ -155,14 +335,14 @@ mod tests {
     #[test]
     fn blob_validate_rejects_wrong_chunk_total() {
         let blob = BlobNode {
-            digest: blake3::hash(b"blob").as_bytes().into(),
-            size_bytes: 16,
+            digest: test_digest("blob"),
+            size_bytes: INVALID_BLOB_SIZE_BYTES,
             chunks: vec![ChunkRef {
-                digest: blake3::hash(b"chunk").as_bytes().into(),
-                size_bytes: 8,
+                digest: test_digest("chunk"),
+                size_bytes: INVALID_CHUNK_SIZE_BYTES,
             }],
         };
-        let caught = std::panic::catch_unwind(|| blob.validate());
+        let caught = std::panic::catch_unwind(|| validate_blob(&blob));
         assert!(caught.is_err(), "blob.validate should reject mismatched chunk sizes");
     }
 }

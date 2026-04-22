@@ -10,6 +10,13 @@ use crate::model::ClosureFixture;
 use crate::model::DirectoryNode;
 use crate::model::OutputFixture;
 use crate::model::ReceiverManifest;
+use crate::model::b3_digest_from_delta;
+use crate::model::closure_full_transfer_bytes;
+use crate::model::manifest_insert_known_blob;
+use crate::model::manifest_insert_known_chunk;
+use crate::model::manifest_insert_known_directory;
+use crate::model::new_receiver_manifest;
+use crate::model::validate_blob;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BenchCase {
@@ -176,7 +183,7 @@ fn whole_output_hit_case() -> BenchCase {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![sender_output.clone()],
     };
-    let mut receiver = ReceiverManifest::new("/crunch/store");
+    let mut receiver = new_receiver_manifest("/crunch/store");
     receiver.known_outputs.insert("whole-output-hit".to_owned());
     let receiver_store = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
@@ -189,10 +196,10 @@ fn subtree_unmatched_dirs() -> Vec<ArtifactNode> {
     (b'a'..=b'h')
         .map(|ch| {
             let suffix = (ch as char).to_string();
-            dir_node(
-                &format!("subtree-unmatched-{suffix}"),
-                vec![blob_node(&format!("subtree-unmatched-{suffix}-blob"), 4_096)],
-            )
+            dir_node(&format!("subtree-unmatched-{suffix}"), vec![blob_node(
+                &format!("subtree-unmatched-{suffix}-blob"),
+                4_096,
+            )])
         })
         .collect()
 }
@@ -217,9 +224,9 @@ fn subtree_hit_case() -> BenchCase {
             ]),
         }],
     };
-    let mut receiver = ReceiverManifest::new("/crunch/store");
-    receiver.known_directories.insert(shared_a_digest);
-    receiver.known_directories.insert(shared_b_digest);
+    let mut receiver = new_receiver_manifest("/crunch/store");
+    manifest_insert_known_directory(&mut receiver, b3_digest_from_delta(shared_a_digest));
+    manifest_insert_known_directory(&mut receiver, b3_digest_from_delta(shared_b_digest));
     let mut local_children = unmatched.clone();
     local_children.push(shared_a.clone());
     local_children.push(shared_b.clone());
@@ -255,7 +262,7 @@ fn subtree_hit_case() -> BenchCase {
 fn blob_hit_case() -> BenchCase {
     let shared_blob = blob_node("blob-hit-shared", 65_536);
     let shared_digest = digest_of(&shared_blob);
-    debug_assert!(!shared_digest.as_ref().is_empty());
+    debug_assert!(!b3_digest_from_delta(shared_digest).as_ref().is_empty());
     let shared_dir = dir_node("blob-hit-shared-dir", vec![shared_blob.clone()]);
     let unmatched_a = dir_node("blob-hit-unmatched-a", vec![blob_node("blob-hit-unmatched-a-blob", 4_096)]);
     let unmatched_b = dir_node("blob-hit-unmatched-b", vec![blob_node("blob-hit-unmatched-b-blob", 4_096)]);
@@ -268,8 +275,8 @@ fn blob_hit_case() -> BenchCase {
             root: dir_node("blob-hit-root", vec![shared_blob, blob_node("blob-hit-changed", 32_768)]),
         }],
     };
-    let mut receiver = ReceiverManifest::new("/crunch/store");
-    receiver.known_blobs.insert(shared_digest);
+    let mut receiver = new_receiver_manifest("/crunch/store");
+    manifest_insert_known_blob(&mut receiver, b3_digest_from_delta(shared_digest));
     let receiver_output = OutputFixture {
         output_id: "blob-hit-local".to_owned(),
         root: dir_node("blob-hit-local-root", vec![
@@ -315,9 +322,9 @@ fn chunk_hit_case() -> BenchCase {
             root: dir_node("chunk-hit-root", vec![sender_blob]),
         }],
     };
-    let mut receiver = ReceiverManifest::new("/crunch/store");
+    let mut receiver = new_receiver_manifest("/crunch/store");
     for chunk in sender_chunks.iter().take(7) {
-        receiver.known_chunks.insert(chunk.digest);
+        manifest_insert_known_chunk(&mut receiver, b3_digest_from_delta(chunk.digest));
     }
     let mut receiver_chunks = sender_chunks.iter().take(7).cloned().collect::<Vec<_>>();
     receiver_chunks.push(ChunkRef {
@@ -362,7 +369,7 @@ fn chunk_hit_case() -> BenchCase {
 
 fn cross_output_case() -> BenchCase {
     let shared_blob = blob_node("cross-output-shared", 131_072);
-    debug_assert!(!digest_of(&shared_blob).as_ref().is_empty());
+    debug_assert!(!b3_digest_from_delta(digest_of(&shared_blob)).as_ref().is_empty());
     let sender = ClosureFixture {
         store_prefix: "/crunch/store".to_owned(),
         outputs: vec![
@@ -382,7 +389,7 @@ fn cross_output_case() -> BenchCase {
             },
         ],
     };
-    let receiver = ReceiverManifest::new("/crunch/store");
+    let receiver = new_receiver_manifest("/crunch/store");
     let local_shared_blob = blob_node("cross-output-local-shared", 131_072);
     let local_shared_inner_a = dir_node("cross-output-local-shared-inner-a", vec![local_shared_blob.clone()]);
     let local_shared_inner_b = dir_node("cross-output-local-shared-inner-b", vec![local_shared_blob]);
@@ -432,7 +439,7 @@ fn build_case(
     frontier_complete_outputs: HashSet<String>,
     expected_coarse_bytes: u64,
 ) -> BenchCase {
-    let expected_full_bytes = sender.full_transfer_bytes();
+    let expected_full_bytes = closure_full_transfer_bytes(&sender);
     let receiver_lossy_frontiers = receiver_frontiers.iter().map(lossy_frontier_summary).collect::<Vec<_>>();
     let receiver_probabilistic_frontiers =
         receiver_frontiers.iter().map(probabilistic_frontier_summary).collect::<Vec<_>>();
@@ -674,7 +681,7 @@ fn collect_nested_summary_relative_refs(
             root_child_ordinal,
             descendant_ordinal: *descendant_ordinal,
         };
-        if refs_by_digest.insert(child_directory.digest, relative_ref).is_some() {
+        if refs_by_digest.insert(b3_digest_from_delta(child_directory.digest), relative_ref).is_some() {
             return None;
         }
         *descendant_ordinal = descendant_ordinal.saturating_add(1);
@@ -1029,7 +1036,7 @@ fn root_child_ordinal_map(output: &OutputFixture, expected_child_count: u64) -> 
     }
     let mut ordinal_by_digest = HashMap::new();
     for (index, child) in directory.children.iter().enumerate() {
-        let digest = digest_of(child);
+        let digest = b3_digest_from_delta(digest_of(child));
         if ordinal_by_digest.insert(digest, index as u64).is_some() {
             return None;
         }
@@ -1120,7 +1127,7 @@ fn frontier_summary(owner_output_id: &str, node: &ArtifactNode) -> ReceiverFront
     collect_summary_digests(node, &mut directory_digests, &mut blob_digests, &mut chunk_digests);
     ReceiverFrontierSummary {
         owner_output_id: owner_output_id.to_owned(),
-        directory_digest: directory.digest,
+        directory_digest: b3_digest_from_delta(directory.digest),
         directory_digests,
         blob_digests,
         chunk_digests,
@@ -1136,15 +1143,15 @@ fn collect_summary_digests(
 ) {
     match node {
         ArtifactNode::Directory(directory) => {
-            directory_digests.insert(directory.digest);
+            directory_digests.insert(b3_digest_from_delta(directory.digest));
             for child in &directory.children {
                 collect_summary_digests(child, directory_digests, blob_digests, chunk_digests);
             }
         }
         ArtifactNode::Blob(blob) => {
-            blob_digests.insert(blob.digest);
+            blob_digests.insert(b3_digest_from_delta(blob.digest));
             for chunk in &blob.chunks {
-                chunk_digests.insert(chunk.digest);
+                chunk_digests.insert(b3_digest_from_delta(chunk.digest));
             }
         }
         ArtifactNode::Symlink { .. } => {}
@@ -1153,7 +1160,7 @@ fn collect_summary_digests(
 
 fn digest(label: &str) -> B3Digest {
     assert!(!label.is_empty(), "digest label must not be empty");
-    blake3::hash(label.as_bytes()).as_bytes().into()
+    blake3::hash(label.as_bytes()).into()
 }
 
 fn blob_node(label: &str, size_bytes: u64) -> ArtifactNode {
@@ -1162,7 +1169,7 @@ fn blob_node(label: &str, size_bytes: u64) -> ArtifactNode {
         size_bytes,
         chunks: Vec::new(),
     };
-    blob.validate();
+    validate_blob(&blob);
     ArtifactNode::Blob(blob)
 }
 
@@ -1187,7 +1194,7 @@ fn chunked_blob_from_chunks(label: &str, chunks: &[ChunkRef]) -> ArtifactNode {
         size_bytes,
         chunks: chunks.to_vec(),
     };
-    blob.validate();
+    validate_blob(&blob);
     ArtifactNode::Blob(blob)
 }
 

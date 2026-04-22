@@ -1,13 +1,9 @@
-use std::collections::HashSet;
-
-use snix_castore::B3Digest;
-
-use crate::model::ArtifactNode;
-use crate::model::BlobNode;
-use crate::model::ClosureFixture;
-use crate::model::ReceiverManifest;
-use crate::model::TransferPlan;
-use crate::model::TransferTally;
+use crate::ClosureFixture;
+use crate::ReceiverManifest;
+use crate::TransferPlan;
+use crate::model::core_closure_fixture;
+use crate::model::core_receiver_manifest;
+use crate::model::transfer_plan_from_core;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanError {
@@ -30,122 +26,37 @@ impl std::fmt::Display for PlanError {
 
 impl std::error::Error for PlanError {}
 
+impl From<crunch_delta_core::PlanError> for PlanError {
+    fn from(value: crunch_delta_core::PlanError) -> Self {
+        match value {
+            crunch_delta_core::PlanError::StorePrefixMismatch {
+                sender_prefix,
+                receiver_prefix,
+            } => Self::StorePrefixMismatch {
+                sender_prefix,
+                receiver_prefix,
+            },
+        }
+    }
+}
+
 pub fn plan_transfer(sender: &ClosureFixture, receiver: &ReceiverManifest) -> Result<TransferPlan, PlanError> {
-    if sender.store_prefix != receiver.store_prefix {
-        return Err(PlanError::StorePrefixMismatch {
-            sender_prefix: sender.store_prefix.clone(),
-            receiver_prefix: receiver.store_prefix.clone(),
-        });
-    }
-
-    assert!(!sender.outputs.is_empty(), "sender fixture must have at least one output");
-    debug_assert!(!sender.store_prefix.is_empty());
-    let full_transfer_bytes = sender.full_transfer_bytes();
-    let mut available_blobs = HashSet::<B3Digest>::new();
-    let mut transferred_bytes = 0u64;
-    let mut tally = TransferTally::default();
-
-    for output in &sender.outputs {
-        if receiver.known_outputs.contains(&output.output_id) {
-            tally.reused_outputs = tally.reused_outputs.saturating_add(1);
-            continue;
-        }
-        transferred_bytes =
-            transferred_bytes.saturating_add(plan_node(&output.root, receiver, &mut available_blobs, &mut tally));
-    }
-
-    Ok(TransferPlan {
-        transferred_bytes,
-        full_transfer_bytes,
-        tally,
-    })
-}
-
-fn plan_node(
-    node: &ArtifactNode,
-    receiver: &ReceiverManifest,
-    available_blobs: &mut HashSet<B3Digest>,
-    tally: &mut TransferTally,
-) -> u64 {
-    match node {
-        ArtifactNode::Directory(directory) => plan_directory(directory, receiver, available_blobs, tally),
-        ArtifactNode::Blob(blob) => plan_blob(blob, receiver, available_blobs, tally),
-        ArtifactNode::Symlink { .. } => 0,
-    }
-}
-
-fn plan_directory(
-    directory: &crate::DirectoryNode,
-    receiver: &ReceiverManifest,
-    available_blobs: &mut HashSet<B3Digest>,
-    tally: &mut TransferTally,
-) -> u64 {
-    if receiver.known_directories.contains(&directory.digest) {
-        tally.reused_directories = tally.reused_directories.saturating_add(1);
-        return 0;
-    }
-
-    directory
-        .children
-        .iter()
-        .fold(0u64, |total, child| total.saturating_add(plan_node(child, receiver, available_blobs, tally)))
-}
-
-fn plan_blob(
-    blob: &BlobNode,
-    receiver: &ReceiverManifest,
-    available_blobs: &mut HashSet<B3Digest>,
-    tally: &mut TransferTally,
-) -> u64 {
-    blob.validate();
-    debug_assert!(!blob.digest.as_ref().is_empty());
-    debug_assert!(blob.size_bytes > 0 || blob.chunks.is_empty());
-    if receiver.known_blobs.contains(&blob.digest) || available_blobs.contains(&blob.digest) {
-        tally.reused_blobs = tally.reused_blobs.saturating_add(1);
-        return 0;
-    }
-
-    if blob.chunks.is_empty() {
-        available_blobs.insert(blob.digest);
-        tally.sent_blobs = tally.sent_blobs.saturating_add(1);
-        return blob.size_bytes;
-    }
-
-    let (missing_bytes, known_chunk_count, missing_chunk_count) = analyze_blob_chunks(blob, receiver);
-    if known_chunk_count == 0 || missing_bytes >= blob.size_bytes {
-        available_blobs.insert(blob.digest);
-        tally.sent_blobs = tally.sent_blobs.saturating_add(1);
-        return blob.size_bytes;
-    }
-
-    available_blobs.insert(blob.digest);
-    tally.reused_chunks = tally.reused_chunks.saturating_add(known_chunk_count);
-    tally.sent_chunks = tally.sent_chunks.saturating_add(missing_chunk_count);
-    missing_bytes
-}
-
-fn analyze_blob_chunks(blob: &BlobNode, receiver: &ReceiverManifest) -> (u64, u32, u32) {
-    let mut missing_bytes = 0u64;
-    let mut known_chunk_count = 0u32;
-    let mut missing_chunk_count = 0u32;
-
-    for chunk in &blob.chunks {
-        if receiver.known_chunks.contains(&chunk.digest) {
-            known_chunk_count = known_chunk_count.saturating_add(1);
-            continue;
-        }
-        missing_bytes = missing_bytes.saturating_add(chunk.size_bytes);
-        missing_chunk_count = missing_chunk_count.saturating_add(1);
-    }
-
-    assert_eq!(known_chunk_count.saturating_add(missing_chunk_count), blob.chunks.len() as u32);
-    (missing_bytes, known_chunk_count, missing_chunk_count)
+    let core_plan = crunch_delta_core::plan_transfer(core_closure_fixture(sender), core_receiver_manifest(receiver))
+        .map_err(PlanError::from)?;
+    Ok(transfer_plan_from_core(core_plan))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NegotiationOffer;
     use crate::bench_suite;
+    use crate::chunk_profile_v1;
+    use crate::chunk_profile_wire_v1;
+    use crate::model::core_closure_fixture;
+    use crate::model::core_receiver_manifest;
+    use crate::model::new_receiver_manifest;
+    use crate::negotiation::matches_runtime_profile;
 
     #[test]
     fn prefix_mismatch_is_rejected() {
@@ -199,5 +110,40 @@ mod tests {
         assert_eq!(plan.transferred_bytes, 139_264);
         assert_eq!(plan.tally.sent_blobs, 3);
         assert_eq!(plan.tally.reused_blobs, 1);
+    }
+
+    #[test]
+    fn borrowed_facade_accepts_std_receiver_manifest() {
+        let suite = bench_suite();
+        let case = &suite.cases[0];
+        let empty_receiver = new_receiver_manifest(&case.sender.store_prefix);
+        let plan = plan_transfer(&case.sender, &empty_receiver).expect("borrowed facade should plan");
+        assert!(plan.full_transfer_bytes >= plan.transferred_bytes);
+        assert_eq!(empty_receiver.store_prefix, case.sender.store_prefix);
+    }
+
+    #[test]
+    fn delta_facade_reexports_core_planner_types() {
+        let suite = bench_suite();
+        let case = &suite.cases[0];
+        let facade_plan = plan_transfer(&case.sender, &case.receiver).expect("facade should return transfer plan");
+        let core_plan = crunch_delta_core::plan_transfer(
+            core_closure_fixture(&case.sender),
+            core_receiver_manifest(&case.receiver),
+        )
+        .expect("core planner should accept converted facade inputs");
+        let offer = NegotiationOffer::protocol_v1();
+        let profile = chunk_profile_wire_v1();
+
+        assert_eq!(facade_plan.transferred_bytes, core_plan.transferred_bytes);
+        assert_eq!(facade_plan.full_transfer_bytes, core_plan.full_transfer_bytes);
+        assert_eq!(offer.supported_chunk_profiles, vec![profile]);
+        assert!(matches_runtime_profile(profile, &chunk_profile_v1()));
+    }
+
+    #[test]
+    fn plan_error_keeps_std_error_in_facade() {
+        fn assert_error<E: std::error::Error>() {}
+        assert_error::<PlanError>();
     }
 }

@@ -29,7 +29,12 @@ use crate::model::BlobNode;
 use crate::model::ChunkProfile;
 use crate::model::ClosureFixture;
 use crate::model::ReceiverManifest;
+use crate::model::b3_digest_from_delta;
 use crate::model::chunk_profile_v1;
+use crate::model::manifest_insert_known_blob;
+use crate::model::manifest_insert_known_chunk;
+use crate::model::manifest_insert_known_directory;
+use crate::model::new_receiver_manifest;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ManifestProbeCounts {
@@ -95,7 +100,7 @@ async fn build_receiver_manifest_with_store(
 ) -> Result<ManifestBuildOutcome, ManifestError> {
     debug_assert!(!case.sender.outputs.is_empty());
     debug_assert!(!case.sender.store_prefix.is_empty());
-    let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
+    let mut manifest = new_receiver_manifest(&case.sender.store_prefix);
     let candidates = SenderCandidates::from_fixture(&case.sender);
     let chunk_profile = chunk_profile_for_manifest();
     let mut traversal = TraversalMemo::default();
@@ -149,7 +154,7 @@ async fn build_receiver_manifest_lossy_with_store(
 ) -> Result<ManifestBuildOutcome, ManifestError> {
     debug_assert!(!case.sender.outputs.is_empty());
     debug_assert!(!case.sender.store_prefix.is_empty());
-    let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
+    let mut manifest = new_receiver_manifest(&case.sender.store_prefix);
     let exact_candidates = SenderCandidates::from_fixture(&case.sender);
     let lossy_candidates = LossySenderCandidates::from_fixture(&case.sender);
     let chunk_profile = chunk_profile_for_manifest();
@@ -221,7 +226,7 @@ async fn build_receiver_manifest_probabilistic_with_store(
 ) -> Result<ManifestBuildOutcome, ManifestError> {
     debug_assert!(!case.sender.outputs.is_empty());
     debug_assert!(!case.sender.store_prefix.is_empty());
-    let mut manifest = ReceiverManifest::new(&case.sender.store_prefix);
+    let mut manifest = new_receiver_manifest(&case.sender.store_prefix);
     let exact_candidates = SenderCandidates::from_fixture(&case.sender);
     let probabilistic_candidates = ProbabilisticSenderCandidates::from_fixture(&case.sender);
     let chunk_profile = chunk_profile_for_manifest();
@@ -356,15 +361,15 @@ fn collect_sender_candidates(
 ) {
     match node {
         ArtifactNode::Directory(directory) => {
-            directory_digests.insert(directory.digest);
+            directory_digests.insert(b3_digest_from_delta(directory.digest));
             for child in &directory.children {
                 collect_sender_candidates(child, directory_digests, blob_digests, chunk_digests);
             }
         }
         ArtifactNode::Blob(blob) => {
-            blob_digests.insert(blob.digest);
+            blob_digests.insert(b3_digest_from_delta(blob.digest));
             for chunk in &blob.chunks {
-                chunk_digests.insert(chunk.digest);
+                chunk_digests.insert(b3_digest_from_delta(chunk.digest));
             }
         }
         ArtifactNode::Symlink { .. } => {}
@@ -388,17 +393,17 @@ fn apply_frontier_hits(
 ) {
     for digest in &summary.directory_digests {
         if candidates.directory_digests.contains(digest) {
-            manifest.known_directories.insert(*digest);
+            manifest_insert_known_directory(manifest, *digest);
         }
     }
     for digest in &summary.blob_digests {
         if candidates.blob_digests.contains(digest) {
-            manifest.known_blobs.insert(*digest);
+            manifest_insert_known_blob(manifest, *digest);
         }
     }
     for digest in &summary.chunk_digests {
         if candidates.chunk_digests.contains(digest) {
-            manifest.known_chunks.insert(*digest);
+            manifest_insert_known_chunk(manifest, *digest);
         }
     }
 }
@@ -412,15 +417,15 @@ fn collect_lossy_sender_candidates(
 ) {
     match node {
         ArtifactNode::Directory(directory) => {
-            directory_buckets.insert(lossy_digest_bucket(&directory.digest));
+            directory_buckets.insert(lossy_digest_bucket(&b3_digest_from_delta(directory.digest)));
             for child in &directory.children {
                 collect_lossy_sender_candidates(child, directory_buckets, blob_buckets, chunk_buckets);
             }
         }
         ArtifactNode::Blob(blob) => {
-            blob_buckets.insert(lossy_digest_bucket(&blob.digest));
+            blob_buckets.insert(lossy_digest_bucket(&b3_digest_from_delta(blob.digest)));
             for chunk in &blob.chunks {
-                chunk_buckets.insert(lossy_digest_bucket(&chunk.digest));
+                chunk_buckets.insert(lossy_digest_bucket(&b3_digest_from_delta(chunk.digest)));
             }
         }
         ArtifactNode::Symlink { .. } => {}
@@ -523,7 +528,7 @@ async fn walk_local_node(
         match next {
             Node::Directory { digest, .. } => {
                 if candidates.directory_digests.contains(&digest) {
-                    manifest.known_directories.insert(digest);
+                    manifest_insert_known_directory(manifest, digest);
                     continue;
                 }
                 if let Some(summary) = frontiers.and_then(|frontiers| frontiers.get(&digest)) {
@@ -603,7 +608,7 @@ async fn walk_local_nodes_lossy(
         match next {
             Node::Directory { digest, .. } => {
                 if exact_candidates.directory_digests.contains(&digest) {
-                    manifest.known_directories.insert(digest);
+                    manifest_insert_known_directory(manifest, digest);
                     continue;
                 }
                 if let Some(summary) = lossy_frontiers.and_then(|frontiers| frontiers.get(&digest))
@@ -666,7 +671,7 @@ async fn walk_local_nodes_probabilistic(
         match next {
             Node::Directory { digest, .. } => {
                 if exact_candidates.directory_digests.contains(&digest) {
-                    manifest.known_directories.insert(digest);
+                    manifest_insert_known_directory(manifest, digest);
                     continue;
                 }
                 if let Some(summary) = probabilistic_frontiers.and_then(|frontiers| frontiers.get(&digest))
@@ -721,12 +726,13 @@ async fn record_local_blob(
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
     debug_assert!(chunk_profile.min_chunk_bytes > 0);
-    debug_assert!(!blob.digest.as_ref().is_empty());
-    if candidates.blob_digests.contains(&blob.digest) {
-        manifest.known_blobs.insert(blob.digest);
+    let blob_digest = b3_digest_from_delta(blob.digest);
+    debug_assert!(!blob_digest.as_ref().is_empty());
+    if candidates.blob_digests.contains(&blob_digest) {
+        manifest_insert_known_blob(manifest, blob_digest);
         return Ok(());
     }
-    if !traversal.seen_blobs.insert(blob.digest) {
+    if !traversal.seen_blobs.insert(blob_digest) {
         return Ok(());
     }
     if blob.size_bytes <= u64::from(chunk_profile.min_chunk_bytes) {
@@ -736,14 +742,14 @@ async fn record_local_blob(
         return Ok(());
     }
 
-    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob.digest).await? else {
+    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob_digest).await? else {
         return Ok(());
     };
     for chunk in chunk_meta {
         let digest = B3Digest::try_from(chunk.digest.to_vec())
             .map_err(|_| ManifestError::InvalidChunkDigestLen(chunk.digest.len()))?;
         if candidates.chunk_digests.contains(&digest) {
-            manifest.known_chunks.insert(digest);
+            manifest_insert_known_chunk(manifest, digest);
         }
     }
     Ok(())
@@ -760,12 +766,13 @@ async fn record_local_blob_lossy(
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
     debug_assert!(chunk_profile.min_chunk_bytes > 0);
-    debug_assert!(!blob.digest.as_ref().is_empty());
-    if exact_candidates.blob_digests.contains(&blob.digest) {
-        manifest.known_blobs.insert(blob.digest);
+    let blob_digest = b3_digest_from_delta(blob.digest);
+    debug_assert!(!blob_digest.as_ref().is_empty());
+    if exact_candidates.blob_digests.contains(&blob_digest) {
+        manifest_insert_known_blob(manifest, blob_digest);
         return Ok(());
     }
-    if !traversal.seen_blobs.insert(blob.digest) {
+    if !traversal.seen_blobs.insert(blob_digest) {
         return Ok(());
     }
     if blob.size_bytes <= u64::from(chunk_profile.min_chunk_bytes) {
@@ -774,7 +781,7 @@ async fn record_local_blob_lossy(
     if lossy_candidates.chunk_buckets.is_empty() {
         return Ok(());
     }
-    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob.digest).await? else {
+    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob_digest).await? else {
         return Ok(());
     };
     for chunk in chunk_meta {
@@ -782,7 +789,7 @@ async fn record_local_blob_lossy(
             .map_err(|_| ManifestError::InvalidChunkDigestLen(chunk.digest.len()))?;
         let bucket = lossy_digest_bucket(&digest);
         if lossy_candidates.chunk_buckets.contains(&bucket) && exact_candidates.chunk_digests.contains(&digest) {
-            manifest.known_chunks.insert(digest);
+            manifest_insert_known_chunk(manifest, digest);
         }
     }
     Ok(())
@@ -799,12 +806,13 @@ async fn record_local_blob_probabilistic(
     manifest: &mut ReceiverManifest,
 ) -> Result<(), ManifestError> {
     debug_assert!(chunk_profile.min_chunk_bytes > 0);
-    debug_assert!(!blob.digest.as_ref().is_empty());
-    if exact_candidates.blob_digests.contains(&blob.digest) {
-        manifest.known_blobs.insert(blob.digest);
+    let blob_digest = b3_digest_from_delta(blob.digest);
+    debug_assert!(!blob_digest.as_ref().is_empty());
+    if exact_candidates.blob_digests.contains(&blob_digest) {
+        manifest_insert_known_blob(manifest, blob_digest);
         return Ok(());
     }
-    if !traversal.seen_blobs.insert(blob.digest) {
+    if !traversal.seen_blobs.insert(blob_digest) {
         return Ok(());
     }
     if blob.size_bytes <= u64::from(chunk_profile.min_chunk_bytes) {
@@ -813,14 +821,14 @@ async fn record_local_blob_probabilistic(
     if probabilistic_candidates.chunk_digests.is_empty() {
         return Ok(());
     }
-    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob.digest).await? else {
+    let Some(chunk_meta) = load_seeded_chunk_metadata_if_present(services, blob_digest).await? else {
         return Ok(());
     };
     for chunk in chunk_meta {
         let digest = B3Digest::try_from(chunk.digest.to_vec())
             .map_err(|_| ManifestError::InvalidChunkDigestLen(chunk.digest.len()))?;
         if probabilistic_candidates.chunk_digests.contains(&digest) {
-            manifest.known_chunks.insert(digest);
+            manifest_insert_known_chunk(manifest, digest);
         }
     }
     Ok(())
@@ -1012,18 +1020,18 @@ fn seed_node(
                 entries.push((name, seed_child_node(child)));
             }
             let dir = Directory::try_from_iter(entries).expect("fixture directory must be valid");
-            directories.insert(directory.digest, dir);
+            directories.insert(b3_digest_from_delta(directory.digest), dir);
         }
         ArtifactNode::Blob(blob) => {
             let chunk_meta = blob
                 .chunks
                 .iter()
                 .map(|chunk| ChunkMeta {
-                    digest: Bytes::copy_from_slice(chunk.digest.as_ref()),
+                    digest: Bytes::copy_from_slice(b3_digest_from_delta(chunk.digest).as_ref()),
                     size: chunk.size_bytes,
                 })
                 .collect::<Vec<_>>();
-            blobs.insert(blob.digest, chunk_meta);
+            blobs.insert(b3_digest_from_delta(blob.digest), chunk_meta);
         }
         ArtifactNode::Symlink { .. } => {}
     }
@@ -1033,11 +1041,11 @@ fn seed_node(
 fn seed_child_node(node: &ArtifactNode) -> Node {
     match node {
         ArtifactNode::Directory(directory) => Node::Directory {
-            digest: directory.digest,
+            digest: b3_digest_from_delta(directory.digest),
             size: directory.children.len() as u64,
         },
         ArtifactNode::Blob(blob) => Node::File {
-            digest: blob.digest,
+            digest: b3_digest_from_delta(blob.digest),
             size: blob.size_bytes,
             executable: false,
         },
@@ -1065,7 +1073,7 @@ mod tests {
     use crate::plan_transfer;
 
     fn test_digest(label: &str) -> B3Digest {
-        blake3::hash(label.as_bytes()).as_bytes().into()
+        blake3::hash(label.as_bytes()).into()
     }
 
     fn test_chunk(label: &str, size_bytes: u64) -> ChunkRef {
@@ -1107,13 +1115,13 @@ mod tests {
     fn test_case(name: &'static str, sender: ClosureFixture, receiver_store: ClosureFixture) -> BenchCase {
         BenchCase {
             name,
-            receiver: ReceiverManifest::new(&sender.store_prefix),
+            receiver: new_receiver_manifest(&sender.store_prefix),
             receiver_frontiers: Vec::new(),
             receiver_lossy_frontiers: Vec::new(),
             receiver_probabilistic_frontiers: Vec::new(),
             frontier_complete_outputs: HashSet::new(),
-            expected_full_bytes: sender.full_transfer_bytes(),
-            expected_coarse_bytes: sender.full_transfer_bytes(),
+            expected_full_bytes: crate::model::closure_full_transfer_bytes(&sender),
+            expected_coarse_bytes: crate::model::closure_full_transfer_bytes(&sender),
             sender,
             receiver_store,
         }
@@ -1196,7 +1204,10 @@ mod tests {
 
         assert_eq!(outcome.probes.chunk_queries, 1);
         assert_eq!(services.blob_read_opens(), 0);
-        assert_eq!(outcome.manifest.known_chunks, HashSet::from([shared_chunk.digest]));
+        assert_eq!(
+            crate::model::manifest_known_chunks_as_b3(&outcome.manifest),
+            HashSet::from([b3_digest_from_delta(shared_chunk.digest)])
+        );
     }
 
     #[tokio::test]
@@ -1209,9 +1220,10 @@ mod tests {
         };
         let receiver_store = test_fixture("/crunch/store", vec![test_output("receiver", stale_root)]);
         let case = test_case("stale-directory", sender, receiver_store);
-        let exact_services = fixture_store_with_omissions(&case.receiver_store, &[stale_digest], &[]);
-        let lossy_services = fixture_store_with_omissions(&case.receiver_store, &[stale_digest], &[]);
-        let probabilistic_services = fixture_store_with_omissions(&case.receiver_store, &[stale_digest], &[]);
+        let stale_directory_digest = b3_digest_from_delta(stale_digest);
+        let exact_services = fixture_store_with_omissions(&case.receiver_store, &[stale_directory_digest], &[]);
+        let lossy_services = fixture_store_with_omissions(&case.receiver_store, &[stale_directory_digest], &[]);
+        let probabilistic_services = fixture_store_with_omissions(&case.receiver_store, &[stale_directory_digest], &[]);
 
         let exact = build_receiver_manifest_with_store(&case, &exact_services)
             .await
@@ -1252,9 +1264,11 @@ mod tests {
             test_dir("receiver-root-stale", vec![receiver_blob]),
         )]);
         let case = test_case("stale-blob", sender, receiver_store);
-        let exact_services = fixture_store_with_omissions(&case.receiver_store, &[], &[stale_blob_digest]);
-        let lossy_services = fixture_store_with_omissions(&case.receiver_store, &[], &[stale_blob_digest]);
-        let probabilistic_services = fixture_store_with_omissions(&case.receiver_store, &[], &[stale_blob_digest]);
+        let stale_receiver_blob_digest = b3_digest_from_delta(stale_blob_digest);
+        let exact_services = fixture_store_with_omissions(&case.receiver_store, &[], &[stale_receiver_blob_digest]);
+        let lossy_services = fixture_store_with_omissions(&case.receiver_store, &[], &[stale_receiver_blob_digest]);
+        let probabilistic_services =
+            fixture_store_with_omissions(&case.receiver_store, &[], &[stale_receiver_blob_digest]);
 
         let exact = build_receiver_manifest_with_store(&case, &exact_services)
             .await
