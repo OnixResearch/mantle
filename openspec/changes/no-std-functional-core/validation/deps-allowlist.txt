@@ -1,0 +1,2 @@
+# approved no-std core dependencies
+# fill during implementation
