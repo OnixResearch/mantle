@@ -179,7 +179,7 @@ pub fn release_attestation_canonical_bytes(value: ReleaseAttestation) -> Result<
 
 pub fn release_attestation_canonical_digest(value: ReleaseAttestation) -> Result<AttestationDigest, Error> {
     let bytes = release_attestation_canonical_bytes(value)?;
-    Ok(AttestationDigest::from_canonical_bytes(&bytes))
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -250,7 +250,7 @@ pub fn witness_attestation_canonical_bytes(value: WitnessAttestation) -> Result<
 
 pub fn witness_attestation_canonical_digest(value: WitnessAttestation) -> Result<AttestationDigest, Error> {
     let bytes = witness_attestation_canonical_bytes(value)?;
-    Ok(AttestationDigest::from_canonical_bytes(&bytes))
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -408,8 +408,8 @@ mod tests {
 
     #[test]
     fn release_attestation_binds_manifest_and_binary_digests() {
-        let manifest_digest = AttestationDigest::from_canonical_bytes(b"manifest-content");
-        let proof_digest = AttestationDigest::from_canonical_bytes(b"proof-bundle");
+        let manifest_digest = AttestationDigest::from_canonical_bytes(b"manifest-content".to_vec());
+        let proof_digest = AttestationDigest::from_canonical_bytes(b"proof-bundle".to_vec());
         let attestation = ReleaseAttestation::new(ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: manifest_digest,
@@ -756,8 +756,8 @@ mod tests {
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
-            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
-            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
             workflow: Workflow {
                 command: "crunch self-build".to_string(),
@@ -789,8 +789,8 @@ mod tests {
     fn release_with_digests(digests: Vec<BinaryDigest>) -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
-            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
-            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
             workflow: Workflow {
                 command: "crunch self-build".to_string(),

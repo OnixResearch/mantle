@@ -795,7 +795,7 @@ fn write_project_files(dir: &Path, locked_hash: &str) {
 }
 "#;
     std::fs::write(dir.join("crunch-project.ncl"), manifest_text).unwrap();
-    std::fs::write(dir.join("crunch.lock"), lock.to_json().unwrap()).unwrap();
+    std::fs::write(dir.join("crunch.lock"), lock.clone().to_json().unwrap()).unwrap();
     std::fs::write(dir.join("hello-fix.patch"), "diff --git a/a b/a\n").unwrap();
     assert_eq!(manifest.version, "1.0.0");
 }

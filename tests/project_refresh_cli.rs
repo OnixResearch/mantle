@@ -37,14 +37,14 @@ fn init_project(dir: &Path) {
 
 fn write_project_files(dir: &Path, manifest: &str, lock: &Lockfile) {
     std::fs::write(dir.join("crunch-project.ncl"), manifest).unwrap();
-    std::fs::write(dir.join("crunch.lock"), lock.to_json().unwrap()).unwrap();
+    std::fs::write(dir.join("crunch.lock"), lock.clone().to_json().unwrap()).unwrap();
     std::fs::create_dir_all(dir.join(".crunch")).unwrap();
-    std::fs::write(dir.join(".crunch/inputs.ncl"), generate_inputs_ncl(lock)).unwrap();
+    std::fs::write(dir.join(".crunch/inputs.ncl"), generate_inputs_ncl(lock.clone())).unwrap();
 }
 
 fn read_lock(dir: &Path) -> Lockfile {
     let text = std::fs::read_to_string(dir.join("crunch.lock")).unwrap();
-    Lockfile::from_json(&text).unwrap()
+    Lockfile::from_json(text).unwrap()
 }
 
 fn run_git(dir: &Path, args: &[&str]) -> String {

@@ -30,23 +30,29 @@ pub struct MergeReport {
 }
 
 impl MergeReport {
-    pub fn has_errors(&self) -> bool {
-        self.issues.iter().any(|i| i.severity == Severity::Error)
+    pub fn has_errors(self) -> bool {
+        self.issues.iter().any(|issue| issue.severity == Severity::Error)
     }
 
-    pub fn is_clean(&self) -> bool {
+    pub fn is_clean(self) -> bool {
         self.issues.is_empty()
     }
 }
 
-pub fn check_manifest_lock(manifest: &ProjectManifest, lock: &Lockfile) -> MergeReport {
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilterInputsResult {
+    pub found: Vec<ManifestInput>,
+    pub missing: Vec<String>,
+}
+
+pub fn check_manifest_lock(manifest: ProjectManifest, lock: Lockfile) -> MergeReport {
     let mut issues = Vec::new();
 
-    check_missing_entries(manifest, lock, &mut issues);
-    check_orphaned_entries(manifest, lock, &mut issues);
-    check_kind_consistency(manifest, lock, &mut issues);
-    check_patch_consistency(manifest, lock, &mut issues);
-    check_frozen_inputs(manifest, lock, &mut issues);
+    check_missing_entries(&manifest, &lock, &mut issues);
+    check_orphaned_entries(&manifest, &lock, &mut issues);
+    check_kind_consistency(&manifest, &lock, &mut issues);
+    check_patch_consistency(&manifest, &lock, &mut issues);
+    check_frozen_inputs(&manifest, &lock, &mut issues);
 
     MergeReport { issues }
 }
@@ -67,7 +73,7 @@ fn check_missing_entries(manifest: &ProjectManifest, lock: &Lockfile, issues: &m
 }
 
 fn check_orphaned_entries(manifest: &ProjectManifest, lock: &Lockfile, issues: &mut Vec<MergeIssue>) {
-    let manifest_names: BTreeSet<&str> = manifest.inputs.iter().map(|i| i.name.as_str()).collect();
+    let manifest_names: BTreeSet<&str> = manifest.inputs.iter().map(|input| input.name.as_str()).collect();
 
     for name in lock.inputs.keys() {
         if issues.len() as u64 >= MAX_ISSUES as u64 {
@@ -180,7 +186,7 @@ fn locked_kind_label(kind: &crate::lock::LockedKind) -> &'static str {
     }
 }
 
-pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Vec<String> {
+pub fn inputs_needing_refresh(manifest: ProjectManifest, lock: Lockfile) -> Vec<String> {
     let mut result = Vec::with_capacity(manifest.inputs.len());
 
     for input in &manifest.inputs {
@@ -201,24 +207,25 @@ pub fn inputs_needing_refresh(manifest: &ProjectManifest, lock: &Lockfile) -> Ve
     result
 }
 
-pub fn filter_inputs<'a>(manifest: &'a ProjectManifest, selected: &[String]) -> (Vec<&'a ManifestInput>, Vec<String>) {
+pub fn filter_inputs(manifest: ProjectManifest, selected: Vec<String>) -> FilterInputsResult {
     let mut found = Vec::with_capacity(selected.len());
-    let mut not_found = Vec::with_capacity(selected.len());
+    let mut missing = Vec::with_capacity(selected.len());
 
-    let manifest_names: BTreeMap<&str, &ManifestInput> = manifest.inputs.iter().map(|i| (i.name.as_str(), i)).collect();
+    let manifest_names: BTreeMap<&str, &ManifestInput> =
+        manifest.inputs.iter().map(|input| (input.name.as_str(), input)).collect();
 
     for name in selected {
         match manifest_names.get(name.as_str()) {
-            Some(input) => found.push(*input),
-            None => not_found.push(name.clone()),
+            Some(input) => found.push((*input).clone()),
+            None => missing.push(name),
         }
     }
 
-    (found, not_found)
+    FilterInputsResult { found, missing }
 }
 
-pub fn orphaned_lock_entries(manifest: &ProjectManifest, lock: &Lockfile) -> Vec<String> {
-    let manifest_names: BTreeSet<&str> = manifest.inputs.iter().map(|i| i.name.as_str()).collect();
+pub fn orphaned_lock_entries(manifest: ProjectManifest, lock: Lockfile) -> Vec<String> {
+    let manifest_names: BTreeSet<&str> = manifest.inputs.iter().map(|input| input.name.as_str()).collect();
 
     lock.inputs.keys().filter(|name| !manifest_names.contains(name.as_str())).cloned().collect()
 }
@@ -283,19 +290,19 @@ mod tests {
 
     #[test]
     fn clean_merge() {
-        let m = manifest_with(vec![file_input("foo")]);
-        let l = lock_with(vec![("foo", file_lock_entry())]);
-        let report = check_manifest_lock(&m, &l);
-        assert!(report.is_clean());
+        let manifest = manifest_with(vec![file_input("foo")]);
+        let lock = lock_with(vec![("foo", file_lock_entry())]);
+        let report = check_manifest_lock(manifest, lock);
+        assert!(report.clone().is_clean());
         assert!(!report.has_errors());
     }
 
     #[test]
     fn missing_lock_entry() {
-        let m = manifest_with(vec![file_input("foo"), file_input("bar")]);
-        let l = lock_with(vec![("foo", file_lock_entry())]);
-        let report = check_manifest_lock(&m, &l);
-        assert!(report.has_errors());
+        let manifest = manifest_with(vec![file_input("foo"), file_input("bar")]);
+        let lock = lock_with(vec![("foo", file_lock_entry())]);
+        let report = check_manifest_lock(manifest, lock);
+        assert!(report.clone().has_errors());
         assert_eq!(report.issues.len(), 1);
         assert!(report.issues[0].message.contains("bar"));
         assert!(report.issues[0].message.contains("no lock entry"));
@@ -303,10 +310,10 @@ mod tests {
 
     #[test]
     fn orphaned_lock_entry() {
-        let m = manifest_with(vec![file_input("foo")]);
-        let l = lock_with(vec![("foo", file_lock_entry()), ("stale", file_lock_entry())]);
-        let report = check_manifest_lock(&m, &l);
-        assert!(!report.has_errors());
+        let manifest = manifest_with(vec![file_input("foo")]);
+        let lock = lock_with(vec![("foo", file_lock_entry()), ("stale", file_lock_entry())]);
+        let report = check_manifest_lock(manifest, lock);
+        assert!(!report.clone().has_errors());
         assert_eq!(report.issues.len(), 1);
         assert_eq!(report.issues[0].severity, Severity::Warning);
         assert!(report.issues[0].message.contains("orphaned"));
@@ -314,8 +321,8 @@ mod tests {
 
     #[test]
     fn kind_mismatch() {
-        let m = manifest_with(vec![file_input("foo")]);
-        let l = lock_with(vec![("foo", LockEntry {
+        let manifest = manifest_with(vec![file_input("foo")]);
+        let lock = lock_with(vec![("foo", LockEntry {
             kind: LockedKind::Git {
                 repository: "https://example.com/repo.git".into(),
                 rev: "abc".into(),
@@ -328,8 +335,8 @@ mod tests {
             patches: vec![],
             mirrors: vec![],
         })]);
-        let report = check_manifest_lock(&m, &l);
-        assert!(report.has_errors());
+        let report = check_manifest_lock(manifest, lock);
+        assert!(report.clone().has_errors());
         assert!(report.issues[0].message.contains("does not match"));
     }
 
@@ -337,10 +344,10 @@ mod tests {
     fn frozen_without_lock() {
         let mut input = file_input("frozen-thing");
         input.frozen = true;
-        let m = manifest_with(vec![input]);
-        let l = lock_with(vec![]);
-        let report = check_manifest_lock(&m, &l);
-        assert!(report.has_errors());
+        let manifest = manifest_with(vec![input]);
+        let lock = lock_with(vec![]);
+        let report = check_manifest_lock(manifest, lock);
+        assert!(report.clone().has_errors());
         assert!(!report.issues.is_empty());
     }
 
@@ -348,50 +355,50 @@ mod tests {
     fn inputs_needing_refresh_skips_frozen() {
         let mut input = file_input("frozen-thing");
         input.frozen = true;
-        let m = manifest_with(vec![input, file_input("unlocked")]);
-        let l = lock_with(vec![]);
-        let needs = inputs_needing_refresh(&m, &l);
+        let manifest = manifest_with(vec![input, file_input("unlocked")]);
+        let lock = lock_with(vec![]);
+        let needs = inputs_needing_refresh(manifest, lock);
         assert_eq!(needs, vec!["unlocked"]);
     }
 
     #[test]
     fn inputs_needing_refresh_includes_missing() {
-        let m = manifest_with(vec![file_input("a"), file_input("b")]);
-        let l = lock_with(vec![("a", file_lock_entry())]);
-        let needs = inputs_needing_refresh(&m, &l);
+        let manifest = manifest_with(vec![file_input("a"), file_input("b")]);
+        let lock = lock_with(vec![("a", file_lock_entry())]);
+        let needs = inputs_needing_refresh(manifest, lock);
         assert_eq!(needs, vec!["b"]);
     }
 
     #[test]
     fn filter_inputs_finds_existing() {
-        let m = manifest_with(vec![file_input("a"), file_input("b")]);
-        let (found, missing) = filter_inputs(&m, &["a".into()]);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].name, "a");
-        assert!(missing.is_empty());
+        let manifest = manifest_with(vec![file_input("a"), file_input("b")]);
+        let result = filter_inputs(manifest, vec!["a".into()]);
+        assert_eq!(result.found.len(), 1);
+        assert_eq!(result.found[0].name, "a");
+        assert!(result.missing.is_empty());
     }
 
     #[test]
     fn filter_inputs_reports_missing() {
-        let m = manifest_with(vec![file_input("a")]);
-        let (found, missing) = filter_inputs(&m, &["a".into(), "z".into()]);
-        assert_eq!(found.len(), 1);
-        assert_eq!(missing, vec!["z"]);
+        let manifest = manifest_with(vec![file_input("a")]);
+        let result = filter_inputs(manifest, vec!["a".into(), "z".into()]);
+        assert_eq!(result.found.len(), 1);
+        assert_eq!(result.missing, vec!["z"]);
     }
 
     #[test]
     fn orphaned_entries_detected() {
-        let m = manifest_with(vec![file_input("a")]);
-        let l = lock_with(vec![("a", file_lock_entry()), ("b", file_lock_entry())]);
-        let orphans = orphaned_lock_entries(&m, &l);
+        let manifest = manifest_with(vec![file_input("a")]);
+        let lock = lock_with(vec![("a", file_lock_entry()), ("b", file_lock_entry())]);
+        let orphans = orphaned_lock_entries(manifest, lock);
         assert_eq!(orphans, vec!["b"]);
     }
 
     #[test]
     fn empty_manifest_and_lock_is_clean() {
-        let m = manifest_with(vec![]);
-        let l = lock_with(vec![]);
-        let report = check_manifest_lock(&m, &l);
+        let manifest = manifest_with(vec![]);
+        let lock = lock_with(vec![]);
+        let report = check_manifest_lock(manifest, lock);
         assert!(report.is_clean());
     }
 }

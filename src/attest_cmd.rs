@@ -221,7 +221,8 @@ fn load_lockfile(current_dir: &Path) -> Result<(String, Lockfile), RunError> {
     let path = current_dir.join(LOCK_FILE);
     let text =
         std::fs::read_to_string(&path).map_err(|e| RunError::Internal(format!("reading {}: {e}", path.display())))?;
-    let lock = Lockfile::from_json(&text).map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))?;
+    let lock =
+        Lockfile::from_json(text.clone()).map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))?;
     Ok((text, lock))
 }
 

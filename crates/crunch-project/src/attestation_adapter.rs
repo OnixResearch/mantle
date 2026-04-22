@@ -71,11 +71,12 @@ mod tests {
         let roots = vec![ArtifactReference {
             node_id: "artifact:/nix/store/root".to_string(),
             logical_path: "/nix/store/root".to_string(),
-            attestation_digest: AttestationDigest::from_canonical_bytes(b"root"),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"root".to_vec()),
         }];
+        let lock_text = lock.clone().to_json().unwrap();
         let attestation = synthesize_project_attestation(ProjectAttestationInput {
             manifest_text: "manifest",
-            lock_text: &lock.to_json().unwrap(),
+            lock_text: &lock_text,
             manifest: &manifest,
             lock: &lock,
             selected_roots: &roots,

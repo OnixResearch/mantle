@@ -185,7 +185,7 @@ fn refresh_hashes_local_patch_relative_to_project_root() {
         .stderr(predicate::str::contains("patch lock data updated"));
 
     let lock_text = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
-    let lock = crunch_project::Lockfile::from_json(&lock_text).unwrap();
+    let lock = crunch_project::Lockfile::from_json(lock_text).unwrap();
     assert_eq!(lock.inputs["pkg"].patches, vec!["mypatch"]);
     assert_eq!(lock.patches["mypatch"].source, crunch_project::LockedPatchSource::Local {
         path: "patches/fix.patch".into(),

@@ -41,6 +41,7 @@ pub use manifest::ManifestInput;
 pub use manifest::PatchDef;
 pub use manifest::PatchSource;
 pub use manifest::ProjectManifest;
+pub use merge::FilterInputsResult;
 pub use merge::MergeIssue;
 pub use merge::MergeReport;
 pub use merge::Severity;

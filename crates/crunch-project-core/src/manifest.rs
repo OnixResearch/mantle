@@ -3,6 +3,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -30,9 +31,7 @@ struct RawProjectManifest {
 
 impl<'de> Deserialize<'de> for ProjectManifest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawProjectManifest::deserialize(deserializer)?;
         Ok(Self {
             version: raw.version,
@@ -43,18 +42,23 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 }
 
 impl ProjectManifest {
-    pub fn schema_version(&self) -> Option<SchemaVersion> {
-        parse_version(&self.version)
+    pub fn schema_version(self) -> Option<SchemaVersion> {
+        parse_version(self.version)
     }
 
-    pub fn validate(&self) -> Vec<String> {
-        let mut problems = Vec::with_capacity(self.inputs.len().saturating_mul(2).saturating_add(self.patches.len()));
+    pub fn validate(self) -> Vec<String> {
+        let ProjectManifest {
+            version,
+            inputs,
+            patches,
+        } = self;
+        let mut problems = Vec::with_capacity(inputs.len().saturating_mul(2).saturating_add(patches.len()));
 
-        match parse_version(&self.version) {
+        match parse_version(version.clone()) {
             None => {
-                problems.push(format!("invalid manifest version: '{}'", self.version));
+                problems.push(format!("invalid manifest version: '{}'", version));
             }
-            Some(v) if !v.is_compatible_with(&SchemaVersion::CURRENT) => {
+            Some(v) if !v.is_compatible_with(SchemaVersion::CURRENT) => {
                 problems.push(format!(
                     "manifest version {} is not compatible with current version {}",
                     v,
@@ -64,20 +68,20 @@ impl ProjectManifest {
             _ => {}
         }
 
-        if self.inputs.len() as u64 > MAX_INPUTS as u64 {
-            problems.push(format!("too many inputs: {} (max {MAX_INPUTS})", self.inputs.len()));
+        if inputs.len() as u64 > MAX_INPUTS as u64 {
+            problems.push(format!("too many inputs: {} (max {MAX_INPUTS})", inputs.len()));
         }
 
         let mut seen_names = BTreeSet::new();
-        for input in &self.inputs {
+        for input in &inputs {
             if !seen_names.insert(input.name.as_str()) {
                 problems.push(format!("duplicate input name: {}", input.name));
             }
             problems.extend(input.validate());
         }
 
-        let patch_names: BTreeSet<&str> = self.patches.iter().map(|p| p.name.as_str()).collect();
-        for input in &self.inputs {
+        let patch_names: BTreeSet<&str> = patches.iter().map(|p| p.name.as_str()).collect();
+        for input in &inputs {
             for patch_ref in &input.patches {
                 if !patch_names.contains(patch_ref.as_str()) {
                     problems.push(format!("input '{}' references undefined patch '{patch_ref}'", input.name));
@@ -111,9 +115,7 @@ struct RawManifestInput {
 
 impl<'de> Deserialize<'de> for ManifestInput {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawManifestInput::deserialize(deserializer)?;
         Ok(Self {
             name: raw.name,
@@ -184,17 +186,12 @@ enum RawInputKind {
 
 impl<'de> Deserialize<'de> for InputKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawInputKind::deserialize(deserializer)?;
         Ok(match raw {
             RawInputKind::File { url } => Self::File { url },
             RawInputKind::Tarball { url } => Self::Tarball { url },
-            RawInputKind::Git {
-                repository,
-                reference,
-            } => Self::Git {
+            RawInputKind::Git { repository, reference } => Self::Git {
                 repository,
                 reference: reference.unwrap_or_else(GitReference::default),
             },
@@ -254,9 +251,7 @@ struct RawHashSpec {
 
 impl<'de> Deserialize<'de> for HashSpec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawHashSpec::deserialize(deserializer)?;
         Ok(Self {
             algo: raw.algo.unwrap_or_default(),

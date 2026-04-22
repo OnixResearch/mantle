@@ -65,7 +65,7 @@ pub fn artifact_attestation_canonical_bytes(value: ArtifactAttestation) -> Resul
 
 pub fn artifact_attestation_canonical_digest(value: ArtifactAttestation) -> Result<AttestationDigest, Error> {
     let bytes = artifact_attestation_canonical_bytes(value)?;
-    Ok(AttestationDigest::from_canonical_bytes(&bytes))
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
 pub fn canonical_closure_attestation(value: ClosureAttestation) -> Result<ClosureAttestation, Error> {
@@ -108,7 +108,7 @@ pub fn closure_attestation_canonical_bytes(value: ClosureAttestation) -> Result<
 
 pub fn closure_attestation_canonical_digest(value: ClosureAttestation) -> Result<AttestationDigest, Error> {
     let bytes = closure_attestation_canonical_bytes(value)?;
-    Ok(AttestationDigest::from_canonical_bytes(&bytes))
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
 pub fn canonical_project_attestation(value: ProjectAttestation) -> Result<ProjectAttestation, Error> {
@@ -157,7 +157,7 @@ pub fn project_attestation_canonical_bytes(value: ProjectAttestation) -> Result<
 
 pub fn project_attestation_canonical_digest(value: ProjectAttestation) -> Result<AttestationDigest, Error> {
     let bytes = project_attestation_canonical_bytes(value)?;
-    Ok(AttestationDigest::from_canonical_bytes(&bytes))
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
 fn normalize_claims(value: Claims) -> Result<Claims, Error> {
@@ -455,7 +455,7 @@ mod tests {
         closure.facts.members = vec![reference(
             "artifact:a",
             "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-a",
-            AttestationDigest::from_canonical_bytes(b"a"),
+            AttestationDigest::from_canonical_bytes(b"a".to_vec()),
         )];
 
         let err = closure_attestation_canonical_bytes(closure).unwrap_err();
@@ -470,7 +470,7 @@ mod tests {
         project.facts.selected_roots = vec![reference(
             "project:demo",
             "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-a",
-            AttestationDigest::from_canonical_bytes(b"bad-root"),
+            AttestationDigest::from_canonical_bytes(b"bad-root".to_vec()),
         )];
 
         let err = project_attestation_canonical_bytes(project).unwrap_err();
@@ -562,8 +562,8 @@ mod tests {
     }
 
     fn closure_attestation(reversed: bool) -> ClosureAttestation {
-        let digest_a = AttestationDigest::from_canonical_bytes(b"a");
-        let digest_b = AttestationDigest::from_canonical_bytes(b"b");
+        let digest_a = AttestationDigest::from_canonical_bytes(b"a".to_vec());
+        let digest_b = AttestationDigest::from_canonical_bytes(b"b".to_vec());
         let members = if reversed {
             vec![
                 reference("artifact:b", "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-b", digest_b),
@@ -648,8 +648,8 @@ mod tests {
                 edge("project:demo", EdgeKind::DeclaredByProject, "src:manifest"),
             ]
         };
-        let digest_a = AttestationDigest::from_canonical_bytes(b"artifact-a");
-        let digest_b = AttestationDigest::from_canonical_bytes(b"artifact-b");
+        let digest_a = AttestationDigest::from_canonical_bytes(b"artifact-a".to_vec());
+        let digest_b = AttestationDigest::from_canonical_bytes(b"artifact-b".to_vec());
         ProjectAttestation {
             schema_version,
             claims: Claims {

@@ -19,7 +19,7 @@ pub trait Canonicalize {
 
     fn canonical_digest(&self) -> Result<AttestationDigest, Error> {
         let bytes = self.canonical_bytes()?;
-        Ok(AttestationDigest::from_canonical_bytes(&bytes))
+        Ok(AttestationDigest::from_canonical_bytes(bytes))
     }
 }
 
@@ -120,8 +120,8 @@ mod tests {
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(crunch_attestation_core::ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
-            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
-            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
             workflow: Workflow {
                 command: "crunch self-build".to_string(),

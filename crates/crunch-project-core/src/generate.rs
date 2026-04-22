@@ -52,9 +52,9 @@ struct GitKindFields<'a> {
 ///
 /// Each lock entry becomes a record field with its resolved metadata.
 /// The output is valid Nickel that can be imported by package code.
-pub fn generate_inputs_ncl(lock: &Lockfile) -> String {
-    assert_input_limits(lock);
-    assert_patch_references_are_locked(lock);
+pub fn generate_inputs_ncl(lock: Lockfile) -> String {
+    assert_input_limits(&lock);
+    assert_patch_references_are_locked(&lock);
 
     let mut out = String::with_capacity(1024);
     out.push_str(HEADER);
@@ -67,7 +67,7 @@ pub fn generate_inputs_ncl(lock: &Lockfile) -> String {
         generate_entry(&mut out, name, entry);
     }
 
-    generate_locked_patches(&mut out, lock);
+    generate_locked_patches(&mut out, &lock);
     out.push_str("}\n");
     out
 }
@@ -116,62 +116,44 @@ fn generate_locked_patch(out: &mut String, name: &str, patch: &LockedPatch) {
     let field_name = render_field_name(name);
     out.push_str(&format!("    {field_name} = {{\n"));
     generate_patch_source_fields(out, &patch.source);
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "      ",
-            name: "hash",
-            value: &patch.hash.value,
-        },
-    );
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "      ",
-            name: "algo",
-            value: &patch.hash.algo.to_string(),
-        },
-    );
+    push_string_field(out, RenderedStringField {
+        indent: "      ",
+        name: "hash",
+        value: &patch.hash.value,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "      ",
+        name: "algo",
+        value: &patch.hash.algo.to_string(),
+    });
     out.push_str("    },\n");
 }
 
 fn generate_patch_source_fields(out: &mut String, source: &LockedPatchSource) {
     match source {
         LockedPatchSource::Local { path } => {
-            push_string_field(
-                out,
-                RenderedStringField {
-                    indent: "      ",
-                    name: "type",
-                    value: "local",
-                },
-            );
-            push_string_field(
-                out,
-                RenderedStringField {
-                    indent: "      ",
-                    name: "path",
-                    value: path,
-                },
-            );
+            push_string_field(out, RenderedStringField {
+                indent: "      ",
+                name: "type",
+                value: "local",
+            });
+            push_string_field(out, RenderedStringField {
+                indent: "      ",
+                name: "path",
+                value: path,
+            });
         }
         LockedPatchSource::Remote { url } => {
-            push_string_field(
-                out,
-                RenderedStringField {
-                    indent: "      ",
-                    name: "type",
-                    value: "remote",
-                },
-            );
-            push_string_field(
-                out,
-                RenderedStringField {
-                    indent: "      ",
-                    name: "url",
-                    value: url,
-                },
-            );
+            push_string_field(out, RenderedStringField {
+                indent: "      ",
+                name: "type",
+                value: "remote",
+            });
+            push_string_field(out, RenderedStringField {
+                indent: "      ",
+                name: "url",
+                value: url,
+            });
         }
     }
 }
@@ -184,130 +166,88 @@ fn generate_entry(out: &mut String, name: &str, entry: &LockEntry) {
     out.push_str(&format!("  {field_name} = {{\n"));
 
     generate_kind_fields(out, &entry.kind);
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "hash",
-            value: &entry.hash.value,
-        },
-    );
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "algo",
-            value: &entry.hash.algo.to_string(),
-        },
-    );
-    push_string_array(
-        out,
-        RenderedStringArray {
-            indent: "    ",
-            name: "mirrors",
-            values: &entry.mirrors,
-        },
-    );
-    push_string_array(
-        out,
-        RenderedStringArray {
-            indent: "    ",
-            name: "patches",
-            values: &entry.patches,
-        },
-    );
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "hash",
+        value: &entry.hash.value,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "algo",
+        value: &entry.hash.algo.to_string(),
+    });
+    push_string_array(out, RenderedStringArray {
+        indent: "    ",
+        name: "mirrors",
+        values: &entry.mirrors,
+    });
+    push_string_array(out, RenderedStringArray {
+        indent: "    ",
+        name: "patches",
+        values: &entry.patches,
+    });
 
     out.push_str("  },\n");
 }
 
 fn generate_kind_fields(out: &mut String, kind: &LockedKind) {
     match kind {
-        LockedKind::File { url } => generate_url_kind_fields(
-            out,
-            UrlKindFields {
-                kind_name: "file",
-                url,
-            },
-        ),
-        LockedKind::Tarball { url } => generate_url_kind_fields(
-            out,
-            UrlKindFields {
-                kind_name: "tarball",
-                url,
-            },
-        ),
+        LockedKind::File { url } => generate_url_kind_fields(out, UrlKindFields { kind_name: "file", url }),
+        LockedKind::Tarball { url } => generate_url_kind_fields(out, UrlKindFields {
+            kind_name: "tarball",
+            url,
+        }),
         LockedKind::Git {
             repository,
             rev,
             ref_name,
-        } => generate_git_kind_fields(
-            out,
-            GitKindFields {
-                repository,
-                rev,
-                ref_name: ref_name.as_deref(),
-            },
-        ),
+        } => generate_git_kind_fields(out, GitKindFields {
+            repository,
+            rev,
+            ref_name: ref_name.as_deref(),
+        }),
     }
 }
 
 fn generate_url_kind_fields(out: &mut String, fields: UrlKindFields<'_>) {
     assert!(!fields.kind_name.is_empty(), "kind name must not be empty");
     assert!(!fields.url.is_empty(), "url must not be empty");
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "type",
-            value: fields.kind_name,
-        },
-    );
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "url",
-            value: fields.url,
-        },
-    );
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "type",
+        value: fields.kind_name,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "url",
+        value: fields.url,
+    });
 }
 
 fn generate_git_kind_fields(out: &mut String, fields: GitKindFields<'_>) {
     assert!(!fields.repository.is_empty(), "git repository must not be empty");
     assert!(!fields.rev.is_empty(), "git revision must not be empty");
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "type",
-            value: "git",
-        },
-    );
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "repository",
-            value: fields.repository,
-        },
-    );
-    push_string_field(
-        out,
-        RenderedStringField {
-            indent: "    ",
-            name: "rev",
-            value: fields.rev,
-        },
-    );
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "type",
+        value: "git",
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "repository",
+        value: fields.repository,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "rev",
+        value: fields.rev,
+    });
     if let Some(ref_name_value) = fields.ref_name {
-        push_string_field(
-            out,
-            RenderedStringField {
-                indent: "    ",
-                name: "ref_name",
-                value: ref_name_value,
-            },
-        );
+        push_string_field(out, RenderedStringField {
+            indent: "    ",
+            name: "ref_name",
+            value: ref_name_value,
+        });
     }
 }
 
@@ -375,7 +315,7 @@ fn escape_nickel(s: &str) -> String {
 ///
 /// Uses a simple hash of the content bytes. Two files with the same
 /// fingerprint have the same content.
-pub fn content_fingerprint(content: &str) -> u64 {
+pub fn content_fingerprint(content: String) -> u64 {
     const FNV1A_OFFSET_BASIS_U64: u64 = 0xcbf29ce484222325;
     const FNV1A_PRIME_U64: u64 = 0x100000001b3;
 
@@ -418,7 +358,7 @@ mod tests {
     #[test]
     fn generate_empty_lock() {
         let lock = Lockfile::new();
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.starts_with("# Generated"));
         assert!(ncl.contains("{\n}\n"));
     }
@@ -426,7 +366,7 @@ mod tests {
     #[test]
     fn generate_file_entry() {
         let lock = lock_with_file("data", "https://example.com/data.bin", "sha256-abc=");
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("data = {"));
         assert!(ncl.contains("type = \"file\""));
         assert!(ncl.contains("url = \"https://example.com/data.bin\""));
@@ -436,14 +376,14 @@ mod tests {
     #[test]
     fn generate_hyphenated_name_quoted() {
         let lock = lock_with_file("my-input", "https://example.com/f", "sha256-x=");
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("\"my-input\" = {"));
     }
 
     #[test]
     fn generate_quoted_name_escapes_embedded_quote() {
         let lock = lock_with_file("my\"input", "https://example.com/f", "sha256-x=");
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("\"my\\\"input\" = {"));
         assert!(!ncl.contains("\"my\"input\" = {"));
     }
@@ -470,7 +410,7 @@ mod tests {
             patches: BTreeMap::new(),
         };
 
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("type = \"git\""));
         assert!(ncl.contains("repository = \"https://github.com/NixOS/nixpkgs.git\""));
         assert!(ncl.contains("rev = \"abc123\""));
@@ -501,7 +441,7 @@ mod tests {
                 value: "sha256-p2=".into(),
             },
         });
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("patches = ["));
         assert!(ncl.contains("\"p1\""));
         assert!(ncl.contains("\"p2\""));
@@ -525,15 +465,15 @@ mod tests {
 
     #[test]
     fn fingerprint_deterministic() {
-        let a = content_fingerprint("hello");
-        let b = content_fingerprint("hello");
+        let a = content_fingerprint("hello".to_string());
+        let b = content_fingerprint("hello".to_string());
         assert_eq!(a, b);
     }
 
     #[test]
     fn fingerprint_differs() {
-        let a = content_fingerprint("hello");
-        let b = content_fingerprint("world");
+        let a = content_fingerprint("hello".to_string());
+        let b = content_fingerprint("world".to_string());
         assert_ne!(a, b);
     }
 
@@ -567,7 +507,7 @@ mod tests {
             patches,
         };
 
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("_patches = {"));
         assert!(ncl.contains("fix1 = {"));
         assert!(ncl.contains("type = \"local\""));
@@ -593,7 +533,7 @@ mod tests {
             patches,
         };
 
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("_patches = {"));
         assert!(ncl.contains("type = \"remote\""));
         assert!(ncl.contains("url = \"https://example.com/fix.patch\""));
@@ -617,7 +557,7 @@ mod tests {
             patches,
         };
 
-        let ncl = generate_inputs_ncl(&lock);
+        let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("\"fix\\\"name\" = {"));
         assert!(!ncl.contains("\"fix\"name\" = {"));
     }
@@ -627,7 +567,7 @@ mod tests {
         let mut lock = lock_with_file("src", "https://example.com/src.tar.gz", "sha256-h=");
         lock.inputs.get_mut("src").unwrap().patches = vec!["missing".into()];
 
-        let panic_result = std::panic::catch_unwind(|| generate_inputs_ncl(&lock));
+        let panic_result = std::panic::catch_unwind(move || generate_inputs_ncl(lock));
         let panic_payload = panic_result.expect_err("generation should reject missing patch metadata");
         let panic_message = if let Some(message) = panic_payload.downcast_ref::<String>() {
             message.clone()

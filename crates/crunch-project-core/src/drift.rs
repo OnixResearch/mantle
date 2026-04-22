@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use crate::generate::content_fingerprint;
 use crate::generate::generate_inputs_ncl;
 use crate::lock::Lockfile;
@@ -13,19 +15,19 @@ pub enum DriftStatus {
 }
 
 impl DriftStatus {
-    pub fn is_ok(&self) -> bool {
+    pub fn is_ok(self) -> bool {
         matches!(self, DriftStatus::InSync)
     }
 }
 
-pub fn check_drift(lock: &Lockfile, actual_content: Option<&str>) -> DriftStatus {
+pub fn check_drift(lock: Lockfile, actual_content: Option<String>) -> DriftStatus {
     let actual_content = match actual_content {
-        Some(c) => c,
+        Some(content) => content,
         None => return DriftStatus::Missing,
     };
 
     let expected = generate_inputs_ncl(lock);
-    let expected_fp = content_fingerprint(&expected);
+    let expected_fp = content_fingerprint(expected);
     let actual_fp = content_fingerprint(actual_content);
 
     if expected_fp == actual_fp {
@@ -71,27 +73,27 @@ mod tests {
     #[test]
     fn in_sync() {
         let lock = simple_lock();
-        let expected = generate_inputs_ncl(&lock);
-        assert_eq!(check_drift(&lock, Some(&expected)), DriftStatus::InSync);
+        let expected = generate_inputs_ncl(lock.clone());
+        assert_eq!(check_drift(lock, Some(expected)), DriftStatus::InSync);
     }
 
     #[test]
     fn drifted() {
         let lock = simple_lock();
-        let status = check_drift(&lock, Some("stale content"));
+        let status = check_drift(lock, Some("stale content".to_string()));
         assert!(matches!(status, DriftStatus::Drifted { .. }));
     }
 
     #[test]
     fn missing_file() {
         let lock = simple_lock();
-        assert_eq!(check_drift(&lock, None), DriftStatus::Missing);
+        assert_eq!(check_drift(lock, None), DriftStatus::Missing);
     }
 
     #[test]
     fn empty_lock_in_sync_with_empty_generated() {
         let lock = Lockfile::new();
-        let expected = generate_inputs_ncl(&lock);
-        assert_eq!(check_drift(&lock, Some(&expected)), DriftStatus::InSync);
+        let expected = generate_inputs_ncl(lock.clone());
+        assert_eq!(check_drift(lock, Some(expected)), DriftStatus::InSync);
     }
 }

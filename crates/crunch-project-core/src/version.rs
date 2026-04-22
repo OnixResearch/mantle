@@ -2,12 +2,15 @@ use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use core::fmt;
+
 use serde::Deserialize;
 use serde::Serialize;
 
 /// Maximum number of supported schema versions. Guards against unbounded
 /// migration chains.
 const MAX_VERSIONS: u32 = 256;
+
+const VERSION_COMPONENT_COUNT: usize = 3;
 
 /// A schema version in `major.minor.patch` form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -31,11 +34,11 @@ impl SchemaVersion {
         Self { major, minor, patch }
     }
 
-    pub fn is_compatible_with(&self, other: &SchemaVersion) -> bool {
+    pub fn is_compatible_with(self, other: SchemaVersion) -> bool {
         self.major == other.major
     }
 
-    pub fn needs_upgrade_to(&self, target: &SchemaVersion) -> bool {
+    pub fn needs_upgrade_to(self, target: SchemaVersion) -> bool {
         assert!(self.major <= target.major, "cannot downgrade: {self} > {target}");
         self != target
     }
@@ -56,13 +59,13 @@ impl Serialize for SchemaVersion {
 impl<'de> Deserialize<'de> for SchemaVersion {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        parse_version(&s).ok_or_else(|| serde::de::Error::custom(format!("invalid schema version: {s}")))
+        parse_version(s.clone()).ok_or_else(|| serde::de::Error::custom(format!("invalid schema version: {s}")))
     }
 }
 
-pub fn parse_version(s: &str) -> Option<SchemaVersion> {
+pub fn parse_version(s: String) -> Option<SchemaVersion> {
     let parts: alloc::vec::Vec<&str> = s.split('.').collect();
-    if parts.len() != 3 {
+    if parts.len() != VERSION_COMPONENT_COUNT {
         return None;
     }
 
@@ -98,19 +101,19 @@ mod tests {
     fn parse_roundtrip() {
         let v = SchemaVersion::new(2, 3, 4);
         let s = v.to_string();
-        let parsed = parse_version(&s).unwrap();
+        let parsed = parse_version(s).unwrap();
         assert_eq!(v, parsed);
     }
 
     #[test]
     fn parse_rejects_malformed() {
-        assert!(parse_version("").is_none());
-        assert!(parse_version("1").is_none());
-        assert!(parse_version("1.0").is_none());
-        assert!(parse_version("1.0.0.0").is_none());
-        assert!(parse_version("abc").is_none());
-        assert!(parse_version("01.0.0").is_none());
-        assert!(parse_version("-1.0.0").is_none());
+        assert!(parse_version("".to_string()).is_none());
+        assert!(parse_version("1".to_string()).is_none());
+        assert!(parse_version("1.0".to_string()).is_none());
+        assert!(parse_version("1.0.0.0".to_string()).is_none());
+        assert!(parse_version("abc".to_string()).is_none());
+        assert!(parse_version("01.0.0".to_string()).is_none());
+        assert!(parse_version("-1.0.0".to_string()).is_none());
     }
 
     #[test]
@@ -119,9 +122,9 @@ mod tests {
         let v1_1 = SchemaVersion::new(1, 1, 0);
         let v2 = SchemaVersion::new(2, 0, 0);
 
-        assert!(v1.is_compatible_with(&v1_1));
-        assert!(v1_1.is_compatible_with(&v1));
-        assert!(!v1.is_compatible_with(&v2));
+        assert!(v1.is_compatible_with(v1_1));
+        assert!(v1_1.is_compatible_with(v1));
+        assert!(!v1.is_compatible_with(v2));
     }
 
     #[test]
@@ -129,8 +132,8 @@ mod tests {
         let v1 = SchemaVersion::new(1, 0, 0);
         let v1_1 = SchemaVersion::new(1, 1, 0);
 
-        assert!(v1.needs_upgrade_to(&v1_1));
-        assert!(!v1.needs_upgrade_to(&v1));
+        assert!(v1.needs_upgrade_to(v1_1));
+        assert!(!v1.needs_upgrade_to(v1));
     }
 
     #[test]

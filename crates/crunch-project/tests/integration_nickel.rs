@@ -40,7 +40,7 @@ fn lock_with_entries() -> Lockfile {
 #[test]
 fn generated_inputs_is_valid_nickel() {
     let lock = lock_with_entries();
-    let ncl = generate_inputs_ncl(&lock);
+    let ncl = generate_inputs_ncl(lock);
 
     // Write to temp file and evaluate with crunch-eval
     let dir = tempfile::tempdir().unwrap();
@@ -62,7 +62,7 @@ fn generated_inputs_is_valid_nickel() {
 #[test]
 fn generated_inputs_field_values_match_lock() {
     let lock = lock_with_entries();
-    let ncl = generate_inputs_ncl(&lock);
+    let ncl = generate_inputs_ncl(lock);
 
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("inputs.ncl");
@@ -100,7 +100,7 @@ fn generated_inputs_field_values_match_lock() {
 #[test]
 fn generated_inputs_importable_from_package_code() {
     let lock = lock_with_entries();
-    let ncl = generate_inputs_ncl(&lock);
+    let ncl = generate_inputs_ncl(lock);
 
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("inputs.ncl"), &ncl).unwrap();
@@ -129,16 +129,16 @@ fn generated_inputs_importable_from_package_code() {
 #[test]
 fn drift_detection_matches_generation() {
     let lock = lock_with_entries();
-    let ncl = generate_inputs_ncl(&lock);
+    let ncl = generate_inputs_ncl(lock.clone());
 
     // Fresh generation is in sync
-    assert!(check_drift(&lock, Some(&ncl)).is_ok());
+    assert!(check_drift(lock.clone(), Some(ncl)).is_ok());
 
     // Missing file
-    assert_eq!(check_drift(&lock, None), DriftStatus::Missing);
+    assert_eq!(check_drift(lock.clone(), None), DriftStatus::Missing);
 
     // Stale content
-    assert!(matches!(check_drift(&lock, Some("old content")), DriftStatus::Drifted { .. }));
+    assert!(matches!(check_drift(lock, Some("old content".to_string())), DriftStatus::Drifted { .. }));
 }
 
 #[test]

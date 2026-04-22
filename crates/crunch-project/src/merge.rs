@@ -1,3 +1,4 @@
+pub use crunch_project_core::FilterInputsResult;
 pub use crunch_project_core::MergeIssue;
 pub use crunch_project_core::MergeReport;
 pub use crunch_project_core::Severity;

@@ -2,6 +2,7 @@ use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -28,9 +29,7 @@ struct RawLockfile {
 
 impl<'de> Deserialize<'de> for Lockfile {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawLockfile::deserialize(deserializer)?;
         Ok(Self {
             version: raw.version,
@@ -49,26 +48,31 @@ impl Lockfile {
         }
     }
 
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
+    pub fn to_json(self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(&self)
     }
 
-    pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(s)
+    pub fn from_json(s: String) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(&s)
     }
 
-    pub fn validate(&self) -> Vec<String> {
-        let mut problems = Vec::with_capacity(self.inputs.len().saturating_add(self.patches.len()));
+    pub fn validate(self) -> Vec<String> {
+        let Lockfile {
+            version: _,
+            inputs,
+            patches,
+        } = self;
+        let mut problems = Vec::with_capacity(inputs.len().saturating_add(patches.len()));
 
-        if self.inputs.len() as u64 > MAX_LOCK_ENTRIES as u64 {
-            problems.push(format!("too many lock entries: {} (max {MAX_LOCK_ENTRIES})", self.inputs.len()));
+        if inputs.len() as u64 > MAX_LOCK_ENTRIES as u64 {
+            problems.push(format!("too many lock entries: {} (max {MAX_LOCK_ENTRIES})", inputs.len()));
         }
 
-        if self.patches.len() as u64 > MAX_LOCKED_PATCHES as u64 {
-            problems.push(format!("too many locked patches: {} (max {MAX_LOCKED_PATCHES})", self.patches.len()));
+        if patches.len() as u64 > MAX_LOCKED_PATCHES as u64 {
+            problems.push(format!("too many locked patches: {} (max {MAX_LOCKED_PATCHES})", patches.len()));
         }
 
-        for (name, entry) in &self.inputs {
+        for (name, entry) in &inputs {
             if name.is_empty() {
                 problems.push("lock entry with empty name".into());
             }
@@ -76,7 +80,7 @@ impl Lockfile {
                 problems.push(format!("lock entry '{name}': hash value is empty"));
             }
             for patch_name in &entry.patches {
-                if !self.patches.contains_key(patch_name) {
+                if !patches.contains_key(patch_name) {
                     problems.push(format!("lock entry '{name}' references unlocked patch '{patch_name}'"));
                 }
             }
@@ -110,9 +114,7 @@ struct RawLockEntry {
 
 impl<'de> Deserialize<'de> for LockEntry {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawLockEntry::deserialize(deserializer)?;
         Ok(Self {
             kind: raw.kind,
@@ -155,9 +157,7 @@ enum RawLockedKind {
 
 impl<'de> Deserialize<'de> for LockedKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawLockedKind::deserialize(deserializer)?;
         Ok(match raw {
             RawLockedKind::File { url } => Self::File { url },
@@ -250,8 +250,8 @@ mod tests {
     #[test]
     fn lockfile_json_roundtrip() {
         let lock = sample_lockfile();
-        let json = lock.to_json().unwrap();
-        let parsed = Lockfile::from_json(&json).unwrap();
+        let json = lock.clone().to_json().unwrap();
+        let parsed = Lockfile::from_json(json).unwrap();
         assert_eq!(lock, parsed);
     }
 

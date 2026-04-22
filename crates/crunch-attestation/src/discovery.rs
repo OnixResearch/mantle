@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::Canonicalize;
 use crate::Error;
+#[cfg(test)]
 use crate::encode_detached_signature;
 use crate::parse_detached_signature;
 use crate::policy::ReleasePolicy;
@@ -521,7 +522,7 @@ mod tests {
         };
         fs::write(dir.join("release-attestation.json.sig"), encode_detached_signature(&release_sig)).unwrap();
 
-        let release_digest = AttestationDigest::from_canonical_bytes(&release_bytes);
+        let release_digest = AttestationDigest::from_canonical_bytes(release_bytes.clone());
 
         let witnesses_dir = dir.join("witnesses");
         fs::create_dir_all(&witnesses_dir).unwrap();
@@ -573,8 +574,8 @@ mod tests {
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
-            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
-            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
             workflow: Workflow {
                 command: "crunch self-build".to_string(),

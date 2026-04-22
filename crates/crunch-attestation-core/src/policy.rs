@@ -458,7 +458,7 @@ mod tests {
                     host_class: "other-host".to_string(),
                 },
             ),
-            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-second"),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-second".to_vec()),
             signer_key_name: "witness-a-key-2".to_string(),
         };
         let policy = ReleasePolicy::new(2, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
@@ -575,12 +575,12 @@ mod tests {
         let release = sample_release();
         let wrong_ref = ValidatedWitness {
             attestation: WitnessAttestation::new(
-                AttestationDigest::from_canonical_bytes(b"wrong-release"),
+                AttestationDigest::from_canonical_bytes(b"wrong-release".to_vec()),
                 "witness-a".to_string(),
                 release.binary_digests.clone(),
                 sample_env(),
             ),
-            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att"),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att".to_vec()),
             signer_key_name: "witness-a-key".to_string(),
         };
         let policy = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
@@ -613,7 +613,7 @@ mod tests {
                 }],
                 sample_env(),
             ),
-            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att"),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att".to_vec()),
             signer_key_name: "witness-a-key".to_string(),
         };
         let policy = ReleasePolicy::new(1, "witness_identity".to_string(), vec!["signer-1".to_string()], vec![
@@ -673,8 +673,8 @@ mod tests {
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(crate::release::ReleaseAttestationInit {
             release_id: "crunch-0.1.0".to_string(),
-            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest"),
-            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof"),
+            release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
+            proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
             workflow: Workflow {
                 command: "crunch self-build".to_string(),

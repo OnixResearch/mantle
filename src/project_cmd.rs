@@ -56,12 +56,12 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
 
     // Write empty lockfile
     let lock = Lockfile::new();
-    let lock_json = lock.to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+    let lock_json = lock.clone().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
     std::fs::write(&lock_path, &lock_json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
 
     // Create .crunch/ and generate empty inputs
     std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
-    let inputs_ncl = generate_inputs_ncl(&lock);
+    let inputs_ncl = generate_inputs_ncl(lock);
     std::fs::write(&inputs_path, &inputs_ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
 
     // Add .crunch/ to .gitignore if not already there
@@ -80,19 +80,19 @@ pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
     let lock = load_lockfile(dir)?;
 
     // 1. Validate manifest internally
-    let manifest_problems = manifest.validate();
+    let manifest_problems = manifest.clone().validate();
     for p in &manifest_problems {
         eprintln!("manifest: {p}");
     }
 
     // 2. Validate lockfile internally
-    let lock_problems = lock.validate();
+    let lock_problems = lock.clone().validate();
     for p in &lock_problems {
         eprintln!("lockfile: {p}");
     }
 
     // 3. Check manifest-lock consistency
-    let report = check_manifest_lock(&manifest, &lock);
+    let report = check_manifest_lock(manifest.clone(), lock.clone());
     for issue in &report.issues {
         let prefix = match issue.severity {
             Severity::Error => "error",
@@ -104,7 +104,7 @@ pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
     // 4. Check drift
     let inputs_path = dir.join(INPUTS_FILE);
     let actual_content = std::fs::read_to_string(&inputs_path).ok();
-    let drift = check_drift(&lock, actual_content.as_deref());
+    let drift = check_drift(lock.clone(), actual_content);
     match &drift {
         DriftStatus::InSync => {}
         DriftStatus::Missing => {
@@ -186,7 +186,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     print_patch_failures(&result.failures);
 
     if result.has_changes() {
-        let problems = result.lock.validate();
+        let problems = result.lock.clone().validate();
         if !problems.is_empty() {
             for problem in &problems {
                 eprintln!("lockfile warning: {problem}");
@@ -280,12 +280,12 @@ fn load_lockfile(dir: &Path) -> Result<Lockfile, RunError> {
 
     let content =
         std::fs::read_to_string(&path).map_err(|e| RunError::Internal(format!("reading {LOCK_FILE}: {e}")))?;
-    Lockfile::from_json(&content).map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))
+    Lockfile::from_json(content).map_err(|e| RunError::Internal(format!("parsing {LOCK_FILE}: {e}")))
 }
 
 fn write_lockfile(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let path = dir.join(LOCK_FILE);
-    let json = lock.to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
+    let json = lock.clone().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
     std::fs::write(&path, &json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
     Ok(())
 }
@@ -293,7 +293,7 @@ fn write_lockfile(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
 fn write_inputs_ncl(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let inputs_dir = dir.join(INPUTS_DIR);
     std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
-    let ncl = generate_inputs_ncl(lock);
+    let ncl = generate_inputs_ncl(lock.clone());
     let path = dir.join(INPUTS_FILE);
     std::fs::write(&path, &ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
     Ok(())

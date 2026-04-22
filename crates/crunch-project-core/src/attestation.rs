@@ -99,12 +99,12 @@ pub fn synthesize_project_attestation(input: ProjectAttestationRequest) -> Resul
 }
 
 fn validate_project_inputs(manifest: &ProjectManifest, lock: &Lockfile) -> Result<(), Error> {
-    let manifest_problems = manifest.validate();
+    let manifest_problems = manifest.clone().validate();
     if !manifest_problems.is_empty() {
         return Err(Error::Validation(alloc::format!("invalid manifest: {}", manifest_problems.join("; "))));
     }
 
-    let lock_problems = lock.validate();
+    let lock_problems = lock.clone().validate();
     if !lock_problems.is_empty() {
         return Err(Error::Validation(alloc::format!("invalid lockfile: {}", lock_problems.join("; "))));
     }
@@ -345,7 +345,7 @@ mod tests {
         let lock = sample_lock();
         let roots = sample_roots();
         let manifest_text = "{ version = \"1.0.0\", inputs = [], patches = [] }".to_string();
-        let lock_text = lock.to_json().unwrap();
+        let lock_text = lock.clone().to_json().unwrap();
 
         let attestation = synthesize_project_attestation(ProjectAttestationRequest {
             manifest_text,
@@ -400,7 +400,7 @@ mod tests {
         let mut roots = sample_roots();
         let first = synthesize_project_attestation(ProjectAttestationRequest {
             manifest_text: "manifest".to_string(),
-            lock_text: lock.to_json().unwrap(),
+            lock_text: lock.clone().to_json().unwrap(),
             manifest: manifest.clone(),
             lock: lock.clone(),
             selected_roots: roots.clone(),
@@ -409,7 +409,7 @@ mod tests {
         roots.reverse();
         let second = synthesize_project_attestation(ProjectAttestationRequest {
             manifest_text: "manifest".to_string(),
-            lock_text: lock.to_json().unwrap(),
+            lock_text: lock.clone().to_json().unwrap(),
             manifest,
             lock,
             selected_roots: roots,
@@ -429,7 +429,7 @@ mod tests {
 
         let err = synthesize_project_attestation(ProjectAttestationRequest {
             manifest_text: "manifest".to_string(),
-            lock_text: lock.to_json().unwrap(),
+            lock_text: lock.clone().to_json().unwrap(),
             manifest,
             lock,
             selected_roots: sample_roots(),
@@ -550,12 +550,12 @@ mod tests {
             ArtifactReference {
                 node_id: "artifact:/nix/store/root-b".to_string(),
                 logical_path: "/nix/store/root-b".to_string(),
-                attestation_digest: AttestationDigest::from_canonical_bytes(b"root-b"),
+                attestation_digest: AttestationDigest::from_canonical_bytes(b"root-b".to_vec()),
             },
             ArtifactReference {
                 node_id: "artifact:/nix/store/root-a".to_string(),
                 logical_path: "/nix/store/root-a".to_string(),
-                attestation_digest: AttestationDigest::from_canonical_bytes(b"root-a"),
+                attestation_digest: AttestationDigest::from_canonical_bytes(b"root-a".to_vec()),
             },
         ]
     }

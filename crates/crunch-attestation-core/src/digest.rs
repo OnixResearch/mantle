@@ -1,5 +1,6 @@
 use alloc::string::String;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 
 use data_encoding::HEXLOWER;
 use serde::Deserialize;
@@ -16,19 +17,16 @@ const DIGEST_HEX_LEN: usize = DIGEST_BYTES_LEN.saturating_mul(2);
 pub struct AttestationDigest([u8; DIGEST_BYTES_LEN]);
 
 impl AttestationDigest {
-    pub fn from_canonical_bytes(bytes: &[u8]) -> Self {
-        let digest = blake3::hash(bytes);
+    pub fn from_canonical_bytes(bytes: Vec<u8>) -> Self {
+        let digest = blake3::hash(&bytes);
         Self(*digest.as_bytes())
     }
 
-    pub fn parse_hex(value: &str) -> Result<Self, Error> {
-        validate_digest_hex(value)?;
-        let decoded = HEXLOWER.decode(value.as_bytes()).map_err(|_| Error::InvalidDigestHex {
-            value: value.to_string(),
-        })?;
-        let digest_bytes: [u8; DIGEST_BYTES_LEN] = decoded.try_into().map_err(|_| Error::InvalidDigestHex {
-            value: value.to_string(),
-        })?;
+    pub fn parse_hex(value: String) -> Result<Self, Error> {
+        validate_digest_hex(&value)?;
+        let decoded =
+            HEXLOWER.decode(value.as_bytes()).map_err(|_| Error::InvalidDigestHex { value: value.clone() })?;
+        let digest_bytes: [u8; DIGEST_BYTES_LEN] = decoded.try_into().map_err(|_| Error::InvalidDigestHex { value })?;
         Ok(Self(digest_bytes))
     }
 
@@ -36,15 +34,15 @@ impl AttestationDigest {
         HEXLOWER.encode(&self.0)
     }
 
-    pub fn as_bytes(&self) -> &[u8; DIGEST_BYTES_LEN] {
-        &self.0
+    pub fn into_bytes(self) -> [u8; DIGEST_BYTES_LEN] {
+        self.0
     }
 }
 
 impl Serialize for AttestationDigest {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_str(&self.to_hex())
+        serializer.serialize_str(&(*self).to_hex())
     }
 }
 
@@ -52,7 +50,7 @@ impl<'de> Deserialize<'de> for AttestationDigest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let value = String::deserialize(deserializer)?;
-        Self::parse_hex(&value).map_err(serde::de::Error::custom)
+        Self::parse_hex(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -82,17 +80,19 @@ mod tests {
 
     #[test]
     fn digest_round_trip_hex() {
-        let digest = AttestationDigest::from_canonical_bytes(b"hello");
+        let digest = AttestationDigest::from_canonical_bytes(b"hello".to_vec());
         let encoded = digest.to_hex();
-        let decoded = AttestationDigest::parse_hex(&encoded).unwrap();
+        let decoded = AttestationDigest::parse_hex(encoded.clone()).unwrap();
         assert_eq!(decoded, digest);
         assert_eq!(encoded.len(), DIGEST_HEX_LEN);
     }
 
     #[test]
     fn digest_rejects_uppercase_hex() {
-        let err = AttestationDigest::parse_hex("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            .unwrap_err();
+        let err = AttestationDigest::parse_hex(
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        )
+        .unwrap_err();
         assert!(matches!(err, Error::InvalidDigestHex { .. }));
     }
 }
