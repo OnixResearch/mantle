@@ -226,28 +226,29 @@ def is_std_workspace_rust_source(relative_path: str) -> bool:
     return path.parts[2] in CRATE_WORKSPACE_RUST_DIRS
 
 
-def resolve_change_history_root() -> Path:
-    if ACTIVE_CHANGE_ROOT.exists():
-        return ACTIVE_CHANGE_ROOT
+def resolve_change_history_paths() -> list[Path]:
     archived_matches = sorted(ARCHIVE_CHANGES_ROOT.glob(f"*-{NO_STD_CHANGE_NAME}"))
-    if len(archived_matches) == 1:
-        return archived_matches[0]
     if len(archived_matches) > 1:
         matches = ", ".join(str(path.relative_to(REPO_ROOT)) for path in archived_matches)
         raise CheckFailure(f"multiple archived change roots found for {NO_STD_CHANGE_NAME}: {matches}")
+    if ACTIVE_CHANGE_ROOT.exists():
+        return [ACTIVE_CHANGE_ROOT]
+    if len(archived_matches) == 1:
+        return [ACTIVE_CHANGE_ROOT, archived_matches[0]]
     raise CheckFailure(f"missing active or archived change root for {NO_STD_CHANGE_NAME}")
 
 
 def touched_std_workspace_source_files() -> list[str]:
-    change_root = resolve_change_history_root()
-    change_root_relative = change_root.relative_to(REPO_ROOT)
+    change_paths = resolve_change_history_paths()
+    change_pathspecs = [str(path.relative_to(REPO_ROOT)) for path in change_paths]
     history = [
         line.strip()
-        for line in run_git_command(["log", "--format=%H", "--reverse", "--", str(change_root_relative)]).splitlines()
+        for line in run_git_command(["log", "--format=%H", "--reverse", "--", *change_pathspecs]).splitlines()
         if line.strip()
     ]
     if not history:
-        raise CheckFailure(f"no git history found for change path: {change_root_relative}")
+        joined_pathspecs = ", ".join(change_pathspecs)
+        raise CheckFailure(f"no git history found for change paths: {joined_pathspecs}")
     diff_base = git_revision_parent(history[0])
     touched_paths = [
         line.strip()
