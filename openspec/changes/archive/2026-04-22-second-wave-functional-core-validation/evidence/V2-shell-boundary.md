@@ -34,6 +34,8 @@ Files inspected:
 
 Observed boundary:
 
+- The public shell-core surface was normalized only as far as the widened
+  API-shape checker required; behavior and shell ownership stayed the same.
 - `crunch-shell-core` now exposes owned-data core APIs only:
   - `parse_shell_sidecar_json(json: String)`
   - `compute_activation(sidecar: ShellSidecar, host_env: HostEnv, output_path: String, with_paths: Vec<String>)`

@@ -10,7 +10,10 @@ Reviewed-At: 2026-04-22
 
 ```text
 ./scripts/check-no-std-core.sh   # pueue task 17
+rm -rf openspec/changes/second-wave-functional-core-validation
+cp -a openspec/changes/archive/2026-04-22-second-wave-functional-core-validation openspec/changes/second-wave-functional-core-validation
 openspec_gate stage=tasks change=second-wave-functional-core-validation
+rm -rf openspec/changes/second-wave-functional-core-validation
 ```
 
 ## Results
@@ -50,6 +53,10 @@ Packet summary:
   - `missing-target scenario OK`
 
 ### Tasks-stage gate packet
+
+Because `openspec_gate` only accepts active changes, the archived change was
+restored temporarily under `openspec/changes/second-wave-functional-core-validation`
+for the rerun, then removed again after the gate transcript was captured.
 
 `openspec_gate stage=tasks change=second-wave-functional-core-validation` ended with:
 

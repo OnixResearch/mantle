@@ -56,9 +56,11 @@ This change closes that drift before more no-std work stacks on top.
   `portability`; later implementation will touch `scripts/check-no-std-core.sh`,
   `scripts/no_std_core_checks.py`, `openspec/specs/functional-core/validation/*`,
   and `openspec/specs/functional-core/evidence/ownership-review.md`
-- **APIs**: no new public runtime API is required; this change documents and
-  later validates the APIs already exposed by `crunch-shell-core` and
-  `crunch-release-core`
+- **APIs**: no broad user-visible runtime API expansion is required; this
+  change documents and validates the second-wave core boundary, but it may
+  require narrow public API normalization inside `crunch-shell-core` or
+  `crunch-release-core` when widened API-shape enforcement rejects existing
+  borrowed public surfaces
 - **Dependencies**: no new runtime dependencies are intended; later
   implementation may add a checked-in validation inventory file so the runner
   stops hard-coding first-wave-only constants
@@ -67,8 +69,9 @@ This change closes that drift before more no-std work stacks on top.
 
 ## Non-Goals
 
-- rewriting `crunch-shell-core` or `crunch-release-core` into different shapes
-  as part of this change
+- broad semantic rewrites of `crunch-shell-core` or `crunch-release-core` as
+  part of this change; only narrow checker-driven signature normalization that
+  preserves the existing shell/core responsibility split is in scope
 - reopening the archived first-wave extraction as if shell/release had been in
   that original scope all along
 - adding a third no-std wave for build, store, pipeline, or eval crates

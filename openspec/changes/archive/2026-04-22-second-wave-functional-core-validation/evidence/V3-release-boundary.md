@@ -40,6 +40,9 @@ Files inspected:
 
 Observed boundary:
 
+- The public release-core surface was normalized only as far as the widened
+  API-shape checker required; behavior, proof semantics, and std-shell
+  ownership stayed the same.
 - `crunch-release-core` owns owned-data manifest/proof logic only:
   - `canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest)`
   - `validate_bundled_artifact_record(artifact: BundledArtifact, field_name: String)`

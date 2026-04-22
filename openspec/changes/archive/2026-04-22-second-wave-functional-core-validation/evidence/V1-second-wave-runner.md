@@ -32,6 +32,12 @@ cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_sou
 
 ## Results
 
+This packet is backed by direct transcript evidence captured during closeout:
+
+- live rerun of both deterministic probe commands in the session transcript
+- `pueue_log` of task `17` with the full `./scripts/check-no-std-core.sh`
+  output, including each `cargo check`, `cargo test`, and checker-script line
+
 ### Change validation + deterministic wasm probes
 
 - `openspec validate second-wave-functional-core-validation` → `Change 'second-wave-functional-core-validation' is valid`

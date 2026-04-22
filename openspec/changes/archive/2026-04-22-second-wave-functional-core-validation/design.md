@@ -24,6 +24,12 @@ That creates a brittle state where shell/release no-std work is real but not
 part of the declared boundary. A later regression could land in those crates
 without tripping the documented proof path.
 
+A second retroactive wrinkle is API-shape enforcement. `crunch-shell-core` and
+`crunch-release-core` already carried a few public borrowed/reference helpers
+from their pre-spec landing. Once the widened checker makes owned-data core
+surfaces normative, those helpers stop being mere implementation detail and
+become validation failures.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -39,7 +45,9 @@ without tripping the documented proof path.
 
 **Non-Goals:**
 
-- redesign the second-wave core APIs during this spec-only change
+- perform broad semantic redesign of the second-wave core APIs during this
+  validation change; only minimal checker-driven boundary normalization that
+  preserves behavior and shell ownership is in scope
 - claim shell or release domains are now historical parts of the archived
   first-wave change
 - broaden the no-std wave to build/store/eval/runtime crates here
@@ -135,7 +143,26 @@ must check the active rustup-managed toolchain first, run
 with a clear prerequisite error before any second-wave checks start when the
 target cannot be provided.
 
-### 5. Retroactive validation must not depend only on new-change git history
+### 5. Allow minimal boundary-normalizing API reshapes when checker coverage exposes borrowed surfaces
+
+**Choice:** this change may apply narrow public API normalization to
+`crunch-shell-core` and `crunch-release-core` when widened API-shape
+validation rejects existing borrowed/reference-based surfaces, but it must not
+change domain semantics or move shell responsibilities across the boundary.
+
+**Rationale:** the second-wave cores landed before this validation change.
+Once `functional.core.apis.plain.data.typed.results` and the API-shape checker
+become normative for those crates, public `&str`, `&[u8]`, `&self`, or similar
+borrowed surfaces become proof failures. Narrow owned-data normalization keeps
+spec, checker, and implementation aligned without treating shell/release as a
+new semantic redesign project.
+
+**Implementation:** allow minimal shifts such as owned-input free functions,
+owned request structs, or visibility tightening for borrowed helper methods,
+while preserving the same std-shell/core split, the same user-visible shell and
+release CLI behavior, and the same core business logic ownership.
+
+### 6. Retroactive validation must not depend only on new-change git history
 
 **Choice:** second-wave validation must not rely only on files touched by this
 new OpenSpec change, because the shell/release code already landed before this
