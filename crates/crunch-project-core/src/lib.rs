@@ -17,6 +17,7 @@ mod generate;
 mod lock;
 mod manifest;
 mod merge;
+mod mirrors;
 mod version;
 
 pub use drift::DriftStatus;
@@ -48,5 +49,7 @@ pub use merge::check_manifest_lock;
 pub use merge::filter_inputs;
 pub use merge::inputs_needing_refresh;
 pub use merge::orphaned_lock_entries;
+pub use mirrors::url_with_mirrors;
+pub use mirrors::validate_mirrors;
 pub use version::SchemaVersion;
 pub use version::parse_version;
