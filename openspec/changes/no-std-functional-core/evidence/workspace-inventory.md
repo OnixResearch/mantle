@@ -105,13 +105,25 @@ change only owns crunch-maintained crate boundaries.
   - `LockedHash`
   - `LockedPatch`
   - `LockedPatchSource`
+- merge/drift/generated-input pure logic:
+  - `MergeIssue`
+  - `MergeReport`
+  - `Severity`
+  - `check_manifest_lock(...)`
+  - `filter_inputs(...)`
+  - `inputs_needing_refresh(...)`
+  - `orphaned_lock_entries(...)`
+  - `generate_inputs_ncl(...)`
+  - `content_fingerprint(...)`
+  - `DriftStatus`
+  - `check_drift(...)`
 
 ### `crunch-project` still owns
 
 - `refresh.rs` resolver traits, git/url/local-file hashing boundary, and refresh outcome application
 - `attestation.rs` project-attestation synthesis
-- `generate.rs`, `merge.rs`, `drift.rs`, `upgrade.rs`, and `mirrors.rs` until their APIs are reshaped for core rules
-- std-facing re-export/adaptor modules in `src/{manifest,lock,version}.rs`
+- `upgrade.rs` and `mirrors.rs` until their APIs are reshaped for core rules
+- std-facing re-export/adaptor modules in `src/{manifest,lock,version,merge,generate,drift}.rs`
 
 ## Immediate Extraction Notes
 

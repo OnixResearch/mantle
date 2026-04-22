@@ -9,10 +9,20 @@
 
 extern crate alloc;
 
+#[cfg(test)]
+extern crate std;
+
+mod drift;
+mod generate;
 mod lock;
 mod manifest;
+mod merge;
 mod version;
 
+pub use drift::DriftStatus;
+pub use drift::check_drift;
+pub use generate::content_fingerprint;
+pub use generate::generate_inputs_ncl;
 pub use lock::LockEntry;
 pub use lock::LockedHash;
 pub use lock::LockedKind;
@@ -31,5 +41,12 @@ pub use manifest::ManifestInput;
 pub use manifest::PatchDef;
 pub use manifest::PatchSource;
 pub use manifest::ProjectManifest;
+pub use merge::MergeIssue;
+pub use merge::MergeReport;
+pub use merge::Severity;
+pub use merge::check_manifest_lock;
+pub use merge::filter_inputs;
+pub use merge::inputs_needing_refresh;
+pub use merge::orphaned_lock_entries;
 pub use version::SchemaVersion;
 pub use version::parse_version;
