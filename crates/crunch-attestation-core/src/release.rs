@@ -341,7 +341,7 @@ fn validate_schema_tag(tag: SchemaTag<'_>) -> Result<(), Error> {
         return Ok(());
     }
     Err(Error::SchemaTagMismatch {
-        expected: tag.expected,
+        expected: tag.expected.to_string(),
         actual: tag.actual.to_string(),
     })
 }
@@ -350,7 +350,9 @@ fn validate_non_empty(field: NamedField<'_>) -> Result<(), Error> {
     if !field.value.is_empty() {
         return Ok(());
     }
-    Err(Error::EmptyField { field: field.name })
+    Err(Error::EmptyField {
+        field: field.name.to_string(),
+    })
 }
 
 fn validate_env_field(field: NamedField<'_>) -> Result<(), Error> {
@@ -361,7 +363,7 @@ fn validate_env_field(field: NamedField<'_>) -> Result<(), Error> {
     let actual = count_with_overflow_marker(field.value.len(), MAX_ENV_FIELD_LEN);
     if actual > MAX_ENV_FIELD_LEN {
         return Err(Error::FieldTooLong {
-            field: field.name,
+            field: field.name.to_string(),
             limit: MAX_ENV_FIELD_LEN,
             actual,
         });
@@ -510,7 +512,7 @@ mod tests {
 
         let err = release_attestation_canonical_bytes(attestation).unwrap_err();
         assert_eq!(err, Error::SchemaTagMismatch {
-            expected: RELEASE_ATTESTATION_SCHEMA,
+            expected: RELEASE_ATTESTATION_SCHEMA.to_string(),
             actual: "wrong-schema".to_string(),
         });
     }
@@ -522,7 +524,7 @@ mod tests {
 
         let err = witness_attestation_canonical_bytes(attestation).unwrap_err();
         assert_eq!(err, Error::SchemaTagMismatch {
-            expected: WITNESS_ATTESTATION_SCHEMA,
+            expected: WITNESS_ATTESTATION_SCHEMA.to_string(),
             actual: "wrong-schema".to_string(),
         });
     }
@@ -533,7 +535,9 @@ mod tests {
         attestation.release_id.clear();
 
         let err = release_attestation_canonical_bytes(attestation).unwrap_err();
-        assert_eq!(err, Error::EmptyField { field: "release_id" });
+        assert_eq!(err, Error::EmptyField {
+            field: "release_id".to_string(),
+        });
     }
 
     #[test]
@@ -543,7 +547,7 @@ mod tests {
 
         let err = witness_attestation_canonical_bytes(attestation).unwrap_err();
         assert_eq!(err, Error::EmptyField {
-            field: "witness_identity"
+            field: "witness_identity".to_string()
         });
     }
 
@@ -554,7 +558,7 @@ mod tests {
 
         let err = release_attestation_canonical_bytes(attestation).unwrap_err();
         assert_eq!(err, Error::EmptyField {
-            field: "binary_digest.name"
+            field: "binary_digest.name".to_string()
         });
     }
 
@@ -565,7 +569,7 @@ mod tests {
 
         let err = witness_attestation_canonical_bytes(attestation).unwrap_err();
         assert_eq!(err, Error::FieldTooLong {
-            field: "system",
+            field: "system".to_string(),
             limit: 256,
             actual: 257,
         });

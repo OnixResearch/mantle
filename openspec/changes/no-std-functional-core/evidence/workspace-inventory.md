@@ -77,14 +77,18 @@ change only owns crunch-maintained crate boundaries.
   - `ArtifactFacts`, `ArtifactAttestation`, `ArtifactReference`
   - `ClosureSemantics`, `ClosureFacts`, `ClosureAttestation`
   - `ProjectFacts`, `ProjectAttestation`
+- canonicalization and digest transforms from `src/canonical.rs`
+- release/witness attestation types and canonical digest helpers from `src/release.rs`
+- policy / revocation evaluation from `src/policy.rs`, including selector-driven
+  witness independence domains
 
 ### `crunch-attestation` still owns
 
 - `discovery.rs` filesystem scanning and file loading
-- `canonical.rs` canonicalization logic and current `Canonicalize` trait surface
-- `release.rs` release/witness attestation transforms
-- `policy.rs` policy/revocation evaluation and witness filtering
-- std-facing re-export/adaptor modules in `src/{error,digest,schema,version}.rs`
+- `adapter.rs` borrowed/std compatibility wrappers for canonicalization,
+  policy evaluation, and detached-signature helpers
+- std-facing re-export/adaptor modules in
+  `src/{canonical,digest,error,policy,release,schema,version}.rs`
 
 ### `crunch-project-core` now owns
 
@@ -98,7 +102,7 @@ change only owns crunch-maintained crate boundaries.
   - `HashSpec`
   - `PatchDef`
   - `PatchSource`
-- lockfile data model and validation:
+- lockfile data model, JSON conversion, and validation:
   - `Lockfile`
   - `LockEntry`
   - `LockedKind`
@@ -121,15 +125,33 @@ change only owns crunch-maintained crate boundaries.
   - `url_with_mirrors(...)`
   - `OLDEST_SUPPORTED`
   - `upgrade_lockfile(...)`
+- normalized refresh planning and application:
+  - `ResolvedInput`
+  - `HashResolutionMode`
+  - `RefreshFailure`
+  - `StaleReport`
+  - `RefreshOutcome`
+  - `ApplyResult`
+  - `plan_refresh_inputs(...)`
+  - `refresh_inputs(...)`
+  - `list_stale(...)`
+  - `plan_patch_resolutions(...)`
+  - `apply_outcomes(...)`
+- project attestation synthesis over owned request data:
+  - `ProjectAttestationRequest`
+  - `synthesize_project_attestation(...)`
 
 ### `crunch-project` still owns
 
-- `refresh.rs` resolver traits, git/url/local-file hashing boundary, and refresh outcome application
-- `attestation.rs` project-attestation synthesis
-- std-facing re-export/adaptor modules in `src/{manifest,lock,version,merge,generate,drift,mirrors,upgrade}.rs`
+- `refresh_adapter.rs` resolver traits plus git/url/local-file hashing I/O
+- `attestation_adapter.rs` borrowed/std-facing project-attestation wrapper
+- `upgrade_adapter.rs` std error translation around core upgrade results
+- std-facing re-export/adaptor modules in
+  `src/{manifest,lock,version,merge,generate,drift,mirrors,refresh,attestation,upgrade}.rs`
+- lockfile and generated-input file writes in the root CLI shell (`src/project_cmd.rs`)
 
 ## Immediate Extraction Notes
 
 - `crunch-attestation` current `Canonicalize` public trait will not survive unchanged inside a first-wave core crate because the OpenSpec API-shape rules forbid public traits in core crates.
 - `crunch-project` current refresh boundary cannot move as-is because `RefreshResolver` is a public trait and current core-facing functions use trait objects and references; the std adapter must keep resolver traits while the core takes normalized data.
-- `crunch-project` and `crunch-attestation` both have public inherent methods with reference receivers today (`&self`), so the later extraction needs an explicit API-shape pass, not a file copy.
+- The first-wave core crates no longer expose reference receivers or external JSON error types on their public boundary; any remaining borrowed ergonomics stay in std adapters.

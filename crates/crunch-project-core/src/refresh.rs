@@ -49,17 +49,6 @@ pub enum RefreshOutcome {
     Failed { name: String, reason: String },
 }
 
-impl RefreshOutcome {
-    pub fn name(&self) -> &str {
-        match self {
-            RefreshOutcome::Updated(resolved) => &resolved.name,
-            RefreshOutcome::Unchanged { name } => name,
-            RefreshOutcome::Frozen { name } => name,
-            RefreshOutcome::Failed { name, .. } => name,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedInputState {
     Resolved(ResolvedInput),
@@ -106,13 +95,8 @@ pub struct ApplyResult {
     pub lock: Lockfile,
     pub inputs_changed: u32,
     pub patches_changed: bool,
+    pub has_changes: bool,
     pub failures: Vec<RefreshFailure>,
-}
-
-impl ApplyResult {
-    pub fn has_changes(&self) -> bool {
-        self.inputs_changed > 0 || self.patches_changed
-    }
 }
 
 pub fn plan_refresh_inputs(request: RefreshInputsPlanRequest) -> Vec<ManifestInput> {
@@ -184,10 +168,13 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
     let inputs_changed = inputs_changed.saturating_sub(reverted);
     let orphan_changed = remove_orphaned_patches(&mut new_lock);
 
+    let has_changes = inputs_changed > 0 || patch_changed || orphan_changed;
+
     ApplyResult {
         lock: new_lock,
         inputs_changed,
         patches_changed: patch_changed || orphan_changed,
+        has_changes,
         failures: patch_failures,
     }
 }

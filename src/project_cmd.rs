@@ -185,7 +185,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
     let input_failures = collect_outcome_failures(&outcomes);
     print_patch_failures(&result.failures);
 
-    if result.has_changes() {
+    if result.has_changes {
         let problems = result.lock.clone().validate();
         if !problems.is_empty() {
             for problem in &problems {

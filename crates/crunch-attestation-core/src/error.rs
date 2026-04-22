@@ -3,60 +3,23 @@ use core::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
-    CollectionTooLarge {
-        limit: u32,
-        actual: u32,
-    },
-    EmptyField {
-        field: &'static str,
-    },
-    DuplicateNodeId {
-        node_id: String,
-    },
-    MissingNode {
-        node_id: String,
-    },
-    InvalidArtifactSubject {
-        node_id: String,
-    },
-    InvalidClosureNode {
-        node_id: String,
-    },
+    CollectionTooLarge { limit: u32, actual: u32 },
+    EmptyField { field: String },
+    DuplicateNodeId { node_id: String },
+    MissingNode { node_id: String },
+    InvalidArtifactSubject { node_id: String },
+    InvalidClosureNode { node_id: String },
     EmptyClosureRoots,
-    InvalidClosureRoot {
-        node_id: String,
-    },
-    MissingClosureRoot {
-        node_id: String,
-    },
-    InvalidProjectNode {
-        node_id: String,
-    },
-    InvalidProjectRoot {
-        node_id: String,
-    },
-    Serialize {
-        message: String,
-    },
-    InvalidDigestHex {
-        value: String,
-    },
-    SchemaTagMismatch {
-        expected: &'static str,
-        actual: String,
-    },
-    FieldTooLong {
-        field: &'static str,
-        limit: u32,
-        actual: u32,
-    },
-    UnsupportedPolicyField {
-        field: &'static str,
-        value: String,
-    },
-    InvalidDetachedSignature {
-        message: String,
-    },
+    InvalidClosureRoot { node_id: String },
+    MissingClosureRoot { node_id: String },
+    InvalidProjectNode { node_id: String },
+    InvalidProjectRoot { node_id: String },
+    Serialize { message: String },
+    InvalidDigestHex { value: String },
+    SchemaTagMismatch { expected: String, actual: String },
+    FieldTooLong { field: String, limit: u32, actual: u32 },
+    UnsupportedPolicyField { field: String, value: String },
+    InvalidDetachedSignature { message: String },
 }
 
 impl fmt::Display for Error {

@@ -7,8 +7,11 @@ Date: 2026-04-22
 
 ### `crunch-attestation`
 
-- `crates/crunch-attestation/src/error.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/canonical.rs` → adapter-only re-export
 - `crates/crunch-attestation/src/digest.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/error.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/policy.rs` → adapter-only re-export
+- `crates/crunch-attestation/src/release.rs` → adapter-only re-export
 - `crates/crunch-attestation/src/schema.rs` → adapter-only re-export
 - `crates/crunch-attestation/src/version.rs` → adapter-only re-export
 
@@ -28,6 +31,9 @@ Date: 2026-04-22
 - `crates/crunch-project/src/refresh.rs` → `unrelated`
   - removed one now-unused test import after moving foundational types to
     `crunch-project-core`
+- `crates/crunch-project/src/upgrade_adapter.rs` → `adapter-only`
+  - keeps CLI-facing error translation in std while `crates/crunch-project/src/upgrade.rs`
+    is reduced to re-exports only
 
 ## Review verdict
 

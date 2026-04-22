@@ -1,3 +1,5 @@
+use alloc::string::ToString;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -13,7 +15,7 @@ impl SchemaVersion {
     pub fn new(value: u32) -> Result<Self, Error> {
         if value == 0 {
             return Err(Error::EmptyField {
-                field: "schema_version",
+                field: "schema_version".to_string(),
             });
         }
 

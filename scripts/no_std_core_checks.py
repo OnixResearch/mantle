@@ -1,0 +1,737 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+import tomllib
+from collections import defaultdict
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CHANGE_ROOT = REPO_ROOT / "openspec" / "changes" / "no-std-functional-core"
+ALLOWLIST_PATH = CHANGE_ROOT / "validation" / "deps-allowlist.txt"
+OWNERSHIP_REVIEW_PATH = CHANGE_ROOT / "evidence" / "ownership-review.md"
+
+CORE_PACKAGES = ("crunch-attestation-core", "crunch-project-core")
+CORE_SOURCE_DIRS = (
+    REPO_ROOT / "crates" / "crunch-attestation-core" / "src",
+    REPO_ROOT / "crates" / "crunch-project-core" / "src",
+)
+CORE_LIB_FILES = {
+    "crunch-attestation-core": REPO_ROOT / "crates" / "crunch-attestation-core" / "src" / "lib.rs",
+    "crunch-project-core": REPO_ROOT / "crates" / "crunch-project-core" / "src" / "lib.rs",
+}
+CORE_MANIFEST_FILES = {
+    "crunch-attestation-core": REPO_ROOT / "crates" / "crunch-attestation-core" / "Cargo.toml",
+    "crunch-project-core": REPO_ROOT / "crates" / "crunch-project-core" / "Cargo.toml",
+}
+CORE_SCOPE_FILES = {
+    "crunch-attestation-core": (
+        "canonical.rs",
+        "digest.rs",
+        "error.rs",
+        "policy.rs",
+        "release.rs",
+        "schema.rs",
+        "version.rs",
+    ),
+    "crunch-project-core": (
+        "manifest.rs",
+        "lock.rs",
+        "merge.rs",
+        "drift.rs",
+        "upgrade.rs",
+        "version.rs",
+        "generate.rs",
+        "refresh.rs",
+    ),
+}
+REQUIRED_EXPORT_SNIPPETS = {
+    "crunch-attestation-core": (
+        "pub use policy::evaluate_policy;",
+        "pub use release::binary_digests_match;",
+    ),
+    "crunch-project-core": (
+        "pub use refresh::ResolvedInput;",
+        "pub use refresh::HashResolutionMode;",
+        "pub use refresh::RefreshFailure;",
+        "pub use refresh::StaleReport;",
+        "pub use refresh::RefreshOutcome;",
+        "pub use refresh::ApplyResult;",
+        "pub use refresh::refresh_inputs;",
+        "pub use refresh::apply_outcomes;",
+        "pub use refresh::list_stale;",
+    ),
+}
+LEGACY_STD_FILES = (
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "canonical.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "digest.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "error.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "policy.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "release.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "schema.rs",
+    REPO_ROOT / "crates" / "crunch-attestation" / "src" / "version.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "manifest.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "lock.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "merge.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "drift.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "upgrade.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "version.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "generate.rs",
+    REPO_ROOT / "crates" / "crunch-project" / "src" / "refresh.rs",
+)
+ALLOWED_LEGACY_PREFIXES = ("use ", "pub use ", "type ", "pub type ")
+COMMENT_PREFIXES = ("//", "///", "//!", "/*", "*", "*/")
+TREE_PACKAGE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) v[0-9]")
+TREE_FEATURE_RE = re.compile(r"(?:^|[|` +\\-]+)([A-Za-z0-9_.-]+) feature \"([^\"]+)\"")
+PUBLIC_FN_RE = re.compile(r"\bpub\s+fn\b")
+PUBLIC_STRUCT_RE = re.compile(r"\bpub\s+struct\b")
+PUBLIC_ENUM_RE = re.compile(r"\bpub\s+enum\b")
+PUBLIC_TYPE_RE = re.compile(r"\bpub\s+type\b")
+PUBLIC_TRAIT_RE = re.compile(r"\bpub\s+trait\b")
+CFG_TEST_ATTR = "#[cfg(test)]"
+WASM_TARGET = "wasm32-unknown-unknown"
+SCALAR_TYPES = {"bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"}
+CONTAINER_TYPES = {"String", "Box", "Vec", "Option", "Result", "BTreeMap", "BTreeSet"}
+BANNED_TYPE_PATTERNS = (
+    ("reference", re.compile(r"&")),
+    ("impl trait", re.compile(r"\bimpl\b")),
+    ("trait object", re.compile(r"\bdyn\b")),
+    ("Rc", re.compile(r"\bRc\b")),
+    ("Arc", re.compile(r"\bArc\b")),
+    ("Cow", re.compile(r"\bCow\b")),
+    ("Path", re.compile(r"\bPath\b")),
+    ("PathBuf", re.compile(r"\bPathBuf\b")),
+    ("Command", re.compile(r"\bCommand\b")),
+    ("std path", re.compile(r"\bstd::")),
+    ("OsStr", re.compile(r"\bOsStr\b")),
+    ("OsString", re.compile(r"\bOsString\b")),
+    ("HashMap", re.compile(r"\bHashMap\b")),
+    ("HashSet", re.compile(r"\bHashSet\b")),
+)
+BANNED_PURITY_PATTERNS = (
+    ("std path", re.compile(r"\bstd::")),
+    ("println", re.compile(r"\bprintln!")),
+    ("eprintln", re.compile(r"\beprintln!")),
+    ("dbg", re.compile(r"\bdbg!")),
+    ("log", re.compile(r"\blog::")),
+    ("tracing", re.compile(r"\btracing::")),
+    ("rand", re.compile(r"\brand::")),
+    ("getrandom", re.compile(r"\bgetrandom::")),
+    ("fastrand", re.compile(r"\bfastrand::")),
+    ("thread_rng", re.compile(r"\bthread_rng\b")),
+    ("OnceLock", re.compile(r"\bOnceLock\b")),
+    ("LazyLock", re.compile(r"\bLazyLock\b")),
+    ("lazy_static", re.compile(r"\blazy_static!")),
+    ("thread_local", re.compile(r"\bthread_local!")),
+    ("static mut", re.compile(r"\bstatic\s+mut\b")),
+)
+
+
+def die(message: str) -> None:
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+class CheckFailure(Exception):
+    pass
+
+
+class ValidationError(Exception):
+    pass
+
+
+def run_command(command: list[str]) -> str:
+    result = subprocess.run(command, cwd=REPO_ROOT, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        cmd_text = " ".join(command)
+        raise CheckFailure(f"command failed ({cmd_text}):\n{result.stderr}{result.stdout}")
+    return result.stdout
+
+
+def read_allowlist() -> set[str]:
+    if not ALLOWLIST_PATH.exists():
+        raise CheckFailure(f"missing allowlist: {ALLOWLIST_PATH.relative_to(REPO_ROOT)}")
+    allowlist: set[str] = set()
+    for raw_line in ALLOWLIST_PATH.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        allowlist.add(line)
+    if not allowlist:
+        raise CheckFailure(f"allowlist is empty: {ALLOWLIST_PATH.relative_to(REPO_ROOT)}")
+    return allowlist
+
+
+def parse_tree(output: str) -> tuple[set[str], dict[str, set[str]]]:
+    packages: set[str] = set()
+    features: dict[str, set[str]] = defaultdict(set)
+    for line in output.splitlines():
+        feature_match = TREE_FEATURE_RE.search(line)
+        if feature_match is not None:
+            features[feature_match.group(1)].add(feature_match.group(2))
+        package_match = TREE_PACKAGE_RE.search(line)
+        if package_match is not None:
+            packages.add(package_match.group(1))
+    return packages, features
+
+
+def remove_cfg_test_items(text: str) -> str:
+    pieces: list[str] = []
+    cursor = 0
+    while True:
+        marker_index = text.find(CFG_TEST_ATTR, cursor)
+        if marker_index == -1:
+            pieces.append(text[cursor:])
+            break
+        pieces.append(text[cursor:marker_index])
+        cursor = skip_cfg_test_item(text, marker_index)
+    return "".join(pieces)
+
+
+def skip_cfg_test_item(text: str, marker_index: int) -> int:
+    cursor = marker_index + len(CFG_TEST_ATTR)
+    while cursor < len(text) and text[cursor].isspace():
+        cursor += 1
+    while text.startswith("#[", cursor):
+        attr_end = text.find("]", cursor)
+        if attr_end == -1:
+            return len(text)
+        cursor = attr_end + 1
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+    if text.startswith("extern crate ", cursor):
+        end = text.find(";", cursor)
+        return len(text) if end == -1 else end + 1
+    block_start = text.find("{", cursor)
+    statement_end = text.find(";", cursor)
+    if block_start != -1 and (statement_end == -1 or block_start < statement_end):
+        return find_matching_delimiter(text, block_start, "{", "}") + 1
+    if statement_end != -1:
+        return statement_end + 1
+    return len(text)
+
+
+def find_matching_delimiter(text: str, start: int, open_char: str, close_char: str) -> int:
+    depth = 0
+    index = start
+    in_string = False
+    in_char = False
+    line_comment = False
+    block_comment = False
+    raw_hash_count = -1
+
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+            index += 1
+            continue
+
+        if block_comment:
+            if char == "*" and next_char == "/":
+                block_comment = False
+                index += 2
+                continue
+            index += 1
+            continue
+
+        if in_string:
+            if raw_hash_count >= 0:
+                if char == '"' and text[index + 1 : index + 1 + raw_hash_count] == ("#" * raw_hash_count):
+                    in_string = False
+                    index += raw_hash_count + 1
+                    raw_hash_count = -1
+                    continue
+                index += 1
+                continue
+            if char == "\\":
+                index += 2
+                continue
+            if char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if in_char:
+            if char == "\\":
+                index += 2
+                continue
+            if char == "'":
+                in_char = False
+            index += 1
+            continue
+
+        if char == "/" and next_char == "/":
+            line_comment = True
+            index += 2
+            continue
+        if char == "/" and next_char == "*":
+            block_comment = True
+            index += 2
+            continue
+        if char == 'r':
+            probe = index + 1
+            hash_count = 0
+            while probe < len(text) and text[probe] == '#':
+                hash_count += 1
+                probe += 1
+            if probe < len(text) and text[probe] == '"':
+                in_string = True
+                raw_hash_count = hash_count
+                index = probe + 1
+                continue
+        if char == '"':
+            in_string = True
+            raw_hash_count = -1
+            index += 1
+            continue
+        if char == "'":
+            if next_char and not (next_char.isalpha() or next_char == "_"):
+                in_char = True
+                index += 1
+                continue
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    raise ValidationError(f"unmatched delimiter in source starting at offset {start}")
+
+
+def line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
+
+
+def split_top_level(text: str, separator: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}":
+            brace_depth -= 1
+        elif char == "<":
+            angle_depth += 1
+        elif char == ">":
+            if angle_depth > 0:
+                angle_depth -= 1
+        elif char == separator and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 and angle_depth == 0:
+            parts.append(text[start:index])
+            start = index + 1
+    parts.append(text[start:])
+    return parts
+
+
+def collect_signature(text: str, start: int) -> str:
+    cursor = start
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    while cursor < len(text):
+        char = text[cursor]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "<":
+            angle_depth += 1
+        elif char == ">":
+            if angle_depth > 0:
+                angle_depth -= 1
+        elif char == "{" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 and angle_depth == 0:
+            return text[start:cursor].strip()
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 and angle_depth == 0:
+            return text[start:cursor].strip()
+        cursor += 1
+    raise ValidationError("unterminated public function signature")
+
+
+def collect_braced_item(text: str, start: int) -> str:
+    brace_index = text.find("{", start)
+    if brace_index == -1:
+        raise ValidationError("expected braced public item")
+    end_index = find_matching_delimiter(text, brace_index, "{", "}")
+    return text[start : end_index + 1]
+
+
+def collect_statement_item(text: str, start: int) -> str:
+    cursor = start
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    angle_depth = 0
+    while cursor < len(text):
+        char = text[cursor]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            bracket_depth -= 1
+        elif char == "<":
+            angle_depth += 1
+        elif char == ">":
+            if angle_depth > 0:
+                angle_depth -= 1
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0 and angle_depth == 0:
+            return text[start : cursor + 1]
+        cursor += 1
+    raise ValidationError("expected semicolon-terminated public item")
+
+
+def normalize_type_expression(expr: str) -> str:
+    return " ".join(expr.strip().split())
+
+
+def split_generic(expr: str) -> tuple[str, str | None]:
+    angle_index = expr.find("<")
+    if angle_index == -1:
+        return expr.strip(), None
+    end_index = find_matching_delimiter(expr, angle_index, "<", ">")
+    root = expr[:angle_index].strip()
+    inner = expr[angle_index + 1 : end_index].strip()
+    suffix = expr[end_index + 1 :].strip()
+    if suffix:
+        raise CheckFailure(f"unsupported type suffix in boundary expression: {expr}")
+    return root, inner
+
+
+def validate_boundary_type(expr: str, where: str) -> None:
+    normalized = normalize_type_expression(expr)
+    if not normalized:
+        raise CheckFailure(f"empty boundary type in {where}")
+    for label, pattern in BANNED_TYPE_PATTERNS:
+        if pattern.search(normalized):
+            raise CheckFailure(f"{where} uses banned boundary type form ({label}): {normalized}")
+    if normalized.startswith("["):
+        if not normalized.endswith("]"):
+            raise CheckFailure(f"{where} has malformed array or slice type: {normalized}")
+        inner = normalized[1:-1]
+        if ";" not in inner:
+            raise CheckFailure(f"{where} exposes a slice type, which is forbidden: {normalized}")
+        parts = split_top_level(inner, ";")
+        if len(parts) != 2:
+            raise CheckFailure(f"{where} has malformed owned-bytes array: {normalized}")
+        element_type = normalize_type_expression(parts[0])
+        if element_type != "u8":
+            raise CheckFailure(f"{where} only allows owned byte arrays, got: {normalized}")
+        if not parts[1].strip():
+            raise CheckFailure(f"{where} has empty array length: {normalized}")
+        return
+    if normalized.startswith("("):
+        raise CheckFailure(f"{where} exposes a tuple type, which is forbidden: {normalized}")
+    root, generic_args = split_generic(normalized)
+    root = root.strip()
+    if root in SCALAR_TYPES or root in {"String", "Self"}:
+        if generic_args is not None:
+            raise CheckFailure(f"{where} has unexpected generic arguments on scalar or String: {normalized}")
+        return
+    if root in CONTAINER_TYPES:
+        if generic_args is None:
+            raise CheckFailure(f"{where} must specify generic arguments for container type: {normalized}")
+        arguments = [normalize_type_expression(part) for part in split_top_level(generic_args, ",") if part.strip()]
+        if not arguments:
+            raise CheckFailure(f"{where} has empty generic argument list: {normalized}")
+        for argument in arguments:
+            validate_boundary_type(argument, where)
+        return
+    if "::" in root:
+        root_parts = root.split("::")
+        first_segment = root_parts[0]
+        last_segment = root_parts[-1]
+        if first_segment in {"crate", "self", "super"}:
+            if generic_args is not None:
+                for argument in split_top_level(generic_args, ","):
+                    if argument.strip():
+                        validate_boundary_type(argument, where)
+            return
+        if first_segment in {"alloc", "core"} and last_segment in CONTAINER_TYPES | {"String"} | SCALAR_TYPES:
+            if generic_args is not None:
+                for argument in split_top_level(generic_args, ","):
+                    if argument.strip():
+                        validate_boundary_type(argument, where)
+            return
+        raise CheckFailure(f"{where} exposes a non-local multi-segment type path: {normalized}")
+    if generic_args is not None:
+        for argument in split_top_level(generic_args, ","):
+            if argument.strip():
+                validate_boundary_type(argument, where)
+
+
+def validate_function_signature(signature: str, where: str) -> None:
+    paren_start = signature.find("(")
+    if paren_start == -1:
+        raise CheckFailure(f"malformed public function signature in {where}: {signature}")
+    paren_end = find_matching_delimiter(signature, paren_start, "(", ")")
+    params = signature[paren_start + 1 : paren_end]
+    for param in split_top_level(params, ","):
+        normalized = normalize_type_expression(param)
+        if not normalized:
+            continue
+        if normalized in {"self", "mut self"}:
+            continue
+        if ":" not in normalized:
+            raise CheckFailure(f"public function parameter lacks explicit type in {where}: {normalized}")
+        _, type_expr = normalized.split(":", 1)
+        validate_boundary_type(type_expr, f"{where} parameter")
+    arrow_index = signature.find("->", paren_end)
+    if arrow_index != -1:
+        return_type = signature[arrow_index + 2 :].strip()
+        validate_boundary_type(return_type, f"{where} return type")
+
+
+def validate_struct_item(item: str, where: str) -> None:
+    if "{" not in item:
+        paren_start = item.find("(")
+        if paren_start == -1:
+            return
+        paren_end = find_matching_delimiter(item, paren_start, "(", ")")
+        for field in split_top_level(item[paren_start + 1 : paren_end], ","):
+            normalized = normalize_type_expression(field)
+            if not normalized:
+                continue
+            if normalized.startswith("pub "):
+                normalized = normalized[4:].strip()
+            validate_boundary_type(normalized, f"{where} tuple field")
+        return
+    body = item[item.find("{") + 1 : item.rfind("}")]
+    for field in split_top_level(body, ","):
+        normalized = normalize_type_expression(field)
+        if not normalized or not normalized.startswith("pub "):
+            continue
+        if ":" not in normalized:
+            raise CheckFailure(f"malformed public struct field in {where}: {normalized}")
+        _, type_expr = normalized.split(":", 1)
+        validate_boundary_type(type_expr, f"{where} field")
+
+
+def validate_enum_item(item: str, where: str) -> None:
+    body = item[item.find("{") + 1 : item.rfind("}")]
+    for variant in split_top_level(body, ","):
+        normalized = normalize_type_expression(variant)
+        if not normalized:
+            continue
+        if "(" in normalized:
+            paren_start = normalized.find("(")
+            paren_end = find_matching_delimiter(normalized, paren_start, "(", ")")
+            for payload in split_top_level(normalized[paren_start + 1 : paren_end], ","):
+                if payload.strip():
+                    validate_boundary_type(payload, f"{where} variant payload")
+            continue
+        if "{" in normalized:
+            brace_start = normalized.find("{")
+            brace_end = find_matching_delimiter(normalized, brace_start, "{", "}")
+            fields = normalized[brace_start + 1 : brace_end]
+            for field in split_top_level(fields, ","):
+                field_text = normalize_type_expression(field)
+                if not field_text:
+                    continue
+                if ":" not in field_text:
+                    raise CheckFailure(f"malformed enum field in {where}: {field_text}")
+                _, type_expr = field_text.split(":", 1)
+                validate_boundary_type(type_expr, f"{where} variant field")
+
+
+def production_text(path: Path) -> str:
+    return remove_cfg_test_items(path.read_text())
+
+
+def command_deps() -> None:
+    allowlist = read_allowlist()
+    closure_packages: set[str] = set()
+    package_features: dict[str, set[str]] = defaultdict(set)
+    for package in CORE_PACKAGES:
+        output = run_command(
+            [
+                "cargo",
+                "tree",
+                "-e",
+                "normal,features,no-proc-macro",
+                "-p",
+                package,
+                "--target",
+                WASM_TARGET,
+                "--charset",
+                "ascii",
+            ]
+        )
+        packages, features = parse_tree(output)
+        closure_packages.update(packages)
+        for name, feature_values in features.items():
+            package_features[name].update(feature_values)
+    unexpected = sorted(closure_packages - allowlist)
+    stale = sorted(allowlist - closure_packages)
+    failures: list[str] = []
+    if unexpected:
+        failures.append(f"unexpected no-std core dependencies: {', '.join(unexpected)}")
+    if stale:
+        failures.append(f"stale allowlist entries: {', '.join(stale)}")
+    for package_name in sorted(closure_packages):
+        if "std" in package_features.get(package_name, set()):
+            failures.append(f"std feature enabled in no-std closure: {package_name}")
+    if failures:
+        raise CheckFailure("\n".join(failures))
+    print("dependency allowlist OK:", ", ".join(sorted(closure_packages)))
+
+
+def command_purity() -> None:
+    failures: list[str] = []
+    for source_dir in CORE_SOURCE_DIRS:
+        for path in sorted(source_dir.glob("*.rs")):
+            text = production_text(path)
+            for label, pattern in BANNED_PURITY_PATTERNS:
+                for match in pattern.finditer(text):
+                    failures.append(
+                        f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}: banned purity pattern ({label})"
+                    )
+    if failures:
+        raise CheckFailure("\n".join(failures))
+    print("purity check OK")
+
+
+def command_scope() -> None:
+    failures: list[str] = []
+    for package, lib_path in CORE_LIB_FILES.items():
+        text = lib_path.read_text()
+        if "#![no_std]" not in text:
+            failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing #![no_std]")
+        if "extern crate alloc;" not in text:
+            failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing extern crate alloc;")
+        for required_export in REQUIRED_EXPORT_SNIPPETS[package]:
+            if required_export not in text:
+                failures.append(f"{lib_path.relative_to(REPO_ROOT)} missing required export: {required_export}")
+        cargo_manifest = tomllib.loads(CORE_MANIFEST_FILES[package].read_text())
+        features = cargo_manifest.get("features", {})
+        if "std" in features:
+            failures.append(f"{CORE_MANIFEST_FILES[package].relative_to(REPO_ROOT)} defines forbidden std feature")
+        default_features = features.get("default", [])
+        if isinstance(default_features, list) and "std" in default_features:
+            failures.append(f"{CORE_MANIFEST_FILES[package].relative_to(REPO_ROOT)} default features include std")
+        crate_source_dir = lib_path.parent
+        for relative_name in CORE_SCOPE_FILES[package]:
+            if not (crate_source_dir / relative_name).exists():
+                failures.append(f"{crate_source_dir.relative_to(REPO_ROOT)}/{relative_name} missing")
+    if failures:
+        raise CheckFailure("\n".join(failures))
+    print("scope check OK")
+
+
+def command_api_shape() -> None:
+    failures: list[str] = []
+    for source_dir in CORE_SOURCE_DIRS:
+        for path in sorted(source_dir.glob("*.rs")):
+            text = production_text(path)
+            for match in PUBLIC_TRAIT_RE.finditer(text):
+                failures.append(f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}: public trait is forbidden")
+            try:
+                for match in PUBLIC_FN_RE.finditer(text):
+                    signature = collect_signature(text, match.start())
+                    validate_function_signature(signature, f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}")
+                for match in PUBLIC_STRUCT_RE.finditer(text):
+                    brace_index = text.find("{", match.start())
+                    semicolon_index = text.find(";", match.start())
+                    if semicolon_index != -1 and (brace_index == -1 or semicolon_index < brace_index):
+                        item = collect_statement_item(text, match.start())
+                    else:
+                        item = collect_braced_item(text, match.start())
+                    validate_struct_item(item, f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}")
+                for match in PUBLIC_ENUM_RE.finditer(text):
+                    item = collect_braced_item(text, match.start())
+                    validate_enum_item(item, f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())}")
+                for match in PUBLIC_TYPE_RE.finditer(text):
+                    item = collect_statement_item(text, match.start())
+                    alias_body = item.split("=", 1)[1].rsplit(";", 1)[0]
+                    validate_boundary_type(alias_body, f"{path.relative_to(REPO_ROOT)}:{line_number(text, match.start())} type alias")
+            except (CheckFailure, ValidationError) as error:
+                failures.append(str(error))
+    if failures:
+        raise CheckFailure("\n".join(failures))
+    print("API shape check OK")
+
+
+def command_ownership() -> None:
+    failures: list[str] = []
+    for path in LEGACY_STD_FILES:
+        for index, raw_line in enumerate(path.read_text().splitlines(), 1):
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(COMMENT_PREFIXES):
+                continue
+            if stripped.startswith("#"):
+                continue
+            if stripped.startswith(ALLOWED_LEGACY_PREFIXES):
+                continue
+            failures.append(f"{path.relative_to(REPO_ROOT)}:{index}: legacy file must stay adapter-only: {stripped}")
+    if not OWNERSHIP_REVIEW_PATH.exists():
+        failures.append(f"missing ownership review artifact: {OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)}")
+    else:
+        artifact_text = OWNERSHIP_REVIEW_PATH.read_text()
+        for required_text in ("## Review verdict", "Reviewer:", "adapter-only", "unrelated"):
+            if required_text not in artifact_text:
+                failures.append(
+                    f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing required review marker: {required_text}"
+                )
+        for legacy_path in LEGACY_STD_FILES:
+            relative_text = str(legacy_path.relative_to(REPO_ROOT))
+            if relative_text not in artifact_text:
+                failures.append(
+                    f"{OWNERSHIP_REVIEW_PATH.relative_to(REPO_ROOT)} missing legacy path review entry: {relative_text}"
+                )
+    if failures:
+        raise CheckFailure("\n".join(failures))
+    print("ownership check OK")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("deps", "purity", "scope", "api-shape", "ownership"))
+    args = parser.parse_args()
+    try:
+        if args.command == "deps":
+            command_deps()
+        elif args.command == "purity":
+            command_purity()
+        elif args.command == "scope":
+            command_scope()
+        elif args.command == "api-shape":
+            command_api_shape()
+        elif args.command == "ownership":
+            command_ownership()
+        else:
+            raise AssertionError(f"unexpected command: {args.command}")
+    except CheckFailure as error:
+        die(str(error))
+    except ValidationError as error:
+        die(str(error))
+
+
+if __name__ == "__main__":
+    main()

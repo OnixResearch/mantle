@@ -1,2 +1,15 @@
-# approved no-std core dependencies
-# fill during implementation
+# approved no-std core runtime dependency closure
+arrayref
+arrayvec
+blake3
+cfg-if
+constant_time_eq
+crunch-attestation-core
+crunch-project-core
+data-encoding
+itoa
+memchr
+serde
+serde_core
+serde_json
+zmij

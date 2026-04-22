@@ -314,7 +314,9 @@ fn validate_non_empty(field: NamedField<'_>) -> Result<(), Error> {
     if !field.value.is_empty() {
         return Ok(());
     }
-    Err(Error::EmptyField { field: field.name })
+    Err(Error::EmptyField {
+        field: field.name.to_string(),
+    })
 }
 
 fn validate_len(actual_usize: usize, limit: u32) -> Result<(), Error> {
@@ -485,7 +487,9 @@ mod tests {
         artifact.facts.output_name.clear();
 
         let err = artifact_attestation_canonical_bytes(artifact).unwrap_err();
-        assert_eq!(err, Error::EmptyField { field: "output_name" });
+        assert_eq!(err, Error::EmptyField {
+            field: "output_name".to_string(),
+        });
     }
 
     #[test]

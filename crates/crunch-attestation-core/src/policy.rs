@@ -256,7 +256,7 @@ fn parse_independence_selector(field: &str) -> Result<IndependenceSelector, Erro
         INDEPENDENCE_FIELD_SIGNER_KEY_NAME => Ok(IndependenceSelector::SignerKeyName),
         INDEPENDENCE_FIELD_REBUILD_HOST_CLASS => Ok(IndependenceSelector::RebuildHostClass),
         _ => Err(Error::UnsupportedPolicyField {
-            field: "independence_field",
+            field: "independence_field".to_string(),
             value: field.to_string(),
         }),
     }
@@ -275,7 +275,7 @@ fn assert_matching_witness_counts(matching_count: u32, active_witness_count: usi
 fn validate_policy(policy: &ReleasePolicy) -> Result<IndependenceSelector, Error> {
     if policy.schema != RELEASE_POLICY_SCHEMA {
         return Err(Error::SchemaTagMismatch {
-            expected: RELEASE_POLICY_SCHEMA,
+            expected: RELEASE_POLICY_SCHEMA.to_string(),
             actual: policy.schema.clone(),
         });
     }
@@ -283,7 +283,7 @@ fn validate_policy(policy: &ReleasePolicy) -> Result<IndependenceSelector, Error
     validate_signer_list(&policy.trusted_witness_signers)?;
     if policy.independence_field.is_empty() {
         return Err(Error::EmptyField {
-            field: "independence_field",
+            field: "independence_field".to_string(),
         });
     }
     parse_independence_selector(&policy.independence_field)
@@ -294,7 +294,7 @@ fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
     assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
     if revocations.schema != RELEASE_REVOCATIONS_SCHEMA {
         return Err(Error::SchemaTagMismatch {
-            expected: RELEASE_REVOCATIONS_SCHEMA,
+            expected: RELEASE_REVOCATIONS_SCHEMA.to_string(),
             actual: revocations.schema.clone(),
         });
     }
@@ -748,7 +748,7 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(err, Error::SchemaTagMismatch {
-            expected: RELEASE_POLICY_SCHEMA,
+            expected: RELEASE_POLICY_SCHEMA.to_string(),
             actual: "wrong".to_string(),
         });
     }
@@ -768,7 +768,7 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(err, Error::SchemaTagMismatch {
-            expected: RELEASE_REVOCATIONS_SCHEMA,
+            expected: RELEASE_REVOCATIONS_SCHEMA.to_string(),
             actual: "wrong".to_string(),
         });
     }
@@ -787,7 +787,7 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(err, Error::UnsupportedPolicyField {
-            field: "independence_field",
+            field: "independence_field".to_string(),
             value: "rebuild_environment_summary.system".to_string(),
         });
     }

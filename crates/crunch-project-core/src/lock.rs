@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+use crate::error::Error;
 use crate::manifest::HashAlgo;
 use crate::version::SchemaVersion;
 
@@ -48,12 +49,12 @@ impl Lockfile {
         }
     }
 
-    pub fn to_json(self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(&self)
+    pub fn to_json(self) -> Result<String, Error> {
+        serde_json::to_string_pretty(&self).map_err(|err| Error::Lockfile(format!("JSON serialization: {err}")))
     }
 
-    pub fn from_json(s: String) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(&s)
+    pub fn from_json(s: String) -> Result<Self, Error> {
+        serde_json::from_str(&s).map_err(|err| Error::Lockfile(format!("JSON parse: {err}")))
     }
 
     pub fn validate(self) -> Vec<String> {

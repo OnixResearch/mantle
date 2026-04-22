@@ -18,6 +18,7 @@ mod mirrors;
 mod refresh;
 mod refresh_adapter;
 mod upgrade;
+mod upgrade_adapter;
 mod version;
 
 pub use attestation::ProjectAttestationInput;
