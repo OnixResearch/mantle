@@ -126,6 +126,39 @@ fn system_build_human_summary_lists_successful_machines() {
         .stdout(predicate::str::contains("server2"));
 }
 
+#[test]
+fn system_build_json_keeps_structured_diagnostics_off_stdout() {
+    let mut cmd = crunch_command();
+    cmd.args([
+        "--json",
+        "system",
+        "build",
+        EXAMPLE_INVENTORY,
+        "--modules",
+        EXAMPLE_MODULES,
+        "--assembler",
+        "unknown-backend",
+    ]);
+    let output = cmd.assert().failure().get_output().clone();
+    let stdout_json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let stderr_lines = std::str::from_utf8(&output.stderr).unwrap().lines().collect::<Vec<_>>();
+
+    assert!(stdout_json["machines"]["server1"].is_object());
+    assert_eq!(stdout_json["machines"]["server1"]["kind"], "failed");
+    assert_eq!(stdout_json["machines"]["server2"]["kind"], "failed");
+    assert_eq!(stdout_json["errors"][0]["Assembler"]["message"], "unknown assembler 'unknown-backend'");
+    assert_eq!(stdout_json["errors"][0]["Assembler"]["machine_name"], "server1");
+    assert!(stderr_lines.iter().all(|line| serde_json::from_str::<Value>(line).is_ok()));
+    assert!(stderr_lines.iter().any(|line| {
+        let json: Value = serde_json::from_str(line).unwrap();
+        json["severity"] == "warning" && json["layer"] == "eval"
+    }));
+    assert!(stderr_lines.iter().any(|line| {
+        let json: Value = serde_json::from_str(line).unwrap();
+        json["severity"] == "error" && json["layer"] == "assembler"
+    }));
+}
+
 fn run_system_eval(args: &[&str]) -> std::process::Output {
     let mut cmd = crunch_command();
     cmd.args(args);

@@ -159,12 +159,13 @@
 
 - [ ] Write example modules: `sshd.ncl` (no deps), `firewall.ncl` (provider: firewall), `nginx.ncl` (consumes: firewall, inputs: sshd), in `examples/system-config/modules/`
 - [ ] Write example inventory: 2 machines, instances of all 3 modules, in `examples/system-config/inventory.ncl`
-- [ ] Integration test: `crunch system eval examples/system-config/inventory.ncl` produces the expected per-machine dry-run result envelope for both machines
-- [ ] Integration test: `crunch system eval --stop-after=fragments` produces merged config trees
-- [ ] Integration test: `crunch system eval --machine=server1` only evaluates server1
+- [x] Integration test: `crunch system eval examples/system-config/inventory.ncl` produces the expected per-machine dry-run result envelope for both machines
+- [x] Integration test: `crunch system eval --stop-after=fragments` produces merged config trees
+- [x] Integration test: `crunch system eval --machine=server1` only evaluates server1
 - [ ] Integration test: `crunch system build` (gated by `can_build()`) builds derivations and produces store output
 - [ ] Integration test: partial failure — inventory with bad settings on one machine, verify the other machine succeeds, stdout keeps the successful machine result, and stderr reports the error
 - [ ] Integration test: module with contract violation produces Nickel blame error with module name and field path
+  - Evidence: `cargo test -p crunch --test system_cli -- --nocapture` passed with `8 passed; 0 failed` on 2026-04-22, including JSON stderr diagnostics for warning+error lines while stdout kept the build result envelope.
 
 ## Phase 12: Documentation
 

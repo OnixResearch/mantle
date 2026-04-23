@@ -29,13 +29,21 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::RunContext;
+use crate::build_cmd;
 use crate::errors::RunError;
 
 const DEFAULT_MODULES_DIR_NAME: &str = "modules";
-const DEFAULT_MODULE_PRIORITY: i64 = 1000;
 const NICKEL_FORMAT_NOT_IMPLEMENTED: &str = "system eval --format nickel is not implemented yet";
-const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const MODULE_TIMEOUT_SECS: u64 = 60;
+const DIAGNOSTIC_SEVERITY_WARNING: &str = "warning";
+const DIAGNOSTIC_SEVERITY_ERROR: &str = "error";
+const DIAGNOSTIC_LAYER_CLI: &str = "cli";
+const DIAGNOSTIC_LAYER_LOADER: &str = "loader";
+const DIAGNOSTIC_LAYER_INVENTORY: &str = "inventory";
+const DIAGNOSTIC_LAYER_CROSSREF: &str = "crossref";
+const DIAGNOSTIC_LAYER_EVAL: &str = "eval";
+const DIAGNOSTIC_LAYER_FRAGMENT: &str = "fragment";
+const DIAGNOSTIC_LAYER_ASSEMBLER: &str = "assembler";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SystemStopAfter {
@@ -69,23 +77,17 @@ pub struct SystemBuildOptions {
 
 #[derive(Debug, Serialize)]
 struct SystemDiagnosticEnvelope {
-    kind: &'static str,
+    severity: &'static str,
+    layer: &'static str,
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    machine_name: Option<String>,
+    detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    module_name: Option<String>,
+    machine: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    module: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     field_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    detail: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct BuildMachineReport {
-    schema: &'static str,
-    machine_name: String,
-    derivation_count: u32,
 }
 
 #[derive(Debug)]
@@ -188,6 +190,7 @@ pub fn cmd_system_build(ctx: &RunContext, options: SystemBuildOptions) -> Result
     };
 
     populate_build_outcomes(
+        ctx,
         &prepared.inventory,
         &prepared.selected_machines,
         &prepared.merged_configs,
@@ -399,6 +402,7 @@ fn populate_derivation_outcomes(
 }
 
 fn populate_build_outcomes(
+    ctx: &RunContext,
     inventory: &Inventory,
     selected_machines: &BTreeSet<String>,
     merged_configs: &BTreeMap<String, crunch_system::MergedConfig>,
@@ -416,7 +420,7 @@ fn populate_build_outcomes(
         };
         match dry_run_assemble(registry, machine_name, machine, config, assembler_override) {
             Ok(derivations) => {
-                let reports = build_reports_for_machine(machine_name, derivations.len())?;
+                let reports = build_reports_for_machine(ctx, machine_name, &derivations)?;
                 result.machines.insert(
                     machine_name.clone(),
                     JsonMachineOutcome {
@@ -476,15 +480,128 @@ fn input_to_json(input: &crunch_glue::Input) -> Value {
     }
 }
 
-fn build_reports_for_machine(machine_name: &str, derivation_count: usize) -> Result<Vec<Value>, RunError> {
-    let derivation_count = u32::try_from(derivation_count)
-        .map_err(|_| RunError::Internal(format!("derivation count for machine '{machine_name}' does not fit in u32")))?;
-    let report = BuildMachineReport {
-        schema: BUILD_REPORT_SCHEMA,
-        machine_name: machine_name.to_string(),
-        derivation_count,
+fn build_reports_for_machine(
+    ctx: &RunContext,
+    _machine_name: &str,
+    derivations: &[crunch_glue::CrunchDerivation],
+) -> Result<Vec<Value>, RunError> {
+    let build_expr = machine_build_expression(derivations)?;
+    let pipeline_result = build_machine_pipeline_result(ctx, &build_expr)?;
+    let logs_dir = build_cmd::log_dir();
+    let report_json = crate::build_report::render_build_json_report(
+        &build_machine_config(ctx, &build_expr)?,
+        &pipeline_result,
+        &logs_dir,
+        &[],
+    )
+    .map_err(|error| RunError::Internal(format!("serializing machine build report: {error}")))?;
+    Ok(vec![serde_json::from_str(&report_json).map_err(json_internal_error)?])
+}
+
+fn build_machine_pipeline_result(ctx: &RunContext, build_expr: &str) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    let config = build_machine_config(ctx, build_expr)?;
+    build_cmd::run_build(&config)
+}
+
+fn build_machine_config(ctx: &RunContext, build_expr: &str) -> Result<crunch_pipeline::BuildConfig, RunError> {
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|error| RunError::Internal(format!("creating system build temp file: {error}")))?;
+    std::fs::write(tmp.path(), build_expr)
+        .map_err(|error| RunError::Internal(format!("writing system build temp file: {error}")))?;
+    let temp_path = tmp.into_temp_path();
+    let persisted = temp_path.keep().map_err(|error| {
+        RunError::Internal(format!("persisting system build temp file {}: {}", error.path.display(), error.error))
+    })?;
+    let keypair = build_cmd::load_or_generate_signing_keypair(None, &ctx.resolved_state_dir, !ctx.json)?;
+    let configured_trusted_keys = build_cmd::load_configured_trusted_public_keys(None, &ctx.resolved_state_dir)?;
+    let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
+    Ok(crunch_pipeline::BuildConfig {
+        file: persisted,
+        import_paths: Vec::new(),
+        output_dir: ctx.store.clone(),
+        state_dir: ctx.resolved_state_dir.clone(),
+        store_dir: ctx.store_prefix.clone(),
+        verbose: ctx.verbose,
+        max_jobs: 1,
+        substituter_url: None,
+        hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+        keypair,
+        trusted_keys,
+        trust_unsigned: false,
+        root_retention_source: Some(crunch_store::GcRootSource::Build),
+    })
+}
+
+fn machine_build_expression(derivations: &[crunch_glue::CrunchDerivation]) -> Result<String, RunError> {
+    let derivation_exprs = derivations
+        .iter()
+        .map(derivation_to_nickel)
+        .collect::<Vec<_>>();
+    Ok(format!("[\n{}\n]", derivation_exprs.join(",\n")))
+}
+
+fn derivation_to_nickel(derivation: &crunch_glue::CrunchDerivation) -> String {
+    let args = render_string_list(&derivation.args);
+    let outputs = render_string_list(&derivation.outputs);
+    let env = render_string_map(&derivation.env);
+    let inputs = render_input_list(&derivation.inputs);
+    let fixed_output = render_fixed_output(&derivation.fixed_output);
+    format!(
+        "{{ name = {}, builder = {}, system = {}, args = {}, outputs = {}, env = {}, inputs = {}, fixed_output = {}, addressing_mode = {} }}",
+        render_string(&derivation.name),
+        render_string(&derivation.builder),
+        render_string(&derivation.system),
+        args,
+        outputs,
+        env,
+        inputs,
+        fixed_output,
+        render_string(&derivation.addressing_mode),
+    )
+}
+
+fn render_input_list(inputs: &[crunch_glue::Input]) -> String {
+    let rendered = inputs.iter().map(render_input).collect::<Vec<_>>();
+    format!("[{}]", rendered.join(", "))
+}
+
+fn render_input(input: &crunch_glue::Input) -> String {
+    match input {
+        crunch_glue::Input::Source(path) => render_string(path),
+        crunch_glue::Input::OutputSelection(output_ref) => format!("{{ drv = {}, output = {} }}", derivation_to_nickel(&output_ref.drv), render_string(&output_ref.output)),
+        crunch_glue::Input::Derivation(derivation) => derivation_to_nickel(derivation),
+    }
+}
+
+fn render_fixed_output(fixed_output: &Option<crunch_glue::FixedOutput>) -> String {
+    let Some(fixed_output) = fixed_output else {
+        return "null".to_string();
     };
-    Ok(vec![serde_json::to_value(report).map_err(json_internal_error)?])
+    format!(
+        "{{ algo = {}, hash = {}, mode = {} }}",
+        render_string(&fixed_output.algo),
+        render_string(&fixed_output.hash),
+        render_string(&fixed_output.mode),
+    )
+}
+
+fn render_string_list(values: &[String]) -> String {
+    let rendered = values.iter().map(|value| render_string(value)).collect::<Vec<_>>();
+    format!("[{}]", rendered.join(", "))
+}
+
+fn render_string_map(values: &std::collections::HashMap<String, String>) -> String {
+    let mut entries = values.iter().collect::<Vec<_>>();
+    entries.sort_by(|left, right| left.0.cmp(right.0));
+    let rendered = entries
+        .into_iter()
+        .map(|(key, value)| format!("{} = {}", key, render_string(value)))
+        .collect::<Vec<_>>();
+    format!("{{ {} }}", rendered.join(", "))
+}
+
+fn render_string(value: &str) -> String {
+    serde_json::to_string(value).expect("string serialization must succeed")
 }
 
 fn json_merged_config(merged_config: crunch_system::MergedConfig) -> JsonMergedConfig {
@@ -587,49 +704,49 @@ fn error_diagnostic(error: &SystemConfigError) -> SystemDiagnosticEnvelope {
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("cli", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_CLI, message, detail, machine_name, module_name, field_path),
         SystemConfigError::Loader {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("loader", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_LOADER, message, detail, machine_name, module_name, field_path),
         SystemConfigError::Inventory {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("inventory", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_INVENTORY, message, detail, machine_name, module_name, field_path),
         SystemConfigError::CrossRef {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("crossref", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_CROSSREF, message, detail, machine_name, module_name, field_path),
         SystemConfigError::Eval {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("eval", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_EVAL, message, detail, machine_name, module_name, field_path),
         SystemConfigError::Fragment {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("fragment", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_FRAGMENT, message, detail, machine_name, module_name, field_path),
         SystemConfigError::Assembler {
             message,
             detail,
             machine_name,
             module_name,
             field_path,
-        } => diagnostic("assembler", message, detail, machine_name, module_name, field_path),
+        } => diagnostic(DIAGNOSTIC_LAYER_ASSEMBLER, message, detail, machine_name, module_name, field_path),
     }
 }
 
@@ -640,18 +757,19 @@ fn warning_diagnostic(warning: &crunch_system::error::SystemConfigWarning) -> Sy
             machine_name,
             module_name,
         } => SystemDiagnosticEnvelope {
-            kind: "warning",
+            severity: DIAGNOSTIC_SEVERITY_WARNING,
+            layer: DIAGNOSTIC_LAYER_EVAL,
             message: format!("orphan provider consumption: {provider_type}"),
-            machine_name: machine_name.clone(),
-            module_name: module_name.clone(),
-            field_path: None,
             detail: None,
+            machine: machine_name.clone(),
+            module: module_name.clone(),
+            field_path: None,
         },
     }
 }
 
 fn diagnostic(
-    kind: &'static str,
+    layer: &'static str,
     message: &str,
     detail: &Option<String>,
     machine_name: &Option<String>,
@@ -659,12 +777,13 @@ fn diagnostic(
     field_path: &Option<String>,
 ) -> SystemDiagnosticEnvelope {
     SystemDiagnosticEnvelope {
-        kind,
+        severity: DIAGNOSTIC_SEVERITY_ERROR,
+        layer,
         message: message.to_string(),
-        machine_name: machine_name.clone(),
-        module_name: module_name.clone(),
-        field_path: field_path.clone(),
         detail: detail.clone(),
+        machine: machine_name.clone(),
+        module: module_name.clone(),
+        field_path: field_path.clone(),
     }
 }
 
