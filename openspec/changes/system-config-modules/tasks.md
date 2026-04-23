@@ -78,43 +78,45 @@
 
 ## Phase 6: Module evaluator (orchestration)
 
-- [ ] Implement inventory cross-reference validation: each service matches a module, each instance role matches module roles, each instance machine matches inventory machines (EVAL-12)
-- [ ] Implement settings validation: merge instance settings with module interface defaults via `evaluator.merge()` (EVAL-3)
-- [ ] Implement module `impl` invocation: call with `{settings, machine_name, role_name, upstream, providers}` record, serialize result to JSON (EVAL-4, EVAL-6d)
-- [ ] Implement export threading: collect `output.exports` from each module's result, pass to downstream modules as `upstream.<module_name>` (EVAL-5)
-- [ ] Implement provider collection: collect `output.providers` by type, pass as array to consuming modules (EVAL-6d)
-- [ ] Implement per-module wallclock timeout (default 60s) via channel receive timeout (EVAL-10)
-- [ ] Implement fail-open error collection: failed module does not block independent modules; dependent modules chain the failure diagnostic (EVAL-9, ERR-2)
-- [ ] Unit test: cross-reference validation — service references nonexistent module, verify CrossRef error
-- [ ] Unit test: cross-reference validation — instance references nonexistent role, verify CrossRef error
-- [ ] Unit test: cross-reference validation — instance references nonexistent machine, verify CrossRef error
-- [ ] Unit test: settings merge with fake handle-compatible boundary — valid settings returns merged value
-- [ ] Unit test: impl invocation with fake handle-compatible boundary — verify args record shape
-- [ ] Unit test: export threading — module A exports, module B sees upstream.A
-- [ ] Unit test: provider merging — two modules produce same type, consumer gets ordered array
-- [ ] Unit test: fail-open — module A fails, independent module B succeeds, B's result present
-- [ ] Unit test: orphan provider warning — module consumes type no module produces, verify warning in `warnings` and empty providers array (EVAL-6e)
-- [ ] Unit test: fail-open — module A fails, dependent module C also fails with chained diagnostic
-- [ ] Unit test: determinism — run same modules+inventory twice through the evaluator, verify identical `EvaluatedFragment` output (EVAL-7)
+- [x] Implement inventory cross-reference validation: each service matches a module, each instance role matches module roles, each instance machine matches inventory machines (EVAL-12)
+- [x] Implement settings validation: merge instance settings with module interface defaults via `evaluator.merge()` (EVAL-3)
+- [x] Implement module `impl` invocation: call with `{settings, machine_name, role_name, upstream, providers}` record, serialize result to JSON (EVAL-4, EVAL-6d)
+- [x] Implement export threading: collect `output.exports` from each module's result, pass to downstream modules as `upstream.<module_name>` (EVAL-5)
+- [x] Implement provider collection: collect `output.providers` by type, pass as array to consuming modules (EVAL-6d)
+- [x] Implement per-module wallclock timeout (default 60s) via channel receive timeout (EVAL-10)
+- [x] Implement fail-open error collection: failed module does not block independent modules; dependent modules chain the failure diagnostic (EVAL-9, ERR-2)
+- [x] Unit test: cross-reference validation — service references nonexistent module, verify CrossRef error
+- [x] Unit test: cross-reference validation — instance references nonexistent role, verify CrossRef error
+- [x] Unit test: cross-reference validation — instance references nonexistent machine, verify CrossRef error
+- [x] Unit test: settings merge with fake handle-compatible boundary — valid settings returns merged value
+- [x] Unit test: impl invocation with fake handle-compatible boundary — verify args record shape
+- [x] Unit test: export threading — module A exports, module B sees upstream.A
+- [x] Unit test: provider merging — two modules produce same type, consumer gets ordered array
+- [x] Unit test: fail-open — module A fails, independent module B succeeds, B's result present
+- [x] Unit test: orphan provider warning — module consumes type no module produces, verify warning in `warnings` and empty providers array (EVAL-6e)
+- [x] Unit test: fail-open — module A fails, dependent module C also fails with chained diagnostic
+- [x] Unit test: determinism — run same modules+inventory twice through the evaluator, verify identical `EvaluatedFragment` output (EVAL-7)
 - [ ] Call `handle.drop_value()` for consumed `ValidatedModule` value IDs after `impl` invocation and JSON serialization to prevent value table growth
+  - Evidence: `cargo test -p crunch-system evaluator:: -- --nocapture` passed with `11 passed; 0 failed` on 2026-04-22.
 
 ## Phase 7: Fragment collector
 
-- [ ] Implement `group_by_machine(fragments: &[EvaluatedFragment], inventory: &Inventory) -> BTreeMap<String, Vec<&EvaluatedFragment>>` (FRAG-1)
-- [ ] Implement `merge_fragments(fragments: &[EvaluatedFragment]) -> Result<MergedConfig, Vec<SystemConfigError>>` — deep JSON merge with priority tiebreak (FRAG-2)
-- [ ] Implement output namespace preservation — pass through `output.nixos`, `output.files`, etc. without interpretation (FRAG-3)
-- [ ] Implement optional machine filter (FRAG-4)
-- [ ] Implement merge provenance tracking: record which module contributed each top-level key (FRAG-5)
-- [ ] Enforce merge depth limit (default 128, configurable) (FRAG-6)
-- [ ] Unit test: group 4 fragments from 2 machines, verify grouping
-- [ ] Unit test: deep merge — two fragments with compatible nested records
-- [ ] Unit test: priority tiebreak — higher-priority fragment wins on scalar conflict
-- [ ] Unit test: equal-priority conflict — error naming both modules and path
-- [ ] Unit test: array replacement — fragment B's array replaces fragment A's at same path
-- [ ] Unit test: namespace preservation — `output.nixos` and `output.files` both present
-- [ ] Unit test: machine filter — only selected machine's fragments collected
-- [ ] Unit test: provenance — verify each top-level key attributed to correct module
-- [ ] Unit test: depth limit exceeded — tree deeper than 128, verify error
+- [x] Implement `group_by_machine(fragments: &[EvaluatedFragment], inventory: &Inventory) -> BTreeMap<String, Vec<&EvaluatedFragment>>` (FRAG-1)
+- [x] Implement `merge_fragments(fragments: &[EvaluatedFragment]) -> Result<MergedConfig, Vec<SystemConfigError>>` — deep JSON merge with priority tiebreak (FRAG-2)
+- [x] Implement output namespace preservation — pass through `output.nixos`, `output.files`, etc. without interpretation (FRAG-3)
+- [x] Implement optional machine filter (FRAG-4)
+- [x] Implement merge provenance tracking: record which module contributed each top-level key (FRAG-5)
+- [x] Enforce merge depth limit (default 128, configurable) (FRAG-6)
+- [x] Unit test: group 4 fragments from 2 machines, verify grouping
+- [x] Unit test: deep merge — two fragments with compatible nested records
+- [x] Unit test: priority tiebreak — higher-priority fragment wins on scalar conflict
+- [x] Unit test: equal-priority conflict — error naming both modules and path
+- [x] Unit test: array replacement — fragment B's array replaces fragment A's at same path
+- [x] Unit test: namespace preservation — `output.nixos` and `output.files` both present
+- [x] Unit test: machine filter — only selected machine's fragments collected
+- [x] Unit test: provenance — verify each top-level key attributed to correct module
+- [x] Unit test: depth limit exceeded — tree deeper than 128, verify error
+  - Evidence: `cargo test -p crunch-system collector:: -- --nocapture` passed with `9 passed; 0 failed` on 2026-04-22.
 
 ## Phase 8: System assembler trait and NixOS backend
 
