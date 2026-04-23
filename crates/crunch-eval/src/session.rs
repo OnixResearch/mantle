@@ -6,10 +6,12 @@
 //! Individual roots are forced on demand through
 //! [`EvaluationSession::force_root`].
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicU32;
@@ -480,9 +482,65 @@ where F: FnOnce()
 }
 
 type BoxedWorkerJob = Box<dyn WorkerJob + Send + 'static>;
+type ErasedWorkerResult = Box<dyn Any + Send + 'static>;
+
+struct WorkerResultSlot {
+    payload: Mutex<Option<ErasedWorkerResult>>,
+    ready: Condvar,
+}
+
+impl WorkerResultSlot {
+    fn new() -> Self {
+        Self {
+            payload: Mutex::new(None),
+            ready: Condvar::new(),
+        }
+    }
+
+    fn clear(&self) -> Result<(), Error> {
+        let mut payload = self
+            .payload
+            .lock()
+            .map_err(|_| Error::Boundary("bounded worker result slot mutex was poisoned".to_string()))?;
+        payload.take();
+        Ok(())
+    }
+
+    fn store<T: Send + 'static>(&self, result: Result<Vec<IndexedRoot<T>>, WorkerFailure>) {
+        let mut payload = match self.payload.lock() {
+            Ok(payload) => payload,
+            Err(_poisoned) => return,
+        };
+        *payload = Some(Box::new(result));
+        self.ready.notify_one();
+    }
+
+    fn take<T: Send + 'static>(&self) -> Result<Result<Vec<IndexedRoot<T>>, WorkerFailure>, Error> {
+        let payload = self
+            .payload
+            .lock()
+            .map_err(|_| Error::Boundary("bounded worker result slot mutex was poisoned".to_string()))?;
+        let mut payload = self
+            .ready
+            .wait_while(payload, |slot| slot.is_none())
+            .map_err(|_| Error::Boundary("bounded worker result slot wait was poisoned".to_string()))?;
+        let erased = payload
+            .take()
+            .ok_or_else(|| Error::Boundary("bounded worker result slot completed without a payload".to_string()))?;
+        erased
+            .downcast::<Result<Vec<IndexedRoot<T>>, WorkerFailure>>()
+            .map(|boxed| *boxed)
+            .map_err(|_| Error::Boundary("bounded worker result slot held an unexpected payload type".to_string()))
+    }
+}
+
+struct BoundedWorkerSlot {
+    sender: mpsc::SyncSender<BoxedWorkerJob>,
+    result_slot: Arc<WorkerResultSlot>,
+}
 
 struct BoundedWorkerPool {
-    senders: Vec<mpsc::SyncSender<BoxedWorkerJob>>,
+    workers: Vec<BoundedWorkerSlot>,
     next_worker: AtomicU32,
 }
 
@@ -490,22 +548,25 @@ impl BoundedWorkerPool {
     fn submit<T: Send + 'static>(
         &self,
         job: impl FnOnce() -> Result<Vec<IndexedRoot<T>>, WorkerFailure> + Send + 'static,
-    ) -> Result<mpsc::Receiver<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
-        assert!(!self.senders.is_empty(), "worker pool must have at least one sender");
+    ) -> Result<Arc<WorkerResultSlot>, Error> {
+        assert!(!self.workers.is_empty(), "worker pool must have at least one worker");
 
-        let (sender, receiver) = mpsc::sync_channel(1);
-        let boxed_job: BoxedWorkerJob = Box::new(move || match sender.send(job()) {
-            Ok(()) => {}
-            Err(_send_err) => {}
-        });
-        let sender_count = self.senders.len();
-        assert!(sender_count != 0, "worker pool must have at least one sender");
+        let worker_count = self.workers.len();
+        assert!(worker_count != 0, "worker pool must have at least one worker");
         let next_worker = usize_from_u32(self.next_worker.fetch_add(1, Ordering::Relaxed));
-        let worker_index = next_worker % sender_count;
-        self.senders[worker_index]
+        let worker_index = next_worker % worker_count;
+        let worker_slot = &self.workers[worker_index];
+        worker_slot.result_slot.clear()?;
+        let result_slot = worker_slot.result_slot.clone();
+        let result_slot_for_job = result_slot.clone();
+        let boxed_job: BoxedWorkerJob = Box::new(move || {
+            result_slot_for_job.store(job());
+        });
+        worker_slot
+            .sender
             .send(boxed_job)
             .map_err(|_| Error::Boundary("bounded worker pool thread exited unexpectedly".to_string()))?;
-        Ok(receiver)
+        Ok(result_slot)
     }
 }
 
@@ -548,7 +609,7 @@ impl AssignmentExecutor for ThreadedExecutor {
         for assignment in assignments {
             let worker = worker_input.clone();
             let assignment = assignment.clone();
-            let receiver = worker_pool.submit(move || force_worker_assignment(&worker, assignment))?;
+            let receiver = worker_pool.submit::<T>(move || force_worker_assignment(&worker, assignment))?;
             worker_receivers.push(receiver);
         }
         collect_threaded_results(worker_receivers)
@@ -613,13 +674,11 @@ fn force_selected_roots_with_executors<T: DeserializeOwned + Send + 'static>(
 }
 
 fn collect_threaded_results<T: Send + 'static>(
-    worker_receivers: Vec<mpsc::Receiver<Result<Vec<IndexedRoot<T>>, WorkerFailure>>>,
+    worker_slots: Vec<Arc<WorkerResultSlot>>,
 ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
-    let mut results = Vec::with_capacity(worker_receivers.len());
-    for receiver in worker_receivers {
-        let worker_result = receiver
-            .recv()
-            .map_err(|_| Error::Boundary("bounded worker pool job dropped without a result".to_string()))?;
+    let mut results = Vec::with_capacity(worker_slots.len());
+    for worker_slot in worker_slots {
+        let worker_result = worker_slot.take()?;
         results.push(worker_result);
     }
     Ok(results)
@@ -677,9 +736,10 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
         return Ok(worker_pool.clone());
     }
 
-    let mut senders = Vec::with_capacity(usize_from_u32(worker_count));
+    let mut workers = Vec::with_capacity(usize_from_u32(worker_count));
     for worker_index in 0..worker_count {
         let (sender, receiver) = mpsc::sync_channel::<BoxedWorkerJob>(1);
+        let result_slot = Arc::new(WorkerResultSlot::new());
         std::thread::Builder::new()
             .name(format!("crunch-eval-worker-{worker_count}-{worker_index}"))
             .spawn(move || {
@@ -688,12 +748,12 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
                 }
             })
             .map_err(|err| Error::Boundary(format!("failed to spawn bounded worker thread: {err}")))?;
-        senders.push(sender);
+        workers.push(BoundedWorkerSlot { sender, result_slot });
     }
 
-    assert_eq!(u32_from_usize(senders.len()), worker_count, "worker pool must create one sender per worker");
+    assert_eq!(u32_from_usize(workers.len()), worker_count, "worker pool must create one worker slot per worker");
     let worker_pool = Arc::new(BoundedWorkerPool {
-        senders,
+        workers,
         next_worker: AtomicU32::new(0),
     });
     worker_pools.insert(worker_count, worker_pool.clone());
