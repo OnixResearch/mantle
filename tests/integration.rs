@@ -3,7 +3,19 @@
 //! These tests invoke the compiled `crunch` binary via `assert_cmd` and
 //! check stdout, stderr, and exit codes.
 
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::net::TcpStream;
+use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread::JoinHandle;
+use std::thread::{self};
+use std::time::Duration;
 
 use assert_cmd::Command;
 use predicates::prelude::*;
@@ -18,6 +30,206 @@ fn crunch_cmd() -> Command {
 
 fn crunch_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+#[derive(Debug, Clone)]
+enum HttpFixtureResponse {
+    Fixed {
+        status_line: String,
+        headers: Vec<(String, String)>,
+        body: Vec<u8>,
+    },
+}
+
+struct HttpFixtureServer {
+    base_url: String,
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl HttpFixtureServer {
+    fn serve_cache_dir(cache_dir: &Path) -> Self {
+        let mut routes = BTreeMap::<String, HttpFixtureResponse>::new();
+        routes.insert("/nix-cache-info".to_string(), HttpFixtureResponse::Fixed {
+            status_line: "HTTP/1.1 200 OK".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: std::fs::read(cache_dir.join("nix-cache-info")).unwrap(),
+        });
+        for entry in std::fs::read_dir(cache_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "narinfo") {
+                routes.insert(format!("/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
+                    status_line: "HTTP/1.1 200 OK".to_string(),
+                    headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                    body: std::fs::read(path).unwrap(),
+                });
+            }
+        }
+        for entry in std::fs::read_dir(cache_dir.join("nar")).unwrap() {
+            let entry = entry.unwrap();
+            routes.insert(format!("/nar/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
+                status_line: "HTTP/1.1 200 OK".to_string(),
+                headers: vec![("Content-Type".to_string(), "application/octet-stream".to_string())],
+                body: std::fs::read(entry.path()).unwrap(),
+            });
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+        let routes = Arc::new(routes);
+        let routes_thread = Arc::clone(&routes);
+        let handle = thread::spawn(move || {
+            while !stop_thread.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => serve_http_fixture_request(&mut stream, &routes_thread),
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("accept failed: {err}"),
+                }
+            }
+        });
+
+        Self {
+            base_url: format!("http://{addr}"),
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for HttpFixtureServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let url: url::Url = self.base_url.parse().unwrap();
+        let host = url.host_str().unwrap();
+        let port = url.port_or_known_default().unwrap();
+        let _ = TcpStream::connect((host, port));
+        if let Some(handle) = self.handle.take() {
+            handle.join().unwrap();
+        }
+    }
+}
+
+fn serve_http_fixture_request(stream: &mut TcpStream, routes: &BTreeMap<String, HttpFixtureResponse>) {
+    let mut buffer = [0u8; 4096];
+    let bytes_read = stream.read(&mut buffer).unwrap();
+    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+    let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).unwrap_or("/").to_string();
+    let response = routes.get(&path).cloned().unwrap_or(HttpFixtureResponse::Fixed {
+        status_line: "HTTP/1.1 404 Not Found".to_string(),
+        headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+        body: b"not found".to_vec(),
+    });
+
+    let HttpFixtureResponse::Fixed {
+        status_line,
+        headers,
+        body,
+    } = response;
+    let mut response_bytes =
+        format!("{status_line}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len()).into_bytes();
+    for (name, value) in headers {
+        response_bytes.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
+    }
+    response_bytes.extend_from_slice(b"\r\n");
+    response_bytes.extend_from_slice(&body);
+    stream.write_all(&response_bytes).unwrap();
+    stream.flush().unwrap();
+}
+
+async fn open_http_pull_test_store(dir: &Path) -> crunch_store::StoreHandle {
+    let state_dir = dir.join("state");
+    let output_dir = dir.join("output");
+    std::fs::create_dir_all(&state_dir).unwrap();
+    std::fs::create_dir_all(&output_dir).unwrap();
+    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir,
+        output_dir,
+        remote_cache_url: None,
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: "/crunch/store".to_string(),
+    })
+    .await
+    .unwrap()
+}
+
+async fn render_http_pull_nar_bytes(handle: &crunch_store::StoreHandle, node: &snix_castore::Node) -> Vec<u8> {
+    use tokio::io::AsyncReadExt;
+
+    let (mut reader, writer) = tokio::io::duplex(64 * 1024);
+    let node = node.clone();
+    let blob_service = handle.blob_service();
+    let directory_service = handle.directory_service();
+    let write_task =
+        tokio::spawn(async move { snix_store::nar::write_nar(writer, &node, blob_service, directory_service).await });
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes).await.unwrap();
+    write_task.await.unwrap().unwrap();
+    bytes
+}
+
+async fn make_http_pull_cache_fixture(work_dir: &Path) -> (PathBuf, String, String) {
+    use nix_compat::store_path::StorePath;
+    use snix_castore::Node;
+    use snix_store::path_info::PathInfo;
+    use snix_store::pathinfoservice::PathInfoService;
+    use tokio::io::AsyncWriteExt;
+
+    let store = open_http_pull_test_store(&work_dir.join("seed-store")).await;
+    let mut writer = store.blob_service().open_write().await;
+    let content = b"http pull integration content";
+    writer.write_all(content).await.unwrap();
+    let blob_digest = writer.close().await.unwrap();
+    let node = Node::File {
+        digest: blob_digest,
+        size: content.len() as u64,
+        executable: false,
+    };
+    let nar_bytes = render_http_pull_nar_bytes(&store, &node).await;
+    let nar_sha256: [u8; 32] = {
+        use sha2::Digest;
+        sha2::Sha256::digest(&nar_bytes).into()
+    };
+    let store_path = StorePath::from_name_and_digest_fixed("http-pull-cli", [7u8; 20]).unwrap();
+    let mut path_info = PathInfo {
+        store_path: store_path.clone(),
+        node,
+        references: vec![],
+        nar_sha256,
+        nar_size: nar_bytes.len() as u64,
+        signatures: vec![],
+        deriver: None,
+        ca: None,
+    };
+    let (keypair, _) = crunch_build::signing::generate_keypair();
+    let store_path_ref: nix_compat::store_path::StorePathRef = path_info.store_path.as_ref();
+    let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+        &store_path_ref,
+        &path_info.nar_sha256,
+        path_info.nar_size,
+        std::iter::empty::<&nix_compat::store_path::StorePathRef>(),
+        "/crunch/store",
+    );
+    path_info.signatures.push(keypair.signing_key.sign(fingerprint.as_bytes()).to_owned());
+    store.pathinfo_service().put(path_info.clone()).await.unwrap();
+
+    let cache_dir = work_dir.join("cache");
+    crunch_store::export_paths_to_cache_dir(&store, &[path_info.clone()], &cache_dir, &crunch_store::PushOptions {
+        trust_unsigned: false,
+    })
+    .await
+    .unwrap();
+
+    (
+        cache_dir,
+        path_info.store_path.to_absolute_path_with_prefix("/crunch/store"),
+        keypair.verifying_key.to_string(),
+    )
 }
 
 // ── Phase 2: Eval tests ─────────────────────────────────────────
@@ -652,6 +864,126 @@ fn store_sign_all_signs_existing_unsigned_entries() {
 }
 
 // ── Phase 5: Error and edge cases ───────────────────────────────
+
+#[test]
+fn store_pull_http_requires_explicit_paths() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://cache.example.com")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("HTTP pull requires explicit store path selectors"));
+}
+
+#[test]
+fn store_pull_http_rejects_all() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://cache.example.com")
+        .arg("--all")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("--all is not supported for HTTP caches; specify paths explicitly"));
+}
+
+#[test]
+fn store_pull_rejects_http_url_with_userinfo() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("https://user@cache.example.com")
+        .arg("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains(
+            "HTTP pull source must not include URL credentials",
+        ));
+}
+
+#[test]
+fn store_pull_rejects_unsupported_url_scheme() {
+    let store_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    crunch_cmd()
+        .arg("--store")
+        .arg(store_dir.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg("file://cache.example.com")
+        .arg("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test")
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains(
+            "unsupported pull source URL scheme",
+        ));
+}
+
+#[test]
+fn store_pull_http_round_trip_imports_path() {
+    let work = tempfile::tempdir().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (cache_dir, logical_store_path, trusted_public_key) =
+        runtime.block_on(make_http_pull_cache_fixture(work.path()));
+    let server = HttpFixtureServer::serve_cache_dir(&cache_dir);
+    let store_dir = work.path().join("pull-store");
+    let state_dir = work.path().join("pull-state");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    std::fs::create_dir_all(&state_dir).unwrap();
+
+    let output = crunch_cmd()
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg(&server.base_url)
+        .arg("--trusted-public-keys")
+        .arg(&trusted_public_key)
+        .arg(&logical_store_path)
+        .output()
+        .expect("HTTP pull should execute");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "HTTP pull failed (exit {}):\nstdout: {stdout}\nstderr: {stderr}",
+        output.status.code().unwrap_or(-1),
+    );
+    assert!(stdout.contains("PULL "), "stdout: {stdout}");
+    assert!(stderr.contains("imported=1"), "stderr: {stderr}");
+
+    let pulled_name = logical_store_path.rsplit('/').next().unwrap();
+    assert!(store_dir.join(pulled_name).exists(), "expected pulled output on disk");
+}
 
 #[test]
 fn build_missing_store_exits_3() {

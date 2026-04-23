@@ -523,11 +523,11 @@ pub enum StoreAction {
         /// Store paths to push (full or fragment)
         paths: Vec<String>,
     },
-    /// Pull (import) store paths from a binary cache directory
+    /// Pull (import) store paths from a binary cache directory or HTTP cache URL
     Pull {
-        /// Source binary cache directory
+        /// Source binary cache directory or HTTP/HTTPS cache URL
         #[arg(long)]
-        from: std::path::PathBuf,
+        from: String,
 
         /// Import all paths from the cache directory
         #[arg(long)]

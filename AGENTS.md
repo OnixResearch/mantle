@@ -460,6 +460,19 @@ When claiming test results in commit messages or completion summaries:
   `examples/`, and `tests/`, including `tests/benchmark_harness.rs`. Use that
   root package leg plus first-party crate package flags instead of
   `cargo fmt --all --check` when vendor/ must stay out of scope.
+- Store-pull URL gotcha: keep `crunch store pull --from` as `String` until
+  explicit `Url::parse`. On this host `PathBuf::from("http://cache.example.com")`
+  stringifies as `http:/cache.example.com`, which silently breaks HTTP cache
+  dispatch.
+- Current HTTP pull semantics: `import_paths_from_http_cache()` strips query /
+  fragment from the cache base URL, rejects URL userinfo credentials, always
+  runs `nix-cache-info` preflight before any already-present short-circuit,
+  treats only preflight 404 as “missing”, and warns/continues on other
+  non-success preflight statuses (for example 401/403/410/5xx) plus redirect /
+  transport failures.
+- Rustfmt gotcha: formatting crate roots like `src/main.rs` or
+  `crates/*/src/lib.rs` can cascade into sibling modules and dirty unrelated
+  files. Prefer leaf-file formatting or revert the unrelated churn immediately.
 - The new first-party clippy helper assumes the documented build env. Without
   the clang/mold/pkg-config PATH prefix and OpenSSL `PKG_CONFIG_PATH`, it fails
   early with `linker 'clang' not found` before any first-party lint results.

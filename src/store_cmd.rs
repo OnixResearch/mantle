@@ -459,7 +459,10 @@ async fn cmd_store_push(
     }
 
     if report.skipped_unsigned_count > 0 {
-        eprintln!("warning: {} unsigned path(s) skipped (use --trust-unsigned to include)", report.skipped_unsigned_count);
+        eprintln!(
+            "warning: {} unsigned path(s) skipped (use --trust-unsigned to include)",
+            report.skipped_unsigned_count
+        );
     }
 
     eprintln!(
@@ -473,24 +476,71 @@ async fn cmd_store_push(
     Ok(())
 }
 
+fn parse_pull_source(source: &str) -> Result<crunch_store::PullSource, RunError> {
+    let is_http_source = source.starts_with("http://") || source.starts_with("https://");
+    if is_http_source {
+        let url = url::Url::parse(source)
+            .map_err(|e| RunError::Internal(format!("invalid HTTP pull source '{source}': {e}")))?;
+        if !url.username().is_empty() || url.password().is_some() {
+            return Err(RunError::Internal(format!(
+                "HTTP pull source must not include URL credentials: {source}"
+            )));
+        }
+        return Ok(crunch_store::PullSource::Http(url));
+    }
+    if source.contains("://") {
+        return Err(RunError::Internal(format!(
+            "unsupported pull source URL scheme in '{source}'; only http:// and https:// are supported"
+        )));
+    }
+    Ok(crunch_store::PullSource::Directory(std::path::PathBuf::from(source)))
+}
+
+fn parse_http_pull_paths(
+    path_selectors: &[String],
+    store_dir: &str,
+) -> Result<Vec<nix_compat::store_path::StorePath<String>>, RunError> {
+    let mut parsed_paths = Vec::with_capacity(path_selectors.len());
+    for selector in path_selectors {
+        let store_path =
+            nix_compat::store_path::StorePath::from_absolute_path_with_prefix(selector.as_bytes(), store_dir).map_err(
+                |_| {
+                    RunError::Internal(format!(
+                        "HTTP pull requires explicit logical store paths under {store_dir}; got '{selector}'"
+                    ))
+                },
+            )?;
+        parsed_paths.push(store_path);
+    }
+    Ok(parsed_paths)
+}
+
 async fn cmd_store_pull(
     store: &crunch_store::StoreHandle,
-    source: &Path,
+    source: &str,
     is_pull_all: bool,
     trust_unsigned: bool,
     explicit_trusted_public_keys: &[String],
     path_selectors: &[String],
     state_dir: &Path,
 ) -> Result<(), RunError> {
+    let pull_source = parse_pull_source(source)?;
+    if matches!(&pull_source, crunch_store::PullSource::Http(_)) && is_pull_all {
+        return Err(RunError::Internal("--all is not supported for HTTP caches; specify paths explicitly".to_string()));
+    }
     if path_selectors.is_empty() && !is_pull_all {
-        return Err(RunError::Internal("provide store paths or use --all".to_string()));
+        let detail = if matches!(&pull_source, crunch_store::PullSource::Http(_)) {
+            "HTTP pull requires explicit store path selectors"
+        } else {
+            "provide store paths or use --all"
+        };
+        return Err(RunError::Internal(detail.to_string()));
     }
 
-    if !source.exists() {
-        return Err(RunError::Internal(format!(
-            "pull source directory does not exist: {}",
-            source.display()
-        )));
+    if let crunch_store::PullSource::Directory(source_dir) = &pull_source {
+        if !source_dir.exists() {
+            return Err(RunError::Internal(format!("pull source directory does not exist: {}", source_dir.display())));
+        }
     }
 
     // Resolve trusted keys: explicit CLI keys + store-configured keys.
@@ -498,26 +548,29 @@ async fn cmd_store_pull(
     let keypair = load_or_generate_signing_keypair(None, state_dir, true)?;
     let configured_keys = load_configured_trusted_public_keys(parsed_explicit.as_deref(), state_dir)?;
     let trusted_keys = crunch_build::build_trusted_keys(&keypair, configured_keys.as_deref());
-
-    let paths_filter = if is_pull_all {
-        None
-    } else {
-        Some(path_selectors.to_vec())
-    };
-
     let options = crunch_store::PullOptions {
         trust_unsigned,
         trusted_public_keys: trusted_keys,
     };
 
-    let report = crunch_store::import_paths_from_cache_dir(
-        store,
-        source,
-        paths_filter.as_deref(),
-        &options,
-    )
-    .await
-    .map_err(|e| RunError::Internal(format!("pull: {e}")))?;
+    let report = match pull_source {
+        crunch_store::PullSource::Directory(source_dir) => {
+            let paths_filter = if is_pull_all {
+                None
+            } else {
+                Some(path_selectors.to_vec())
+            };
+            crunch_store::import_paths_from_cache_dir(store, &source_dir, paths_filter.as_deref(), &options)
+                .await
+                .map_err(|e| RunError::Internal(format!("pull: {e}")))?
+        }
+        crunch_store::PullSource::Http(cache_url) => {
+            let requested_paths = parse_http_pull_paths(path_selectors, store.store_dir())?;
+            crunch_store::import_paths_from_http_cache(store, &cache_url, &requested_paths, &options)
+                .await
+                .map_err(|e| RunError::Internal(format!("pull: {e}")))?
+        }
+    };
 
     for pulled in &report.paths {
         println!("PULL {}", pulled.store_path);

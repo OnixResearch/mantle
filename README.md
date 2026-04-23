@@ -548,7 +548,7 @@ pull imports into it.
 crunch store push --all --to /srv/cache
 
 # Push specific paths
-crunch store push --to /srv/cache /nix/store/<hash>-hello
+crunch store push --to /srv/cache /crunch/store/<hash>-hello
 
 # Include unsigned entries (normally skipped)
 crunch store push --all --to /srv/cache --trust-unsigned
@@ -556,12 +556,16 @@ crunch store push --all --to /srv/cache --trust-unsigned
 # Pull all paths from a cache directory
 crunch store pull --all --from /srv/cache
 
-# Pull specific paths
-crunch store pull --from /srv/cache /nix/store/<hash>-hello
+# Pull specific paths from a cache directory
+crunch store pull --from /srv/cache /crunch/store/<hash>-hello
 
-# Pull with explicit trust (signature verification)
-crunch store pull --all --from /srv/cache \
-  --trusted-public-keys "builder-1:base64pubkey..."
+# Pull specific paths from an HTTP cache
+crunch store pull --from https://cache.example.com /crunch/store/<hash>-hello
+
+# Pull from HTTP with explicit trust (signature verification)
+crunch store pull --from https://cache.example.com \
+  --trusted-public-keys "builder-1:base64pubkey..." \
+  /crunch/store/<hash>-hello
 
 # Accept unsigned narinfos
 crunch store pull --all --from /srv/cache --trust-unsigned
@@ -575,6 +579,9 @@ Pull verifies narinfo signatures against the configured trusted keys
 (same trust set as `crunch build --substituters`). Paths that fail
 signature verification, have a store-directory prefix mismatch, or whose
 NAR content does not match the declared hash are skipped with a warning.
+HTTP pull is explicit-path only: `--all` works for directory caches, but
+HTTP/HTTPS sources require one or more logical store paths on the command
+line.
 
 Both commands acquire the store mutation lock, so they are safe alongside
 concurrent builds on the same state directory.

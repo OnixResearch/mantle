@@ -5,8 +5,19 @@
 
 mod audit_support;
 
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::net::TcpStream;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread::JoinHandle;
+use std::thread::{self};
+use std::time::Duration;
 
 use assert_cmd::Command;
 use audit_support::AuditArtifact;
@@ -15,6 +26,116 @@ use serde::Deserialize;
 
 fn crunch_cmd() -> Command {
     Command::cargo_bin("crunch").expect("crunch binary should be built")
+}
+
+#[derive(Debug, Clone)]
+enum HttpFixtureResponse {
+    Fixed {
+        status_line: String,
+        headers: Vec<(String, String)>,
+        body: Vec<u8>,
+    },
+}
+
+struct HttpFixtureServer {
+    base_url: String,
+    stop: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl HttpFixtureServer {
+    fn serve_cache_dir(cache_dir: &Path) -> Self {
+        let mut routes = BTreeMap::<String, HttpFixtureResponse>::new();
+        routes.insert("/nix-cache-info".to_string(), HttpFixtureResponse::Fixed {
+            status_line: "HTTP/1.1 200 OK".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: std::fs::read(cache_dir.join("nix-cache-info")).unwrap(),
+        });
+        for entry in std::fs::read_dir(cache_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "narinfo") {
+                routes.insert(format!("/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
+                    status_line: "HTTP/1.1 200 OK".to_string(),
+                    headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                    body: std::fs::read(path).unwrap(),
+                });
+            }
+        }
+        for entry in std::fs::read_dir(cache_dir.join("nar")).unwrap() {
+            let entry = entry.unwrap();
+            routes.insert(format!("/nar/{}", entry.file_name().to_string_lossy()), HttpFixtureResponse::Fixed {
+                status_line: "HTTP/1.1 200 OK".to_string(),
+                headers: vec![("Content-Type".to_string(), "application/octet-stream".to_string())],
+                body: std::fs::read(entry.path()).unwrap(),
+            });
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+        let routes = Arc::new(routes);
+        let routes_thread = Arc::clone(&routes);
+        let handle = thread::spawn(move || {
+            while !stop_thread.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => serve_http_fixture_request(&mut stream, &routes_thread),
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("accept failed: {err}"),
+                }
+            }
+        });
+
+        Self {
+            base_url: format!("http://{addr}"),
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for HttpFixtureServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let url: url::Url = self.base_url.parse().unwrap();
+        let host = url.host_str().unwrap();
+        let port = url.port_or_known_default().unwrap();
+        let _ = TcpStream::connect((host, port));
+        if let Some(handle) = self.handle.take() {
+            handle.join().unwrap();
+        }
+    }
+}
+
+fn serve_http_fixture_request(stream: &mut TcpStream, routes: &BTreeMap<String, HttpFixtureResponse>) {
+    let mut buffer = [0u8; 4096];
+    let bytes_read = stream.read(&mut buffer).unwrap();
+    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+    let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).unwrap_or("/").to_string();
+    let response = routes.get(&path).cloned().unwrap_or(HttpFixtureResponse::Fixed {
+        status_line: "HTTP/1.1 404 Not Found".to_string(),
+        headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+        body: b"not found".to_vec(),
+    });
+
+    let HttpFixtureResponse::Fixed {
+        status_line,
+        headers,
+        body,
+    } = response;
+    let mut response_bytes =
+        format!("{status_line}\r\nContent-Length: {}\r\nConnection: close\r\n", body.len()).into_bytes();
+    for (name, value) in headers {
+        response_bytes.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
+    }
+    response_bytes.extend_from_slice(b"\r\n");
+    response_bytes.extend_from_slice(&body);
+    stream.write_all(&response_bytes).unwrap();
+    stream.flush().unwrap();
 }
 
 fn can_build() -> bool {
@@ -711,10 +832,14 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
     // Step 2: push all paths to a binary cache directory.
     let mut push_cmd = crunch_cmd();
     push_cmd
-        .arg("--store").arg(&store)
-        .arg("--state-dir").arg(&state)
-        .arg("store").arg("push")
-        .arg("--to").arg(&cache)
+        .arg("--store")
+        .arg(&store)
+        .arg("--state-dir")
+        .arg(&state)
+        .arg("store")
+        .arg("push")
+        .arg("--to")
+        .arg(&cache)
         .arg("--all");
     let push_output = push_cmd.output().expect("push should execute");
     let push_stderr = String::from_utf8_lossy(&push_output.stderr);
@@ -735,16 +860,9 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
     let narinfo_entries: Vec<_> = std::fs::read_dir(&cache)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .map_or(false, |ext| ext == "narinfo")
-        })
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "narinfo"))
         .collect();
-    assert!(
-        !narinfo_entries.is_empty(),
-        "cache dir should contain at least one .narinfo file",
-    );
+    assert!(!narinfo_entries.is_empty(), "cache dir should contain at least one .narinfo file",);
 
     // Find the narinfo for the output we built (match by store path name).
     let output_name = out.file_name().unwrap().to_str().unwrap();
@@ -771,38 +889,23 @@ fn smoke_build_then_push_narinfo_and_nar_match() {
             use sha2::Digest;
             sha2::Sha256::digest(&nar_bytes).into()
         };
-        assert_eq!(
-            actual_sha256, narinfo.nar_hash,
-            "NAR file sha256 must match narinfo NarHash",
-        );
+        assert_eq!(actual_sha256, narinfo.nar_hash, "NAR file sha256 must match narinfo NarHash",);
 
         // Verify NarSize matches actual file size.
-        assert_eq!(
-            nar_bytes.len() as u64, narinfo.nar_size,
-            "NAR file size must match narinfo NarSize",
-        );
+        assert_eq!(nar_bytes.len() as u64, narinfo.nar_size, "NAR file size must match narinfo NarSize",);
 
         // Verify FileHash matches if present.
         if let Some(file_hash) = narinfo.file_hash {
-            assert_eq!(
-                actual_sha256, file_hash,
-                "FileHash must match actual NAR sha256 (uncompressed)",
-            );
+            assert_eq!(actual_sha256, file_hash, "FileHash must match actual NAR sha256 (uncompressed)",);
         }
 
         // Verify FileSize matches if present.
         if let Some(file_size) = narinfo.file_size {
-            assert_eq!(
-                nar_bytes.len() as u64, file_size,
-                "FileSize must match actual NAR file size",
-            );
+            assert_eq!(nar_bytes.len() as u64, file_size, "FileSize must match actual NAR file size",);
         }
 
         // Verify at least one signature is present.
-        assert!(
-            !narinfo.signatures.is_empty(),
-            "pushed narinfo should have at least one signature",
-        );
+        assert!(!narinfo.signatures.is_empty(), "pushed narinfo should have at least one signature",);
 
         break;
     }
@@ -897,10 +1000,7 @@ fn smoke_push_nix_store_prefix_consumable_by_nix() {
 
     // Step 3: verify nix-cache-info has /nix/store.
     let cache_info = std::fs::read_to_string(cache.join("nix-cache-info")).unwrap();
-    assert!(
-        cache_info.contains("StoreDir: /nix/store"),
-        "nix-cache-info must use /nix/store, got: {cache_info}",
-    );
+    assert!(cache_info.contains("StoreDir: /nix/store"), "nix-cache-info must use /nix/store, got: {cache_info}",);
 
     // Step 4: ask host nix to query the cache — this proves Nix can parse
     // the narinfo format, NAR URL, hash, and signatures.
@@ -918,14 +1018,10 @@ fn smoke_push_nix_store_prefix_consumable_by_nix() {
     );
 
     // The JSON output should contain at least one path under /nix/store.
-    let nix_info: serde_json::Value = serde_json::from_str(&nix_stdout).unwrap_or_else(|err| {
-        panic!("nix path-info --json should produce valid JSON: {err}\nstdout: {nix_stdout}")
-    });
+    let nix_info: serde_json::Value = serde_json::from_str(&nix_stdout)
+        .unwrap_or_else(|err| panic!("nix path-info --json should produce valid JSON: {err}\nstdout: {nix_stdout}"));
     let paths: Vec<&str> = match &nix_info {
-        serde_json::Value::Array(arr) => arr
-            .iter()
-            .filter_map(|v| v.get("path").and_then(|p| p.as_str()))
-            .collect(),
+        serde_json::Value::Array(arr) => arr.iter().filter_map(|v| v.get("path").and_then(|p| p.as_str())).collect(),
         serde_json::Value::Object(map) => map.keys().map(|k| k.as_str()).collect(),
         _ => panic!("unexpected nix path-info JSON shape: {nix_stdout}"),
     };
@@ -976,10 +1072,14 @@ fn smoke_build_push_pull_round_trip() {
     // Step 2: push to binary cache directory.
     let mut push_cmd = crunch_cmd();
     push_cmd
-        .arg("--store").arg(&store_a)
-        .arg("--state-dir").arg(&state_a)
-        .arg("store").arg("push")
-        .arg("--to").arg(&cache)
+        .arg("--store")
+        .arg(&store_a)
+        .arg("--state-dir")
+        .arg(&state_a)
+        .arg("store")
+        .arg("push")
+        .arg("--to")
+        .arg(&cache)
         .arg("--all");
     let push_output = push_cmd.output().expect("push should execute");
     assert!(
@@ -997,10 +1097,14 @@ fn smoke_build_push_pull_round_trip() {
 
     let mut pull_cmd = crunch_cmd();
     pull_cmd
-        .arg("--store").arg(&store_b)
-        .arg("--state-dir").arg(&state_b)
-        .arg("store").arg("pull")
-        .arg("--from").arg(&cache)
+        .arg("--store")
+        .arg(&store_b)
+        .arg("--state-dir")
+        .arg(&state_b)
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg(&cache)
         .arg("--all")
         .arg("--trust-unsigned");
     let pull_output = pull_cmd.output().expect("pull should execute");
@@ -1011,41 +1115,116 @@ fn smoke_build_push_pull_round_trip() {
         "pull failed (exit {}):\nstdout: {pull_stdout}\nstderr: {pull_stderr}",
         pull_output.status.code().unwrap_or(-1),
     );
-    assert!(
-        pull_stdout.contains("PULL "),
-        "pull should report at least one imported path, got: {pull_stdout}",
-    );
-    assert!(
-        pull_stderr.contains("imported="),
-        "pull should print summary, got: {pull_stderr}",
-    );
+    assert!(pull_stdout.contains("PULL "), "pull should report at least one imported path, got: {pull_stdout}",);
+    assert!(pull_stderr.contains("imported="), "pull should print summary, got: {pull_stderr}",);
 
     // Step 4: verify the output exists in store-b.
     // The output name in store-a should appear in store-b with the same hash.
     let out_name = out.file_name().unwrap().to_str().unwrap();
     let pulled_path = store_b.join(out_name);
-    assert!(
-        pulled_path.exists(),
-        "pulled output should exist on disk: {}",
-        pulled_path.display(),
-    );
+    assert!(pulled_path.exists(), "pulled output should exist on disk: {}", pulled_path.display(),);
 
     // Step 5: verify PathInfo is queryable.
     let mut info_cmd = crunch_cmd();
     info_cmd
-        .arg("--store").arg(&store_b)
-        .arg("--state-dir").arg(&state_b)
-        .arg("store").arg("info")
+        .arg("--store")
+        .arg(&store_b)
+        .arg("--state-dir")
+        .arg(&state_b)
+        .arg("store")
+        .arg("info")
         .arg(out_name);
     let info_output = info_cmd.output().expect("store info should execute");
-    assert!(
-        info_output.status.success(),
-        "store info failed: {}",
-        String::from_utf8_lossy(&info_output.stderr),
-    );
+    assert!(info_output.status.success(), "store info failed: {}", String::from_utf8_lossy(&info_output.stderr),);
     let info_stdout = String::from_utf8_lossy(&info_output.stdout);
-    assert!(
-        info_stdout.contains("store_path:"),
-        "store info should show store_path, got: {info_stdout}",
+    assert!(info_stdout.contains("store_path:"), "store info should show store_path, got: {info_stdout}",);
+}
+
+#[test]
+fn smoke_build_push_http_pull_round_trip() {
+    if !can_build() {
+        eprintln!("SKIP: /nix/store not writable or bwrap missing");
+        return;
+    }
+
+    let work = tempfile::tempdir().unwrap();
+    let store_a = work.path().join("store-a");
+    let state_a = work.path().join("state-a");
+    let cache = work.path().join("cache");
+    std::fs::create_dir_all(&store_a).unwrap();
+    std::fs::create_dir_all(&state_a).unwrap();
+    std::fs::create_dir_all(&cache).unwrap();
+
+    let run = build_ncl_with_state(
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "pull-http-hello",
+  builder = "/bin/sh",
+  args = ["-c", "echo 'http pull test content' > $out"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation"#,
+        &store_a,
+        Some(&state_a),
     );
+    assert_eq!(run.report.counts.succeeded_total, 1);
+    let out = first_output_path(&run);
+    assert!(out.exists(), "build output should exist: {}", out.display());
+
+    let mut push_cmd = crunch_cmd();
+    push_cmd
+        .arg("--store")
+        .arg(&store_a)
+        .arg("--state-dir")
+        .arg(&state_a)
+        .arg("store")
+        .arg("push")
+        .arg("--to")
+        .arg(&cache)
+        .arg("--all");
+    let push_output = push_cmd.output().expect("push should execute");
+    assert!(
+        push_output.status.success(),
+        "push failed (exit {}):\n{}",
+        push_output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&push_output.stderr),
+    );
+
+    let server = HttpFixtureServer::serve_cache_dir(&cache);
+    let signing_key_contents = std::fs::read_to_string(state_a.join("signing-key")).unwrap();
+    let keypair = crunch_build::signing::load_keypair(&signing_key_contents).unwrap();
+    let trusted_public_key = keypair.verifying_key.to_string();
+
+    let store_b = work.path().join("store-b");
+    let state_b = work.path().join("state-b");
+    std::fs::create_dir_all(&store_b).unwrap();
+    std::fs::create_dir_all(&state_b).unwrap();
+
+    let logical_store_path = format!("/crunch/store/{}", out.file_name().unwrap().to_string_lossy());
+    let mut pull_cmd = crunch_cmd();
+    pull_cmd
+        .arg("--store")
+        .arg(&store_b)
+        .arg("--state-dir")
+        .arg(&state_b)
+        .arg("store")
+        .arg("pull")
+        .arg("--from")
+        .arg(&server.base_url)
+        .arg("--trusted-public-keys")
+        .arg(&trusted_public_key)
+        .arg(&logical_store_path);
+    let pull_output = pull_cmd.output().expect("HTTP pull should execute");
+    let pull_stdout = String::from_utf8_lossy(&pull_output.stdout);
+    let pull_stderr = String::from_utf8_lossy(&pull_output.stderr);
+    assert!(
+        pull_output.status.success(),
+        "HTTP pull failed (exit {}):\nstdout: {pull_stdout}\nstderr: {pull_stderr}",
+        pull_output.status.code().unwrap_or(-1),
+    );
+    assert!(pull_stdout.contains("PULL "), "HTTP pull should report imported path, got: {pull_stdout}");
+    assert!(pull_stderr.contains("imported=1"), "HTTP pull should print summary, got: {pull_stderr}");
+
+    let out_name = out.file_name().unwrap().to_str().unwrap();
+    let pulled_path = store_b.join(out_name);
+    assert!(pulled_path.exists(), "pulled HTTP output should exist: {}", pulled_path.display());
 }

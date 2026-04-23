@@ -1,457 +1,4 @@
-# Binary Cache Substitution Specification
-
-## Purpose
-
-Defines how crunch fetches pre-built outputs from remote Nix binary
-caches, avoiding local builds when cached results are available.
-## Requirements
-### Requirement: Remote Cache Fallback
-
-The build pipeline MUST query a remote binary cache when a derivation's
-output is not found in the local PathInfo database.
-
-#### Scenario: Cache hit from remote
-
-- GIVEN a derivation `hello` with output path digest `D`
-- AND the local PathInfo database has no entry for `D`
-- AND `https://cache.nixos.org/D.narinfo` returns a valid narinfo
-- WHEN `check_cache` runs for `hello`
-- THEN the NAR is downloaded, decompressed, and ingested into castore
-- AND a PathInfo entry is written to the local redb database
-- AND the build is skipped (output marked as cached)
-
-#### Scenario: Remote miss falls through to build
-
-- GIVEN a derivation `mypkg` with output path digest `D`
-- AND the local PathInfo database has no entry for `D`
-- AND the remote cache returns 404 for `D.narinfo`
-- WHEN `check_cache` runs for `mypkg`
-- THEN the derivation is built locally as normal
-
-#### Scenario: Subsequent build uses local cache
-
-- GIVEN `hello` was previously substituted from a remote cache
-- AND its PathInfo exists in the local redb database
-- WHEN `check_cache` runs for `hello` again
-- THEN the local PathInfo is used (no network request)
-
-### Requirement: FOD Substitution Skip
-
-The system MUST NOT attempt remote substitution for fixed-output
-derivations (derivations where any output has a `ca_hash`).
-
-#### Scenario: FOD bypasses remote cache
-
-- GIVEN a fetchurl derivation with `fixed_output.hash = "sha256-..."`
-- WHEN the build pipeline processes this derivation
-- THEN no `.narinfo` request is made to the remote cache
-- AND the derivation is built via the fetcher pipeline
-
-### Requirement: Substitution Disable Flag
-
-The CLI MUST provide a `--no-substitute` flag that disables all
-remote cache lookups.
-
-#### Scenario: No-substitute flag
-
-- GIVEN `--no-substitute` is passed on the command line
-- WHEN any derivation is processed
-- THEN no remote cache requests are made
-- AND all derivations are built locally
-
-### Requirement: Substituter Configuration
-
-The CLI MUST accept a `--substituters` flag specifying one or more
-cache URLs.
-
-#### Scenario: Custom substituter
-
-- GIVEN `--substituters https://my-cache.example.com`
-- WHEN a derivation output is not in local cache
-- THEN `https://my-cache.example.com/<digest>.narinfo` is queried
-
-#### Scenario: Default substituter
-
-- GIVEN no `--substituters` flag is provided
-- AND `--no-substitute` is not provided
-- WHEN a derivation output is not in local cache
-- THEN `https://cache.nixos.org/<digest>.narinfo` is queried
-
-### Requirement: Remote Failure Graceful Degradation
-
-Remote cache failures MUST be treated as cache misses, not build failures,
-including network errors, malformed narinfo, and NAR download failures.
-
-#### Scenario: Network error during substitution
-
-- GIVEN the remote cache is unreachable
-- WHEN `check_cache` queries the remote
-- THEN a warning is logged
-- AND the derivation is built locally
-
-### Requirement: CA Derivation Substitution Skip
-
-The system MUST NOT attempt remote substitution for content-addressed
-derivations whose output paths are not yet known (output.path is None).
-
-#### Scenario: CA derivation not substituted
-
-- GIVEN a CA derivation `ca-hello` with `output.path = None`
-- WHEN `check_cache` runs
-- THEN no remote cache request is made for this output
-- AND the derivation proceeds to build
-
-### Requirement: Delta-aware Substitution Negotiation
-
-The substitution pipeline MUST allow a trusted remote cache to advertise a
-delta-capable transfer path in addition to ordinary full-artifact fetch.
-
-A delta-capable HTTP cache MUST expose its delta negotiation and streaming
-endpoints under the same cache authority used for ordinary substitution.
-
-When both sides support delta transfer, crunch MUST prefer the delta path if
-receiver-local reuse can reduce transferred bytes. If capability negotiation
-fails or reuse is not available, crunch MUST fall back to ordinary substitution
-behavior.
-
-#### Scenario: Delta-capable cache hit reuses local content
-
-- GIVEN a trusted remote cache that supports delta transfer
-- AND the receiver already has reusable blob chunks for the requested output
-- WHEN crunch requests that output from the cache
-- THEN crunch may fetch only the missing content instead of the whole artifact
-- AND a successful result is reported as a normal substitution cache hit
-
-#### Scenario: Delta-capable HTTP cache uses the existing authority
-
-- GIVEN a trusted HTTP cache that supports both ordinary substitution and delta
-  transfer
-- WHEN crunch negotiates a delta-capable fetch from that cache
-- THEN the delta negotiation and stream requests go to the same cache authority
-  as the ordinary substitution request
-
-#### Scenario: Legacy cache falls back to full-artifact fetch
-
-- GIVEN a trusted remote cache that does not support delta transfer
-- WHEN crunch requests that output from the cache
-- THEN crunch uses the existing full-artifact substitution path
-- AND the request does not fail merely because delta support is absent
-
-### Requirement: Store push to directory
-
-The store layer MUST provide a library function that exports selected signed
-PathInfo entries to a flat Nix binary cache directory layout.
-
-For each selected PathInfo the function MUST:
-1. Render the NAR archive from the castore node using `write_nar`
-2. Write the NAR to `<dest>/nar/<nar-sha256-nixbase32>.nar`
-3. Construct a `NarInfo` with correct `URL`, `FileHash`, and `FileSize` fields
-4. Write the narinfo to `<dest>/<store-path-hash>.narinfo`
-5. Write `<dest>/nix-cache-info` if it does not already exist
-
-The function MUST return a structured `PushReport` with counts of pushed paths,
-skipped-unsigned paths, skipped-already-present paths, and total bytes written.
-
-#### Scenario: Push a single signed path
-
-- GIVEN a local store with one signed PathInfo for path `hello`
-- AND a writable empty target directory
-- WHEN `export_paths_to_cache_dir([hello], dest)` is called
-- THEN `<dest>/<digest>.narinfo` exists and is parseable as a valid narinfo
-- AND `<dest>/nar/<nar-hash>.nar` exists and its sha256 matches the narinfo `NarHash`
-- AND `<dest>/nix-cache-info` exists with the correct `StoreDir`
-- AND the report shows `pushed_count = 1`
-
-#### Scenario: Push skips unsigned PathInfo by default
-
-- GIVEN a local store with one unsigned PathInfo for path `unsigned-pkg`
-- AND `trust_unsigned` is false
-- WHEN `export_paths_to_cache_dir([unsigned-pkg], dest)` is called
-- THEN no narinfo or NAR file is written for `unsigned-pkg`
-- AND the report shows `skipped_unsigned_count = 1`
-
-#### Scenario: Push includes unsigned PathInfo when trust_unsigned is set
-
-- GIVEN a local store with one unsigned PathInfo for path `unsigned-pkg`
-- AND `trust_unsigned` is true
-- WHEN `export_paths_to_cache_dir([unsigned-pkg], dest)` is called
-- THEN `<dest>/<digest>.narinfo` is written for `unsigned-pkg`
-- AND the report shows `pushed_count = 1`
-
-#### Scenario: Idempotent push skips already-present paths
-
-- GIVEN a target directory that already contains `<digest>.narinfo` for path `hello`
-- WHEN `export_paths_to_cache_dir([hello], dest)` is called again
-- THEN the existing narinfo is not overwritten
-- AND no NAR is re-rendered for `hello`
-- AND the report shows `skipped_already_present_count = 1`
-
-#### Scenario: Push multiple paths
-
-- GIVEN a local store with three signed PathInfo entries
-- AND a writable empty target directory
-- WHEN `export_paths_to_cache_dir([a, b, c], dest)` is called
-- THEN three narinfo files and up to three NAR files exist in the target
-- AND the report shows `pushed_count = 3`
-
-#### Scenario: Narinfo references match stored PathInfo
-
-- GIVEN a signed PathInfo with two runtime references
-- WHEN it is pushed to a directory
-- THEN the narinfo `References` field lists both referenced store path names
-- AND the narinfo `NarHash` and `NarSize` match the PathInfo values
-
-### Requirement: NAR rendering as a public StoreHandle method
-
-`StoreHandle` MUST expose a public method for rendering a NAR archive from a
-castore node to an arbitrary `AsyncWrite` sink.
-
-This method MUST stream the NAR without buffering the full archive in memory.
-
-#### Scenario: Render NAR to a file
-
-- GIVEN a castore node representing a directory tree
-- AND a writable file handle
-- WHEN `store.render_nar(node, file)` is called
-- THEN the file contains a valid NAR archive of that tree
-- AND the NAR sha256 matches what `PathInfo.nar_sha256` records
-
-#### Scenario: Render NAR to a hasher
-
-- GIVEN a castore node
-- WHEN `store.render_nar(node, hasher_writer)` is called
-- THEN the hasher receives the full NAR byte stream without intermediate files
-
-### Requirement: CLI store push subcommand
-
-The CLI MUST provide `crunch store push` for exporting build results to a
-binary cache directory.
-
-Required arguments:
-- `--to <path>` — target directory (required)
-- `<path>...` — store paths to push (optional if `--all` is given)
-- `--all` — push all signed paths in the local store
-- `--signing-key <path>` — signing key file (for narinfo signatures)
-- `--trust-unsigned` — include unsigned PathInfo entries
-
-The command MUST use the store mutation lock to prevent concurrent push and
-GC operations.
-
-#### Scenario: Push named paths to directory
-
-- GIVEN a successful build of `hello` and `world`
-- WHEN `crunch store push --to /srv/cache hello world` runs
-- THEN both paths are exported to `/srv/cache/`
-- AND the command prints a summary of pushed paths and bytes
-
-#### Scenario: Push all paths
-
-- GIVEN a local store with five signed paths
-- WHEN `crunch store push --all --to /srv/cache` runs
-- THEN all five paths are exported
-
-#### Scenario: Push with no signed paths warns
-
-- GIVEN a local store with only unsigned PathInfo entries
-- AND `--trust-unsigned` is not passed
-- WHEN `crunch store push --all --to /srv/cache` runs
-- THEN the command prints a warning that no paths were pushed
-- AND it exits with code 0
-
-#### Scenario: Push to nonexistent directory
-
-- GIVEN `--to /nonexistent/dir`
-- WHEN `crunch store push --all --to /nonexistent/dir` runs
-- THEN the command creates the directory and its `nar/` subdirectory
-- AND proceeds with the push
-
-### Requirement: nix-cache-info file
-
-The push operation MUST write a `nix-cache-info` file in the target directory
-if one does not already exist. The file MUST contain at least `StoreDir` set
-to the store prefix used by this crunch instance.
-
-#### Scenario: nix-cache-info reflects store prefix
-
-- GIVEN crunch running with default store prefix `/crunch/store`
-- WHEN paths are pushed to an empty directory
-- THEN `nix-cache-info` contains `StoreDir: /crunch/store`
-
-#### Scenario: Existing nix-cache-info is preserved
-
-- GIVEN a target directory with an existing `nix-cache-info`
-- WHEN paths are pushed
-- THEN the existing `nix-cache-info` is not modified
-
-### Requirement: Store pull from directory
-
-The store layer MUST provide a library function that imports PathInfo entries
-from a flat Nix binary cache directory layout into the local store.
-
-For each `.narinfo` file in the source directory the function MUST:
-1. Parse the narinfo with the local store directory prefix
-2. Verify at least one signature against trusted public keys (unless
-   `trust_unsigned` is set)
-3. Reject the path if the narinfo `StorePath` prefix does not match the
-   local store directory
-4. Skip the path if a PathInfo already exists locally for that store path
-5. Resolve the NAR file path from the narinfo `URL` field
-6. Ingest the NAR into castore via `ingest_nar_and_hash`, verifying the
-   NAR hash matches the narinfo `NarHash`
-7. Construct and persist a PathInfo from the narinfo fields
-8. Export the castore node to the local store directory on disk
-
-The function MUST return a structured `PullReport` with counts of imported
-paths, skipped-already-present, skipped-untrusted, skipped-hash-mismatch,
-skipped-missing-nar, skipped-parse-error, and total bytes ingested.
-
-#### Scenario: Pull a single signed path from a pushed cache
-
-- GIVEN a cache directory produced by `crunch store push` with one signed path
-- AND the local store has no PathInfo for that path
-- AND the narinfo signature matches a trusted public key
-- WHEN `import_paths_from_cache_dir(handle, source, options)` is called
-- THEN the NAR is ingested into castore
-- AND a PathInfo is persisted in the local store
-- AND the output is exported to the local store directory on disk
-- AND the report shows `imported_count = 1`
-
-#### Scenario: Pull skips already-present paths
-
-- GIVEN a cache directory with one narinfo for path `hello`
-- AND the local store already has PathInfo for `hello`
-- WHEN `import_paths_from_cache_dir` is called
-- THEN no NAR is ingested for `hello`
-- AND the report shows `skipped_already_present_count = 1`
-
-#### Scenario: Pull rejects untrusted signatures by default
-
-- GIVEN a cache directory with one narinfo signed by key `unknown-1`
-- AND the trusted public keys list does not include `unknown-1`
-- AND `trust_unsigned` is false
-- WHEN `import_paths_from_cache_dir` is called
-- THEN no NAR is ingested
-- AND the report shows `skipped_untrusted_count = 1`
-
-#### Scenario: Pull accepts untrusted when trust_unsigned is set
-
-- GIVEN a cache directory with one unsigned narinfo
-- AND `trust_unsigned` is true
-- WHEN `import_paths_from_cache_dir` is called
-- THEN the NAR is ingested and PathInfo is persisted
-- AND the report shows `imported_count = 1`
-
-#### Scenario: Pull detects NAR hash mismatch
-
-- GIVEN a cache directory where the NAR file has been corrupted
-- AND the narinfo `NarHash` no longer matches the NAR content
-- WHEN `import_paths_from_cache_dir` is called
-- THEN the path is skipped
-- AND the report shows `skipped_hash_mismatch_count = 1`
-
-#### Scenario: Pull skips missing NAR files
-
-- GIVEN a cache directory where the `.narinfo` exists but the referenced
-  NAR file is absent
-- WHEN `import_paths_from_cache_dir` is called
-- THEN the path is skipped
-- AND the report shows `skipped_missing_nar_count = 1`
-
-#### Scenario: Pull rejects store prefix mismatch
-
-- GIVEN a cache directory with narinfos using `StorePath: /nix/store/...`
-- AND the local store uses prefix `/crunch/store`
-- WHEN `import_paths_from_cache_dir` is called
-- THEN those paths are skipped
-- AND the report includes a store prefix mismatch indication
-
-#### Scenario: Pull multiple paths
-
-- GIVEN a cache directory with three valid signed narinfos
-- WHEN `import_paths_from_cache_dir` is called with no path filter
-- THEN all three paths are ingested and persisted
-- AND the report shows `imported_count = 3`
-
-#### Scenario: Pull with path filter
-
-- GIVEN a cache directory with narinfos for paths `a`, `b`, and `c`
-- AND the caller requests only `[a, c]`
-- WHEN `import_paths_from_cache_dir` is called
-- THEN only paths `a` and `c` are imported
-- AND path `b` is not ingested
-
-### Requirement: CLI store pull subcommand
-
-The CLI `crunch store pull` `--from` argument MUST accept both local directory
-ID: binary.cache.cli.storepull
-paths and `http://` or `https://` URLs.
-
-When `--from` is a URL:
-- The HTTP pull path MUST be used for `http://` and `https://` URLs only
-- Unsupported URL schemes such as `file://` MUST be rejected with a clear
-  error before dispatch
-- Cache URLs with userinfo (`user@host` or `user:pass@host`) MUST be rejected
-  with a clear error before dispatch
-- Phase 1 HTTP pull MUST support only public caches and MUST NOT add auth-
-  header, token, insecure, or TLS-override behavior
-- `--all` MUST be rejected with a clear error ("--all is not supported for
-  HTTP caches; specify paths explicitly")
-- Path selectors are required
-
-When `--from` is a local path:
-- Behavior is unchanged from the directory pull implementation
-
-#### Scenario: Pull from HTTP URL
-ID: binary.cache.cli.storepull.httpurl
-
-- GIVEN `--from https://cache.example.com`
-- AND store path arguments are provided
-- WHEN `crunch store pull` runs
-- THEN paths are fetched over HTTP
-
-#### Scenario: Pull --all from HTTP is rejected
-ID: binary.cache.cli.storepull.httpallrejected
-
-- GIVEN `--from https://cache.example.com`
-- AND `--all` is passed
-- WHEN `crunch store pull` runs
-- THEN the command fails with an error message explaining that --all is not
-  supported for HTTP caches
-
-#### Scenario: Pull from HTTP requires explicit path selectors
-ID: binary.cache.cli.storepull.httprequirespaths
-
-- GIVEN `--from https://cache.example.com`
-- AND no store path arguments are provided
-- AND `--all` is not passed
-- WHEN `crunch store pull` runs
-- THEN the command fails before any HTTP request is issued
-- AND the error explains that HTTP pull requires explicit store path selectors
-
-#### Scenario: Pull rejects unsupported URL schemes
-ID: binary.cache.cli.storepull.unsupportedurlscheme
-
-- GIVEN `--from file://cache.example.com`
-- WHEN `crunch store pull` runs
-- THEN the command fails before local-path dispatch or any HTTP request
-- AND the error explains that only `http://` and `https://` URLs are supported
-
-#### Scenario: Pull rejects HTTP URL userinfo
-ID: binary.cache.cli.storepull.userinforejected
-
-- GIVEN `--from https://user@cache.example.com`
-- WHEN `crunch store pull` runs
-- THEN the command fails before any HTTP request is issued
-- AND the error explains that HTTP pull URLs must not include credentials
-
-#### Scenario: Pull imports from a pushed on-disk HTTP cache into a fresh store
-ID: binary.cache.cli.storepull.httpfreshstateroundtrip
-
-- GIVEN a pushed on-disk cache served over local HTTP
-- AND a fresh local store/state directory plus the source verifying key
-- WHEN `crunch store pull --from http://127.0.0.1:PORT <logical-path>` runs
-- THEN the requested path is imported into the fresh store
-- AND the output exists on disk after the command succeeds
+## ADDED Requirements
 
 ### Requirement: Store pull from HTTP cache
 
@@ -866,3 +413,77 @@ ID: binary.cache.remotenixcacheinfo.validation.malformedprefixmismatch
 - THEN the path is skipped before NAR download
 - AND the report records a store-directory mismatch outcome
 
+## MODIFIED Requirements
+
+### Requirement: CLI store pull subcommand
+
+The CLI `crunch store pull` `--from` argument MUST accept both local directory
+ID: binary.cache.cli.storepull
+paths and `http://` or `https://` URLs.
+
+When `--from` is a URL:
+- The HTTP pull path MUST be used for `http://` and `https://` URLs only
+- Unsupported URL schemes such as `file://` MUST be rejected with a clear
+  error before dispatch
+- Cache URLs with userinfo (`user@host` or `user:pass@host`) MUST be rejected
+  with a clear error before dispatch
+- Phase 1 HTTP pull MUST support only public caches and MUST NOT add auth-
+  header, token, insecure, or TLS-override behavior
+- `--all` MUST be rejected with a clear error ("--all is not supported for
+  HTTP caches; specify paths explicitly")
+- Path selectors are required
+
+When `--from` is a local path:
+- Behavior is unchanged from the directory pull implementation
+
+#### Scenario: Pull from HTTP URL
+ID: binary.cache.cli.storepull.httpurl
+
+- GIVEN `--from https://cache.example.com`
+- AND store path arguments are provided
+- WHEN `crunch store pull` runs
+- THEN paths are fetched over HTTP
+
+#### Scenario: Pull --all from HTTP is rejected
+ID: binary.cache.cli.storepull.httpallrejected
+
+- GIVEN `--from https://cache.example.com`
+- AND `--all` is passed
+- WHEN `crunch store pull` runs
+- THEN the command fails with an error message explaining that --all is not
+  supported for HTTP caches
+
+#### Scenario: Pull from HTTP requires explicit path selectors
+ID: binary.cache.cli.storepull.httprequirespaths
+
+- GIVEN `--from https://cache.example.com`
+- AND no store path arguments are provided
+- AND `--all` is not passed
+- WHEN `crunch store pull` runs
+- THEN the command fails before any HTTP request is issued
+- AND the error explains that HTTP pull requires explicit store path selectors
+
+#### Scenario: Pull rejects unsupported URL schemes
+ID: binary.cache.cli.storepull.unsupportedurlscheme
+
+- GIVEN `--from file://cache.example.com`
+- WHEN `crunch store pull` runs
+- THEN the command fails before local-path dispatch or any HTTP request
+- AND the error explains that only `http://` and `https://` URLs are supported
+
+#### Scenario: Pull rejects HTTP URL userinfo
+ID: binary.cache.cli.storepull.userinforejected
+
+- GIVEN `--from https://user@cache.example.com`
+- WHEN `crunch store pull` runs
+- THEN the command fails before any HTTP request is issued
+- AND the error explains that HTTP pull URLs must not include credentials
+
+#### Scenario: Pull imports from a pushed on-disk HTTP cache into a fresh store
+ID: binary.cache.cli.storepull.httpfreshstateroundtrip
+
+- GIVEN a pushed on-disk cache served over local HTTP
+- AND a fresh local store/state directory plus the source verifying key
+- WHEN `crunch store pull --from http://127.0.0.1:PORT <logical-path>` runs
+- THEN the requested path is imported into the fresh store
+- AND the output exists on disk after the command succeeds
