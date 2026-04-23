@@ -4,7 +4,9 @@ use serde_json::Value;
 use std::path::Path;
 
 const EXAMPLE_INVENTORY: &str = "examples/system-config/inventory.ncl";
+const EXAMPLE_PARTIAL_FAILURE_INVENTORY: &str = "examples/system-config/inventory-partial-failure.ncl";
 const EXAMPLE_MODULES: &str = "examples/system-config/modules";
+const EXAMPLE_BAD_MODULES: &str = "examples/system-config/bad-modules";
 
 #[test]
 fn system_eval_produces_machine_envelope_for_two_machines() {
@@ -106,8 +108,18 @@ fn system_build_json_outputs_build_envelope() {
     ]);
     let output = cmd.assert().success().get_output().clone();
     let stdout_json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let server1_report = &stdout_json["machines"]["server1"]["reports"][0];
+    let server2_report = &stdout_json["machines"]["server2"]["reports"][0];
     assert_eq!(stdout_json["machines"]["server1"]["kind"], "build");
     assert_eq!(stdout_json["machines"]["server2"]["kind"], "build");
+    assert_eq!(server1_report["schema"], "crunch-build-report-v1");
+    assert_eq!(server2_report["schema"], "crunch-build-report-v1");
+    assert!(server1_report["counts"].is_object());
+    assert!(server2_report["counts"].is_object());
+    assert!(server1_report["outcomes"].is_array());
+    assert!(server2_report["outcomes"].is_array());
+    assert!(server1_report["failed"].is_array());
+    assert!(server2_report["failed"].is_array());
 }
 
 #[test]
@@ -124,6 +136,53 @@ fn system_build_human_summary_lists_successful_machines() {
         .success()
         .stdout(predicate::str::contains("server1"))
         .stdout(predicate::str::contains("server2"));
+}
+
+#[test]
+fn system_eval_partial_failure_keeps_successful_machine_on_stdout() {
+    let mut cmd = crunch_command();
+    cmd.args([
+        "--json",
+        "system",
+        "eval",
+        EXAMPLE_PARTIAL_FAILURE_INVENTORY,
+        "--modules",
+        EXAMPLE_MODULES,
+        "--assembler",
+        "unknown-backend",
+    ]);
+    let output = cmd.assert().failure().get_output().clone();
+    let stdout_json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let stderr_lines = std::str::from_utf8(&output.stderr).unwrap().lines().collect::<Vec<_>>();
+
+    assert_eq!(stdout_json["machines"]["server1"]["kind"], "failed");
+    assert_eq!(stdout_json["machines"]["server2"]["kind"], "failed");
+    assert!(stdout_json["errors"].as_array().unwrap().iter().any(|error| {
+        error["Assembler"]["machine_name"] == "server1"
+    }));
+    assert!(stderr_lines.iter().any(|line| {
+        let json: Value = serde_json::from_str(line).unwrap();
+        json["severity"] == "error" && json["machine"] == "server1"
+    }));
+}
+
+#[test]
+fn system_eval_bad_module_contract_reports_module_name() {
+    let mut cmd = crunch_command();
+    cmd.args([
+        "system",
+        "eval",
+        EXAMPLE_INVENTORY,
+        "--modules",
+        EXAMPLE_BAD_MODULES,
+        "--machine",
+        "server1",
+    ]);
+    cmd.assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("bad-contract"))
+        .stderr(predicate::str::contains("not a function"));
 }
 
 #[test]

@@ -265,10 +265,15 @@ fn resolve_modules_dir(inventory_path: &Path, modules_dir_override: Option<&Path
         .join(DEFAULT_MODULES_DIR_NAME)
 }
 
+fn discovered_modules_dir(modules_dir: &Path) -> PathBuf {
+    modules_dir.to_path_buf()
+}
+
 fn load_validated_modules(modules_dir: &Path) -> Result<Vec<ValidatedModule>, RunError> {
-    let discovered = crunch_system::loader::discover_module_files(modules_dir)
+    let discovery_dir = discovered_modules_dir(modules_dir);
+    let discovered = crunch_system::loader::discover_module_files(&discovery_dir)
         .map_err(|error| fatal_system_error(error, 3))?;
-    let import_paths = module_import_paths(modules_dir)?;
+    let import_paths = module_import_paths(&discovery_dir)?;
     let handle = EvalThread::spawn(import_paths.iter().map(PathBuf::from).collect());
     let runtime = RuntimeBuilder::new_current_thread()
         .enable_all()
