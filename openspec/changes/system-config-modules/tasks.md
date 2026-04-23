@@ -120,24 +120,26 @@
 
 ## Phase 8: System assembler trait and NixOS backend
 
-- [ ] Define `Assembler` trait: `fn name(&self) -> &str`, `fn assemble(&self, machine_name, machine, config) -> Result<Vec<CrunchDerivation>, AssemblerError>` (ASM-1)
-- [ ] Implement `NixosPhase1Assembler`: extracts `output.nixos` from MergedConfig, emits one `CrunchDerivation` per machine with JSON config in `env`, builder writes `$out/system-config.json` (ASM-2)
-- [ ] Implement assembler registry: `BTreeMap<String, Box<dyn Assembler>>`, lookup by machine class (ASM-3)
-- [ ] Verify emitted `CrunchDerivation` is compatible with `crunch-glue::convert()` (ASM-4)
-- [ ] Implement dry-run mode: return derivations without submitting to build (ASM-6)
-- [ ] Unit test: NixOS backend — MergedConfig with `output.nixos` → CrunchDerivation with correct env and `system` from `MachineRecord.system`
-- [ ] Unit test: NixOS backend — MergedConfig without `output.nixos` → AssemblerError
-- [ ] Unit test: assembler registry — register two backends, dispatch by machine class
-- [ ] Unit test: dry-run — verify derivations returned, no build side effects
-- [ ] Unit test: backend isolation — adding a new backend requires no changes to existing code
+- [x] Define `Assembler` trait: `fn name(&self) -> &str`, `fn assemble(&self, machine_name, machine, config) -> Result<Vec<CrunchDerivation>, AssemblerError>` (ASM-1)
+- [x] Implement `NixosPhase1Assembler`: extracts `output.nixos` from MergedConfig, emits one `CrunchDerivation` per machine with JSON config in `env`, builder writes `$out/system-config.json` (ASM-2)
+- [x] Implement assembler registry: `BTreeMap<String, Box<dyn Assembler>>`, lookup by machine class (ASM-3)
+- [x] Verify emitted `CrunchDerivation` is compatible with `crunch-glue::convert()` (ASM-4)
+- [x] Implement dry-run mode: return derivations without submitting to build (ASM-6)
+- [x] Unit test: NixOS backend — MergedConfig with `output.nixos` → CrunchDerivation with correct env and `system` from `MachineRecord.system`
+- [x] Unit test: NixOS backend — MergedConfig without `output.nixos` → AssemblerError
+- [x] Unit test: assembler registry — register two backends, dispatch by machine class
+- [x] Unit test: dry-run — verify derivations returned, no build side effects
+- [x] Unit test: backend isolation — adding a new backend requires no changes to existing code
+  - Evidence: `cargo test -p crunch-system assembler:: -- --nocapture` passed with `5 passed; 0 failed` on 2026-04-22.
 
 ## Phase 9: Inventory validation
 
-- [ ] Implement `validate_inventory(inv: &Inventory) -> Result<(), Vec<SystemConfigError>>` — enforce fixed limits: max machines 4096, max instances per service 4096, max total instances 65536 (INV-5)
-- [ ] Unit test: valid inventory passes
-- [ ] Unit test: machine count limit exceeded
-- [ ] Unit test: instance per-service limit exceeded
-- [ ] Unit test: total instance limit exceeded
+- [x] Implement `validate_inventory(inv: &Inventory) -> Result<(), Vec<SystemConfigError>>` — enforce fixed limits: max machines 4096, max instances per service 4096, max total instances 65536 (INV-5)
+- [x] Unit test: valid inventory passes
+- [x] Unit test: machine count limit exceeded
+- [x] Unit test: instance per-service limit exceeded
+- [x] Unit test: total instance limit exceeded
+  - Evidence: `cargo test -p crunch-system inventory_validate:: -- --nocapture` passed with `4 passed; 0 failed` on 2026-04-22.
 
 ## Phase 10: CLI integration
 

@@ -1,3 +1,4 @@
+pub mod assembler;
 pub mod collector;
 pub mod contracts;
 pub mod error;
@@ -5,6 +6,7 @@ pub mod eval_trait;
 pub mod evaluator;
 pub mod graph;
 pub mod inventory;
+pub mod inventory_validate;
 pub mod loader;
 pub mod threading;
 
