@@ -1,5 +1,10 @@
-## ADDED Requirements
+# evaluator-trait Specification
 
+## Purpose
+
+This spec defines the dedicated-thread Nickel evaluator boundary and handle
+protocol used by the system-config pipeline.
+## Requirements
 ### Requirement: TRAIT-1 On-thread NickelEvaluator interface
 
 `crunch-system` MUST define an object-safe `NickelEvaluator` trait for the
@@ -146,3 +151,4 @@ ID: systemconfig.evaluator.trait.trait7.scenario
   `impl`
 - AND dropping the module later sends handle-based cleanup back to the eval
   thread
+

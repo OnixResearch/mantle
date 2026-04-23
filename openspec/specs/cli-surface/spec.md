@@ -1,5 +1,10 @@
-## ADDED Requirements
+# cli-surface Specification
 
+## Purpose
+
+This spec defines the public `crunch system eval` and `crunch system build`
+CLI contract for the native system-config pipeline.
+## Requirements
 ### Requirement: CLI-1 System eval command
 
 The CLI MUST provide `crunch system eval <inventory.ncl>` as the dry-run entry
@@ -187,3 +192,4 @@ ID: systemconfig.cli.surface.cli6.invalidscenario
 - WHEN the command parses CLI arguments
 - THEN stdout remains empty
 - AND the command exits non-zero with a CLI diagnostic before evaluation begins
+

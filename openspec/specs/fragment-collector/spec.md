@@ -1,5 +1,10 @@
-## ADDED Requirements
+# fragment-collector Specification
 
+## Purpose
+
+This spec defines per-machine grouping, merge behavior, provenance, and limits
+for collected system-config fragments.
+## Requirements
 ### Requirement: FRAG-1 Per-machine grouping
 
 The collector MUST group evaluated module output fragments by target machine.
@@ -104,3 +109,4 @@ ID: systemconfig.fragment.collector.frag6.scenario
 - WHEN the collector validates the merged output
 - THEN the collector fails with a fragment diagnostic
 - AND the diagnostic names the deepest offending path
+

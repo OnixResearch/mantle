@@ -1,5 +1,10 @@
-## ADDED Requirements
+# module-loader Specification
 
+## Purpose
+
+This spec defines module discovery, structural validation, identity
+assignment, and loader-side limits for system-config modules.
+## Requirements
 ### Requirement: LOADER-1 Directory scanning
 
 The loader MUST accept a directory path and return all `*.ncl` files found at
@@ -137,3 +142,4 @@ ID: systemconfig.module.loader.loader5.scenario
 - WHEN the loader scans the directory
 - THEN it fails before evaluation starts
 - AND the error names the configured module-count limit
+

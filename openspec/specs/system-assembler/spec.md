@@ -1,5 +1,10 @@
-## ADDED Requirements
+# system-assembler Specification
 
+## Purpose
+
+This spec defines assembler backends that turn merged machine configs into
+`CrunchDerivation` values for the system-config pipeline.
+## Requirements
 ### Requirement: ASM-1 Assembler trait
 
 The system layer MUST define an object-safe assembler trait that converts a
@@ -113,3 +118,4 @@ ID: systemconfig.system.assembler.asm6.scenario
 - WHEN assembly completes in dry-run mode
 - THEN stdout contains derivation records rather than built outputs
 - AND no derivation is submitted to `crunch-pipeline::build()`
+

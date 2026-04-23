@@ -1,5 +1,10 @@
-## ADDED Requirements
+# error-model Specification
 
+## Purpose
+
+This spec defines shared errors, warnings, and result-envelope semantics for
+the system-config pipeline.
+## Requirements
 ### Requirement: ERR-1 Error and warning taxonomy
 
 The system-config pipeline MUST expose a shared error taxonomy rooted in a
@@ -133,3 +138,4 @@ ID: systemconfig.error.model.err4.scenario
   failed selected machine
 - AND `SystemPipelineResult.errors` contains the failure diagnostic
 - AND `SystemPipelineResult.warnings` remains available for non-fatal warnings
+

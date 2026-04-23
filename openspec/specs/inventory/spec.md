@@ -1,5 +1,10 @@
-## ADDED Requirements
+# inventory Specification
 
+## Purpose
+
+This spec defines the structural inventory document consumed by `crunch system`
+and the boundary between inventory validation and module evaluation.
+## Requirements
 ### Requirement: INV-1 Machine records
 
 The inventory MUST contain a `machines` field whose keys are machine names and
@@ -117,3 +122,4 @@ ID: systemconfig.inventory.inv6.scenario
 - WHEN the inventory is loaded
 - THEN only inventory data is evaluated at that step
 - AND no module `impl` function is called during inventory loading
+

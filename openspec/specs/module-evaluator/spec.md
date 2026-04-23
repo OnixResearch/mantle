@@ -1,5 +1,10 @@
-## ADDED Requirements
+# module-evaluator Specification
 
+## Purpose
+
+This spec defines dependency ordering, cross-reference checks, provider and
+export threading, and failure handling for system-config module evaluation.
+## Requirements
 ### Requirement: EVAL-1 Topological sort
 
 The evaluator MUST sort modules by their declared `inputs` dependencies before
@@ -246,3 +251,4 @@ ID: systemconfig.module.evaluator.eval12.scenario
 - WHEN cross-reference validation runs
 - THEN the evaluator records a cross-reference error
 - AND it does not call the module's `impl` for that instance
+
