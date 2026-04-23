@@ -267,9 +267,12 @@ The no-std core boundary MUST stay covered by repeatable validation.
 ID: functional.core.nostd.boundary.continuously.verified
 
 Validation for this change MUST run in the repo's rustup-managed toolchain
-environment. It MUST first ensure the `wasm32-unknown-unknown` target is
-installed via `rustup target add wasm32-unknown-unknown` or fail with a clear
-prerequisite error.
+environment when rustup is available, or in the active preinstalled cargo/rustc
+environment when rustup is unavailable. It MUST first ensure the
+`wasm32-unknown-unknown` target is available, either by running
+`rustup target add wasm32-unknown-unknown` or by verifying a preinstalled
+`wasm32-unknown-unknown` target under the active `rustc` sysroot; otherwise it
+MUST fail with a clear prerequisite error.
 
 Validation MUST then include these exact commands:
 

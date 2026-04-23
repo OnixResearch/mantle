@@ -1,0 +1,811 @@
+V3 rail start 2026-04-22T19:45:37-04:00
+PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/nix/store/6jafhh81cf85d0vqwrnhl5yfc4wibxvq-protobuf-29.6/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:/nix/store/qn1pfnn2xgfwdr6avw1fnvwsabi83973-bubblewrap-0.11.0/bin:/nix/store/836lndidk1144z81npf27c7dcgmczid3-fd-10.4.2/bin:/nix/store/922crn2k3v8yaqk7anps80hba919lnds-ripgrep-15.1.0/bin:/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/home/brittonr/.local/bin:/run/wrappers/bin:/etc/profiles/per-user/brittonr/bin:/run/current-system/sw/bin
+CARGO_TARGET_DIR=/home/brittonr/git/crunch/crunch/target/v3-no-std-rail
+SNIX_BUILD_SANDBOX_SHELL=/nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox
+
+>>> rustup target prerequisite fallback
+rustup not found on PATH; verifying preinstalled target instead
+
+>>> rustc --print target-libdir --target wasm32-unknown-unknown
+/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/wasm32-unknown-unknown/lib
+
+>>> cargo check -p crunch-attestation-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+
+>>> cargo check -p crunch-project-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+
+>>> cargo check -p crunch-shell-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+
+>>> cargo check -p crunch-release-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+
+>>> cargo check -p crunch-delta-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+
+>>> cargo check -p crunch-attestation-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+
+>>> cargo check -p crunch-project-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+
+>>> cargo check -p crunch-shell-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+
+>>> cargo check -p crunch-release-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+
+>>> cargo check -p crunch-delta-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+
+>>> cargo test -p crunch-attestation-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_attestation_core-c68b395cbf714334)
+
+running 65 tests
+test digest::tests::digest_rejects_uppercase_hex ... ok
+test canonical::tests::canonicalization_rejects_empty_required_field ... ok
+test canonical::tests::canonicalization_rejects_duplicate_node_ids ... ok
+test canonical::tests::canonicalization_rejects_invalid_project_root ... ok
+test canonical::tests::canonicalization_rejects_invalid_artifact_subject ... ok
+test canonical::tests::canonicalization_rejects_missing_edge_endpoint ... ok
+test canonical::tests::canonicalization_rejects_closure_root_missing_from_members ... ok
+test canonical::tests::canonicalization_rejects_invalid_closure_root_kind ... ok
+test canonical::tests::canonicalization_rejects_oversized_alias_collection ... ok
+test policy::tests::policy_rejects_unsupported_independence_field ... ok
+test policy::tests::policy_json_round_trip ... ok
+test policy::tests::policy_rejects_wrong_schema_tag ... ok
+test policy::tests::revocations_json_round_trip ... ok
+test policy::tests::revocations_rejects_wrong_schema_tag ... ok
+test canonical::tests::artifact_digest_ignores_node_and_edge_insertion_order ... ok
+test release::tests::final_class_serializes_as_kebab ... ok
+test release::tests::matching_digest_sets_compare_equal ... ok
+test release::tests::not_evaluated_policy_mirrors_technical_class ... ok
+test release::tests::mismatched_digest_sets_compare_unequal ... ok
+test release::tests::insufficient_policy_mirrors_technical_class ... ok
+test release::tests::detached_signature_rejects_missing_colon ... ok
+test release::tests::release_rejects_empty_release_id ... ok
+test release::tests::detached_signature_rejects_empty_payload ... ok
+test release::tests::final_class_ordering_matches_spec ... ok
+test release::tests::release_rejects_oversized_binary_digests ... ok
+test digest::tests::digest_round_trip_hex ... ok
+test policy::tests::zero_witnesses_yield_self_proof_valid ... ok
+test release::tests::binary_digests_sorted_regardless_of_insertion_order ... ok
+test policy::tests::one_matching_witness_raises_technical_class ... ok
+test policy::tests::witness_with_wrong_release_reference_does_not_count ... ok
+test policy::tests::insufficient_quorum_fails_policy_with_technical_success ... ok
+test release::tests::release_rejects_empty_binary_digest_name ... ok
+test policy::tests::witness_with_wrong_rebuilt_digest_does_not_count ... ok
+test policy::tests::policy_change_does_not_affect_attestation_digests ... ok
+test release::tests::release_attestation_binds_manifest_and_binary_digests ... ok
+test policy::tests::satisfied_quorum_promotes_final_class ... ok
+test policy::tests::revoked_attestation_digest_degrades_policy ... ok
+test policy::tests::same_signer_key_cannot_satisfy_signer_key_independence ... ok
+test release::tests::release_rejects_wrong_schema_tag ... ok
+test policy::tests::revoked_key_degrades_policy_without_changing_technical_result ... ok
+test release::tests::technical_class_ordering_matches_spec ... ok
+test release::tests::satisfied_policy_promotes_to_quorum_satisfied ... ok
+test canonical::tests::project_digest_ignores_selection_order ... ok
+test release::tests::detached_signature_rejects_empty_key_name ... ok
+test release::tests::detached_signature_rejects_wrong_length ... ok
+test release::tests::detached_signature_round_trip ... ok
+test release::tests::technical_class_serializes_as_kebab ... ok
+test canonical::tests::project_digest_changes_when_schema_version_changes ... ok
+test release::tests::release_canonical_json_has_correct_key_order ... ok
+test release::tests::trust_tier_separates_all_three_fields ... ok
+test policy::tests::shared_host_class_cannot_satisfy_host_class_independence ... ok
+test release::tests::release_attestation_json_round_trip ... ok
+test policy::tests::distinct_signer_keys_can_satisfy_signer_key_independence ... ok
+test release::tests::signature_suite_serializes_as_kebab ... ok
+test release::tests::release_attestation_digest_is_stable_across_serializations ... ok
+test policy::tests::revocations_applied_before_quorum_counting ... ok
+test policy::tests::same_identity_cannot_satisfy_independence ... ok
+test release::tests::witness_attestation_binds_to_release_digest ... ok
+test canonical::tests::closure_digest_ignores_discovery_order ... ok
+test release::tests::witness_canonical_json_has_correct_key_order ... ok
+test release::tests::witness_rejects_empty_witness_identity ... ok
+test release::tests::witness_rejects_wrong_schema_tag ... ok
+test release::tests::witness_rejects_oversized_env_field ... ok
+test release::tests::witness_attestation_json_round_trip ... ok
+test release::tests::witness_attestation_digest_is_stable_across_serializations ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_attestation_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-project-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_project_core-dcb0eab53e883ddd)
+
+running 77 tests
+test generate::tests::fingerprint_deterministic ... ok
+test generate::tests::fingerprint_differs ... ok
+test drift::tests::empty_lock_in_sync_with_empty_generated ... ok
+test drift::tests::missing_file ... ok
+test generate::tests::needs_quoting_cases ... ok
+test generate::tests::generate_panics_on_unlocked_patch_reference ... ok
+test generate::tests::generate_empty_lock ... ok
+test lock::tests::empty_lockfile_is_valid ... ok
+test lock::tests::lockfile_default_version_is_current ... ok
+test generate::tests::escape_special_chars ... ok
+test lock::tests::lockfile_detects_empty_hash ... ok
+test generate::tests::generate_quoted_patch_name_escapes_embedded_quote ... ok
+test generate::tests::generate_with_patches ... ok
+test generate::tests::generate_git_entry ... ok
+test drift::tests::drifted ... ok
+test generate::tests::generate_file_entry ... ok
+test generate::tests::generate_quoted_name_escapes_embedded_quote ... ok
+test generate::tests::generate_includes_patch_metadata ... ok
+test generate::tests::generate_remote_patch_metadata ... ok
+test generate::tests::generate_hyphenated_name_quoted ... ok
+test drift::tests::in_sync ... ok
+test lock::tests::lockfile_detects_unlocked_patch ... ok
+test lock::tests::locked_patch_source_variants ... ok
+test lock::tests::locked_kind_git_serde ... ok
+test lock::tests::lockfile_json_stability ... ok
+test lock::tests::lockfile_entry_with_all_fields ... ok
+test lock::tests::lockfile_validates_clean ... ok
+test manifest::tests::git_reference_default_is_main ... ok
+test lock::tests::lockfile_json_roundtrip ... ok
+test manifest::tests::empty_name_is_invalid ... ok
+test manifest::tests::manifest_rejects_bad_version ... ok
+test manifest::tests::manifest_detects_duplicate_names ... ok
+test manifest::tests::manifest_rejects_incompatible_version ... ok
+test manifest::tests::manifest_detects_undefined_patch ... ok
+test manifest::tests::manifest_accepts_compatible_version ... ok
+test attestation::tests::project_attestation_rejects_missing_locked_patch ... ok
+test manifest::tests::manifest_validates_clean ... ok
+test manifest::tests::schema_version_accessor ... ok
+test merge::tests::empty_manifest_and_lock_is_clean ... ok
+test merge::tests::clean_merge ... ok
+test merge::tests::filter_inputs_finds_existing ... ok
+test merge::tests::filter_inputs_reports_missing ... ok
+test merge::tests::frozen_without_lock ... ok
+test merge::tests::inputs_needing_refresh_includes_missing ... ok
+test merge::tests::inputs_needing_refresh_skips_frozen ... ok
+test merge::tests::missing_lock_entry ... ok
+test merge::tests::kind_mismatch ... ok
+test manifest::tests::manifest_serde_roundtrip ... ok
+test merge::tests::orphaned_entries_detected ... ok
+test merge::tests::orphaned_lock_entry ... ok
+test mirrors::tests::duplicate_rejected ... ok
+test mirrors::tests::empty_url_rejected ... ok
+test mirrors::tests::unsupported_scheme_rejected ... ok
+test mirrors::tests::url_with_mirrors_order ... ok
+test mirrors::tests::url_with_no_mirrors ... ok
+test mirrors::tests::valid_mirrors ... ok
+test refresh::tests::apply_outcomes_removes_orphaned_patches ... ok
+test refresh::tests::apply_outcomes_reverts_input_when_patch_resolution_fails ... ok
+test refresh::tests::apply_outcomes_updates_lock_and_resolves_patches ... ok
+test refresh::tests::plan_refresh_inputs_filters_selected_inputs ... ok
+test refresh::tests::list_stale_separates_changed_and_failed_inputs ... ok
+test refresh::tests::refresh_inputs_marks_frozen_without_resolution ... ok
+test refresh::tests::refresh_inputs_marks_matching_entry_unchanged ... ok
+test refresh::tests::refresh_inputs_marks_resolved_entry_updated ... ok
+test upgrade::tests::upgrade_0_9_0_to_1_0_0 ... ok
+test upgrade::tests::upgrade_current_is_noop ... ok
+test upgrade::tests::upgrade_future_version_fails ... ok
+test upgrade::tests::upgrade_preserves_all_data ... ok
+test upgrade::tests::upgrade_unknown_old_version_fails ... ok
+test version::tests::compatibility_check ... ok
+test version::tests::current_version_parses ... ok
+test version::tests::parse_rejects_malformed ... ok
+test version::tests::parse_roundtrip ... ok
+test version::tests::serde_roundtrip ... ok
+test version::tests::upgrade_check ... ok
+test attestation::tests::project_attestation_records_locked_sources_patches_and_roots ... ok
+test attestation::tests::project_attestation_canonicalizes_root_order ... ok
+
+test result: ok. 77 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_project_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-shell-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell_core-6e33e38dbb532a25)
+
+running 17 tests
+test plan::tests::crunch_shell_always_set ... ok
+test plan::tests::empty_path_is_error ... ok
+test plan::tests::env_merge_basic ... ok
+test plan::tests::hook_passthrough ... ok
+test plan::tests::no_hook ... ok
+test types::tests::empty_sidecar_defaults ... ok
+test plan::tests::protected_var_absent_from_host_not_injected ... ok
+test types::tests::missing_version ... ok
+test plan::tests::all_protected_vars_defended ... ok
+test plan::tests::crunch_shell_overrides_sidecar ... ok
+test plan::tests::path_dedup_first_wins ... ok
+test plan::tests::path_ordering_with_before_sidecar_before_host ... ok
+test plan::tests::protected_var_skipped_with_warning ... ok
+test types::tests::sidecar_full_json_parse ... ok
+test types::tests::unknown_fields_ignored ... ok
+test types::tests::version_zero_rejected ... ok
+test types::tests::unsupported_version ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_shell_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-release-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_release_core-79bbd8e80cfa98b3)
+
+running 6 tests
+test manifest::tests::validate_rejects_prerequisite_inventory_linkage_mismatch ... ok
+test manifest::tests::canonical_bytes_are_stable_and_compact ... ok
+test manifest::tests::validate_rejects_absolute_member_path ... ok
+test manifest::tests::validate_rejects_stage2_digest_not_present_in_binaries ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_wrong_schema ... ok
+test manifest::tests::extract_full_proof_identity_fields_accepts_valid_manifest ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_release_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-delta-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_delta_core-e7452ba2db12ad91)
+
+running 7 tests
+test model::tests::chunk_profile_v1_matches_spec ... ok
+test planner::tests::planner_matches_fixed_suite_targets ... ok
+test negotiation::tests::chunk_profile_wire_v1_matches_runtime_profile ... ok
+test planner::tests::known_output_reuses_whole_output ... ok
+test negotiation::tests::duplicate_version_offer_is_rejected ... ok
+test model::tests::blob_validation_rejects_mismatched_chunk_total ... ok
+test planner::tests::prefix_mismatch_is_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_delta_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-delta-core duplicate_version_offer_is_rejected
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_delta_core-e7452ba2db12ad91)
+
+running 1 test
+test negotiation::tests::duplicate_version_offer_is_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-delta-core prefix_mismatch_is_rejected
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_delta_core-e7452ba2db12ad91)
+
+running 1 test
+test planner::tests::prefix_mismatch_is_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_attestation-70ab3cc2669e3b8c)
+
+running 1 test
+test discovery::tests::shell_adapter_keeps_discovery_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_project-53ba0695fff35dac)
+
+running 1 test
+test refresh_adapter::tests::shell_adapter_keeps_refresh_io_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/integration_nickel.rs (target/v3-no-std-rail/debug/deps/integration_nickel-aadfd82328e831f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-shell adapter_preserves_path_order_and_appends_bin
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell-5204342a32808016)
+
+running 1 test
+test adapter::tests::adapter_preserves_path_order_and_appends_bin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+
+
+>>> cargo test -p crunch-shell non_utf8_with_path_is_rejected
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell-5204342a32808016)
+
+running 1 test
+test adapter::tests::non_utf8_with_path_is_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch --bin crunch create_and_verify_release_bundle_round_trip
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running unittests src/main.rs (target/v3-no-std-rail/debug/deps/crunch-91c510bafde8685f)
+
+running 1 test
+test release_evidence::tests::create_and_verify_release_bundle_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 165 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/main.rs (target/v3-no-std-rail/debug/deps/crunch-91c510bafde8685f)
+
+running 1 test
+test release_evidence::tests::load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 165 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_manifest_schema_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.04s
+
+
+>>> cargo test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_missing_workflow_provenance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+
+
+>>> cargo test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_claim_boundary_violation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+
+
+>>> cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
+
+>>> cargo test -p crunch-delta substitution_adapter_keeps_async_store_and_network_in_shell
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_delta-6dbb5ff303485c74)
+
+running 1 test
+test substitution::tests::substitution_adapter_keeps_async_store_and_network_in_shell ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.00s
+
+
+>>> cargo test -p crunch-delta delta_facade_reexports_core_planner_types
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_delta-6dbb5ff303485c74)
+
+running 1 test
+test planner::tests::delta_facade_reexports_core_planner_types ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.00s
+
+
+>>> ./scripts/check-no-std-core-deps.sh
+dependency allowlist OK: arrayref, arrayvec, blake3, cfg-if, constant_time_eq, crunch-attestation-core, crunch-delta-core, crunch-project-core, crunch-release-core, crunch-shell-core, data-encoding, itoa, memchr, serde, serde_core, serde_json, zmij
+
+>>> ./scripts/check-no-std-core-purity.sh
+purity check OK
+
+>>> ./scripts/check-no-std-core-scope.sh
+scope check OK
+
+>>> ./scripts/check-no-std-core-api-shape.sh
+API shape check OK
+
+>>> ./scripts/check-no-std-core-ownership.sh
+ownership check OK: crates/crunch-delta/src/fixtures.rs, crates/crunch-delta/src/lib.rs, crates/crunch-delta/src/manifest.rs, crates/crunch-delta/src/model.rs, crates/crunch-delta/src/negotiation.rs, crates/crunch-delta/src/planner.rs, crates/crunch-delta/src/substitution.rs, crates/crunch-shell/src/adapter.rs, crates/crunch-shell/src/lib.rs, crates/crunch-shell/src/types.rs, src/release_cmd.rs, src/release_evidence.rs
+
+>>> ./scripts/check-no-std-core.sh
+rustup not found; using preinstalled cargo/rustc on PATH
+toolchain: preinstalled
+[1/12] openspec validate functional-core
+running: openspec validate functional-core
+Specification 'functional-core' is valid
+[2/12] host cargo checks
+running: cargo check -p crunch-attestation-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+running: cargo check -p crunch-project-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+running: cargo check -p crunch-shell-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+running: cargo check -p crunch-release-core
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+[3/12] wasm cargo checks
+running: cargo check -p crunch-attestation-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+running: cargo check -p crunch-project-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+running: cargo check -p crunch-shell-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+running: cargo check -p crunch-release-core --target wasm32-unknown-unknown
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[4/12] core tests
+running: cargo test -p crunch-attestation-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_attestation_core-c68b395cbf714334)
+
+running 65 tests
+test canonical::tests::canonicalization_rejects_duplicate_node_ids ... ok
+test canonical::tests::canonicalization_rejects_empty_required_field ... ok
+test canonical::tests::canonicalization_rejects_invalid_artifact_subject ... ok
+test canonical::tests::canonicalization_rejects_closure_root_missing_from_members ... ok
+test canonical::tests::artifact_digest_ignores_node_and_edge_insertion_order ... ok
+test canonical::tests::canonicalization_rejects_invalid_closure_root_kind ... ok
+test canonical::tests::canonicalization_rejects_missing_edge_endpoint ... ok
+test canonical::tests::canonicalization_rejects_oversized_alias_collection ... ok
+test canonical::tests::canonicalization_rejects_invalid_project_root ... ok
+test digest::tests::digest_rejects_uppercase_hex ... ok
+test digest::tests::digest_round_trip_hex ... ok
+test canonical::tests::closure_digest_ignores_discovery_order ... ok
+test canonical::tests::project_digest_changes_when_schema_version_changes ... ok
+test policy::tests::insufficient_quorum_fails_policy_with_technical_success ... ok
+test policy::tests::one_matching_witness_raises_technical_class ... ok
+test policy::tests::policy_change_does_not_affect_attestation_digests ... ok
+test policy::tests::policy_rejects_unsupported_independence_field ... ok
+test policy::tests::distinct_signer_keys_can_satisfy_signer_key_independence ... ok
+test policy::tests::policy_json_round_trip ... ok
+test canonical::tests::project_digest_ignores_selection_order ... ok
+test policy::tests::policy_rejects_wrong_schema_tag ... ok
+test policy::tests::revocations_json_round_trip ... ok
+test policy::tests::revocations_rejects_wrong_schema_tag ... ok
+test policy::tests::revocations_applied_before_quorum_counting ... ok
+test policy::tests::revoked_attestation_digest_degrades_policy ... ok
+test policy::tests::same_identity_cannot_satisfy_independence ... ok
+test policy::tests::revoked_key_degrades_policy_without_changing_technical_result ... ok
+test policy::tests::same_signer_key_cannot_satisfy_signer_key_independence ... ok
+test policy::tests::shared_host_class_cannot_satisfy_host_class_independence ... ok
+test policy::tests::satisfied_quorum_promotes_final_class ... ok
+test policy::tests::witness_with_wrong_rebuilt_digest_does_not_count ... ok
+test policy::tests::witness_with_wrong_release_reference_does_not_count ... ok
+test release::tests::detached_signature_rejects_empty_key_name ... ok
+test release::tests::detached_signature_rejects_empty_payload ... ok
+test release::tests::detached_signature_rejects_missing_colon ... ok
+test policy::tests::zero_witnesses_yield_self_proof_valid ... ok
+test release::tests::binary_digests_sorted_regardless_of_insertion_order ... ok
+test release::tests::detached_signature_rejects_wrong_length ... ok
+test release::tests::detached_signature_round_trip ... ok
+test release::tests::final_class_ordering_matches_spec ... ok
+test release::tests::insufficient_policy_mirrors_technical_class ... ok
+test release::tests::final_class_serializes_as_kebab ... ok
+test release::tests::matching_digest_sets_compare_equal ... ok
+test release::tests::mismatched_digest_sets_compare_unequal ... ok
+test release::tests::not_evaluated_policy_mirrors_technical_class ... ok
+test release::tests::release_attestation_binds_manifest_and_binary_digests ... ok
+test release::tests::release_rejects_empty_binary_digest_name ... ok
+test release::tests::release_rejects_empty_release_id ... ok
+test release::tests::release_canonical_json_has_correct_key_order ... ok
+test release::tests::release_rejects_wrong_schema_tag ... ok
+test release::tests::satisfied_policy_promotes_to_quorum_satisfied ... ok
+test release::tests::release_attestation_digest_is_stable_across_serializations ... ok
+test release::tests::release_attestation_json_round_trip ... ok
+test release::tests::signature_suite_serializes_as_kebab ... ok
+test release::tests::technical_class_serializes_as_kebab ... ok
+test release::tests::technical_class_ordering_matches_spec ... ok
+test release::tests::trust_tier_separates_all_three_fields ... ok
+test release::tests::release_rejects_oversized_binary_digests ... ok
+test release::tests::witness_attestation_binds_to_release_digest ... ok
+test release::tests::witness_rejects_oversized_env_field ... ok
+test release::tests::witness_rejects_empty_witness_identity ... ok
+test release::tests::witness_rejects_wrong_schema_tag ... ok
+test release::tests::witness_canonical_json_has_correct_key_order ... ok
+test release::tests::witness_attestation_json_round_trip ... ok
+test release::tests::witness_attestation_digest_is_stable_across_serializations ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_attestation_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: cargo test -p crunch-project-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_project_core-dcb0eab53e883ddd)
+
+running 77 tests
+test drift::tests::empty_lock_in_sync_with_empty_generated ... ok
+test drift::tests::drifted ... ok
+test drift::tests::missing_file ... ok
+test generate::tests::fingerprint_deterministic ... ok
+test drift::tests::in_sync ... ok
+test generate::tests::fingerprint_differs ... ok
+test generate::tests::escape_special_chars ... ok
+test attestation::tests::project_attestation_rejects_missing_locked_patch ... ok
+test generate::tests::generate_empty_lock ... ok
+test generate::tests::generate_file_entry ... ok
+test generate::tests::generate_hyphenated_name_quoted ... ok
+test generate::tests::generate_includes_patch_metadata ... ok
+test generate::tests::generate_git_entry ... ok
+test generate::tests::generate_quoted_name_escapes_embedded_quote ... ok
+test generate::tests::generate_quoted_patch_name_escapes_embedded_quote ... ok
+test generate::tests::generate_panics_on_unlocked_patch_reference ... ok
+test generate::tests::generate_with_patches ... ok
+test generate::tests::needs_quoting_cases ... ok
+test lock::tests::empty_lockfile_is_valid ... ok
+test generate::tests::generate_remote_patch_metadata ... ok
+test lock::tests::locked_kind_git_serde ... ok
+test lock::tests::lockfile_default_version_is_current ... ok
+test lock::tests::locked_patch_source_variants ... ok
+test attestation::tests::project_attestation_records_locked_sources_patches_and_roots ... ok
+test lock::tests::lockfile_detects_empty_hash ... ok
+test lock::tests::lockfile_detects_unlocked_patch ... ok
+test lock::tests::lockfile_json_stability ... ok
+test lock::tests::lockfile_entry_with_all_fields ... ok
+test lock::tests::lockfile_validates_clean ... ok
+test manifest::tests::empty_name_is_invalid ... ok
+test manifest::tests::git_reference_default_is_main ... ok
+test manifest::tests::manifest_accepts_compatible_version ... ok
+test manifest::tests::manifest_detects_duplicate_names ... ok
+test lock::tests::lockfile_json_roundtrip ... ok
+test manifest::tests::manifest_detects_undefined_patch ... ok
+test manifest::tests::manifest_rejects_bad_version ... ok
+test manifest::tests::manifest_rejects_incompatible_version ... ok
+test manifest::tests::manifest_validates_clean ... ok
+test manifest::tests::schema_version_accessor ... ok
+test merge::tests::empty_manifest_and_lock_is_clean ... ok
+test merge::tests::clean_merge ... ok
+test merge::tests::filter_inputs_finds_existing ... ok
+test merge::tests::filter_inputs_reports_missing ... ok
+test merge::tests::frozen_without_lock ... ok
+test merge::tests::inputs_needing_refresh_includes_missing ... ok
+test merge::tests::inputs_needing_refresh_skips_frozen ... ok
+test manifest::tests::manifest_serde_roundtrip ... ok
+test merge::tests::kind_mismatch ... ok
+test merge::tests::missing_lock_entry ... ok
+test merge::tests::orphaned_entries_detected ... ok
+test mirrors::tests::duplicate_rejected ... ok
+test merge::tests::orphaned_lock_entry ... ok
+test mirrors::tests::empty_url_rejected ... ok
+test mirrors::tests::url_with_mirrors_order ... ok
+test mirrors::tests::unsupported_scheme_rejected ... ok
+test mirrors::tests::url_with_no_mirrors ... ok
+test mirrors::tests::valid_mirrors ... ok
+test refresh::tests::apply_outcomes_removes_orphaned_patches ... ok
+test refresh::tests::apply_outcomes_reverts_input_when_patch_resolution_fails ... ok
+test attestation::tests::project_attestation_canonicalizes_root_order ... ok
+test refresh::tests::apply_outcomes_updates_lock_and_resolves_patches ... ok
+test refresh::tests::plan_refresh_inputs_filters_selected_inputs ... ok
+test refresh::tests::list_stale_separates_changed_and_failed_inputs ... ok
+test refresh::tests::refresh_inputs_marks_frozen_without_resolution ... ok
+test refresh::tests::refresh_inputs_marks_resolved_entry_updated ... ok
+test upgrade::tests::upgrade_current_is_noop ... ok
+test upgrade::tests::upgrade_0_9_0_to_1_0_0 ... ok
+test refresh::tests::refresh_inputs_marks_matching_entry_unchanged ... ok
+test upgrade::tests::upgrade_future_version_fails ... ok
+test upgrade::tests::upgrade_unknown_old_version_fails ... ok
+test upgrade::tests::upgrade_preserves_all_data ... ok
+test version::tests::compatibility_check ... ok
+test version::tests::parse_roundtrip ... ok
+test version::tests::current_version_parses ... ok
+test version::tests::serde_roundtrip ... ok
+test version::tests::parse_rejects_malformed ... ok
+test version::tests::upgrade_check ... ok
+
+test result: ok. 77 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_project_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: cargo test -p crunch-shell-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell_core-6e33e38dbb532a25)
+
+running 17 tests
+test plan::tests::crunch_shell_always_set ... ok
+test plan::tests::empty_path_is_error ... ok
+test plan::tests::crunch_shell_overrides_sidecar ... ok
+test plan::tests::all_protected_vars_defended ... ok
+test plan::tests::env_merge_basic ... ok
+test plan::tests::path_dedup_first_wins ... ok
+test plan::tests::hook_passthrough ... ok
+test plan::tests::no_hook ... ok
+test plan::tests::protected_var_absent_from_host_not_injected ... ok
+test plan::tests::path_ordering_with_before_sidecar_before_host ... ok
+test plan::tests::protected_var_skipped_with_warning ... ok
+test types::tests::empty_sidecar_defaults ... ok
+test types::tests::missing_version ... ok
+test types::tests::sidecar_full_json_parse ... ok
+test types::tests::unknown_fields_ignored ... ok
+test types::tests::unsupported_version ... ok
+test types::tests::version_zero_rejected ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_shell_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: cargo test -p crunch-release-core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_release_core-79bbd8e80cfa98b3)
+
+running 6 tests
+test manifest::tests::validate_rejects_prerequisite_inventory_linkage_mismatch ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_wrong_schema ... ok
+test manifest::tests::validate_rejects_absolute_member_path ... ok
+test manifest::tests::validate_rejects_stage2_digest_not_present_in_binaries ... ok
+test manifest::tests::extract_full_proof_identity_fields_accepts_valid_manifest ... ok
+test manifest::tests::canonical_bytes_are_stable_and_compact ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_release_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[5/12] first-wave std adapter tests
+running: cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_attestation-70ab3cc2669e3b8c)
+
+running 1 test
+test discovery::tests::shell_adapter_keeps_discovery_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+running: cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_project-53ba0695fff35dac)
+
+running 1 test
+test refresh_adapter::tests::shell_adapter_keeps_refresh_io_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/integration_nickel.rs (target/v3-no-std-rail/debug/deps/integration_nickel-aadfd82328e831f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+[6/12] shell activation boundary tests
+running: cargo test -p crunch-shell adapter_preserves_path_order_and_appends_bin
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell-5204342a32808016)
+
+running 1 test
+test adapter::tests::adapter_preserves_path_order_and_appends_bin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+running: cargo test -p crunch-shell non_utf8_with_path_is_rejected
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/v3-no-std-rail/debug/deps/crunch_shell-5204342a32808016)
+
+running 1 test
+test adapter::tests::non_utf8_with_path_is_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+[7/12] release boundary tests
+running: cargo test -p crunch --bin crunch create_and_verify_release_bundle_round_trip
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/main.rs (target/v3-no-std-rail/debug/deps/crunch-91c510bafde8685f)
+
+running 1 test
+test release_evidence::tests::create_and_verify_release_bundle_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 165 filtered out; finished in 0.00s
+
+running: cargo test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/main.rs (target/v3-no-std-rail/debug/deps/crunch-91c510bafde8685f)
+
+running 1 test
+test release_evidence::tests::load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 165 filtered out; finished in 0.00s
+
+running: cargo test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_manifest_schema_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
+running: cargo test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_missing_workflow_provenance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
+running: cargo test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_claim_boundary_violation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
+running: cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/release_cli.rs (target/v3-no-std-rail/debug/deps/release_cli-3e852437f55c7e7d)
+
+running 1 test
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
+[8/12] dependency boundary
+running: ./scripts/check-no-std-core-deps.sh
+dependency allowlist OK: arrayref, arrayvec, blake3, cfg-if, constant_time_eq, crunch-attestation-core, crunch-delta-core, crunch-project-core, crunch-release-core, crunch-shell-core, data-encoding, itoa, memchr, serde, serde_core, serde_json, zmij
+[9/12] purity
+running: ./scripts/check-no-std-core-purity.sh
+purity check OK
+[10/12] scope
+running: ./scripts/check-no-std-core-scope.sh
+scope check OK
+[11/12] API shape
+running: ./scripts/check-no-std-core-api-shape.sh
+API shape check OK
+[12/12] ownership
+running: ./scripts/check-no-std-core-ownership.sh
+ownership check OK: crates/crunch-delta/src/fixtures.rs, crates/crunch-delta/src/lib.rs, crates/crunch-delta/src/manifest.rs, crates/crunch-delta/src/model.rs, crates/crunch-delta/src/negotiation.rs, crates/crunch-delta/src/planner.rs, crates/crunch-delta/src/substitution.rs, crates/crunch-shell/src/adapter.rs, crates/crunch-shell/src/lib.rs, crates/crunch-shell/src/types.rs, src/release_cmd.rs, src/release_evidence.rs
+
+V3 rail success 2026-04-22T19:45:49-04:00

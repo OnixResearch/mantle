@@ -73,6 +73,20 @@ Date: 2026-04-22
 - `crates/crunch-delta/src/lib.rs` → `adapter-only`
   - crate-root re-exports and std-facing compatibility wiring stay thin around
     `crunch-delta-core`
+- `crates/crunch-delta/src/fixtures.rs` → `unrelated`
+  - benchmark-only fixture construction and wire-size modeling remain std-owned
+    helper code; this file does not contain production delta planning/protocol
+    business logic
+- `crates/crunch-delta/src/model.rs` → `adapter-only`
+  - std-facing `B3Digest` / `HashSet` façades and conversion helpers translate
+    runtime-shaped values into owned `crunch-delta-core` requests before core
+    calls
+- `crates/crunch-delta/src/negotiation.rs` → `adapter-only`
+  - façade-owned wire types and `std::error::Error` mapping stay in std while
+    negotiation semantics remain in `crunch-delta-core`
+- `crates/crunch-delta/src/planner.rs` → `adapter-only`
+  - std-facing `PlanError` and borrowed façade conversion remain here while the
+    transfer-planning logic itself stays in `crunch-delta-core`
 - `crates/crunch-delta/src/manifest.rs` → `adapter-only`
   - castore probing and receiver-manifest construction remain std-owned shell
     work before the core boundary

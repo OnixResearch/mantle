@@ -21,7 +21,7 @@ Supplemental adopted-core checker evidence captured the same session:
 - `python3 scripts/no_std_core_checks.py api-shape`
   - `API shape check OK`
 - `python3 scripts/no_std_core_checks.py ownership`
-  - `ownership check OK: crates/crunch-delta/src/lib.rs, crates/crunch-delta/src/manifest.rs, crates/crunch-delta/src/substitution.rs, crates/crunch-shell/src/adapter.rs, crates/crunch-shell/src/lib.rs, crates/crunch-shell/src/types.rs, src/release_cmd.rs, src/release_evidence.rs`
+  - `ownership check OK: crates/crunch-delta/src/fixtures.rs, crates/crunch-delta/src/lib.rs, crates/crunch-delta/src/manifest.rs, crates/crunch-delta/src/model.rs, crates/crunch-delta/src/negotiation.rs, crates/crunch-delta/src/planner.rs, crates/crunch-delta/src/substitution.rs, crates/crunch-shell/src/adapter.rs, crates/crunch-shell/src/lib.rs, crates/crunch-shell/src/types.rs, src/release_cmd.rs, src/release_evidence.rs`
 - `python3 scripts/no_std_core_checks.py deps`
   - `dependency allowlist OK: ... crunch-delta-core ...`
 
@@ -63,16 +63,24 @@ Supplemental adopted-core checker evidence captured the same session:
 - records `crates/crunch-delta/src/lib.rs` as `adapter-only`
 - records `crates/crunch-delta/src/manifest.rs` as `adapter-only`
 - records `crates/crunch-delta/src/substitution.rs` as `adapter-only`
-- review verdict explicitly says delta planning/protocol business logic remains in `crunch-delta-core`
+- records touched std delta files from the history-union derivation through `HEAD`:
+  - `crates/crunch-delta/src/fixtures.rs` as `unrelated`
+  - `crates/crunch-delta/src/model.rs` as `adapter-only`
+  - `crates/crunch-delta/src/negotiation.rs` as `adapter-only`
+  - `crates/crunch-delta/src/planner.rs` as `adapter-only`
+- review verdict explicitly says shell/release business logic remains in `crunch-shell-core` / `crunch-release-core` while delta planning/protocol business logic remains in `crunch-delta-core`
 
 ## Proposal-stage transcript linkage
 
-This packet intentionally references the proposal-stage validation transcript required by the task:
+This packet intentionally verifies the proposal-stage validation transcript required by the task:
 
 - `openspec/changes/delta-functional-core/evidence/proposal-validation-2026-04-22.md`
+- transcript contains `openspec validate delta-functional-core` with `Change 'delta-functional-core' is valid`
+- transcript contains `openspec_gate stage=proposal change=delta-functional-core` with `VERDICT: FAIL`
+- transcript also preserves the captured proposal-gate findings about the initial missing proposal-stage evidence file, missing `design.md` / `tasks.md` in the first review packet, and tightened semantic-parity / negative-case verification language
 
 ## Verdict
 
 V1 satisfied on 2026-04-22.
 
-The workspace tier now names `crunch-delta-core` alongside the earlier adopted cores, keeps `crunch-delta` as the std adaptor layer, and records the delta adaptor files in both the adopted-core inventory and the ownership review.
+The workspace tier now names `crunch-delta-core` alongside the earlier adopted cores, keeps `crunch-delta` as the std adaptor layer, records the delta adaptor files plus the touched std delta files in both the adopted-core inventory / ownership review story, and verifies that the proposal-stage transcript contains the required validate output plus proposal-gate rerun findings.
