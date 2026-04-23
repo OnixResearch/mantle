@@ -262,13 +262,20 @@ fn load_validated_modules(modules_dir: &Path) -> Result<Vec<ValidatedModule>, Ru
     for (name, path) in discovered {
         let source = std::fs::read_to_string(&path)
             .map_err(|error| RunError::Internal(format!("reading module {}: {error}", path.display())))?;
-        let json = crunch_eval::evaluate_str_to_json(&source, &import_paths)
-            .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))?;
-        let value: Value = serde_json::from_str(&json)
+        let metadata_json = module_metadata_json(&source, &path, &import_paths)?;
+        let value: Value = serde_json::from_str(&metadata_json)
             .map_err(|error| RunError::Internal(format!("deserializing module {}: {error}", path.display())))?;
         modules.push(validate_module_json(&name, &value).map_err(|error| fatal_system_error(error, 3))?);
     }
     Ok(modules)
+}
+
+fn module_metadata_json(source: &str, path: &Path, import_paths: &[OsString]) -> Result<String, RunError> {
+    let metadata_source = format!(
+        "let module = ({source}) in let inputs = if std.record.has_field \"inputs\" module then module.inputs else [] in let consumes_providers = if std.record.has_field \"consumes_providers\" module then module.consumes_providers else [] in let produces_providers = if std.record.has_field \"produces_providers\" module then module.produces_providers else [] in let priority = if std.record.has_field \"priority\" module then module.priority else 1000 in {{ interface = module.interface, inputs = inputs, consumes_providers = consumes_providers, produces_providers = produces_providers, priority = priority, impl_present = true }}"
+    );
+    crunch_eval::evaluate_str_to_json(&metadata_source, import_paths)
+        .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))
 }
 
 fn module_import_paths(modules_dir: &Path) -> Result<Vec<OsString>, RunError> {
