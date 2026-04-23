@@ -415,6 +415,9 @@ Building derivations (not just compiling crunch) requires:
 - `StoreHandle::get_artifact_attestation()` and `StoreHandle::runtime_closure_attestation()` are the retrieval entry points.
 - The cheapest real substitution e2e for attestations is: build once locally, reopen the signed `PathInfo` from `state_dir/pathinfo.redb`, render a NAR from `state_dir/blobs`, serve that `.narinfo` + NAR from a tiny local HTTP server, then rebuild in a fresh `state_dir` with `--substituters <url>` and the first build's verifying key. That exercises `NixHTTPPathInfoService`, remote sidecar persistence, and `crunch attest verify artifact|closure` without an external cache.
 
+## System-config VM seam (2026-04-23)
+- `crunch system eval --stop-after fragments` exposes per-machine `machines.<name>.merged_config.data.output.nixos` on stdout (see `tests/system_cli.rs`). That is the natural VM-smoke bridge for the current phase-1 pipeline because it exercises live loader/evaluator/collector behavior without requiring the build path.
+
 ## Dependency Audit
 
 - Root `cargo deny` policy now lives in `deny.toml`; without it, `cargo deny check` falls back to a default config and produces a giant wall of license rejections that hides the real advisory set.
