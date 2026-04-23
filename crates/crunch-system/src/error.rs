@@ -1,6 +1,7 @@
+use serde::Serialize;
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error, Serialize)]
 pub enum SystemConfigError {
     #[error("cli error: {message}")]
     Cli {
@@ -60,7 +61,7 @@ pub enum SystemConfigError {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error, Serialize)]
 pub enum SystemConfigWarning {
     #[error("orphan provider consumption: {provider_type}")]
     OrphanProviderConsumption {

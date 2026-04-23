@@ -20,6 +20,7 @@ mod release_source;
 mod self_build;
 mod shell_cmd;
 mod store_cmd;
+mod system_cmd;
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -34,6 +35,10 @@ use clap::Parser;
 use clap::Subcommand;
 use errors::RunError;
 use operator_diagnostics::DoctorProfile;
+use system_cmd::SystemBuildOptions;
+use system_cmd::SystemEvalFormat;
+use system_cmd::SystemEvalOptions;
+use system_cmd::SystemStopAfter;
 
 #[derive(Parser, Debug)]
 #[command(name = "crunch", about = "Nickel build system on the Nix store protocol")]
@@ -147,6 +152,12 @@ enum Command {
         /// Additional import paths for Nickel
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<PathBuf>,
+    },
+
+    /// Evaluate or build a machine inventory through the system-config pipeline
+    System {
+        #[command(subcommand)]
+        action: SystemAction,
     },
 
     /// Generate a seed.ncl from existing Nix store packages
@@ -450,6 +461,52 @@ pub enum AttestVerifyAction {
 }
 
 #[derive(Subcommand, Debug, Clone)]
+pub enum SystemAction {
+    /// Dry-run the system-config pipeline and print fragments or derivations
+    Eval {
+        /// Path to the inventory Nickel file
+        inventory: PathBuf,
+
+        /// Module directory (default: ./modules relative to the inventory file)
+        #[arg(long)]
+        modules: Option<PathBuf>,
+
+        /// Restrict evaluation to one or more machines
+        #[arg(long = "machine")]
+        machine: Vec<String>,
+
+        /// Override assembler backend selection for all selected machines
+        #[arg(long = "assembler")]
+        assembler: Option<String>,
+
+        /// Stop after merged fragments or dry-run derivations
+        #[arg(long = "stop-after", value_enum, default_value_t = SystemStopAfter::Derivations)]
+        stop_after: SystemStopAfter,
+
+        /// Stdout serialization format for the result envelope
+        #[arg(long = "format", value_enum, default_value_t = SystemEvalFormat::Json)]
+        format: SystemEvalFormat,
+    },
+    /// Build a machine inventory through the system-config pipeline
+    Build {
+        /// Path to the inventory Nickel file
+        inventory: PathBuf,
+
+        /// Module directory (default: ./modules relative to the inventory file)
+        #[arg(long)]
+        modules: Option<PathBuf>,
+
+        /// Restrict evaluation to one or more machines
+        #[arg(long = "machine")]
+        machine: Vec<String>,
+
+        /// Override assembler backend selection for all selected machines
+        #[arg(long = "assembler")]
+        assembler: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
 pub enum StoreAction {
     /// List all known store paths
     List,
@@ -636,6 +693,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     match &args.command {
         Command::Doctor { profile } => run_doctor_command(ctx, *profile),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
+        Command::System { action } => run_system_command(ctx, action),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
         Command::Release { action } => run_release_command(ctx, action.clone()),
@@ -688,6 +746,43 @@ fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {
     let json = crunch_eval::evaluate_to_json(file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
     println!("{json}");
     Ok(())
+}
+
+fn run_system_command(ctx: &RunContext, action: &SystemAction) -> Result<(), RunError> {
+    match action {
+        SystemAction::Eval {
+            inventory,
+            modules,
+            machine,
+            assembler,
+            stop_after,
+            format,
+        } => system_cmd::cmd_system_eval(
+            ctx,
+            SystemEvalOptions {
+                inventory_path: inventory.clone(),
+                modules_dir: modules.clone(),
+                machine_filter: machine.clone(),
+                assembler_override: assembler.clone(),
+                stop_after: *stop_after,
+                format: *format,
+            },
+        ),
+        SystemAction::Build {
+            inventory,
+            modules,
+            machine,
+            assembler,
+        } => system_cmd::cmd_system_build(
+            ctx,
+            SystemBuildOptions {
+                inventory_path: inventory.clone(),
+                modules_dir: modules.clone(),
+                machine_filter: machine.clone(),
+                assembler_override: assembler.clone(),
+            },
+        ),
+    }
 }
 
 fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {

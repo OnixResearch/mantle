@@ -1213,6 +1213,7 @@ dependencies = [
  "crunch-release-core",
  "crunch-shell",
  "crunch-store",
+ "crunch-system",
  "data-encoding",
  "digest",
  "flate2",

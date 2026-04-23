@@ -143,16 +143,17 @@
 
 ## Phase 10: CLI integration
 
-- [ ] Add `System { action: SystemAction }` variant to `Command` enum in `src/main.rs` with `Eval` and `Build` subcommands (CLI-1, CLI-2)
-- [ ] Add `--modules <dir>` flag, default `./modules/` relative to inventory file (CLI-3)
-- [ ] Add `--machine <name>` repeatable flag for machine filter (CLI-4)
-- [ ] Add `--assembler <name>` flag for backend override on both `crunch system eval` and `crunch system build` (CLI-5)
-- [ ] Add `--stop-after fragments|derivations` flag for eval (CLI-1)
-- [ ] Add `--format json|nickel` flag for eval output (CLI-6)
-- [ ] Implement `src/system_cmd.rs`: wire inventory deserialization → loader → evaluator thread → evaluator → collector → assembler → pipeline
-- [ ] Add `crunch-system` and `crunch-pipeline` deps to the binary crate's Cargo.toml
-- [ ] Structured JSON warning/error output on stderr when `--json` is active (ERR-3)
-- [ ] `--format nickel` returns clear "not yet implemented" error message (CLI-6, design Decision 15)
+- [x] Add `System { action: SystemAction }` variant to `Command` enum in `src/main.rs` with `Eval` and `Build` subcommands (CLI-1, CLI-2)
+- [x] Add `--modules <dir>` flag, default `./modules/` relative to inventory file (CLI-3)
+- [x] Add `--machine <name>` repeatable flag for machine filter (CLI-4)
+- [x] Add `--assembler <name>` flag for backend override on both `crunch system eval` and `crunch system build` (CLI-5)
+- [x] Add `--stop-after fragments|derivations` flag for eval (CLI-1)
+- [x] Add `--format json|nickel` flag for eval output (CLI-6)
+- [x] Implement `src/system_cmd.rs`: wire inventory deserialization → loader → evaluator thread → evaluator → collector → assembler → pipeline
+- [x] Add `crunch-system` and `crunch-pipeline` deps to the binary crate's Cargo.toml
+- [x] Structured JSON warning/error output on stderr when `--json` is active (ERR-3)
+- [x] `--format nickel` returns clear "not yet implemented" error message (CLI-6, design Decision 15)
+  - Evidence: `cargo check -p crunch --bin crunch` passed on 2026-04-22 after wiring `src/system_cmd.rs`, `SystemAction`, and the `crunch-system` binary dependency.
 
 ## Phase 11: Integration tests
 
