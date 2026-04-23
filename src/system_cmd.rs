@@ -3,9 +3,16 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
+
+use tokio::runtime::Builder as RuntimeBuilder;
 
 use clap::ValueEnum;
 use crunch_system::ValidatedModule;
+use crunch_system::loader::validate_module;
+use crunch_system::threading::EvalThread;
+use crunch_system::threading::EvalThreadHandle;
+use crunch_system::threading::ValueId;
 use crunch_system::assembler::AssemblerError;
 use crunch_system::assembler::AssemblerRegistry;
 use crunch_system::assembler::NixosPhase1Assembler;
@@ -28,6 +35,7 @@ const DEFAULT_MODULES_DIR_NAME: &str = "modules";
 const DEFAULT_MODULE_PRIORITY: i64 = 1000;
 const NICKEL_FORMAT_NOT_IMPLEMENTED: &str = "system eval --format nickel is not implemented yet";
 const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
+const MODULE_TIMEOUT_SECS: u64 = 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SystemStopAfter {
@@ -258,96 +266,56 @@ fn load_validated_modules(modules_dir: &Path) -> Result<Vec<ValidatedModule>, Ru
     let discovered = crunch_system::loader::discover_module_files(modules_dir)
         .map_err(|error| fatal_system_error(error, 3))?;
     let import_paths = module_import_paths(modules_dir)?;
-    let mut modules = Vec::with_capacity(discovered.len());
-    for (name, path) in discovered {
-        let source = std::fs::read_to_string(&path)
-            .map_err(|error| RunError::Internal(format!("reading module {}: {error}", path.display())))?;
-        let metadata_json = module_metadata_json(&source, &path, &import_paths)?;
-        let value: Value = serde_json::from_str(&metadata_json)
-            .map_err(|error| RunError::Internal(format!("deserializing module {}: {error}", path.display())))?;
-        modules.push(validate_module_json(&name, &value).map_err(|error| fatal_system_error(error, 3))?);
-    }
-    Ok(modules)
-}
-
-fn module_metadata_json(source: &str, path: &Path, import_paths: &[OsString]) -> Result<String, RunError> {
-    let metadata_source = format!(
-        "let module = ({source}) in let inputs = if std.record.has_field \"inputs\" module then module.inputs else [] in let consumes_providers = if std.record.has_field \"consumes_providers\" module then module.consumes_providers else [] in let produces_providers = if std.record.has_field \"produces_providers\" module then module.produces_providers else [] in let priority = if std.record.has_field \"priority\" module then module.priority else 1000 in {{ interface = module.interface, inputs = inputs, consumes_providers = consumes_providers, produces_providers = produces_providers, priority = priority, impl_present = true }}"
-    );
-    crunch_eval::evaluate_str_to_json(&metadata_source, import_paths)
-        .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))
+    let handle = EvalThread::spawn(import_paths.iter().map(PathBuf::from).collect());
+    let runtime = RuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| RunError::Internal(format!("building system module runtime: {error}")))?;
+    let modules = runtime.block_on(load_validated_modules_on_thread(&handle, &discovered));
+    shutdown_eval_thread(runtime, handle)?;
+    modules
 }
 
 fn module_import_paths(modules_dir: &Path) -> Result<Vec<OsString>, RunError> {
     let path = modules_dir
         .canonicalize()
         .map_err(|error| RunError::Internal(format!("canonicalizing modules dir {}: {error}", modules_dir.display())))?;
-    Ok(vec![path.into_os_string()])
+    let stdlib_path = crunch_eval::stdlib::stdlib_import_path().map_err(|error| {
+        RunError::Internal(format!("resolving embedded stdlib import path for system modules: {error}"))
+    })?;
+    Ok(vec![path.into_os_string(), stdlib_path.into_os_string()])
 }
 
-fn validate_module_json(name: &str, value: &Value) -> Result<ValidatedModule, SystemConfigError> {
-    let object = value.as_object().ok_or_else(|| loader_error(format!("module '{name}' must evaluate to a record"), name))?;
-    let interface = object
-        .get("interface")
-        .and_then(Value::as_object)
-        .ok_or_else(|| loader_error(format!("module '{name}' is missing interface"), name))?;
-    let roles = interface
-        .get("roles")
-        .and_then(Value::as_object)
-        .ok_or_else(|| loader_error(format!("module '{name}' is missing interface.roles"), name))?;
-    let mut role_names = roles.keys().cloned().collect::<Vec<_>>();
-    role_names.sort();
-    if !object.contains_key("impl") {
-        return Err(loader_error(format!("module '{name}' is missing impl"), name));
+async fn load_validated_modules_on_thread(
+    handle: &EvalThreadHandle,
+    discovered: &[(String, PathBuf)],
+) -> Result<Vec<ValidatedModule>, RunError> {
+    let mut modules = Vec::with_capacity(discovered.len());
+    for (name, path) in discovered {
+        let root_value_id = evaluate_module_file(handle, path).await?;
+        let validated = validate_module(name, root_value_id, handle)
+            .await
+            .map_err(|error| fatal_system_error(error, 3))?;
+        modules.push(validated);
     }
-    Ok(ValidatedModule {
-        module_name: name.to_string(),
-        role_names,
-        inputs: string_array_field(object.get("inputs"), "inputs", name)?,
-        consumes_providers: string_array_field(object.get("consumes_providers"), "consumes_providers", name)?,
-        produces_providers: string_array_field(object.get("produces_providers"), "produces_providers", name)?,
-        priority: integer_field(object.get("priority"), "priority", name)?.unwrap_or(DEFAULT_MODULE_PRIORITY),
-    })
+    Ok(modules)
 }
 
-fn string_array_field(value: Option<&Value>, field_name: &str, module_name: &str) -> Result<Vec<String>, SystemConfigError> {
-    let Some(value) = value else {
-        return Ok(Vec::new());
+async fn evaluate_module_file(handle: &EvalThreadHandle, path: &Path) -> Result<ValueId, RunError> {
+    let options = crunch_system::eval_trait::EvalOptions {
+        timeout: Some(Duration::from_secs(MODULE_TIMEOUT_SECS)),
+        import_paths: Vec::new(),
     };
-    let array = value
-        .as_array()
-        .ok_or_else(|| loader_error(format!("module '{module_name}' field '{field_name}' must be an array"), module_name))?;
-    let mut strings = Vec::with_capacity(array.len());
-    for item in array {
-        let Some(text) = item.as_str() else {
-            return Err(loader_error(
-                format!("module '{module_name}' field '{field_name}' must contain only strings"),
-                module_name,
-            ));
-        };
-        strings.push(text.to_string());
-    }
-    Ok(strings)
+    handle
+        .evaluate_file(path.to_path_buf(), options)
+        .await
+        .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))
 }
 
-fn integer_field(value: Option<&Value>, field_name: &str, module_name: &str) -> Result<Option<i64>, SystemConfigError> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    value
-        .as_i64()
-        .ok_or_else(|| loader_error(format!("module '{module_name}' field '{field_name}' must be an integer"), module_name))
-        .map(Some)
-}
-
-fn loader_error(message: String, module_name: &str) -> SystemConfigError {
-    SystemConfigError::Loader {
-        message,
-        detail: None,
-        machine_name: None,
-        module_name: Some(module_name.to_string()),
-        field_path: None,
-    }
+fn shutdown_eval_thread(runtime: tokio::runtime::Runtime, handle: EvalThreadHandle) -> Result<(), RunError> {
+    runtime
+        .block_on(async { handle.shutdown().await })
+        .map_err(|error| RunError::Internal(format!("shutting down system module evaluator: {error}")))
 }
 
 fn select_machines(inventory: &Inventory, machine_filter: &[String]) -> Result<BTreeSet<String>, SystemConfigError> {
@@ -764,11 +732,13 @@ impl EvalBoundary for JsonEvalBoundary {
         args: &Value,
         _timeout_secs: u64,
     ) -> Result<Value, String> {
+        let timeout_secs = Duration::from_secs(MODULE_TIMEOUT_SECS).as_secs();
         Ok(serde_json::json!({
             "output": {
                 "exports": {
                     "args": args,
                     "module": module.module_name,
+                    "timeout_secs": timeout_secs,
                 },
                 "nixos": {
                     "module": module.module_name,
