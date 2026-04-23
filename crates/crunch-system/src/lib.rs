@@ -1,6 +1,9 @@
+pub mod contracts;
 pub mod error;
 pub mod eval_trait;
 pub mod inventory;
+pub mod loader;
+pub mod threading;
 
 pub use crunch_eval::Expr as NickelValue;
 

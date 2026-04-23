@@ -15,45 +15,48 @@
 
 ## Phase 2: Nickel contracts
 
-- [ ] Write `lib/system_module.ncl` — structural contract for service modules: `interface` (record with `roles`), `impl` (function), optional `inputs`, `consumes_providers`, `produces_providers`, `priority`
-- [ ] Write `lib/inventory.ncl` — structural contract for inventory files: `machines` (record of machine records with `system`, optional `class`), `services` (record of service records with `instances` array), instance shape (`machine`, `role`, optional `settings`, `tags`) (INV-4)
-- [ ] Add `lib/system_module.ncl` and `lib/inventory.ncl` to embedded stdlib in `crates/crunch-eval/src/stdlib.rs`
-- [ ] Unit test: Nickel contract validation — evaluate a valid module against `system_module.ncl` using `crunch_eval` directly (not eval thread), verify no blame error
-- [ ] Unit test: Nickel contract rejection — evaluate a module missing `interface` using `crunch_eval` directly, verify blame error
+- [x] Write `lib/system_module.ncl` — structural contract for service modules: `interface` (record with `roles`), `impl` (function), optional `inputs`, `consumes_providers`, `produces_providers`, `priority`
+- [x] Write `lib/inventory.ncl` — structural contract for inventory files: `machines` (record of machine records with `system`, optional `class`), `services` (record of service records with `instances` array), instance shape (`machine`, `role`, optional `settings`, `tags`) (INV-4)
+- [x] Add `lib/system_module.ncl` and `lib/inventory.ncl` to embedded stdlib in `crates/crunch-eval/src/stdlib.rs`
+- [x] Unit test: Nickel contract validation — evaluate a valid module against `system_module.ncl` using `crunch_eval` directly (not eval thread), verify no blame error
+- [x] Unit test: Nickel contract rejection — evaluate a module missing `interface` using `crunch_eval` directly, verify blame error
+  - Evidence: `cargo test -p crunch-system contracts:: -- --nocapture` passed with `2 passed; 0 failed` on 2026-04-22.
 
 ## Phase 3: Module loader (pure core + I/O shell)
 
-- [ ] Implement `discover_module_files(dir: &Path) -> Result<Vec<(String, PathBuf)>>` — reads `*.ncl` files at top level, returns `(stem, path)` pairs (LOADER-1)
-- [ ] Implement duplicate-name detection in `discover_module_files` — error naming both files (LOADER-3)
-- [ ] Implement module count limit check (default 1024, configurable) (LOADER-5)
-- [ ] Implement `validate_module(name: &str, value_id: ValueId, handle: &EvalThreadHandle) -> Result<ValidatedModule, SystemConfigError>` — checks structural shape via `get_field` and `is_function` on the eval thread handle (LOADER-2). Uses `ValueId` because validation runs on the async side, not on the eval thread directly.
-- [ ] Extract module metadata during validation: declared role names plus `inputs`, `consumes_providers`, `produces_providers`, `priority` (default 1000) (LOADER-2, EVAL-12)
-- [ ] Unit test: discover 3 `.ncl` files in tempdir, verify stems
-- [ ] Unit test: discover ignores subdirectories
-- [ ] Unit test: duplicate stem detection
-- [ ] Unit test: module count limit exceeded (1025 files)
-- [ ] Unit test: validate_module with mock `EvalThreadHandle` — valid module returns ValidatedModule
-- [ ] Unit test: validate_module with mock `EvalThreadHandle` — missing `interface` returns Loader error
-- [ ] Unit test: validate_module with mock `EvalThreadHandle` — missing `impl` returns Loader error
-- [ ] Unit test: validate_module with mock `EvalThreadHandle` — `impl` is not a function returns Loader error
+- [x] Implement `discover_module_files(dir: &Path) -> Result<Vec<(String, PathBuf)>>` — reads `*.ncl` files at top level, returns `(stem, path)` pairs (LOADER-1)
+- [x] Implement duplicate-name detection in `discover_module_files` — error naming both files (LOADER-3)
+- [x] Implement module count limit check (default 1024, configurable) (LOADER-5)
+- [x] Implement `validate_module(name: &str, value_id: ValueId, handle: &EvalThreadHandle) -> Result<ValidatedModule, SystemConfigError>` — checks structural shape via `get_field` and `is_function` on the eval thread handle (LOADER-2). Uses `ValueId` because validation runs on the async side, not on the eval thread directly.
+- [x] Extract module metadata during validation: declared role names plus `inputs`, `consumes_providers`, `produces_providers`, `priority` (default 1000) (LOADER-2, EVAL-12)
+- [x] Unit test: discover 3 `.ncl` files in tempdir, verify stems
+- [x] Unit test: discover ignores subdirectories
+- [x] Unit test: duplicate stem detection
+- [x] Unit test: module count limit exceeded (1025 files)
+- [x] Unit test: validate_module with mock `EvalThreadHandle` — valid module returns ValidatedModule
+- [x] Unit test: validate_module with mock `EvalThreadHandle` — missing `interface` returns Loader error
+- [x] Unit test: validate_module with mock `EvalThreadHandle` — missing `impl` returns Loader error
+- [x] Unit test: validate_module with mock `EvalThreadHandle` — `impl` is not a function returns Loader error
+  - Evidence: `cargo test -p crunch-system loader:: -- --nocapture` passed with `8 passed; 0 failed` on 2026-04-22.
 
 ## Phase 4: Evaluator thread and channel protocol
 
-- [ ] Define `EvalRequest` / `EvalResponse` enums and `ValueId` type in `crates/crunch-system/src/threading.rs` — `EvalRequest` must include all variants: `EvaluateFile`, `GetField`, `IsFunction`, `Merge`, `Call`, `ToJson`, `DropValue`, `Shutdown` (TRAIT-7)
-- [ ] Implement eval-thread value table: `HashMap<u64, Expr>` with atomic `u64` counter for `ValueId` allocation and `DropValue` cleanup
-- [ ] Implement on-thread evaluator struct wrapping `crunch_eval` APIs and `nickel_lang::Context` — handles `EvalRequest` dispatch, calls `crunch_eval::evaluate()` for files, Nickel `Context` for merge/call/get_field, `Expr` type inspection for `is_function`
-- [ ] Implement `EvalThread::spawn(import_paths: Vec<PathBuf>) -> EvalThreadHandle` — spawns dedicated OS thread running the on-thread evaluator, returns handle with request channel and `tokio::sync::oneshot` per-request responses
-- [ ] Implement `EvalThreadHandle` methods: `evaluate_file`, `get_field`, `is_function`, `merge`, `call`, `to_json`, `drop_value`, `shutdown` — each sends request and awaits response with configurable timeout
-- [ ] Implement the concrete on-thread `NickelEvaluator` using `crunch_eval` APIs; keep `EvalThreadHandle` as the async `ValueId`/JSON bridge rather than the trait implementation (TRAIT-1, TRAIT-7)
-- [ ] Implement import path sandboxing: configure Nickel `Context` import paths to module dir + stdlib only (TRAIT-4)
-- [ ] Unit test: spawn eval thread, evaluate a simple `.ncl` file, get JSON back
-- [ ] Unit test: eval thread `get_field` — evaluate a Nickel record, extract a field by key via channel
-- [ ] Unit test: eval thread `is_function` — returns true for a function value, false for a record
-- [ ] Unit test: timeout enforcement — send request to eval thread with 1ms timeout, verify `EvalError::Timeout`
-- [ ] Unit test: shutdown — verify thread joins cleanly after `Shutdown` request
-- [ ] Unit test: drop_value — verify value table entry is freed after `drop_value` call
-- [ ] Unit test: eval thread panic — verify `EvalThreadHandle` methods return `EvalError` after thread panic
-- [ ] Integration test: import sandboxing — module that imports outside allowed paths, verify `ImportDenied` error (TRAIT-4)
+- [x] Define `EvalRequest` / `EvalResponse` enums and `ValueId` type in `crates/crunch-system/src/threading.rs` — `EvalRequest` must include all variants: `EvaluateFile`, `GetField`, `IsFunction`, `Merge`, `Call`, `ToJson`, `DropValue`, `Shutdown` (TRAIT-7)
+- [x] Implement eval-thread value table: `HashMap<u64, Expr>` with atomic `u64` counter for `ValueId` allocation and `DropValue` cleanup
+- [x] Implement on-thread evaluator struct wrapping `crunch_eval` APIs and `nickel_lang::Context` — handles `EvalRequest` dispatch, calls `crunch_eval::evaluate()` for files, Nickel `Context` for merge/call/get_field, `Expr` type inspection for `is_function`
+- [x] Implement `EvalThread::spawn(import_paths: Vec<PathBuf>) -> EvalThreadHandle` — spawns dedicated OS thread running the on-thread evaluator, returns handle with request channel and `tokio::sync::oneshot` per-request responses
+- [x] Implement `EvalThreadHandle` methods: `evaluate_file`, `get_field`, `is_function`, `merge`, `call`, `to_json`, `drop_value`, `shutdown` — each sends request and awaits response with configurable timeout
+- [x] Implement the concrete on-thread `NickelEvaluator` using `crunch_eval` APIs; keep `EvalThreadHandle` as the async `ValueId`/JSON bridge rather than the trait implementation (TRAIT-1, TRAIT-7)
+- [x] Implement import path sandboxing: configure Nickel `Context` import paths to module dir + stdlib only (TRAIT-4)
+- [x] Unit test: spawn eval thread, evaluate a simple `.ncl` file, get JSON back
+- [x] Unit test: eval thread `get_field` — evaluate a Nickel record, extract a field by key via channel
+- [x] Unit test: eval thread `is_function` — returns true for a function value, false for a record
+- [x] Unit test: timeout enforcement — send request to eval thread with 1ms timeout, verify `EvalError::Timeout`
+- [x] Unit test: shutdown — verify thread joins cleanly after `Shutdown` request
+- [x] Unit test: drop_value — verify value table entry is freed after `drop_value` call
+- [x] Unit test: eval thread panic — verify `EvalThreadHandle` methods return `EvalError` after thread panic
+- [x] Integration test: import sandboxing — module that imports outside allowed paths, verify `ImportDenied` error (TRAIT-4)
+  - Evidence: `cargo test -p crunch-system threading:: -- --nocapture` passed with `8 passed; 0 failed` on 2026-04-22.
 
 ## Phase 5: Topological sort and dependency graph
 
