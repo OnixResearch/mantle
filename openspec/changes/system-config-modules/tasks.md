@@ -165,7 +165,7 @@
 - [x] Integration test: `crunch system build` (gated by `can_build()`) builds derivations and produces store output
 - [x] Integration test: partial failure — inventory with bad settings on one machine, verify the other machine succeeds, stdout keeps the successful machine result, and stderr reports the error
 - [x] Integration test: module with contract violation produces Nickel blame error with module name and field path
-  - Evidence: `cargo test -p crunch --test system_cli -- --nocapture` passed with `10 passed; 0 failed` on 2026-04-23, covering the real build-report envelope, JSON stderr diagnostics, a machine-scoped failure transcript, and loader contract failure naming `bad-contract`.
+  - Evidence: `cargo test -p crunch --test system_cli -- --nocapture` passed with `10 passed; 0 failed` on 2026-04-23, and stdout `errors`/`warnings` now use the same `severity`/`layer`/`message`/`detail`/`machine`/`module` diagnostic object shape that stderr emits in JSON mode.
 
 ## Phase 12: Documentation
 

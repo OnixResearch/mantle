@@ -119,8 +119,8 @@ struct JsonMachineOutcome {
 #[derive(Debug, Serialize)]
 struct JsonSystemPipelineResult {
     machines: BTreeMap<String, JsonMachineOutcome>,
-    errors: Vec<SystemConfigError>,
-    warnings: Vec<crunch_system::error::SystemConfigWarning>,
+    errors: Vec<SystemDiagnosticEnvelope>,
+    warnings: Vec<SystemDiagnosticEnvelope>,
 }
 
 #[derive(Debug, Serialize)]
@@ -140,8 +140,18 @@ pub fn cmd_system_eval(ctx: &RunContext, options: SystemEvalOptions) -> Result<(
     let prepared = prepare_system_run(&options.inventory_path, options.modules_dir.as_deref(), &options.machine_filter)?;
     let mut result = JsonSystemPipelineResult {
         machines: BTreeMap::new(),
-        errors: prepared.module_execution.errors.clone(),
-        warnings: prepared.module_execution.warnings.clone(),
+        errors: prepared
+            .module_execution
+            .errors
+            .iter()
+            .map(error_diagnostic)
+            .collect(),
+        warnings: prepared
+            .module_execution
+            .warnings
+            .iter()
+            .map(warning_diagnostic)
+            .collect(),
     };
 
     match options.stop_after {
@@ -171,7 +181,11 @@ pub fn cmd_system_eval(ctx: &RunContext, options: SystemEvalOptions) -> Result<(
         }
     }
 
-    emit_nonfatal_diagnostics(ctx, &result)?;
+    emit_nonfatal_diagnostics(
+        ctx,
+        &collect_renderable_errors(&prepared.module_execution.errors, &result.errors),
+        &prepared.module_execution.warnings,
+    )?;
     println!("{}", serde_json::to_string_pretty(&result).map_err(json_internal_error)?);
     if result.errors.is_empty() {
         Ok(())
@@ -185,8 +199,18 @@ pub fn cmd_system_build(ctx: &RunContext, options: SystemBuildOptions) -> Result
     let registry = default_assembler_registry();
     let mut result = JsonSystemPipelineResult {
         machines: BTreeMap::new(),
-        errors: prepared.module_execution.errors.clone(),
-        warnings: prepared.module_execution.warnings.clone(),
+        errors: prepared
+            .module_execution
+            .errors
+            .iter()
+            .map(error_diagnostic)
+            .collect(),
+        warnings: prepared
+            .module_execution
+            .warnings
+            .iter()
+            .map(warning_diagnostic)
+            .collect(),
     };
 
     populate_build_outcomes(
@@ -199,7 +223,11 @@ pub fn cmd_system_build(ctx: &RunContext, options: SystemBuildOptions) -> Result
         &mut result,
     )?;
 
-    emit_nonfatal_diagnostics(ctx, &result)?;
+    emit_nonfatal_diagnostics(
+        ctx,
+        &collect_renderable_errors(&prepared.module_execution.errors, &result.errors),
+        &prepared.module_execution.warnings,
+    )?;
     if ctx.json {
         println!("{}", serde_json::to_string_pretty(&result).map_err(json_internal_error)?);
     } else {
@@ -398,7 +426,7 @@ fn populate_derivation_outcomes(
                 );
             }
             Err(error) => {
-                result.errors.push(map_assembler_error(&error));
+                result.errors.push(error_diagnostic(&map_assembler_error(&error)));
                 result.machines.insert(machine_name.clone(), failed_machine_outcome());
             }
         }
@@ -437,7 +465,7 @@ fn populate_build_outcomes(
                 );
             }
             Err(error) => {
-                result.errors.push(map_assembler_error(&error));
+                result.errors.push(error_diagnostic(&map_assembler_error(&error)));
                 result.machines.insert(machine_name.clone(), failed_machine_outcome());
             }
         }
@@ -644,14 +672,38 @@ fn build_human_summary(result: &JsonSystemPipelineResult) -> HumanSystemBuildSum
     }
 }
 
-fn emit_nonfatal_diagnostics(ctx: &RunContext, result: &JsonSystemPipelineResult) -> Result<(), RunError> {
-    for warning in &result.warnings {
+fn emit_nonfatal_diagnostics(
+    ctx: &RunContext,
+    errors: &[SystemConfigError],
+    warnings: &[crunch_system::error::SystemConfigWarning],
+) -> Result<(), RunError> {
+    for warning in warnings {
         emit_warning(ctx, warning)?;
     }
-    for error in &result.errors {
+    for error in errors {
         emit_error(ctx, error)?;
     }
     Ok(())
+}
+
+fn collect_renderable_errors(
+    base_errors: &[SystemConfigError],
+    rendered_errors: &[SystemDiagnosticEnvelope],
+) -> Vec<SystemConfigError> {
+    let mut collected = base_errors.to_vec();
+    for diagnostic in rendered_errors {
+        if diagnostic.layer != DIAGNOSTIC_LAYER_ASSEMBLER {
+            continue;
+        }
+        collected.push(SystemConfigError::Assembler {
+            message: diagnostic.message.clone(),
+            detail: diagnostic.detail.clone(),
+            machine_name: diagnostic.machine.clone(),
+            module_name: diagnostic.module.clone(),
+            field_path: diagnostic.field_path.clone(),
+        });
+    }
+    collected
 }
 
 fn emit_pre_machine_failure(errors: Vec<SystemConfigError>) {

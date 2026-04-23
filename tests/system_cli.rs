@@ -158,7 +158,7 @@ fn system_eval_partial_failure_keeps_successful_machine_on_stdout() {
     assert_eq!(stdout_json["machines"]["server1"]["kind"], "failed");
     assert_eq!(stdout_json["machines"]["server2"]["kind"], "failed");
     assert!(stdout_json["errors"].as_array().unwrap().iter().any(|error| {
-        error["Assembler"]["machine_name"] == "server1"
+        error["severity"] == "error" && error["layer"] == "assembler" && error["machine"] == "server1"
     }));
     assert!(stderr_lines.iter().any(|line| {
         let json: Value = serde_json::from_str(line).unwrap();
@@ -205,8 +205,10 @@ fn system_build_json_keeps_structured_diagnostics_off_stdout() {
     assert!(stdout_json["machines"]["server1"].is_object());
     assert_eq!(stdout_json["machines"]["server1"]["kind"], "failed");
     assert_eq!(stdout_json["machines"]["server2"]["kind"], "failed");
-    assert_eq!(stdout_json["errors"][0]["Assembler"]["message"], "unknown assembler 'unknown-backend'");
-    assert_eq!(stdout_json["errors"][0]["Assembler"]["machine_name"], "server1");
+    assert_eq!(stdout_json["errors"][0]["message"], "unknown assembler 'unknown-backend'");
+    assert_eq!(stdout_json["errors"][0]["machine"], "server1");
+    assert_eq!(stdout_json["errors"][0]["severity"], "error");
+    assert_eq!(stdout_json["errors"][0]["layer"], "assembler");
     assert!(stderr_lines.iter().all(|line| serde_json::from_str::<Value>(line).is_ok()));
     assert!(stderr_lines.iter().any(|line| {
         let json: Value = serde_json::from_str(line).unwrap();
