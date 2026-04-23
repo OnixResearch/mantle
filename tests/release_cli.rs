@@ -6,6 +6,19 @@ use std::process::Command as ProcessCommand;
 use std::process::Output;
 
 use assert_cmd::Command;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use crunch_attestation::AttestationDigest;
+use crunch_attestation::Canonicalize;
+use crunch_attestation::DetachedSignature;
+use crunch_attestation::RebuildEnvironmentSummary;
+use crunch_attestation::ReleaseAttestation;
+use crunch_attestation::ReleasePolicy;
+use crunch_attestation::ReleaseRevocations;
+use crunch_attestation::WitnessAttestation;
+use crunch_attestation::encode_detached_signature;
+use crunch_build::KeyPair;
+use crunch_build::load_keypair;
 use predicates::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -13,6 +26,8 @@ use tempfile::TempDir;
 
 const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
 const BLAKE3_HEX_LEN: usize = 64;
+const RELEASE_SIGNING_KEY: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -175,6 +190,91 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
     (temp, bundle_dir, manifest)
+}
+
+fn release_keypair() -> KeyPair {
+    load_keypair(RELEASE_SIGNING_KEY).unwrap()
+}
+
+fn write_release_signing_key(path: &Path) {
+    write_file(path, format!("{RELEASE_SIGNING_KEY}\n").as_bytes());
+}
+
+fn read_release_attestation(verification_dir: &Path) -> ReleaseAttestation {
+    serde_json::from_slice(&std::fs::read(verification_dir.join("release-attestation.json")).unwrap()).unwrap()
+}
+
+fn write_policy(
+    verification_dir: &Path,
+    release_signer_name: &str,
+    trusted_witness_identities: Vec<String>,
+    min_matching_witnesses: u32,
+) {
+    let policy = ReleasePolicy::new(
+        min_matching_witnesses,
+        "witness_identity".to_string(),
+        vec![release_signer_name.to_string()],
+        trusted_witness_identities,
+    );
+    write_file(&verification_dir.join("policy.json"), serde_json::to_vec_pretty(&policy).unwrap().as_slice());
+}
+
+fn write_empty_revocations(verification_dir: &Path) {
+    let revocations = ReleaseRevocations::empty();
+    write_file(
+        &verification_dir.join("revocations.json"),
+        serde_json::to_vec_pretty(&revocations).unwrap().as_slice(),
+    );
+}
+
+fn write_witness_material(
+    verification_dir: &Path,
+    release_attestation: &ReleaseAttestation,
+    witness_keypair: &KeyPair,
+    identity: &str,
+) {
+    write_witness_material_with_release_digest(
+        verification_dir,
+        release_attestation,
+        release_attestation.canonical_digest().unwrap(),
+        witness_keypair,
+        identity,
+    );
+}
+
+fn write_witness_material_with_release_digest(
+    verification_dir: &Path,
+    release_attestation: &ReleaseAttestation,
+    release_attestation_digest: AttestationDigest,
+    witness_keypair: &KeyPair,
+    identity: &str,
+) {
+    let witness = WitnessAttestation::new(
+        release_attestation_digest,
+        identity.to_string(),
+        release_attestation.binary_digests.clone(),
+        RebuildEnvironmentSummary {
+            system: "x86_64-linux".to_string(),
+            toolchain: "rust-1.91.1".to_string(),
+            host_class: "nixos-25.05".to_string(),
+        },
+    );
+    let witness_bytes = witness.canonical_bytes().unwrap();
+    write_file(&verification_dir.join("witnesses").join(format!("{identity}.json")), witness_bytes.as_slice());
+
+    let signature = witness_keypair.signing_key.sign(&witness_bytes);
+    let detached_signature = DetachedSignature {
+        key_name: signature.name().to_string(),
+        signature_bytes: *signature.bytes(),
+    };
+    write_file(
+        &verification_dir.join("witnesses").join(format!("{identity}.json.sig")),
+        format!("{}\n", encode_detached_signature(&detached_signature)).as_bytes(),
+    );
+}
+
+fn invalid_signature_line(key_name: &str) -> String {
+    format!("{}:{}", key_name, BASE64_STANDARD.encode([0_u8; 64]))
 }
 
 #[test]
@@ -390,6 +490,341 @@ fn release_verify_rejects_proof_linkage_source_digest_mismatch() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("source archive digest does not match bundled source archive"));
+}
+
+#[test]
+fn release_attest_writes_signed_release_attestation_and_default_dir() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let expected_verification_dir = temp.path().join("target/release-verification").join(&manifest.release_id);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "release attestation: {}",
+            expected_verification_dir.join("release-attestation.json").display()
+        )))
+        .stdout(predicate::str::contains(format!("release id: {}", manifest.release_id)));
+
+    let attestation = read_release_attestation(&expected_verification_dir);
+    let manifest_digest = blake3::hash(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).to_hex().to_string();
+
+    assert_eq!(attestation.release_id, manifest.release_id);
+    assert_eq!(attestation.release_evidence_manifest_digest_blake3.to_hex(), manifest_digest,);
+    assert_eq!(attestation.proof_bundle_digest_blake3.to_hex(), manifest.proof_bundle.digest_blake3);
+    assert_eq!(attestation.binary_digests.len(), 1);
+    assert_eq!(attestation.binary_digests[0].name, manifest.binaries[0].relative_path);
+    assert!(expected_verification_dir.join("release-attestation.json.sig").exists());
+}
+
+#[test]
+fn release_attest_honors_json_output() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification-json");
+
+    let output = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(json["release_id"], "crunch-0.1.0-rc1");
+    assert_eq!(json["attestation_path"], verification_dir.join("release-attestation.json").display().to_string());
+    assert_eq!(json["signature_path"], verification_dir.join("release-attestation.json.sig").display().to_string());
+}
+
+#[test]
+fn attest_release_show_prints_release_attestation_envelope() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let output = crunch().arg("attest").arg("release-show").arg(&verification_dir).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let show_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(show_json["kind"], "crunch-release-attestation");
+    assert_eq!(show_json["stored_path"], verification_dir.join("release-attestation.json").display().to_string());
+    assert_eq!(show_json["attestation"]["release_id"], "crunch-0.1.0-rc1");
+}
+
+#[test]
+fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+
+    let show_output =
+        crunch().arg("attest").arg("witness-show").arg(&verification_dir).arg("witness-a").output().unwrap();
+    assert!(show_output.status.success(), "{}", String::from_utf8_lossy(&show_output.stderr));
+    let show_json: serde_json::Value = serde_json::from_slice(&show_output.stdout).unwrap();
+    assert_eq!(show_json["kind"], "crunch-witness-attestation");
+    assert_eq!(show_json["attestation"]["witness_identity"], "witness-a");
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["release_signer_key_name"], release_keypair.verifying_key.name());
+    assert_eq!(verify_json["discovered_witness_count"], 1);
+    assert_eq!(verify_json["considered_witness_count"], 1);
+    assert_eq!(verify_json["technical_class"], "external-witness-match");
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+    assert_eq!(verify_json["matching_witness_count"], 1);
+}
+
+#[test]
+fn attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_holds() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let trusted_witness_keypair = crunch_build::generate_keypair().0;
+    let unknown_witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &trusted_witness_keypair, "witness-good");
+    write_witness_material(&verification_dir, &release_attestation, &unknown_witness_keypair, "witness-unknown");
+    write_policy(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-good".to_string(), "witness-unknown".to_string()],
+        1,
+    );
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(trusted_witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["discovered_witness_count"], 2);
+    assert_eq!(verify_json["considered_witness_count"], 1);
+    assert_eq!(verify_json["matching_witness_count"], 1);
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+}
+
+#[test]
+fn attest_release_verify_rejects_invalid_release_signature() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_keypair = release_keypair();
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), Vec::new(), 0);
+    write_empty_revocations(&verification_dir);
+    write_file(
+        &verification_dir.join("release-attestation.json.sig"),
+        format!("{}\n", invalid_signature_line(release_keypair.verifying_key.name())).as_bytes(),
+    );
+
+    crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("release attestation signature failed verification"));
+}
+
+#[test]
+fn attest_release_verify_reports_policy_insufficient_for_wrong_release_digest_witness() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    let wrong_release_digest = AttestationDigest::from_canonical_bytes(b"wrong-release".to_vec());
+    write_witness_material_with_release_digest(
+        &verification_dir,
+        &release_attestation,
+        wrong_release_digest,
+        &witness_keypair,
+        "witness-a",
+    );
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["discovered_witness_count"], 1);
+    assert_eq!(verify_json["considered_witness_count"], 1);
+    assert_eq!(verify_json["matching_witness_count"], 0);
+    assert_eq!(verify_json["technical_class"], "self-proof-valid");
+    assert_eq!(verify_json["policy_status"], "insufficient");
+    assert_eq!(verify_json["final_class"], "self-proof-valid");
+}
+
+#[test]
+fn attest_release_verify_reports_policy_insufficient_for_untrusted_witness_identity() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-b".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["discovered_witness_count"], 1);
+    assert_eq!(verify_json["considered_witness_count"], 0);
+    assert_eq!(verify_json["technical_class"], "self-proof-valid");
+    assert_eq!(verify_json["policy_status"], "insufficient");
+    assert_eq!(verify_json["final_class"], "self-proof-valid");
+    assert_eq!(verify_json["matching_witness_count"], 0);
 }
 
 fn write_canonical_manifest(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) {

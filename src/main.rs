@@ -14,6 +14,7 @@ mod operator_diagnostics;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
+mod release_attestation;
 mod release_cmd;
 mod release_evidence;
 mod release_source;
@@ -411,6 +412,20 @@ pub enum ReleaseAction {
         /// Bundle directory to verify
         bundle_dir: PathBuf,
     },
+    /// Create and sign a release attestation for a verified release bundle
+    Attest {
+        /// Bundle directory to attest
+        bundle_dir: PathBuf,
+
+        /// Output directory for attestation sidecars (default:
+        /// target/release-verification/<release-id>)
+        #[arg(long)]
+        verification_dir: Option<PathBuf>,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -436,6 +451,28 @@ pub enum AttestAction {
     Project {
         /// Selected built roots for the project view
         roots: Vec<String>,
+    },
+    /// Show a signed release attestation from a verification directory
+    ReleaseShow {
+        /// Verification directory containing release-attestation.json
+        verification_dir: PathBuf,
+    },
+    /// Show witness attestations from a verification directory
+    WitnessShow {
+        /// Verification directory containing witnesses/*.json
+        verification_dir: PathBuf,
+
+        /// Optional witness identity to show
+        identity: Option<String>,
+    },
+    /// Verify a release attestation, witness set, and policy from a verification directory
+    ReleaseVerify {
+        /// Verification directory containing attestation material and policy files
+        verification_dir: PathBuf,
+
+        /// Trusted public keys for release and witness signature verification (name:base64)
+        #[arg(long = "trusted-public-key", value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
     },
 }
 
@@ -757,31 +794,25 @@ fn run_system_command(ctx: &RunContext, action: &SystemAction) -> Result<(), Run
             assembler,
             stop_after,
             format,
-        } => system_cmd::cmd_system_eval(
-            ctx,
-            SystemEvalOptions {
-                inventory_path: inventory.clone(),
-                modules_dir: modules.clone(),
-                machine_filter: machine.clone(),
-                assembler_override: assembler.clone(),
-                stop_after: *stop_after,
-                format: *format,
-            },
-        ),
+        } => system_cmd::cmd_system_eval(ctx, SystemEvalOptions {
+            inventory_path: inventory.clone(),
+            modules_dir: modules.clone(),
+            machine_filter: machine.clone(),
+            assembler_override: assembler.clone(),
+            stop_after: *stop_after,
+            format: *format,
+        }),
         SystemAction::Build {
             inventory,
             modules,
             machine,
             assembler,
-        } => system_cmd::cmd_system_build(
-            ctx,
-            SystemBuildOptions {
-                inventory_path: inventory.clone(),
-                modules_dir: modules.clone(),
-                machine_filter: machine.clone(),
-                assembler_override: assembler.clone(),
-            },
-        ),
+        } => system_cmd::cmd_system_build(ctx, SystemBuildOptions {
+            inventory_path: inventory.clone(),
+            modules_dir: modules.clone(),
+            machine_filter: machine.clone(),
+            assembler_override: assembler.clone(),
+        }),
     }
 }
 
@@ -948,7 +979,7 @@ fn run_project_command(command: &Command) -> Result<(), RunError> {
 }
 
 fn run_release_command(ctx: &RunContext, action: ReleaseAction) -> Result<(), RunError> {
-    release_cmd::cmd_release(action, &current_dir_or_error()?, ctx.json)
+    release_cmd::cmd_release(action, &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
 }
 
 fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunError> {

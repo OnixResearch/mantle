@@ -7,6 +7,8 @@ use crunch_attestation::Canonicalize;
 use crunch_attestation::ClosureAttestation;
 use crunch_attestation::ClosureSemantics;
 use crunch_attestation::ProjectAttestation;
+use crunch_attestation::ReleaseAttestation;
+use crunch_attestation::WitnessAttestation;
 use crunch_project::Lockfile;
 use crunch_project::ProjectAttestationInput;
 use crunch_project::ProjectManifest;
@@ -20,7 +22,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::errors::RunError;
+use crate::release_attestation::ReleaseVerificationOutput;
+use crate::release_attestation::load_release_attestation_document;
+use crate::release_attestation::load_witness_documents;
+use crate::release_attestation::verify_release_attestation_directory;
 
 const MANIFEST_FILE: &str = "crunch-project.ncl";
 const LOCK_FILE: &str = "crunch.lock";
@@ -30,6 +37,8 @@ enum AttestationDocument {
     Artifact(ArtifactAttestation),
     Closure(ClosureAttestation),
     Project(ProjectAttestation),
+    Release(ReleaseAttestation),
+    Witness(WitnessAttestation),
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +111,18 @@ async fn cmd_attest_async(
             let document = load_project_document(current_dir, &store, &roots).await?;
             print_document(&document, None)
         }
+        crate::AttestAction::ReleaseShow { verification_dir } => {
+            let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
+            print_document(&AttestationDocument::Release(attestation), Some(stored_path))
+        }
+        crate::AttestAction::WitnessShow {
+            verification_dir,
+            identity,
+        } => cmd_witness_show(&verification_dir, identity.as_deref()),
+        crate::AttestAction::ReleaseVerify {
+            verification_dir,
+            trusted_public_keys,
+        } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir),
     }
 }
 
@@ -139,6 +160,87 @@ async fn cmd_verify(
             verify_project_document(&document, file.as_deref(), digest.as_deref())
         }
     }
+}
+
+fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
+    let documents = load_witness_documents(verification_dir)?;
+    if let Some(identity) = requested_identity {
+        let document = documents
+            .into_iter()
+            .find(|document| document.attestation.witness_identity == identity)
+            .ok_or_else(|| {
+                RunError::Internal(format!(
+                    "no witness attestation with identity '{}' in {}",
+                    identity,
+                    verification_dir.display()
+                ))
+            })?;
+        return print_document(&AttestationDocument::Witness(document.attestation), Some(document.attestation_path));
+    }
+
+    let mut rendered = Vec::with_capacity(documents.len());
+    for document in documents {
+        let text = render_document(
+            &AttestationDocument::Witness(document.attestation),
+            Some(document.attestation_path.as_path()),
+        )?;
+        let envelope: Value = serde_json::from_str(&text)
+            .map_err(|err| RunError::Internal(format!("parsing witness envelope json: {err}")))?;
+        rendered.push(envelope);
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&rendered)
+            .map_err(|err| RunError::Internal(format!("serializing witness envelopes: {err}")))?
+    );
+    Ok(())
+}
+
+fn cmd_release_verify(
+    verification_dir: &Path,
+    explicit_trusted_public_keys: &[String],
+    state_dir: &Path,
+) -> Result<(), RunError> {
+    let trusted_public_keys = resolve_release_verify_keys(explicit_trusted_public_keys, state_dir)?;
+    let output = verify_release_attestation_directory(verification_dir, &trusted_public_keys)?;
+    print_release_verification_output(&output)
+}
+
+fn resolve_release_verify_keys(
+    explicit_trusted_public_keys: &[String],
+    state_dir: &Path,
+) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, RunError> {
+    let parsed_explicit_keys = parse_release_trusted_public_keys(explicit_trusted_public_keys)?;
+    let configured = load_configured_trusted_public_keys(parsed_explicit_keys.as_deref(), state_dir)?;
+    configured.ok_or_else(|| {
+        RunError::Internal(
+            "release verification requires trusted public keys via --trusted-public-key or configured trusted-public-keys"
+                .to_string(),
+        )
+    })
+}
+
+fn parse_release_trusted_public_keys(
+    explicit_trusted_public_keys: &[String],
+) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
+    if explicit_trusted_public_keys.is_empty() {
+        return Ok(None);
+    }
+
+    let mut keys = Vec::with_capacity(explicit_trusted_public_keys.len());
+    for key_str in explicit_trusted_public_keys {
+        let key = nix_compat::narinfo::VerifyingKey::parse(key_str)
+            .map_err(|err| RunError::Internal(format!("invalid trusted public key '{key_str}': {err}")))?;
+        keys.push(key);
+    }
+    Ok(Some(keys))
+}
+
+fn print_release_verification_output(output: &ReleaseVerificationOutput) -> Result<(), RunError> {
+    let text = serde_json::to_string_pretty(output)
+        .map_err(|err| RunError::Internal(format!("serializing release verification output: {err}")))?;
+    println!("{text}");
+    Ok(())
 }
 
 async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Result<StoreHandle, RunError> {
@@ -377,6 +479,12 @@ fn parse_document_text(text: &str) -> Result<(AttestationDocument, Option<String
     if let Ok(value) = serde_json::from_str::<ProjectAttestation>(text) {
         return Ok((AttestationDocument::Project(value), None));
     }
+    if let Ok(value) = serde_json::from_str::<ReleaseAttestation>(text) {
+        return Ok((AttestationDocument::Release(value), None));
+    }
+    if let Ok(value) = serde_json::from_str::<WitnessAttestation>(text) {
+        return Ok((AttestationDocument::Witness(value), None));
+    }
 
     Err(RunError::Internal("input is not a supported attestation document".to_string()))
 }
@@ -392,6 +500,12 @@ fn parse_document_value(kind: &str, value: Value) -> Result<AttestationDocument,
         "project" => serde_json::from_value::<ProjectAttestation>(value)
             .map(AttestationDocument::Project)
             .map_err(|e| RunError::Internal(format!("parsing project attestation: {e}"))),
+        "crunch-release-attestation" => serde_json::from_value::<ReleaseAttestation>(value)
+            .map(AttestationDocument::Release)
+            .map_err(|e| RunError::Internal(format!("parsing release attestation: {e}"))),
+        "crunch-witness-attestation" => serde_json::from_value::<WitnessAttestation>(value)
+            .map(AttestationDocument::Witness)
+            .map_err(|e| RunError::Internal(format!("parsing witness attestation: {e}"))),
         other => Err(RunError::Internal(format!("unsupported attestation kind '{other}'"))),
     }
 }
@@ -419,6 +533,12 @@ fn document_value(document: &AttestationDocument) -> Result<Value, RunError> {
         AttestationDocument::Project(value) => {
             serde_json::to_value(value).map_err(|e| RunError::Internal(format!("serializing project: {e}")))
         }
+        AttestationDocument::Release(value) => {
+            serde_json::to_value(value).map_err(|e| RunError::Internal(format!("serializing release: {e}")))
+        }
+        AttestationDocument::Witness(value) => {
+            serde_json::to_value(value).map_err(|e| RunError::Internal(format!("serializing witness: {e}")))
+        }
     }
 }
 
@@ -432,6 +552,12 @@ fn canonical_document_bytes(document: &AttestationDocument) -> Result<Vec<u8>, R
         }
         AttestationDocument::Project(value) => {
             value.canonical_bytes().map_err(|e| RunError::Internal(format!("project canonicalization: {e}")))
+        }
+        AttestationDocument::Release(value) => {
+            value.canonical_bytes().map_err(|e| RunError::Internal(format!("release canonicalization: {e}")))
+        }
+        AttestationDocument::Witness(value) => {
+            value.canonical_bytes().map_err(|e| RunError::Internal(format!("witness canonicalization: {e}")))
         }
     }
 }
@@ -450,6 +576,14 @@ fn document_digest_hex(document: &AttestationDocument) -> Result<String, RunErro
             .canonical_digest()
             .map(|digest| digest.to_hex())
             .map_err(|e| RunError::Internal(format!("project digest: {e}"))),
+        AttestationDocument::Release(value) => value
+            .canonical_digest()
+            .map(|digest| digest.to_hex())
+            .map_err(|e| RunError::Internal(format!("release digest: {e}"))),
+        AttestationDocument::Witness(value) => value
+            .canonical_digest()
+            .map(|digest| digest.to_hex())
+            .map_err(|e| RunError::Internal(format!("witness digest: {e}"))),
     }
 }
 
@@ -510,6 +644,8 @@ impl AttestationDocument {
             Self::Artifact(_) => "artifact",
             Self::Closure(_) => "closure",
             Self::Project(_) => "project",
+            Self::Release(_) => "crunch-release-attestation",
+            Self::Witness(_) => "crunch-witness-attestation",
         }
     }
 }

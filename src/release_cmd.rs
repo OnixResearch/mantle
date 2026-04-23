@@ -2,6 +2,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::errors::RunError;
+use crate::release_attestation::create_release_attestation;
+use crate::release_attestation::default_verification_dir;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ReleaseBundleCreateRequest;
@@ -9,7 +11,12 @@ use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_source::write_tracked_source_archive;
 
-pub(crate) fn cmd_release(action: crate::ReleaseAction, current_dir: &Path, json: bool) -> Result<(), RunError> {
+pub(crate) fn cmd_release(
+    action: crate::ReleaseAction,
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+) -> Result<(), RunError> {
     match action {
         crate::ReleaseAction::Create {
             release_id,
@@ -29,6 +36,11 @@ pub(crate) fn cmd_release(action: crate::ReleaseAction, current_dir: &Path, json
             workflow_version,
         ),
         crate::ReleaseAction::Verify { bundle_dir } => cmd_release_verify(json, bundle_dir),
+        crate::ReleaseAction::Attest {
+            bundle_dir,
+            verification_dir,
+            signing_key,
+        } => cmd_release_attest(current_dir, state_dir, json, bundle_dir, verification_dir, signing_key),
     }
 }
 
@@ -88,6 +100,46 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
     }
+    Ok(())
+}
+
+fn cmd_release_attest(
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+    bundle_dir: PathBuf,
+    verification_dir: Option<PathBuf>,
+    signing_key: Option<PathBuf>,
+) -> Result<(), RunError> {
+    let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
+    let verified_manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let resolved_verification_dir = match verification_dir {
+        Some(path) => resolve_input_path(current_dir, path),
+        None => default_verification_dir(current_dir, &verified_manifest.release_id),
+    };
+    let created =
+        create_release_attestation(&verified_manifest, &resolved_verification_dir, signing_key.as_deref(), state_dir)?;
+    if json {
+        let rendered = serde_json::json!({
+            "release_id": created.attestation.release_id,
+            "digest": created.digest_hex,
+            "signer": created.signer_key_name,
+            "attestation_path": created.attestation_path.display().to_string(),
+            "signature_path": created.signature_path.display().to_string(),
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing release attestation output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("release attestation: {}", created.attestation_path.display());
+    println!("signature: {}", created.signature_path.display());
+    println!("release id: {}", created.attestation.release_id);
+    println!("digest: {}", created.digest_hex);
+    println!("signer: {}", created.signer_key_name);
     Ok(())
 }
 
