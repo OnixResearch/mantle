@@ -26,7 +26,7 @@ The first wave MUST continue to cover these concrete scopes:
   `list_stale(...)`, while std adapters keep `RefreshResolver`
   implementations and all resolver I/O
 
-The second wave MUST cover these concrete scopes:
+The second wave MUST continue to cover these concrete scopes:
 
 - `crunch-shell-core`: shell sidecar JSON validation plus activation
   env/path/hook planning over owned UTF-8 `String`, `Vec<String>`, and
@@ -39,6 +39,21 @@ The second wave MUST cover these concrete scopes:
   `src/release_evidence.rs` and `src/release_cmd.rs` keep file copying,
   directory hashing, manifest I/O, proof-bundle loading, digesting, and CLI
   formatting in the std shell
+
+The third wave MUST cover these concrete scopes:
+
+- `crunch-delta-core`: delta transfer model, protocol negotiation, and reuse
+  planning currently implemented in
+  `crates/crunch-delta/src/{model.rs,negotiation.rs,planner.rs}`, including
+  `ArtifactNode`, `BlobNode`, `DirectoryNode`, `ChunkRef`, `DeltaDigest`,
+  `ChunkProfile`, `ClosureFixture`, `ReceiverManifest`, `TransferPlan`,
+  `TransferTally`, `NegotiationOffer`, `NegotiatedProtocol`, `PlanError`,
+  `NegotiationError`, `plan_transfer(...)`, `negotiate_protocol(...)`,
+  `chunk_profile_v1(...)`, and `chunk_profile_wire_v1(...)`, where
+  `DeltaDigest` is the core-local 32-byte BLAKE3 digest surface and receiver /
+  negotiation membership uses ordered `BTreeSet` + deterministic `Vec`
+  traversal state while the std adaptor keeps castore/store/runtime conversion
+  before the core call
 
 Additional domains MAY follow later, but they MUST use the same core/shell
 pattern once adopted.
@@ -66,15 +81,36 @@ ID: functional.core.dedicated.nostd.crates.second.wave
 - AND `crunch-shell` plus the root `crunch` release-evidence path remain std
   shell/adaptor layers around those cores
 
+#### Scenario: Third wave adds delta planning core crate
+ID: functional.core.dedicated.nostd.crates.third.wave
+
+- GIVEN the third no-std extraction wave lands
+- WHEN the workspace is inspected
+- THEN `crunch-delta-core` exists as a dedicated no-std crate
+- AND `crunch-delta` remains the std adaptor layer around manifest probing,
+  substitution orchestration, and store/network conversion
+
+#### Scenario: Third wave preserves delta planning and negotiation semantics
+ID: functional.core.dedicated.nostd.crates.third.wave.semantic.parity
+
+- GIVEN sender/receiver fixtures and negotiation offers that already define the
+  current delta planning and protocol behavior
+- WHEN the third-wave extraction normalizes digests and membership sets before
+  calling `crunch-delta-core`
+- THEN `plan_transfer(...)`, `negotiate_protocol(...)`, `chunk_profile_v1(...)`,
+  and `chunk_profile_wire_v1(...)` keep the same semantics as before the move
+- AND the extraction changes crate boundaries, not delta reuse policy or wire
+  meaning
+
 ### Requirement: Core APIs stay on plain data and typed results
 
 Functional-core APIs MUST accept plain owned data and return plans, normalized
 values, validation results, or typed errors. They MUST NOT perform effects.
 
-For the adopted first- and second-wave core crates, every public free-function
-signature, public inherent method signature, public struct field, public enum
-payload, and public type alias in the core crates MUST use only recursively
-allowed boundary types:
+For the adopted first-, second-, and third-wave core crates, every public
+free-function signature, public inherent method signature, public struct field,
+public enum payload, and public type alias in the core crates MUST use only
+recursively allowed boundary types:
 
 - crate-local named structs/enums
 - scalars: `bool`, `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`
@@ -87,12 +123,17 @@ Those checked boundary surfaces MUST NOT use references, slices, tuples,
 `impl Trait`, trait objects, `Rc`, `Arc`, `Cow`, or any
 path/process/time/env/os boundary type.
 
-The adopted first- and second-wave core crates MUST NOT define public traits.
-Public trait-impl methods are outside this no-references rule. The API-shape
-checker MUST ignore trait-required receiver/formatter signatures and instead
-inspect only the checked boundary surfaces named above.
+The adopted first-, second-, and third-wave core crates MUST NOT define public
+traits. Public trait-impl methods are outside this no-references rule. The
+API-shape checker MUST ignore trait-required receiver/formatter signatures and
+instead inspect only the checked boundary surfaces named above.
 
 ID: functional.core.apis.plain.data.typed.results
+
+For the adopted third wave, the public `crunch-delta-core` boundary MUST expose
+`DeltaDigest` plus ordered `BTreeSet` / `Vec` traversal data. It MUST NOT
+expose `snix_castore::B3Digest`, `HashSet`, `PathInfo`, async traits, or other
+std/runtime-owned transport surfaces on its public API.
 
 Core APIs MUST NOT read files, spawn subprocesses, fetch from the network, read
 ambient environment variables, consult the wall clock, or write logs directly.
@@ -151,6 +192,21 @@ The required shell-adapter tests MUST prove these assertions:
   and `cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
   prove malformed release evidence is rejected without pushing file I/O or CLI
   formatting into the no-std core boundary
+- `cargo test -p crunch-delta substitution_adapter_keeps_async_store_and_network_in_shell`
+  proves `crunch-delta` keeps manifest probing, HTTP/session framing,
+  `PathInfo` handling, attestation persistence, `B3Digest` / `HashSet`
+  conversion, and store/network integration in the std adaptor while
+  `crunch-delta-core` only receives normalized `DeltaDigest`, ordered
+  `BTreeSet` membership, `ClosureFixture`, `ReceiverManifest`, and
+  `NegotiationOffer` values
+- `cargo test -p crunch-delta delta_facade_reexports_core_planner_types`
+  proves `crunch-delta` still exposes the intended std-facing planner /
+  negotiation facade after the core split instead of forcing callers to depend
+  directly on `crunch-delta-core`
+- `cargo test -p crunch-delta-core duplicate_version_offer_is_rejected` and
+  `cargo test -p crunch-delta-core prefix_mismatch_is_rejected` prove malformed
+  negotiation offers and planner prefix mismatches are rejected inside the core
+  instead of leaking runtime transport/state types back across the boundary
 
 #### Scenario: Project refresh keeps resolver I/O in shell
 ID: functional.core.shell.adapters.effect.translation.project.refresh.io.in.shell
@@ -189,6 +245,27 @@ ID: functional.core.shell.adapters.effect.translation.release.evidence.bundle.io
   the std shell before or after the core call
 - AND `crunch-release-core` only receives manifest bytes or owned manifest data
 
+#### Scenario: Delta substitution keeps async store and network work in shell
+ID: functional.core.shell.adapters.effect.translation.delta.substitution.io.in.shell
+
+- GIVEN delta substitution needs castore probing, remote negotiation, or final
+  `PathInfo` / attestation integration
+- WHEN crunch performs delta planning or reuse negotiation
+- THEN `crunch-delta` performs that std/async/store/network work before or
+  after the core call
+- AND `crunch-delta-core` only receives normalized planning and negotiation
+  inputs over owned no-std-safe data
+
+#### Scenario: Delta facade stays std-facing after the split
+ID: functional.core.shell.adapters.effect.translation.delta.facade.compatibility
+
+- GIVEN downstream code depends on the std-facing `crunch-delta` crate today
+- WHEN the third-wave extraction lands
+- THEN `crunch-delta` still re-exports or wraps the intended planner /
+  negotiation facade
+- AND callers do not need to depend directly on `crunch-delta-core` just to use
+  the existing std-facing delta surface
+
 ### Requirement: No-std boundary stays continuously verified
 
 The no-std core boundary MUST stay covered by repeatable validation.
@@ -196,9 +273,12 @@ The no-std core boundary MUST stay covered by repeatable validation.
 ID: functional.core.nostd.boundary.continuously.verified
 
 Validation for this change MUST run in the repo's rustup-managed toolchain
-environment. It MUST first ensure the `wasm32-unknown-unknown` target is
-installed via `rustup target add wasm32-unknown-unknown` or fail with a clear
-prerequisite error.
+environment when rustup is available, or in the active preinstalled cargo/rustc
+environment when rustup is unavailable. It MUST first ensure the
+`wasm32-unknown-unknown` target is available, either by running
+`rustup target add wasm32-unknown-unknown` or by verifying a preinstalled
+`wasm32-unknown-unknown` target under the active `rustc` sysroot; otherwise it
+MUST fail with a clear prerequisite error.
 
 Validation MUST then include these exact commands:
 
@@ -206,14 +286,19 @@ Validation MUST then include these exact commands:
 - `cargo check -p crunch-project-core`
 - `cargo check -p crunch-shell-core`
 - `cargo check -p crunch-release-core`
+- `cargo check -p crunch-delta-core`
 - `cargo check -p crunch-attestation-core --target wasm32-unknown-unknown`
 - `cargo check -p crunch-project-core --target wasm32-unknown-unknown`
 - `cargo check -p crunch-shell-core --target wasm32-unknown-unknown`
 - `cargo check -p crunch-release-core --target wasm32-unknown-unknown`
+- `cargo check -p crunch-delta-core --target wasm32-unknown-unknown`
 - `cargo test -p crunch-attestation-core`
 - `cargo test -p crunch-project-core`
 - `cargo test -p crunch-shell-core`
 - `cargo test -p crunch-release-core`
+- `cargo test -p crunch-delta-core`
+- `cargo test -p crunch-delta-core duplicate_version_offer_is_rejected`
+- `cargo test -p crunch-delta-core prefix_mismatch_is_rejected`
 - `cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core`
 - `cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core`
 - `cargo test -p crunch-shell adapter_preserves_path_order_and_appends_bin`
@@ -224,6 +309,8 @@ Validation MUST then include these exact commands:
 - `cargo test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance`
 - `cargo test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation`
 - `cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
+- `cargo test -p crunch-delta substitution_adapter_keeps_async_store_and_network_in_shell`
+- `cargo test -p crunch-delta delta_facade_reexports_core_planner_types`
 - `scripts/check-no-std-core-deps.sh`
 - `scripts/check-no-std-core-purity.sh`
 - `scripts/check-no-std-core-scope.sh`
@@ -231,8 +318,8 @@ Validation MUST then include these exact commands:
 - `scripts/check-no-std-core-ownership.sh`
 
 The dependency-boundary checker MUST operate as an allowlist, not a denylist.
-It MUST fail if the dependency closure of any adopted first- or second-wave
-core crate includes any crate not named in the checked-in allowlist
+It MUST fail if the dependency closure of any adopted first-, second-, or
+third-wave core crate includes any crate not named in the checked-in allowlist
 `openspec/specs/functional-core/validation/deps-allowlist.txt`.
 
 The checker MUST also verify enabled features with `cargo tree -e features` or
@@ -243,15 +330,15 @@ The backing adopted-core inventory that drives
 `scripts/check-no-std-core-scope.sh`, `scripts/check-no-std-core-api-shape.sh`,
 and `scripts/check-no-std-core-ownership.sh` MUST live as one checked-in source
 under `openspec/specs/functional-core/validation/`. That inventory MUST
-enumerate every adopted first- and second-wave core crate, its required
-exports, and its std adapter files. `scripts/no_std_core_checks.py` MAY cache
-parsed inventory data during one run, but it MUST fail when `crunch-shell-core`,
-`crunch-release-core`, or their named exported surfaces are absent from that
-checked-in backing inventory.
+enumerate every adopted first-, second-, and third-wave core crate, its
+required exports, and its std adapter files. `scripts/no_std_core_checks.py`
+MAY cache parsed inventory data during one run, but it MUST fail when
+`crunch-shell-core`, `crunch-release-core`, `crunch-delta-core`, or their named
+exported surfaces are absent from that checked-in backing inventory.
 
-The purity checker MUST fail if adopted first- or second-wave core source uses
-any banned direct ambient-effect or non-determinism pattern, including these
-minimum patterns:
+The purity checker MUST fail if adopted first-, second-, or third-wave core
+source uses any banned direct ambient-effect or non-determinism pattern,
+including these minimum patterns:
 
 - `std::`
 - `println!`
@@ -273,13 +360,14 @@ The scope checker MUST fail unless all of these statements are true:
 
 - `crates/crunch-attestation-core/src/lib.rs`,
   `crates/crunch-project-core/src/lib.rs`,
-  `crates/crunch-shell-core/src/lib.rs`, and
-  `crates/crunch-release-core/src/lib.rs` each declare `#![no_std]` and
+  `crates/crunch-shell-core/src/lib.rs`,
+  `crates/crunch-release-core/src/lib.rs`, and
+  `crates/crunch-delta-core/src/lib.rs` each declare `#![no_std]` and
   `extern crate alloc`
-- the default feature set of each adopted first- or second-wave core crate
-  remains no-std
-- none of the adopted first- or second-wave core crates defines a `std`
-  feature at all
+- the default feature set of each adopted first-, second-, or third-wave core
+  crate remains no-std
+- none of the adopted first-, second-, or third-wave core crates defines a
+  `std` feature at all
 - `crunch-attestation-core` exports the first-wave attestation modules and
   functions named in `functional.core.dedicated.nostd.crates`
 - `crunch-project-core` exports the first-wave project modules and functions
@@ -291,13 +379,15 @@ The scope checker MUST fail unless all of these statements are true:
   `ReleaseWorkflowIdentity`, `ReleaseProofLinkage`,
   `FullSelfHostingProofIdentityFields`, and
   `extract_full_self_hosting_proof_identity_fields(...)`
+- `crunch-delta-core` exports the third-wave delta model, negotiation, and
+  planner types/functions named in `functional.core.dedicated.nostd.crates`
 
 The API-shape checker MUST operate as an allowlist over the checked boundary
 surfaces defined by `functional.core.apis.plain.data.typed.results`. It MUST
 recursively inspect generic arguments and fail if any checked boundary surface
-in the adopted first- or second-wave core crates exposes a type outside that
-allowed boundary set. It MUST also fail if any adopted first- or second-wave
-core crate defines any `pub trait`.
+in the adopted first-, second-, or third-wave core crates exposes a type
+outside that allowed boundary set. It MUST also fail if any adopted first-,
+second-, or third-wave core crate defines any `pub trait`.
 
 The ownership checker MUST continue to deterministically inspect the first-wave
 legacy std source paths:
@@ -333,23 +423,29 @@ is not fully automatable, final validation MUST also update the checked-in
 review artifact `openspec/specs/functional-core/evidence/ownership-review.md`.
 That artifact MUST still list every touched std workspace source file outside
 those first-wave legacy paths derived from the union of git history for the
-active path `openspec/changes/no-std-functional-core/` and the archived path
-`openspec/changes/archive/*-no-std-functional-core/`, when present, through
+active paths `openspec/changes/no-std-functional-core/` and
+`openspec/changes/delta-functional-core/` plus the archived paths
+`openspec/changes/archive/*-no-std-functional-core/` and
+`openspec/changes/archive/*-delta-functional-core/`, when present, through
 `HEAD`.
 
-That artifact MUST also explicitly list these second-wave std adapter files even
-if the current implementation change does not edit them:
+That artifact MUST also explicitly list these second- and third-wave std
+adapter files even if the current implementation change does not edit them:
 
 - `crates/crunch-shell/src/lib.rs`
 - `crates/crunch-shell/src/adapter.rs`
 - `crates/crunch-shell/src/types.rs`
 - `src/release_evidence.rs`
 - `src/release_cmd.rs`
+- `crates/crunch-delta/src/lib.rs`
+- `crates/crunch-delta/src/manifest.rs`
+- `crates/crunch-delta/src/substitution.rs`
 
-The ownership review artifact MUST classify each listed second-wave std adapter
-file as `adapter-only` or `unrelated`, and it MUST record a review verdict that
-shell/release business logic remains in `crunch-shell-core` and
-`crunch-release-core` rather than drifting back into those std files.
+The ownership review artifact MUST classify each listed second- and third-wave
+std adapter file as `adapter-only` or `unrelated`, and it MUST record a review
+verdict that shell/release business logic remains in `crunch-shell-core` and
+`crunch-release-core`, while delta planning/protocol business logic remains in
+`crunch-delta-core` rather than drifting back into those std files.
 
 #### Scenario: Regression introduces std leak
 ID: functional.core.nostd.boundary.continuously.verified.regression.introduces.std.leak

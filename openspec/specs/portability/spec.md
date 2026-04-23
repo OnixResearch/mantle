@@ -247,23 +247,24 @@ required compilation floor.
 ID: portability.nostd.core.compiles.without.std
 
 For the adopted no-std waves, `crunch-attestation-core`,
-`crunch-project-core`, `crunch-shell-core`, and `crunch-release-core` MUST
-compile without `std`. Their surrounding std crates or std root modules MUST
-own path discovery, file I/O, subprocesses, networking, clocks, hashing of
-host files, and other host facilities before translating those inputs into
-plain core values.
+`crunch-project-core`, `crunch-shell-core`, `crunch-release-core`, and
+`crunch-delta-core` MUST compile without `std`. Their surrounding std crates or
+std root modules MUST own path discovery, file I/O, subprocesses, networking,
+clocks, hashing of host files, store/runtime probing, and other host
+facilities before translating those inputs into plain core values.
 
 The required no-std portability proof for the adopted waves MUST satisfy
 `functional.core.nostd.boundary.continuously.verified`, including the target
 prerequisite for `wasm32-unknown-unknown`.
 
-#### Scenario: First-wave core compiles on no-std target
+#### Scenario: Adopted cores compile on no-std target
 ID: portability.nostd.core.compiles.without.std.target
 
 - GIVEN the adopted no-std core crates
 - WHEN the required no-std boundary validation runs
 - THEN `crunch-attestation-core`, `crunch-project-core`, `crunch-shell-core`,
-  and `crunch-release-core` compile for `wasm32-unknown-unknown`
+  `crunch-release-core`, and `crunch-delta-core` compile for
+  `wasm32-unknown-unknown`
 - AND their shell/adaptor crates remain free to use std on supported hosts
 
 ### Requirement: Adopted portable core stays inside approved no-std dependency closure
