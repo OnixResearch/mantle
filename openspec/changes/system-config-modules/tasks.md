@@ -60,20 +60,21 @@
 
 ## Phase 5: Topological sort and dependency graph
 
-- [ ] Implement `build_dependency_graph(modules: &[ValidatedModule]) -> Result<DependencyGraph, SystemConfigError>` — builds directed graph from `inputs` edges (EVAL-1)
-- [ ] Add provider edges to dependency graph: `produces_providers` → `consumes_providers` (EVAL-6b)
-- [ ] Implement Kahn's algorithm with stable tiebreak (priority then name) for topological sort (EVAL-1)
-- [ ] Implement cycle detection: if Kahn's queue empties early, report all remaining nodes and involved provider types (EVAL-2, EVAL-6c)
-- [ ] Enforce fixed limits: max chain depth 256, max provider types per module 32, max total provider edges 4096 (EVAL-8)
-- [ ] Unit test: 5 modules, linear chain A→B→C→D→E, verify order
-- [ ] Unit test: diamond dependency A→B, A→C, B→D, C→D, verify D before B,C before A
-- [ ] Unit test: provider-only ordering — A produces "firewall", C consumes "firewall", verify A before C with no explicit inputs
-- [ ] Unit test: stable tiebreak — modules with no deps, different priorities, verify lower priority number first
-- [ ] Unit test: stable tiebreak — equal priority, verify alphabetical
-- [ ] Unit test: cycle detection — A→B→C→A, verify error names all three
-- [ ] Unit test: provider cycle — A produces P/consumes Q, B produces Q/consumes P, verify error names modules and provider types
-- [ ] Unit test: chain depth limit exceeded
-- [ ] Unit test: provider edge count limit exceeded
+- [x] Implement `build_dependency_graph(modules: &[ValidatedModule]) -> Result<DependencyGraph, SystemConfigError>` — builds directed graph from `inputs` edges (EVAL-1)
+- [x] Add provider edges to dependency graph: `produces_providers` → `consumes_providers` (EVAL-6b)
+- [x] Implement Kahn's algorithm with stable tiebreak (priority then name) for topological sort (EVAL-1)
+- [x] Implement cycle detection: if Kahn's queue empties early, report all remaining nodes and involved provider types (EVAL-2, EVAL-6c)
+- [x] Enforce fixed limits: max chain depth 256, max provider types per module 32, max total provider edges 4096 (EVAL-8)
+- [x] Unit test: 5 modules, linear chain A→B→C→D→E, verify order
+- [x] Unit test: diamond dependency A→B, A→C, B→D, C→D, verify D before B,C before A
+- [x] Unit test: provider-only ordering — A produces "firewall", C consumes "firewall", verify A before C with no explicit inputs
+- [x] Unit test: stable tiebreak — modules with no deps, different priorities, verify lower priority number first
+- [x] Unit test: stable tiebreak — equal priority, verify alphabetical
+- [x] Unit test: cycle detection — A→B→C→A, verify error names all three
+- [x] Unit test: provider cycle — A produces P/consumes Q, B produces Q/consumes P, verify error names modules and provider types
+- [x] Unit test: chain depth limit exceeded
+- [x] Unit test: provider edge count limit exceeded
+  - Evidence: `cargo test -p crunch-system graph:: -- --nocapture` passed with `9 passed; 0 failed` on 2026-04-22.
 
 ## Phase 6: Module evaluator (orchestration)
 
