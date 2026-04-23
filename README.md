@@ -923,6 +923,34 @@ The lockfile (`crunch.lock`) stores resolved revisions and NAR hashes.
 hashing) and updates both `crunch.lock` and `.crunch/inputs.ncl`
 (generated Nickel bindings).
 
+## System configuration
+
+`crunch` now has a native system-configuration pipeline for Nickel module
+inventories.
+
+```bash
+# Dry-run a checked-in example inventory to merged derivations
+crunch system eval examples/system-config/inventory.ncl
+
+# Stop after merged fragments instead of assembling derivations
+crunch system eval examples/system-config/inventory.ncl --stop-after fragments
+
+# Build the assembled machine derivations
+crunch system build examples/system-config/inventory.ncl
+```
+
+The default module directory is `./modules` next to the inventory file, and the
+checked-in example inventory uses `examples/system-config/modules/`. `crunch
+system eval` supports `--machine <name>` filters, `--assembler <name>` backend
+overrides, and `--format json|nickel` output selection (`nickel` is reserved but
+not implemented yet). `crunch system build` reuses the standard crunch build
+pipeline and, under `--json`, returns a machine-level envelope whose successful
+machine entries embed the existing `crunch-build-report-v1` payloads.
+
+For module shape, inventory schema, and authoring examples, see
+[`docs/system-config.md`](docs/system-config.md) and
+[`examples/system-config/README.md`](examples/system-config/README.md).
+
 ## CLI
 
 ### Commands
@@ -953,6 +981,10 @@ crunch upgrade                   Migrate project files to the current schema
 crunch shell [name]              Enter or execute inside a dev shell
 crunch develop [name]            Deprecated alias for `crunch shell`
 crunch run [name] [-- args...]   Build and execute a package binary
+
+# System configuration
+crunch system eval <inventory>   Evaluate a module inventory to fragments or derivations
+crunch system build <inventory>  Build a module inventory through the system pipeline
 ```
 
 ### Global flags

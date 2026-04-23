@@ -96,7 +96,8 @@
 - [x] Unit test: orphan provider warning — module consumes type no module produces, verify warning in `warnings` and empty providers array (EVAL-6e)
 - [x] Unit test: fail-open — module A fails, dependent module C also fails with chained diagnostic
 - [x] Unit test: determinism — run same modules+inventory twice through the evaluator, verify identical `EvaluatedFragment` output (EVAL-7)
-- [ ] Call `handle.drop_value()` for consumed `ValidatedModule` value IDs after `impl` invocation and JSON serialization to prevent value table growth
+- [x] Call `handle.drop_value()` for consumed `ValidatedModule` value IDs after `impl` invocation and JSON serialization to prevent value table growth
+  - Evidence: `src/system_cmd.rs::load_validated_modules_on_thread()` now drops each evaluated module root `ValueId` with `drop_module_root_value(...)` immediately after `validate_module(...)` succeeds, so the evaluator thread does not retain validated module root values for the rest of the load pass.
   - Evidence: `cargo test -p crunch-system evaluator:: -- --nocapture` passed with `11 passed; 0 failed` on 2026-04-22.
 
 ## Phase 7: Fragment collector
@@ -173,3 +174,4 @@
 - [x] Write `docs/system-config.md` covering module format, inventory schema, CLI usage, and assembler backends
 - [x] Add module authoring examples to `examples/system-config/README.md`
   - Evidence: `README.md`, `docs/system-config.md`, and `examples/system-config/README.md` were updated on 2026-04-23 to document the native system-config CLI, inventory/module schema, backend behavior, and the checked-in example fixture.
+  - Verification: `cargo run --quiet -- system eval examples/system-config/inventory.ncl` succeeded on 2026-04-23, and `cargo run --quiet -- system build examples/system-config/inventory.ncl` produced the documented human summary shape with `successful_machines`, `failed_machines`, `warning_count`, and `error_count`.

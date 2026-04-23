@@ -332,6 +332,7 @@ async fn load_validated_modules_on_thread(
         let validated = validate_module(name, root_value_id, handle)
             .await
             .map_err(|error| fatal_system_error(error, 3))?;
+        drop_module_root_value(handle, root_value_id, name).await?;
         modules.push(validated);
     }
     Ok(modules)
@@ -346,6 +347,13 @@ async fn evaluate_module_file(handle: &EvalThreadHandle, path: &Path) -> Result<
         .evaluate_file(path.to_path_buf(), options)
         .await
         .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))
+}
+
+async fn drop_module_root_value(handle: &EvalThreadHandle, value_id: ValueId, module_name: &str) -> Result<(), RunError> {
+    handle
+        .drop_value(value_id)
+        .await
+        .map_err(|error| RunError::Internal(format!("dropping module root value for {module_name}: {error}")))
 }
 
 fn shutdown_eval_thread(runtime: tokio::runtime::Runtime, handle: EvalThreadHandle) -> Result<(), RunError> {
