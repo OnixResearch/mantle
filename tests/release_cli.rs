@@ -200,6 +200,12 @@ fn write_release_signing_key(path: &Path) {
     write_file(path, format!("{RELEASE_SIGNING_KEY}\n").as_bytes());
 }
 
+fn write_generated_signing_key(path: &Path) -> KeyPair {
+    let (keypair, key_line) = crunch_build::generate_keypair();
+    write_file(path, format!("{key_line}\n").as_bytes());
+    keypair
+}
+
 fn read_release_attestation(verification_dir: &Path) -> ReleaseAttestation {
     serde_json::from_slice(&std::fs::read(verification_dir.join("release-attestation.json")).unwrap()).unwrap()
 }
@@ -550,6 +556,124 @@ fn release_attest_honors_json_output() {
     assert_eq!(json["release_id"], "crunch-0.1.0-rc1");
     assert_eq!(json["attestation_path"], verification_dir.join("release-attestation.json").display().to_string());
     assert_eq!(json["signature_path"], verification_dir.join("release-attestation.json.sig").display().to_string());
+}
+
+#[test]
+fn attest_witness_create_writes_signed_witness_attestation() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let witness_signing_key_path = temp.path().join("witness.key");
+    let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+
+    let create_output = crunch()
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .arg("--signing-key")
+        .arg(&witness_signing_key_path)
+        .output()
+        .unwrap();
+    assert!(create_output.status.success(), "{}", String::from_utf8_lossy(&create_output.stderr));
+    let created_json: serde_json::Value = serde_json::from_slice(&create_output.stdout).unwrap();
+
+    assert_eq!(created_json["kind"], "crunch-witness-attestation");
+    assert_eq!(created_json["signer"], witness_keypair.verifying_key.name());
+    assert_eq!(created_json["stored_path"], verification_dir.join("witnesses/witness-a.json").display().to_string());
+    assert_eq!(
+        created_json["signature_path"],
+        verification_dir.join("witnesses/witness-a.json.sig").display().to_string()
+    );
+
+    write_policy(&verification_dir, release_keypair().verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair().verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["matching_witness_count"], 1);
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+}
+
+#[test]
+fn attest_witness_create_rejects_rebuilt_binary_count_mismatch() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let witness_signing_key_path = temp.path().join("witness.key");
+    let _witness_keypair = write_generated_signing_key(&witness_signing_key_path);
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let extra_binary_path = temp.path().join("extra-bin");
+    write_file(&extra_binary_path, b"extra-binary");
+
+    crunch()
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--rebuilt-binary")
+        .arg(&extra_binary_path)
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .arg("--signing-key")
+        .arg(&witness_signing_key_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("rebuilt binary count mismatch"));
 }
 
 #[test]

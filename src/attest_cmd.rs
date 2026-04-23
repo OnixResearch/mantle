@@ -24,7 +24,9 @@ use serde_json::Value;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::errors::RunError;
+use crate::release_attestation::CreatedWitnessAttestation;
 use crate::release_attestation::ReleaseVerificationOutput;
+use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
 use crate::release_attestation::verify_release_attestation_directory;
@@ -115,6 +117,25 @@ async fn cmd_attest_async(
             let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
             print_document(&AttestationDocument::Release(attestation), Some(stored_path))
         }
+        crate::AttestAction::WitnessCreate {
+            verification_dir,
+            rebuilt_binary,
+            identity,
+            system,
+            toolchain,
+            host_class,
+            signing_key,
+        } => cmd_witness_create(
+            current_dir,
+            state_dir,
+            &verification_dir,
+            &rebuilt_binary,
+            identity.as_deref(),
+            &system,
+            &toolchain,
+            &host_class,
+            signing_key.as_deref(),
+        ),
         crate::AttestAction::WitnessShow {
             verification_dir,
             identity,
@@ -160,6 +181,32 @@ async fn cmd_verify(
             verify_project_document(&document, file.as_deref(), digest.as_deref())
         }
     }
+}
+
+fn cmd_witness_create(
+    current_dir: &Path,
+    state_dir: &Path,
+    verification_dir: &Path,
+    rebuilt_binary: &[PathBuf],
+    identity: Option<&str>,
+    system: &str,
+    toolchain: &str,
+    host_class: &str,
+    signing_key: Option<&Path>,
+) -> Result<(), RunError> {
+    let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
+    let resolved_binaries = resolve_cli_paths(current_dir, rebuilt_binary);
+    let created = create_witness_attestation(
+        &resolved_verification_dir,
+        &resolved_binaries,
+        identity,
+        system,
+        toolchain,
+        host_class,
+        signing_key,
+        state_dir,
+    )?;
+    print_created_witness_attestation(&created)
 }
 
 fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
@@ -220,6 +267,18 @@ fn resolve_release_verify_keys(
     })
 }
 
+fn resolve_cli_paths(current_dir: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
+    paths.iter().map(|path| resolve_cli_path(current_dir, path.as_path())).collect()
+}
+
+fn resolve_cli_path(current_dir: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        current_dir.join(path)
+    }
+}
+
 fn parse_release_trusted_public_keys(
     explicit_trusted_public_keys: &[String],
 ) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
@@ -234,6 +293,25 @@ fn parse_release_trusted_public_keys(
         keys.push(key);
     }
     Ok(Some(keys))
+}
+
+fn print_created_witness_attestation(created: &CreatedWitnessAttestation) -> Result<(), RunError> {
+    let attestation = serde_json::to_value(&created.attestation)
+        .map_err(|err| RunError::Internal(format!("serializing witness attestation: {err}")))?;
+    let rendered = serde_json::json!({
+        "kind": "crunch-witness-attestation",
+        "digest": created.digest_hex,
+        "stored_path": created.attestation_path.display().to_string(),
+        "signature_path": created.signature_path.display().to_string(),
+        "signer": created.signer_key_name,
+        "attestation": attestation,
+    });
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&rendered)
+            .map_err(|err| RunError::Internal(format!("serializing created witness output: {err}")))?
+    );
+    Ok(())
 }
 
 fn print_release_verification_output(output: &ReleaseVerificationOutput) -> Result<(), RunError> {

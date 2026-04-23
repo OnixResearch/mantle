@@ -8,6 +8,7 @@ use crunch_attestation::DetachedSignature;
 use crunch_attestation::FinalClass;
 use crunch_attestation::PolicyFailureReason;
 use crunch_attestation::PolicyStatus;
+use crunch_attestation::RebuildEnvironmentSummary;
 use crunch_attestation::ReleaseAttestation;
 use crunch_attestation::ReleaseAttestationInit;
 use crunch_attestation::ReleasePolicy;
@@ -25,6 +26,7 @@ use serde::Serialize;
 use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::errors::RunError;
 use crate::release_evidence::ReleaseEvidenceManifest;
+use crate::release_evidence::compute_path_blake3_digest;
 
 const BLAKE3_ALGORITHM_NAME: &str = "blake3";
 pub(crate) const RELEASE_ATTESTATION_FILE_NAME: &str = "release-attestation.json";
@@ -45,6 +47,15 @@ pub(crate) struct CreatedReleaseAttestation {
 pub(crate) struct WitnessDocument {
     pub attestation: WitnessAttestation,
     pub attestation_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CreatedWitnessAttestation {
+    pub attestation: WitnessAttestation,
+    pub digest_hex: String,
+    pub signer_key_name: String,
+    pub attestation_path: PathBuf,
+    pub signature_path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -87,6 +98,53 @@ pub(crate) fn create_release_attestation(
         attestation,
         digest_hex,
         signer_key_name: keypair.verifying_key.name().to_string(),
+        attestation_path,
+        signature_path,
+    })
+}
+
+pub(crate) fn create_witness_attestation(
+    verification_dir: &Path,
+    rebuilt_binary_paths: &[PathBuf],
+    witness_identity: Option<&str>,
+    system: &str,
+    toolchain: &str,
+    host_class: &str,
+    signing_key_path: Option<&Path>,
+    state_dir: &Path,
+) -> Result<CreatedWitnessAttestation, RunError> {
+    let (release_attestation, _stored_path) = load_release_attestation_document(verification_dir)?;
+    let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+    let signer_key_name = keypair.verifying_key.name().to_string();
+    let resolved_identity = resolve_witness_identity(witness_identity, &signer_key_name)?;
+    let rebuilt_digests = compute_rebuilt_binary_digests(&release_attestation, rebuilt_binary_paths)?;
+    let attestation = WitnessAttestation::new(
+        release_attestation
+            .canonical_digest()
+            .map_err(|err| RunError::Build(format!("release attestation digest: {err}")))?,
+        resolved_identity.clone(),
+        rebuilt_digests,
+        RebuildEnvironmentSummary {
+            system: system.to_string(),
+            toolchain: toolchain.to_string(),
+            host_class: host_class.to_string(),
+        },
+    );
+    let canonical_bytes = canonical_witness_bytes(&attestation)?;
+    let digest_hex = AttestationDigest::from_canonical_bytes(canonical_bytes.clone()).to_hex();
+    let signature = sign_detached_message(&canonical_bytes, &keypair);
+    let witness_dir = prepare_witness_dir(verification_dir)?;
+    let attestation_path = witness_dir.join(format!("{resolved_identity}.json"));
+    let signature_path = witness_dir.join(format!("{resolved_identity}.json.sig"));
+    std::fs::write(&attestation_path, &canonical_bytes)
+        .map_err(|err| RunError::Internal(format!("writing {}: {err}", attestation_path.display())))?;
+    std::fs::write(&signature_path, format!("{}\n", encode_detached_signature(&signature)))
+        .map_err(|err| RunError::Internal(format!("writing {}: {err}", signature_path.display())))?;
+
+    Ok(CreatedWitnessAttestation {
+        attestation,
+        digest_hex,
+        signer_key_name,
         attestation_path,
         signature_path,
     })
@@ -336,7 +394,68 @@ fn prepare_verification_dir(dir: &Path) -> Result<(), RunError> {
     std::fs::create_dir_all(dir).map_err(|err| RunError::Internal(format!("creating {}: {err}", dir.display())))?;
     let witnesses_dir = dir.join(WITNESSES_DIR_NAME);
     std::fs::create_dir_all(&witnesses_dir)
-        .map_err(|err| RunError::Internal(format!("creating {}: {err}", witnesses_dir.display())))
+        .map_err(|err| RunError::Internal(format!("creating {}: {err}", witnesses_dir.display())))?;
+    Ok(())
+}
+
+fn prepare_witness_dir(verification_dir: &Path) -> Result<PathBuf, RunError> {
+    prepare_verification_dir(verification_dir)?;
+    let witness_dir = verification_dir.join(WITNESSES_DIR_NAME);
+    assert!(witness_dir.starts_with(verification_dir), "witness dir must stay under verification dir");
+    Ok(witness_dir)
+}
+
+fn resolve_witness_identity(requested_identity: Option<&str>, signer_key_name: &str) -> Result<String, RunError> {
+    let identity = match requested_identity {
+        Some(identity) => identity.trim(),
+        None => signer_key_name,
+    };
+    validate_witness_identity(identity)?;
+    Ok(identity.to_string())
+}
+
+fn validate_witness_identity(identity: &str) -> Result<(), RunError> {
+    if identity.is_empty() {
+        return Err(RunError::Internal("witness identity must not be empty".to_string()));
+    }
+    if identity == "." || identity == ".." {
+        return Err(RunError::Internal(format!("witness identity must not be '{}'", identity)));
+    }
+    if identity.contains('/') || identity.contains('\\') {
+        return Err(RunError::Internal(format!("witness identity must not contain path separators: {}", identity)));
+    }
+    Ok(())
+}
+
+fn compute_rebuilt_binary_digests(
+    release_attestation: &ReleaseAttestation,
+    rebuilt_binary_paths: &[PathBuf],
+) -> Result<Vec<BinaryDigest>, RunError> {
+    let expected_count_u32 = u32::try_from(release_attestation.binary_digests.len())
+        .map_err(|_| RunError::Internal("published release binary count overflowed u32".to_string()))?;
+    let actual_count_u32 = u32::try_from(rebuilt_binary_paths.len())
+        .map_err(|_| RunError::Internal("rebuilt binary count overflowed u32".to_string()))?;
+    if expected_count_u32 != actual_count_u32 {
+        return Err(RunError::Internal(format!(
+            "rebuilt binary count mismatch: release attestation expects {expected_count_u32}, got {actual_count_u32}"
+        )));
+    }
+
+    let mut rebuilt_digests = Vec::with_capacity(rebuilt_binary_paths.len());
+    for (published_digest, rebuilt_path) in release_attestation.binary_digests.iter().zip(rebuilt_binary_paths.iter()) {
+        rebuilt_digests.push(build_rebuilt_binary_digest(published_digest, rebuilt_path)?);
+    }
+    assert_eq!(rebuilt_digests.len(), rebuilt_binary_paths.len(), "rebuilt digest list must align with inputs");
+    Ok(rebuilt_digests)
+}
+
+fn build_rebuilt_binary_digest(published_digest: &BinaryDigest, rebuilt_path: &Path) -> Result<BinaryDigest, RunError> {
+    let digest = compute_path_blake3_digest(rebuilt_path)?;
+    Ok(BinaryDigest {
+        name: published_digest.name.clone(),
+        algorithm: BLAKE3_ALGORITHM_NAME.to_string(),
+        digest,
+    })
 }
 
 fn read_release_attestation_file(path: &Path) -> Result<ReleaseAttestation, RunError> {

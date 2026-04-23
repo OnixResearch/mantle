@@ -457,6 +457,35 @@ pub enum AttestAction {
         /// Verification directory containing release-attestation.json
         verification_dir: PathBuf,
     },
+    /// Create and sign a witness attestation under a verification directory
+    WitnessCreate {
+        /// Verification directory containing release-attestation.json
+        verification_dir: PathBuf,
+
+        /// Rebuilt binary outputs in the same order as the published release artifacts
+        #[arg(long = "rebuilt-binary", required = true)]
+        rebuilt_binary: Vec<PathBuf>,
+
+        /// Stable witness identity recorded in the attestation (default: signer key name)
+        #[arg(long)]
+        identity: Option<String>,
+
+        /// Short target-system label for the rebuild environment summary
+        #[arg(long)]
+        system: String,
+
+        /// Short toolchain label for the rebuild environment summary
+        #[arg(long)]
+        toolchain: String,
+
+        /// Short host-class label for the rebuild environment summary
+        #[arg(long)]
+        host_class: String,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+    },
     /// Show witness attestations from a verification directory
     WitnessShow {
         /// Verification directory containing witnesses/*.json

@@ -367,6 +367,16 @@ fn build_artifact_record(
     validate_bundled_artifact_record(artifact, "artifact".to_string()).map_err(core_error_to_run_error)
 }
 
+pub(crate) fn compute_path_blake3_digest(path: &Path) -> Result<String, RunError> {
+    if path.is_file() {
+        return hash_file(path).map(|(_size_bytes, digest_blake3)| digest_blake3);
+    }
+    if path.is_dir() {
+        return hash_directory(path).map(|(_size_bytes, digest_blake3)| digest_blake3);
+    }
+    Err(RunError::Internal(format!("expected file or directory artifact: {}", path.display())))
+}
+
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
     let metadata =
         std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
