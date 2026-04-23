@@ -482,9 +482,7 @@ fn parse_pull_source(source: &str) -> Result<crunch_store::PullSource, RunError>
         let url = url::Url::parse(source)
             .map_err(|e| RunError::Internal(format!("invalid HTTP pull source '{source}': {e}")))?;
         if !url.username().is_empty() || url.password().is_some() {
-            return Err(RunError::Internal(format!(
-                "HTTP pull source must not include URL credentials: {source}"
-            )));
+            return Err(RunError::Internal(format!("HTTP pull source must not include URL credentials: {source}")));
         }
         return Ok(crunch_store::PullSource::Http(url));
     }

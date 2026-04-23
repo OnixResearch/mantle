@@ -824,7 +824,7 @@ async fn open_bootstrap_pathinfo(
                 read_only: false,
                 cache_size: None,
             })
-                .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
+            .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
         }
     }
 }

@@ -5,14 +5,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use tokio::runtime::Builder as RuntimeBuilder;
-
 use clap::ValueEnum;
 use crunch_system::ValidatedModule;
-use crunch_system::loader::validate_module;
-use crunch_system::threading::EvalThread;
-use crunch_system::threading::EvalThreadHandle;
-use crunch_system::threading::ValueId;
 use crunch_system::assembler::AssemblerError;
 use crunch_system::assembler::AssemblerRegistry;
 use crunch_system::assembler::NixosPhase1Assembler;
@@ -25,8 +19,13 @@ use crunch_system::evaluator::ModuleExecutionResult;
 use crunch_system::evaluator::evaluate_modules_for_machines;
 use crunch_system::inventory::Inventory;
 use crunch_system::inventory_validate::validate_inventory;
+use crunch_system::loader::validate_module;
+use crunch_system::threading::EvalThread;
+use crunch_system::threading::EvalThreadHandle;
+use crunch_system::threading::ValueId;
 use serde::Serialize;
 use serde_json::Value;
+use tokio::runtime::Builder as RuntimeBuilder;
 
 use crate::RunContext;
 use crate::build_cmd;
@@ -137,35 +136,23 @@ pub fn cmd_system_eval(ctx: &RunContext, options: SystemEvalOptions) -> Result<(
         return Err(RunError::Reported(3));
     }
 
-    let prepared = prepare_system_run(&options.inventory_path, options.modules_dir.as_deref(), &options.machine_filter)?;
+    let prepared =
+        prepare_system_run(&options.inventory_path, options.modules_dir.as_deref(), &options.machine_filter)?;
     let mut result = JsonSystemPipelineResult {
         machines: BTreeMap::new(),
-        errors: prepared
-            .module_execution
-            .errors
-            .iter()
-            .map(error_diagnostic)
-            .collect(),
-        warnings: prepared
-            .module_execution
-            .warnings
-            .iter()
-            .map(warning_diagnostic)
-            .collect(),
+        errors: prepared.module_execution.errors.iter().map(error_diagnostic).collect(),
+        warnings: prepared.module_execution.warnings.iter().map(warning_diagnostic).collect(),
     };
 
     match options.stop_after {
         SystemStopAfter::Fragments => {
             for (machine_name, merged_config) in prepared.merged_configs {
-                result.machines.insert(
-                    machine_name,
-                    JsonMachineOutcome {
-                        kind: "fragments",
-                        merged_config: Some(json_merged_config(merged_config)),
-                        derivations: None,
-                        reports: None,
-                    },
-                );
+                result.machines.insert(machine_name, JsonMachineOutcome {
+                    kind: "fragments",
+                    merged_config: Some(json_merged_config(merged_config)),
+                    derivations: None,
+                    reports: None,
+                });
             }
         }
         SystemStopAfter::Derivations => {
@@ -195,22 +182,13 @@ pub fn cmd_system_eval(ctx: &RunContext, options: SystemEvalOptions) -> Result<(
 }
 
 pub fn cmd_system_build(ctx: &RunContext, options: SystemBuildOptions) -> Result<(), RunError> {
-    let prepared = prepare_system_run(&options.inventory_path, options.modules_dir.as_deref(), &options.machine_filter)?;
+    let prepared =
+        prepare_system_run(&options.inventory_path, options.modules_dir.as_deref(), &options.machine_filter)?;
     let registry = default_assembler_registry();
     let mut result = JsonSystemPipelineResult {
         machines: BTreeMap::new(),
-        errors: prepared
-            .module_execution
-            .errors
-            .iter()
-            .map(error_diagnostic)
-            .collect(),
-        warnings: prepared
-            .module_execution
-            .warnings
-            .iter()
-            .map(warning_diagnostic)
-            .collect(),
+        errors: prepared.module_execution.errors.iter().map(error_diagnostic).collect(),
+        warnings: prepared.module_execution.warnings.iter().map(warning_diagnostic).collect(),
     };
 
     populate_build_outcomes(
@@ -276,9 +254,9 @@ fn load_inventory(inventory_path: &Path) -> Result<Inventory, RunError> {
 }
 
 fn inventory_import_paths(inventory_path: &Path) -> Result<Vec<OsString>, RunError> {
-    let inventory_dir = inventory_path
-        .parent()
-        .ok_or_else(|| RunError::Internal(format!("inventory path {} has no parent directory", inventory_path.display())))?;
+    let inventory_dir = inventory_path.parent().ok_or_else(|| {
+        RunError::Internal(format!("inventory path {} has no parent directory", inventory_path.display()))
+    })?;
     Ok(vec![inventory_dir.as_os_str().to_os_string()])
 }
 
@@ -299,8 +277,8 @@ fn discovered_modules_dir(modules_dir: &Path) -> PathBuf {
 
 fn load_validated_modules(modules_dir: &Path) -> Result<Vec<ValidatedModule>, RunError> {
     let discovery_dir = discovered_modules_dir(modules_dir);
-    let discovered = crunch_system::loader::discover_module_files(&discovery_dir)
-        .map_err(|error| fatal_system_error(error, 3))?;
+    let discovered =
+        crunch_system::loader::discover_module_files(&discovery_dir).map_err(|error| fatal_system_error(error, 3))?;
     let import_paths = module_import_paths(&discovery_dir)?;
     let handle = EvalThread::spawn(import_paths.iter().map(PathBuf::from).collect());
     let runtime = RuntimeBuilder::new_current_thread()
@@ -313,9 +291,9 @@ fn load_validated_modules(modules_dir: &Path) -> Result<Vec<ValidatedModule>, Ru
 }
 
 fn module_import_paths(modules_dir: &Path) -> Result<Vec<OsString>, RunError> {
-    let path = modules_dir
-        .canonicalize()
-        .map_err(|error| RunError::Internal(format!("canonicalizing modules dir {}: {error}", modules_dir.display())))?;
+    let path = modules_dir.canonicalize().map_err(|error| {
+        RunError::Internal(format!("canonicalizing modules dir {}: {error}", modules_dir.display()))
+    })?;
     let stdlib_path = crunch_eval::stdlib::stdlib_import_path().map_err(|error| {
         RunError::Internal(format!("resolving embedded stdlib import path for system modules: {error}"))
     })?;
@@ -329,9 +307,8 @@ async fn load_validated_modules_on_thread(
     let mut modules = Vec::with_capacity(discovered.len());
     for (name, path) in discovered {
         let root_value_id = evaluate_module_file(handle, path).await?;
-        let validated = validate_module(name, root_value_id, handle)
-            .await
-            .map_err(|error| fatal_system_error(error, 3))?;
+        let validated =
+            validate_module(name, root_value_id, handle).await.map_err(|error| fatal_system_error(error, 3))?;
         drop_module_root_value(handle, root_value_id, name).await?;
         modules.push(validated);
     }
@@ -349,7 +326,11 @@ async fn evaluate_module_file(handle: &EvalThreadHandle, path: &Path) -> Result<
         .map_err(|error| RunError::Eval(format!("evaluating module {}: {error}", path.display())))
 }
 
-async fn drop_module_root_value(handle: &EvalThreadHandle, value_id: ValueId, module_name: &str) -> Result<(), RunError> {
+async fn drop_module_root_value(
+    handle: &EvalThreadHandle,
+    value_id: ValueId,
+    module_name: &str,
+) -> Result<(), RunError> {
     handle
         .drop_value(value_id)
         .await
@@ -419,19 +400,13 @@ fn populate_derivation_outcomes(
         };
         match dry_run_assemble(registry, machine_name, machine, config, assembler_override) {
             Ok(derivations) => {
-                let derivations_json = derivations
-                    .iter()
-                    .map(derivation_to_json)
-                    .collect::<Result<Vec<_>, _>>()?;
-                result.machines.insert(
-                    machine_name.clone(),
-                    JsonMachineOutcome {
-                        kind: "derivations",
-                        merged_config: None,
-                        derivations: Some(derivations_json),
-                        reports: None,
-                    },
-                );
+                let derivations_json = derivations.iter().map(derivation_to_json).collect::<Result<Vec<_>, _>>()?;
+                result.machines.insert(machine_name.clone(), JsonMachineOutcome {
+                    kind: "derivations",
+                    merged_config: None,
+                    derivations: Some(derivations_json),
+                    reports: None,
+                });
             }
             Err(error) => {
                 result.errors.push(error_diagnostic(&map_assembler_error(&error)));
@@ -462,15 +437,12 @@ fn populate_build_outcomes(
         match dry_run_assemble(registry, machine_name, machine, config, assembler_override) {
             Ok(derivations) => {
                 let reports = build_reports_for_machine(ctx, machine_name, &derivations)?;
-                result.machines.insert(
-                    machine_name.clone(),
-                    JsonMachineOutcome {
-                        kind: "build",
-                        merged_config: None,
-                        derivations: None,
-                        reports: Some(reports),
-                    },
-                );
+                result.machines.insert(machine_name.clone(), JsonMachineOutcome {
+                    kind: "build",
+                    merged_config: None,
+                    derivations: None,
+                    reports: Some(reports),
+                });
             }
             Err(error) => {
                 result.errors.push(error_diagnostic(&map_assembler_error(&error)));
@@ -482,11 +454,7 @@ fn populate_build_outcomes(
 }
 
 fn derivation_to_json(derivation: &crunch_glue::CrunchDerivation) -> Result<Value, RunError> {
-    let inputs = derivation
-        .inputs
-        .iter()
-        .map(input_to_json)
-        .collect::<Vec<_>>();
+    let inputs = derivation.inputs.iter().map(input_to_json).collect::<Vec<_>>();
     let fixed_output = derivation.fixed_output.as_ref().map(|fixed_output| {
         serde_json::json!({
             "algo": fixed_output.algo,
@@ -539,7 +507,10 @@ fn build_reports_for_machine(
     Ok(vec![serde_json::from_str(&report_json).map_err(json_internal_error)?])
 }
 
-fn build_machine_pipeline_result(ctx: &RunContext, build_expr: &str) -> Result<crunch_pipeline::PipelineResult, RunError> {
+fn build_machine_pipeline_result(
+    ctx: &RunContext,
+    build_expr: &str,
+) -> Result<crunch_pipeline::PipelineResult, RunError> {
     let config = build_machine_config(ctx, build_expr)?;
     build_cmd::run_build(&config)
 }
@@ -574,10 +545,7 @@ fn build_machine_config(ctx: &RunContext, build_expr: &str) -> Result<crunch_pip
 }
 
 fn machine_build_expression(derivations: &[crunch_glue::CrunchDerivation]) -> Result<String, RunError> {
-    let derivation_exprs = derivations
-        .iter()
-        .map(derivation_to_nickel)
-        .collect::<Vec<_>>();
+    let derivation_exprs = derivations.iter().map(derivation_to_nickel).collect::<Vec<_>>();
     Ok(format!("[\n{}\n]", derivation_exprs.join(",\n")))
 }
 
@@ -609,7 +577,11 @@ fn render_input_list(inputs: &[crunch_glue::Input]) -> String {
 fn render_input(input: &crunch_glue::Input) -> String {
     match input {
         crunch_glue::Input::Source(path) => render_string(path),
-        crunch_glue::Input::OutputSelection(output_ref) => format!("{{ drv = {}, output = {} }}", derivation_to_nickel(&output_ref.drv), render_string(&output_ref.output)),
+        crunch_glue::Input::OutputSelection(output_ref) => format!(
+            "{{ drv = {}, output = {} }}",
+            derivation_to_nickel(&output_ref.drv),
+            render_string(&output_ref.output)
+        ),
         crunch_glue::Input::Derivation(derivation) => derivation_to_nickel(derivation),
     }
 }
@@ -910,12 +882,7 @@ impl EvalBoundary for JsonEvalBoundary {
         Ok(Value::Object(merged))
     }
 
-    fn invoke_impl(
-        &self,
-        module: &ValidatedModule,
-        args: &Value,
-        _timeout_secs: u64,
-    ) -> Result<Value, String> {
+    fn invoke_impl(&self, module: &ValidatedModule, args: &Value, _timeout_secs: u64) -> Result<Value, String> {
         let timeout_secs = Duration::from_secs(MODULE_TIMEOUT_SECS).as_secs();
         Ok(serde_json::json!({
             "output": {
