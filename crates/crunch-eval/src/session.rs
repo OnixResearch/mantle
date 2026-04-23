@@ -11,14 +11,14 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 
 use nickel_lang::Context;
-use parking_lot::Condvar;
-use parking_lot::Mutex;
 use nickel_lang::Expr;
 use serde::de::DeserializeOwned;
 
@@ -498,22 +498,32 @@ impl WorkerResultSlot {
     }
 
     fn clear(&self) -> Result<(), Error> {
-        let mut payload = self.payload.lock();
+        let mut payload = self
+            .payload
+            .lock()
+            .map_err(|_| Error::Boundary("bounded worker result slot mutex was poisoned".to_string()))?;
         payload.take();
         Ok(())
     }
 
     fn store<T: Send + 'static>(&self, result: Result<Vec<IndexedRoot<T>>, WorkerFailure>) {
-        let mut payload = self.payload.lock();
+        let mut payload = match self.payload.lock() {
+            Ok(payload) => payload,
+            Err(_poisoned) => return,
+        };
         *payload = Some(Box::new(result));
         self.ready.notify_one();
     }
 
     fn take<T: Send + 'static>(&self) -> Result<Result<Vec<IndexedRoot<T>>, WorkerFailure>, Error> {
-        let mut payload = self.payload.lock();
-        while payload.is_none() {
-            self.ready.wait(&mut payload);
-        }
+        let payload = self
+            .payload
+            .lock()
+            .map_err(|_| Error::Boundary("bounded worker result slot mutex was poisoned".to_string()))?;
+        let mut payload = self
+            .ready
+            .wait_while(payload, |slot| slot.is_none())
+            .map_err(|_| Error::Boundary("bounded worker result slot wait was poisoned".to_string()))?;
         let erased = payload
             .take()
             .ok_or_else(|| Error::Boundary("bounded worker result slot completed without a payload".to_string()))?;
@@ -719,7 +729,9 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
 
     assert!(worker_count >= 1, "worker_count must be at least 1");
     let worker_pools = WORKER_POOLS.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut worker_pools = worker_pools.lock();
+    let mut worker_pools = worker_pools
+        .lock()
+        .map_err(|_| Error::Boundary("bounded worker pool mutex was poisoned".to_string()))?;
     if let Some(worker_pool) = worker_pools.get(&worker_count) {
         return Ok(worker_pool.clone());
     }
