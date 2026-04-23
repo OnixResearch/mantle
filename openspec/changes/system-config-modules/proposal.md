@@ -105,8 +105,10 @@ into buildable derivations without a Nix runtime dependency.
    eval and build when the global `--json` flag is active.
 8. CLI-focused checks verify `--machine` filtering happens before backend
    override resolution, `--assembler` overrides per-machine `class` for the
-   selected machine set, and unknown backend names produce assembler
-   diagnostics for the selected machines.
+   selected machine set when assembly is requested, `crunch system eval
+   --stop-after=fragments` skips assembler lookup even if `--assembler` is
+   present, and unknown backend names produce assembler diagnostics only for
+   machine sets that actually request assembly work.
 9. Save validator and proposal-gate rerun output under
    `evidence/proposal-validation-2026-04-21.md` so proposal-stage readiness is
    attached to the change artifacts.

@@ -63,19 +63,28 @@ The inventory structural contract MUST ship with crunch's embedded Nickel
 stdlib.
 ID: systemconfig.inventory.inv4
 
-User inventories apply the contract through Nickel merge, such as
-`inventory | crunch.Inventory`. After that contract application succeeds, later
-pipeline stages MUST consume a validated pure-data inventory value containing
-only the `machines` and `services` records defined by INV-1 and INV-2, rather
-than an unevaluated Nickel expression.
+`crunch system eval` and `crunch system build` MUST apply `crunch.Inventory`
+at the Nickel boundary themselves before Rust-side deserialization and limit
+validation run. User inventories therefore MAY be plain pure-data Nickel
+records and are NOT required to spell the merge explicitly in the file.
+After that pipeline-applied contract merge succeeds, later pipeline stages
+MUST consume a validated pure-data inventory value containing only the
+`machines` and `services` records defined by INV-1 and INV-2, rather than an
+unevaluated Nickel expression. If the pipeline-applied contract merge fails,
+the command MUST treat the result as a fatal inventory validation error before
+any module loading or machine evaluation begins.
 
 #### Scenario: Inventory contract is available from the embedded stdlib
 ID: systemconfig.inventory.inv4.scenario
 
-- GIVEN a user inventory evaluated through crunch's embedded stdlib
-- WHEN the inventory applies `crunch.Inventory`
+- GIVEN a plain pure-data user inventory evaluated through crunch's embedded
+  stdlib
+- WHEN `crunch system eval` or `crunch system build` applies
+  `crunch.Inventory` at the pipeline boundary
 - THEN the structural contract is resolved without needing external files
 - AND later pipeline stages receive a validated pure-data inventory value
+- AND a contract failure would stop the command before any module loading or
+  machine evaluation begins
 
 ### Requirement: INV-5 Fixed limits
 

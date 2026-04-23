@@ -30,6 +30,13 @@ command MUST exit non-zero. Otherwise the command MUST exit with status 0 when
 no error diagnostics were produced for selected machines, and non-zero when any
 error diagnostic was produced.
 
+When `--stop-after=fragments` is selected, eval MUST stop before assembler
+resolution or validation begins. In that mode `--assembler <name>` MUST be
+accepted for CLI consistency but MUST have no effect, and unknown backend names
+MUST NOT produce assembler diagnostics because no assembler lookup occurs.
+Backend resolution and unknown-backend diagnostics apply only to
+`--stop-after=derivations`, where dry-run assembly is actually requested.
+
 #### Scenario: Eval returns dry-run derivations with partial success preserved
 ID: systemconfig.cli.surface.cli1.scenario
 
@@ -128,7 +135,10 @@ When `--assembler` is absent, the backend MUST be resolved from the selected
 machine's `class` field. When `--assembler` is present, the override MUST take
 precedence over every selected machine's `class` value. If the named backend is
 not registered, each selected machine MUST fail with an assembler diagnostic
-before assembly begins.
+before assembly begins whenever the command reaches assembly work. For
+`crunch system eval --stop-after=fragments`, assembler lookup is skipped as
+specified by CLI-1, so `--assembler` is accepted but ignored and unknown
+backend names MUST NOT produce assembler diagnostics in that mode.
 
 #### Scenario: Assembler override wins over machine.class
 ID: systemconfig.cli.surface.cli5.scenario

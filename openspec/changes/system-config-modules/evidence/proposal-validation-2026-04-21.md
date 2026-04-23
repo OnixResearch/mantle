@@ -8,15 +8,16 @@ Change 'system-config-modules' is valid
 
 ## Command: `openspec_gate stage=proposal change=system-config-modules`
 
-Latest gate rerun after the spec repairs produced this summary:
-
 ```text
-VERDICT: WARN
+VERDICT: FAIL
 
-The proposal-stage artifacts appear internally consistent from the supplied text.
-Conditionally ready on artifact content.
-Not fully gated from supplied evidence until the validator and proposal gate are rerun and their passing results are captured.
+## Findings
+- [high] [class=omission] [scope=spec] [route=spec-rule] [promoted=yes] Module output contract is assumed by later specs but never defined.
+- [medium] [class=omission] [scope=spec] [route=spec-rule] [promoted=yes] Stable CLI/result contract lacks deterministic ordering rules for diagnostics.
+- [medium] [class=omission] [scope=review] [route=human] [promoted=no] Proposal-stage validation evidence referenced by the proposal is not supplied.
 ```
 
-This evidence file is the place to append the next rerun transcript once the
-stage gate is rechecked.
+## Status
+
+This file records the latest rerun transcript while the proposal gate is still
+failing. Update it again once the gate reaches `VERDICT: PASS`.

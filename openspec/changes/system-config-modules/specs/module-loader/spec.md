@@ -37,9 +37,18 @@ default is 1000. `interface.roles` itself MUST be a record keyed by role name.
 Each `interface.roles.<role>` value MUST be the Nickel contract/default value
 for that role's `settings` merge: the evaluator uses that role value as the
 base merged against instance settings in EVAL-3, and the loader only needs to
-materialize the role name plus a handle to that role value. Modules failing
-structural validation MUST produce a loader error that names the file and the
-missing or malformed field.
+materialize the role name plus a handle to that role value. The same embedded
+Nickel contract MUST also define the module result shape returned by `impl`:
+that result is a record whose `output` field MAY contain `exports`,
+`providers`, `nixos`, and `files`. `output.exports` MAY be any Nickel record
+or value that later downstream modules read through `upstream.<module_name>` as
+described by EVAL-5. `output.providers` MUST be a record keyed by provider type
+string whose values are the provider payloads later collected into ordered
+arrays per provider type as described by EVAL-6. `output.nixos` and
+`output.files` MAY contain backend-specific records passed through by the
+fragment collector as described by FRAG-3. Modules failing structural
+validation MUST produce a loader error that names the file and the missing or
+malformed field.
 
 The system-module structural contract MUST ship in crunch's embedded Nickel
 stdlib as a Nickel contract, and loader validation MUST apply that contract at
@@ -53,6 +62,17 @@ ID: systemconfig.module.loader.loader2.scenario
   contract and extracts async-side role metadata
 - THEN validation fails with a loader diagnostic naming `impl`
 - AND the module is excluded from later evaluation
+
+#### Scenario: Loader rejects malformed module output namespaces
+ID: systemconfig.module.loader.loader2.outputscenario
+
+- GIVEN a module whose `impl` result contract declares `output.providers`
+  as a non-record value
+- WHEN structural validation applies the embedded Nickel system-module
+  contract
+- THEN validation fails with a loader diagnostic naming `output.providers`
+- AND downstream evaluator and collector stages do not need to guess the
+  provider-output shape
 
 ### Requirement: LOADER-3 Module identity
 

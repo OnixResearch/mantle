@@ -59,7 +59,11 @@ originated failures such as invalid flags or deferred feature errors MUST use
 `layer = "cli"`. When the global `--json` flag is not active, stderr MUST
 remain human-readable text.
 Stdout payload shape is defined by the CLI surface requirements and MUST remain
-separate from stderr diagnostics in both modes.
+separate from stderr diagnostics in both modes. Diagnostic emission order on
+stderr MUST be deterministic: sort first by machine name with non-machine
+(fatal pre-machine) diagnostics before machine-scoped diagnostics, then by
+module name when present, then by severity with `error` before `warning`, and
+finally by stable message text as a last tiebreak.
 
 #### Scenario: JSON diagnostics stay on stderr
 ID: systemconfig.error.model.err3.scenario
@@ -111,7 +115,9 @@ with a `status` discriminator field whose value is one of `fragments`,
 When serialized inside stdout `SystemPipelineResult` envelopes, `errors` and
 `warnings` entries MUST use the same object shape as ERR-3 diagnostics:
 `severity`, `layer`, `message`, and `detail`, plus `module` and `machine`
-fields when applicable.
+fields when applicable. The `errors` and `warnings` vectors MUST each use the
+same deterministic ordering rule as ERR-3 stderr emission so repeated runs over
+the same inputs produce identical stdout collection order.
 
 Fatal inventory-level validation failures MAY return a top-level
 `Err(Vec<SystemConfigError>)` instead of a `SystemPipelineResult`, because no
