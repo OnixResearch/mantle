@@ -1012,7 +1012,14 @@ fn run_release_command(ctx: &RunContext, action: ReleaseAction) -> Result<(), Ru
 }
 
 fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunError> {
-    attest_cmd::cmd_attest(action, &current_dir_or_error()?, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
+    attest_cmd::cmd_attest(
+        action,
+        &current_dir_or_error()?,
+        &ctx.store,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+        ctx.json,
+    )
 }
 
 fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {

@@ -559,6 +559,52 @@ fn release_attest_honors_json_output() {
 }
 
 #[test]
+fn attest_witness_create_prints_human_summary_without_json() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let witness_signing_key_path = temp.path().join("witness.key");
+    let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+
+    crunch()
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .arg("--signing-key")
+        .arg(&witness_signing_key_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("witness attestation: "))
+        .stdout(predicate::str::contains("witness identity: witness-a"))
+        .stdout(predicate::str::contains(format!("signer: {}", witness_keypair.verifying_key.name())));
+}
+
+#[test]
 fn attest_witness_create_writes_signed_witness_attestation() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let release_signing_key_path = temp.path().join("release.key");
@@ -582,6 +628,7 @@ fn attest_witness_create_writes_signed_witness_attestation() {
     let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
 
     let create_output = crunch()
+        .arg("--json")
         .arg("attest")
         .arg("witness-create")
         .arg(&verification_dir)
@@ -628,6 +675,51 @@ fn attest_witness_create_writes_signed_witness_attestation() {
 
     assert_eq!(verify_json["matching_witness_count"], 1);
     assert_eq!(verify_json["final_class"], "quorum-satisfied");
+}
+
+#[test]
+fn attest_witness_create_rejects_too_long_identity() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let witness_signing_key_path = temp.path().join("witness.key");
+    let _witness_keypair = write_generated_signing_key(&witness_signing_key_path);
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let long_identity = "w".repeat(129);
+
+    crunch()
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg(&long_identity)
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .arg("--signing-key")
+        .arg(&witness_signing_key_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("witness identity exceeds 128 bytes"));
 }
 
 #[test]

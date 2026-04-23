@@ -33,6 +33,7 @@ pub(crate) const RELEASE_ATTESTATION_FILE_NAME: &str = "release-attestation.json
 pub(crate) const RELEASE_ATTESTATION_SIG_FILE_NAME: &str = "release-attestation.json.sig";
 pub(crate) const WITNESSES_DIR_NAME: &str = "witnesses";
 const MAX_WITNESS_SHOW_FILES: u32 = 1_024;
+const MAX_WITNESS_IDENTITY_BYTES: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CreatedReleaseAttestation {
@@ -415,6 +416,7 @@ fn resolve_witness_identity(requested_identity: Option<&str>, signer_key_name: &
 }
 
 fn validate_witness_identity(identity: &str) -> Result<(), RunError> {
+    let identity_len_bytes = identity.len();
     if identity.is_empty() {
         return Err(RunError::Internal("witness identity must not be empty".to_string()));
     }
@@ -423,6 +425,18 @@ fn validate_witness_identity(identity: &str) -> Result<(), RunError> {
     }
     if identity.contains('/') || identity.contains('\\') {
         return Err(RunError::Internal(format!("witness identity must not contain path separators: {}", identity)));
+    }
+    if identity.chars().any(|character| character.is_control()) {
+        return Err(RunError::Internal(format!(
+            "witness identity must not contain control characters: {:?}",
+            identity
+        )));
+    }
+    if identity_len_bytes > MAX_WITNESS_IDENTITY_BYTES {
+        return Err(RunError::Internal(format!(
+            "witness identity exceeds {} bytes: {}",
+            MAX_WITNESS_IDENTITY_BYTES, identity_len_bytes
+        )));
     }
     Ok(())
 }
@@ -620,6 +634,22 @@ mod tests {
 
         assert!(is_trusted_witness_identity(&allow_all, &witness));
         assert!(!is_trusted_witness_identity(&allow_only_b, &witness));
+    }
+
+    #[test]
+    fn validate_witness_identity_rejects_control_characters() {
+        let err = validate_witness_identity("witness\nname").unwrap_err();
+
+        assert!(err.message().contains("control characters"));
+        assert!(err.message().contains("witness\\nname"));
+    }
+
+    #[test]
+    fn validate_witness_identity_rejects_overlong_names() {
+        let err = validate_witness_identity(&"w".repeat(MAX_WITNESS_IDENTITY_BYTES.saturating_add(1))).unwrap_err();
+
+        assert!(err.message().contains("witness identity exceeds"));
+        assert!(err.message().contains(&MAX_WITNESS_IDENTITY_BYTES.to_string()));
     }
 
     fn sample_manifest() -> ReleaseEvidenceManifest {

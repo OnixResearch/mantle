@@ -66,9 +66,10 @@ pub fn cmd_attest(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    json: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(cmd_attest_async(action, current_dir, output_dir, state_dir, store_dir))
+    rt.block_on(cmd_attest_async(action, current_dir, output_dir, state_dir, store_dir, json))
 }
 
 async fn cmd_attest_async(
@@ -77,6 +78,7 @@ async fn cmd_attest_async(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    json: bool,
 ) -> Result<(), RunError> {
     match action {
         crate::AttestAction::Show { path } => {
@@ -128,6 +130,7 @@ async fn cmd_attest_async(
         } => cmd_witness_create(
             current_dir,
             state_dir,
+            json,
             &verification_dir,
             &rebuilt_binary,
             identity.as_deref(),
@@ -186,6 +189,7 @@ async fn cmd_verify(
 fn cmd_witness_create(
     current_dir: &Path,
     state_dir: &Path,
+    json: bool,
     verification_dir: &Path,
     rebuilt_binary: &[PathBuf],
     identity: Option<&str>,
@@ -206,7 +210,7 @@ fn cmd_witness_create(
         signing_key,
         state_dir,
     )?;
-    print_created_witness_attestation(&created)
+    print_created_witness_attestation(&created, json)
 }
 
 fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
@@ -295,22 +299,31 @@ fn parse_release_trusted_public_keys(
     Ok(Some(keys))
 }
 
-fn print_created_witness_attestation(created: &CreatedWitnessAttestation) -> Result<(), RunError> {
-    let attestation = serde_json::to_value(&created.attestation)
-        .map_err(|err| RunError::Internal(format!("serializing witness attestation: {err}")))?;
-    let rendered = serde_json::json!({
-        "kind": "crunch-witness-attestation",
-        "digest": created.digest_hex,
-        "stored_path": created.attestation_path.display().to_string(),
-        "signature_path": created.signature_path.display().to_string(),
-        "signer": created.signer_key_name,
-        "attestation": attestation,
-    });
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&rendered)
-            .map_err(|err| RunError::Internal(format!("serializing created witness output: {err}")))?
-    );
+fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: bool) -> Result<(), RunError> {
+    if json {
+        let attestation = serde_json::to_value(&created.attestation)
+            .map_err(|err| RunError::Internal(format!("serializing witness attestation: {err}")))?;
+        let rendered = serde_json::json!({
+            "kind": "crunch-witness-attestation",
+            "digest": created.digest_hex,
+            "stored_path": created.attestation_path.display().to_string(),
+            "signature_path": created.signature_path.display().to_string(),
+            "signer": created.signer_key_name,
+            "attestation": attestation,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing created witness output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("witness attestation: {}", created.attestation_path.display());
+    println!("signature: {}", created.signature_path.display());
+    println!("witness identity: {}", created.attestation.witness_identity);
+    println!("digest: {}", created.digest_hex);
+    println!("signer: {}", created.signer_key_name);
     Ok(())
 }
 
