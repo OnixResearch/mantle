@@ -152,6 +152,8 @@ crunch run .#hello -- --help
 # Attestation and release evidence entry points
 crunch attest show /nix/store/<hash>-hello
 crunch release verify target/release-evidence/<release-id>
+crunch release attest target/release-evidence/<release-id>
+crunch attest release-verify target/release-verification/<release-id> --trusted-public-key <name:base64>
 ```
 
 For the full command path, examples, and sidecar rules, see
@@ -853,6 +855,40 @@ packaged integrity and proof-context evidence. It lets another operator inspect
 exact artifacts and verify they are internally consistent. It does not, by
 itself, prove a full-source bootstrap root, independent rebuild agreement, or
 bit-for-bit reproducible release outputs.
+
+### Release attestations and witness verification
+
+After a release-evidence bundle verifies, the next layer is a signed release
+attestation plus optional external witness attestations:
+
+```bash
+# Sign the verified release bundle into a verification directory
+crunch release attest target/release-evidence/<release-id>
+
+# Publish one witness attestation from rebuilt outputs
+crunch attest witness-create target/release-verification/<release-id> \
+  --rebuilt-binary /path/to/rebuilt/crunch \
+  --system x86_64-linux \
+  --toolchain rust-1.91.1 \
+  --host-class nixos-25.05 \
+  --signing-key /path/to/witness.key
+
+# Inspect the resulting documents
+crunch attest release-show target/release-verification/<release-id>
+crunch attest witness-show target/release-verification/<release-id>
+
+# Apply policy and trusted keys to the discovered witness set
+crunch attest release-verify target/release-verification/<release-id> \
+  --trusted-public-key <release-or-witness-name:base64>
+```
+
+`crunch release attest` writes `release-attestation.json` plus a detached
+`.sig` file. `crunch attest witness-create` writes `witnesses/<identity>.json`
+and a matching `.sig` sidecar under the same verification directory, reusing
+the published release binary names and pairing rebuilt outputs by argument
+order. `crunch attest release-verify` separates technical validity from policy
+sufficiency, so a release can stay technically valid even when the witness set
+is policy-insufficient.
 
 ### Bootstrap roadmap
 

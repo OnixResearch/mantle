@@ -259,6 +259,52 @@ canonical, that recorded digests still match, and that the nested proof bundle
 is a full proof artifact. It does not prove a full-source bootstrap root,
 independent rebuild agreement, or globally reproducible release outputs.
 
+## Sign and verify decentralized release material
+
+Once a release bundle verifies locally, sign it into a verification directory:
+
+```bash
+crunch release attest target/release-evidence/<release-id>
+```
+
+That writes `target/release-verification/<release-id>/release-attestation.json`
+and a matching `.sig` sidecar by default.
+
+Independent rebuilders can then publish witness attestations into the same
+verification directory:
+
+```bash
+crunch attest witness-create target/release-verification/<release-id> \
+  --rebuilt-binary /path/to/rebuilt/crunch \
+  --system x86_64-linux \
+  --toolchain rust-1.91.1 \
+  --host-class nixos-25.05 \
+  --signing-key /path/to/witness.key
+```
+
+Repeat `--rebuilt-binary` in the same order as the published release outputs.
+The command reuses the published binary names inside the signed payload and
+rejects count mismatches before writing sidecars.
+
+Inspect the discovered material with:
+
+```bash
+crunch attest release-show target/release-verification/<release-id>
+crunch attest witness-show target/release-verification/<release-id>
+```
+
+Then verify technical status plus social policy against trusted key material:
+
+```bash
+crunch attest release-verify target/release-verification/<release-id> \
+  --trusted-public-key <release-or-witness-name:base64>
+```
+
+`crunch attest release-verify` reports the technical class, policy status, and
+final class separately. Unknown-key or bad-signature witnesses remain visible in
+`discovered_witness_count` but are excluded before quorum evaluation, so mixed
+witness sets do not abort verification.
+
 For the current trust boundary behind those claims, see
 [`docs/bootstrap-stage0-inventory.md`](bootstrap-stage0-inventory.md).
 For the checked-in benchmark workflow, see
