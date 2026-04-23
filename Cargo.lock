@@ -1338,6 +1338,7 @@ dependencies = [
  "cranelift-native",
  "crunch-glue",
  "nickel-lang",
+ "parking_lot",
  "serde",
  "serde_json",
  "tempfile",
