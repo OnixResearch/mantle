@@ -1,16 +1,17 @@
 ## Phase 1: Crate scaffold and core types
 
-- [ ] Create `crates/crunch-system/Cargo.toml` with deps on `crunch-eval`, `crunch-glue`, `crunch-pipeline`, `serde`, `serde_json`; add to workspace `Cargo.toml`
-- [ ] Define `SystemConfigError` enum in `crates/crunch-system/src/error.rs` with variants: `Cli`, `Loader`, `Inventory`, `CrossRef`, `Eval`, `Fragment`, `Assembler` (ERR-1)
-- [ ] Define `SystemConfigWarning` enum in `crates/crunch-system/src/error.rs` for non-fatal warnings such as orphan provider consumption (ERR-1, EVAL-6e)
-- [ ] Define `EvalError` enum in `crates/crunch-system/src/eval_trait.rs` with variants: `NickelError(String)`, `Timeout`, `ImportDenied` (TRAIT-5)
-- [ ] Define `EvalOptions` struct with `timeout: Option<Duration>`, `import_paths: Vec<PathBuf>` (TRAIT-3)
-- [ ] Define `NickelEvaluator` trait with `evaluate_file`, `merge`, `call`, `get_field`, `is_function`, `to_json` methods (TRAIT-1)
-- [ ] Define `NickelValue` type alias for `crunch_eval::Expr` (TRAIT-2); re-export from `crates/crunch-system/src/lib.rs`
-- [ ] Define cross-layer types: `ValidatedModule`, `EvaluatedFragment`, `MergedConfig`, `FragmentSource` in `crates/crunch-system/src/lib.rs`
-- [ ] Define `Inventory`, `MachineRecord`, `ServiceRecord`, `InstanceRecord` structs in `crates/crunch-system/src/inventory.rs` with `serde::Deserialize` (INV-1, INV-2)
-- [ ] Define `SystemPipelineResult`, `MachineOutcome` result types with separate `errors` and `warnings` collections (ERR-4)
-- [ ] Verify: `cargo check -p crunch-system` compiles with all type definitions
+- [x] Create `crates/crunch-system/Cargo.toml` with deps on `crunch-eval`, `crunch-glue`, `crunch-pipeline`, `serde`, `serde_json`; add to workspace `Cargo.toml`
+- [x] Define `SystemConfigError` enum in `crates/crunch-system/src/error.rs` with variants: `Cli`, `Loader`, `Inventory`, `CrossRef`, `Eval`, `Fragment`, `Assembler` (ERR-1)
+- [x] Define `SystemConfigWarning` enum in `crates/crunch-system/src/error.rs` for non-fatal warnings such as orphan provider consumption (ERR-1, EVAL-6e)
+- [x] Define `EvalError` enum in `crates/crunch-system/src/eval_trait.rs` with variants: `NickelError(String)`, `Timeout`, `ImportDenied` (TRAIT-5)
+- [x] Define `EvalOptions` struct with `timeout: Option<Duration>`, `import_paths: Vec<PathBuf>` (TRAIT-3)
+- [x] Define `NickelEvaluator` trait with `evaluate_file`, `merge`, `call`, `get_field`, `is_function`, `to_json` methods (TRAIT-1)
+- [x] Define `NickelValue` type alias for `crunch_eval::Expr` (TRAIT-2); re-export from `crates/crunch-system/src/lib.rs`
+- [x] Define cross-layer types: `ValidatedModule`, `EvaluatedFragment`, `MergedConfig`, `FragmentSource` in `crates/crunch-system/src/lib.rs`
+- [x] Define `Inventory`, `MachineRecord`, `ServiceRecord`, `InstanceRecord` structs in `crates/crunch-system/src/inventory.rs` with `serde::Deserialize` (INV-1, INV-2)
+- [x] Define `SystemPipelineResult`, `MachineOutcome` result types with separate `errors` and `warnings` collections (ERR-4)
+- [x] Verify: `cargo check -p crunch-system` compiles with all type definitions
+  - Evidence: `cargo check -p crunch-system` passed on 2026-04-22 after adding the new workspace crate and scaffold types.
 
 ## Phase 2: Nickel contracts
 

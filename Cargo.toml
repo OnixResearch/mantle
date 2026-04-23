@@ -15,6 +15,7 @@ members = [
   "crates/crunch-shell",
   "crates/crunch-shell-core",
   "crates/crunch-release-core",
+  "crates/crunch-system",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -43,6 +44,7 @@ default_scope = [
   "-p", "crunch-project-core",
   "-p", "crunch-release-core",
   "-p", "crunch-shell",
+  "-p", "crunch-system",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
 ]
