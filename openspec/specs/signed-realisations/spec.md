@@ -26,9 +26,9 @@ signature.
 
 ### Requirement: Auto-generate signing key on first run
 
-If no signing key is configured via `--signing-key` and no key exists at
-`$CRUNCH_CONFIG_DIR/signing-key`, the system MUST generate a new ed25519
-keypair, write it to that path with 0600 permissions, and use it.
+The system MUST generate a new ed25519 keypair, write it to
+`$CRUNCH_CONFIG_DIR/signing-key` with 0600 permissions, and use it when no
+signing key is configured via `--signing-key` and no key exists at that path.
 
 The key name MUST be `crunch-<hostname>-1`.
 

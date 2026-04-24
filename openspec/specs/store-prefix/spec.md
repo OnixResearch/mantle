@@ -78,7 +78,21 @@ Functions affected:
 - `derivation::hash_derivation_modulo` (env references)
 - `derivation::output_path` computations
 
+#### Scenario: Constant use is rejected in path computation
+
+- GIVEN a vendored `nix_compat` path-computation helper
+- WHEN it needs to serialize or hash an absolute store path
+- THEN the caller-provided store prefix is used instead of a compile-time
+  `STORE_DIR` constant
+
 ### Requirement: Backward compatibility flag
 
 The `--nix-compat` flag MUST be a shorthand for `--store-prefix /nix/store`.
 It MUST NOT change any other behavior.
+
+#### Scenario: nix-compat flag only changes prefix
+
+- GIVEN `--nix-compat` is passed without any other behavior flag
+- WHEN crunch initializes its store-prefix configuration
+- THEN the logical prefix is `/nix/store`
+- AND every other configuration value matches the ordinary defaults

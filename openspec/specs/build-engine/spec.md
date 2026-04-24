@@ -5,7 +5,7 @@
 Defines the boundary between the conversion layer (crunch-glue) and
 the build engine (crunch-build), eliminating the upward dependency.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: DerivationRegistry in crunch-build
 
@@ -75,9 +75,8 @@ and `snix-*` crates (for store/build traits).
 
 ### Requirement: Pipeline bridges the gap
 
-The pipeline crate (or the binary crate, until crunch-pipeline exists)
-MUST translate between `ConversionCache` output and
-`DerivationRegistry` input:
+The pipeline crate (or the binary crate, until crunch-pipeline exists) MUST
+translate between `ConversionCache` output and `DerivationRegistry` input:
 
 ```rust
 fn populate_registry(

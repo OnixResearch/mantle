@@ -1,4 +1,12 @@
-## ADDED Requirements
+# Delta Substitution Specification
+
+## Purpose
+
+Defines how trusted HTTP substituters may satisfy cache hits through delta
+transfer while preserving ordinary substitution trust, final verification,
+and reporting semantics.
+
+## Requirements
 
 ### Requirement: Trusted HTTP substituters may satisfy cache hits through delta mode
 

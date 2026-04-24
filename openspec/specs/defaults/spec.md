@@ -59,7 +59,7 @@ Only the hash function changes (SHA-256 → BLAKE3). Path length is unchanged.
 
 ### Requirement: BLAKE3 consistency across all levels
 
-With this change, BLAKE3 is used at every level:
+The system MUST use BLAKE3 consistently at every applicable hashing level:
 
 | Level | Hash | Notes |
 |---|---|---|
@@ -71,6 +71,13 @@ With this change, BLAKE3 is used at every level:
 FOD output hashes remain user-specified because they verify upstream content
 (e.g., a tarball's sha256). The derivation-level hashing of the FOD itself
 uses BLAKE3.
+
+#### Scenario: Fixed-output derivation keeps declared content hash
+
+- GIVEN a fixed-output derivation declares `sha256` for upstream content
+- WHEN crunch computes both the FOD output hash and the derivation path
+- THEN the upstream content is verified with the declared `sha256` hash
+- AND the derivation path fingerprint still uses BLAKE3
 
 ### Requirement: Modify vendored nix-compat for BLAKE3
 
@@ -99,12 +106,17 @@ Fixed-output derivations (FODs) are content-addressed by definition — their
 output path is computed from the declared hash. This is already handled by
 `build_ca_path` in nix-compat. FODs in v0 work as expected.
 
+#### Scenario: Regular v0 output path is known before build
+
+- GIVEN a non-fixed-output v0 derivation
+- WHEN crunch computes the derivation output paths
+- THEN each output path is derived from the ATerm hash before the builder runs
+
 ### Requirement: Content-addressed derivations as default
 
-crunch SHOULD implement content-addressed derivations as the default
-output addressing mode. When a build completes, the output path is
-determined by the content of the output (BLAKE3 hash of the NAR), not
-by the derivation inputs.
+crunch SHOULD implement content-addressed derivations as the default output addressing mode, and the architecture MUST support both content-addressed and input-addressed modes from the start.
+When a build completes, the output path is determined by the content of the
+output (BLAKE3 hash of the NAR), not by the derivation inputs.
 
 This means:
 
@@ -145,9 +157,9 @@ pipeline stabilizes. The architecture MUST support both from the start.
 
 ### Requirement: Dynamic derivations as default
 
-crunch SHOULD support dynamic derivations: builds that produce `.drv` files
-as outputs, which are then built in turn. This enables meta-build scenarios
-and is needed for self-hosting.
+crunch SHOULD support dynamic derivations, meaning builds that produce `.drv` files as outputs, and the build orchestration MUST remain able to accept derivations discovered at build time.
+Those produced `.drv` files are then built in turn. This enables meta-build
+scenarios and is needed for self-hosting.
 
 The build orchestration MUST:
 
@@ -169,7 +181,8 @@ discovered at build time.
 
 ### Requirement: cgroup isolation as default
 
-crunch SHOULD run builds inside cgroups on Linux. This enables:
+crunch SHOULD run builds inside cgroups on Linux; v0 MUST be allowed to defer cgroup support because it is not required for correctness.
+When cgroup support is available, this enables:
 
 - Resource usage tracking per build (CPU, memory, I/O)
 - Resource limits (prevent a single build from consuming all memory)
@@ -180,9 +193,15 @@ SHOULD be added to the bwrap builder as well.
 
 **Note:** v0 MAY defer cgroup support. It is not required for correctness.
 
+#### Scenario: Cgroup-enabled build reports bounded resources
+
+- GIVEN Linux cgroup support is enabled for builds
+- WHEN a build runs through the sandbox
+- THEN crunch can attribute CPU, memory, and I/O usage to that build
+
 ### Requirement: Git-native content addressing
 
-ccrunch SHOULD support git-native content addressing for source trees.
+crunch SHOULD support git-native content addressing for source trees, and source-tree addressing MUST remain extensible enough to preserve git tree identity.
 When a source input is a git repository, the tree hash from git can be
 used directly as the content address instead of re-hashing through NAR.
 
@@ -192,10 +211,17 @@ and enables direct verification against git commit hashes.
 **Note:** v0 MAY defer this. The `Input` type would gain a `GitTree`
 variant in addition to `Source` and `Derivation`.
 
+#### Scenario: Git tree identity can be preserved
+
+- GIVEN a git source input with a known tree hash
+- WHEN crunch materializes the source tree
+- THEN the source-addressing model can record that git tree identity without
+  requiring a NAR-only identity
+
 ### Requirement: Verified fetches as default
 
-When crunch fetches git repositories, signature verification SHOULD be
-enabled by default. This means:
+When crunch fetches git repositories, signature verification SHOULD be enabled by default, and fetcher design MUST support that policy when a signing key is provided.
+This means:
 
 - `fetchGit` (or crunch's equivalent) verifies commit signatures when
   a signing key is provided
@@ -206,6 +232,12 @@ because of backwards compatibility. We have no such constraint.
 
 **Note:** v0 MAY defer fetcher implementation entirely. When fetchers
 are added, verification should be the default.
+
+#### Scenario: Unsigned git fetch requires explicit opt-out
+
+- GIVEN a git fetch has a configured signing policy
+- WHEN the fetched revision cannot be verified
+- THEN the fetch is rejected unless the user explicitly opts out of verification
 
 ### Requirement: Enforced sandbox security (from Lix)
 
@@ -223,11 +255,18 @@ The security boundary is per-platform but the principle is uniform:
 builds cannot escape the sandbox, escalate privileges, or access
 undeclared inputs.
 
+#### Scenario: Sandbox weakening is unavailable
+
+- GIVEN a user starts a build
+- WHEN crunch selects the platform sandbox
+- THEN it enables the strongest available isolation for that platform
+- AND no CLI option weakens that isolation boundary
+
 ### Requirement: Parallel builds (from Determinate Nix)
 
-crunch SHOULD build independent derivations in the dependency graph
-concurrently. The `BuildService` trait is already async and supports
-concurrent `do_build` calls.
+crunch SHOULD build independent derivations in the dependency graph concurrently, and the architecture MUST support parallelism from the start.
+The `BuildService` trait is already async and supports concurrent `do_build`
+calls.
 
 The scheduler identifies derivations whose inputs are all built and
 submits them to the build service in parallel, bounded by a
@@ -244,12 +283,13 @@ support parallelism from the start.
 
 ### Requirement: Managed garbage collection (from Determinate Nix)
 
-crunch SHOULD include automatic garbage collection that:
+crunch SHOULD include automatic garbage collection; manual `crunch store gc` MUST remain sufficient for v0 if automatic GC is deferred.
+Long-term garbage-collection control can:
 
-- Runs in the background (or before builds when disk is low)
-- Maintains a configurable minimum free disk space (default: 10GB)
-- Deletes unreferenced store paths oldest-first
-- Enters urgent mode if disk falls below a critical threshold
+- Run in the background (or before builds when disk is low)
+- Maintain a configurable minimum free disk space (default: 10GB)
+- Delete unreferenced store paths oldest-first
+- Enter urgent mode if disk falls below a critical threshold
 
 Users SHOULD NOT need to manually run a GC command for normal operation.
 A `crunch store gc` command MAY be provided for manual control.
@@ -257,10 +297,17 @@ A `crunch store gc` command MAY be provided for manual control.
 **Note:** v0 MAY defer automatic GC. A manual `crunch store gc` command
 is sufficient for v0.
 
+#### Scenario: Manual GC keeps free space policy explicit
+
+- GIVEN automatic GC is not yet enabled
+- WHEN an operator runs `crunch store gc`
+- THEN crunch deletes only unreferenced store paths according to the configured
+  retention policy
+
 ### Requirement: Auto-fix FOD hash mismatches (from Determinate Nix)
 
-When a fixed-output derivation build completes but the output hash
-does not match the declared hash, crunch MUST:
+crunch MUST report and optionally fix declared hash mismatches when a
+fixed-output derivation build completes with a different output hash:
 
 1. Report the expected hash and the actual hash
 2. Display the exact line in the `.ncl` file to update
@@ -286,9 +333,15 @@ rebuild.
 
 ### Requirement: Hash algorithm in Nickel contracts
 
-The `HashAlgo` enum in the Nickel stdlib includes `'md5`, `'sha1`,
+The `HashAlgo` enum in the Nickel stdlib MUST include `'md5`, `'sha1`,
 `'sha256`, `'sha512`, and `'blake3`. BLAKE3 is a first-class hash
 algorithm, not an experimental addition.
+
+#### Scenario: Nickel accepts blake3 hash declarations
+
+- GIVEN a Nickel fetch declaration sets `algo = 'blake3`
+- WHEN the declaration is checked against the stdlib contracts
+- THEN the hash algorithm is accepted as a first-class option
 
 ### Requirement: Independence from Nix
 
@@ -296,6 +349,12 @@ crunch MUST NOT depend on Nix experimental features being available in
 any Nix installation. crunch operates independently. The features listed
 here are design decisions for crunch, informed by but not dependent on
 Nix's experimental feature process.
+
+#### Scenario: Missing Nix experimental flags do not affect crunch
+
+- GIVEN a host Nix installation has no experimental features enabled
+- WHEN crunch evaluates or builds its own Nickel-based inputs
+- THEN crunch behavior is unchanged because it does not depend on those flags
 
 ## Summary
 

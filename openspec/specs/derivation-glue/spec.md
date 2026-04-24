@@ -164,8 +164,8 @@ The glue layer MUST detect and reject circular dependencies.
 
 ### Requirement: Deduplication of shared derivation inputs
 
-When the same derivation appears in multiple `inputs` arrays (diamond
-dependency), the glue layer MUST deduplicate by derivation identity
+The glue layer MUST deduplicate by derivation identity when the same
+derivation appears in multiple `inputs` arrays (diamond dependency)
 (same ATerm serialization produces the same drv path). The derivation
 MUST be converted and registered in KnownPaths only once.
 
@@ -186,6 +186,13 @@ The algorithm is recursive descent with memoization via KnownPaths:
    conversion and reuse the existing drv path
 3. Detect cycles by tracking in-progress conversions (a derivation
    encountered while already being converted indicates a cycle)
+
+#### Scenario: Parent conversion waits for dependencies
+
+- GIVEN derivation A depends on derivation B
+- WHEN the glue layer converts A
+- THEN B is converted or reused from KnownPaths before A records its
+  `input_derivations` entry
 
 ### Requirement: Store path computation
 
@@ -220,6 +227,12 @@ The glue layer MUST maintain a `KnownPaths` structure tracking:
 This is a reimplementation of snix-glue's `KnownPaths`, adapted to work
 without snix-eval's `Value` types.
 
+#### Scenario: Reverse output lookup succeeds
+
+- GIVEN a derivation is registered in KnownPaths
+- WHEN the glue layer looks up one of its output paths
+- THEN it can recover the producing derivation path for later registry wiring
+
 ### Requirement: Environment auto-population
 
 The glue layer MUST automatically add these entries to `Derivation.environment`:
@@ -241,8 +254,8 @@ This matches the behavior of `builtins.derivationStrict` in Nix.
 
 ### Requirement: Fixed-output derivation handling
 
-When `fixed_output` is `Some` (the Nickel record had a `fixed_output` field),
-the glue layer MUST:
+The glue layer MUST handle `fixed_output = Some(...)` records by performing
+these steps:
 
 1. Parse `fixed_output.hash` as a Nix hash string (SRI or hex)
 2. Read `fixed_output.algo` (string from enum: `"sha256"`, `"sha1"`, etc.)

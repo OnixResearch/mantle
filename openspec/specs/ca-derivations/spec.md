@@ -75,10 +75,9 @@ final CA paths and moves the output.
 
 ### Requirement: Self-reference rewriting via blake3 markers
 
-If a CA build output contains references to its own provisional
-path (e.g., a binary with an embedded RPATH, or a script with
-a hardcoded store path), the system MUST rewrite those references
-to the final content-addressed path.
+The system MUST rewrite references from a CA build output to its own
+provisional path (e.g., a binary with an embedded RPATH, or a script with
+a hardcoded store path) so they point to the final content-addressed path.
 
 The rewriting uses a two-pass approach:
 
@@ -116,9 +115,9 @@ marker is also the same length.
 
 ### Requirement: Input reference rewriting
 
-If a CA derivation's inputs are themselves CA derivations whose
-final paths differ from their provisional paths, the system MUST
-rewrite references to input provisional paths in the output.
+The system MUST rewrite references to input provisional paths in a CA
+derivation output when those inputs are themselves CA derivations whose
+final paths differ from their provisional paths.
 
 This is necessary for transitive correctness: if `libfoo`'s final
 CA path differs from its provisional path, and `myapp` embeds

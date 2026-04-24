@@ -176,9 +176,9 @@ MUST NOT corrupt the database. It MAY block on write transactions
 
 ### Requirement: Graceful degradation
 
-If the database cannot be opened (permissions, corruption), the
-system MUST fall back to the v0 behavior (filesystem-only cache
-checks, in-memory PathInfo). It MUST log a warning.
+The system MUST degrade gracefully when the PathInfo database cannot be
+opened due to permissions or corruption by falling back to the v0 behavior
+(filesystem-only cache checks, in-memory PathInfo). It MUST log a warning.
 
 #### Scenario: Corrupt database
 

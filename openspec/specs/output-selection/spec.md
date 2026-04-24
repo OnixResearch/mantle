@@ -40,9 +40,9 @@ output at convert time.
 
 ### Requirement: Coalescing Duplicate Selections
 
-When the same dependency appears multiple times in `inputs` with
-different output selections, the system MUST coalesce them into a
-single `input_derivations` entry with the union of selected outputs.
+The system MUST coalesce duplicate selected-output dependencies into a
+single `input_derivations` entry with the union of selected outputs when
+the same dependency appears multiple times in `inputs`.
 
 #### Scenario: Two selections from same dep
 

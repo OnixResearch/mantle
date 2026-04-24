@@ -51,9 +51,9 @@ serializing paths for lookup keys. `get_by_drv_path` and
 
 ### Requirement: Builder uses store_dir for filesystem checks
 
-`Builder::all_outputs_exist()`, `path_exists_on_disk()`,
-`ensure_input_nodes()`, and `load_cached_outputs()` MUST resolve
-absolute paths using the configured `store_dir`, not the constant.
+Builder filesystem checks MUST resolve absolute paths using the configured
+`store_dir`, not the constant. This includes `Builder::all_outputs_exist()`,
+`path_exists_on_disk()`, `ensure_input_nodes()`, and `load_cached_outputs()`.
 
 #### Scenario: Cache check in custom store
 
@@ -123,13 +123,20 @@ the case in `build_store_path_from_fingerprint_parts_with_store_dir`).
 via `to_absolute_path_with_prefix()`. This keeps `StorePath`
 lightweight and avoids changing its layout.
 
+#### Scenario: StorePath serializes with caller prefix
+
+- GIVEN a `StorePath` value and two different store-dir prefixes
+- WHEN each prefix is passed to `to_absolute_path_with_prefix()`
+- THEN the serialized paths differ only by prefix while the digest and name
+  remain unchanged
+
 ### Requirement: Tests use tempdir stores
 
-Unit and integration tests that check filesystem behavior (cache
-hits, source validation) SHOULD use a temporary directory as the
-store dir instead of requiring write access to `/nix/store`.
-Tests that assert exact path strings MUST be parameterized or
-duplicated for the default store dir.
+Test coverage MUST avoid requiring write access to `/nix/store`. Unit and
+integration tests that check filesystem behavior SHOULD use a temporary
+directory as the store dir.
+Tests that assert exact path strings MUST be parameterized or duplicated for
+the default store dir.
 
 #### Scenario: Cache test without /nix/store
 

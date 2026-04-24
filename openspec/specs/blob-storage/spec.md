@@ -89,7 +89,3 @@ and build invocations.
 - GIVEN `crunch bootstrap --fetch` has fetched a tarball
 - WHEN `crunch build` runs a derivation using the same tarball content
 - THEN the blob data is already present (cache hit), no re-download
-
-## REMOVED Requirements
-
-(none)
