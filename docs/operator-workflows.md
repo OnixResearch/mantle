@@ -275,11 +275,12 @@ verifier-local social policy files:
 
 ```bash
 RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
 WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
-  --trusted-release-signer <release-signer-name> \
+  --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 ```
 
@@ -288,9 +289,12 @@ self-proof-only policy with `min_matching_witnesses = 0`. Use
 `--profile single-witness` when one matching witness should be enough to satisfy
 policy. `crunch attest key-show` prints the exact `name:base64` verifier token
 accepted by `--trusted-public-key`; omit `--signing-key` to read the default
-configured signing key instead. `crunch attest policy-init` writes `policy.json`
-plus an explicit empty `revocations.json`, and it refuses to overwrite either
-file unless `--force` is present.
+configured signing key instead. The signer name for `--trusted-release-signer`
+is the token prefix before the colon, so a shell workflow can derive it with
+`RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when the release key was
+auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
+policy-init` writes `policy.json` plus an explicit empty `revocations.json`,
+and it refuses to overwrite either file unless `--force` is present.
 
 Independent rebuilders can then publish witness attestations into the same
 verification directory:

@@ -490,24 +490,29 @@ fn verify_signature_bytes(
     let signature_text = encode_detached_signature(signature);
     let signature_ref = SignatureRef::parse(&signature_text)
         .map_err(|err| RunError::Internal(format!("encoding {context} signature: {err}")))?;
-    let trusted_key = find_trusted_key(trusted_public_keys, &signature.key_name, context)?;
-    if !trusted_key.verify(canonical_text, &signature_ref) {
+
+    let mut found_named_key = false;
+    for trusted_key in trusted_public_keys {
+        if trusted_key.name() != signature.key_name {
+            continue;
+        }
+        found_named_key = true;
+        if trusted_key.verify(canonical_text, &signature_ref) {
+            return Ok(signature.key_name.clone());
+        }
+    }
+
+    if !found_named_key {
         return Err(RunError::Build(format!(
-            "{context} signature failed verification for signer '{}'",
+            "{context} signer '{}' is missing from the trusted public key set",
             signature.key_name
         )));
     }
-    Ok(signature.key_name.clone())
-}
 
-fn find_trusted_key<'a>(
-    trusted_public_keys: &'a [VerifyingKey],
-    signer_key_name: &str,
-    context: &str,
-) -> Result<&'a VerifyingKey, RunError> {
-    trusted_public_keys.iter().find(|key| key.name() == signer_key_name).ok_or_else(|| {
-        RunError::Build(format!("{context} signer '{}' is missing from the trusted public key set", signer_key_name))
-    })
+    Err(RunError::Build(format!(
+        "{context} signature failed verification for signer '{}'",
+        signature.key_name
+    )))
 }
 
 fn build_release_attestation_from_bundle(manifest: &ReleaseEvidenceManifest) -> Result<ReleaseAttestation, RunError> {
@@ -730,6 +735,16 @@ mod tests {
     const TEST_KEYPAIR: &str =
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
+    fn renamed_keypair(key_name: &str) -> crunch_build::KeyPair {
+        let (_generated_keypair, generated_line) = crunch_build::generate_keypair();
+        let (_generated_name, encoded_keypair) = generated_line
+            .split_once(':')
+            .unwrap_or_else(|| panic!("generated signing key must contain ':' separator: {generated_line}"));
+        let renamed_line = format!("{key_name}:{encoded_keypair}");
+        crunch_build::load_keypair(&renamed_line)
+            .unwrap_or_else(|err| panic!("renamed signing key must stay parseable: {err}"))
+    }
+
     #[test]
     fn build_release_attestation_uses_manifest_digests_and_relative_paths() {
         let manifest = sample_manifest();
@@ -757,6 +772,47 @@ mod tests {
                 .unwrap();
 
         assert_eq!(signer, "cache.example.com-1");
+    }
+
+    #[test]
+    fn verify_signature_bytes_accepts_later_matching_key_when_names_collide() {
+        let keypair = crunch_build::load_keypair(TEST_KEYPAIR).unwrap();
+        let colliding_keypair = renamed_keypair("cache.example.com-1");
+        let attestation = sample_release_attestation();
+        let canonical_bytes = canonical_release_bytes(&attestation).unwrap();
+        let signature = sign_detached_message(&canonical_bytes, &keypair);
+
+        let signer = verify_signature_bytes(
+            &canonical_bytes,
+            &signature,
+            &[colliding_keypair.verifying_key, keypair.verifying_key],
+            "release attestation",
+        )
+        .unwrap();
+
+        assert_eq!(signer, "cache.example.com-1");
+    }
+
+    #[test]
+    fn verify_signature_bytes_rejects_colliding_names_when_no_key_matches() {
+        let keypair = crunch_build::load_keypair(TEST_KEYPAIR).unwrap();
+        let colliding_keypair = renamed_keypair("cache.example.com-1");
+        let attestation = sample_release_attestation();
+        let canonical_bytes = canonical_release_bytes(&attestation).unwrap();
+        let signature = sign_detached_message(&canonical_bytes, &keypair);
+
+        let err = verify_signature_bytes(
+            &canonical_bytes,
+            &signature,
+            &[colliding_keypair.verifying_key],
+            "release attestation",
+        )
+        .unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("release attestation signature failed verification for signer 'cache.example.com-1'")
+        );
     }
 
     #[test]

@@ -206,6 +206,25 @@ fn write_generated_signing_key(path: &Path) -> KeyPair {
     keypair
 }
 
+fn trusted_public_key_from_default_config(current_dir: &Path, config_dir: &Path) -> String {
+    let output = crunch()
+        .current_dir(current_dir)
+        .env("CRUNCH_CONFIG_DIR", config_dir)
+        .arg("attest")
+        .arg("key-show")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+fn trusted_public_key_key_name(trusted_public_key: &str) -> &str {
+    trusted_public_key
+        .split_once(':')
+        .map(|(key_name, _key_material)| key_name)
+        .unwrap_or_else(|| panic!("trusted public key must contain a ':' separator: {trusted_public_key}"))
+}
+
 fn read_release_attestation(verification_dir: &Path) -> ReleaseAttestation {
     serde_json::from_slice(&std::fs::read(verification_dir.join("release-attestation.json")).unwrap()).unwrap()
 }
@@ -763,6 +782,85 @@ fn attest_policy_init_rejects_existing_policy_without_force() {
     let revocations_after = std::fs::read(verification_dir.join("revocations.json")).unwrap();
     assert_eq!(policy_before, policy_after);
     assert_eq!(revocations_before, revocations_after);
+}
+
+#[test]
+fn witnessed_self_hosting_release_workflow_with_generated_keys_and_key_show_reports_quorum_satisfied() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let verification_dir = temp.path().join("verification");
+    let publisher_config_dir = temp.path().join("publisher-config");
+    let witness_config_dir = temp.path().join("witness-config");
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &publisher_config_dir)
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .assert()
+        .success();
+    assert!(publisher_config_dir.join("signing-key").exists());
+
+    let release_trusted_key = trusted_public_key_from_default_config(temp.path(), &publisher_config_dir);
+    let release_signer_name = trusted_public_key_key_name(&release_trusted_key).to_string();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(&release_signer_name)
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .success();
+
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .assert()
+        .success();
+    assert!(witness_config_dir.join("signing-key").exists());
+
+    let witness_trusted_key = trusted_public_key_from_default_config(temp.path(), &witness_config_dir);
+    let verify_output = crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(&release_trusted_key)
+        .arg("--trusted-public-key")
+        .arg(&witness_trusted_key)
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["release_signer_key_name"], release_signer_name);
+    assert_eq!(verify_json["technical_class"], "external-witness-match");
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+    assert_eq!(verify_json["matching_witness_count"], 1);
 }
 
 #[test]

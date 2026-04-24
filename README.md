@@ -867,12 +867,13 @@ crunch release attest target/release-evidence/<release-id>
 
 # Export the verifier-ready public key strings used by release-verify
 RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
 WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 
 # Scaffold verifier-local policy and empty revocations files
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
-  --trusted-release-signer <release-signer-name> \
+  --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 
 # Publish one witness attestation from rebuilt outputs
@@ -897,8 +898,12 @@ crunch attest release-verify target/release-verification/<release-id> \
 `crunch release attest` writes `release-attestation.json` plus a detached
 `.sig` file. `crunch attest key-show` reads an existing signing keypair and
 prints the exact `name:base64` token accepted by `--trusted-public-key`; omit
-`--signing-key` to inspect the default configured signing key instead.
-`crunch attest policy-init` writes verifier-local `policy.json` and
+`--signing-key` to inspect the default configured signing key instead. The
+release-signer name passed to `--trusted-release-signer` is the substring
+before `:` in that token, so shell workflows can derive it with
+`RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when keys were
+auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
+policy-init` writes verifier-local `policy.json` and
 `revocations.json` for either `self-proof-only` or `single-witness`
 publication without hand-authoring JSON. `crunch attest witness-create` writes
 `witnesses/<identity>.json` and a matching `.sig` sidecar under the same
