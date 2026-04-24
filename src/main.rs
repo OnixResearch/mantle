@@ -494,6 +494,27 @@ pub enum AttestAction {
         /// Optional witness identity to show
         identity: Option<String>,
     },
+    /// Initialize verifier-local policy and revocation files in a verification directory
+    PolicyInit {
+        /// Verification directory containing release-attestation.json
+        verification_dir: PathBuf,
+
+        /// Named policy profile to scaffold
+        #[arg(long, value_enum)]
+        profile: AttestPolicyProfileArg,
+
+        /// Trusted release signer names recorded in policy.json
+        #[arg(long = "trusted-release-signer", required = true)]
+        trusted_release_signer: Vec<String>,
+
+        /// Trusted witness identities recorded in policy.json for witness-count profiles
+        #[arg(long = "trusted-witness-identity")]
+        trusted_witness_identity: Vec<String>,
+
+        /// Overwrite existing policy.json and revocations.json
+        #[arg(long)]
+        force: bool,
+    },
     /// Verify a release attestation, witness set, and policy from a verification directory
     ReleaseVerify {
         /// Verification directory containing attestation material and policy files
@@ -503,6 +524,12 @@ pub enum AttestAction {
         #[arg(long = "trusted-public-key", value_delimiter = ',')]
         trusted_public_keys: Vec<String>,
     },
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum)]
+pub enum AttestPolicyProfileArg {
+    SelfProofOnly,
+    SingleWitness,
 }
 
 #[derive(Subcommand, Debug, Clone)]

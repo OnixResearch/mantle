@@ -865,9 +865,16 @@ attestation plus optional external witness attestations:
 # Sign the verified release bundle into a verification directory
 crunch release attest target/release-evidence/<release-id>
 
+# Scaffold verifier-local policy and empty revocations files
+crunch attest policy-init target/release-verification/<release-id> \
+  --profile single-witness \
+  --trusted-release-signer <release-signer-name> \
+  --trusted-witness-identity <witness-identity>
+
 # Publish one witness attestation from rebuilt outputs
 crunch attest witness-create target/release-verification/<release-id> \
   --rebuilt-binary /path/to/rebuilt/crunch \
+  --identity <witness-identity> \
   --system x86_64-linux \
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
@@ -883,12 +890,17 @@ crunch attest release-verify target/release-verification/<release-id> \
 ```
 
 `crunch release attest` writes `release-attestation.json` plus a detached
-`.sig` file. `crunch attest witness-create` writes `witnesses/<identity>.json`
-and a matching `.sig` sidecar under the same verification directory, reusing
-the published release binary names and pairing rebuilt outputs by argument
-order. `crunch attest release-verify` separates technical validity from policy
-sufficiency, so a release can stay technically valid even when the witness set
-is policy-insufficient.
+`.sig` file. `crunch attest policy-init` writes verifier-local `policy.json`
+and `revocations.json` for either `self-proof-only` or `single-witness`
+publication without hand-authoring JSON. `crunch attest witness-create` writes
+`witnesses/<identity>.json` and a matching `.sig` sidecar under the same
+verification directory, reusing the published release binary names and pairing
+rebuilt outputs by argument order. `crunch attest release-verify` separates
+technical validity from policy sufficiency, so a release can stay technically
+valid even when the witness set is policy-insufficient. A successful
+single-witness workflow therefore proves external witness agreement under the
+configured policy; it still does not prove a full-source bootstrap root or
+globally reproducible release artifacts.
 
 ### Bootstrap roadmap
 

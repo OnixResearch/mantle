@@ -210,6 +210,14 @@ fn read_release_attestation(verification_dir: &Path) -> ReleaseAttestation {
     serde_json::from_slice(&std::fs::read(verification_dir.join("release-attestation.json")).unwrap()).unwrap()
 }
 
+fn read_policy(verification_dir: &Path) -> ReleasePolicy {
+    serde_json::from_slice(&std::fs::read(verification_dir.join("policy.json")).unwrap()).unwrap()
+}
+
+fn read_revocations(verification_dir: &Path) -> ReleaseRevocations {
+    serde_json::from_slice(&std::fs::read(verification_dir.join("revocations.json")).unwrap()).unwrap()
+}
+
 fn write_policy(
     verification_dir: &Path,
     release_signer_name: &str,
@@ -556,6 +564,223 @@ fn release_attest_honors_json_output() {
     assert_eq!(json["release_id"], "crunch-0.1.0-rc1");
     assert_eq!(json["attestation_path"], verification_dir.join("release-attestation.json").display().to_string());
     assert_eq!(json["signature_path"], verification_dir.join("release-attestation.json.sig").display().to_string());
+}
+
+#[test]
+fn attest_policy_init_self_proof_only_writes_policy_files() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("--json")
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("self-proof-only")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let created_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(created_json["kind"], "crunch-release-policy-init");
+    assert_eq!(created_json["profile"], "self-proof-only");
+    assert_eq!(created_json["policy_path"], verification_dir.join("policy.json").display().to_string());
+    assert_eq!(created_json["revocations_path"], verification_dir.join("revocations.json").display().to_string());
+
+    let policy = read_policy(&verification_dir);
+    let revocations = read_revocations(&verification_dir);
+    assert_eq!(policy.min_matching_witnesses, 0);
+    assert_eq!(policy.independence_field, "witness_identity");
+    assert_eq!(policy.trusted_release_signers, vec![release_keypair().verifying_key.name().to_string()]);
+    assert!(policy.trusted_witness_signers.is_empty());
+    assert_eq!(revocations, ReleaseRevocations::empty());
+}
+
+#[test]
+fn attest_policy_init_single_witness_writes_policy_files() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("profile: single-witness"))
+        .stdout(predicate::str::contains("trusted witness identities: witness-a"));
+
+    let policy = read_policy(&verification_dir);
+    let revocations = read_revocations(&verification_dir);
+    assert_eq!(policy.min_matching_witnesses, 1);
+    assert_eq!(policy.independence_field, "witness_identity");
+    assert_eq!(policy.trusted_release_signers, vec![release_keypair().verifying_key.name().to_string()]);
+    assert_eq!(policy.trusted_witness_signers, vec!["witness-a".to_string()]);
+    assert_eq!(revocations, ReleaseRevocations::empty());
+}
+
+#[test]
+fn attest_policy_init_rejects_existing_policy_without_force() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("self-proof-only")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .assert()
+        .success();
+
+    let policy_before = std::fs::read(verification_dir.join("policy.json")).unwrap();
+    let revocations_before = std::fs::read(verification_dir.join("revocations.json")).unwrap();
+
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("refusing to overwrite existing"));
+
+    let policy_after = std::fs::read(verification_dir.join("policy.json")).unwrap();
+    let revocations_after = std::fs::read(verification_dir.join("revocations.json")).unwrap();
+    assert_eq!(policy_before, policy_after);
+    assert_eq!(revocations_before, revocations_after);
+}
+
+#[test]
+fn witnessed_self_hosting_release_workflow_reports_quorum_satisfied() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .success();
+
+    let witness_signing_key_path = temp.path().join("witness.key");
+    let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+
+    crunch()
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .arg("--signing-key")
+        .arg(&witness_signing_key_path)
+        .assert()
+        .success();
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair().verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["technical_class"], "external-witness-match");
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+    assert_eq!(verify_json["matching_witness_count"], 1);
 }
 
 #[test]

@@ -24,8 +24,11 @@ use serde_json::Value;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::errors::RunError;
+use crate::release_attestation::CreatedPolicyFiles;
 use crate::release_attestation::CreatedWitnessAttestation;
+use crate::release_attestation::PolicyInitProfile;
 use crate::release_attestation::ReleaseVerificationOutput;
+use crate::release_attestation::create_policy_files;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
@@ -143,6 +146,21 @@ async fn cmd_attest_async(
             verification_dir,
             identity,
         } => cmd_witness_show(&verification_dir, identity.as_deref()),
+        crate::AttestAction::PolicyInit {
+            verification_dir,
+            profile,
+            trusted_release_signer,
+            trusted_witness_identity,
+            force,
+        } => cmd_policy_init(
+            current_dir,
+            json,
+            &verification_dir,
+            map_policy_profile(profile),
+            &trusted_release_signer,
+            &trusted_witness_identity,
+            force,
+        ),
         crate::AttestAction::ReleaseVerify {
             verification_dir,
             trusted_public_keys,
@@ -211,6 +229,33 @@ fn cmd_witness_create(
         state_dir,
     )?;
     print_created_witness_attestation(&created, json)
+}
+
+fn cmd_policy_init(
+    current_dir: &Path,
+    json: bool,
+    verification_dir: &Path,
+    profile: PolicyInitProfile,
+    trusted_release_signers: &[String],
+    trusted_witness_identities: &[String],
+    force: bool,
+) -> Result<(), RunError> {
+    let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
+    let created = create_policy_files(
+        &resolved_verification_dir,
+        profile,
+        trusted_release_signers,
+        trusted_witness_identities,
+        force,
+    )?;
+    print_created_policy_files(&created, json)
+}
+
+fn map_policy_profile(profile: crate::AttestPolicyProfileArg) -> PolicyInitProfile {
+    match profile {
+        crate::AttestPolicyProfileArg::SelfProofOnly => PolicyInitProfile::SelfProofOnly,
+        crate::AttestPolicyProfileArg::SingleWitness => PolicyInitProfile::SingleWitness,
+    }
 }
 
 fn cmd_witness_show(verification_dir: &Path, requested_identity: Option<&str>) -> Result<(), RunError> {
@@ -324,6 +369,37 @@ fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: 
     println!("witness identity: {}", created.attestation.witness_identity);
     println!("digest: {}", created.digest_hex);
     println!("signer: {}", created.signer_key_name);
+    Ok(())
+}
+
+fn print_created_policy_files(created: &CreatedPolicyFiles, json: bool) -> Result<(), RunError> {
+    if json {
+        let policy = serde_json::to_value(&created.policy)
+            .map_err(|err| RunError::Internal(format!("serializing policy json: {err}")))?;
+        let revocations = serde_json::to_value(&created.revocations)
+            .map_err(|err| RunError::Internal(format!("serializing revocations json: {err}")))?;
+        let rendered = serde_json::json!({
+            "kind": "crunch-release-policy-init",
+            "profile": created.profile.as_str(),
+            "policy_path": created.policy_path.display().to_string(),
+            "revocations_path": created.revocations_path.display().to_string(),
+            "policy": policy,
+            "revocations": revocations,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing created policy output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("policy: {}", created.policy_path.display());
+    println!("revocations: {}", created.revocations_path.display());
+    println!("profile: {}", created.profile.as_str());
+    println!("min matching witnesses: {}", created.policy.min_matching_witnesses);
+    println!("trusted release signers: {}", created.policy.trusted_release_signers.join(", "));
+    println!("trusted witness identities: {}", created.policy.trusted_witness_signers.join(", "));
     Ok(())
 }
 

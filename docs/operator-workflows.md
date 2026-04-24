@@ -270,12 +270,29 @@ crunch release attest target/release-evidence/<release-id>
 That writes `target/release-verification/<release-id>/release-attestation.json`
 and a matching `.sig` sidecar by default.
 
+Before witness publication, scaffold the verifier-local social policy files:
+
+```bash
+crunch attest policy-init target/release-verification/<release-id> \
+  --profile single-witness \
+  --trusted-release-signer <release-signer-name> \
+  --trusted-witness-identity <witness-identity>
+```
+
+Use `--profile self-proof-only` when the verification directory should stay at a
+self-proof-only policy with `min_matching_witnesses = 0`. Use
+`--profile single-witness` when one matching witness should be enough to satisfy
+policy. The command writes `policy.json` plus an explicit empty
+`revocations.json`, and it refuses to overwrite either file unless `--force` is
+present.
+
 Independent rebuilders can then publish witness attestations into the same
 verification directory:
 
 ```bash
 crunch attest witness-create target/release-verification/<release-id> \
   --rebuilt-binary /path/to/rebuilt/crunch \
+  --identity <witness-identity> \
   --system x86_64-linux \
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
@@ -303,7 +320,9 @@ crunch attest release-verify target/release-verification/<release-id> \
 `crunch attest release-verify` reports the technical class, policy status, and
 final class separately. Unknown-key or bad-signature witnesses remain visible in
 `discovered_witness_count` but are excluded before quorum evaluation, so mixed
-witness sets do not abort verification.
+witness sets do not abort verification. A successful single-witness run proves
+external witness agreement under the configured policy. It still does not prove
+a full-source bootstrap root or globally reproducible release outputs.
 
 For the current trust boundary behind those claims, see
 [`docs/bootstrap-stage0-inventory.md`](bootstrap-stage0-inventory.md).
