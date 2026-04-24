@@ -859,25 +859,34 @@ bit-for-bit reproducible release outputs.
 ### Release attestations and witness verification
 
 After a release-evidence bundle verifies, the next layer is a signed release
-attestation plus optional external witness attestations:
+attestation plus optional external witness attestations. The checked-in
+cross-machine flow is publisher -> witness -> publisher:
 
 ```bash
-# Sign the verified release bundle into a verification directory
+# Publisher: sign the verified release bundle into a verification directory
 crunch release attest target/release-evidence/<release-id>
 
-# Export the verifier-ready public key strings used by release-verify
+# Publisher: export the verifier-ready public key string used by release-verify
 RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
 RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 
-# Scaffold verifier-local policy and empty revocations files
+# Publisher: scaffold verifier-local policy and empty revocations files
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
   --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 
-# Publish one witness attestation from rebuilt outputs
-crunch attest witness-create target/release-verification/<release-id> \
+# Publisher: export a public-only witness-request directory for the witness
+crunch release witness-export target/release-evidence/<release-id> \
+  --verification-dir target/release-verification/<release-id> \
+  --request-dir target/release-witness-requests/<release-id>
+
+# Witness: inspect the exported request bundle and rebuild from it
+crunch release verify \
+  target/release-witness-requests/<release-id>/release-evidence/<release-id>
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+crunch attest witness-create \
+  target/release-witness-requests/<release-id>/release-verification/<release-id> \
   --rebuilt-binary /path/to/rebuilt/crunch \
   --identity <witness-identity> \
   --system x86_64-linux \
@@ -885,11 +894,9 @@ crunch attest witness-create target/release-verification/<release-id> \
   --host-class nixos-25.05 \
   --signing-key /path/to/witness.key
 
-# Inspect the resulting documents
-crunch attest release-show target/release-verification/<release-id>
-crunch attest witness-show target/release-verification/<release-id>
-
-# Apply policy and trusted keys to the discovered witness set
+# Publisher: import the returned witness sidecars and verify the final status
+crunch attest witness-import target/release-verification/<release-id> \
+  target/release-witness-requests/<release-id>/release-verification/<release-id>
 crunch attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
@@ -903,12 +910,17 @@ release-signer name passed to `--trusted-release-signer` is the substring
 before `:` in that token, so shell workflows can derive it with
 `RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when keys were
 auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
-policy-init` writes verifier-local `policy.json` and
-`revocations.json` for either `self-proof-only` or `single-witness`
-publication without hand-authoring JSON. `crunch attest witness-create` writes
-`witnesses/<identity>.json` and a matching `.sig` sidecar under the same
-verification directory, reusing the published release binary names and pairing
-rebuilt outputs by argument order. `crunch attest release-verify` separates
+policy-init` writes verifier-local `policy.json` and `revocations.json` for
+either `self-proof-only` or `single-witness` publication without hand-authoring
+JSON. `crunch release witness-export` copies only public verification material:
+a verified release-evidence bundle, the signed release attestation, and request
+metadata. It does not copy signing keys or verifier-local policy files. `crunch
+attest witness-create` writes `witnesses/<identity>.json` and a matching `.sig`
+sidecar under the witness request's verification seed, reusing the published
+release binary names and pairing rebuilt outputs by argument order. `crunch
+attest witness-import` fails closed on missing signatures, release-digest
+mismatches, and conflicting existing witness identities before touching the
+publisher verification directory. `crunch attest release-verify` separates
 technical validity from policy sufficiency, so a release can stay technically
 valid even when the witness set is policy-insufficient. A successful
 single-witness workflow therefore proves external witness agreement under the

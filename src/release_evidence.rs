@@ -280,7 +280,7 @@ fn copy_directory_into_bundle(
     build_artifact_record(&dest_dir, relative_path, BundledArtifactKind::Directory)
 }
 
-fn copy_directory_tree(source_dir: &Path, dest_dir: &Path) -> Result<(), RunError> {
+pub(crate) fn copy_directory_tree(source_dir: &Path, dest_dir: &Path) -> Result<(), RunError> {
     let mut entries = Vec::new();
     collect_paths_sorted(source_dir, &mut entries)?;
     assert!(

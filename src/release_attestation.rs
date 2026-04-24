@@ -574,7 +574,7 @@ fn prepare_verification_dir(dir: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn prepare_witness_dir(verification_dir: &Path) -> Result<PathBuf, RunError> {
+pub(crate) fn prepare_witness_dir(verification_dir: &Path) -> Result<PathBuf, RunError> {
     prepare_verification_dir(verification_dir)?;
     let witness_dir = verification_dir.join(WITNESSES_DIR_NAME);
     assert!(witness_dir.starts_with(verification_dir), "witness dir must stay under verification dir");
@@ -590,7 +590,7 @@ fn resolve_witness_identity(requested_identity: Option<&str>, signer_key_name: &
     Ok(identity.to_string())
 }
 
-fn validate_witness_identity(identity: &str) -> Result<(), RunError> {
+pub(crate) fn validate_witness_identity(identity: &str) -> Result<(), RunError> {
     let identity_len_bytes = identity.len();
     if identity.is_empty() {
         return Err(RunError::Internal("witness identity must not be empty".to_string()));

@@ -270,18 +270,22 @@ crunch release attest target/release-evidence/<release-id>
 That writes `target/release-verification/<release-id>/release-attestation.json`
 and a matching `.sig` sidecar by default.
 
-Before witness publication, export the trusted public keys and scaffold the
-verifier-local social policy files:
+Before witness publication, export the trusted public key, scaffold the
+verifier-local social policy files, and export a portable witness-request
+directory:
 
 ```bash
 RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
 RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
   --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
+
+crunch release witness-export target/release-evidence/<release-id> \
+  --verification-dir target/release-verification/<release-id> \
+  --request-dir target/release-witness-requests/<release-id>
 ```
 
 Use `--profile self-proof-only` when the verification directory should stay at a
@@ -294,13 +298,21 @@ is the token prefix before the colon, so a shell workflow can derive it with
 `RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when the release key was
 auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
 policy-init` writes `policy.json` plus an explicit empty `revocations.json`,
-and it refuses to overwrite either file unless `--force` is present.
+and it refuses to overwrite either file unless `--force` is present. `crunch
+release witness-export` copies only public verification material into the
+request directory: the verified release-evidence bundle, the signed release
+attestation, and request metadata. It does not copy signing keys or
+verifier-local policy files.
 
-Independent rebuilders can then publish witness attestations into the same
-verification directory:
+Independent rebuilders can then verify the exported release bundle in a second
+environment and publish witness attestations into the copied verification seed:
 
 ```bash
-crunch attest witness-create target/release-verification/<release-id> \
+crunch release verify \
+  target/release-witness-requests/<release-id>/release-evidence/<release-id>
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+crunch attest witness-create \
+  target/release-witness-requests/<release-id>/release-verification/<release-id> \
   --rebuilt-binary /path/to/rebuilt/crunch \
   --identity <witness-identity> \
   --system x86_64-linux \
@@ -320,16 +332,22 @@ crunch attest release-show target/release-verification/<release-id>
 crunch attest witness-show target/release-verification/<release-id>
 ```
 
-Then verify technical status plus social policy against trusted key material:
+Then import the returned witness sidecars and verify technical status plus
+social policy against trusted key material:
 
 ```bash
+crunch attest witness-import target/release-verification/<release-id> \
+  target/release-witness-requests/<release-id>/release-verification/<release-id>
 crunch attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
-`crunch attest release-verify` reports the technical class, policy status, and
-final class separately. Unknown-key or bad-signature witnesses remain visible in
+`crunch attest witness-import` fails closed on missing signatures,
+release-digest mismatches, and conflicting existing witness identities before
+copying anything into the publisher verification directory. `crunch attest
+release-verify` reports the technical class, policy status, and final class
+separately. Unknown-key or bad-signature witnesses remain visible in
 `discovered_witness_count` but are excluded before quorum evaluation, so mixed
 witness sets do not abort verification. A successful single-witness run proves
 external witness agreement under the configured policy. It still does not prove

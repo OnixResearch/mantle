@@ -34,6 +34,7 @@ use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
 use crate::release_attestation::verify_release_attestation_directory;
+use crate::witness_handoff::import_witness_material;
 
 const MANIFEST_FILE: &str = "crunch-project.ncl";
 const LOCK_FILE: &str = "crunch.lock";
@@ -150,6 +151,10 @@ async fn cmd_attest_async(
             verification_dir,
             identity,
         } => cmd_witness_show(&verification_dir, identity.as_deref()),
+        crate::AttestAction::WitnessImport {
+            verification_dir,
+            source,
+        } => cmd_witness_import(current_dir, json, &verification_dir, &source),
         crate::AttestAction::PolicyInit {
             verification_dir,
             profile,
@@ -239,6 +244,45 @@ fn cmd_witness_create(
         state_dir,
     )?;
     print_created_witness_attestation(&created, json)
+}
+
+fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, source: &Path) -> Result<(), RunError> {
+    let resolved_verification_dir = resolve_cli_path(current_dir, verification_dir);
+    let resolved_source = resolve_cli_path(current_dir, source);
+    let imported = import_witness_material(&resolved_verification_dir, &resolved_source)?;
+    if json {
+        let rendered = serde_json::json!({
+            "kind": "crunch-witness-import",
+            "verification_dir": imported.verification_dir.display().to_string(),
+            "imported_witness_identities": imported.imported_witness_identities,
+            "skipped_duplicate_identities": imported.skipped_duplicate_identities,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing witness import output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("verification dir: {}", imported.verification_dir.display());
+    println!(
+        "imported witness identities: {}",
+        if imported.imported_witness_identities.is_empty() {
+            "(none)".to_string()
+        } else {
+            imported.imported_witness_identities.join(", ")
+        }
+    );
+    println!(
+        "skipped exact duplicates: {}",
+        if imported.skipped_duplicate_identities.is_empty() {
+            "(none)".to_string()
+        } else {
+            imported.skipped_duplicate_identities.join(", ")
+        }
+    );
+    Ok(())
 }
 
 fn cmd_policy_init(

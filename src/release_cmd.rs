@@ -10,6 +10,8 @@ use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_source::write_tracked_source_archive;
+use crate::witness_handoff::create_witness_request_directory;
+use crate::witness_handoff::default_witness_request_dir;
 
 pub(crate) fn cmd_release(
     action: crate::ReleaseAction,
@@ -41,6 +43,11 @@ pub(crate) fn cmd_release(
             verification_dir,
             signing_key,
         } => cmd_release_attest(current_dir, state_dir, json, bundle_dir, verification_dir, signing_key),
+        crate::ReleaseAction::WitnessExport {
+            bundle_dir,
+            verification_dir,
+            request_dir,
+        } => cmd_release_witness_export(current_dir, json, bundle_dir, verification_dir, request_dir),
     }
 }
 
@@ -140,6 +147,56 @@ fn cmd_release_attest(
     println!("release id: {}", created.attestation.release_id);
     println!("digest: {}", created.digest_hex);
     println!("signer: {}", created.signer_key_name);
+    Ok(())
+}
+
+fn cmd_release_witness_export(
+    current_dir: &Path,
+    json: bool,
+    bundle_dir: PathBuf,
+    verification_dir: Option<PathBuf>,
+    request_dir: Option<PathBuf>,
+) -> Result<(), RunError> {
+    let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
+    let verified_manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let resolved_verification_dir = match verification_dir {
+        Some(path) => resolve_input_path(current_dir, path),
+        None => default_verification_dir(current_dir, &verified_manifest.release_id),
+    };
+    let resolved_request_dir = match request_dir {
+        Some(path) => resolve_input_path(current_dir, path),
+        None => default_witness_request_dir(current_dir, &verified_manifest.release_id),
+    };
+    let created = create_witness_request_directory(
+        &verified_manifest,
+        &resolved_bundle_dir,
+        &resolved_verification_dir,
+        &resolved_request_dir,
+    )?;
+    if json {
+        let rendered = serde_json::json!({
+            "kind": "crunch-witness-request",
+            "release_id": created.release_id,
+            "layout_version": created.layout_version,
+            "request_dir": created.request_dir.display().to_string(),
+            "request_path": created.request_path.display().to_string(),
+            "release_bundle_path": created.release_bundle_path.display().to_string(),
+            "verification_seed_path": created.verification_seed_path.display().to_string(),
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing witness request output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("witness request: {}", created.request_dir.display());
+    println!("request metadata: {}", created.request_path.display());
+    println!("release id: {}", created.release_id);
+    println!("layout version: {}", created.layout_version);
+    println!("release bundle copy: {}", created.release_bundle_path.display());
+    println!("verification seed: {}", created.verification_seed_path.display());
     Ok(())
 }
 

@@ -310,6 +310,42 @@ fn invalid_signature_line(key_name: &str) -> String {
     format!("{}:{}", key_name, BASE64_STANDARD.encode([0_u8; 64]))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WitnessRequestJson {
+    schema: String,
+    request_layout_version: u32,
+    release_id: String,
+    release_bundle_relative_path: String,
+    verification_seed_relative_path: String,
+}
+
+fn read_witness_request(request_dir: &Path) -> WitnessRequestJson {
+    serde_json::from_slice(&std::fs::read(request_dir.join("request.json")).unwrap()).unwrap()
+}
+
+fn copy_directory_for_test(source_dir: &Path, dest_dir: &Path) {
+    std::fs::create_dir_all(dest_dir).unwrap();
+    copy_directory_entries_for_test(source_dir, dest_dir);
+}
+
+fn copy_directory_entries_for_test(source_dir: &Path, dest_dir: &Path) {
+    let mut entries = std::fs::read_dir(source_dir).unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
+    entries.sort();
+    for source_path in entries {
+        let relative = source_path.strip_prefix(source_dir).unwrap();
+        let dest_path = dest_dir.join(relative);
+        if source_path.is_dir() {
+            std::fs::create_dir_all(&dest_path).unwrap();
+            copy_directory_entries_for_test(&source_path, &dest_path);
+            continue;
+        }
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::copy(&source_path, &dest_path).unwrap();
+    }
+}
+
 #[test]
 fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();
@@ -782,6 +818,399 @@ fn attest_policy_init_rejects_existing_policy_without_force() {
     let revocations_after = std::fs::read(verification_dir.join("revocations.json")).unwrap();
     assert_eq!(policy_before, policy_after);
     assert_eq!(revocations_before, revocations_after);
+}
+
+#[test]
+fn witness_export_writes_request_directory() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let export_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let request = read_witness_request(&request_dir);
+
+    assert_eq!(export_json["kind"], "crunch-witness-request");
+    assert_eq!(export_json["release_id"], manifest.release_id);
+    assert_eq!(request.schema, "crunch-witness-request-v1");
+    assert_eq!(request.request_layout_version, 1);
+    assert_eq!(request.release_id, manifest.release_id);
+    assert_eq!(request.release_bundle_relative_path, format!("release-evidence/{}", manifest.release_id));
+    assert_eq!(request.verification_seed_relative_path, format!("release-verification/{}", manifest.release_id));
+    assert!(request_dir.join(&request.release_bundle_relative_path).join("manifest.json").exists());
+    assert!(request_dir.join(&request.verification_seed_relative_path).join("release-attestation.json").exists());
+    assert!(
+        request_dir
+            .join(&request.verification_seed_relative_path)
+            .join("release-attestation.json.sig")
+            .exists()
+    );
+    assert!(!request_dir.join(&request.verification_seed_relative_path).join("policy.json").exists());
+    assert!(!request_dir.join(&request.verification_seed_relative_path).join("revocations.json").exists());
+    assert!(!request_dir.join("signing-key").exists());
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(request_dir.join(&request.release_bundle_relative_path))
+        .assert()
+        .success();
+}
+
+#[test]
+fn witness_export_rejects_release_id_mismatch() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let mut attestation = read_release_attestation(&verification_dir);
+    attestation.release_id = "wrong-release".to_string();
+    write_file(
+        &verification_dir.join("release-attestation.json"),
+        serde_json::to_vec(&attestation).unwrap().as_slice(),
+    );
+
+    crunch()
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("release id mismatch"));
+}
+
+#[test]
+fn witness_import_accepts_directory_source_and_skips_exact_duplicates() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let source_verification_dir = temp.path().join("returned-verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&publisher_verification_dir);
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&source_verification_dir, &release_attestation, &witness_keypair, "witness-a");
+
+    crunch()
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&source_verification_dir)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("imported witness identities: witness-a"));
+    assert!(publisher_verification_dir.join("witnesses/witness-a.json").exists());
+    assert!(publisher_verification_dir.join("witnesses/witness-a.json.sig").exists());
+
+    let duplicate_output = crunch()
+        .arg("--json")
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(source_verification_dir.join("witnesses/witness-a.json"))
+        .output()
+        .unwrap();
+    assert!(duplicate_output.status.success(), "{}", String::from_utf8_lossy(&duplicate_output.stderr));
+    let duplicate_json: serde_json::Value = serde_json::from_slice(&duplicate_output.stdout).unwrap();
+
+    assert_eq!(duplicate_json["kind"], "crunch-witness-import");
+    assert_eq!(duplicate_json["imported_witness_identities"], serde_json::json!([]));
+    assert_eq!(duplicate_json["skipped_duplicate_identities"], serde_json::json!(["witness-a"]));
+}
+
+#[test]
+fn witness_import_rejects_missing_signature_sidecar() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let source_verification_dir = temp.path().join("returned-verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&publisher_verification_dir);
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&source_verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    std::fs::remove_file(source_verification_dir.join("witnesses/witness-a.json.sig")).unwrap();
+
+    crunch()
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&source_verification_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("missing witness signature sidecar"));
+}
+
+#[test]
+fn witness_import_rejects_wrong_release_attestation_digest() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let source_verification_dir = temp.path().join("returned-verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&publisher_verification_dir);
+    let witness_keypair = crunch_build::generate_keypair().0;
+    let wrong_release_digest = AttestationDigest::from_canonical_bytes(b"wrong-release".to_vec());
+    write_witness_material_with_release_digest(
+        &source_verification_dir,
+        &release_attestation,
+        wrong_release_digest,
+        &witness_keypair,
+        "witness-a",
+    );
+
+    crunch()
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&source_verification_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("references release attestation digest"));
+}
+
+#[test]
+fn witness_import_rejects_conflicting_duplicate_identity() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let release_signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&release_signing_key_path);
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let first_source_dir = temp.path().join("returned-first");
+    let second_source_dir = temp.path().join("returned-second");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--signing-key")
+        .arg(&release_signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&publisher_verification_dir);
+    let first_witness_keypair = crunch_build::generate_keypair().0;
+    let second_witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&first_source_dir, &release_attestation, &first_witness_keypair, "witness-a");
+    write_witness_material(&second_source_dir, &release_attestation, &second_witness_keypair, "witness-a");
+
+    crunch()
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&first_source_dir)
+        .assert()
+        .success();
+
+    crunch()
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&second_source_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("conflicting witness identity"));
+}
+
+#[test]
+fn cross_machine_witness_handoff_reports_quorum_satisfied() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let publisher_config_dir = temp.path().join("publisher-config");
+    let witness_config_dir = temp.path().join("witness-config");
+    let request_dir = temp.path().join("publisher-request");
+    let witness_workspace = temp.path().join("witness-workspace");
+    let witness_request_dir = witness_workspace.join("request");
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &publisher_config_dir)
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .assert()
+        .success();
+    assert!(publisher_config_dir.join("signing-key").exists());
+
+    let release_trusted_key = trusted_public_key_from_default_config(temp.path(), &publisher_config_dir);
+    let release_signer_name = trusted_public_key_key_name(&release_trusted_key).to_string();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&publisher_verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(&release_signer_name)
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    copy_directory_for_test(&request_dir, &witness_request_dir);
+    let witness_request = read_witness_request(&witness_request_dir);
+    assert_eq!(witness_request.release_id, manifest.release_id);
+
+    let witness_bundle_dir = witness_request_dir.join(&witness_request.release_bundle_relative_path);
+    let witness_verification_dir = witness_request_dir.join(&witness_request.verification_seed_relative_path);
+
+    crunch()
+        .current_dir(&witness_workspace)
+        .arg("release")
+        .arg("verify")
+        .arg(&witness_bundle_dir)
+        .assert()
+        .success();
+
+    let rebuilt_binary_path = witness_bundle_dir.join("binaries/01-crunch-bin");
+    crunch()
+        .current_dir(&witness_workspace)
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .arg("attest")
+        .arg("witness-create")
+        .arg(&witness_verification_dir)
+        .arg("--rebuilt-binary")
+        .arg(&rebuilt_binary_path)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .assert()
+        .success();
+    assert!(witness_config_dir.join("signing-key").exists());
+
+    let witness_trusted_key = trusted_public_key_from_default_config(&witness_workspace, &witness_config_dir);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&witness_verification_dir)
+        .assert()
+        .success();
+
+    let verify_output = crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&publisher_verification_dir)
+        .arg("--trusted-public-key")
+        .arg(&release_trusted_key)
+        .arg("--trusted-public-key")
+        .arg(&witness_trusted_key)
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["release_signer_key_name"], release_signer_name);
+    assert_eq!(verify_json["technical_class"], "external-witness-match");
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
+    assert_eq!(verify_json["matching_witness_count"], 1);
 }
 
 #[test]

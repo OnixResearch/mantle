@@ -22,6 +22,7 @@ mod self_build;
 mod shell_cmd;
 mod store_cmd;
 mod system_cmd;
+mod witness_handoff;
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -426,6 +427,20 @@ pub enum ReleaseAction {
         #[arg(long)]
         signing_key: Option<PathBuf>,
     },
+    /// Export a portable witness-request directory from verified public artifacts
+    WitnessExport {
+        /// Verified release-evidence bundle directory to export
+        bundle_dir: PathBuf,
+
+        /// Verification directory containing the signed release attestation
+        #[arg(long)]
+        verification_dir: Option<PathBuf>,
+
+        /// Output directory for the witness request (default:
+        /// target/release-witness-requests/<release-id>)
+        #[arg(long)]
+        request_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -500,6 +515,14 @@ pub enum AttestAction {
 
         /// Optional witness identity to show
         identity: Option<String>,
+    },
+    /// Import returned witness sidecars into a verification directory
+    WitnessImport {
+        /// Verification directory containing release-attestation.json
+        verification_dir: PathBuf,
+
+        /// Source witness json file, witnesses/ directory, or verification dir with witnesses/
+        source: PathBuf,
     },
     /// Initialize verifier-local policy and revocation files in a verification directory
     PolicyInit {
