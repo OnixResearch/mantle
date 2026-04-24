@@ -270,9 +270,13 @@ crunch release attest target/release-evidence/<release-id>
 That writes `target/release-verification/<release-id>/release-attestation.json`
 and a matching `.sig` sidecar by default.
 
-Before witness publication, scaffold the verifier-local social policy files:
+Before witness publication, export the trusted public keys and scaffold the
+verifier-local social policy files:
 
 ```bash
+RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
   --trusted-release-signer <release-signer-name> \
@@ -282,9 +286,11 @@ crunch attest policy-init target/release-verification/<release-id> \
 Use `--profile self-proof-only` when the verification directory should stay at a
 self-proof-only policy with `min_matching_witnesses = 0`. Use
 `--profile single-witness` when one matching witness should be enough to satisfy
-policy. The command writes `policy.json` plus an explicit empty
-`revocations.json`, and it refuses to overwrite either file unless `--force` is
-present.
+policy. `crunch attest key-show` prints the exact `name:base64` verifier token
+accepted by `--trusted-public-key`; omit `--signing-key` to read the default
+configured signing key instead. `crunch attest policy-init` writes `policy.json`
+plus an explicit empty `revocations.json`, and it refuses to overwrite either
+file unless `--force` is present.
 
 Independent rebuilders can then publish witness attestations into the same
 verification directory:
@@ -314,7 +320,8 @@ Then verify technical status plus social policy against trusted key material:
 
 ```bash
 crunch attest release-verify target/release-verification/<release-id> \
-  --trusted-public-key <release-or-witness-name:base64>
+  --trusted-public-key "$RELEASE_TRUSTED_KEY" \
+  --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
 `crunch attest release-verify` reports the technical class, policy status, and

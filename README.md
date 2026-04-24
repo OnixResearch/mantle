@@ -865,6 +865,10 @@ attestation plus optional external witness attestations:
 # Sign the verified release bundle into a verification directory
 crunch release attest target/release-evidence/<release-id>
 
+# Export the verifier-ready public key strings used by release-verify
+RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+
 # Scaffold verifier-local policy and empty revocations files
 crunch attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
@@ -886,12 +890,16 @@ crunch attest witness-show target/release-verification/<release-id>
 
 # Apply policy and trusted keys to the discovered witness set
 crunch attest release-verify target/release-verification/<release-id> \
-  --trusted-public-key <release-or-witness-name:base64>
+  --trusted-public-key "$RELEASE_TRUSTED_KEY" \
+  --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
 `crunch release attest` writes `release-attestation.json` plus a detached
-`.sig` file. `crunch attest policy-init` writes verifier-local `policy.json`
-and `revocations.json` for either `self-proof-only` or `single-witness`
+`.sig` file. `crunch attest key-show` reads an existing signing keypair and
+prints the exact `name:base64` token accepted by `--trusted-public-key`; omit
+`--signing-key` to inspect the default configured signing key instead.
+`crunch attest policy-init` writes verifier-local `policy.json` and
+`revocations.json` for either `self-proof-only` or `single-witness`
 publication without hand-authoring JSON. `crunch attest witness-create` writes
 `witnesses/<identity>.json` and a matching `.sig` sidecar under the same
 verification directory, reusing the published release binary names and pairing

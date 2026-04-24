@@ -457,6 +457,13 @@ pub enum AttestAction {
         /// Verification directory containing release-attestation.json
         verification_dir: PathBuf,
     },
+    /// Show the trusted public key token for an existing signing keypair
+    KeyShow {
+        /// Path to a Nix-format ed25519 signing keypair file (defaults to the configured signing
+        /// key)
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+    },
     /// Create and sign a witness attestation under a verification directory
     WitnessCreate {
         /// Verification directory containing release-attestation.json

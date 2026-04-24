@@ -23,6 +23,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
+use crate::build_cmd::load_existing_signing_keypair;
 use crate::errors::RunError;
 use crate::release_attestation::CreatedPolicyFiles;
 use crate::release_attestation::CreatedWitnessAttestation;
@@ -122,6 +123,9 @@ async fn cmd_attest_async(
             let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
             print_document(&AttestationDocument::Release(attestation), Some(stored_path))
         }
+        crate::AttestAction::KeyShow { signing_key } => {
+            cmd_key_show(current_dir, state_dir, json, signing_key.as_deref())
+        }
         crate::AttestAction::WitnessCreate {
             verification_dir,
             rebuilt_binary,
@@ -202,6 +206,12 @@ async fn cmd_verify(
             verify_project_document(&document, file.as_deref(), digest.as_deref())
         }
     }
+}
+
+fn cmd_key_show(current_dir: &Path, state_dir: &Path, json: bool, signing_key: Option<&Path>) -> Result<(), RunError> {
+    let resolved_signing_key = signing_key.map(|path| resolve_cli_path(current_dir, path));
+    let (keypair, source_path) = load_existing_signing_keypair(resolved_signing_key.as_deref(), state_dir)?;
+    print_trusted_public_key(&keypair.verifying_key.to_string(), keypair.verifying_key.name(), &source_path, json)
 }
 
 fn cmd_witness_create(
@@ -342,6 +352,31 @@ fn parse_release_trusted_public_keys(
         keys.push(key);
     }
     Ok(Some(keys))
+}
+
+fn print_trusted_public_key(
+    trusted_public_key: &str,
+    key_name: &str,
+    source_path: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::json!({
+            "kind": "crunch-trusted-public-key",
+            "trusted_public_key": trusted_public_key,
+            "key_name": key_name,
+            "source_path": source_path.display().to_string(),
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing trusted public key output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("{trusted_public_key}");
+    Ok(())
 }
 
 fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: bool) -> Result<(), RunError> {

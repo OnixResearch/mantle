@@ -349,6 +349,26 @@ pub fn log_dir() -> PathBuf {
     std::env::var("CRUNCH_LOG_DIR").map(PathBuf::from).unwrap_or_else(|_| state_dir().join("logs"))
 }
 
+/// Load a signing keypair from the given path or the default config location,
+/// but never generate a new key.
+pub fn load_existing_signing_keypair(
+    explicit_path: Option<&Path>,
+    state_dir: &Path,
+) -> Result<(signing::KeyPair, PathBuf), RunError> {
+    if let Some(path) = explicit_path {
+        let keypair = load_signing_keypair_from_path(path)?;
+        return Ok((keypair, path.to_path_buf()));
+    }
+
+    let default_path = default_signing_key_path(state_dir);
+    if default_path.exists() {
+        let keypair = load_signing_keypair_from_path(&default_path)?;
+        return Ok((keypair, default_path));
+    }
+
+    Err(RunError::Internal(format!("no signing key found at {}", default_path.display())))
+}
+
 /// Load a signing keypair from the given path, the default config location,
 /// or generate one automatically.
 pub fn load_or_generate_signing_keypair(
@@ -356,25 +376,18 @@ pub fn load_or_generate_signing_keypair(
     state_dir: &Path,
     emit_human: bool,
 ) -> Result<signing::KeyPair, RunError> {
-    // 1. Explicit path from --signing-key.
-    if let Some(path) = explicit_path {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| RunError::Internal(format!("reading signing key {}: {e}", path.display())))?;
-        return signing::load_keypair(&contents)
-            .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", path.display())));
-    }
-
-    // 2. Default location: $CRUNCH_CONFIG_DIR/signing-key or $state_dir/signing-key.
-    let config_dir = config_dir_or(state_dir);
-    let default_path = config_dir.join("signing-key");
-    if default_path.exists() {
-        let contents = std::fs::read_to_string(&default_path)
-            .map_err(|e| RunError::Internal(format!("reading signing key {}: {e}", default_path.display())))?;
-        return signing::load_keypair(&contents)
-            .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", default_path.display())));
+    match load_existing_signing_keypair(explicit_path, state_dir) {
+        Ok((keypair, _path)) => return Ok(keypair),
+        Err(err) => {
+            if explicit_path.is_some() {
+                return Err(err);
+            }
+        }
     }
 
     // 3. Auto-generate.
+    let config_dir = config_dir_or(state_dir);
+    let default_path = default_signing_key_path(state_dir);
     let (keypair, line) = signing::generate_keypair();
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| RunError::Internal(format!("creating config dir {}: {e}", config_dir.display())))?;
@@ -406,6 +419,17 @@ pub fn load_or_generate_signing_keypair(
         eprintln!("Generated signing key: {} ({})", keypair.verifying_key.name(), default_path.display());
     }
     Ok(keypair)
+}
+
+fn load_signing_keypair_from_path(path: &Path) -> Result<signing::KeyPair, RunError> {
+    let contents = std::fs::read_to_string(path)
+        .map_err(|e| RunError::Internal(format!("reading signing key {}: {e}", path.display())))?;
+    signing::load_keypair(&contents)
+        .map_err(|e| RunError::Internal(format!("parsing signing key {}: {e}", path.display())))
+}
+
+fn default_signing_key_path(state_dir: &Path) -> PathBuf {
+    config_dir_or(state_dir).join("signing-key")
 }
 
 pub fn load_configured_trusted_public_keys(

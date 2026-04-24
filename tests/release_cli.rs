@@ -567,6 +567,62 @@ fn release_attest_honors_json_output() {
 }
 
 #[test]
+fn attest_key_show_explicit_signing_key_prints_trusted_public_key() {
+    let temp = tempfile::tempdir().unwrap();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+
+    let output = crunch().arg("attest").arg("key-show").arg("--signing-key").arg(&signing_key_path).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), release_keypair().verifying_key.to_string());
+}
+
+#[test]
+fn attest_key_show_uses_default_config_signing_key() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join("config");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    let signing_key_path = config_dir.join("signing-key");
+    write_release_signing_key(&signing_key_path);
+
+    let output = crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &config_dir)
+        .arg("--json")
+        .arg("attest")
+        .arg("key-show")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(json["kind"], "crunch-trusted-public-key");
+    assert_eq!(json["trusted_public_key"], release_keypair().verifying_key.to_string());
+    assert_eq!(json["key_name"], release_keypair().verifying_key.name());
+    assert_eq!(json["source_path"], signing_key_path.display().to_string());
+}
+
+#[test]
+fn attest_key_show_missing_signing_key_fails_without_generation() {
+    let temp = tempfile::tempdir().unwrap();
+    let config_dir = temp.path().join("config");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    let signing_key_path = config_dir.join("signing-key");
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &config_dir)
+        .arg("attest")
+        .arg("key-show")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no signing key found"));
+
+    assert!(!signing_key_path.exists());
+}
+
+#[test]
 fn attest_policy_init_self_proof_only_writes_policy_files() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let signing_key_path = temp.path().join("release.key");
