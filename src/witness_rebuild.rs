@@ -196,7 +196,7 @@ pub(crate) fn plan_witness_rebuild(request_dir: &Path, scratch_root: &Path) -> R
 }
 
 pub(crate) fn prepare_witness_rebuild_scratch(plan: &WitnessRebuildPlan) -> Result<(), RunError> {
-    prepare_empty_directory(&plan.scratch_layout.scratch_root, "witness rebuild scratch root")?;
+    prepare_witness_rebuild_root(&plan.scratch_layout)?;
     copy_request_seed_directory(plan)?;
     extract_source_archive(plan)?;
     Ok(())
@@ -471,19 +471,77 @@ fn source_archive_path(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) ->
     Ok(bundle_dir.join(relative))
 }
 
-fn prepare_empty_directory(path: &Path, label: &str) -> Result<(), RunError> {
-    if path.exists() {
-        if !path.is_dir() {
-            return Err(RunError::Internal(format!("{} is not a directory: {}", label, path.display())));
-        }
-        let mut entries =
-            std::fs::read_dir(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?;
-        if entries.next().is_some() {
-            return Err(RunError::Internal(format!("{} must be empty: {}", label, path.display())));
-        }
+fn prepare_witness_rebuild_root(layout: &WitnessRebuildLayout) -> Result<(), RunError> {
+    if !layout.scratch_root.exists() {
+        return std::fs::create_dir_all(&layout.scratch_root)
+            .map_err(|err| RunError::Internal(format!("creating {}: {err}", layout.scratch_root.display())));
+    }
+    validate_existing_scratch_root(&layout.scratch_root)
+}
+
+fn validate_existing_scratch_root(path: &Path) -> Result<(), RunError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|err| RunError::Internal(format!("reading {} metadata: {err}", path.display())))?;
+    if metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!(
+            "witness rebuild scratch root must not be a symlink: {}",
+            path.display()
+        )));
+    }
+    if !metadata.is_dir() {
+        return Err(RunError::Internal(format!("witness rebuild scratch root is not a directory: {}", path.display())));
+    }
+    let unexpected_entries = unexpected_scratch_root_entries(path)?;
+    if unexpected_entries.is_empty() {
         return Ok(());
     }
-    std::fs::create_dir_all(path).map_err(|err| RunError::Internal(format!("creating {}: {err}", path.display())))
+    Err(RunError::Internal(format!(
+        "witness rebuild scratch root must be empty except for helper-owned tmp/cargo-target directories: {} (unexpected entries: {})",
+        path.display(),
+        unexpected_entries.join(", ")
+    )))
+}
+
+fn unexpected_scratch_root_entries(path: &Path) -> Result<Vec<String>, RunError> {
+    let mut unexpected_entries = Vec::new();
+    for entry_result in
+        std::fs::read_dir(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?
+    {
+        let entry =
+            entry_result.map_err(|err| RunError::Internal(format!("reading {} entry: {err}", path.display())))?;
+        let entry_name = entry.file_name().into_string().map_err(|_| {
+            RunError::Internal(format!("witness rebuild scratch entry is not valid UTF-8 under {}", path.display()))
+        })?;
+        if is_helper_owned_scratch_entry(&entry_name) {
+            validate_helper_owned_scratch_entry(&entry.path())?;
+            continue;
+        }
+        unexpected_entries.push(entry_name);
+    }
+    unexpected_entries.sort();
+    Ok(unexpected_entries)
+}
+
+fn is_helper_owned_scratch_entry(entry_name: &str) -> bool {
+    entry_name == SCRATCH_TMP_DIR_NAME || entry_name == SCRATCH_CARGO_TARGET_DIR_NAME
+}
+
+fn validate_helper_owned_scratch_entry(path: &Path) -> Result<(), RunError> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|err| RunError::Internal(format!("reading {} metadata: {err}", path.display())))?;
+    if metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!(
+            "witness rebuild helper-owned scratch entry must not be a symlink: {}",
+            path.display()
+        )));
+    }
+    if metadata.is_dir() {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "witness rebuild helper-owned scratch entry must be a directory: {}",
+        path.display()
+    )))
 }
 
 fn copy_request_seed_directory(plan: &WitnessRebuildPlan) -> Result<(), RunError> {
@@ -731,5 +789,37 @@ mod tests {
     fn validate_supported_workflow_identity_rejects_unknown_pair() {
         let err = validate_supported_workflow_identity("./scripts/other.sh", "v9").unwrap_err();
         assert!(err.message().contains("unsupported witness rebuild workflow"));
+    }
+
+    #[test]
+    fn validate_existing_scratch_root_allows_helper_owned_dirs_only() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join(SCRATCH_TMP_DIR_NAME)).unwrap();
+        std::fs::create_dir_all(temp.path().join(SCRATCH_CARGO_TARGET_DIR_NAME)).unwrap();
+
+        let result = validate_existing_scratch_root(temp.path());
+        assert!(result.is_ok(), "helper-owned dirs should be accepted: {result:?}");
+    }
+
+    #[test]
+    fn validate_existing_scratch_root_rejects_unexpected_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("unexpected"), b"x").unwrap();
+
+        let err = validate_existing_scratch_root(temp.path()).unwrap_err();
+        assert!(err.message().contains("unexpected entries: unexpected"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_existing_scratch_root_rejects_symlink_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target");
+        let link = temp.path().join("link");
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let err = validate_existing_scratch_root(&link).unwrap_err();
+        assert!(err.message().contains("must not be a symlink"));
     }
 }

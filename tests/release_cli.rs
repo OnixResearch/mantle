@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -1289,6 +1291,187 @@ fn witness_rebuild_helper_check_is_preflight_only() {
     assert!(!scratch_dir.exists(), "helper check mode must stay preflight-only");
     let request = read_witness_request(&request_dir);
     assert!(!request_dir.join(&request.verification_seed_relative_path).join("witnesses").exists());
+}
+
+#[test]
+fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let witness_config_dir = temp.path().join("witness-config");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg(&request_dir)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .env("SNIX_BUILD_SANDBOX_SHELL", &driver_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let audit_path = PathBuf::from(rebuild_json["audit_meta_path"].as_str().unwrap());
+
+    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["check_only"], false);
+    assert_eq!(rebuild_json["release_id"], manifest.release_id);
+    assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
+    assert!(Path::new(rebuild_json["signature_path"].as_str().unwrap()).exists());
+    assert!(audit_path.exists());
+    let audit = read_witness_rebuild_audit(&audit_path);
+    assert_eq!(audit.status, "success");
+    assert_eq!(audit.rebuilt_outputs[0].digest_blake3, manifest.binaries[0].digest_blake3);
+}
+
+#[cfg(unix)]
+#[test]
+fn witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_target = temp.path().join("scratch-target");
+    let scratch_link = temp.path().join("scratch-link");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    let sentinel_path = temp.path().join("driver-sentinel");
+    write_fake_witness_rebuild_driver(&driver_path);
+    std::fs::create_dir_all(&scratch_target).unwrap();
+    symlink(&scratch_target, &scratch_link).unwrap();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_link)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must not be a symlink"));
+    assert!(!sentinel_path.exists(), "symlinked scratch root must fail before launching the driver");
+}
+
+#[test]
+fn witness_rebuild_cli_rejects_request_paths_that_escape_request_dir() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let mut request = read_witness_request(&request_dir);
+    request.release_bundle_relative_path = "../escape".to_string();
+    write_file(&request_dir.join("request.json"), serde_json::to_vec(&request).unwrap().as_slice());
+
+    crunch()
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must stay inside the request directory"));
 }
 
 #[test]
