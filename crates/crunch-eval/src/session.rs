@@ -179,6 +179,18 @@ impl EvaluationSession {
             "import paths must not contain empty entries"
         );
 
+        if let Some(labels) = discover_static_record_labels(&source) {
+            let init = SessionInit {
+                ctx,
+                source,
+                import_paths: scope,
+                source_name,
+                shape: RootShape::Record,
+                labels,
+            };
+            return Ok(Self::new_session(init));
+        }
+
         let shallow_expr = ctx.eval_shallow(&source).map_err(Error::Eval)?;
         let shape = classify_shape(&mut ctx, &shallow_expr)?;
 
@@ -914,6 +926,66 @@ fn label_error(label: &str, err: Error) -> Error {
     }
 }
 
+fn discover_static_record_labels(source: &str) -> Option<Vec<RootLabel>> {
+    use nickel_lang_core::cache::{CacheHub, SourcePath};
+    use nickel_lang_core::parser::{ErrorTolerantParserCompat, grammar::TermParser, lexer::Lexer};
+    use nickel_lang_core::position::PosTable;
+
+    let mut cache = CacheHub::new();
+    let input_id = cache.replace_string(SourcePath::Query, source.to_string());
+    let input_source = cache.sources.source(input_id);
+    let parsed = TermParser::new()
+        .parse_strict_compat(&mut PosTable::new(), input_id, Lexer::new(input_source))
+        .ok()?;
+    static_record_labels_from_value(&parsed)
+}
+
+fn static_record_labels_from_value(value: &nickel_lang_core::eval::value::NickelValue) -> Option<Vec<RootLabel>> {
+    use nickel_lang_core::term::Term;
+
+    let term = value.as_term()?;
+    match term {
+        Term::Let(data) => static_record_labels_from_value(&data.body),
+        Term::Annotated(data) => static_record_labels_from_value(&data.inner),
+        Term::Sealed(data) => static_record_labels_from_value(&data.inner),
+        Term::Closurize(value) => static_record_labels_from_value(value),
+        Term::RecRecord(data) => collect_static_record_labels(&data.record, data.includes.is_empty(), data.dyn_fields.is_empty()),
+        _ => None,
+    }
+}
+
+fn collect_static_record_labels(
+    record: &nickel_lang_core::term::record::RecordData,
+    has_no_includes: bool,
+    has_no_dynamic_fields: bool,
+) -> Option<Vec<RootLabel>> {
+    if !has_no_includes {
+        return None;
+    }
+
+    if !has_no_dynamic_fields {
+        return None;
+    }
+
+    if record.fields.keys().any(|key| key.label() == "name") {
+        return None;
+    }
+
+    let mut labels = Vec::with_capacity(record.fields.len());
+    for (index, (key, field)) in record.fields.iter().enumerate() {
+        if field.value.is_none() {
+            return None;
+        }
+
+        labels.push(RootLabel {
+            label: key.label().to_string(),
+            index: u32_from_usize(index),
+        });
+    }
+
+    Some(labels)
+}
+
 /// Classify the top-level shape from a shallowly-evaluated expression.
 fn classify_shape(ctx: &mut Context, expr: &Expr) -> Result<RootShape, Error> {
     if expr.is_array() {
@@ -1051,6 +1123,38 @@ mod tests {
         assert_eq!(clamp_parallel_workers(16, 4), 2);
         assert_eq!(clamp_parallel_workers(24, 4), 3);
         assert_eq!(clamp_parallel_workers(32, 4), 4);
+    }
+
+    #[test]
+    fn discover_static_record_labels_extracts_let_wrapped_record_fields() {
+        let source = r#"
+let crunch = import "lib.ncl" in {
+  alpha = { x = 1 },
+  beta = { x = 2 },
+}
+"#;
+
+        let labels = discover_static_record_labels(source).unwrap();
+        assert_eq!(
+            labels,
+            vec![
+                RootLabel {
+                    label: "alpha".to_string(),
+                    index: 0,
+                },
+                RootLabel {
+                    label: "beta".to_string(),
+                    index: 1,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn discover_static_record_labels_rejects_single_derivation_shape() {
+        let source = r#"{ name = "demo", builder = "/bin/sh" }"#;
+
+        assert!(discover_static_record_labels(source).is_none());
     }
 
     #[test]
