@@ -251,7 +251,6 @@ fn load_witness_import_candidates(source: &Path) -> Result<Vec<WitnessImportCand
     for json_path in &json_paths {
         candidates.push(load_single_witness_import_candidate(json_path)?);
     }
-    assert!(!candidates.is_empty(), "witness import candidates must not be empty");
     Ok(candidates)
 }
 
@@ -403,12 +402,18 @@ fn classify_witness_import(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AppliedWitnessImportPlan {
+    imported_witness_identities: Vec<String>,
+    skipped_duplicate_identities: Vec<String>,
+}
+
 fn apply_witness_import_plan(
     witness_dir: &Path,
     plan: &[WitnessImportPlanEntry],
-) -> Result<ImportedWitnessMaterial, RunError> {
-    let mut imported = Vec::new();
-    let mut skipped = Vec::new();
+) -> Result<AppliedWitnessImportPlan, RunError> {
+    let mut imported_witness_identities = Vec::new();
+    let mut skipped_duplicate_identities = Vec::new();
     for entry in plan {
         let destination_paths = destination_witness_paths(witness_dir, &entry.identity);
         match entry.decision {
@@ -417,14 +422,13 @@ fn apply_witness_import_plan(
                     .map_err(|err| RunError::Internal(format!("writing {}: {err}", destination_paths.0.display())))?;
                 std::fs::write(&destination_paths.1, &entry.signature_bytes)
                     .map_err(|err| RunError::Internal(format!("writing {}: {err}", destination_paths.1.display())))?;
-                imported.push(entry.identity.clone());
+                imported_witness_identities.push(entry.identity.clone());
             }
-            WitnessImportDecision::SkipExactDuplicate => skipped.push(entry.identity.clone()),
+            WitnessImportDecision::SkipExactDuplicate => skipped_duplicate_identities.push(entry.identity.clone()),
         }
     }
-    Ok(ImportedWitnessMaterial {
-        verification_dir: witness_dir.parent().unwrap_or(witness_dir).to_path_buf(),
-        imported_witness_identities: imported,
-        skipped_duplicate_identities: skipped,
+    Ok(AppliedWitnessImportPlan {
+        imported_witness_identities,
+        skipped_duplicate_identities,
     })
 }
