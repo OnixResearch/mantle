@@ -32,6 +32,9 @@ const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
 const BLAKE3_HEX_LEN: usize = 64;
 const RELEASE_SIGNING_KEY: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+const FAKE_WITNESS_DRIVER_MODE_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_MODE";
+const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_LAUNCH_SIGNAL";
+const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_CONTENT: &str = "launched";
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -351,17 +354,27 @@ fn read_witness_rebuild_audit(audit_path: &Path) -> WitnessRebuildAuditJson {
     serde_json::from_slice(&std::fs::read(audit_path).unwrap()).unwrap()
 }
 
+fn assert_fake_witness_driver_launch_signal_present(path: &Path) {
+    assert!(path.exists(), "fake witness driver must record launch signal: {}", path.display());
+    let launch_signal = std::fs::read_to_string(path).unwrap();
+    assert_eq!(launch_signal.trim(), FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_CONTENT);
+}
+
+fn assert_fake_witness_driver_launch_signal_absent(path: &Path) {
+    assert!(!path.exists(), "fake witness driver must not record launch signal: {}", path.display());
+}
+
 fn write_fake_witness_rebuild_driver(path: &Path) {
     let script = r#"#!/usr/bin/env bash
 set -euo pipefail
 readonly DRIVER_SLEEP_SECONDS=0.1
+launch_signal="${CRUNCH_TEST_WITNESS_DRIVER_LAUNCH_SIGNAL:?fake driver requires launch signal path}"
+# Write launch signal before later env validation so preflight-failure tests can
+# distinguish "driver never launched" from "driver started and failed early".
+printf 'launched\n' > "$launch_signal"
 : "${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}"
 : "${CRUNCH_WITNESS_RELEASE_BUNDLE_DIR:?}"
 mode="${CRUNCH_TEST_WITNESS_DRIVER_MODE:-match}"
-sentinel="${CRUNCH_TEST_WITNESS_DRIVER_SENTINEL:-}"
-if [[ -n "$sentinel" ]]; then
-  printf 'launched\n' > "$sentinel"
-fi
 mkdir -p "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
 printf 'driver mode: %s\n' "$mode"
 sleep "$DRIVER_SLEEP_SECONDS"
@@ -1303,6 +1316,7 @@ fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
     let scratch_dir = temp.path().join("scratch");
     let witness_config_dir = temp.path().join("witness-config");
     let driver_path = temp.path().join("fake-witness-driver.sh");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1346,7 +1360,8 @@ fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
         .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
         .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .env(FAKE_WITNESS_DRIVER_MODE_ENV, "match")
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .env("SNIX_BUILD_SANDBOX_SHELL", &driver_path)
         .output()
         .unwrap();
@@ -1359,6 +1374,7 @@ fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
     assert!(Path::new(rebuild_json["signature_path"].as_str().unwrap()).exists());
+    assert_fake_witness_driver_launch_signal_present(&launch_signal_path);
     assert!(audit_path.exists());
     let audit = read_witness_rebuild_audit(&audit_path);
     assert_eq!(audit.status, "success");
@@ -1376,7 +1392,7 @@ fn witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver() 
     let scratch_target = temp.path().join("scratch-target");
     let scratch_link = temp.path().join("scratch-link");
     let driver_path = temp.path().join("fake-witness-driver.sh");
-    let sentinel_path = temp.path().join("driver-sentinel");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
     std::fs::create_dir_all(&scratch_target).unwrap();
     symlink(&scratch_target, &scratch_link).unwrap();
@@ -1408,7 +1424,7 @@ fn witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver() 
     crunch()
         .current_dir(temp.path())
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .arg("release")
         .arg("witness-rebuild")
         .arg(&request_dir)
@@ -1425,7 +1441,71 @@ fn witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver() 
         .assert()
         .failure()
         .stderr(predicate::str::contains("must not be a symlink"));
-    assert!(!sentinel_path.exists(), "symlinked scratch root must fail before launching the driver");
+    assert_fake_witness_driver_launch_signal_absent(&launch_signal_path);
+}
+
+#[cfg(unix)]
+#[test]
+fn witness_rebuild_cli_rejects_symlinked_helper_owned_scratch_entry_before_launching_driver() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let helper_target = temp.path().join("helper-tmp-target");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
+    write_fake_witness_rebuild_driver(&driver_path);
+    std::fs::create_dir_all(&scratch_dir).unwrap();
+    std::fs::create_dir_all(&helper_target).unwrap();
+    symlink(&helper_target, scratch_dir.join("tmp")).unwrap();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("helper-owned scratch entry must not be a symlink"));
+    assert_fake_witness_driver_launch_signal_absent(&launch_signal_path);
 }
 
 #[test]
@@ -1482,7 +1562,7 @@ fn witness_rebuild_cli_rejects_unsupported_workflow_before_running_driver() {
     let verification_dir = temp.path().join("verification");
     let request_dir = temp.path().join("request");
     let driver_path = temp.path().join("fake-witness-driver.sh");
-    let sentinel_path = temp.path().join("driver-sentinel");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1519,11 +1599,11 @@ fn witness_rebuild_cli_rejects_unsupported_workflow_before_running_driver() {
         .arg(&request_dir)
         .arg("--check")
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .assert()
         .failure()
         .stderr(predicate::str::contains("unsupported witness rebuild workflow"));
-    assert!(!sentinel_path.exists(), "unsupported workflow must fail before launching the driver");
+    assert_fake_witness_driver_launch_signal_absent(&launch_signal_path);
 }
 
 #[test]
@@ -1534,7 +1614,7 @@ fn witness_rebuild_cli_rejects_published_output_name_mismatch_before_running_dri
     let verification_dir = temp.path().join("verification");
     let request_dir = temp.path().join("request");
     let driver_path = temp.path().join("fake-witness-driver.sh");
-    let sentinel_path = temp.path().join("driver-sentinel");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1571,11 +1651,11 @@ fn witness_rebuild_cli_rejects_published_output_name_mismatch_before_running_dri
         .arg(&request_dir)
         .arg("--check")
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .assert()
         .failure()
         .stderr(predicate::str::contains("published output name mismatch"));
-    assert!(!sentinel_path.exists(), "output-name mismatch must fail before launching the driver");
+    assert_fake_witness_driver_launch_signal_absent(&launch_signal_path);
 }
 
 #[test]
@@ -1588,6 +1668,7 @@ fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
     let scratch_dir = temp.path().join("scratch");
     let witness_config_dir = temp.path().join("witness-config");
     let driver_path = temp.path().join("fake-witness-driver.sh");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1618,7 +1699,8 @@ fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
         .current_dir(temp.path())
         .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .env(FAKE_WITNESS_DRIVER_MODE_ENV, "match")
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .arg("--json")
         .arg("release")
         .arg("witness-rebuild")
@@ -1646,6 +1728,7 @@ fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
     assert!(Path::new(rebuild_json["signature_path"].as_str().unwrap()).exists());
+    assert_fake_witness_driver_launch_signal_present(&launch_signal_path);
     assert_eq!(audit.schema, "crunch-witness-rebuild-audit-v1");
     assert_eq!(audit.status, "success");
     assert!(
@@ -1672,6 +1755,7 @@ fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
     let request_dir = temp.path().join("request");
     let scratch_dir = temp.path().join("scratch");
     let driver_path = temp.path().join("fake-witness-driver.sh");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1701,7 +1785,8 @@ fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
     crunch()
         .current_dir(temp.path())
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "mismatch")
+        .env(FAKE_WITNESS_DRIVER_MODE_ENV, "mismatch")
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .arg("release")
         .arg("witness-rebuild")
         .arg(&request_dir)
@@ -1734,6 +1819,7 @@ fn witnessed_self_hosting_rebuild_workflow_reports_quorum_satisfied() {
     let request_dir = temp.path().join("publisher-request");
     let scratch_dir = temp.path().join("witness-scratch");
     let driver_path = temp.path().join("fake-witness-driver.sh");
+    let launch_signal_path = temp.path().join("driver-launch-signal");
     write_fake_witness_rebuild_driver(&driver_path);
 
     crunch()
@@ -1780,7 +1866,8 @@ fn witnessed_self_hosting_rebuild_workflow_reports_quorum_satisfied() {
         .current_dir(temp.path())
         .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
         .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
-        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .env(FAKE_WITNESS_DRIVER_MODE_ENV, "match")
+        .env(FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV, &launch_signal_path)
         .arg("--json")
         .arg("release")
         .arg("witness-rebuild")

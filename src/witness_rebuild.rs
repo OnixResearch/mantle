@@ -801,6 +801,31 @@ mod tests {
         assert!(result.is_ok(), "helper-owned dirs should be accepted: {result:?}");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn validate_existing_scratch_root_rejects_symlinked_helper_owned_tmp_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("tmp-target");
+        let link = temp.path().join(SCRATCH_TMP_DIR_NAME);
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let err = validate_existing_scratch_root(temp.path()).unwrap_err();
+        assert!(err.message().contains("helper-owned scratch entry must not be a symlink"));
+        assert!(err.message().contains(SCRATCH_TMP_DIR_NAME));
+    }
+
+    #[test]
+    fn validate_existing_scratch_root_rejects_file_helper_owned_cargo_target_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join(SCRATCH_CARGO_TARGET_DIR_NAME);
+        std::fs::write(&file, b"x").unwrap();
+
+        let err = validate_existing_scratch_root(temp.path()).unwrap_err();
+        assert!(err.message().contains("helper-owned scratch entry must be a directory"));
+        assert!(err.message().contains(SCRATCH_CARGO_TARGET_DIR_NAME));
+    }
+
     #[test]
     fn validate_existing_scratch_root_rejects_unexpected_entries() {
         let temp = tempfile::tempdir().unwrap();
