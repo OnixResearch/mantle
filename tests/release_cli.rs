@@ -26,10 +26,12 @@ use crunch_build::load_keypair;
 use predicates::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Sha256;
 use tempfile::TempDir;
 
 const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
 const BLAKE3_HEX_LEN: usize = 64;
+const TEST_CARGO_SHA256_HEX_LEN: usize = 64;
 const RELEASE_SIGNING_KEY: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const FAKE_WITNESS_DRIVER_MODE_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_MODE";
@@ -62,11 +64,36 @@ fn assert_git_ok(repo_root: &Path, args: &[&str]) {
     );
 }
 
+fn cargo_sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = <Sha256 as sha2::Digest>::new();
+    <Sha256 as sha2::Digest>::update(&mut hasher, bytes);
+    let digest = <Sha256 as sha2::Digest>::finalize(hasher);
+    let encoded = data_encoding::HEXLOWER.encode(&digest);
+    assert_eq!(encoded.len(), TEST_CARGO_SHA256_HEX_LEN);
+    encoded
+}
+
+fn write_test_vendor_package(repo_root: &Path) {
+    let manifest = b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n";
+    let lib = b"pub fn dep() {}\n";
+    write_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), manifest);
+    write_file(&repo_root.join("vendor-deps/dep/lib.rs"), lib);
+    let manifest_digest = cargo_sha256_hex(manifest);
+    let lib_digest = cargo_sha256_hex(lib);
+    let checksum_manifest =
+        format!("{{\"files\":{{\"Cargo.toml\":\"{manifest_digest}\",\"lib.rs\":\"{lib_digest}\"}},\"package\":null}}",);
+    write_file(&repo_root.join("vendor-deps/dep/.cargo-checksum.json"), checksum_manifest.as_bytes());
+}
+
 fn create_minimal_release_repo(repo_root: &Path) {
+    write_file(&repo_root.join(".gitignore"), b"vendor-deps/\n");
     write_file(&repo_root.join(".cargo/vendor-config.toml"), b"directory = \"vendor-deps\"\n");
-    write_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n");
+    write_test_vendor_package(repo_root);
     write_file(&repo_root.join("Cargo.toml"), b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n");
-    write_file(&repo_root.join("Cargo.lock"), b"# lock\n");
+    write_file(
+        &repo_root.join("Cargo.lock"),
+        b"[[package]]\nname = \"dep\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/dep.git#0123456789abcdef\"\n",
+    );
     write_file(&repo_root.join("bootstrap/seed.ncl"), b"{}\n");
     write_file(&repo_root.join("builders/default.ncl"), b"{}\n");
     write_file(&repo_root.join("crates/demo/src/lib.rs"), b"pub fn demo() {}\n");

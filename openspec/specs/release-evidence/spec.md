@@ -1,8 +1,9 @@
 # release-evidence Specification
 
 ## Purpose
-Define packaged release-evidence bundles that capture tracked-worktree source,
-release binaries, full proof artifacts, and prerequisite inventory, and allow
+Define packaged release-evidence bundles that capture tracked-worktree source
+plus verified vendored Cargo inputs, release binaries, full proof artifacts,
+and prerequisite inventory, and allow
 bundle-local integrity verification without over-claiming bootstrap or global
 reproducibility guarantees.
 ## Requirements
@@ -18,7 +19,8 @@ A valid bundle MUST contain at least:
 - and the bundled prerequisite inventory.
 
 The staged-source archive MUST be exported from the current tracked worktree
-contents rather than from a stale `HEAD` archive.
+contents plus the verified `vendor-deps/` Cargo inputs required by self-build,
+rather than from a stale `HEAD` archive.
 
 The manifest MUST record at least the release identifier, source digest,
 produced binary digest or digests, bundled proof-artifact digest, and bundled
@@ -32,11 +34,13 @@ prerequisite-inventory digest.
 - AND another tool can determine which bundled files are mandatory for
   verification
 
-#### Scenario: Staged-source archive reflects the current tracked worktree
+#### Scenario: Staged-source archive reflects the current tracked worktree and vendored inputs
 
 - GIVEN local tracked worktree content differs from `HEAD`
+- AND `vendor-deps/` is present, verified against `Cargo.lock`, and ignored by Git
 - WHEN crunch creates a release evidence bundle
 - THEN the bundled staged-source archive reflects the current tracked worktree
+- AND it includes the verified vendored Cargo inputs needed by self-build
 - AND it does not silently fall back to a stale `HEAD` archive
 
 ### Requirement: CLI can create release evidence bundles

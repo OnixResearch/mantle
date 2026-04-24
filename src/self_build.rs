@@ -10,6 +10,7 @@
 //! The output is a statically-linked crunch binary compiled inside a
 //! bwrap sandbox using only the bootstrap toolchain.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
@@ -18,6 +19,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+
+use serde::Deserialize;
+use sha2::Sha256;
 
 use crate::build_cmd::build_import_paths;
 use crate::build_cmd::load_configured_trusted_public_keys;
@@ -34,6 +38,27 @@ const MAX_STAGE_SOURCE_ENTRIES: u32 = 200_000;
 
 /// Maximum recursion depth during stage0 source staging.
 const MAX_STAGE_SOURCE_DEPTH: u32 = 64;
+
+/// Maximum locked packages parsed from Cargo.lock during vendor validation.
+const MAX_CARGO_LOCK_PACKAGE_COUNT: u32 = 20_000;
+
+/// Maximum top-level package directories accepted under vendor-deps/.
+const MAX_VENDOR_PACKAGE_COUNT: u32 = 20_000;
+
+/// Maximum files accepted inside one vendored package checksum manifest.
+const MAX_VENDOR_PACKAGE_FILE_COUNT: u32 = 200_000;
+
+/// Expected lowercase SHA-256 hex digest length in Cargo vendor metadata.
+///
+/// Cargo.lock and `.cargo-checksum.json` define this digest algorithm as part
+/// of Cargo's interoperability format. Crunch-owned hashes remain BLAKE3.
+const CARGO_SHA256_HEX_LEN: usize = 64;
+
+/// One kibibyte in bytes for fixed-size hashing buffers.
+const KIB_BYTES: usize = 1024;
+
+/// Read-buffer capacity for streaming Cargo SHA-256 over vendored package files.
+const CARGO_SHA256_READ_BUFFER_BYTES: usize = 64 * KIB_BYTES;
 
 /// Top-level repo entries included in the staged source tree.
 pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
@@ -274,8 +299,8 @@ impl SelfBuildReport {
 
 /// Stage the crunch source tree into the output store.
 ///
-/// 1. Check the checked-in vendored Cargo inputs are present and targeted
-/// 2. Copy the selected source tree into staging with Rust filesystem calls
+/// 1. Copy the selected source tree into staging with Rust filesystem calls
+/// 2. Check the staged vendored Cargo inputs are present and fresh
 /// 3. Compute the staged-tree fingerprint
 /// 4. Copy the staged tree into `$store_dir/$hash-crunch-src/`
 ///
@@ -285,13 +310,13 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     let stage_root = staging.path().join("crunch-src");
     std::fs::create_dir_all(&stage_root).map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
 
-    eprintln!("  checking vendored cargo inputs...");
-    require_checked_vendor_inputs(src_dir)?;
-
     eprintln!("  copying selected source tree...");
     copy_selected_source_tree(src_dir, &stage_root)?;
     assert!(stage_root.join("Cargo.toml").exists(), "staged source must contain Cargo.toml");
     assert!(!stage_root.join(".git").exists(), "staged source must not contain .git");
+
+    eprintln!("  checking staged vendored cargo inputs...");
+    require_checked_vendor_inputs(&stage_root)?;
 
     let size = dir_size(&stage_root);
     assert!(
@@ -559,26 +584,481 @@ fn run_cmd(cmd: &mut Command, label: &str) -> Result<(), RunError> {
     Ok(())
 }
 
-/// Require the checked-in vendored Cargo inputs to be present.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct PackageKey {
+    name: String,
+    version: String,
+}
+
+impl fmt::Display for PackageKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.version)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct LockedPackage {
+    key: PackageKey,
+    source: Option<String>,
+    checksum: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct LockedPackageBuilder {
+    name: Option<String>,
+    version: Option<String>,
+    source: Option<String>,
+    checksum: Option<String>,
+}
+
+#[derive(Debug)]
+struct ExpectedVendorPackage {
+    source: String,
+    checksum: Option<String>,
+}
+
+#[derive(Debug)]
+struct VendoredPackage {
+    package_checksum: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VendorChecksumManifest {
+    files: BTreeMap<String, String>,
+    package: Option<String>,
+}
+
+/// Require the source-tree vendored Cargo inputs to be present and internally
+/// fresh enough for self-build.
 ///
-/// This is a shallow stage0 guard: it checks that `vendor-deps/` exists and
-/// that `.cargo/vendor-config.toml` points at that checked-in directory. It
-/// does not yet prove that the vendor tree is fresh relative to `Cargo.lock`.
+/// This guard is intentionally host-tool-free: it reads `Cargo.lock`, the
+/// source-tree Cargo vendor config, and Cargo's `.cargo-checksum.json` files
+/// directly instead of shelling out to host `cargo`, `git`, `nix`, or network
+/// tools before the long bootstrap begins.
 pub(crate) fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunError> {
     let vendor_dir = src_dir.join("vendor-deps");
     let vendor_config = src_dir.join(".cargo").join("vendor-config.toml");
     if !vendor_dir.is_dir() {
-        return Err(RunError::Internal(format!("checked-in vendor-deps/ missing: {}", vendor_dir.display(),)));
+        return Err(RunError::Internal(format!("source-tree vendor-deps/ missing: {}", vendor_dir.display())));
     }
     let vendor_config_text = std::fs::read_to_string(&vendor_config)
         .map_err(|e| RunError::Internal(format!("read {}: {e}", vendor_config.display())))?;
     if !vendor_config_text.contains("directory = \"vendor-deps\"") {
         return Err(RunError::Internal(format!(
-            "vendor config must point at checked-in vendor-deps/: {}",
+            "vendor config must point at source-tree vendor-deps/: {}",
             vendor_config.display(),
         )));
     }
+    verify_checked_vendor_freshness(src_dir, &vendor_dir)
+}
+
+fn verify_checked_vendor_freshness(src_dir: &Path, vendor_dir: &Path) -> Result<(), RunError> {
+    assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
+    assert!(vendor_dir.is_dir(), "vendor dir must exist: {}", vendor_dir.display());
+    let lock_path = src_dir.join("Cargo.lock");
+    let lock_text = std::fs::read_to_string(&lock_path)
+        .map_err(|e| RunError::Internal(format!("read {}: {e}", lock_path.display())))?;
+    let locked_packages = parse_cargo_lock_packages(&lock_text)?;
+    let expected = expected_vendor_packages(&locked_packages)?;
+    let actual = load_vendored_packages(vendor_dir)?;
+    verify_vendor_package_set(&expected, &actual)
+}
+
+fn parse_cargo_lock_packages(lock_text: &str) -> Result<Vec<LockedPackage>, RunError> {
+    let mut packages: Vec<LockedPackage> = Vec::new();
+    let mut current: Option<LockedPackageBuilder> = None;
+    for raw_line in lock_text.lines() {
+        let line = raw_line.trim();
+        if line == "[[package]]" {
+            push_locked_package(&mut packages, current.take())?;
+            current = Some(LockedPackageBuilder::default());
+            continue;
+        }
+        if let Some(builder) = current.as_mut() {
+            apply_lock_package_field(builder, line)?;
+        }
+    }
+    push_locked_package(&mut packages, current)?;
+    Ok(packages)
+}
+
+fn push_locked_package(
+    packages: &mut Vec<LockedPackage>,
+    builder: Option<LockedPackageBuilder>,
+) -> Result<(), RunError> {
+    let Some(builder) = builder else {
+        return Ok(());
+    };
+    if packages.len() >= MAX_CARGO_LOCK_PACKAGE_COUNT as usize {
+        return Err(RunError::Internal(format!("Cargo.lock package count exceeds {}", MAX_CARGO_LOCK_PACKAGE_COUNT,)));
+    }
+    let name = builder.name.ok_or_else(|| RunError::Internal("Cargo.lock package missing name".to_string()))?;
+    let version = builder
+        .version
+        .ok_or_else(|| RunError::Internal(format!("Cargo.lock package {name} missing version")))?;
+    packages.push(LockedPackage {
+        key: PackageKey { name, version },
+        source: builder.source,
+        checksum: builder.checksum,
+    });
     Ok(())
+}
+
+fn apply_lock_package_field(builder: &mut LockedPackageBuilder, line: &str) -> Result<(), RunError> {
+    if let Some(value) = parse_quoted_field(line, "name")? {
+        builder.name = Some(value);
+        return Ok(());
+    }
+    if let Some(value) = parse_quoted_field(line, "version")? {
+        builder.version = Some(value);
+        return Ok(());
+    }
+    if let Some(value) = parse_quoted_field(line, "source")? {
+        builder.source = Some(value);
+        return Ok(());
+    }
+    if let Some(value) = parse_quoted_field(line, "checksum")? {
+        ensure_cargo_sha256_hex("Cargo.lock checksum", &value)?;
+        builder.checksum = Some(value);
+    }
+    Ok(())
+}
+
+fn expected_vendor_packages(
+    packages: &[LockedPackage],
+) -> Result<BTreeMap<PackageKey, ExpectedVendorPackage>, RunError> {
+    let mut expected: BTreeMap<PackageKey, ExpectedVendorPackage> = BTreeMap::new();
+    for package in packages {
+        let Some(source) = package.source.as_ref() else {
+            continue;
+        };
+        if !is_supported_vendor_source(source) {
+            return Err(RunError::Internal(format!(
+                "unsupported vendored Cargo source for {}: {}",
+                package.key, source,
+            )));
+        }
+        if is_registry_vendor_source(source) && package.checksum.is_none() {
+            return Err(RunError::Internal(format!("registry package {} is missing Cargo.lock checksum", package.key)));
+        }
+        let previous = expected.insert(package.key.clone(), ExpectedVendorPackage {
+            source: source.clone(),
+            checksum: package.checksum.clone(),
+        });
+        if previous.is_some() {
+            return Err(RunError::Internal(format!("duplicate vendored package in Cargo.lock: {}", package.key)));
+        }
+    }
+    Ok(expected)
+}
+
+fn load_vendored_packages(vendor_dir: &Path) -> Result<BTreeMap<PackageKey, VendoredPackage>, RunError> {
+    let mut children: Vec<PathBuf> = Vec::new();
+    let entries = std::fs::read_dir(vendor_dir)
+        .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", vendor_dir.display())))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", vendor_dir.display())))?;
+        children.push(entry.path());
+    }
+    children.sort();
+    vendored_package_index(&children)
+}
+
+fn vendored_package_index(children: &[PathBuf]) -> Result<BTreeMap<PackageKey, VendoredPackage>, RunError> {
+    let mut packages: BTreeMap<PackageKey, VendoredPackage> = BTreeMap::new();
+    for child in children {
+        if packages.len() >= MAX_VENDOR_PACKAGE_COUNT as usize {
+            return Err(RunError::Internal(format!("vendor-deps package count exceeds {}", MAX_VENDOR_PACKAGE_COUNT)));
+        }
+        let metadata = std::fs::symlink_metadata(child)
+            .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", child.display())))?;
+        if !metadata.is_dir() {
+            return Err(RunError::Internal(format!("vendor-deps entry is not a directory: {}", child.display())));
+        }
+        let (key, package) = read_vendored_package(child)?;
+        let previous = packages.insert(key.clone(), package);
+        if previous.is_some() {
+            return Err(RunError::Internal(format!("duplicate vendored package directory for {key}")));
+        }
+    }
+    Ok(packages)
+}
+
+fn read_vendored_package(package_dir: &Path) -> Result<(PackageKey, VendoredPackage), RunError> {
+    let manifest_path = package_dir.join("Cargo.toml");
+    let manifest_text = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| RunError::Internal(format!("read {}: {e}", manifest_path.display())))?;
+    let key = parse_vendor_manifest_package(&manifest_text, &manifest_path)?;
+    let checksum_path = package_dir.join(".cargo-checksum.json");
+    let checksum = read_vendor_checksum_manifest(&checksum_path)?;
+    verify_vendor_file_checksums(package_dir, &checksum)?;
+    Ok((key, VendoredPackage {
+        package_checksum: checksum.package,
+    }))
+}
+
+fn parse_vendor_manifest_package(manifest_text: &str, manifest_path: &Path) -> Result<PackageKey, RunError> {
+    let mut in_package_section = false;
+    let mut name: Option<String> = None;
+    let mut version: Option<String> = None;
+    for raw_line in manifest_text.lines() {
+        let line = raw_line.trim();
+        if line.starts_with('[') {
+            in_package_section = line == "[package]";
+            continue;
+        }
+        if !in_package_section {
+            continue;
+        }
+        if let Some(value) = parse_quoted_field(line, "name")? {
+            name = Some(value);
+        }
+        if let Some(value) = parse_quoted_field(line, "version")? {
+            version = Some(value);
+        }
+    }
+    let name = name.ok_or_else(|| {
+        RunError::Internal(format!("vendor manifest missing package name: {}", manifest_path.display()))
+    })?;
+    let version = version.ok_or_else(|| {
+        RunError::Internal(format!("vendor manifest {name} missing package version: {}", manifest_path.display()))
+    })?;
+    Ok(PackageKey { name, version })
+}
+
+fn read_vendor_checksum_manifest(checksum_path: &Path) -> Result<VendorChecksumManifest, RunError> {
+    let bytes = std::fs::read(checksum_path)
+        .map_err(|e| RunError::Internal(format!("read {}: {e}", checksum_path.display())))?;
+    let manifest: VendorChecksumManifest = serde_json::from_slice(&bytes)
+        .map_err(|e| RunError::Internal(format!("parse {}: {e}", checksum_path.display())))?;
+    if let Some(package_checksum) = manifest.package.as_ref() {
+        ensure_cargo_sha256_hex("vendor package checksum", package_checksum)?;
+    }
+    for digest in manifest.files.values() {
+        ensure_cargo_sha256_hex("vendor file checksum", digest)?;
+    }
+    Ok(manifest)
+}
+
+fn verify_vendor_file_checksums(package_dir: &Path, manifest: &VendorChecksumManifest) -> Result<(), RunError> {
+    let actual = vendor_file_hashes(package_dir)?;
+    for (relative_path, expected_digest) in &manifest.files {
+        if !actual.contains_key(relative_path) {
+            return Err(RunError::Internal(format!(
+                "vendor checksum lists missing file {} in {}",
+                relative_path,
+                package_dir.display(),
+            )));
+        }
+        let actual_digest = actual.get(relative_path).expect("contains_key checked above");
+        if actual_digest != expected_digest {
+            return Err(RunError::Internal(format!(
+                "vendor file checksum mismatch: {}/{}",
+                package_dir.display(),
+                relative_path
+            )));
+        }
+    }
+    for relative_path in actual.keys() {
+        if !manifest.files.contains_key(relative_path) {
+            return Err(RunError::Internal(format!(
+                "vendor package contains file missing from checksum manifest: {}/{}",
+                package_dir.display(),
+                relative_path,
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn vendor_file_hashes(package_dir: &Path) -> Result<BTreeMap<String, String>, RunError> {
+    let mut hashes: BTreeMap<String, String> = BTreeMap::new();
+    let mut file_count: u32 = 0;
+    collect_vendor_file_hashes(package_dir, package_dir, &mut hashes, &mut file_count)?;
+    assert!(file_count as usize == hashes.len(), "vendor file count must match hash map length");
+    Ok(hashes)
+}
+
+fn collect_vendor_file_hashes(
+    package_dir: &Path,
+    current_dir: &Path,
+    hashes: &mut BTreeMap<String, String>,
+    file_count: &mut u32,
+) -> Result<(), RunError> {
+    let mut children: Vec<PathBuf> = Vec::new();
+    let entries = std::fs::read_dir(current_dir)
+        .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", current_dir.display())))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", current_dir.display())))?;
+        children.push(entry.path());
+    }
+    children.sort();
+    for child in &children {
+        collect_vendor_child_hash(package_dir, child, hashes, file_count)?;
+    }
+    Ok(())
+}
+
+fn collect_vendor_child_hash(
+    package_dir: &Path,
+    child: &Path,
+    hashes: &mut BTreeMap<String, String>,
+    file_count: &mut u32,
+) -> Result<(), RunError> {
+    let metadata = std::fs::symlink_metadata(child)
+        .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", child.display())))?;
+    if metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!("vendored package contains symlink: {}", child.display())));
+    }
+    if metadata.is_dir() {
+        return collect_vendor_file_hashes(package_dir, child, hashes, file_count);
+    }
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("vendored package contains unsupported entry: {}", child.display())));
+    }
+    collect_vendor_file_hash(package_dir, child, hashes, file_count)
+}
+
+fn collect_vendor_file_hash(
+    package_dir: &Path,
+    child: &Path,
+    hashes: &mut BTreeMap<String, String>,
+    file_count: &mut u32,
+) -> Result<(), RunError> {
+    let relative_path = vendor_relative_path(package_dir, child)?;
+    if relative_path == ".cargo-checksum.json" {
+        return Ok(());
+    }
+    *file_count = file_count.saturating_add(1);
+    if *file_count > MAX_VENDOR_PACKAGE_FILE_COUNT {
+        return Err(RunError::Internal(format!(
+            "vendor package file count exceeds {} in {}",
+            MAX_VENDOR_PACKAGE_FILE_COUNT,
+            package_dir.display(),
+        )));
+    }
+    let digest = hash_file_cargo_sha256_hex(child)?;
+    let previous = hashes.insert(relative_path, digest);
+    assert!(previous.is_none(), "vendor relative file paths must be unique");
+    Ok(())
+}
+
+fn verify_vendor_package_set(
+    expected: &BTreeMap<PackageKey, ExpectedVendorPackage>,
+    actual: &BTreeMap<PackageKey, VendoredPackage>,
+) -> Result<(), RunError> {
+    for (key, expected_package) in expected {
+        let actual_package = actual
+            .get(key)
+            .ok_or_else(|| RunError::Internal(format!("Cargo.lock package missing from vendor-deps/: {key}")))?;
+        verify_vendor_package_lock_checksum(key, expected_package, actual_package)?;
+    }
+    for key in actual.keys() {
+        if !expected.contains_key(key) {
+            return Err(RunError::Internal(format!("vendor-deps/ contains package not present in Cargo.lock: {key}")));
+        }
+    }
+    Ok(())
+}
+
+fn verify_vendor_package_lock_checksum(
+    key: &PackageKey,
+    expected: &ExpectedVendorPackage,
+    actual: &VendoredPackage,
+) -> Result<(), RunError> {
+    if let Some(expected_checksum) = expected.checksum.as_ref() {
+        let actual_checksum = actual
+            .package_checksum
+            .as_ref()
+            .ok_or_else(|| RunError::Internal(format!("vendored package {key} is missing package checksum")))?;
+        if actual_checksum != expected_checksum {
+            return Err(RunError::Internal(format!("vendored package checksum mismatch for {key}")));
+        }
+        return Ok(());
+    }
+    if is_registry_vendor_source(&expected.source) {
+        return Err(RunError::Internal(format!("registry package {key} has no Cargo.lock checksum")));
+    }
+    if actual.package_checksum.is_some() {
+        return Err(RunError::Internal(format!(
+            "non-registry vendored package {key} unexpectedly has package checksum"
+        )));
+    }
+    Ok(())
+}
+
+fn parse_quoted_field(line: &str, expected_key: &str) -> Result<Option<String>, RunError> {
+    let Some((key, raw_value)) = line.split_once('=') else {
+        return Ok(None);
+    };
+    if key.trim() != expected_key {
+        return Ok(None);
+    }
+    parse_basic_quoted_value(raw_value).map(Some)
+}
+
+fn parse_basic_quoted_value(raw_value: &str) -> Result<String, RunError> {
+    let value = raw_value.trim();
+    if !value.starts_with('"') {
+        return Err(RunError::Internal(format!("expected quoted Cargo value, got: {value}")));
+    }
+    if !value.ends_with('"') {
+        return Err(RunError::Internal(format!("unterminated quoted Cargo value: {value}")));
+    }
+    if value.len() < 2 {
+        return Err(RunError::Internal(format!("empty quoted Cargo delimiter: {value}")));
+    }
+    let inner = &value[1..value.len() - 1];
+    if inner.contains('\\') {
+        return Err(RunError::Internal(format!(
+            "escaped Cargo value is not supported by self-build validator: {value}"
+        )));
+    }
+    Ok(inner.to_string())
+}
+
+fn vendor_relative_path(package_dir: &Path, child: &Path) -> Result<String, RunError> {
+    let relative_path = child.strip_prefix(package_dir).map_err(|e| {
+        RunError::Internal(format!("strip vendor prefix {} from {}: {e}", package_dir.display(), child.display()))
+    })?;
+    let relative_str = relative_path.to_str().ok_or_else(|| {
+        RunError::Internal(format!("vendored path is not UTF-8 under {}: {}", package_dir.display(), child.display()))
+    })?;
+    Ok(relative_str.replace(std::path::MAIN_SEPARATOR, "/"))
+}
+
+fn hash_file_cargo_sha256_hex(path: &Path) -> Result<String, RunError> {
+    let mut file = File::open(path).map_err(|e| RunError::Internal(format!("open {}: {e}", path.display())))?;
+    let mut hasher = <Sha256 as sha2::Digest>::new();
+    let mut buffer = [0_u8; CARGO_SHA256_READ_BUFFER_BYTES];
+    loop {
+        let bytes_read =
+            file.read(&mut buffer).map_err(|e| RunError::Internal(format!("read {}: {e}", path.display())))?;
+        if bytes_read == 0 {
+            break;
+        }
+        <Sha256 as sha2::Digest>::update(&mut hasher, &buffer[..bytes_read]);
+    }
+    let digest = <Sha256 as sha2::Digest>::finalize(hasher);
+    Ok(data_encoding::HEXLOWER.encode(&digest))
+}
+
+fn ensure_cargo_sha256_hex(label: &str, value: &str) -> Result<(), RunError> {
+    if value.len() != CARGO_SHA256_HEX_LEN {
+        return Err(RunError::Internal(format!("{label} must be {CARGO_SHA256_HEX_LEN} lowercase hex chars")));
+    }
+    if !value.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+        return Err(RunError::Internal(format!("{label} must be lowercase SHA-256 hex: {value}")));
+    }
+    Ok(())
+}
+
+fn is_supported_vendor_source(source: &str) -> bool {
+    is_registry_vendor_source(source) || source.starts_with("git+")
+}
+
+fn is_registry_vendor_source(source: &str) -> bool {
+    source.starts_with("registry+") || source.starts_with("sparse+")
 }
 
 fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), RunError> {
@@ -1482,6 +1962,7 @@ fn validate_staged_source_dir(source_dir: &Path, output_dir: &Path) -> Result<()
             vendor_config.display(),
         )));
     }
+    require_checked_vendor_inputs(source_dir)?;
     let expected_store_name = expected_staged_source_store_name(source_dir)?;
     let actual_store_name = source_dir.file_name().and_then(|name| name.to_str()).ok_or_else(|| {
         RunError::Internal(format!("staged source path has no UTF-8 file name: {}", source_dir.display()))
@@ -1880,12 +2361,25 @@ mod tests {
         std::fs::create_dir_all(dir.join("bootstrap")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join(".cargo")).unwrap();
+        let vendor_dep = dir.join("vendor-deps").join("dep-a");
+        std::fs::create_dir_all(&vendor_dep).unwrap();
         std::fs::write(dir.join("Cargo.toml"), "[package]\nname = \"crunch\"\nversion = \"0.0.0\"\n").unwrap();
+        let package_checksum = sample_cargo_sha256('a');
+        std::fs::write(
+            dir.join("Cargo.lock"),
+            format!(
+                "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{package_checksum}\"\n",
+            ),
+        )
+        .unwrap();
         std::fs::write(
             dir.join(".cargo").join("vendor-config.toml"),
             "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n",
         )
         .unwrap();
+        std::fs::write(vendor_dep.join("Cargo.toml"), "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n").unwrap();
+        std::fs::write(vendor_dep.join("lib.rs"), "pub fn dep_a() {}\n").unwrap();
+        write_vendor_checksum_manifest(&vendor_dep, Some(&package_checksum));
     }
 
     fn write_stageable_checkout(dir: &Path) {
@@ -1896,9 +2390,17 @@ mod tests {
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
         std::fs::create_dir_all(dir.join("vendor").join("patched")).unwrap();
-        std::fs::create_dir_all(dir.join("vendor-deps").join("dep-a")).unwrap();
+        let vendor_dep = dir.join("vendor-deps").join("dep-a");
+        std::fs::create_dir_all(&vendor_dep).unwrap();
         std::fs::write(dir.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
-        std::fs::write(dir.join("Cargo.lock"), "# lock\n").unwrap();
+        let package_checksum = sample_cargo_sha256('a');
+        std::fs::write(
+            dir.join("Cargo.lock"),
+            format!(
+                "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{package_checksum}\"\n",
+            ),
+        )
+        .unwrap();
         std::fs::write(dir.join("rust-toolchain.toml"), "[toolchain]\nchannel = \"nightly\"\n").unwrap();
         std::fs::write(
             dir.join(".cargo").join("vendor-config.toml"),
@@ -1912,11 +2414,28 @@ mod tests {
         std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
         std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(dir.join("vendor").join("patched").join("README"), "vendor patch\n").unwrap();
-        std::fs::write(
-            dir.join("vendor-deps").join("dep-a").join("Cargo.toml"),
-            "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n",
-        )
-        .unwrap();
+        std::fs::write(vendor_dep.join("Cargo.toml"), "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n").unwrap();
+        std::fs::write(vendor_dep.join("lib.rs"), "pub fn dep_a() {}\n").unwrap();
+        write_vendor_checksum_manifest(&vendor_dep, Some(&package_checksum));
+    }
+
+    fn sample_cargo_sha256(ch: char) -> String {
+        assert!(ch.is_ascii_hexdigit(), "sample checksum char must be hex");
+        assert!(!ch.is_ascii_uppercase(), "sample checksum char must be lowercase");
+        std::iter::repeat_n(ch, CARGO_SHA256_HEX_LEN).collect()
+    }
+
+    fn write_vendor_checksum_manifest(package_dir: &Path, package_checksum: Option<&str>) {
+        let cargo_toml_digest = hash_file_cargo_sha256_hex(&package_dir.join("Cargo.toml")).unwrap();
+        let lib_digest = hash_file_cargo_sha256_hex(&package_dir.join("lib.rs")).unwrap();
+        let package_json = match package_checksum {
+            Some(checksum) => format!("\"{checksum}\""),
+            None => "null".to_string(),
+        };
+        let manifest = format!(
+            "{{\"files\":{{\"Cargo.toml\":\"{cargo_toml_digest}\",\"lib.rs\":\"{lib_digest}\"}},\"package\":{package_json}}}",
+        );
+        std::fs::write(package_dir.join(".cargo-checksum.json"), manifest).unwrap();
     }
 
     fn make_valid_staged_source(output_dir: &Path) -> PathBuf {
@@ -2183,7 +2702,103 @@ mod tests {
         .unwrap();
 
         let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
-        assert!(err.to_string().contains("must point at checked-in vendor-deps"), "unexpected error: {err}");
+        assert!(err.to_string().contains("must point at source-tree vendor-deps"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_accepts_matching_vendor_tree() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+
+        require_checked_vendor_inputs(repo.path()).unwrap();
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_missing_locked_package() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::remove_dir_all(repo.path().join("vendor-deps").join("dep-a")).unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("missing from vendor-deps"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_extra_vendored_package() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        let extra = repo.path().join("vendor-deps").join("dep-extra");
+        std::fs::create_dir_all(&extra).unwrap();
+        std::fs::write(extra.join("Cargo.toml"), "[package]\nname=\"dep-extra\"\nversion=\"0.0.0\"\n").unwrap();
+        std::fs::write(extra.join("lib.rs"), "pub fn dep_extra() {}\n").unwrap();
+        write_vendor_checksum_manifest(&extra, Some(&sample_cargo_sha256('b')));
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("not present in Cargo.lock"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_package_checksum_mismatch() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        let vendor_dep = repo.path().join("vendor-deps").join("dep-a");
+        write_vendor_checksum_manifest(&vendor_dep, Some(&sample_cargo_sha256('b')));
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("package checksum mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_file_checksum_mismatch() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::write(repo.path().join("vendor-deps").join("dep-a").join("lib.rs"), "pub fn tampered() {}\n").unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("vendor file checksum mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_accepts_git_package_without_registry_checksum() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        let dep_dir = repo.path().join("vendor-deps").join("dep-a");
+        write_vendor_checksum_manifest(&dep_dir, None);
+        std::fs::write(
+            repo.path().join("Cargo.lock"),
+            "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"git+https://example.invalid/dep-a.git#0123456789abcdef\"\n",
+        )
+        .unwrap();
+
+        require_checked_vendor_inputs(repo.path()).unwrap();
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_registry_package_without_lock_checksum() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::write(
+            repo.path().join("Cargo.lock"),
+            "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+        )
+        .unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("missing Cargo.lock checksum"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_malformed_lock_quote_without_panic() {
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        std::fs::write(
+            repo.path().join("Cargo.lock"),
+            "[[package]]\nname = \"\nversion = \"0.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+        )
+        .unwrap();
+
+        let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(err.to_string().contains("quoted Cargo"), "unexpected error: {err}");
     }
 
     #[test]

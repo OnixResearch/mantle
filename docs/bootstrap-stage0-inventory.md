@@ -10,8 +10,9 @@ Today the repo has two proof modes:
 
 Neither mode yet proves a full-source bootstrap root or reproducible release
 artifacts. A later `crunch release create` bundle can package the proof bundle,
-release binary, tracked-worktree source archive, and this inventory for bundle-
-local integrity and proof-context checks, but that packaged evidence still does
+release binary, source archive containing tracked worktree files plus verified
+vendored Cargo inputs, and this inventory for bundle-local integrity and
+proof-context checks, but that packaged evidence still does
 not widen the underlying bootstrap claim.
 
 ## Contract boundary
@@ -35,7 +36,7 @@ Anything outside those buckets is a hidden trust edge.
 |---|---|---|---|
 | Linux host | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | bwrap build service and current proof run on Linux only | non-Linux first bootstrap not in scope yet |
 | Checkout source tree | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 still starts from the current repo checkout before crunch can rebuild itself | source staging now copies a fixed allowlist of top-level entries with Rust filesystem calls |
-| Checked-in `vendor-deps/` tree + `.cargo/vendor-config.toml` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 reuses the repo's checked vendored Cargo inputs instead of running host `cargo vendor` | staging currently checks that `vendor-deps/` exists and that `.cargo/vendor-config.toml` points at `vendor-deps`; it does not yet prove vendor-tree/Cargo.lock freshness |
+| Source-tree `vendor-deps/` directory + `.cargo/vendor-config.toml` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 reuses the repo's vendored Cargo inputs instead of running host `cargo vendor` | staging validates `Cargo.lock` registry/git packages against `vendor-deps/`, verifies Cargo's `.cargo-checksum.json` file digests, and checks Cargo-format SHA-256 package checksums where Cargo.lock provides them |
 | Host `bwrap` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before crunch has built its own | later self-build stages switch to crunch-built `bwrap` |
 | Static `SNIX_BUILD_SANDBOX_SHELL` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | must be explicit; hidden realization is not acceptable for the stronger claim |
 | Host Rust nightly + `cargo` + `clang` + `mold` + `pkg-config` + OpenSSL dev files | `./scripts/prove-self-hosting.sh` | stage0 helper builds the checkout test binary and prepares the proof env | proof-only prerequisites, not required by `crunch bootstrap --fetch` |

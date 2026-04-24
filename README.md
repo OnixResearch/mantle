@@ -613,7 +613,8 @@ different bootstrap paths, and they do not all prove the same thing.
 - **Self-hosting proof**: a crunch-built `crunch` can rebuild `crunch` from
   the same staged source tree.
 - **Packaged release evidence**: a release bundle carries the exact binary,
-  tracked-worktree source archive, proof bundle, and prerequisite inventory so
+  source archive with tracked worktree files plus verified vendored Cargo inputs,
+  proof bundle, and prerequisite inventory so
   later verification can check bundle-local integrity and proof linkage.
 - **Full-source bootstrap**: the trusted root has been reduced to small,
   explicitly audited source or bootstrap seeds.
@@ -660,8 +661,9 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 #### `crunch self-build`
 
 - **Current claim**: seed-assisted self-build from the current checkout.
-- **Trusted inputs today**: the current source tree, the checked-in
-  `vendor-deps/` tree and `.cargo/vendor-config.toml`, the reduced
+- **Trusted inputs today**: the current source tree, the source-tree
+  `vendor-deps/` directory and `.cargo/vendor-config.toml` validated against
+  `Cargo.lock` and Cargo's `.cargo-checksum.json` metadata, the reduced
   `musl-seed-toolchain` provider derived from the pinned musl.cc tarball, and
   the host sandbox entry points used for the first bootstrap stage.
 - **Host prerequisites**: `bwrap` and a static sandbox shell for the first
@@ -695,7 +697,7 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 | Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
 | Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
 | Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
-| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and tracked-worktree source archive for later bundle-local integrity and proof-context checks with `crunch release verify` | The proof and release bundle still stop short of independent reproducibility evidence for release outputs |
+| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and a source archive containing tracked worktree files plus verified vendored Cargo inputs for later bundle-local integrity and proof-context checks with `crunch release verify` | The proof and release bundle still stop short of independent reproducibility evidence for release outputs |
 
 ## Self-Build
 
@@ -715,9 +717,10 @@ bwrap sandbox. Output is a statically linked musl binary.
 This is still seed-assisted bootstrap. It does not yet prove that the first
 bootstrap works on a host with Nix commands absent from `PATH`.
 
-First bootstrap requires the checked-in source tree with `vendor-deps/` and
-`.cargo/vendor-config.toml`, plus `bwrap` and a static sandbox shell on
-`PATH`.
+First bootstrap requires the source tree with `vendor-deps/` and
+`.cargo/vendor-config.toml`; `crunch self-build` validates the staged vendored
+inputs against `Cargo.lock` and Cargo checksum metadata before building them.
+It also requires `bwrap` and a static sandbox shell on `PATH`.
 After the first self-build, the crunch-built `bwrap` and `busybox` are used
 for subsequent builds.
 
@@ -832,8 +835,9 @@ crunch release create \
 
 Repeat `--binary` when one release bundle should carry multiple executables.
 
-That command builds a staged-source tarball from the current tracked worktree,
-then copies the release binary, proof bundle, and prerequisite inventory into a
+That command builds a staged-source tarball from the current tracked worktree
+plus verified vendored Cargo inputs needed by self-build, then copies the release
+binary, proof bundle, and prerequisite inventory into a
 new release-evidence bundle under `target/release-evidence/<release-id>/` by
 default. The top-level `manifest.json` records BLAKE3 digests for the source
 archive, bundled binary or binaries, proof-bundle directory, prerequisite

@@ -241,7 +241,7 @@ Release evidence starts from a full proof run, not from
 # Produce a full proof bundle first
 ./scripts/prove-self-hosting.sh
 
-# Package release evidence from the current tracked worktree
+# Package release evidence from tracked worktree files plus verified vendored Cargo inputs
 crunch release create \
   --release-id crunch-<version> \
   --binary /path/to/crunch \

@@ -12,6 +12,7 @@ use crate::self_build::STAGED_SOURCE_TOP_LEVEL_ENTRIES;
 use crate::self_build::require_checked_vendor_inputs;
 
 const MAX_TRACKED_SOURCE_PATHS: u32 = 200_000;
+const MAX_VENDOR_SOURCE_PATHS: u32 = 200_000;
 const MAX_PARENT_DIRS: u32 = 200_000;
 const TAR_MODE_DIR_DEFAULT: u32 = 0o755;
 const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
@@ -19,12 +20,9 @@ const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
 pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path) -> Result<(), RunError> {
     assert!(repo_root.is_dir(), "repo root must exist: {}", repo_root.display());
     require_checked_vendor_inputs(repo_root)?;
-    let tracked_paths = tracked_source_paths(repo_root)?;
-    if tracked_paths.is_empty() {
-        return Err(RunError::Internal(format!(
-            "tracked source archive found no tracked files under {}",
-            repo_root.display()
-        )));
+    let source_paths = source_archive_paths(repo_root)?;
+    if source_paths.is_empty() {
+        return Err(RunError::Internal(format!("source archive found no files under {}", repo_root.display())));
     }
 
     let archive_parent = archive_path
@@ -35,11 +33,19 @@ pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path
     let archive_file = File::create(archive_path)
         .map_err(|err| RunError::Internal(format!("creating {}: {err}", archive_path.display())))?;
     let mut builder = tar::Builder::new(archive_file);
-    append_tracked_paths_to_archive(&mut builder, repo_root, &tracked_paths)?;
+    append_source_paths_to_archive(&mut builder, repo_root, &source_paths)?;
     builder
         .finish()
         .map_err(|err| RunError::Internal(format!("finalizing {}: {err}", archive_path.display())))?;
     Ok(())
+}
+
+fn source_archive_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
+    let mut paths: BTreeSet<PathBuf> = tracked_source_paths(repo_root)?.into_iter().collect();
+    for vendor_path in vendored_source_paths(repo_root)? {
+        paths.insert(vendor_path);
+    }
+    Ok(paths.into_iter().collect())
 }
 
 fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
@@ -76,6 +82,59 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
     Ok(tracked)
 }
 
+fn vendored_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
+    let vendor_dir = repo_root.join("vendor-deps");
+    if !vendor_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    collect_vendor_source_paths(repo_root, &vendor_dir, &mut paths)?;
+    paths.sort();
+    Ok(paths)
+}
+
+fn collect_vendor_source_paths(repo_root: &Path, current_dir: &Path, paths: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    let mut children = Vec::new();
+    let entries = std::fs::read_dir(current_dir)
+        .map_err(|err| RunError::Internal(format!("read_dir {}: {err}", current_dir.display())))?;
+    for entry in entries {
+        let entry =
+            entry.map_err(|err| RunError::Internal(format!("read_dir entry {}: {err}", current_dir.display())))?;
+        children.push(entry.path());
+    }
+    children.sort();
+    for child in &children {
+        collect_vendor_source_child(repo_root, child, paths)?;
+    }
+    Ok(())
+}
+
+fn collect_vendor_source_child(repo_root: &Path, child: &Path, paths: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    let metadata = std::fs::symlink_metadata(child)
+        .map_err(|err| RunError::Internal(format!("symlink_metadata {}: {err}", child.display())))?;
+    if metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!("vendor-deps source archive path is a symlink: {}", child.display())));
+    }
+    if metadata.is_dir() {
+        return collect_vendor_source_paths(repo_root, child, paths);
+    }
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("vendor-deps source archive path is unsupported: {}", child.display())));
+    }
+    let relative = child.strip_prefix(repo_root).map_err(|err| {
+        RunError::Internal(format!("strip repo prefix {} from {}: {err}", repo_root.display(), child.display()))
+    })?;
+    let path_count_u32: u32 = paths
+        .len()
+        .try_into()
+        .map_err(|_| RunError::Internal("vendor source path count overflowed u32".to_string()))?;
+    if path_count_u32 >= MAX_VENDOR_SOURCE_PATHS {
+        return Err(RunError::Internal(format!("vendor source path count exceeded {MAX_VENDOR_SOURCE_PATHS}")));
+    }
+    paths.push(relative.to_path_buf());
+    Ok(())
+}
+
 fn is_allowlisted_source_path(relative_path: &Path) -> bool {
     let Some(first_component) = relative_path.components().next() else {
         return false;
@@ -84,7 +143,7 @@ fn is_allowlisted_source_path(relative_path: &Path) -> bool {
     STAGED_SOURCE_TOP_LEVEL_ENTRIES.iter().any(|entry| first_component == std::ffi::OsStr::new(entry))
 }
 
-fn append_tracked_paths_to_archive(
+fn append_source_paths_to_archive(
     builder: &mut tar::Builder<File>,
     repo_root: &Path,
     tracked_paths: &[PathBuf],
@@ -148,7 +207,7 @@ fn append_single_path(
     if metadata.is_dir() {
         return append_directory_entry(builder, &source_path, relative_path);
     }
-    Err(RunError::Internal(format!("unsupported tracked source entry type: {}", source_path.display())))
+    Err(RunError::Internal(format!("unsupported source archive entry type: {}", source_path.display())))
 }
 
 fn append_directory_entry(
@@ -244,7 +303,7 @@ fn tar_directory_path(relative_path: &Path) -> Result<String, RunError> {
 
 fn tar_path_string(relative_path: &Path) -> Result<String, RunError> {
     let Some(path_str) = relative_path.to_str() else {
-        return Err(RunError::Internal(format!("tracked source path is not valid utf-8: {}", relative_path.display())));
+        return Err(RunError::Internal(format!("source archive path is not valid utf-8: {}", relative_path.display())));
     };
     Ok(path_str.replace('\\', "/"))
 }
@@ -267,7 +326,11 @@ mod tests {
     use std::io::Read;
     use std::process::Output;
 
+    use sha2::Sha256;
+
     use super::*;
+
+    const TEST_SHA256_HEX_LEN: usize = 64;
 
     fn write_file(path: &Path, content: &[u8]) {
         if let Some(parent) = path.parent() {
@@ -320,11 +383,37 @@ mod tests {
         );
     }
 
+    fn cargo_sha256_hex(bytes: &[u8]) -> String {
+        let mut hasher = <Sha256 as sha2::Digest>::new();
+        <Sha256 as sha2::Digest>::update(&mut hasher, bytes);
+        let digest = <Sha256 as sha2::Digest>::finalize(hasher);
+        let encoded = data_encoding::HEXLOWER.encode(&digest);
+        assert_eq!(encoded.len(), TEST_SHA256_HEX_LEN);
+        encoded
+    }
+
+    fn write_test_vendor_package(repo_root: &Path) {
+        let manifest = b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n";
+        let lib = b"pub fn dep() {}\n";
+        write_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), manifest);
+        write_file(&repo_root.join("vendor-deps/dep/lib.rs"), lib);
+        let manifest_digest = cargo_sha256_hex(manifest);
+        let lib_digest = cargo_sha256_hex(lib);
+        let checksum_manifest = format!(
+            "{{\"files\":{{\"Cargo.toml\":\"{manifest_digest}\",\"lib.rs\":\"{lib_digest}\"}},\"package\":null}}",
+        );
+        write_file(&repo_root.join("vendor-deps/dep/.cargo-checksum.json"), checksum_manifest.as_bytes());
+    }
+
     fn create_minimal_repo(repo_root: &Path) {
+        write_file(&repo_root.join(".gitignore"), b"vendor-deps/\n");
         write_file(&repo_root.join(".cargo/vendor-config.toml"), b"directory = \"vendor-deps\"\n");
-        write_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n");
+        write_test_vendor_package(repo_root);
         write_file(&repo_root.join("Cargo.toml"), b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n");
-        write_file(&repo_root.join("Cargo.lock"), b"# lock\n");
+        write_file(
+            &repo_root.join("Cargo.lock"),
+            b"[[package]]\nname = \"dep\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/dep.git#0123456789abcdef\"\n",
+        );
         write_file(&repo_root.join("bootstrap/seed.ncl"), b"{}\n");
         write_file(&repo_root.join("builders/default.ncl"), b"{}\n");
         write_file(&repo_root.join("crates/demo/src/lib.rs"), b"pub fn demo() {}\n");
@@ -335,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn tracked_source_archive_uses_current_worktree_and_skips_untracked_files() {
+    fn source_archive_uses_current_worktree_verified_vendor_and_skips_untracked_files() {
         let repo = tempfile::tempdir().unwrap();
         create_minimal_repo(repo.path());
         assert_git_ok(repo.path(), &["init"]);
@@ -354,6 +443,7 @@ mod tests {
         let mut tar = tar::Archive::new(Cursor::new(archive_bytes));
         let mut found_main = false;
         let mut found_untracked = false;
+        let mut found_ignored_vendor = false;
         for entry_result in tar.entries().unwrap() {
             let mut entry = entry_result.unwrap();
             let path = entry.path().unwrap().into_owned();
@@ -366,9 +456,13 @@ mod tests {
             if path == std::path::Path::new("src/untracked.txt") {
                 found_untracked = true;
             }
+            if path == std::path::Path::new("vendor-deps/dep/Cargo.toml") {
+                found_ignored_vendor = true;
+            }
         }
 
         assert!(found_main, "archive must contain tracked modified file");
+        assert!(found_ignored_vendor, "archive must include verified ignored vendor-deps");
         assert!(!found_untracked, "archive must skip untracked file");
     }
 }
