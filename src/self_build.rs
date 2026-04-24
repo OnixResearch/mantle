@@ -471,6 +471,7 @@ CARGOEOF
       export TARGET_CC=gcc
       export TARGET_AR=ar
       export HOST_CC=gcc
+      export RUSTC_BOOTSTRAP=1
 
       if [ -n "$GCC_LIB" ]; then
         export LIBRARY_PATH="$GCC_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
@@ -1965,6 +1966,7 @@ mod tests {
         assert!(ncl.contains("--release"));
         assert!(ncl.contains("$out/bin/crunch"));
         assert!(ncl.contains("SNIX_BUILD_SANDBOX_SHELL"));
+        assert!(ncl.contains("export RUSTC_BOOTSTRAP=1"));
     }
 
     #[test]
