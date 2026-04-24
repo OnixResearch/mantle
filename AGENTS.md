@@ -691,6 +691,7 @@ When claiming test results in commit messages or completion summaries:
 - That persistence boundary only requires a non-empty `PathInfo.signatures` list. For local benchmark fixtures, a parsed fixed narinfo signature string is enough; trust verification is not part of `persist_and_export_signed_output()`.
 - Root `Cargo.toml` sets `autoexamples = false`. New checked-in benchmark examples must get an explicit `[[example]]` entry or `cargo run --example ...` fails with "no example target named ...".
 - The wide package-set fixture (`tests/fixtures/wide_package_set.ncl`) needs the Nickel stdlib import path. Benchmark examples opening it directly should pass `crunch_eval::stdlib::stdlib_import_path()` or evaluation fails on missing `lib.ncl`.
+- `crates/crunch-eval/src/session.rs` `force_all_roots_bounded()` is no longer always a worker-pool path: for small all-root sets (currently up to 16 roots with effective worker count ≤2) it now reuses the coordinator session's in-process `force_all_roots()` path instead of cloning labels into isolated workers. On the fixed 16-root benchmark fixture that collapses the bounded metric to roughly the eager-all-roots cost (~65ms) and makes further worker-pool micro-tuning irrelevant for the primary workload until the fixture or threshold changes.
 
 ## Coding Style: Tiger Style
 

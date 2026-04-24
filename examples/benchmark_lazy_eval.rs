@@ -97,7 +97,7 @@ fn measure_eager_all_roots(path: &Path, import_paths: &[OsString]) -> Result<(u6
 
 fn measure_parallel_all_roots(path: &Path, import_paths: &[OsString], concurrency: u32) -> Result<(u64, u32), Error> {
     let start = Instant::now();
-    let session = EvaluationSession::open_file(path, import_paths)?;
+    let mut session = EvaluationSession::open_file(path, import_paths)?;
     let roots = session.force_all_roots_bounded::<CrunchDerivation>(concurrency)?;
     let elapsed_ns = start.elapsed().as_nanos() as u64;
     Ok((elapsed_ns, roots.len() as u32))

@@ -304,7 +304,7 @@ impl EvaluationSession {
 
     /// Force all discovered roots through isolated worker sessions under a bounded cap.
     pub fn force_all_roots_bounded<T: DeserializeOwned + Send + 'static>(
-        &self,
+        &mut self,
         max_concurrency: u32,
     ) -> Result<Vec<(String, T)>, Error> {
         self.force_all_roots_with_policy(max_concurrency, RootForceExecutionPolicy::PreferThreaded)
@@ -312,10 +312,16 @@ impl EvaluationSession {
 
     /// Force all discovered roots through an explicit host execution policy.
     pub fn force_all_roots_with_policy<T: DeserializeOwned + Send + 'static>(
-        &self,
+        &mut self,
         max_concurrency: u32,
         policy: RootForceExecutionPolicy,
     ) -> Result<Vec<(String, T)>, Error> {
+        let requested_root_count = self.labels.len();
+        let effective_concurrency = effective_parallel_workers(requested_root_count, max_concurrency);
+        if should_reuse_session_for_all_roots(requested_root_count, effective_concurrency, policy) {
+            return self.force_all_roots();
+        }
+
         let labels = self.labels.iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
         self.force_selected_roots_with_policy(&labels, max_concurrency, policy)
     }
@@ -617,6 +623,12 @@ impl AssignmentExecutor for ThreadedExecutor {
 }
 
 const MIN_ROOTS_PER_WORKER: usize = 8;
+const SESSION_REUSE_ALL_ROOTS_MAX_WORKERS: u32 = 2;
+const SESSION_REUSE_ALL_ROOTS_MAX_ROOTS: usize = MIN_ROOTS_PER_WORKER * usize_from_u32_const(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS);
+
+const fn usize_from_u32_const(value: u32) -> usize {
+    value as usize
+}
 
 fn usize_from_u32(value: u32) -> usize {
     match usize::try_from(value) {
@@ -647,8 +659,7 @@ fn force_selected_roots_with_policy<T: DeserializeOwned + Send + 'static>(
         return Ok(Vec::new());
     }
 
-    let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
-    let effective_concurrency = clamp_parallel_workers(requested_root_count, concurrency_cap);
+    let effective_concurrency = effective_parallel_workers(requested_root_count, max_concurrency);
     let assignments = build_worker_assignments(labels, effective_concurrency);
     let inline_executor = InlineExecutor;
     let threaded_executor = ThreadedExecutor;
@@ -758,6 +769,35 @@ fn bounded_worker_pool(worker_count: u32) -> Result<Arc<BoundedWorkerPool>, Erro
     });
     worker_pools.insert(worker_count, worker_pool.clone());
     Ok(worker_pool)
+}
+
+fn effective_parallel_workers(requested_root_count: usize, max_concurrency: u32) -> u32 {
+    if requested_root_count == 0 {
+        return 1;
+    }
+
+    let concurrency_cap = normalize_concurrency_cap(max_concurrency, requested_root_count);
+    clamp_parallel_workers(requested_root_count, concurrency_cap)
+}
+
+fn should_reuse_session_for_all_roots(
+    requested_root_count: usize,
+    effective_concurrency: u32,
+    policy: RootForceExecutionPolicy,
+) -> bool {
+    if requested_root_count == 0 {
+        return true;
+    }
+
+    if policy == RootForceExecutionPolicy::Inline {
+        return true;
+    }
+
+    if requested_root_count > SESSION_REUSE_ALL_ROOTS_MAX_ROOTS {
+        return false;
+    }
+
+    effective_concurrency <= SESSION_REUSE_ALL_ROOTS_MAX_WORKERS
 }
 
 fn clamp_parallel_workers(requested_root_count: usize, concurrency_cap: u32) -> u32 {
@@ -1014,6 +1054,40 @@ mod tests {
     }
 
     #[test]
+    fn effective_parallel_workers_clamps_requested_concurrency() {
+        assert_eq!(effective_parallel_workers(0, 4), 1);
+        assert_eq!(effective_parallel_workers(1, 4), 1);
+        assert_eq!(effective_parallel_workers(16, 4), 2);
+        assert_eq!(effective_parallel_workers(16, 2), 2);
+        assert_eq!(effective_parallel_workers(16, 1), 1);
+    }
+
+    #[test]
+    fn small_all_root_sets_reuse_the_session_even_when_threading_is_allowed() {
+        assert!(should_reuse_session_for_all_roots(1, 1, RootForceExecutionPolicy::PreferThreaded));
+        assert!(should_reuse_session_for_all_roots(
+            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS,
+            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS,
+            RootForceExecutionPolicy::PreferThreaded,
+        ));
+        assert!(!should_reuse_session_for_all_roots(
+            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS + 1,
+            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS,
+            RootForceExecutionPolicy::PreferThreaded,
+        ));
+        assert!(!should_reuse_session_for_all_roots(
+            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS,
+            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS.saturating_add(1),
+            RootForceExecutionPolicy::PreferThreaded,
+        ));
+        assert!(should_reuse_session_for_all_roots(
+            SESSION_REUSE_ALL_ROOTS_MAX_ROOTS + 8,
+            SESSION_REUSE_ALL_ROOTS_MAX_WORKERS.saturating_add(1),
+            RootForceExecutionPolicy::Inline,
+        ));
+    }
+
+    #[test]
     fn isolated_worker_input_is_send() {
         fn assert_send<T: Send>() {}
 
@@ -1114,7 +1188,7 @@ mod tests {
   gamma = { name = "gamma", builder = "/bin/sh" },
 }"#;
         let mut serial_session = EvaluationSession::open_str(source, &[]).unwrap();
-        let bounded_session = EvaluationSession::open_str(source, &[]).unwrap();
+        let mut bounded_session = EvaluationSession::open_str(source, &[]).unwrap();
 
         let serial = serial_session.force_all_roots::<CrunchDerivation>().unwrap();
         let bounded = bounded_session.force_all_roots_bounded::<CrunchDerivation>(3).unwrap();

@@ -1235,7 +1235,7 @@ fn benchmark_lazy_eval_workload(
         PARALLEL_ALL_ROOTS_WORKLOAD_NAME => {
             let timed =
                 time_repeated_operation_with_phase_metrics(repeat_count, || {
-                    let session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                    let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
                         .map_err(|e| Error::Command {
                             tool: "EvaluationSession".into(),
                             detail: e.to_string(),
