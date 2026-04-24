@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -319,8 +321,96 @@ struct WitnessRequestJson {
     verification_seed_relative_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WitnessRebuildAuditJson {
+    schema: String,
+    release_id: String,
+    started_unix_ms: u64,
+    finished_unix_ms: u64,
+    status: String,
+    rebuilt_outputs: Vec<WitnessRebuildAuditOutputJson>,
+    witness_attestation_path: Option<String>,
+    witness_signature_path: Option<String>,
+    failure_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WitnessRebuildAuditOutputJson {
+    published_name: String,
+    path: String,
+    digest_blake3: String,
+}
+
 fn read_witness_request(request_dir: &Path) -> WitnessRequestJson {
     serde_json::from_slice(&std::fs::read(request_dir.join("request.json")).unwrap()).unwrap()
+}
+
+fn read_witness_rebuild_audit(audit_path: &Path) -> WitnessRebuildAuditJson {
+    serde_json::from_slice(&std::fs::read(audit_path).unwrap()).unwrap()
+}
+
+fn write_fake_witness_rebuild_driver(path: &Path) {
+    let script = r#"#!/usr/bin/env bash
+set -euo pipefail
+readonly DRIVER_SLEEP_SECONDS=0.1
+: "${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}"
+: "${CRUNCH_WITNESS_RELEASE_BUNDLE_DIR:?}"
+mode="${CRUNCH_TEST_WITNESS_DRIVER_MODE:-match}"
+sentinel="${CRUNCH_TEST_WITNESS_DRIVER_SENTINEL:-}"
+if [[ -n "$sentinel" ]]; then
+  printf 'launched\n' > "$sentinel"
+fi
+mkdir -p "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
+printf 'driver mode: %s\n' "$mode"
+sleep "$DRIVER_SLEEP_SECONDS"
+output_path="$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/stage2-crunch"
+case "$mode" in
+  match)
+    cp "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/binaries/01-crunch-bin" "$output_path"
+    ;;
+  mismatch)
+    printf 'wrong-binary\n' > "$output_path"
+    ;;
+  fail)
+    printf 'driver failure\n' >&2
+    exit 7
+    ;;
+  *)
+    printf 'unknown driver mode: %s\n' "$mode" >&2
+    exit 9
+    ;;
+esac
+printf '{"stage2":{"report":{"output_binary":"%s"}}}\n' "$output_path" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json"
+"#;
+    write_file(path, script.as_bytes());
+    #[cfg(unix)]
+    {
+        let mut permissions = std::fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+}
+
+fn rewrite_request_bundle_manifest(request_dir: &Path, rewrite: impl FnOnce(&mut ReleaseEvidenceManifest)) {
+    let request = read_witness_request(request_dir);
+    let manifest_path = request_dir.join(&request.release_bundle_relative_path).join("manifest.json");
+    let mut manifest: ReleaseEvidenceManifest =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    rewrite(&mut manifest);
+    write_file(&manifest_path, &serde_json::to_vec(&manifest).unwrap());
+}
+
+fn rewrite_request_release_attestation(request_dir: &Path, rewrite: impl FnOnce(&mut ReleaseAttestation)) {
+    let request = read_witness_request(request_dir);
+    let attestation_path = request_dir.join(&request.verification_seed_relative_path).join("release-attestation.json");
+    let mut attestation: ReleaseAttestation =
+        serde_json::from_slice(&std::fs::read(&attestation_path).unwrap()).unwrap();
+    rewrite(&mut attestation);
+    write_file(&attestation_path, &serde_json::to_vec(&attestation).unwrap());
+}
+
+fn witness_rebuild_helper_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/rebuild-witness-request.sh")
 }
 
 fn copy_directory_for_test(source_dir: &Path, dest_dir: &Path) {
@@ -1092,6 +1182,469 @@ fn witness_import_rejects_conflicting_duplicate_identity() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("conflicting witness identity"));
+}
+
+#[test]
+fn witness_rebuild_cli_check_is_preflight_only() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg("--check")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["check_only"], true);
+    assert_eq!(rebuild_json["release_id"], manifest.release_id);
+    assert!(!scratch_dir.exists(), "check mode must not create scratch root");
+    let request = read_witness_request(&request_dir);
+    assert!(!request_dir.join(&request.verification_seed_relative_path).join("witnesses").exists());
+}
+
+#[test]
+fn witness_rebuild_helper_check_is_preflight_only() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--check")
+        .arg("--json")
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg(&request_dir)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["check_only"], true);
+    assert_eq!(rebuild_json["release_id"], manifest.release_id);
+    assert!(!scratch_dir.exists(), "helper check mode must stay preflight-only");
+    let request = read_witness_request(&request_dir);
+    assert!(!request_dir.join(&request.verification_seed_relative_path).join("witnesses").exists());
+}
+
+#[test]
+fn witness_rebuild_cli_rejects_unsupported_workflow_before_running_driver() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    let sentinel_path = temp.path().join("driver-sentinel");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    rewrite_request_bundle_manifest(&request_dir, |manifest| {
+        manifest.workflow.command = "./scripts/other-proof.sh".to_string();
+    });
+
+    crunch()
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--check")
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unsupported witness rebuild workflow"));
+    assert!(!sentinel_path.exists(), "unsupported workflow must fail before launching the driver");
+}
+
+#[test]
+fn witness_rebuild_cli_rejects_published_output_name_mismatch_before_running_driver() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    let sentinel_path = temp.path().join("driver-sentinel");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    rewrite_request_release_attestation(&request_dir, |attestation| {
+        attestation.binary_digests[0].name = "binaries/99-unexpected".to_string();
+    });
+
+    crunch()
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--check")
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_SENTINEL", &sentinel_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("published output name mismatch"));
+    assert!(!sentinel_path.exists(), "output-name mismatch must fail before launching the driver");
+}
+
+#[test]
+fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let witness_config_dir = temp.path().join("witness-config");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .arg("--json")
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let audit_path = PathBuf::from(rebuild_json["audit_meta_path"].as_str().unwrap());
+    let returned_verification_dir = PathBuf::from(rebuild_json["verification_dir"].as_str().unwrap());
+    let audit = read_witness_rebuild_audit(&audit_path);
+
+    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["check_only"], false);
+    assert_eq!(rebuild_json["release_id"], manifest.release_id);
+    assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
+    assert!(Path::new(rebuild_json["signature_path"].as_str().unwrap()).exists());
+    assert_eq!(audit.schema, "crunch-witness-rebuild-audit-v1");
+    assert_eq!(audit.status, "success");
+    assert!(
+        audit.finished_unix_ms > audit.started_unix_ms,
+        "audit timestamps must bracket the rebuild subprocess"
+    );
+    assert_eq!(audit.rebuilt_outputs.len(), 1);
+    assert_eq!(audit.rebuilt_outputs[0].published_name, "binaries/01-crunch-bin");
+    assert_eq!(audit.rebuilt_outputs[0].digest_blake3, manifest.binaries[0].digest_blake3);
+    assert_eq!(audit.witness_attestation_path.as_deref(), rebuild_json["attestation_path"].as_str());
+    assert_eq!(audit.witness_signature_path.as_deref(), rebuild_json["signature_path"].as_str());
+    assert!(returned_verification_dir.join("witnesses/witness-a.json").exists());
+    let request = read_witness_request(&request_dir);
+    assert!(request_dir.join(&request.verification_seed_relative_path).join("release-attestation.json").exists());
+    assert!(!request_dir.join(&request.verification_seed_relative_path).join("witnesses").exists());
+}
+
+#[test]
+fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "mismatch")
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("rebuilt output digest mismatch"));
+
+    let audit = read_witness_rebuild_audit(&scratch_dir.join("witness-rebuild-audit/meta.json"));
+    assert_eq!(audit.status, "failed");
+    assert!(audit.failure_message.unwrap().contains("rebuilt output digest mismatch"));
+    assert!(!scratch_dir.join("release-verification").join("crunch-0.1.0-rc1").join("witnesses").exists());
+}
+
+#[test]
+fn witnessed_self_hosting_rebuild_workflow_reports_quorum_satisfied() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let publisher_verification_dir = temp.path().join("publisher-verification");
+    let publisher_config_dir = temp.path().join("publisher-config");
+    let witness_config_dir = temp.path().join("witness-config");
+    let request_dir = temp.path().join("publisher-request");
+    let scratch_dir = temp.path().join("witness-scratch");
+    let driver_path = temp.path().join("fake-witness-driver.sh");
+    write_fake_witness_rebuild_driver(&driver_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &publisher_config_dir)
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .assert()
+        .success();
+
+    let release_trusted_key = trusted_public_key_from_default_config(temp.path(), &publisher_config_dir);
+    let release_signer_name = trusted_public_key_key_name(&release_trusted_key).to_string();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&publisher_verification_dir)
+        .arg("--profile")
+        .arg("single-witness")
+        .arg("--trusted-release-signer")
+        .arg(&release_signer_name)
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&publisher_verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let rebuild_output = crunch()
+        .current_dir(temp.path())
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .env("CRUNCH_WITNESS_REBUILD_DRIVER", &driver_path)
+        .env("CRUNCH_TEST_WITNESS_DRIVER_MODE", "match")
+        .arg("--json")
+        .arg("release")
+        .arg("witness-rebuild")
+        .arg(&request_dir)
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg("--identity")
+        .arg("witness-a")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .output()
+        .unwrap();
+    assert!(rebuild_output.status.success(), "{}", String::from_utf8_lossy(&rebuild_output.stderr));
+    let rebuild_json: serde_json::Value = serde_json::from_slice(&rebuild_output.stdout).unwrap();
+    let witness_verification_dir = PathBuf::from(rebuild_json["verification_dir"].as_str().unwrap());
+    let witness_trusted_key = trusted_public_key_from_default_config(temp.path(), &witness_config_dir);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("witness-import")
+        .arg(&publisher_verification_dir)
+        .arg(&witness_verification_dir)
+        .assert()
+        .success();
+
+    let verify_output = crunch()
+        .current_dir(temp.path())
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&publisher_verification_dir)
+        .arg("--trusted-public-key")
+        .arg(&release_trusted_key)
+        .arg("--trusted-public-key")
+        .arg(&witness_trusted_key)
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["technical_class"], "external-witness-match");
+    assert_eq!(verify_json["policy_status"], "satisfied");
+    assert_eq!(verify_json["final_class"], "quorum-satisfied");
 }
 
 #[test]

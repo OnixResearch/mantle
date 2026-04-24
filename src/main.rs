@@ -23,6 +23,7 @@ mod shell_cmd;
 mod store_cmd;
 mod system_cmd;
 mod witness_handoff;
+mod witness_rebuild;
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -440,6 +441,39 @@ pub enum ReleaseAction {
         /// target/release-witness-requests/<release-id>)
         #[arg(long)]
         request_dir: Option<PathBuf>,
+    },
+    /// Replay an exported witness request into witness sidecars and rebuild audit evidence
+    WitnessRebuild {
+        /// Exported witness request directory produced by `crunch release witness-export`
+        request_dir: PathBuf,
+
+        /// Scratch root for the rebuild work area (default: $CRUNCH_WITNESS_SCRATCH_DIR or <request-dir>.work)
+        #[arg(long)]
+        scratch_dir: Option<PathBuf>,
+
+        /// Run request validation and workflow preflight only, without rebuilding or writing sidecars
+        #[arg(long)]
+        check: bool,
+
+        /// Stable witness identity recorded in the attestation (default: signer key name)
+        #[arg(long)]
+        identity: Option<String>,
+
+        /// Short target-system label for the rebuild environment summary
+        #[arg(long)]
+        system: Option<String>,
+
+        /// Short toolchain label for the rebuild environment summary
+        #[arg(long)]
+        toolchain: Option<String>,
+
+        /// Short host-class label for the rebuild environment summary
+        #[arg(long)]
+        host_class: Option<String>,
+
+        /// Path to a Nix-format ed25519 signing keypair file
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
     },
 }
 

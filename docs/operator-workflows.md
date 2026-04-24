@@ -304,26 +304,30 @@ request directory: the verified release-evidence bundle, the signed release
 attestation, and request metadata. It does not copy signing keys or
 verifier-local policy files.
 
-Independent rebuilders can then verify the exported release bundle in a second
-environment and publish witness attestations into the copied verification seed:
+Independent rebuilders can then replay the checked-in witness rebuild rail in a
+second environment:
 
 ```bash
-crunch release verify \
-  target/release-witness-requests/<release-id>/release-evidence/<release-id>
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
-crunch attest witness-create \
-  target/release-witness-requests/<release-id>/release-verification/<release-id> \
-  --rebuilt-binary /path/to/rebuilt/crunch \
+./scripts/rebuild-witness-request.sh \
+  target/release-witness-requests/<release-id> \
   --identity <witness-identity> \
   --system x86_64-linux \
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
   --signing-key /path/to/witness.key
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 ```
 
-Repeat `--rebuilt-binary` in the same order as the published release outputs.
-The command reuses the published binary names inside the signed payload and
-rejects count mismatches before writing sidecars.
+The wrapper is the operator-facing shell. It resolves `bwrap`, picks an
+absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch root
+(`target/release-witness-requests/<release-id>.work/` by default or
+`$CRUNCH_WITNESS_SCRATCH_DIR`), rewrites `TMPDIR` and `CARGO_TARGET_DIR` under
+that root, and then calls the machine-readable core command `crunch release
+witness-rebuild <request-dir> ...`. Use `--check` when you want prerequisite and
+request-validation preflight only; successful `--check` output is not rebuild
+proof. The request directory stays immutable after validation. Witness sidecars
+and the rebuild audit directory land under the scratch verification output,
+not back inside the exported request tree.
 
 Inspect the discovered material with:
 
@@ -337,21 +341,24 @@ social policy against trusted key material:
 
 ```bash
 crunch attest witness-import target/release-verification/<release-id> \
-  target/release-witness-requests/<release-id>/release-verification/<release-id>
+  target/release-witness-requests/<release-id>.work/release-verification/<release-id>
 crunch attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
-`crunch attest witness-import` fails closed on missing signatures,
-release-digest mismatches, and conflicting existing witness identities before
-copying anything into the publisher verification directory. `crunch attest
-release-verify` reports the technical class, policy status, and final class
-separately. Unknown-key or bad-signature witnesses remain visible in
-`discovered_witness_count` but are excluded before quorum evaluation, so mixed
-witness sets do not abort verification. A successful single-witness run proves
-external witness agreement under the configured policy. It still does not prove
-a full-source bootstrap root or globally reproducible release outputs.
+The scratch verification directory also carries `witness-rebuild-audit/meta.json`
+plus captured workflow stdout/stderr so the witness can hand back both the
+signed sidecars and a replay transcript. `crunch attest witness-import` fails
+closed on missing signatures, release-digest mismatches, and conflicting
+existing witness identities before copying anything into the publisher
+verification directory. `crunch attest release-verify` reports the technical
+class, policy status, and final class separately. Unknown-key or bad-signature
+witnesses remain visible in `discovered_witness_count` but are excluded before
+quorum evaluation, so mixed witness sets do not abort verification. A
+successful single-witness run proves external witness agreement under the
+configured policy. It still does not prove a full-source bootstrap root or
+globally reproducible release outputs.
 
 For the current trust boundary behind those claims, see
 [`docs/bootstrap-stage0-inventory.md`](bootstrap-stage0-inventory.md).

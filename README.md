@@ -881,22 +881,19 @@ crunch release witness-export target/release-evidence/<release-id> \
   --verification-dir target/release-verification/<release-id> \
   --request-dir target/release-witness-requests/<release-id>
 
-# Witness: inspect the exported request bundle and rebuild from it
-crunch release verify \
-  target/release-witness-requests/<release-id>/release-evidence/<release-id>
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
-crunch attest witness-create \
-  target/release-witness-requests/<release-id>/release-verification/<release-id> \
-  --rebuilt-binary /path/to/rebuilt/crunch \
+# Witness: replay the checked-in rebuild workflow from the exported request
+./scripts/rebuild-witness-request.sh \
+  target/release-witness-requests/<release-id> \
   --identity <witness-identity> \
   --system x86_64-linux \
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
   --signing-key /path/to/witness.key
+WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
 
 # Publisher: import the returned witness sidecars and verify the final status
 crunch attest witness-import target/release-verification/<release-id> \
-  target/release-witness-requests/<release-id>/release-verification/<release-id>
+  target/release-witness-requests/<release-id>.work/release-verification/<release-id>
 crunch attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
@@ -914,18 +911,25 @@ policy-init` writes verifier-local `policy.json` and `revocations.json` for
 either `self-proof-only` or `single-witness` publication without hand-authoring
 JSON. `crunch release witness-export` copies only public verification material:
 a verified release-evidence bundle, the signed release attestation, and request
-metadata. It does not copy signing keys or verifier-local policy files. `crunch
-attest witness-create` writes `witnesses/<identity>.json` and a matching `.sig`
-sidecar under the witness request's verification seed, reusing the published
-release binary names and pairing rebuilt outputs by argument order. `crunch
-attest witness-import` fails closed on missing signatures, release-digest
-mismatches, and conflicting existing witness identities before touching the
-publisher verification directory. `crunch attest release-verify` separates
-technical validity from policy sufficiency, so a release can stay technically
-valid even when the witness set is policy-insufficient. A successful
-single-witness workflow therefore proves external witness agreement under the
-configured policy; it still does not prove a full-source bootstrap root or
-globally reproducible release artifacts.
+metadata. It does not copy signing keys or verifier-local policy files. The
+checked-in witness-side wrapper `./scripts/rebuild-witness-request.sh` is the
+operator-facing path for replaying that request. It preflights `bwrap`, resolves
+an absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch
+root (`<request-dir>.work/` by default or `$CRUNCH_WITNESS_SCRATCH_DIR`), and
+then calls the machine-readable core command `crunch release witness-rebuild
+<request-dir> ...`. The request directory stays immutable after validation; the
+rebuild output lands under the scratch verification directory together with
+`witnesses/<identity>.json`, the matching `.sig`, and
+`witness-rebuild-audit/meta.json` describing the replayed workflow, scratch
+paths, timestamps, and rebuilt output digests. `crunch attest witness-import`
+fails closed on missing signatures, release-digest mismatches, and conflicting
+existing witness identities before touching the publisher verification
+directory. `crunch attest release-verify` separates technical validity from
+policy sufficiency, so a release can stay technically valid even when the
+witness set is policy-insufficient. A successful single-witness workflow
+therefore proves external witness agreement under the configured policy; it
+still does not prove a full-source bootstrap root or globally reproducible
+release artifacts.
 
 ### Bootstrap roadmap
 

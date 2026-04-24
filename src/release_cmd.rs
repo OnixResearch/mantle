@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::errors::RunError;
 use crate::release_attestation::create_release_attestation;
+use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
@@ -12,6 +13,17 @@ use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_source::write_tracked_source_archive;
 use crate::witness_handoff::create_witness_request_directory;
 use crate::witness_handoff::default_witness_request_dir;
+use crate::witness_rebuild::WITNESS_SCRATCH_ENV;
+use crate::witness_rebuild::WitnessRebuildSuccess;
+use crate::witness_rebuild::audit_meta_path;
+use crate::witness_rebuild::build_failure_audit_meta;
+use crate::witness_rebuild::build_success_audit_meta;
+use crate::witness_rebuild::default_witness_scratch_dir;
+use crate::witness_rebuild::plan_witness_rebuild;
+use crate::witness_rebuild::prepare_witness_rebuild_scratch;
+use crate::witness_rebuild::run_witness_rebuild_workflow;
+use crate::witness_rebuild::validate_successful_rebuild;
+use crate::witness_rebuild::write_audit_meta;
 
 pub(crate) fn cmd_release(
     action: crate::ReleaseAction,
@@ -48,6 +60,28 @@ pub(crate) fn cmd_release(
             verification_dir,
             request_dir,
         } => cmd_release_witness_export(current_dir, json, bundle_dir, verification_dir, request_dir),
+        crate::ReleaseAction::WitnessRebuild {
+            request_dir,
+            scratch_dir,
+            check,
+            identity,
+            system,
+            toolchain,
+            host_class,
+            signing_key,
+        } => cmd_release_witness_rebuild(
+            current_dir,
+            state_dir,
+            json,
+            request_dir,
+            scratch_dir,
+            check,
+            identity,
+            system,
+            toolchain,
+            host_class,
+            signing_key,
+        ),
     }
 }
 
@@ -200,6 +234,64 @@ fn cmd_release_witness_export(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn cmd_release_witness_rebuild(
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+    request_dir: PathBuf,
+    scratch_dir: Option<PathBuf>,
+    check: bool,
+    identity: Option<String>,
+    system: Option<String>,
+    toolchain: Option<String>,
+    host_class: Option<String>,
+    signing_key: Option<PathBuf>,
+) -> Result<(), RunError> {
+    let resolved_request_dir = resolve_input_path(current_dir, request_dir);
+    let resolved_scratch_dir = resolve_witness_scratch_dir(current_dir, &resolved_request_dir, scratch_dir)?;
+    let plan = plan_witness_rebuild(&resolved_request_dir, &resolved_scratch_dir)?;
+    if check {
+        return print_witness_rebuild_check(&plan, json);
+    }
+
+    let metadata = required_witness_rebuild_metadata(system, toolchain, host_class)?;
+    prepare_witness_rebuild_scratch(&plan)?;
+    let execution = run_witness_rebuild_workflow(&plan)?;
+    if let Err(err) = validate_successful_rebuild(&plan, &execution) {
+        let failure_meta = build_failure_audit_meta(
+            &plan,
+            &execution.workflow_driver_path,
+            &execution.rebuilt_output_paths,
+            execution.started_unix_ms,
+            execution.finished_unix_ms,
+            err.message(),
+        )?;
+        write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
+        return Err(err);
+    }
+    let success = WitnessRebuildSuccess {
+        rebuilt_output_paths: execution.rebuilt_output_paths,
+        workflow_driver_path: execution.workflow_driver_path,
+        started_unix_ms: execution.started_unix_ms,
+        finished_unix_ms: execution.finished_unix_ms,
+        output: execution.output,
+    };
+    let created = create_witness_attestation(
+        &plan.scratch_layout.verification_dir,
+        &success.rebuilt_output_paths,
+        identity.as_deref(),
+        &metadata.system,
+        &metadata.toolchain,
+        &metadata.host_class,
+        signing_key.as_deref(),
+        state_dir,
+    )?;
+    let audit_meta = build_success_audit_meta(&plan, &success, &created.attestation_path, &created.signature_path)?;
+    write_audit_meta(&audit_meta_path(&plan), &audit_meta)?;
+    print_witness_rebuild_success(&plan, &success, &created.attestation_path, &created.signature_path, json)
+}
+
 fn resolve_bundle_dir(current_dir: &Path, release_id: &str, bundle_dir: Option<PathBuf>) -> PathBuf {
     match bundle_dir {
         Some(path) => resolve_input_path(current_dir, path),
@@ -219,10 +311,135 @@ fn resolve_input_path(current_dir: &Path, path: PathBuf) -> PathBuf {
     }
 }
 
+fn resolve_witness_scratch_dir(
+    current_dir: &Path,
+    request_dir: &Path,
+    scratch_dir: Option<PathBuf>,
+) -> Result<PathBuf, RunError> {
+    if let Some(path) = scratch_dir {
+        return Ok(resolve_input_path(current_dir, path));
+    }
+    if let Some(path_text) = std::env::var_os(WITNESS_SCRATCH_ENV) {
+        return Ok(resolve_input_path(current_dir, PathBuf::from(path_text)));
+    }
+    default_witness_scratch_dir(request_dir)
+}
+
 fn normalize_workflow_value(value: &str, default_value: &str) -> String {
     if value.trim().is_empty() {
         default_value.to_string()
     } else {
         value.to_string()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WitnessRebuildMetadata {
+    system: String,
+    toolchain: String,
+    host_class: String,
+}
+
+fn required_witness_rebuild_metadata(
+    system: Option<String>,
+    toolchain: Option<String>,
+    host_class: Option<String>,
+) -> Result<WitnessRebuildMetadata, RunError> {
+    let system = require_metadata_value(system, "--system")?;
+    let toolchain = require_metadata_value(toolchain, "--toolchain")?;
+    let host_class = require_metadata_value(host_class, "--host-class")?;
+    Ok(WitnessRebuildMetadata {
+        system,
+        toolchain,
+        host_class,
+    })
+}
+
+fn require_metadata_value(value: Option<String>, flag_name: &str) -> Result<String, RunError> {
+    let Some(value) = value else {
+        return Err(RunError::Internal(format!("{} is required unless --check is used", flag_name)));
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(RunError::Internal(format!("{} must not be empty", flag_name)));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan, json: bool) -> Result<(), RunError> {
+    let audit_path = audit_meta_path(plan);
+    if json {
+        let rendered = serde_json::json!({
+            "kind": "crunch-witness-rebuild",
+            "check_only": true,
+            "release_id": plan.release_id,
+            "request_dir": plan.request_dir.display().to_string(),
+            "scratch_root": plan.scratch_layout.scratch_root.display().to_string(),
+            "verification_dir": plan.scratch_layout.verification_dir.display().to_string(),
+            "proof_bundle_dir": plan.scratch_layout.proof_bundle_dir.display().to_string(),
+            "audit_meta_path": audit_path.display().to_string(),
+            "workflow_command": plan.workflow_command,
+            "workflow_version": plan.workflow_version,
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing witness rebuild check output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("witness rebuild preflight OK: {}", plan.request_dir.display());
+    println!("release id: {}", plan.release_id);
+    println!("scratch root: {}", plan.scratch_layout.scratch_root.display());
+    println!("verification output: {}", plan.scratch_layout.verification_dir.display());
+    println!("proof bundle output: {}", plan.scratch_layout.proof_bundle_dir.display());
+    println!("audit metadata: {}", audit_path.display());
+    println!("check only: no rebuild executed, no witness sidecars written");
+    Ok(())
+}
+
+fn print_witness_rebuild_success(
+    plan: &crate::witness_rebuild::WitnessRebuildPlan,
+    success: &WitnessRebuildSuccess,
+    attestation_path: &Path,
+    signature_path: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let audit_path = audit_meta_path(plan);
+    if json {
+        let rebuilt_outputs =
+            success.rebuilt_output_paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
+        let rendered = serde_json::json!({
+            "kind": "crunch-witness-rebuild",
+            "check_only": false,
+            "release_id": plan.release_id,
+            "request_dir": plan.request_dir.display().to_string(),
+            "scratch_root": plan.scratch_layout.scratch_root.display().to_string(),
+            "verification_dir": plan.scratch_layout.verification_dir.display().to_string(),
+            "proof_bundle_dir": plan.scratch_layout.proof_bundle_dir.display().to_string(),
+            "audit_meta_path": audit_path.display().to_string(),
+            "workflow_driver_path": success.workflow_driver_path.display().to_string(),
+            "attestation_path": attestation_path.display().to_string(),
+            "signature_path": signature_path.display().to_string(),
+            "rebuilt_outputs": rebuilt_outputs,
+            "started_unix_ms": success.started_unix_ms,
+            "finished_unix_ms": success.finished_unix_ms,
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing witness rebuild output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("witness rebuild completed: {}", plan.request_dir.display());
+    println!("release id: {}", plan.release_id);
+    println!("scratch root: {}", plan.scratch_layout.scratch_root.display());
+    println!("verification output: {}", plan.scratch_layout.verification_dir.display());
+    println!("witness attestation: {}", attestation_path.display());
+    println!("signature: {}", signature_path.display());
+    println!("rebuild audit: {}", audit_path.display());
+    Ok(())
 }
