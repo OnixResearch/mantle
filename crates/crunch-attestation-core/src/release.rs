@@ -253,6 +253,231 @@ pub fn witness_attestation_canonical_digest(value: WitnessAttestation) -> Result
     Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
+pub const INDEPENDENT_AGREEMENT_REPORT_SCHEMA: &str = "crunch-independent-agreement-report-v1";
+const MAX_AGREEMENT_WITNESS_COUNT: u32 = 1_024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndependentAgreementStatus {
+    Satisfied,
+    Unsatisfied,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WitnessClassificationReason {
+    Counted,
+    UnknownKey,
+    InvalidSignature,
+    Revoked,
+    DigestMismatch,
+    DuplicateIndependenceDomain,
+    MissingIndependenceEvidence,
+    MalformedEnvironmentEvidence,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AgreementWitnessClassification {
+    pub witness_identity: String,
+    pub signer_key_name: String,
+    pub witness_digest_blake3: AttestationDigest,
+    pub signature_valid: bool,
+    pub digest_match: bool,
+    pub independence_domain: String,
+    pub policy_counted: bool,
+    pub classification_reason: WitnessClassificationReason,
+    pub rebuilt_output_digests: Vec<BinaryDigest>,
+    pub environment_summary: RebuildEnvironmentSummary,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct IndependentAgreementReport {
+    pub schema: String,
+    pub release_attestation_digest_blake3: AttestationDigest,
+    pub policy_digest_blake3: AttestationDigest,
+    pub independence_selector: String,
+    pub required_witness_count: u32,
+    pub counted_witness_count: u32,
+    pub skipped_witness_count: u32,
+    pub failed_witness_count: u32,
+    pub witnesses: Vec<AgreementWitnessClassification>,
+    pub artifact_digest_sets: Vec<BinaryDigest>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct IndependentAgreementReportInit {
+    pub release_attestation_digest_blake3: AttestationDigest,
+    pub policy_digest_blake3: AttestationDigest,
+    pub independence_selector: String,
+    pub required_witness_count: u32,
+    pub witnesses: Vec<AgreementWitnessClassification>,
+    pub artifact_digest_sets: Vec<BinaryDigest>,
+}
+
+impl IndependentAgreementReport {
+    pub fn new(init: IndependentAgreementReportInit) -> Result<Self, Error> {
+        let witnesses = normalize_agreement_witnesses(init.witnesses)?;
+        let counted_witness_count = count_witnesses(&witnesses, WitnessCountKind::Counted);
+        let skipped_witness_count = count_witnesses(&witnesses, WitnessCountKind::Skipped);
+        let failed_witness_count = count_witnesses(&witnesses, WitnessCountKind::Failed);
+        let artifact_digest_sets = normalize_binary_digests(init.artifact_digest_sets)?;
+        validate_non_empty(NamedField {
+            name: "independence_selector",
+            value: &init.independence_selector,
+        })?;
+        Ok(Self {
+            schema: INDEPENDENT_AGREEMENT_REPORT_SCHEMA.to_string(),
+            release_attestation_digest_blake3: init.release_attestation_digest_blake3,
+            policy_digest_blake3: init.policy_digest_blake3,
+            independence_selector: init.independence_selector,
+            required_witness_count: init.required_witness_count,
+            counted_witness_count,
+            skipped_witness_count,
+            failed_witness_count,
+            witnesses,
+            artifact_digest_sets,
+        })
+    }
+
+    pub fn status(&self) -> IndependentAgreementStatus {
+        if self.counted_witness_count >= self.required_witness_count {
+            IndependentAgreementStatus::Satisfied
+        } else {
+            IndependentAgreementStatus::Unsatisfied
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WitnessCountKind {
+    Counted,
+    Skipped,
+    Failed,
+}
+
+pub fn independent_agreement_report_canonical_bytes(value: IndependentAgreementReport) -> Result<Vec<u8>, Error> {
+    let canonical = canonical_independent_agreement_report(value)?;
+    to_canonical_bytes(&canonical)
+}
+
+pub fn independent_agreement_report_canonical_digest(
+    value: IndependentAgreementReport,
+) -> Result<AttestationDigest, Error> {
+    let bytes = independent_agreement_report_canonical_bytes(value)?;
+    Ok(AttestationDigest::from_canonical_bytes(bytes))
+}
+
+pub fn canonical_independent_agreement_report(
+    value: IndependentAgreementReport,
+) -> Result<IndependentAgreementReport, Error> {
+    validate_schema_tag(SchemaTag {
+        actual: &value.schema,
+        expected: INDEPENDENT_AGREEMENT_REPORT_SCHEMA,
+    })?;
+    IndependentAgreementReport::new(IndependentAgreementReportInit {
+        release_attestation_digest_blake3: value.release_attestation_digest_blake3,
+        policy_digest_blake3: value.policy_digest_blake3,
+        independence_selector: value.independence_selector,
+        required_witness_count: value.required_witness_count,
+        witnesses: value.witnesses,
+        artifact_digest_sets: value.artifact_digest_sets,
+    })
+}
+
+fn normalize_agreement_witnesses(
+    witnesses: Vec<AgreementWitnessClassification>,
+) -> Result<Vec<AgreementWitnessClassification>, Error> {
+    let actual = count_with_overflow_marker(witnesses.len(), MAX_AGREEMENT_WITNESS_COUNT);
+    if actual > MAX_AGREEMENT_WITNESS_COUNT {
+        return Err(Error::CollectionTooLarge {
+            limit: MAX_AGREEMENT_WITNESS_COUNT,
+            actual,
+        });
+    }
+    let mut normalized = Vec::with_capacity(witnesses.len());
+    for witness in witnesses {
+        normalized.push(normalize_agreement_witness(witness)?);
+    }
+    normalized.sort_by(|left, right| {
+        (
+            &left.witness_identity,
+            &left.signer_key_name,
+            &left.independence_domain,
+            &left.witness_digest_blake3,
+        )
+            .cmp(&(
+                &right.witness_identity,
+                &right.signer_key_name,
+                &right.independence_domain,
+                &right.witness_digest_blake3,
+            ))
+    });
+    Ok(normalized)
+}
+
+fn normalize_agreement_witness(
+    mut witness: AgreementWitnessClassification,
+) -> Result<AgreementWitnessClassification, Error> {
+    validate_non_empty(NamedField {
+        name: "witness_identity",
+        value: &witness.witness_identity,
+    })?;
+    validate_non_empty(NamedField {
+        name: "signer_key_name",
+        value: &witness.signer_key_name,
+    })?;
+    if witness.classification_reason == WitnessClassificationReason::Counted {
+        validate_non_empty(NamedField {
+            name: "independence_domain",
+            value: &witness.independence_domain,
+        })?;
+    }
+    validate_env_field(NamedField {
+        name: "system",
+        value: &witness.environment_summary.system,
+    })?;
+    validate_env_field(NamedField {
+        name: "toolchain",
+        value: &witness.environment_summary.toolchain,
+    })?;
+    validate_env_field(NamedField {
+        name: "host_class",
+        value: &witness.environment_summary.host_class,
+    })?;
+    witness.rebuilt_output_digests = normalize_binary_digests(witness.rebuilt_output_digests)?;
+    Ok(witness)
+}
+
+fn count_witnesses(witnesses: &[AgreementWitnessClassification], kind: WitnessCountKind) -> u32 {
+    let count = witnesses.iter().filter(|witness| witness_matches_count_kind(witness, kind)).count();
+    count_with_overflow_marker(count, MAX_AGREEMENT_WITNESS_COUNT)
+}
+
+fn witness_matches_count_kind(witness: &AgreementWitnessClassification, kind: WitnessCountKind) -> bool {
+    match kind {
+        WitnessCountKind::Counted => witness.policy_counted,
+        WitnessCountKind::Skipped => {
+            !witness.policy_counted
+                && matches!(
+                    witness.classification_reason,
+                    WitnessClassificationReason::UnknownKey
+                        | WitnessClassificationReason::InvalidSignature
+                        | WitnessClassificationReason::Revoked
+                        | WitnessClassificationReason::DuplicateIndependenceDomain
+                        | WitnessClassificationReason::MissingIndependenceEvidence
+                )
+        }
+        WitnessCountKind::Failed => {
+            !witness.policy_counted
+                && matches!(
+                    witness.classification_reason,
+                    WitnessClassificationReason::DigestMismatch
+                        | WitnessClassificationReason::MalformedEnvironmentEvidence
+                )
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TechnicalClass {
@@ -755,6 +980,138 @@ mod tests {
         assert!(identity_pos < suite_pos);
         assert!(suite_pos < rebuilt_pos);
         assert!(rebuilt_pos < env_pos);
+    }
+
+    #[test]
+    fn independent_agreement_report_digest_is_stable_across_witness_order() {
+        let report_a = sample_agreement_report(vec![
+            sample_agreement_witness("witness-b", "key-b", "host-b", WitnessClassificationReason::Counted, true),
+            sample_agreement_witness("witness-a", "key-a", "host-a", WitnessClassificationReason::Counted, true),
+        ]);
+        let report_b = sample_agreement_report(vec![
+            sample_agreement_witness("witness-a", "key-a", "host-a", WitnessClassificationReason::Counted, true),
+            sample_agreement_witness("witness-b", "key-b", "host-b", WitnessClassificationReason::Counted, true),
+        ]);
+
+        let bytes_a = independent_agreement_report_canonical_bytes(report_a.clone()).unwrap();
+        let bytes_b = independent_agreement_report_canonical_bytes(report_b.clone()).unwrap();
+        assert_eq!(bytes_a, bytes_b);
+
+        let digest_a = independent_agreement_report_canonical_digest(report_a).unwrap();
+        let digest_b = independent_agreement_report_canonical_digest(report_b).unwrap();
+        assert_eq!(digest_a, digest_b);
+    }
+
+    #[test]
+    fn independent_agreement_report_counts_skipped_and_failed_witnesses() {
+        let report = sample_agreement_report(vec![
+            sample_agreement_witness("witness-a", "key-a", "host-a", WitnessClassificationReason::Counted, true),
+            sample_agreement_witness("witness-b", "key-b", "host-b", WitnessClassificationReason::UnknownKey, false),
+            sample_agreement_witness(
+                "witness-c",
+                "key-c",
+                "host-c",
+                WitnessClassificationReason::DigestMismatch,
+                false,
+            ),
+        ]);
+
+        assert_eq!(report.counted_witness_count, 1);
+        assert_eq!(report.skipped_witness_count, 1);
+        assert_eq!(report.failed_witness_count, 1);
+        assert_eq!(report.status(), IndependentAgreementStatus::Unsatisfied);
+    }
+
+    #[test]
+    fn independent_agreement_report_classifies_all_skip_reasons() {
+        let report = sample_agreement_report(vec![
+            sample_agreement_witness(
+                "witness-a",
+                "key-a",
+                "host-a",
+                WitnessClassificationReason::InvalidSignature,
+                false,
+            ),
+            sample_agreement_witness("witness-b", "key-b", "host-b", WitnessClassificationReason::Revoked, false),
+            sample_agreement_witness(
+                "witness-c",
+                "key-c",
+                "host-c",
+                WitnessClassificationReason::DuplicateIndependenceDomain,
+                false,
+            ),
+            sample_agreement_witness(
+                "witness-d",
+                "key-d",
+                "host-d",
+                WitnessClassificationReason::MissingIndependenceEvidence,
+                false,
+            ),
+        ]);
+
+        assert_eq!(report.counted_witness_count, 0);
+        assert_eq!(report.skipped_witness_count, 4);
+        assert_eq!(report.failed_witness_count, 0);
+        assert_eq!(report.status(), IndependentAgreementStatus::Unsatisfied);
+    }
+
+    #[test]
+    fn independent_agreement_report_requires_counted_domain() {
+        let err = IndependentAgreementReport::new(IndependentAgreementReportInit {
+            release_attestation_digest_blake3: release_attestation_canonical_digest(sample_release()).unwrap(),
+            policy_digest_blake3: AttestationDigest::from_canonical_bytes(b"policy".to_vec()),
+            independence_selector: "witness_identity".to_string(),
+            required_witness_count: 1,
+            witnesses: vec![sample_agreement_witness(
+                "witness-a",
+                "key-a",
+                "",
+                WitnessClassificationReason::Counted,
+                true,
+            )],
+            artifact_digest_sets: sample_release().binary_digests,
+        })
+        .unwrap_err();
+        assert_eq!(err, Error::EmptyField {
+            field: "independence_domain".to_string()
+        });
+    }
+
+    fn sample_agreement_report(witnesses: Vec<AgreementWitnessClassification>) -> IndependentAgreementReport {
+        IndependentAgreementReport::new(IndependentAgreementReportInit {
+            release_attestation_digest_blake3: release_attestation_canonical_digest(sample_release()).unwrap(),
+            policy_digest_blake3: AttestationDigest::from_canonical_bytes(b"policy".to_vec()),
+            independence_selector: "witness_identity".to_string(),
+            required_witness_count: 2,
+            witnesses,
+            artifact_digest_sets: sample_release().binary_digests,
+        })
+        .unwrap()
+    }
+
+    fn sample_agreement_witness(
+        witness_identity: &str,
+        signer_key_name: &str,
+        independence_domain: &str,
+        classification_reason: WitnessClassificationReason,
+        policy_counted: bool,
+    ) -> AgreementWitnessClassification {
+        AgreementWitnessClassification {
+            witness_identity: witness_identity.to_string(),
+            signer_key_name: signer_key_name.to_string(),
+            witness_digest_blake3: AttestationDigest::from_canonical_bytes(witness_identity.as_bytes().to_vec()),
+            signature_valid: classification_reason != WitnessClassificationReason::InvalidSignature,
+            digest_match: classification_reason != WitnessClassificationReason::DigestMismatch,
+            independence_domain: independence_domain.to_string(),
+            policy_counted,
+            classification_reason,
+            rebuilt_output_digests: sample_release().binary_digests,
+            environment_summary: RebuildEnvironmentSummary {
+                system: "x86_64-linux".to_string(),
+                toolchain: "rust-1.91.1".to_string(),
+                host_class: independence_domain.to_string(),
+            },
+        }
     }
 
     fn sample_release() -> ReleaseAttestation {

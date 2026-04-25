@@ -2,18 +2,24 @@
 
 ## Phase 1: Agreement core
 
-- [ ] I1 Add pure agreement-report types and canonical compact JSON
+- [x] I1 Add pure agreement-report types and canonical compact JSON ✅ 2m 9s (started: 2026-04-25T20:02:30Z → completed: 2026-04-25T20:04:39Z)
       serialization over release attestation, witness classifications,
       digest sets, signer names, identities, selected independence-domain
       values, witness evidence classifications, and environment summaries.
       [covers=release.verification.tech.independent.agreement.report,release.verification.tech.witness.independence.evidence]
-- [ ] I2 Add canonicalization tests proving discovery order does not change
+      Evidence: `cargo test -p crunch-attestation-core independent_agreement`
+      passed in pueue task 13 (4 tests), covering canonical report types,
+      BLAKE3 report digest, sorted witnesses, witness classifications, counts,
+      and required counted independence domain.
+- [x] I2 Add canonicalization tests proving discovery order does not change ✅ 2m 9s (started: 2026-04-25T20:02:30Z → completed: 2026-04-25T20:04:39Z)
       report bytes or BLAKE3 report digest.
       [covers=release.verification.tech.independent.agreement.report]
-- [ ] I3 Add skipped/failed witness classification reasons for unknown key,
+      Evidence: pueue task 13 passed `independent_agreement_report_digest_is_stable_across_witness_order`, proving canonical bytes and report digest are stable across witness discovery order.
+- [x] I3 Add skipped/failed witness classification reasons for unknown key, ✅ 2m 9s (started: 2026-04-25T20:02:30Z → completed: 2026-04-25T20:04:39Z)
       invalid signature, revoked witness, digest mismatch, malformed environment
       summary, missing selector evidence, and duplicate independence domain.
       [covers=release.verification.tech.independent.agreement.report,release.verification.tech.witness.independence.evidence]
+      Evidence: pueue task 13 passed classification tests for counted, unknown-key, invalid-signature, revoked, digest-mismatch, duplicate-independence-domain, missing-independence-evidence, and counted-domain validation.
 
 ## Phase 2: Policy and verifier integration
 
