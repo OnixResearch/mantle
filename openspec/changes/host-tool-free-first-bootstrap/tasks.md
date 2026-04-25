@@ -267,11 +267,18 @@
       file, serializes `declared_seed_artifacts` with id/role/phase/path/digest/
       provenance/owner/required fields, and mirrors the inventory copy plus
       artifact records in `summary.txt`.
-- [ ] I23 Add an operator-facing inventory generation/preflight path for V4 that
+- [x] I23 Add an operator-facing inventory generation/preflight path for V4 that ✅ 5m 30s (started: 2026-04-25T23:48:05Z → completed: 2026-04-25T23:53:35Z)
       consumes only explicit seed paths, rejects discovery from `PATH` or
       `/nix/store`, reports static-vs-dynamic seed closure risk, and emits the
       concrete inventory path used by the full proof.
       [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 15 passed `cargo test -p crunch protected_exec --
+      --nocapture` with 31 lib and 31 bin tests plus the focused script test
+      `prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds`.
+      Pueue task 18 ran `cargo run -q -p crunch -- stage0-inventory --output ...`
+      against explicit `CRUNCH_STAGE0_SEED_*` paths and verified the generated
+      inventory path, no-`PATH`/no-`/nix/store` discovery policy text, and
+      static/script seed closure risk report.
 - [ ] I24 Tighten protected source artifact extraction rules to the documented
       `key=value` grammar (`format`, `strip-components`, `root`) and reject
       malformed or ambiguous rules before fetch or extraction.

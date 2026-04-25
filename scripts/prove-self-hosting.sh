@@ -41,16 +41,19 @@ proof_mode="$PROOF_MODE_FIXED_POINT"
 proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
 no_host_tools="0"
 stage0_inventory=""
+generate_stage0_inventory="0"
 proof_cargo=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-tools] [--stage0-inventory FILE] [--bundle-dir DIR]
+Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-tools] [--stage0-inventory FILE] [--generate-stage0-inventory FILE] [--bundle-dir DIR]
 
   --check                   validate prerequisites, print the proof command, and exit
   --non-nix-host            run proof with proof PATH scrubbed of nix-build/nix-store/nix-shell/nix
   --no-host-tools           run proof with common host tools poisoned for stage0 self-build
   --stage0-inventory FILE   stage0 inventory used by --no-host-tools
+  --generate-stage0-inventory FILE
+                            generate the no-host-tools inventory from explicit CRUNCH_STAGE0_SEED_* paths, then use it
   --bundle-dir DIR          write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
@@ -616,6 +619,9 @@ show_scratch_summary() {
   fi
   if [[ "$no_host_tools" == "1" ]]; then
     note "no-host-tools stage0 inventory: $stage0_inventory"
+    if [[ "$generate_stage0_inventory" == "1" ]]; then
+      note "stage0 inventory generation: explicit CRUNCH_STAGE0_SEED_* paths only"
+    fi
     note "blocked host tools: ${BLOCKED_HOST_TOOL_BINARIES[*]}"
   fi
 }
@@ -677,6 +683,7 @@ parse_args() {
   proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
   no_host_tools="0"
   stage0_inventory=""
+  generate_stage0_inventory="0"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -696,6 +703,16 @@ parse_args() {
         shift
         [[ $# -gt 0 ]] || die "--stage0-inventory requires a file"
         [[ "$1" != -* ]] || die "--stage0-inventory requires a file, got option-like value: $1"
+        stage0_inventory="$1"
+        shift
+        ;;
+      --generate-stage0-inventory)
+        shift
+        [[ $# -gt 0 ]] || die "--generate-stage0-inventory requires a file"
+        [[ "$1" != -* ]] || die "--generate-stage0-inventory requires a file, got option-like value: $1"
+        [[ -z "$stage0_inventory" ]] || die "--generate-stage0-inventory cannot be combined with --stage0-inventory"
+        no_host_tools="1"
+        generate_stage0_inventory="1"
         stage0_inventory="$1"
         shift
         ;;
@@ -724,8 +741,21 @@ parse_args() {
   fi
   if [[ "$no_host_tools" == "1" ]]; then
     stage0_inventory="$(normalize_repo_relative_path "$stage0_inventory")"
-    [[ -f "$stage0_inventory" ]] || die "stage0 inventory file does not exist: $stage0_inventory"
+    if [[ "$generate_stage0_inventory" == "0" ]]; then
+      [[ -f "$stage0_inventory" ]] || die "stage0 inventory file does not exist: $stage0_inventory"
+    fi
   fi
+}
+
+generate_stage0_inventory_if_requested() {
+  if [[ "$generate_stage0_inventory" != "1" ]]; then
+    return
+  fi
+
+  note "generating no-host-tools stage0 inventory: $stage0_inventory"
+  note "stage0 inventory seed policy: explicit CRUNCH_STAGE0_SEED_* paths only; no PATH or /nix/store discovery"
+  "$proof_cargo" run -p crunch -- stage0-inventory --output "$stage0_inventory"
+  [[ -f "$stage0_inventory" ]] || die "stage0 inventory generation did not create: $stage0_inventory"
 }
 
 update_latest_bundle_link() {
@@ -762,6 +792,7 @@ main() {
   configure_rust_build_env
 
   cd "$REPO_ROOT"
+  generate_stage0_inventory_if_requested
 
   if [[ "$mode" == "check" ]]; then
     show_check_summary

@@ -35,6 +35,12 @@ const ENV_STAGE0_SEED_SANDBOX_SHELL: &str = "CRUNCH_STAGE0_SEED_SANDBOX_SHELL";
 const ENV_STAGE0_SEED_TOOLCHAIN_ROOT: &str = "CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT";
 const ENV_STAGE0_SEED_BUILD_TOOLS: &str = "CRUNCH_STAGE0_SEED_BUILD_TOOLS";
 const GENERATED_INVENTORY_HEADER: &str = "# Generated host-tool-free stage0 inventory.\n# Do not edit by hand; regenerate from explicit CRUNCH_STAGE0_SEED_* inputs.\n\n";
+const ELF_MAGIC: &[u8] = b"\x7fELF";
+const SHEBANG_MAGIC: &[u8] = b"#!";
+const DYNAMIC_LINKER_MARKERS: [&[u8]; 4] = [b"ld-linux", b"ld-musl", b"/lib/ld", b"/lib64/ld"];
+const KIB_BYTES: u64 = 1024;
+const MIB_BYTES: u64 = KIB_BYTES * KIB_BYTES;
+const MAX_SEED_CLOSURE_RISK_SCAN_BYTES: u64 = MIB_BYTES;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DigestSpec {
@@ -101,6 +107,34 @@ pub struct ProtectedSourceFetchPlan {
     pub digest: DigestSpec,
     pub extraction_rules: Vec<String>,
     pub allowed_reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SeedClosureRiskReport {
+    pub entry_id: String,
+    pub executable_path: PathBuf,
+    pub risk: SeedClosureRisk,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SeedClosureRisk {
+    StaticElfCandidate,
+    DynamicElfLikely,
+    ScriptInterpreter,
+    UnknownExecutableFormat,
+    Unreadable(String),
+}
+
+impl fmt::Display for SeedClosureRisk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::StaticElfCandidate => write!(f, "static-elf-candidate"),
+            Self::DynamicElfLikely => write!(f, "dynamic-elf-likely"),
+            Self::ScriptInterpreter => write!(f, "script-interpreter-risk"),
+            Self::UnknownExecutableFormat => write!(f, "unknown-executable-format"),
+            Self::Unreadable(message) => write!(f, "unreadable:{message}"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -794,6 +828,49 @@ pub fn write_generated_stage0_inventory_from_env(
     write_generated_stage0_inventory(&config, output_path)
 }
 
+pub fn seed_closure_risk_report(inventory: &Stage0Inventory) -> Vec<SeedClosureRiskReport> {
+    inventory
+        .executable_entries
+        .iter()
+        .map(|entry| SeedClosureRiskReport {
+            entry_id: entry.id.clone(),
+            executable_path: entry.executable_path.clone(),
+            risk: classify_seed_closure_risk(&entry.executable_path),
+        })
+        .collect()
+}
+
+fn classify_seed_closure_risk(path: &Path) -> SeedClosureRisk {
+    match read_seed_risk_prefix(path) {
+        Ok(bytes) => classify_seed_closure_risk_bytes(&bytes),
+        Err(err) => SeedClosureRisk::Unreadable(err.to_string()),
+    }
+}
+
+fn read_seed_risk_prefix(path: &Path) -> io::Result<Vec<u8>> {
+    let mut file = fs::File::open(path)?;
+    let mut limited = (&mut file).take(MAX_SEED_CLOSURE_RISK_SCAN_BYTES);
+    let mut bytes = Vec::new();
+    limited.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+fn classify_seed_closure_risk_bytes(bytes: &[u8]) -> SeedClosureRisk {
+    if bytes.starts_with(SHEBANG_MAGIC) {
+        return SeedClosureRisk::ScriptInterpreter;
+    }
+    if !bytes.starts_with(ELF_MAGIC) {
+        return SeedClosureRisk::UnknownExecutableFormat;
+    }
+    if DYNAMIC_LINKER_MARKERS
+        .iter()
+        .any(|marker| bytes.windows(marker.len()).any(|window| window == *marker))
+    {
+        return SeedClosureRisk::DynamicElfLikely;
+    }
+    SeedClosureRisk::StaticElfCandidate
+}
+
 pub fn render_stage0_inventory_nickel(inventory: &Stage0Inventory) -> Result<String, Stage0InventoryGenerationError> {
     let mut out = String::from(GENERATED_INVENTORY_HEADER);
     out.push_str("{\n");
@@ -1426,6 +1503,43 @@ mod tests {
                 .hex,
             blake3::hash(b"sandbox-entry").to_hex().to_string()
         );
+    }
+
+    #[test]
+    fn seed_closure_risk_reports_static_dynamic_and_script_shapes() {
+        let static_elf = [ELF_MAGIC, b"static payload"].concat();
+        let dynamic_elf = [ELF_MAGIC, b"/lib64/ld-linux-x86-64.so.2"].concat();
+        let script = b"#!/bin/sh\nexit 0\n";
+        let unknown = b"plain executable bytes";
+
+        assert_eq!(classify_seed_closure_risk_bytes(&static_elf), SeedClosureRisk::StaticElfCandidate);
+        assert_eq!(classify_seed_closure_risk_bytes(&dynamic_elf), SeedClosureRisk::DynamicElfLikely);
+        assert_eq!(classify_seed_closure_risk_bytes(script), SeedClosureRisk::ScriptInterpreter);
+        assert_eq!(classify_seed_closure_risk_bytes(unknown), SeedClosureRisk::UnknownExecutableFormat);
+    }
+
+    #[test]
+    fn seed_closure_risk_report_names_inventory_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let sandbox_entry = temp.path().join("seed/bin/bwrap");
+        let sandbox_shell = temp.path().join("seed/bin/busybox");
+        make_executable(&sandbox_entry, &[ELF_MAGIC, b"static bwrap"].concat());
+        make_executable(&sandbox_shell, b"#!/bin/sh\nexit 0\n");
+        let inventory = Stage0Inventory {
+            executable_entries: vec![
+                executable("sandbox-entry", ROLE_SANDBOX_ENTRY, sandbox_entry.to_str().unwrap(), DIGEST_A),
+                executable("sandbox-shell", ROLE_SANDBOX_SHELL, sandbox_shell.to_str().unwrap(), DIGEST_B),
+            ],
+            source_entries: Vec::new(),
+        };
+
+        let report = seed_closure_risk_report(&inventory);
+
+        assert_eq!(report.len(), 2);
+        assert_eq!(report[0].entry_id, "sandbox-entry");
+        assert_eq!(report[0].risk, SeedClosureRisk::StaticElfCandidate);
+        assert_eq!(report[1].entry_id, "sandbox-shell");
+        assert_eq!(report[1].risk, SeedClosureRisk::ScriptInterpreter);
     }
 
     #[test]

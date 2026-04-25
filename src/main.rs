@@ -159,6 +159,13 @@ enum Command {
         profile: DoctorProfile,
     },
 
+    /// Generate a host-tool-free stage0 inventory from explicit seed paths.
+    Stage0Inventory {
+        /// Output inventory path.
+        #[arg(short, long, default_value = "target/host-tool-free-stage0/stage0-inventory.ncl")]
+        output: PathBuf,
+    },
+
     /// Evaluate a .ncl file and print the derivation JSON (no build)
     Eval {
         /// Path to the .ncl file
@@ -916,6 +923,7 @@ fn build_run_context(args: &Args) -> RunContext {
 fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     match &args.command {
         Command::Doctor { profile } => run_doctor_command(ctx, *profile),
+        Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::System { action } => run_system_command(ctx, action),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
@@ -963,6 +971,47 @@ fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), Ru
         return Ok(());
     }
     Err(RunError::Reported(3))
+}
+
+fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), RunError> {
+    let output_path = if output.is_absolute() {
+        output.to_path_buf()
+    } else {
+        current_dir_or_error()?.join(output)
+    };
+    let inventory = protected_exec::write_generated_stage0_inventory_from_env(&output_path)
+        .map_err(|err| RunError::Build(format!("generating stage0 inventory from explicit seed paths: {err}")))?;
+    let risks = protected_exec::seed_closure_risk_report(&inventory);
+    if ctx.json {
+        let risk_json = risks
+            .iter()
+            .map(|risk| {
+                serde_json::json!({
+                    "entry_id": risk.entry_id,
+                    "path": risk.executable_path,
+                    "risk": risk.risk.to_string(),
+                })
+            })
+            .collect::<Vec<_>>();
+        let rendered = serde_json::json!({
+            "schema": "crunch-stage0-inventory-preflight-v1",
+            "inventory_path": output_path,
+            "executable_entries": inventory.executable_entries.len(),
+            "source_entries": inventory.source_entries.len(),
+            "closure_risks": risk_json,
+            "seed_input_policy": "explicit CRUNCH_STAGE0_SEED_* paths only; no PATH or /nix/store discovery",
+        });
+        println!("{}", serde_json::to_string_pretty(&rendered).map_err(|err| RunError::Internal(err.to_string()))?);
+        return Ok(());
+    }
+    println!("stage0 inventory written: {}", output_path.display());
+    println!("seed input policy: explicit CRUNCH_STAGE0_SEED_* paths only; no PATH or /nix/store discovery");
+    println!("executable seed entries: {}", inventory.executable_entries.len());
+    println!("source seed entries: {}", inventory.source_entries.len());
+    for risk in risks {
+        println!("seed closure risk: id={} path={} risk={}", risk.entry_id, risk.executable_path.display(), risk.risk,);
+    }
+    Ok(())
 }
 
 fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {

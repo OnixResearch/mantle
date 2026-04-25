@@ -2212,6 +2212,23 @@ impl ProofScriptFixture {
 
         let cargo_body = r#"#!/bin/sh
 set -eu
+if [ "${1:-}" = "run" ]; then
+  out=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--output" ]; then
+      shift
+      out="${1:?}"
+      break
+    fi
+    shift
+  done
+  [ -n "$out" ] || { printf 'missing stage0 inventory output\n' >&2; exit 1; }
+  mkdir -p "${out%/*}"
+  printf '{ executable_entries = [], source_entries = [] }\n' > "$out"
+  printf 'stage0 inventory written: %s\n' "$out"
+  printf 'seed closure risk: fixture\n'
+  exit 0
+fi
 : "${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}"
 if [ -n "${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}" ]; then
   printf 'launched\n' > "$CRUNCH_TEST_PROOF_COMMAND_SENTINEL"
@@ -2914,6 +2931,42 @@ fn prove_self_hosting_script_exports_no_host_tools_inventory_and_blocks_host_too
         "blocked host tools must stay off helper PATH"
     );
     assert!(stderr.contains("no-host-tools stage0 inventory"), "summary must name inventory, stderr:\n{stderr}");
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let inventory = fixture.repo_dir.join("target/generated-stage0-inventory.ncl");
+    let bundle_dir = fixture.repo_dir.join("target/generated-inventory-proof");
+
+    let output = fixture.run_args_with_envs(
+        &[
+            "--generate-stage0-inventory",
+            "target/generated-stage0-inventory.ncl",
+            "--bundle-dir",
+            "target/generated-inventory-proof",
+        ],
+        &[
+            ("CRUNCH_STAGE0_SEED_SANDBOX_ENTRY", fixture.tool_dir.join("bwrap").display().to_string()),
+            ("CRUNCH_STAGE0_SEED_SANDBOX_SHELL", fixture.tool_dir.join("static-sh").display().to_string()),
+            ("CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT", fixture.tool_dir.display().to_string()),
+            ("CRUNCH_STAGE0_SEED_BUILD_TOOLS", fixture.tool_dir.display().to_string()),
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert!(inventory.exists(), "generated inventory should exist: {}", inventory.display());
+    assert_eq!(std::fs::read_to_string(bundle_dir.join("no-host-tools.txt")).unwrap().trim(), "1");
+    assert_eq!(
+        std::fs::read_to_string(bundle_dir.join("stage0-inventory.txt")).unwrap().trim(),
+        inventory.display().to_string()
+    );
+    assert!(stderr.contains("stage0 inventory seed policy: explicit CRUNCH_STAGE0_SEED_* paths only"));
+    assert!(stderr.contains("no PATH or /nix/store discovery"));
+    assert!(stderr.contains(&format!("no-host-tools stage0 inventory: {}", inventory.display())));
 }
 
 #[cfg(unix)]
