@@ -12,6 +12,9 @@ use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_reproducibility::DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION;
 use crate::release_reproducibility::ReleaseReproduceRequest;
+use crate::release_reproducibility::ReproducibilityStatus;
+use crate::release_reproducibility::VerifiedReproducibilityReport;
+use crate::release_reproducibility::load_bundle_reproducibility_report;
 use crate::release_reproducibility::reproduce_release_artifacts;
 use crate::release_source::write_tracked_source_archive;
 use crate::witness_handoff::create_witness_request_directory;
@@ -149,6 +152,7 @@ fn cmd_release_create(
 
 fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
     let manifest = verify_release_evidence_bundle(&bundle_dir)?;
+    let reproducibility = load_bundle_reproducibility_report(&bundle_dir, &manifest)?;
     if json {
         let rendered = serde_json::to_string(&manifest)
             .map_err(|err| RunError::Internal(format!("serializing verified release evidence manifest: {err}")))?;
@@ -160,8 +164,22 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
         println!("source digest: {}", manifest.source_archive.digest_blake3);
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
+        print_reproducibility_summary(reproducibility.as_ref());
     }
     Ok(())
+}
+
+fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilityReport>) {
+    match reproducibility {
+        Some(report) => {
+            println!("reproducibility: {}", report.status.as_str());
+            println!("reproducibility report: {}", report.path.display());
+            println!("reproducibility report digest: {}", report.digest_blake3);
+        }
+        None => {
+            println!("reproducibility: {}", ReproducibilityStatus::Absent.as_str());
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -23,6 +23,8 @@ use crunch_attestation::WitnessAttestation;
 use crunch_attestation::encode_detached_signature;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
+use crunch_release_core::ReleaseReproducibilityReport;
+use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use predicates::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -500,6 +502,38 @@ fn write_rebuild_script(script_path: &Path, body: &str) {
     }
 }
 
+#[cfg(unix)]
+fn write_matched_default_reproducibility_report(
+    temp: &TempDir,
+    bundle_dir: &Path,
+    manifest: &ReleaseEvidenceManifest,
+) -> PathBuf {
+    let rebuild_script = temp.path().join("verify-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("verify-rebuild-output");
+    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .assert()
+        .success();
+    bundle_dir.join("reproducibility-report.json")
+}
+
+fn read_reproducibility_report(report_path: &Path) -> ReleaseReproducibilityReport {
+    serde_json::from_slice(&std::fs::read(report_path).unwrap()).unwrap()
+}
+
+fn write_canonical_reproducibility_report(report_path: &Path, report: ReleaseReproducibilityReport) {
+    let bytes = release_reproducibility_report_canonical_bytes(report).unwrap();
+    write_file(report_path, &bytes);
+}
+
 #[test]
 fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();
@@ -816,6 +850,75 @@ fn release_reproduce_fails_on_output_name_drift() {
         .stderr(predicate::str::contains("output-name drift"));
 
     assert!(report_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_reports_matched_reproducibility_report() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reproducibility: matched"))
+        .stdout(predicate::str::contains(report_path.display().to_string()));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_rejects_non_canonical_reproducibility_report() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+    let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+    write_file(&report_path, serde_json::to_vec_pretty(&report).unwrap().as_slice());
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("reproducibility report is not canonical compact JSON"));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_rejects_reproducibility_report_linkage_mismatch() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+    let mut report = read_reproducibility_report(&report_path);
+    report.source_archive_digest_blake3 = sample_digest(14);
+    write_canonical_reproducibility_report(&report_path, report);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("source_archive_digest_blake3 linkage mismatch"));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_rejects_reproducibility_report_artifact_set_mismatch() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+    let mut report = read_reproducibility_report(&report_path);
+    report.artifacts[0].name = "renamed-crunch".to_string();
+    write_canonical_reproducibility_report(&report_path, report);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("artifact set mismatch"));
 }
 
 #[test]

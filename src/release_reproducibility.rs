@@ -12,10 +12,13 @@ use crunch_release_core::RebuildWorkflowIdentity;
 use crunch_release_core::ReleaseEvidenceManifest;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::ReleaseReproducibilityReportInit;
+use crunch_release_core::ReleaseReproducibilityReportLinkage;
 use crunch_release_core::ReproducibilityArtifactComparison;
 use crunch_release_core::ReproducibilityComparisonResult;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::release_reproducibility_report_digest_blake3;
+use crunch_release_core::validate_release_reproducibility_report_artifact_names;
+use crunch_release_core::validate_release_reproducibility_report_linkage;
 
 use crate::errors::RunError;
 use crate::release_evidence::verify_release_evidence_bundle;
@@ -37,6 +40,30 @@ pub(crate) struct ReleaseReproduceRequest {
     pub rebuild_args: Vec<OsString>,
     pub workflow_version: String,
     pub report_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReproducibilityStatus {
+    Absent,
+    Matched,
+    Mismatched,
+}
+
+impl ReproducibilityStatus {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Absent => "absent",
+            Self::Matched => "matched",
+            Self::Mismatched => "mismatched",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VerifiedReproducibilityReport {
+    pub path: PathBuf,
+    pub digest_blake3: String,
+    pub status: ReproducibilityStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +111,53 @@ pub(crate) fn reproduce_release_artifacts(
         mismatched_count: counts.mismatched_count,
         missing_count: counts.missing_count,
     })
+}
+
+pub(crate) fn load_bundle_reproducibility_report(
+    bundle_dir: &Path,
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<Option<VerifiedReproducibilityReport>, RunError> {
+    let report_path = default_reproducibility_report_path(bundle_dir);
+    if !report_path.exists() {
+        return Ok(None);
+    }
+    let report_bytes = std::fs::read(&report_path)
+        .map_err(|err| RunError::Internal(format!("reading {}: {err}", report_path.display())))?;
+    let report: ReleaseReproducibilityReport = serde_json::from_slice(&report_bytes)
+        .map_err(|err| RunError::Internal(format!("parsing {}: {err}", report_path.display())))?;
+    let canonical_bytes = release_reproducibility_report_canonical_bytes(report.clone()).map_err(core_error)?;
+    if report_bytes != canonical_bytes {
+        return Err(RunError::Internal("release reproducibility report is not canonical compact JSON".to_string()));
+    }
+    let report = validate_report_linkage_and_artifacts(report, manifest)?;
+    let digest_blake3 = blake3::hash(&canonical_bytes).to_hex().to_string();
+    let status = report_status(&report);
+    Ok(Some(VerifiedReproducibilityReport {
+        path: report_path,
+        digest_blake3,
+        status,
+    }))
+}
+
+fn validate_report_linkage_and_artifacts(
+    report: ReleaseReproducibilityReport,
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<ReleaseReproducibilityReport, RunError> {
+    let expected = ReleaseReproducibilityReportLinkage {
+        release_id: manifest.release_id.clone(),
+        source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        proof_bundle_digest_blake3: manifest.proof_bundle.digest_blake3.clone(),
+    };
+    let report = validate_release_reproducibility_report_linkage(report, expected).map_err(core_error)?;
+    let expected_names = manifest.binaries.iter().map(|artifact| artifact.relative_path.clone()).collect::<Vec<_>>();
+    validate_release_reproducibility_report_artifact_names(report, expected_names).map_err(core_error)
+}
+
+fn report_status(report: &ReleaseReproducibilityReport) -> ReproducibilityStatus {
+    if report.artifacts.iter().all(|artifact| artifact.result == ReproducibilityComparisonResult::Matched) {
+        return ReproducibilityStatus::Matched;
+    }
+    ReproducibilityStatus::Mismatched
 }
 
 fn validate_request(request: &ReleaseReproduceRequest) -> Result<(), RunError> {
@@ -277,7 +351,13 @@ fn write_report(path: &Path, report: ReleaseReproducibilityReport) -> Result<(),
 }
 
 fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
-    report_path.map(Path::to_path_buf).unwrap_or_else(|| bundle_dir.join(DEFAULT_REPORT_FILE_NAME))
+    report_path
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| default_reproducibility_report_path(bundle_dir))
+}
+
+fn default_reproducibility_report_path(bundle_dir: &Path) -> PathBuf {
+    bundle_dir.join(DEFAULT_REPORT_FILE_NAME)
 }
 
 fn collect_unexpected_rebuilt_outputs(

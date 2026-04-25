@@ -45,12 +45,16 @@
 
 ## Phase 3: Verification and docs
 
-- [ ] I5 Extend `release verify` to load optional reproducibility reports,
+- [x] I5 Extend `release verify` to load optional reproducibility reports, ✅ 1m 28s (started: 2026-04-25T19:16:19Z → completed: 2026-04-25T19:17:47Z)
       validate canonical report encoding and report digest, verify report linkage
       to the bundle's release identifier, source archive digest, and proof bundle
       digest, and require the report artifact set to match the published release
       artifact set before any reproducible-release claim is emitted.
       [covers=release.evidence.reproducible.report,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
+      Evidence: `cargo test -p crunch --test release_cli release_verify_`
+      passed in pueue task 21 (19 tests), covering matched report loading,
+      non-canonical report rejection, linkage mismatch, artifact-set
+      mismatch, and existing bundle/linkage drift failures.
 - [ ] I6 Extend `release verify` JSON output with reproducibility status
       `absent`, `matched`, or `mismatched`, and add an option for callers to
       require matched reproducibility evidence.
