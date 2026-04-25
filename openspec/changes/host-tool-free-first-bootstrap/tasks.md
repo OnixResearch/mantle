@@ -223,11 +223,12 @@
       binary, asserts the attempted host bwrap receives `PermissionDenied`, and
       asserts the audit event is `policy_decision=denied` for `execve` with no
       inventory entry before execution.
-- [ ] I19 Update README and `docs/bootstrap-stage0-inventory.md` with the
+- [x] I19 Update README and `docs/bootstrap-stage0-inventory.md` with the ✅ <1m (completed: 2026-04-25T22:46:38Z)
       protected-phase boundary, exact allowed kernel-interface list, inventory
       schema/path, predeclared seed-artifact rules, seccomp supervisor behavior,
       and no-host-tools proof claim.
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.proof.mode]
+      Evidence: `rg -n -- '--no-host-tools|protected-exec-audit|seccomp|bootstrap/stage0-inventory.ncl|sandbox-entry' README.md docs/bootstrap-stage0-inventory.md` found the updated operator docs; `openspec validate host-tool-free-first-bootstrap --strict` passed; `git diff --check` passed. Docs now describe the no-host-tools helper mode, protected phase start/end, allowed direct Linux interfaces, Nickel inventory path/schema, seed roles, fail-closed seccomp behavior, proof audit bundle file, and bounded proof claim.
 
 ## Validation
 

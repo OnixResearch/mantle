@@ -752,9 +752,32 @@ but it also scrubs `nix-build`, `nix-store`, `nix-shell`, and `nix` from the
 proof runner `PATH` before it invokes `cargo test`, so hidden Nix-command
 fallbacks fail loudly.
 
+Use `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>`
+for the host-tool-free stage0 proof mode. The inventory is a concrete Nickel
+file matching `bootstrap/stage0-inventory.ncl`; it must predeclare absolute
+operator-supplied seed artifacts with BLAKE3 digests. Required executable seed
+roles are `sandbox-entry` and `sandbox-shell`; additional allowed seed roles are
+`bootstrap-toolchain-tool` and `bootstrap-build-tool`. In this mode the helper
+captures an absolute Cargo path before proof PATH poisoning, then removes
+`git`, `tar`, `cp`, `sh`, `cargo`, `bwrap`, and Nix commands from the proof
+PATH used by stage0. The stage0 `self-build` command passes `--no-host-tools
+--stage0-inventory <file>` and installs the protected exec supervisor before
+sandbox startup.
+
+The protected stage begins at no-host-tools stage0 `crunch self-build` entry and
+ends only after crunch-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl`
+outputs have been built, exported, verified, selected, and recorded in the proof
+audit. Linux direct kernel interfaces allowed in that protected phase are the
+seccomp user-notification listener, `execve`/`execveat` interception,
+`/proc/<pid>/mem` reads for syscall path bytes, file metadata and content reads
+needed to compute BLAKE3 digests, and normal process wait/exit reporting. Any
+undeclared executable, digest mismatch, unsupported supervisor setup, relative
+or unreadable exec path, or forbidden host helper fails closed before execution.
+
 This helper still does not prove a full-source bootstrap root or reproducible
-release artifacts. It proves either a fixed-point self-hosting rebuild, or the
-same rebuild under the stricter non-Nix-host command-availability contract.
+release artifacts. It proves either a fixed-point self-hosting rebuild, the same
+rebuild under the stricter non-Nix-host command-availability contract, or the
+host-tool-free stage0 boundary against explicitly declared seed artifacts.
 
 Successful runs write a proof bundle to `target/self-hosting-proof/run-...`
 and refresh `target/self-hosting-proof/latest` to point at that bundle. Pass
@@ -810,7 +833,8 @@ Each proof bundle contains:
   and stage2 binaries, plus the stage2 `bwrap` and `busybox` paths and digests,
   store or state locations, copied stage metadata, proof mode, and recorded
   stage0 prerequisite paths
-- `summary.txt` — a short human-readable digest summary
+- `summary.txt` — a short human-readable digest summary, including protected
+  execution audit digest and protected transition summary when present
 - `binaries/stage1-crunch` and `binaries/stage2-crunch` — durable copies of
   the fixed-point binaries, so release packaging and witness rebuilds do not
   depend on temporary proof scratch paths surviving after the proof exits
@@ -818,13 +842,20 @@ Each proof bundle contains:
   `diagnostics.txt` files from the stage audit bundles
 - `stage0-prerequisites/inventory.md` — copied stage0 trust inventory used by
   the proof bundle
+- `protected-exec-audit.json` — machine-readable protected execution audit with
+  no-host-tools mode, optional stage0 inventory digest, blocked host command
+  set, fallback markers, crunch-built sandbox transition records, and final
+  result
 
 The proof does demonstrate a fixed point: stage1 and stage2 must match
 byte-for-byte, and the stage0 and stage2 crunch-built `busybox` and `bwrap`
 outputs must match too. In `--non-nix-host` mode it also proves that the stage0
 command path completed with `nix-build`, `nix-store`, `nix-shell`, and `nix`
-absent from `PATH`. It does not yet demonstrate bit-for-bit reproducible
-release artifacts or a full-source bootstrap root.
+absent from `PATH`. In `--no-host-tools` mode it additionally proves that
+stage0 used declared seed sandbox artifacts under protected exec supervision and
+that common host helper names were absent from the stage0 PATH. It does not yet
+demonstrate bit-for-bit reproducible release artifacts or a full-source
+bootstrap root.
 
 ### Release evidence bundles
 

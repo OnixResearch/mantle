@@ -3,10 +3,13 @@
 This file tracks the stricter first-bootstrap view.
 
 It is not the same thing as the default checked-in self-hosting proof.
-Today the repo has two proof modes:
+Today the repo has three proof modes:
 - default fixed-point proof: stage1 -> stage2 identity
 - stricter `--non-nix-host` proof: same fixed point, with the proof runner
   `PATH` scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
+- `--no-host-tools --stage0-inventory <file>` proof: same fixed point, with
+  stage0 launched through a concrete declared seed inventory and protected exec
+  supervision while common host helpers are absent from the proof PATH
 
 Neither mode by itself proves a full-source bootstrap root or reproducible
 release artifacts. A later `crunch release create` bundle can package the proof
@@ -19,8 +22,14 @@ does not widen the underlying bootstrap claim.
 
 ## Contract boundary
 
-For the planned non-Nix-host first-bootstrap path, every stage0 dependency must
-fit one of these buckets:
+For the protected no-host-tools first-bootstrap path, the protected phase starts
+at stage0 `crunch self-build --no-host-tools --stage0-inventory <file>` entry
+before source staging, fetch, sandbox, or build work. It ends only after the
+exact crunch-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` outputs are
+built, exported to disk, executable-checked, BLAKE3-hashed, selected as the
+later-stage sandbox entry and shell, and recorded in `protected-exec-audit.json`.
+
+Every protected-phase dependency must fit one of these buckets:
 
 - **Host prerequisite**: installed or supplied by the operator before the long
   bootstrap starts.
@@ -29,6 +38,33 @@ fit one of these buckets:
 - **Crunch-built output**: produced later in the bootstrap chain.
 
 Anything outside those buckets is a hidden trust edge.
+
+Allowed direct Linux kernel interfaces in the protected phase are intentionally
+narrow: seccomp user-notification setup/listener handling, interception of
+`execve` and `execveat`, `/proc/<pid>/mem` reads needed to copy syscall path
+bytes from the trapped task, file metadata and content reads needed for BLAKE3
+digest verification, and normal process wait/exit reporting. Unsupported
+seccomp setup, unsupported audit architecture, missing listener inheritance,
+relative or unreadable exec paths, undeclared executables, digest mismatch, or
+forbidden host helper names fail closed before execution.
+
+The concrete no-host-tools inventory is a Nickel file using the schema in
+`bootstrap/stage0-inventory.ncl`. The checked-in file is the typed empty schema;
+real proof runs pass a generated or operator-supplied concrete inventory with
+absolute paths and digests. `executable_entries` and `source_entries` share these
+fields: `schema_version`, `id`, `role`, `phase`, `digest`,
+`provenance_category`, `provenance`, `allowed_reason`, `owner`, and `required`.
+Executable entries add `executable_path`; source entries add `urls` and
+`extraction_rules`. Crunch-owned fingerprints use `digest.algorithm = "blake3"`.
+Non-BLAKE3 hashes are accepted only for interoperability and require an explicit
+`interoperability_reason`.
+
+Allowed protected executable seed roles are exactly `sandbox-entry`,
+`sandbox-shell`, `bootstrap-toolchain-tool`, and `bootstrap-build-tool`.
+`sandbox-entry` and `sandbox-shell` are required and must be unique. Nix commands
+are never valid seed roles. Protected source entries are allowlists: only listed
+URLs may be fetched, extraction rules must be explicit, and downloaded bytes or
+extracted trees must match the declared digest.
 
 ## Current stage0 buckets
 
@@ -39,8 +75,8 @@ Anything outside those buckets is a hidden trust edge.
 | Linux host | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | bwrap build service and current proof run on Linux only | non-Linux first bootstrap not in scope yet |
 | Checkout source tree | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 still starts from the current repo checkout before crunch can rebuild itself | source staging now copies a fixed allowlist of top-level entries with Rust filesystem calls |
 | Source-tree `vendor-deps/` directory + `.cargo/vendor-config.toml` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 reuses the repo's vendored Cargo inputs instead of running host `cargo vendor` | staging validates `Cargo.lock` registry/git packages against `vendor-deps/`, verifies Cargo's `.cargo-checksum.json` file digests, and checks Cargo-format SHA-256 package checksums where Cargo.lock provides them |
-| Host `bwrap` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before crunch has built its own | later self-build stages switch to crunch-built `bwrap` |
-| Static `SNIX_BUILD_SANDBOX_SHELL` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | must be explicit; hidden realization is not acceptable for the stronger claim |
+| Host `bwrap` | default `crunch self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before crunch has built its own | not accepted by no-host-tools mode unless it is explicitly declared as the `sandbox-entry` seed with a matching BLAKE3 digest |
+| Static `SNIX_BUILD_SANDBOX_SHELL` | default `crunch self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | no-host-tools mode uses the declared `sandbox-shell` seed and fails closed on digest drift |
 | Host Rust nightly + `cargo` + `clang` + `mold` + `pkg-config` + OpenSSL dev files | `./scripts/prove-self-hosting.sh` | stage0 helper builds the checkout test binary and prepares the proof env | proof-only prerequisites, not required by `crunch bootstrap --fetch` |
 | About 4 GiB free in the selected proof scratch filesystem (`target/self-hosting-proof/work/` by default, or `CRUNCH_PROOF_SCRATCH_DIR`) | `./scripts/prove-self-hosting.sh` | proof stores two full bootstrap chains plus audit bundles | capacity requirement, not a trust root, but still a stage0 prerequisite |
 
@@ -85,8 +121,17 @@ What the checked-in self-hosting proof demonstrates today:
 - the stage0 and stage2 crunch-built `busybox` and `bwrap` outputs must match
 - in `--non-nix-host` mode, the stage0 command path completes with
   `nix-build`, `nix-store`, `nix-shell`, and `nix` absent from `PATH`
+- in `--no-host-tools` mode, stage0 receives `--no-host-tools
+  --stage0-inventory <file>`, common host helpers (`git`, `tar`, `cp`, `sh`,
+  `cargo`, `bwrap`, and Nix commands) are absent from the proof PATH, the
+  declared `sandbox-entry` and `sandbox-shell` seeds are digest-checked, and the
+  seccomp supervisor denies undeclared child exec attempts before execution
 - successful proof bundles copy this inventory, durable stage1/stage2 binary
   artifacts, and the resolved stage0 prerequisite paths they used
+- successful proof bundles also write `protected-exec-audit.json` with the
+  stage0 inventory digest when no-host-tools mode is active, blocked host
+  command set, fallback-event markers, protected transition records, and final
+  result
 - `crunch release create` can copy a full proof bundle plus this inventory into
   a release-evidence bundle, and `crunch release verify` can later re-check
   bundle-local integrity and proof-context using bundle-local contents only
@@ -103,4 +148,4 @@ What it does not demonstrate yet:
   reproducibility report, and any separately satisfied independent-agreement
   report; release verification keeps these evidence classes separate so one
   label does not silently imply another
-- removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`
+- removal of remaining default proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`; no-host-tools mode narrows the stage0 execution boundary but still requires operator-supplied seed artifacts and does not make them source-built
