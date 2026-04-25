@@ -3,8 +3,12 @@
 - [ ] Add `--hostname localhost` to `COMMON_BWRAP_ARGS` in `vendor/snix-build/src/bwrap/mod.rs`
 - [ ] Add `/proc` masking args (`--ro-bind-try /dev/null /proc/cpuinfo` etc.) after `--proc /proc`
 - [ ] Add `/dev/random` and `/dev/urandom` masking args (`--ro-bind /dev/null /dev/random` etc.) after `--dev /dev`
+- [ ] Add `--tmpfs /dev/shm` after `--dev /dev` to isolate shared memory per build
 - [ ] Add `--unshare-cgroup-try` to `COMMON_BWRAP_ARGS`
-- [ ] Add unit test: assert `COMMON_BWRAP_ARGS` contains `--hostname`, proc masks, dev masks, cgroup unshare
+- [ ] Verify no code path mounts host `/sys` into the sandbox (bwrap root is `--tmpfs /` so `/sys` should be absent; add assertion test)
+- [ ] Replace host `/etc/resolv.conf` and `/etc/services` bind-mounts for network-enabled builds with synthetic files written alongside existing `/etc/passwd`, `/etc/group`, `/etc/hosts`
+- [ ] Add unit test: assert `COMMON_BWRAP_ARGS` contains `--hostname`, proc masks, dev masks, `/dev/shm` isolation, cgroup unshare
+- [ ] Add unit test: network-enabled sandbox uses synthetic `resolv.conf`, not host bind-mount
 
 ## Phase 2: Build environment defaults
 
@@ -36,3 +40,10 @@
 - [ ] Run `cargo test -p snix-build -p crunch-build -p crunch-store -p crunch-pipeline` and verify all pass
 - [ ] Run self-hosting proof (`cargo test -p crunch --test self_hosting -- --ignored --nocapture`) or verify it compiles and lists
 - [ ] Verify bootstrap builds succeed with `NIX_BUILD_CORES=1` (run `crunch self-build --store /tmp/sandbox-determinism-test --no-substitute -j 4`)
+- [ ] Verify FOD fetches succeed with synthetic `resolv.conf` (run a `crunch.fetchurl` build with a network URL)
+
+## Deferred (documented but out of scope)
+
+- Seccomp syscall filtering (separate change with its own compatibility surface)
+- Time namespace (`--unshare-time`, kernel 5.6+, bwrap lacks support)
+- Full `/proc` virtualization via FUSE-based procfs filter

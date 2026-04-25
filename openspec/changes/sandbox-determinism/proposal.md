@@ -15,8 +15,12 @@ exceed that baseline.
 - **Sandbox hostname**: set a fixed hostname inside the UTS namespace.
 - **`/proc` masking**: hide host-specific hardware topology files.
 - **`/dev` restriction**: replace full devtmpfs with a minimal device set.
+- **`/sys` masking**: hide sysfs hardware topology and device information.
+- **FOD `/etc` isolation**: use synthetic `/etc/resolv.conf` and `/etc/services`
+  for network-enabled builds instead of bind-mounting host files.
 - **Output permission normalization**: make exported file modes deterministic.
-- **Output timestamp normalization**: reset mtimes on exported store paths.
+- **Output timestamp normalization**: reset mtimes on exported store paths
+  (files, directories, and symlinks).
 - **`NIX_BUILD_CORES` default**: pin to a deterministic value.
 - **Cgroup namespace isolation**: unshare cgroups to hide host cgroup paths.
 - **`HashMap` audit in orchestrator**: replace non-deterministic iteration
@@ -27,9 +31,12 @@ exceed that baseline.
 ### New Capabilities
 - `sandbox-hostname`: fixed hostname inside all sandbox builds
 - `proc-masking`: hide `/proc/cpuinfo`, `/proc/meminfo`, and related files
-- `dev-restriction`: minimal `/dev` without random/urandom
+- `sys-masking`: hide `/sys/devices/system/cpu/` and related sysfs paths
+- `dev-restriction`: minimal `/dev` without random/urandom or /dev/shm
+- `fod-etc-isolation`: synthetic resolv.conf/services for FOD builds
 - `output-permission-normalization`: deterministic file modes on store outputs
 - `output-timestamp-normalization`: deterministic mtimes on store outputs
+  (including symlink lmtime)
 - `cgroup-isolation`: unshared cgroup namespace
 
 ### Modified Capabilities
@@ -45,6 +52,16 @@ exceed that baseline.
   `crates/crunch-build/src/hermeticity.rs`
 - **APIs**: `export_castore_to_disk()` gains permission/timestamp normalization;
   `SANDBOX_ENV_VARS` changes `NIX_BUILD_CORES` default
-- **Dependencies**: none
+- **Dependencies**: `filetime` crate added to `crunch-store`
 - **Testing**: unit tests for each normalization path; self-hosting proof
   must still pass with the tightened sandbox
+
+## Deferred / Future Work
+
+- **Seccomp filtering**: syscall allowlisting for sandbox processes (deeper
+  defense, separate effort with its own compatibility surface)
+- **Time namespace (`--unshare-time`)**: kernel 5.6+ feature that could
+  prevent `clock_gettime(CLOCK_REALTIME)` leakage, but bwrap does not
+  support it yet
+- **Full `/proc` virtualization**: current approach masks individual files;
+  a procfs-filtering FUSE layer would be more complete but much heavier

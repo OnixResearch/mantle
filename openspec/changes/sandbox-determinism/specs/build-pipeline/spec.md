@@ -126,10 +126,16 @@ matching the `SOURCE_DATE_EPOCH` sandbox default.
 - WHEN `export_castore_to_disk` creates the directory
 - THEN the directory's mtime is Unix timestamp `1`
 
+#### Scenario: Exported symlink has fixed lmtime
+
+- GIVEN a castore symlink node
+- WHEN `export_castore_to_disk` creates the symlink
+- THEN the symlink's lmtime (not following the link) is Unix timestamp `1`
+
 ### Requirement: Deterministic NIX_BUILD_CORES default
 
-The default value of `NIX_BUILD_CORES` in the sandbox environment
-MUST be `1`, not `0`.
+The sandbox MUST set the default value of `NIX_BUILD_CORES` to `1`,
+not `0`.
 
 Derivations MAY override `NIX_BUILD_CORES` via their environment
 (it remains in `ALLOWED_SANDBOX_ENV_OVERRIDES`).
@@ -163,6 +169,58 @@ because cgroup namespace unsharing requires kernel support that may
 not be available on all hosts. The sandbox MUST NOT fail if cgroup
 unsharing is unsupported.
 
+### Requirement: Sysfs isolation
+
+The sandbox MUST NOT expose the host's `/sys` filesystem to build
+processes. The `/sys` mount point MUST either be absent or contain
+only an empty tmpfs.
+
+#### Scenario: Build script tries to read /sys/devices
+
+- GIVEN a derivation whose build script reads `/sys/devices/system/cpu/`
+- WHEN the build executes inside the sandbox
+- THEN the read fails or returns empty (no host CPU topology exposed)
+
+#### Scenario: /sys is not mounted
+
+- GIVEN the bwrap argument list and sandbox root tmpfs
+- WHEN the sandbox is initialized
+- THEN no `--bind` or `--ro-bind` argument maps a host `/sys` path
+  into the sandbox
+
+### Requirement: FOD /etc isolation
+
+The sandbox MUST NOT bind-mount the host's `/etc/resolv.conf` or
+`/etc/services` into the sandbox for network-enabled (fixed-output
+derivation) builds. The sandbox MUST provide synthetic versions of
+these files with deterministic content.
+
+#### Scenario: FOD build sees synthetic resolv.conf
+
+- GIVEN a fixed-output derivation with network access
+- WHEN the build executes inside the sandbox
+- THEN `/etc/resolv.conf` contains a fixed, deterministic nameserver
+  configuration (not the host's resolv.conf)
+
+#### Scenario: Non-FOD build has no resolv.conf
+
+- GIVEN a non-FOD derivation without network access
+- WHEN the build executes inside the sandbox
+- THEN `/etc/resolv.conf` is absent or contains only the synthetic
+  localhost entry (no host DNS config is visible)
+
+### Requirement: /dev/shm isolation
+
+The sandbox MUST provide a private, empty `/dev/shm` for each build.
+Shared memory segments from the host or other builds MUST NOT be
+visible inside the sandbox.
+
+#### Scenario: Build sees empty /dev/shm
+
+- GIVEN a derivation whose build script lists `/dev/shm`
+- WHEN the build executes inside the sandbox
+- THEN `/dev/shm` is empty (a fresh tmpfs)
+
 ### Requirement: Ordered maps in build orchestrator
 
 The build orchestrator MUST NOT use `HashMap` in any code path where
@@ -182,10 +240,24 @@ order has no observable effect.
 
 ### Requirement: SOURCE_DATE_EPOCH override policy
 
-`SOURCE_DATE_EPOCH` MUST remain in `ALLOWED_SANDBOX_ENV_OVERRIDES`.
+The sandbox MUST keep `SOURCE_DATE_EPOCH` in
+`ALLOWED_SANDBOX_ENV_OVERRIDES`.
 
 When a derivation overrides `SOURCE_DATE_EPOCH`, the sandbox MUST
 still emit a hermeticity audit event of kind `EnvironmentOverride`
 in `Practical` mode and MUST reject the override in `Strict` mode.
 
 This is the existing behavior and MUST NOT change.
+
+#### Scenario: SOURCE_DATE_EPOCH override in Practical mode
+
+- GIVEN a derivation that sets `SOURCE_DATE_EPOCH` to `315532800`
+- WHEN the sandbox environment is constructed in Practical mode
+- THEN `SOURCE_DATE_EPOCH` is `315532800`
+- AND a hermeticity audit event of kind `EnvironmentOverride` is emitted
+
+#### Scenario: SOURCE_DATE_EPOCH override in Strict mode
+
+- GIVEN a derivation that sets `SOURCE_DATE_EPOCH` to `315532800`
+- WHEN the sandbox environment is constructed in Strict mode
+- THEN the sandbox rejects the build with an error

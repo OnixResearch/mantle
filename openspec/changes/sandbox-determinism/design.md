@@ -18,6 +18,7 @@ bit-for-bit divergence across machines.
 - Seccomp filtering (deeper defense, separate effort)
 - Full `/proc` virtualization (masking specific files is sufficient)
 - Changing the NAR/castore hashing model (already content-addressed)
+- Time namespace isolation (bwrap lacks support; kernel 5.6+ feature)
 
 ## Decisions
 
@@ -149,6 +150,62 @@ Same for `substitutions`. Internal lookup tables (like
 `source_closure_cache`) can stay `HashMap` since they are never
 iterated into output.
 
+### 9. Mask `/sys` hardware topology
+
+**Choice:** Bind-mount a read-only tmpfs over `/sys` to hide sysfs
+hardware information. Allow only `/sys/fs/cgroup` if cgroup namespace
+unsharing is unavailable.
+
+**Rationale:** sysfs exposes CPU topology (`/sys/devices/system/cpu/`),
+block device info (`/sys/class/block/`), network interfaces
+(`/sys/class/net/`), and DMI/BIOS data (`/sys/class/dmi/`). Build
+scripts that auto-detect hardware features via sysfs produce
+host-dependent output. Nix does not mount `/sys` at all in its
+sandbox.
+
+**Alternative:** Don't mount `/sys` at all. This is simpler and
+matches Nix, but some builds may try to read `/sys/fs/cgroup`.
+Since we add `--unshare-cgroup-try`, the cgroup tree is already
+isolated, so a full `/sys` absence is acceptable.
+
+**Implementation:** bwrap already does not explicitly mount `/sys`.
+Verify that no code path adds it. If the `--tmpfs /` root already
+excludes `/sys`, this is a no-op validation. Add an assertion test.
+
+### 10. Synthetic `/etc` for FOD builds
+
+**Choice:** Replace host bind-mounts of `/etc/resolv.conf` and
+`/etc/services` with synthetic files for network-enabled (FOD) builds.
+
+**Rationale:** `vendor/snix-build/src/bwrap/mod.rs` currently does
+`--ro-bind /etc/resolv.conf /etc/resolv.conf` and
+`--ro-bind /etc/services /etc/services` when `allow_network` is true.
+This leaks the host DNS resolver configuration and service database
+into FOD build outputs. While FODs are hash-checked, the leaked
+content can affect build behavior (e.g., which DNS server is queried
+first, timeouts, search domains) and log output.
+
+**Alternative:** Keep host files. Acceptable for now since FOD outputs
+are hash-verified, but the leak is still observable in build logs.
+
+**Implementation:** Write synthetic `resolv.conf`
+(`nameserver 127.0.0.1`) and `services` (minimal subset) alongside
+the existing synthetic `/etc/passwd`, `/etc/group`, and `/etc/hosts`.
+Bind-mount the synthetic versions instead of the host files.
+
+### 11. Mask `/dev/shm`
+
+**Choice:** Bind-mount a read-only tmpfs over `/dev/shm` after
+`--dev /dev`.
+
+**Rationale:** bwrap's `--dev` creates a full devtmpfs that includes
+`/dev/shm`. Shared memory segments from the host or from other
+sandbox runs can leak state. A fresh empty tmpfs isolates each build.
+
+**Implementation:** Add `--tmpfs /dev/shm` after `--dev /dev` in
+`COMMON_BWRAP_ARGS`. This gives each sandbox a private, empty
+shared memory filesystem.
+
 ## Risks / Trade-offs
 
 **[Broken builds from masked /dev/urandom]** Some build scripts
@@ -170,3 +227,15 @@ should be declared in the derivation, not auto-detected.
 
 **[filetime dependency]** Adds one new crate to `crunch-store`.
 The crate is well-maintained and widely used (1.3B downloads).
+
+**[Synthetic resolv.conf breaks some FOD fetches]** A `nameserver
+127.0.0.1` default requires a local DNS resolver. If no resolver is
+running, DNS resolution fails. Mitigated by also including
+`nameserver 8.8.8.8` as a fallback, or by keeping the host
+`resolv.conf` for the initial phase and deferring synthetic DNS
+to a future hardening pass.
+
+**[/sys absence breaks rare builds]** Some builds legitimately read
+sysfs for hardware feature detection. These builds will fail, which
+is the correct outcome for reproducibility. The derivation should
+declare the detected feature as an explicit input.
