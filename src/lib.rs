@@ -4,3 +4,4 @@
 
 pub mod bootstrap;
 pub mod errors;
+pub mod protected_exec;

@@ -2,12 +2,17 @@
 
 ## Phase 1: Protected execution boundary
 
-- [ ] I1 Add a pure `ProtectedExecPolicy` model that classifies allowed
+- [x] I1 Add a pure `ProtectedExecPolicy` model that classifies allowed ✅ 3m 51s (started: 2026-04-25T21:20:12Z → completed: 2026-04-25T21:24:03Z)
       protected-phase executables from the stage0 inventory and rejects every
       undeclared host path, forbidden Nix command, disallowed seed role,
       missing provenance category, and non-BLAKE3 digest lacking an
       interoperability reason. [covers=bootstrap.hosttoolfree.exec.boundary]
-- [ ] I2 Add `bootstrap/stage0-inventory.ncl` as the typed Nickel source
+      Evidence: pueue task 45 passed `cargo test -p crunch protected_exec -- --nocapture`
+      with 8 protected-exec tests, covering allowed declared seeds,
+      undeclared path rejection, digest mismatch rejection, forbidden Nix
+      executable rejection, provenance rejection, relative path rejection,
+      non-BLAKE3 interoperability enforcement, and source URL allowlisting.
+- [x] I2 Add `bootstrap/stage0-inventory.ncl` as the typed Nickel source ✅ 3m 51s (started: 2026-04-25T21:20:12Z → completed: 2026-04-25T21:24:03Z)
       inventory plus a Rust `Stage0Inventory` validation entry point. The model
       must cover executable seed entries and non-executable source entries with
       schema version, stable id, role, phase, absolute executable path for
@@ -15,6 +20,10 @@
       category/text, allowed reason, required flag, digest algorithm/hex,
       optional interoperability reason, and phase/role fields.
       [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: `src/protected_exec.rs` defines `Stage0Inventory`, executable
+      entries, source entries, digest/provenance validation, and source URL
+      allowlisting; `bootstrap/stage0-inventory.ncl` provides the typed Nickel
+      inventory schema. Pueue task 45 passed the focused model tests.
 - [ ] I3 Add the generated proof inventory helper that writes
       `target/host-tool-free-stage0/stage0-inventory.ncl` only from explicit
       `CRUNCH_STAGE0_SEED_SANDBOX_ENTRY`, `CRUNCH_STAGE0_SEED_SANDBOX_SHELL`,
