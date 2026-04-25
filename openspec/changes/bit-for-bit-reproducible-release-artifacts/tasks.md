@@ -74,10 +74,15 @@
       `cargo test -p crunch-release-core` passed in pueue task 34
       (16 tests), and `cargo check -p crunch-release-core --target
       wasm32-unknown-unknown` passed in pueue task 33.
-- [ ] I8 Update release manifests/report summaries so ordinary bundle-local
+- [x] I8 Update release manifests/report summaries so ordinary bundle-local ✅ 1m 24s (started: 2026-04-25T19:27:35Z → completed: 2026-04-25T19:28:59Z)
       integrity remains separate from reproducible-release evidence and the
       manifest cannot imply reproducibility without a verified report.
       [covers=release.evidence.reproducible.claim.gate]
+      Evidence: `cargo test -p crunch --test release_cli release_` passed in
+      pueue task 36 (41 tests), including assertions that `claim_scope`
+      remains `packaged-integrity-evidence`, no `reproducible_release`
+      manifest flag is emitted, and reproducibility status/report data stays
+      separate in release verify output.
 - [ ] I9 Update release docs to reserve the bit-for-bit reproducible release
       label for bundles with a verified reproducibility report whose artifact
       set matches the published release artifact set.

@@ -880,6 +880,8 @@ fn release_create_can_package_optional_reproducibility_report() {
     let packaged_manifest =
         serde_json::from_slice::<serde_json::Value>(&std::fs::read(packaged_bundle_dir.join("manifest.json")).unwrap())
             .unwrap();
+    assert_eq!(packaged_manifest["claim_scope"], "packaged-integrity-evidence");
+    assert!(packaged_manifest.get("reproducible_release").is_none());
     assert_eq!(
         packaged_manifest["reproducibility_report"]["relative_path"],
         "reproducibility/reproducibility-report.json"
@@ -950,6 +952,8 @@ fn release_verify_json_reports_matched_reproducibility() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
 
+    assert_eq!(json["manifest"]["claim_scope"], "packaged-integrity-evidence");
+    assert!(json["manifest"].get("reproducible_release").is_none());
     assert_eq!(json["reproducibility_status"], "matched");
     assert_eq!(json["reproducibility_report"]["path"], report_path.display().to_string());
     assert_eq!(json["reproducibility_report"]["digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_LEN);
