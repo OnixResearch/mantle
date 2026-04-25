@@ -43,7 +43,7 @@ say that independent rebuild agreement has been reached.
 
 - **Files**: `crates/crunch-attestation-core`, `crates/crunch-attestation`,
   `src/attest_cmd.rs`, release CLI tests, docs.
-- **APIs**: new agreement report fields and maybe `crunch attest agreement-show`.
+- **APIs**: new release-verification JSON fields on the existing `crunch attest release-verify` surface: `independent_agreement_status`, `independent_agreement_class`, report digest, counts, and witness classifications.
 - **Dependencies**: no network service dependency.
 - **Testing**: canonicalization tests, policy tests, CLI integration tests for
   independent and non-independent witness sets.
