@@ -83,7 +83,7 @@
       malformed lock data. `require_checked_vendor_inputs` validates Cargo
       inputs in Rust instead of shelling out, and grep found no protected-phase
       `Command::new("sh")` or `Command::new("cargo")` helper path.
-- [ ] I9 Add unit tests for allowed stage0 crunch, allowed declared seed roles,
+- [x] I9 Add unit tests for allowed stage0 crunch, allowed declared seed roles, ✅ 0m 7s (started: 2026-04-25T21:47:44Z → completed: 2026-04-25T21:47:51Z)
       declared seed digest mismatch rejection, missing required seed artifact
       fail-closed diagnostics, forbidden absolute host executable, forbidden
       PATH command execution, forbidden Nix seed entries even with matching
@@ -91,6 +91,13 @@
       validation, provenance-category rejection, non-BLAKE3 interoperability
       validation, and each removed protected-phase helper family.
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 72 passed isolated-target
+      `cargo test -p crunch protected_exec -- --nocapture` with 18 protected
+      exec tests. Added explicit fake-`PATH` helper-family coverage for `git`,
+      `tar`, `cp`, `sh`, `cargo`, `bwrap`, and Nix commands; added missing
+      required seed path fail-closed coverage; existing tests cover allowed
+      stage0 crunch/self launch, declared roles, digest mismatch, source URL /
+      extraction validation, provenance, and non-BLAKE3 interoperability.
 
 ## Phase 2: Host-tool-free sandbox entry
 

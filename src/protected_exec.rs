@@ -1170,6 +1170,87 @@ mod tests {
     }
 
     #[test]
+    fn generated_inventory_ignores_fake_path_host_helper_families() {
+        let temp = tempfile::tempdir().unwrap();
+        let sandbox_entry = temp.path().join("seed/bin/bwrap-seed");
+        let sandbox_shell = temp.path().join("seed/bin/busybox-seed");
+        let toolchain_cc = temp.path().join("toolchain/bin/cc");
+        let build_make = temp.path().join("build-tools/make");
+        make_executable(&sandbox_entry, b"sandbox-entry");
+        make_executable(&sandbox_shell, b"sandbox-shell");
+        make_executable(&toolchain_cc, b"toolchain-cc");
+        make_executable(&build_make, b"build-make");
+
+        let fake_path_dir = temp.path().join("fake-path");
+        for helper in [
+            "git",
+            "tar",
+            "cp",
+            "sh",
+            "cargo",
+            "bwrap",
+            "nix",
+            "nix-build",
+            "nix-store",
+            "nix-shell",
+        ] {
+            make_executable(&fake_path_dir.join(helper), helper.as_bytes());
+        }
+        let mut env = env_with_seed_paths(&sandbox_entry, &sandbox_shell, &temp.path().join("toolchain"), &[temp
+            .path()
+            .join("build-tools")]);
+        env.insert(OsString::from("PATH"), fake_path_dir.as_os_str().to_os_string());
+        let config = stage0_seed_config_from_env_map(&env).unwrap();
+        let inventory = build_stage0_inventory_from_seed_config(&config).unwrap();
+        let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
+
+        for helper in [
+            "git",
+            "tar",
+            "cp",
+            "sh",
+            "cargo",
+            "bwrap",
+            "nix",
+            "nix-build",
+            "nix-store",
+            "nix-shell",
+        ] {
+            let path = fake_path_dir.join(helper);
+            let digest_hex = blake3_file_hex(&path).unwrap();
+            let err = policy
+                .decide_exec(&ExecRequest {
+                    path: path.clone(),
+                    digest_hex,
+                })
+                .unwrap_err();
+            assert_eq!(err, ProtectedExecError::UndeclaredExecutable { path });
+        }
+    }
+
+    #[test]
+    fn generated_inventory_missing_required_seed_path_fails_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        let sandbox_shell = temp.path().join("seed/bin/busybox-seed");
+        let toolchain_cc = temp.path().join("toolchain/bin/cc");
+        let build_make = temp.path().join("build-tools/make");
+        make_executable(&sandbox_shell, b"sandbox-shell");
+        make_executable(&toolchain_cc, b"toolchain-cc");
+        make_executable(&build_make, b"build-make");
+        let config = Stage0InventorySeedConfig {
+            sandbox_entry: temp.path().join("missing/bwrap-seed"),
+            sandbox_shell,
+            toolchain_root: temp.path().join("toolchain"),
+            build_tool_inputs: vec![temp.path().join("build-tools")],
+        };
+
+        let err = build_stage0_inventory_from_seed_config(&config).unwrap_err();
+        assert_eq!(err, Stage0InventoryGenerationError::MissingInputPath {
+            path: temp.path().join("missing/bwrap-seed")
+        });
+    }
+
+    #[test]
     fn protected_launcher_records_allowed_non_shell_command() {
         let current_exe = std::env::current_exe().unwrap();
         let digest_hex = blake3_file_hex(&current_exe).unwrap();
