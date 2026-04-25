@@ -234,11 +234,16 @@
 
 ## Phase 4: V4 proof correctness hardening
 
-- [ ] I20 Resolve protected seccomp exec paths in the tracee execution
+- [x] I20 Resolve protected seccomp exec paths in the tracee execution ✅ 9m 45s (started: 2026-04-25T23:30:54Z → completed: 2026-04-25T23:40:39Z)
       namespace before digesting: record the tracee path and resolved host path,
       hash the resolved executable bytes, and fail closed for unsupported
       `execveat` dirfd/path forms, relative paths, unreadable paths, or other
       ambiguous resolution cases. [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: `cargo test -p crunch seccomp_supervisor -- --nocapture`
+      passed after the change with 9 lib tests and 9 bin tests, including
+      tracee-root join coverage for `/bin/sh`, symlink resolution before
+      digesting, relative path denial, unreadable path denial, and unsupported
+      non-`AT_FDCWD` `execveat` dirfd denial.
 - [ ] I21 Thread actual `ProtectedSeccompAuditEvent` records from the stage0
       supervisor into `SelfBuildReport` and `protected-exec-audit.json`, and make
       the audit result derived from the observed proof outcome rather than a

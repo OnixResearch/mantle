@@ -3,9 +3,11 @@ mod linux {
     use std::ffi::OsString;
     use std::fs::File;
     use std::io;
+    use std::os::fd::AsRawFd;
     use std::os::fd::RawFd;
     use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::FileExt;
+    use std::path::Path;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::Mutex;
@@ -27,6 +29,10 @@ mod linux {
     const SECCOMP_DATA_ARCH_OFFSET: u32 = 4;
     const MAX_REMOTE_PATH_BYTES: usize = 4096;
     const FILTER_INSTRUCTION_COUNT: u16 = 8;
+    const EXECVE_PATH_ARG_INDEX: usize = 0;
+    const EXECVEAT_DIRFD_ARG_INDEX: usize = 0;
+    const EXECVEAT_PATH_ARG_INDEX: usize = 1;
+    const PROC_FD_PATH_PREFIX: &str = "/proc/self/fd";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub enum ProtectedSeccompError {
@@ -203,15 +209,22 @@ mod linux {
         audit_event: ProtectedSeccompAuditEvent,
     }
 
+    struct ExecTarget {
+        tracee_path: PathBuf,
+        resolved_host_path: PathBuf,
+    }
+
     fn classify_notification(
         listener_fd: RawFd,
         policy: &ProtectedExecPolicy,
         notif: &libc::seccomp_notif,
     ) -> SupervisorDecision {
         let syscall_name = syscall_name(notif.data.nr);
-        match exec_path(listener_fd, notif) {
-            Ok(path) => classify_path(policy, notif.pid, syscall_name, path),
-            Err((path, reason)) => denied_event(notif.pid, syscall_name, path, String::new(), reason, None),
+        match exec_target(listener_fd, notif) {
+            Ok(target) => classify_path(policy, notif.pid, syscall_name, target),
+            Err((path, reason)) => {
+                denied_event(notif.pid, syscall_name, path.clone(), PathBuf::new(), String::new(), reason, None)
+            }
         }
     }
 
@@ -219,26 +232,29 @@ mod linux {
         policy: &ProtectedExecPolicy,
         pid: u32,
         syscall_name: &'static str,
-        path: PathBuf,
+        target: ExecTarget,
     ) -> SupervisorDecision {
-        if !path.is_absolute() {
-            return denied_event(
-                pid,
-                syscall_name,
-                path,
-                String::new(),
-                "relative exec path cannot be resolved safely".to_string(),
-                None,
-            );
-        }
-        let digest_hex = match blake3_file_hex(&path) {
+        assert!(target.tracee_path.is_absolute(), "tracee path must be absolute after target resolution");
+        assert!(
+            target.resolved_host_path.is_absolute(),
+            "resolved host path must be absolute after target resolution"
+        );
+        let digest_hex = match blake3_file_hex(&target.resolved_host_path) {
             Ok(digest) => digest,
             Err(err) => {
-                return denied_event(pid, syscall_name, path, String::new(), err.to_string(), None);
+                return denied_event(
+                    pid,
+                    syscall_name,
+                    target.tracee_path,
+                    target.resolved_host_path,
+                    String::new(),
+                    err.to_string(),
+                    None,
+                );
             }
         };
         match policy.decide_exec(&ExecRequest {
-            path: path.clone(),
+            path: target.resolved_host_path.clone(),
             digest_hex: digest_hex.clone(),
         }) {
             Ok(decision) => SupervisorDecision {
@@ -246,7 +262,9 @@ mod linux {
                 audit_event: ProtectedSeccompAuditEvent {
                     pid,
                     syscall: syscall_name.to_string(),
-                    executable_path: path,
+                    executable_path: target.resolved_host_path.clone(),
+                    tracee_path: target.tracee_path,
+                    resolved_host_path: target.resolved_host_path,
                     digest_hex,
                     reason: decision.reason,
                     phase: PHASE_PROTECTED.to_string(),
@@ -254,14 +272,23 @@ mod linux {
                     policy_decision: "allowed".to_string(),
                 },
             },
-            Err(err) => denied_event(pid, syscall_name, path, digest_hex, err.to_string(), inventory_entry_id(&err)),
+            Err(err) => denied_event(
+                pid,
+                syscall_name,
+                target.tracee_path,
+                target.resolved_host_path,
+                digest_hex,
+                err.to_string(),
+                inventory_entry_id(&err),
+            ),
         }
     }
 
     fn denied_event(
         pid: u32,
         syscall_name: &'static str,
-        path: PathBuf,
+        tracee_path: PathBuf,
+        resolved_host_path: PathBuf,
         digest_hex: String,
         reason: String,
         inventory_entry_id: Option<String>,
@@ -271,7 +298,9 @@ mod linux {
             audit_event: ProtectedSeccompAuditEvent {
                 pid,
                 syscall: syscall_name.to_string(),
-                executable_path: path,
+                executable_path: resolved_host_path.clone(),
+                tracee_path,
+                resolved_host_path,
                 digest_hex,
                 reason,
                 phase: PHASE_PROTECTED.to_string(),
@@ -288,7 +317,8 @@ mod linux {
         }
     }
 
-    fn exec_path(listener_fd: RawFd, notif: &libc::seccomp_notif) -> Result<PathBuf, (PathBuf, String)> {
+    fn exec_target(listener_fd: RawFd, notif: &libc::seccomp_notif) -> Result<ExecTarget, (PathBuf, String)> {
+        validate_execveat_form(notif)?;
         let arg_index = exec_path_arg_index(notif.data.nr)
             .ok_or_else(|| (PathBuf::new(), format!("unexpected syscall number {}", notif.data.nr)))?;
         let addr = notif.data.args[arg_index];
@@ -299,17 +329,93 @@ mod linux {
         if bytes.is_empty() {
             return Err((PathBuf::new(), "empty execveat path is not supported".to_string()));
         }
-        Ok(PathBuf::from(OsString::from_vec(bytes)))
+        let tracee_path = PathBuf::from(OsString::from_vec(bytes));
+        if !tracee_path.is_absolute() {
+            return Err((tracee_path, "relative exec path cannot be resolved safely".to_string()));
+        }
+        let resolved_host_path = resolve_tracee_exec_path(listener_fd, notif.pid, notif.id, &tracee_path)
+            .map_err(|err| (tracee_path.clone(), err))?;
+        Ok(ExecTarget {
+            tracee_path,
+            resolved_host_path,
+        })
     }
 
     fn exec_path_arg_index(syscall_nr: libc::c_int) -> Option<usize> {
         if syscall_nr == libc::SYS_execve as libc::c_int {
-            return Some(0);
+            return Some(EXECVE_PATH_ARG_INDEX);
         }
         if syscall_nr == libc::SYS_execveat as libc::c_int {
-            return Some(1);
+            return Some(EXECVEAT_PATH_ARG_INDEX);
         }
         None
+    }
+
+    fn validate_execveat_form(notif: &libc::seccomp_notif) -> Result<(), (PathBuf, String)> {
+        if notif.data.nr != libc::SYS_execveat as libc::c_int {
+            return Ok(());
+        }
+        let dirfd_raw = notif.data.args[EXECVEAT_DIRFD_ARG_INDEX];
+        if is_at_fdcwd_arg(dirfd_raw) {
+            return Ok(());
+        }
+        Err((PathBuf::new(), format!("unsupported execveat dirfd {dirfd_raw}; only AT_FDCWD is supported")))
+    }
+
+    fn is_at_fdcwd_arg(raw: u64) -> bool {
+        let signed_long = raw as i64;
+        let signed_int = raw as u32 as i32 as i64;
+        let at_fdcwd = libc::AT_FDCWD as i64;
+        signed_long == at_fdcwd || signed_int == at_fdcwd
+    }
+
+    fn resolve_tracee_exec_path(listener_fd: RawFd, pid: u32, id: u64, tracee_path: &Path) -> Result<PathBuf, String> {
+        if !tracee_path.is_absolute() {
+            return Err("relative exec path cannot be resolved safely".to_string());
+        }
+        validate_notification_id(listener_fd, id)?;
+        let proc_root_path = proc_root_exec_path(pid, tracee_path)?;
+        let file = File::open(&proc_root_path)
+            .map_err(|err| format!("open tracee exec path {}: {err}", proc_root_path.display()))?;
+        validate_notification_id(listener_fd, id)?;
+        let fd_path = PathBuf::from(PROC_FD_PATH_PREFIX).join(file.as_raw_fd().to_string());
+        let resolved_host_path = std::fs::read_link(&fd_path)
+            .map_err(|err| format!("resolve tracee exec fd {}: {err}", fd_path.display()))?;
+        validate_notification_id(listener_fd, id)?;
+        if !resolved_host_path.is_absolute() {
+            return Err(format!("resolved tracee exec path is not absolute: {}", resolved_host_path.display()));
+        }
+        Ok(resolved_host_path)
+    }
+
+    fn proc_root_exec_path(pid: u32, tracee_path: &Path) -> Result<PathBuf, String> {
+        join_tracee_root_path(&PathBuf::from(format!("/proc/{pid}/root")), tracee_path)
+    }
+
+    fn join_tracee_root_path(tracee_root: &Path, tracee_path: &Path) -> Result<PathBuf, String> {
+        if !tracee_root.is_absolute() {
+            return Err(format!("tracee root is not absolute: {}", tracee_root.display()));
+        }
+        if !tracee_path.is_absolute() {
+            return Err("relative exec path cannot be resolved safely".to_string());
+        }
+        let mut out = tracee_root.to_path_buf();
+        for component in tracee_path.components() {
+            match component {
+                std::path::Component::RootDir | std::path::Component::CurDir => {}
+                std::path::Component::Normal(part) => out.push(part),
+                std::path::Component::ParentDir => {
+                    return Err(format!(
+                        "tracee exec path contains unsupported parent component: {}",
+                        tracee_path.display()
+                    ));
+                }
+                std::path::Component::Prefix(_) => {
+                    return Err(format!("tracee exec path contains unsupported prefix: {}", tracee_path.display()));
+                }
+            }
+        }
+        Ok(out)
     }
 
     fn read_remote_cstring(listener_fd: RawFd, pid: u32, id: u64, addr: u64) -> Result<Vec<u8>, String> {
@@ -380,6 +486,7 @@ mod linux {
         use crate::protected_exec::Stage0Inventory;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
+        const AUDIT_FLUSH_WAIT_MS: u64 = 50;
 
         fn current_exe_policy(digest_hex: String) -> ProtectedExecPolicy {
             let current_exe = std::env::current_exe().unwrap();
@@ -422,6 +529,30 @@ mod linux {
                 err.to_string(),
                 "protected exec supervisor unsupported: unsupported Linux audit architecture for exec supervisor"
             );
+        }
+
+        #[test]
+        fn tracee_root_join_maps_sandbox_bin_sh_inside_root() {
+            let temp = tempfile::tempdir().unwrap();
+            let bin_dir = temp.path().join("bin");
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let shell = bin_dir.join("sh");
+            std::fs::write(&shell, b"#!/bin/sh\nexit 0\n").unwrap();
+
+            let joined = join_tracee_root_path(temp.path(), Path::new("/bin/sh")).unwrap();
+
+            assert_eq!(joined, shell);
+            assert!(joined.starts_with(temp.path()));
+        }
+
+        #[test]
+        fn tracee_root_join_rejects_ambiguous_relative_and_parent_paths() {
+            let temp = tempfile::tempdir().unwrap();
+            let relative = join_tracee_root_path(temp.path(), Path::new("bin/sh")).unwrap_err();
+            let parent = join_tracee_root_path(temp.path(), Path::new("/../bin/sh")).unwrap_err();
+
+            assert!(relative.contains("relative exec path"), "reason: {relative}");
+            assert!(parent.contains("parent component"), "reason: {parent}");
         }
 
         #[test]
@@ -508,6 +639,90 @@ mod linux {
             );
         }
 
+        #[test]
+        fn seccomp_supervisor_resolves_symlink_before_digesting() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("symlink-resolution") {
+                run_symlink_resolution_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_resolves_symlink_before_digesting")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "symlink-resolution")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
+        fn seccomp_supervisor_denies_relative_exec_path() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("relative-path") {
+                run_relative_path_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_relative_exec_path")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "relative-path")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
+        fn seccomp_supervisor_denies_unreadable_exec_path() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("unreadable-path") {
+                run_unreadable_path_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_unreadable_exec_path")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "unreadable-path")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
+        fn seccomp_supervisor_denies_execveat_non_fdcwd_dirfd() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("execveat-dirfd") {
+                run_execveat_dirfd_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_execveat_non_fdcwd_dirfd")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "execveat-dirfd")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
         fn run_allow_child() {
             let current_exe = std::env::current_exe().unwrap();
             let digest_hex = blake3_file_hex(&current_exe).unwrap();
@@ -584,6 +799,129 @@ mod linux {
             assert_eq!(events[0].syscall, "execveat");
             assert_eq!(events[0].executable_path, current_exe);
             assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
+        }
+
+        fn run_symlink_resolution_child() {
+            let temp = tempfile::tempdir().unwrap();
+            let bin_dir = temp.path().join("bin");
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let current_exe = std::env::current_exe().unwrap();
+            let symlink_path = bin_dir.join("sh");
+            std::os::unix::fs::symlink(&current_exe, &symlink_path).unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+
+            let status = Command::new(&symlink_path).arg("--help").status().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+
+            assert!(status.success());
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "allowed");
+            assert_eq!(events[0].tracee_path, symlink_path);
+            assert_eq!(events[0].resolved_host_path, current_exe);
+            assert_eq!(events[0].executable_path, events[0].resolved_host_path);
+        }
+
+        fn run_relative_path_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            let pid = unsafe { libc::fork() };
+            assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+            if pid == 0 {
+                execve_relative_path();
+            }
+            assert_child_exit(pid, libc::EACCES);
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "denied");
+            assert_eq!(events[0].tracee_path, PathBuf::from("./missing-relative-exec"));
+            assert!(events[0].reason.contains("relative exec path"), "reason: {}", events[0].reason);
+        }
+
+        fn run_unreadable_path_child() {
+            let temp = tempfile::tempdir().unwrap();
+            let directory_exec = temp.path().join("not-a-regular-exec");
+            std::fs::create_dir(&directory_exec).unwrap();
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            let pid = unsafe { libc::fork() };
+            assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+            if pid == 0 {
+                execve_absolute_path(&directory_exec);
+            }
+            assert_child_exit(pid, libc::EACCES);
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "denied");
+            assert_eq!(events[0].tracee_path, directory_exec);
+            assert!(!events[0].reason.is_empty());
+        }
+
+        fn run_execveat_dirfd_child() {
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            let pid = unsafe { libc::fork() };
+            assert!(pid >= 0, "fork failed: {}", std::io::Error::last_os_error());
+            if pid == 0 {
+                execveat_with_dirfd(&current_exe);
+            }
+            assert_child_exit(pid, libc::EACCES);
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "denied");
+            assert!(events[0].reason.contains("execveat dirfd"), "reason: {}", events[0].reason);
+            assert!(events[0].reason.contains("AT_FDCWD"), "reason: {}", events[0].reason);
+        }
+
+        fn assert_child_exit(pid: libc::pid_t, expected_code: i32) {
+            let mut status: libc::c_int = 0;
+            let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+            assert_eq!(waited, pid, "waitpid failed: {}", std::io::Error::last_os_error());
+            assert!(libc::WIFEXITED(status), "child status was {status}");
+            assert_eq!(libc::WEXITSTATUS(status), expected_code);
+        }
+
+        fn execve_relative_path() -> ! {
+            let path = CString::new("./missing-relative-exec").unwrap();
+            execve_raw_path(path.as_ptr())
+        }
+
+        fn execve_absolute_path(path: &Path) -> ! {
+            let path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+            execve_raw_path(path.as_ptr())
+        }
+
+        fn execve_raw_path(path: *const libc::c_char) -> ! {
+            let argv0 = CString::new("crunch-seccomp-test").unwrap();
+            let argv = [argv0.as_ptr(), std::ptr::null()];
+            let envp = [std::ptr::null::<libc::c_char>()];
+            unsafe {
+                libc::execve(path, argv.as_ptr(), envp.as_ptr());
+                libc::_exit(std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EINVAL));
+            }
+        }
+
+        fn execveat_with_dirfd(current_exe: &Path) -> ! {
+            use std::os::fd::AsRawFd;
+            let parent = current_exe.parent().unwrap();
+            let dir = std::fs::File::open(parent).unwrap();
+            let file_name = current_exe.file_name().unwrap().as_encoded_bytes();
+            let path = CString::new(file_name).unwrap();
+            let argv0 = CString::new("crunch-seccomp-test").unwrap();
+            let arg_help = CString::new("--help").unwrap();
+            let argv = [argv0.as_ptr(), arg_help.as_ptr(), std::ptr::null()];
+            let envp = [std::ptr::null::<libc::c_char>()];
+            unsafe {
+                libc::syscall(libc::SYS_execveat, dir.as_raw_fd(), path.as_ptr(), argv.as_ptr(), envp.as_ptr(), 0);
+                libc::_exit(std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EINVAL));
+            }
         }
 
         fn execveat_current_exe_help(current_exe: &Path) -> ! {

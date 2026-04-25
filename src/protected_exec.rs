@@ -531,7 +531,12 @@ pub fn normalized_path_id(path: &Path) -> String {
 pub struct ProtectedSeccompAuditEvent {
     pub pid: u32,
     pub syscall: String,
+    /// Resolved host path whose bytes were hashed and checked against policy.
     pub executable_path: PathBuf,
+    /// Raw executable path read from tracee memory before namespace resolution.
+    pub tracee_path: PathBuf,
+    /// Host path resolved through the tracee root namespace.
+    pub resolved_host_path: PathBuf,
     pub digest_hex: String,
     pub reason: String,
     pub phase: String,
