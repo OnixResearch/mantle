@@ -1,14 +1,14 @@
 ## Phase 1: Sandbox hardening (bwrap)
 
-- [ ] Add `--hostname localhost` to `COMMON_BWRAP_ARGS` in `vendor/snix-build/src/bwrap/mod.rs`
-- [ ] Add `/proc` masking args (`--ro-bind-try /dev/null /proc/cpuinfo` etc.) after `--proc /proc`
-- [ ] Add `/dev/random` and `/dev/urandom` masking args (`--ro-bind /dev/null /dev/random` etc.) after `--dev /dev`
-- [ ] Add `--tmpfs /dev/shm` after `--dev /dev` to isolate shared memory per build
-- [ ] Add `--unshare-cgroup-try` to `COMMON_BWRAP_ARGS`
-- [ ] Verify no code path mounts host `/sys` into the sandbox (bwrap root is `--tmpfs /` so `/sys` should be absent; add assertion test)
-- [ ] Replace host `/etc/resolv.conf` and `/etc/services` bind-mounts for network-enabled builds with synthetic files written alongside existing `/etc/passwd`, `/etc/group`, `/etc/hosts`
-- [ ] Add unit test: assert `COMMON_BWRAP_ARGS` contains `--hostname`, proc masks, dev masks, `/dev/shm` isolation, cgroup unshare
-- [ ] Add unit test: network-enabled sandbox uses synthetic `resolv.conf`, not host bind-mount
+- [x] Add `--hostname localhost` to `COMMON_BWRAP_ARGS` in `vendor/snix-build/src/bwrap/mod.rs` ✅ 5m
+- [x] Add `/proc` masking args (`--ro-bind-try /dev/null /proc/cpuinfo` etc.) after `--proc /proc` ✅ 3m
+- [x] Add `/dev/random` and `/dev/urandom` masking args (`--ro-bind /dev/null /dev/random` etc.) after `--dev /dev` ✅ 3m
+- [x] Add `--tmpfs /dev/shm` after `--dev /dev` to isolate shared memory per build ✅ 1m
+- [x] Add `--unshare-cgroup-try` to `COMMON_BWRAP_ARGS` ✅ 2m
+- [x] Verify no code path mounts host `/sys` into the sandbox (bwrap root is `--tmpfs /` so `/sys` should be absent; add assertion test) ✅ 3m
+- [x] Replace host `/etc/resolv.conf` and `/etc/services` bind-mounts for network-enabled builds with synthetic files written alongside existing `/etc/passwd`, `/etc/group`, `/etc/hosts` ✅ 8m
+- [x] Add unit test: assert `COMMON_BWRAP_ARGS` contains `--hostname`, proc masks, dev masks, `/dev/shm` isolation, cgroup unshare ✅ 5m
+- [x] Add unit test: network-enabled sandbox uses synthetic `resolv.conf`, not host bind-mount ✅ 2m
 
 ## Phase 2: Build environment defaults
 

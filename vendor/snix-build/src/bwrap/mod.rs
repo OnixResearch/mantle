@@ -12,11 +12,14 @@ use crate::sandbox::SandboxSpec;
 
 const COMMON_BWRAP_ARGS: &[&str] = &[
     "--unshare-uts",
+    "--hostname",
+    "localhost",
     "--unshare-ipc",
     "--unshare-pid",
     "--die-with-parent",
     "--as-pid-1",
     "--unshare-user",
+    "--unshare-cgroup-try",
     // Prevent sandbox from gaining new privileges via setuid/setgid binaries
     // or other capability escalation.
     "--new-session",
@@ -29,8 +32,34 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "/",
     "--dev",
     "/dev",
+    "--ro-bind",
+    "/dev/null",
+    "/dev/random",
+    "--ro-bind",
+    "/dev/null",
+    "/dev/urandom",
+    "--tmpfs",
+    "/dev/shm",
     "--proc",
     "/proc",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/cpuinfo",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/meminfo",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/stat",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/loadavg",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/uptime",
+    "--ro-bind-try",
+    "/dev/null",
+    "/proc/version",
     "--tmpfs",
     "/tmp",
 ];
@@ -55,6 +84,60 @@ const ETC_HOSTS: &[u8] = b"
 const ETC_NSSWITCH: &[u8] = b"
 hosts: files dns
 services: files
+";
+
+const ETC_RESOLV_CONF: &[u8] = b"
+nameserver 127.0.0.1
+nameserver 8.8.8.8
+";
+
+const ETC_SERVICES: &[u8] = b"
+tcpmux          1/tcp
+echo            7/tcp
+echo            7/udp
+discard         9/tcp
+discard         9/udp
+systat          11/tcp
+daytime         13/tcp
+daytime         13/udp
+qotd            17/tcp
+chargen         19/tcp
+chargen         19/udp
+ftp-data        20/tcp
+ftp             21/tcp
+ssh             22/tcp
+telnet          23/tcp
+smtp            25/tcp
+time            37/tcp
+time            37/udp
+nameserver      42/tcp
+nicname         43/tcp
+domain          53/tcp
+domain          53/udp
+bootps          67/udp
+bootpc          68/udp
+tftp            69/udp
+gopher          70/tcp
+http            80/tcp
+kerberos        88/tcp
+kerberos        88/udp
+pop3            110/tcp
+ident           113/tcp
+sftp            115/tcp
+nntp            119/tcp
+ntp             123/udp
+imap            143/tcp
+snmp            161/udp
+snmp-trap       162/udp
+bgp             179/tcp
+irc             194/tcp
+ldap            389/tcp
+https           443/tcp
+smtps           465/tcp
+submission      587/tcp
+ldaps           636/tcp
+imaps           993/tcp
+pop3s           995/tcp
 ";
 
 const SANDBOX_UMASK_BITS: u32 = 0o022;
@@ -254,21 +337,22 @@ impl Bwrap {
             "/etc/group".into(),
         ]);
         if spec.allow_network() {
+            fs::write(etc.join("resolv.conf"), ETC_RESOLV_CONF)?;
+            fs::write(etc.join("services"), ETC_SERVICES)?;
             args.extend([
                 "--ro-bind".into(),
-                "/etc/hosts".into(),
+                etc.join("hosts").into(),
                 "/etc/hosts".into(),
                 "--ro-bind".into(),
-                "/etc/resolv.conf".into(),
+                etc.join("resolv.conf").into(),
                 "/etc/resolv.conf".into(),
                 "--ro-bind".into(),
-                "/etc/services".into(),
+                etc.join("services").into(),
                 "/etc/services".into(),
                 "--ro-bind".into(),
                 etc.join("nsswitch.conf").into(),
                 "/etc/nsswitch.conf".into(),
             ]);
-            //TODO: Create /etc/nsswitch.conf with: "hosts: files dns\nservices: files\n"
         } else {
             // Use predefined /etc/hosts like nix does.
             // Among other things it is required for libuv getaddrinfo() tests to pass.
@@ -281,5 +365,75 @@ impl Bwrap {
             args,
             inputs_provider: spec.into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn common_bwrap_args_contains_hostname() {
+        assert!(COMMON_BWRAP_ARGS.windows(2).any(|w| w == ["--hostname", "localhost"]));
+    }
+
+    #[test]
+    fn common_bwrap_args_contains_proc_masks() {
+        let masked = [
+            "/proc/cpuinfo",
+            "/proc/meminfo",
+            "/proc/stat",
+            "/proc/loadavg",
+            "/proc/uptime",
+            "/proc/version",
+        ];
+        for path in &masked {
+            assert!(
+                COMMON_BWRAP_ARGS.windows(3).any(|w| w[0] == "--ro-bind-try" && w[1] == "/dev/null" && w[2] == *path),
+                "/proc mask missing for {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn common_bwrap_args_contains_dev_masks() {
+        let masked = ["/dev/random", "/dev/urandom"];
+        for path in &masked {
+            assert!(
+                COMMON_BWRAP_ARGS.windows(3).any(|w| w[0] == "--ro-bind" && w[1] == "/dev/null" && w[2] == *path),
+                "/dev mask missing for {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn common_bwrap_args_contains_dev_shm_isolation() {
+        assert!(COMMON_BWRAP_ARGS.windows(2).any(|w| w == ["--tmpfs", "/dev/shm"]));
+    }
+
+    #[test]
+    fn common_bwrap_args_contains_cgroup_unshare() {
+        assert!(COMMON_BWRAP_ARGS.contains(&"--unshare-cgroup-try"));
+    }
+
+    #[test]
+    fn common_bwrap_args_does_not_mount_sys() {
+        for window in COMMON_BWRAP_ARGS.windows(2) {
+            let bind_types = ["--bind", "--ro-bind", "--ro-bind-try", "--dev-bind"];
+            if bind_types.contains(&window[0]) {
+                assert!(
+                    !window[1].starts_with("/sys"),
+                    "must not bind-mount host /sys: found {:?}",
+                    window
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn synthetic_etc_files_are_not_empty() {
+        assert!(!ETC_RESOLV_CONF.is_empty());
+        assert!(!ETC_SERVICES.is_empty());
+        assert!(ETC_RESOLV_CONF.windows(10).any(|w| w == b"nameserver"));
     }
 }
