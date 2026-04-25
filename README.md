@@ -957,8 +957,23 @@ fails closed on missing signatures, release-digest mismatches, and conflicting
 existing witness identities before touching the publisher verification
 directory. `crunch attest release-verify` separates technical validity from
 policy sufficiency, so a release can stay technically valid even when the
-witness set is policy-insufficient. A successful single-witness workflow
-therefore proves external witness agreement under the configured policy; it
+witness set is policy-insufficient. In JSON mode it also reports independent
+agreement separately through `independent_agreement_status`,
+`independent_agreement_class`, `independent_agreement_report_digest`, counted / skipped /
+failed witness counts, and per-witness classification reasons. These fields
+are derived from accepted witness files plus verifier-local policy,
+revocations, and trusted keys; they are not publisher-authored release claims.
+Unknown-key and invalid-signature witnesses are skipped, revoked witnesses are
+skipped, duplicate independence domains are skipped, and signature-valid
+witnesses with wrong release references or rebuilt digests are failed evidence.
+A verifier-local `agreement-report.json` must be canonical and match the
+derived report; duplicate report filenames are rejected. Release-evidence
+bundles may also carry the optional report artifact at
+`independent-agreement/agreement-report.json`, where the manifest digest check
+covers it like any other bundled file. A successful single-witness workflow
+therefore proves external witness agreement under the configured policy; a
+satisfied independent-agreement status gives the stronger
+`independent-rebuild-agreement` class for that policy-scoped witness set. It
 still does not prove a full-source bootstrap root or globally reproducible
 release artifacts.
 

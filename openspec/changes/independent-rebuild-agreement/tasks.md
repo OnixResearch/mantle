@@ -80,13 +80,18 @@
       `attest_release_verify` tests including malformed environment evidence;
       `cargo test -p crunch-attestation-core independent_agreement` passed 4
       core report tests in pueue task 32.
-- [ ] I8 Update release verification docs to describe independent agreement as
+- [x] I8 Update release verification docs to describe independent agreement as ✅ 1m 19s (started: 2026-04-25T20:58:00Z → completed: 2026-04-25T20:59:19Z)
       policy-scoped evidence from accepted witness files and verifier-local
       policy, name `independent_agreement_status`,
       `independent_agreement_class`, report digest, counted/skipped/failed
       counts, and classification reasons, and avoid claiming full-source
       bootstrap, global reproducibility, or public witness discovery.
       [covers=release.verification.tech.independent.agreement.class,release.verification.tech.independent.agreement.docs]
+      Evidence: docs audit grepped `README.md` and `docs/operator-workflows.md`
+      for `independent_agreement_status` and
+      `independent-agreement/agreement-report.json`, then confirmed remaining
+      full-source-bootstrap wording stays bounded in `README.md`,
+      `docs/operator-workflows.md`, and `docs/bootstrap-stage0-inventory.md`.
 
 ## Validation
 

@@ -96,9 +96,11 @@ What the checked-in self-hosting proof demonstrates today:
 What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
-- independent rebuild agreement for release artifacts
-- more than packaged integrity, proof-context evidence, and any separately
-  verified reproducibility report; `crunch release verify` keeps bundle-local
-  consistency and reproducibility status separate from independent rebuild
-  agreement
+- independent rebuild agreement by itself; that status is derived later by
+  `crunch attest release-verify --json` from accepted witness sidecars,
+  verifier-local policy, revocations, and trusted keys
+- more than packaged integrity, proof-context evidence, any separately verified
+  reproducibility report, and any separately satisfied independent-agreement
+  report; release verification keeps these evidence classes separate so one
+  label does not silently imply another
 - removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`

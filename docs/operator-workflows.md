@@ -370,13 +370,36 @@ plus captured workflow stdout/stderr so the witness can hand back both the
 signed sidecars and a replay transcript. `crunch attest witness-import` fails
 closed on missing signatures, release-digest mismatches, and conflicting
 existing witness identities before copying anything into the publisher
-verification directory. `crunch attest release-verify` reports the technical
-class, policy status, and final class separately. Unknown-key or bad-signature
-witnesses remain visible in `discovered_witness_count` but are excluded before
-quorum evaluation, so mixed witness sets do not abort verification. A
-successful single-witness run proves external witness agreement under the
-configured policy. It still does not prove a full-source bootstrap root or
-globally reproducible release outputs.
+verification directory.
+
+`crunch attest release-verify --json` reports bundle-local technical validity,
+social policy sufficiency, and independent rebuild agreement as separate
+fields. The independent agreement fields are `independent_agreement_status`,
+`independent_agreement_class`, `independent_agreement_report_digest`,
+`independent_agreement_counted_witness_count`,
+`independent_agreement_skipped_witness_count`,
+`independent_agreement_failed_witness_count`, and per-witness classification
+reasons under `independent_agreement_witnesses`. Agreement is derived from the
+accepted witness files, the verifier-local `policy.json`, `revocations.json`,
+and trusted keys passed on the command line. It is not a hand-authored claim.
+Unknown-key or bad-signature witnesses remain visible in
+`discovered_witness_count` and in the independent-agreement witness list, but
+are skipped before quorum evaluation. Signature-valid witnesses with wrong
+release references or rebuilt binary digests are failed evidence, not counted
+agreement. If a canonical agreement report is present at
+`target/release-verification/<release-id>/agreement-report.json`, verification
+checks it byte-for-byte against the derived report; duplicate
+`agreement-report.json` attachments, including nested
+`independent-agreement/agreement-report.json`, are rejected as ambiguous.
+Release-evidence bundles may carry the same optional report artifact at
+`independent-agreement/agreement-report.json`, where normal manifest digest
+verification applies.
+
+A successful single-witness run proves external witness agreement only under
+the configured policy; a satisfied independent-agreement status gives the
+stronger verifier-local `independent-rebuild-agreement` class for the accepted
+witness set. It still does not prove a full-source bootstrap root or globally
+reproducible release outputs.
 
 For the current trust boundary behind those claims, see
 [`docs/bootstrap-stage0-inventory.md`](bootstrap-stage0-inventory.md).
