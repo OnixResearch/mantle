@@ -13,11 +13,14 @@
       crunch-release-core --target wasm32-unknown-unknown` passed in pueue task 46,
       and filtered `cargo test -p crunch-release-core reproducibility_report`
       passed in pueue task 49 (5 passed).
-- [x] I2 Add report canonicalization tests plus negative fixtures for one-byte ✅ 0m 56s (started: 2026-04-25T19:03:57Z → completed: 2026-04-25T19:04:53Z)
+- [x] I2 Add report canonicalization and stable report identity digest tests plus negative fixtures for one-byte ✅ 0m 56s (started: 2026-04-25T19:03:57Z → completed: 2026-04-25T19:04:53Z)
       drift, missing artifact, output-name drift, and proof-linkage mismatch.
+      The digest test must assert identical semantic reports produce the same
+      BLAKE3 digest over canonical compact JSON bytes.
       [covers=release.evidence.reproducible.report]
       Evidence: `cargo test -p crunch-release-core reproducibility_report` passed
-      in pueue task 51 (10 filtered tests), and `cargo test -p
+      in pueue task 51 (10 filtered tests), including stable canonical-byte and
+      BLAKE3 report identity assertions, and `cargo test -p
       crunch-release-core && cargo check -p crunch-release-core --target
       wasm32-unknown-unknown` passed in pueue task 52 (16 unit tests).
 
@@ -100,7 +103,7 @@
 - [x] V2 Run `cargo test -p crunch-release-core reproducibility_report` proving ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       canonical serialization, byte-identical success, and one-byte drift
       failure. [covers=release.evidence.reproducible.report]
-      Evidence: pueue task 40 passed: 10 filtered reproducibility report tests covered canonical serialization, matched success, one-byte/digest drift, missing rebuilt artifact, output-name drift, and proof-linkage mismatch.
+      Evidence: pueue task 40 passed: 10 filtered reproducibility report tests covered canonical serialization, stable BLAKE3 report identity over canonical compact JSON, matched success, one-byte/digest drift, missing rebuilt artifact, output-name drift, and proof-linkage mismatch.
 - [x] V3 Run `cargo test -p crunch --test release_cli release_` for ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       matched, absent-required, byte-length drift, digest drift,
       missing-artifact, output-name drift, source archive drift, manifest drift,
