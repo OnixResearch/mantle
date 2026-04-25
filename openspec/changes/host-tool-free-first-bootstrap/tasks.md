@@ -49,11 +49,18 @@
       URLs with digest and extraction rules, `verify_source_digest` rejects
       mismatches before extraction, and malformed source URL/extraction entries
       fail during inventory validation.
-- [ ] I5 Route self-build/proof protected-phase process launches through one
+- [x] I5 Route self-build/proof protected-phase process launches through one ✅ 0m 51s (started: 2026-04-25T21:44:48Z → completed: 2026-04-25T21:45:39Z)
       non-shell protected process-launch adapter that enforces
       `ProtectedExecPolicy` before crunch-owned `execve` calls and records
       executable path, digest, reason, phase, inventory entry, and policy
       decision. [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: pueue task 67 passed isolated-target
+      `cargo test -p crunch protected_exec -- --nocapture` with 16 tests.
+      `ProtectedProcessLauncher` now computes executable BLAKE3, plans the
+      launch through `ProtectedExecPolicy`, records path/digest/reason/phase/
+      inventory-entry/policy decision audit events, returns a `Command` only
+      after the policy permits launch, and rejects digest mismatches before a
+      command is returned.
 - [ ] I6 Replace protected-phase source staging helper use (`git`) with
       Rust-owned source staging logic. [covers=bootstrap.hosttoolfree.exec.boundary]
 - [ ] I7 Replace protected-phase archive/copy helper use (`tar`, `cp`) with

@@ -498,6 +498,90 @@ pub fn normalized_path_id(path: &Path) -> String {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtectedLaunchAuditEvent {
+    pub executable_path: PathBuf,
+    pub digest_hex: String,
+    pub reason: String,
+    pub phase: String,
+    pub inventory_entry_id: String,
+    pub policy_decision: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtectedLaunchPlan {
+    pub executable_path: PathBuf,
+    pub digest_hex: String,
+    pub inventory_entry_id: String,
+    pub reason: String,
+    pub phase: String,
+}
+
+pub struct ProtectedProcessLauncher<'policy> {
+    policy: &'policy ProtectedExecPolicy,
+    audit_events: Vec<ProtectedLaunchAuditEvent>,
+}
+
+impl<'policy> ProtectedProcessLauncher<'policy> {
+    pub fn new(policy: &'policy ProtectedExecPolicy) -> Self {
+        Self {
+            policy,
+            audit_events: Vec::new(),
+        }
+    }
+
+    pub fn prepare_command(
+        &mut self,
+        executable_path: &Path,
+    ) -> Result<std::process::Command, Stage0InventoryGenerationError> {
+        let plan = plan_protected_launch(self.policy, executable_path)?;
+        self.audit_events.push(plan.audit_event());
+        Ok(std::process::Command::new(executable_path))
+    }
+
+    pub fn audit_events(&self) -> &[ProtectedLaunchAuditEvent] {
+        &self.audit_events
+    }
+
+    pub fn take_audit_events(&mut self) -> Vec<ProtectedLaunchAuditEvent> {
+        std::mem::take(&mut self.audit_events)
+    }
+}
+
+impl ProtectedLaunchPlan {
+    pub fn audit_event(&self) -> ProtectedLaunchAuditEvent {
+        ProtectedLaunchAuditEvent {
+            executable_path: self.executable_path.clone(),
+            digest_hex: self.digest_hex.clone(),
+            reason: self.reason.clone(),
+            phase: self.phase.clone(),
+            inventory_entry_id: self.inventory_entry_id.clone(),
+            policy_decision: "allowed".to_string(),
+        }
+    }
+}
+
+pub fn plan_protected_launch(
+    policy: &ProtectedExecPolicy,
+    executable_path: &Path,
+) -> Result<ProtectedLaunchPlan, Stage0InventoryGenerationError> {
+    assert!(executable_path.is_absolute(), "protected launch path must be absolute");
+    let digest_hex = blake3_file_hex(executable_path)?;
+    let decision = policy.decide_exec(&ExecRequest {
+        path: executable_path.to_path_buf(),
+        digest_hex: digest_hex.clone(),
+    })?;
+    let entry_id = decision.entry_id.unwrap_or_default();
+    assert!(!entry_id.is_empty(), "allowed protected launch must name inventory entry");
+    Ok(ProtectedLaunchPlan {
+        executable_path: executable_path.to_path_buf(),
+        digest_hex,
+        inventory_entry_id: entry_id,
+        reason: decision.reason,
+        phase: PHASE_PROTECTED.to_string(),
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stage0InventorySeedConfig {
     pub sandbox_entry: PathBuf,
     pub sandbox_shell: PathBuf,
@@ -1061,6 +1145,76 @@ mod tests {
         env.insert(OsString::from(ENV_STAGE0_SEED_TOOLCHAIN_ROOT), toolchain_root.as_os_str().to_os_string());
         env.insert(OsString::from(ENV_STAGE0_SEED_BUILD_TOOLS), std::env::join_paths(build_tools).unwrap());
         env
+    }
+
+    fn inventory_with_current_exe(current_exe: &Path, digest_hex: String) -> Stage0Inventory {
+        let mut inv = inventory();
+        inv.executable_entries.push(ExecutableSeedEntry {
+            schema_version: SCHEMA_VERSION_V1.to_string(),
+            id: "stage0-crunch".to_string(),
+            role: ROLE_STAGE0_CRUNCH.to_string(),
+            phase: PHASE_PROTECTED.to_string(),
+            executable_path: current_exe.to_path_buf(),
+            digest: DigestSpec {
+                algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+                hex: digest_hex,
+                interoperability_reason: None,
+            },
+            provenance_category: PROVENANCE_TEST_FIXTURE.to_string(),
+            provenance: "current test binary".to_string(),
+            allowed_reason: "stage0 crunch may launch itself".to_string(),
+            owner: "bootstrap".to_string(),
+            required: false,
+        });
+        inv
+    }
+
+    #[test]
+    fn protected_launcher_records_allowed_non_shell_command() {
+        let current_exe = std::env::current_exe().unwrap();
+        let digest_hex = blake3_file_hex(&current_exe).unwrap();
+        let inv = inventory_with_current_exe(&current_exe, digest_hex.clone());
+        let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
+        let mut launcher = ProtectedProcessLauncher::new(&policy);
+
+        let mut cmd = launcher.prepare_command(&current_exe).unwrap();
+        let output = cmd.arg("--help").output().unwrap();
+        let events = launcher.audit_events();
+
+        assert!(output.status.success());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].executable_path, current_exe);
+        assert_eq!(events[0].digest_hex, digest_hex);
+        assert_eq!(events[0].inventory_entry_id, "stage0-crunch");
+        assert_eq!(events[0].policy_decision, "allowed");
+        assert_eq!(events[0].phase, PHASE_PROTECTED);
+    }
+
+    #[test]
+    fn protected_launcher_rejects_before_command_is_returned() {
+        let current_exe = std::env::current_exe().unwrap();
+        let inv = inventory_with_current_exe(&current_exe, DIGEST_A.to_string());
+        let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
+        let mut launcher = ProtectedProcessLauncher::new(&policy);
+
+        let err = launcher.prepare_command(&current_exe).unwrap_err();
+        assert!(matches!(err, Stage0InventoryGenerationError::Policy(ProtectedExecError::DigestMismatch { .. })));
+        assert!(launcher.audit_events().is_empty());
+    }
+
+    #[test]
+    fn protected_launcher_take_audit_events_drains_events() {
+        let current_exe = std::env::current_exe().unwrap();
+        let digest_hex = blake3_file_hex(&current_exe).unwrap();
+        let inv = inventory_with_current_exe(&current_exe, digest_hex);
+        let policy = ProtectedExecPolicy::from_inventory(inv).unwrap();
+        let mut launcher = ProtectedProcessLauncher::new(&policy);
+
+        let _cmd = launcher.prepare_command(&current_exe).unwrap();
+        let events = launcher.take_audit_events();
+
+        assert_eq!(events.len(), 1);
+        assert!(launcher.audit_events().is_empty());
     }
 
     #[test]
