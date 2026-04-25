@@ -4,8 +4,9 @@
 
 - [ ] I1 Add pure reproducibility-report types with canonical compact JSON over
       release identifier, source digest, proof digest, rebuild command identity,
-      artifact names, byte lengths, BLAKE3 digests, and comparison results.
-      [covers=release.evidence.reproducible.report]
+      artifact names, byte lengths, BLAKE3 digests, comparison results, and a
+      report identity that the core computes and exposes as the BLAKE3 digest of
+      the canonical compact JSON bytes. [covers=release.evidence.reproducible.report]
 - [ ] I2 Add report canonicalization tests plus negative fixtures for one-byte
       drift, missing artifact, output-name drift, and proof-linkage mismatch.
       [covers=release.evidence.reproducible.report]
@@ -33,11 +34,17 @@
       `absent`, `matched`, or `mismatched`, and add an option for callers to
       require matched reproducibility evidence.
       [covers=release.verification.tech.reproducibility.status,release.evidence.reproducible.claim.gate]
-- [ ] I7 Update release manifests/report summaries so ordinary bundle-local
+- [ ] I7 Implement release evidence bundle creation/package placement for
+      reproducibility evidence: `crunch release create` MUST copy an optional
+      canonical reproducibility report sidecar into the bundle, record its
+      bundle-local path and BLAKE3 digest in manifest/report metadata, and keep
+      bundles without that sidecar verifying as ordinary non-reproducible release
+      evidence. [covers=release.evidence.reproducible.report,release.evidence.reproducible.claim.gate]
+- [ ] I8 Update release manifests/report summaries so ordinary bundle-local
       integrity remains separate from reproducible-release evidence and the
       manifest cannot imply reproducibility without a verified report.
       [covers=release.evidence.reproducible.claim.gate]
-- [ ] I8 Update release docs to reserve the bit-for-bit reproducible release
+- [ ] I9 Update release docs to reserve the bit-for-bit reproducible release
       label for bundles with a verified reproducibility report whose artifact
       set matches the published release artifact set.
       [covers=release.evidence.reproducible.claim.gate]
@@ -46,21 +53,21 @@
 
 - [ ] V1 Run `openspec validate bit-for-bit-reproducible-release-artifacts
       --strict` and record the result. [covers=release.evidence.reproducible.report,release.evidence.reproducible.cli,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
-- [ ] V2 Run reproducibility report core tests proving canonical serialization,
-      byte-identical success, and one-byte drift failure.
-      [covers=release.evidence.reproducible.report]
-- [ ] V3 Run release CLI reproducibility tests for matched, absent-required,
-      byte-length drift, digest drift, missing-artifact, output-name drift,
-      source archive drift, manifest drift, packaging-metadata drift,
-      non-canonical report, proof-linkage mismatch, prerequisite-only proof
-      input, bundle-linkage mismatch, and artifact-set mismatch outcomes.
-      [covers=release.evidence.reproducible.cli,release.evidence.reproducible.report,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
-- [ ] V4 Run release verification JSON tests proving reproducibility status
-      remains separate from signature trust, witness agreement, and basic bundle
-      integrity, including a case where signatures/witnesses remain valid while
-      reproducibility status is `mismatched`.
-      [covers=release.verification.tech.reproducibility.status]
-- [ ] V5 Run docs and manifest/report-summary audits proving ordinary
-      bundle-local integrity stays separate from reproducible-release evidence,
-      and absent or unverified reports cannot imply bit-for-bit reproducibility.
-      [covers=release.evidence.reproducible.claim.gate]
+- [ ] V2 Run `cargo test -p crunch-release-core reproducibility_report` proving
+      canonical serialization, byte-identical success, and one-byte drift
+      failure. [covers=release.evidence.reproducible.report]
+- [ ] V3 Run `cargo test -p crunch --test release_cli reproducibility` for
+      matched, absent-required, byte-length drift, digest drift,
+      missing-artifact, output-name drift, source archive drift, manifest drift,
+      packaging-metadata drift, non-canonical report, proof-linkage mismatch,
+      prerequisite-only proof input, bundle-linkage mismatch, and artifact-set
+      mismatch outcomes. [covers=release.evidence.reproducible.cli,release.evidence.reproducible.report,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
+- [ ] V4 Run `cargo test -p crunch --test release_cli release_verify_json` proving
+      reproducibility status remains separate from signature trust, witness
+      agreement, and basic bundle integrity, including a case where
+      signatures/witnesses remain valid while reproducibility status is
+      `mismatched`. [covers=release.verification.tech.reproducibility.status]
+- [ ] V5 Run `cargo test -p crunch --test release_cli reproducibility_docs_audit`
+      proving ordinary bundle-local integrity stays separate from
+      reproducible-release evidence, and absent or unverified reports cannot
+      imply bit-for-bit reproducibility. [covers=release.evidence.reproducible.claim.gate]
