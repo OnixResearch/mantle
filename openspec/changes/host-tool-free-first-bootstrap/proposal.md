@@ -1,0 +1,65 @@
+# Host-tool-free first bootstrap
+
+## Why
+
+The current first bootstrap path is explicit about its host prerequisites, but
+it still depends on host-side tools and discovery before crunch-built tools
+exist. That leaves a gap between "Nix-free" and "host-tool-free". To make the
+first bootstrap reviewable, crunch should stop executing undeclared host tools
+once the stage0 crunch binary starts, and should fail closed if a required seed
+artifact is missing.
+
+## What Changes
+
+- **Define the host-tool-free boundary.** State exactly which kernel interfaces
+  and predeclared seed artifacts remain allowed before crunch builds its own
+  tools.
+- **Remove host command execution.** Replace host `bwrap`, shell, copy, tar,
+  git, cargo, and helper invocations in the first-bootstrap path with Rust-owned
+  logic or declared seed artifacts.
+- **Add execution auditing.** Record every pre-toolchain executable path used by
+  stage0 and fail if an undeclared host path is executed.
+- **Harden proof mode.** Extend `--non-nix-host` into a broader no-host-tools
+  proof rail.
+
+## Non-Goals
+
+- Replacing the current binary seed provider; that is handled by
+  `full-source-bootstrap-root`.
+- Removing the need for a Linux kernel with namespaces and filesystem support.
+- Changing normal non-bootstrap `crunch build` ergonomics.
+
+## Capabilities
+
+### New Capabilities
+- `bootstrap-host-tool-free-stage0`: perform first bootstrap without executing
+  undeclared host commands.
+- `bootstrap-stage0-exec-audit`: produce machine-readable proof of every
+  executable used before crunch-built tools are available.
+
+### Modified Capabilities
+- `prove-self-hosting`: add a stronger proof mode that blocks broad host-tool
+  fallback, not only Nix commands.
+
+## Impact
+
+- **Files**: `src/self_build.rs`, `scripts/prove-self-hosting.sh`, sandbox
+  launch code, bootstrap docs, self-hosting tests.
+- **APIs**: new strict proof flag or mode, plus report fields for stage0 execs.
+- **Dependencies**: may add internal Rust syscall/filesystem code, but not new
+  host command dependencies.
+- **Testing**: fake-PATH tests, proof-helper branch tests, and an ignored full
+  proof in no-host-tools mode.
+
+## Relationship to Other Changes
+
+This change controls host tool execution. It complements
+`full-source-bootstrap-root`, which controls the seed provenance.
+
+## How to validate
+
+1. `openspec validate host-tool-free-first-bootstrap --strict` passes.
+2. Unit tests prove stage0 rejects undeclared executable paths.
+3. Runner tests prove fake `git`, `tar`, `cp`, `sh`, `cargo`, `bwrap`, and Nix
+   commands are not invoked during the protected phase.
+4. The full self-hosting proof passes in the no-host-tools mode.
