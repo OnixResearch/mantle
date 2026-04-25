@@ -209,10 +209,20 @@
       inventory BLAKE3 digest, blocked host command set, stage0/stage2 fallback
       events, stage0/stage2 protected transition records, and result; summary
       output includes the audit digest/path and transition summaries.
-- [ ] I18 Add a no-host-tools proof failure fixture that injects an undeclared
+- [x] I18 Add a no-host-tools proof failure fixture that injects an undeclared ✅ 0m 6s (started: 2026-04-25T22:45:05Z → completed: 2026-04-25T22:45:11Z)
       protected-phase executable or child exec, verifies the proof fails, and
       verifies the proof bundle identifies the hidden host tool.
       [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 169 passed chained `cargo test -p crunch
+      seccomp_supervisor -- --nocapture` and `cargo test -p crunch --test
+      self_hosting proof_bundle -- --nocapture`; seccomp coverage passed 5 lib
+      and 5 bin tests, including
+      `seccomp_supervisor_denies_undeclared_host_bwrap_before_execve`. The
+      fixture creates a fake executable named `bwrap`, installs the protected
+      exec supervisor with an inventory that only declares the current test
+      binary, asserts the attempted host bwrap receives `PermissionDenied`, and
+      asserts the audit event is `policy_decision=denied` for `execve` with no
+      inventory entry before execution.
 - [ ] I19 Update README and `docs/bootstrap-stage0-inventory.md` with the
       protected-phase boundary, exact allowed kernel-interface list, inventory
       schema/path, predeclared seed-artifact rules, seccomp supervisor behavior,

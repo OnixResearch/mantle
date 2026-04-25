@@ -467,6 +467,27 @@ mod linux {
         }
 
         #[test]
+        fn seccomp_supervisor_denies_undeclared_host_bwrap_before_execve() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("host-bwrap") {
+                run_denied_host_bwrap_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_undeclared_host_bwrap_before_execve")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "host-bwrap")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        #[test]
         fn seccomp_supervisor_allows_declared_execveat_descendant() {
             if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("execveat") {
                 run_execveat_child();
@@ -512,6 +533,34 @@ mod linux {
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].policy_decision, "denied");
             assert!(events[0].reason.contains("digest mismatch"));
+        }
+
+        fn run_denied_host_bwrap_child() {
+            let temp = tempfile::tempdir().unwrap();
+            let bwrap = temp.path().join("bwrap");
+            std::fs::write(&bwrap, b"#!/bin/sh\nexit 0\n").unwrap();
+            make_executable(&bwrap);
+            let current_exe = std::env::current_exe().unwrap();
+            let digest_hex = blake3_file_hex(&current_exe).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(current_exe_policy(digest_hex)).unwrap();
+            let err = Command::new(&bwrap).status().unwrap_err();
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let events = supervisor.audit_events();
+            assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "denied");
+            assert_eq!(events[0].syscall, "execve");
+            assert_eq!(events[0].executable_path, bwrap);
+            assert!(events[0].inventory_entry_id.is_none());
+            assert!(events[0].reason.contains("declared"), "reason: {}", events[0].reason);
+        }
+
+        #[cfg(unix)]
+        fn make_executable(path: &Path) {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata(path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(path, permissions).unwrap();
         }
 
         fn run_execveat_child() {

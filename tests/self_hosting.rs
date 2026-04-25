@@ -1386,10 +1386,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
-    out.push_str(&format!(
-        "protected_exec_audit: {} {}\n",
-        protected_audit.digest_blake3, protected_audit.path
-    ));
+    out.push_str(&format!("protected_exec_audit: {} {}\n", protected_audit.digest_blake3, protected_audit.path));
     out.push_str(&format!("stage0_path_strategy: {}\n", manifest.prerequisites.stage0_path_strategy));
     out.push_str(&format!(
         "stage0_path_dir: {}\n",
@@ -1458,17 +1455,11 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("stage0_hermeticity_mode: {}\n", manifest.stage0.report.hermeticity_mode));
     out.push_str(&format!("stage0_fallback_events: {:?}\n", manifest.stage0.report.fallback_events));
     out.push_str(&format!("stage0_report: {}\n", manifest.stage0.report.bwrap_source));
-    out.push_str(&format!(
-        "stage0_protected_transition: {:?}\n",
-        manifest.stage0.report.protected_transition
-    ));
+    out.push_str(&format!("stage0_protected_transition: {:?}\n", manifest.stage0.report.protected_transition));
     out.push_str(&format!("stage2_hermeticity_mode: {}\n", manifest.stage2.report.hermeticity_mode));
     out.push_str(&format!("stage2_fallback_events: {:?}\n", manifest.stage2.report.fallback_events));
     out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
-    out.push_str(&format!(
-        "stage2_protected_transition: {:?}\n",
-        manifest.stage2.report.protected_transition
-    ));
+    out.push_str(&format!("stage2_protected_transition: {:?}\n", manifest.stage2.report.protected_transition));
     out
 }
 
