@@ -411,6 +411,10 @@ pub enum ReleaseAction {
         #[arg(long)]
         proof_bundle: PathBuf,
 
+        /// Optional canonical reproducibility report to package in the bundle
+        #[arg(long)]
+        reproducibility_report: Option<PathBuf>,
+
         /// Workflow command identity recorded in the manifest
         #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
         workflow_command: String,

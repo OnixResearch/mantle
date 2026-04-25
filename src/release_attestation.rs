@@ -928,6 +928,7 @@ mod tests {
             binaries: vec![sample_artifact(BundledArtifactKind::File, "binaries/01-crunch", 2)],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 3),
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
+            reproducibility_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

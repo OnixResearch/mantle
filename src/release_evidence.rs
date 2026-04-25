@@ -16,10 +16,15 @@ pub(crate) use crunch_release_core::RELEASE_EVIDENCE_SCHEMA;
 use crunch_release_core::ReleaseEvidenceError;
 pub(crate) use crunch_release_core::ReleaseEvidenceManifest;
 pub(crate) use crunch_release_core::ReleaseProofLinkage;
+use crunch_release_core::ReleaseReproducibilityReport;
+use crunch_release_core::ReleaseReproducibilityReportLinkage;
 pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
+use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::validate_bundled_artifact_record;
+use crunch_release_core::validate_release_reproducibility_report_artifact_names;
+use crunch_release_core::validate_release_reproducibility_report_linkage;
 
 use crate::errors::RunError;
 
@@ -46,6 +51,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub proof_bundle_dir: PathBuf,
     pub workflow_command: String,
     pub workflow_version: String,
+    pub reproducibility_report_path: Option<PathBuf>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -65,6 +71,7 @@ impl ReleaseBundleCreateRequest {
             proof_bundle_dir,
             workflow_command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
             workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
+            reproducibility_report_path: None,
         }
     }
 }
@@ -91,6 +98,8 @@ pub(crate) fn create_release_evidence_bundle(
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
         copy_file_into_bundle(&inventory_path, &request.bundle_dir, Path::new("proof/inventory.md"))?;
+    let reproducibility_report =
+        copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
 
     let manifest = ReleaseEvidenceManifest {
@@ -105,6 +114,7 @@ pub(crate) fn create_release_evidence_bundle(
         binaries,
         proof_bundle,
         prerequisite_inventory: prerequisite_inventory.clone(),
+        reproducibility_report,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
             source_archive_digest_blake3,
@@ -195,6 +205,14 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
             return Err(RunError::Internal(format!("release evidence binary is missing: {}", binary_path.display())));
         }
     }
+    if let Some(report_path) = &request.reproducibility_report_path {
+        if !report_path.is_file() {
+            return Err(RunError::Internal(format!(
+                "release evidence reproducibility report is missing: {}",
+                report_path.display()
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -244,6 +262,49 @@ fn copy_binary_set_into_bundle(binary_paths: &[PathBuf], bundle_dir: &Path) -> R
     }
     assert!(!bundled.is_empty(), "binary bundle copy must emit at least one artifact");
     Ok(bundled)
+}
+
+fn copy_optional_reproducibility_report(
+    request: &ReleaseBundleCreateRequest,
+    source_archive: &BundledArtifact,
+    binaries: &[BundledArtifact],
+    proof_bundle: &BundledArtifact,
+) -> Result<Option<BundledArtifact>, RunError> {
+    let Some(report_path) = &request.reproducibility_report_path else {
+        return Ok(None);
+    };
+    validate_reproducibility_report_for_bundle(request, report_path, source_archive, binaries, proof_bundle)?;
+    let relative = Path::new("reproducibility").join("reproducibility-report.json");
+    copy_file_into_bundle(report_path, &request.bundle_dir, &relative).map(Some)
+}
+
+fn validate_reproducibility_report_for_bundle(
+    request: &ReleaseBundleCreateRequest,
+    report_path: &Path,
+    source_archive: &BundledArtifact,
+    binaries: &[BundledArtifact],
+    proof_bundle: &BundledArtifact,
+) -> Result<(), RunError> {
+    let report_bytes = std::fs::read(report_path)
+        .map_err(|err| RunError::Internal(format!("reading {}: {err}", report_path.display())))?;
+    let report: ReleaseReproducibilityReport = serde_json::from_slice(&report_bytes)
+        .map_err(|err| RunError::Internal(format!("parsing {}: {err}", report_path.display())))?;
+    let canonical_bytes =
+        release_reproducibility_report_canonical_bytes(report.clone()).map_err(core_error_to_run_error)?;
+    if report_bytes != canonical_bytes {
+        return Err(RunError::Internal(
+            "release evidence reproducibility report is not canonical compact JSON".to_string(),
+        ));
+    }
+    let expected = ReleaseReproducibilityReportLinkage {
+        release_id: request.release_id.clone(),
+        source_archive_digest_blake3: source_archive.digest_blake3.clone(),
+        proof_bundle_digest_blake3: proof_bundle.digest_blake3.clone(),
+    };
+    let report = validate_release_reproducibility_report_linkage(report, expected).map_err(core_error_to_run_error)?;
+    let expected_names = binaries.iter().map(|artifact| artifact.relative_path.clone()).collect::<Vec<_>>();
+    validate_release_reproducibility_report_artifact_names(report, expected_names).map_err(core_error_to_run_error)?;
+    Ok(())
 }
 
 fn copy_file_into_bundle(
@@ -513,6 +574,9 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
             .map_err(|_| RunError::Internal("release evidence verify binary index overflowed u32".to_string()))?;
         verify_artifact_matches_bundle(artifact, bundle_dir, &format!("binaries[{index_u32}]"))?;
     }
+    if let Some(report) = &manifest.reproducibility_report {
+        verify_artifact_matches_bundle(report, bundle_dir, "reproducibility_report")?;
+    }
     Ok(())
 }
 
@@ -616,6 +680,7 @@ mod tests {
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
+            reproducibility_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

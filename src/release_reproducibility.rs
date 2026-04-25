@@ -28,7 +28,7 @@ pub(crate) const DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION: &str = "crunch-releas
 const REPRODUCE_BUNDLE_DIR_ENV: &str = "CRUNCH_REPRODUCE_BUNDLE_DIR";
 const REPRODUCE_OUTPUT_DIR_ENV: &str = "CRUNCH_REPRODUCE_OUTPUT_DIR";
 const REPRODUCE_RELEASE_ID_ENV: &str = "CRUNCH_REPRODUCE_RELEASE_ID";
-const DEFAULT_REPORT_FILE_NAME: &str = "reproducibility-report.json";
+const DEFAULT_REPORT_RELATIVE_PATH: &str = "reproducibility/reproducibility-report.json";
 const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
 
@@ -117,8 +117,19 @@ pub(crate) fn load_bundle_reproducibility_report(
     bundle_dir: &Path,
     manifest: &ReleaseEvidenceManifest,
 ) -> Result<Option<VerifiedReproducibilityReport>, RunError> {
-    let report_path = default_reproducibility_report_path(bundle_dir);
+    let has_manifest_reference = manifest.reproducibility_report.is_some();
+    let report_path = manifest
+        .reproducibility_report
+        .as_ref()
+        .map(|artifact| bundle_dir.join(&artifact.relative_path))
+        .unwrap_or_else(|| default_reproducibility_report_path(bundle_dir));
     if !report_path.exists() {
+        if has_manifest_reference {
+            return Err(RunError::Internal(format!(
+                "release reproducibility report referenced by manifest is missing: {}",
+                report_path.display()
+            )));
+        }
         return Ok(None);
     }
     let report_bytes = std::fs::read(&report_path)
@@ -357,7 +368,7 @@ fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf
 }
 
 fn default_reproducibility_report_path(bundle_dir: &Path) -> PathBuf {
-    bundle_dir.join(DEFAULT_REPORT_FILE_NAME)
+    bundle_dir.join(DEFAULT_REPORT_RELATIVE_PATH)
 }
 
 fn collect_unexpected_rebuilt_outputs(

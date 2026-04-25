@@ -43,6 +43,7 @@ pub(crate) fn cmd_release(
             bundle_dir,
             binary,
             proof_bundle,
+            reproducibility_report,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -52,6 +53,7 @@ pub(crate) fn cmd_release(
             bundle_dir,
             binary,
             proof_bundle,
+            reproducibility_report,
             workflow_command,
             workflow_version,
         ),
@@ -119,6 +121,7 @@ fn cmd_release_create(
     bundle_dir: Option<PathBuf>,
     binary: Vec<PathBuf>,
     proof_bundle: PathBuf,
+    reproducibility_report: Option<PathBuf>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
@@ -136,6 +139,7 @@ fn cmd_release_create(
         proof_bundle_dir: resolve_input_path(current_dir, proof_bundle),
         workflow_command: normalized_workflow_command,
         workflow_version: normalized_workflow_version,
+        reproducibility_report_path: reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -148,6 +152,9 @@ fn cmd_release_create(
         println!("source archive: {}", manifest.source_archive.relative_path);
         println!("proof bundle: {}", manifest.proof_bundle.relative_path);
         println!("binaries: {}", manifest.binaries.len());
+        if let Some(report) = &manifest.reproducibility_report {
+            println!("reproducibility report: {}", report.relative_path);
+        }
         println!("manifest: manifest.json");
     }
     Ok(())

@@ -79,6 +79,8 @@ pub struct ReleaseEvidenceManifest {
     pub binaries: Vec<BundledArtifact>,
     pub proof_bundle: BundledArtifact,
     pub prerequisite_inventory: BundledArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reproducibility_report: Option<BundledArtifact>,
     pub proof_linkage: ReleaseProofLinkage,
 }
 
@@ -217,6 +219,14 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
     validate_and_record_path(&manifest.source_archive, "source_archive", &mut seen_paths)?;
     validate_and_record_path(&manifest.proof_bundle, "proof_bundle", &mut seen_paths)?;
     validate_and_record_path(&manifest.prerequisite_inventory, "prerequisite_inventory", &mut seen_paths)?;
+    if let Some(report) = &manifest.reproducibility_report {
+        validate_and_record_path(report, "reproducibility_report", &mut seen_paths)?;
+        if report.kind != BundledArtifactKind::File {
+            return Err(validation_error(
+                "release evidence reproducibility_report must be recorded as a file artifact".to_string(),
+            ));
+        }
+    }
     for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
         let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
         validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
@@ -465,6 +475,7 @@ mod tests {
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
+            reproducibility_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

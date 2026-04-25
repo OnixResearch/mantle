@@ -522,7 +522,7 @@ fn write_matched_default_reproducibility_report(
         .arg(&rebuild_script)
         .assert()
         .success();
-    bundle_dir.join("reproducibility-report.json")
+    bundle_dir.join("reproducibility/reproducibility-report.json")
 }
 
 fn read_reproducibility_report(report_path: &Path) -> ReleaseReproducibilityReport {
@@ -850,6 +850,65 @@ fn release_reproduce_fails_on_output_name_drift() {
         .stderr(predicate::str::contains("output-name drift"));
 
     assert!(report_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn release_create_can_package_optional_reproducibility_report() {
+    let (temp, _bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &_bundle_dir, &manifest);
+    let packaged_bundle_dir = temp.path().join("bundle-with-report");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg(&manifest.release_id)
+        .arg("--bundle-dir")
+        .arg(&packaged_bundle_dir)
+        .arg("--binary")
+        .arg(temp.path().join("crunch-bin"))
+        .arg("--proof-bundle")
+        .arg(temp.path().join("proof-input"))
+        .arg("--reproducibility-report")
+        .arg(&report_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reproducibility report: reproducibility/reproducibility-report.json"));
+
+    let packaged_manifest =
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(packaged_bundle_dir.join("manifest.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        packaged_manifest["reproducibility_report"]["relative_path"],
+        "reproducibility/reproducibility-report.json"
+    );
+    assert!(packaged_bundle_dir.join("reproducibility/reproducibility-report.json").is_file());
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&packaged_bundle_dir)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reproducibility: matched"));
+}
+
+#[test]
+fn release_create_without_reproducibility_report_stays_ordinary_bundle() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let manifest =
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+
+    assert!(manifest.get("reproducibility_report").is_none());
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reproducibility: absent"));
 }
 
 #[cfg(unix)]

@@ -62,12 +62,18 @@
       Evidence: `cargo test -p crunch --test release_cli release_verify_`
       passed in pueue task 23 (24 tests), covering JSON statuses `absent`,
       `matched`, `mismatched`, and `--require-reproducible` success/failure.
-- [ ] I7 Implement release evidence bundle creation/package placement for
+- [x] I7 Implement release evidence bundle creation/package placement for ✅ 6m 50s (started: 2026-04-25T19:20:07Z → completed: 2026-04-25T19:26:57Z)
       reproducibility evidence: `crunch release create` MUST copy an optional
       canonical reproducibility report sidecar into the bundle, record its
       bundle-local path and BLAKE3 digest in manifest/report metadata, and keep
       bundles without that sidecar verifying as ordinary non-reproducible release
       evidence. [covers=release.evidence.reproducible.report,release.evidence.reproducible.claim.gate]
+      Evidence: `cargo test -p crunch --test release_cli release_create`
+      passed in pueue task 30 (4 tests), `cargo test -p crunch --test
+      release_cli release_verify_` passed in pueue task 31 (24 tests),
+      `cargo test -p crunch-release-core` passed in pueue task 34
+      (16 tests), and `cargo check -p crunch-release-core --target
+      wasm32-unknown-unknown` passed in pueue task 33.
 - [ ] I8 Update release manifests/report summaries so ordinary bundle-local
       integrity remains separate from reproducible-release evidence and the
       manifest cannot imply reproducibility without a verified report.
