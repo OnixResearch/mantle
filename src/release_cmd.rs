@@ -55,7 +55,10 @@ pub(crate) fn cmd_release(
             workflow_command,
             workflow_version,
         ),
-        crate::ReleaseAction::Verify { bundle_dir } => cmd_release_verify(json, bundle_dir),
+        crate::ReleaseAction::Verify {
+            bundle_dir,
+            require_reproducible,
+        } => cmd_release_verify(json, bundle_dir, require_reproducible),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
             rebuild_output_dir,
@@ -150,13 +153,12 @@ fn cmd_release_create(
     Ok(())
 }
 
-fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
+fn cmd_release_verify(json: bool, bundle_dir: PathBuf, require_reproducible: bool) -> Result<(), RunError> {
     let manifest = verify_release_evidence_bundle(&bundle_dir)?;
     let reproducibility = load_bundle_reproducibility_report(&bundle_dir, &manifest)?;
+    let reproducibility_status = reproducibility_status(reproducibility.as_ref());
     if json {
-        let rendered = serde_json::to_string(&manifest)
-            .map_err(|err| RunError::Internal(format!("serializing verified release evidence manifest: {err}")))?;
-        println!("{rendered}");
+        print_release_verify_json(&manifest, reproducibility.as_ref(), reproducibility_status)?;
     } else {
         println!("release evidence verified: {}", bundle_dir.display());
         println!("release id: {}", manifest.release_id);
@@ -166,7 +168,43 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
         print_reproducibility_summary(reproducibility.as_ref());
     }
+    if require_reproducible && reproducibility_status != ReproducibilityStatus::Matched {
+        return Err(RunError::Internal(format!(
+            "reproducibility evidence required but status is {}",
+            reproducibility_status.as_str()
+        )));
+    }
     Ok(())
+}
+
+fn print_release_verify_json(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    reproducibility: Option<&VerifiedReproducibilityReport>,
+    status: ReproducibilityStatus,
+) -> Result<(), RunError> {
+    let report_json = reproducibility.map(|report| {
+        serde_json::json!({
+            "path": report.path.display().to_string(),
+            "digest_blake3": report.digest_blake3,
+        })
+    });
+    let rendered = serde_json::json!({
+        "kind": "crunch-release-verify-v1",
+        "release_id": manifest.release_id,
+        "manifest": manifest,
+        "reproducibility_status": status.as_str(),
+        "reproducibility_report": report_json,
+    });
+    println!(
+        "{}",
+        serde_json::to_string(&rendered)
+            .map_err(|err| RunError::Internal(format!("serializing verified release evidence output: {err}")))?
+    );
+    Ok(())
+}
+
+fn reproducibility_status(reproducibility: Option<&VerifiedReproducibilityReport>) -> ReproducibilityStatus {
+    reproducibility.map(|report| report.status).unwrap_or(ReproducibilityStatus::Absent)
 }
 
 fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilityReport>) {

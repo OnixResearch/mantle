@@ -868,6 +868,102 @@ fn release_verify_reports_matched_reproducibility_report() {
         .stdout(predicate::str::contains(report_path.display().to_string()));
 }
 
+#[test]
+fn release_verify_json_reports_absent_reproducibility() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    let output = crunch().arg("--json").arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+
+    assert_eq!(json["kind"], "crunch-release-verify-v1");
+    assert_eq!(json["reproducibility_status"], "absent");
+    assert!(json["reproducibility_report"].is_null());
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_json_reports_matched_reproducibility() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let report_path = write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+
+    let output = crunch().arg("--json").arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+
+    assert_eq!(json["reproducibility_status"], "matched");
+    assert_eq!(json["reproducibility_report"]["path"], report_path.display().to_string());
+    assert_eq!(json["reproducibility_report"]["digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_LEN);
+}
+
+#[test]
+fn release_verify_require_reproducible_fails_when_report_absent() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-reproducible")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+
+    assert_eq!(json["reproducibility_status"], "absent");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("reproducibility evidence required"));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_json_reports_mismatched_reproducibility() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("json-mismatch.sh");
+    let rebuild_output_dir = temp.path().join("json-mismatch-output");
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            manifest.binaries[0].relative_path
+        ),
+    );
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("digest drift"));
+
+    let output = crunch().arg("--json").arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+
+    assert_eq!(json["reproducibility_status"], "mismatched");
+}
+
+#[cfg(unix)]
+#[test]
+fn release_verify_require_reproducible_accepts_matched_report() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    write_matched_default_reproducibility_report(&temp, &bundle_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-reproducible")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reproducibility: matched"));
+}
+
 #[cfg(unix)]
 #[test]
 fn release_verify_rejects_non_canonical_reproducibility_report() {

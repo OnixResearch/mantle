@@ -423,6 +423,10 @@ pub enum ReleaseAction {
     Verify {
         /// Bundle directory to verify
         bundle_dir: PathBuf,
+
+        /// Fail unless a verified reproducibility report is present and matched
+        #[arg(long)]
+        require_reproducible: bool,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {

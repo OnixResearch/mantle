@@ -55,10 +55,13 @@
       passed in pueue task 21 (19 tests), covering matched report loading,
       non-canonical report rejection, linkage mismatch, artifact-set
       mismatch, and existing bundle/linkage drift failures.
-- [ ] I6 Extend `release verify` JSON output with reproducibility status
+- [x] I6 Extend `release verify` JSON output with reproducibility status ✅ 0m 55s (started: 2026-04-25T19:18:27Z → completed: 2026-04-25T19:19:22Z)
       `absent`, `matched`, or `mismatched`, and add an option for callers to
       require matched reproducibility evidence.
       [covers=release.verification.tech.reproducibility.status,release.evidence.reproducible.claim.gate]
+      Evidence: `cargo test -p crunch --test release_cli release_verify_`
+      passed in pueue task 23 (24 tests), covering JSON statuses `absent`,
+      `matched`, `mismatched`, and `--require-reproducible` success/failure.
 - [ ] I7 Implement release evidence bundle creation/package placement for
       reproducibility evidence: `crunch release create` MUST copy an optional
       canonical reproducibility report sidecar into the bundle, record its
