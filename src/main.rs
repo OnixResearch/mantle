@@ -30,6 +30,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
+const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
+#[cfg(unix)]
+const UNIX_EXECUTE_BITS: u32 = 0o111;
+
 use build_cmd::BuildOutputMode;
 use build_cmd::build_import_paths;
 use build_cmd::cmd_build;
@@ -350,7 +355,7 @@ enum Command {
         trust_unsigned: bool,
     },
 
-    /// Build and run an executable from crunch.ncl packages
+    /// Build and run an executable from a project package or .ncl file
     Run {
         /// Package name or .#name selector
         name: Option<String>,
@@ -374,6 +379,10 @@ enum Command {
         /// Accept unsigned/unverified PathInfo on cache hits
         #[arg(long)]
         trust_unsigned: bool,
+
+        /// Select a specific executable from the output's bin/ directory
+        #[arg(long)]
+        bin: Option<String>,
 
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
@@ -447,11 +456,13 @@ pub enum ReleaseAction {
         /// Exported witness request directory produced by `crunch release witness-export`
         request_dir: PathBuf,
 
-        /// Scratch root for the rebuild work area (default: $CRUNCH_WITNESS_SCRATCH_DIR or <request-dir>.work)
+        /// Scratch root for the rebuild work area (default: $CRUNCH_WITNESS_SCRATCH_DIR or
+        /// <request-dir>.work)
         #[arg(long)]
         scratch_dir: Option<PathBuf>,
 
-        /// Run request validation and workflow preflight only, without rebuilding or writing sidecars
+        /// Run request validation and workflow preflight only, without rebuilding or writing
+        /// sidecars
         #[arg(long)]
         check: bool,
 
@@ -1207,6 +1218,7 @@ fn run_run_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunEr
             no_substitute,
             signing_key,
             trust_unsigned,
+            bin,
             run_args,
         } => run_package_command(
             ctx,
@@ -1216,6 +1228,7 @@ fn run_run_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunEr
             *no_substitute,
             signing_key.as_deref(),
             *trust_unsigned,
+            bin.as_deref(),
             run_args,
         ),
         _ => unreachable!("run helper called with non-run command"),
@@ -1231,6 +1244,7 @@ fn run_package_command(
     no_substitute: bool,
     signing_key: Option<&std::path::Path>,
     trust_unsigned: bool,
+    bin: Option<&str>,
     run_args: &[String],
 ) -> Result<(), RunError> {
     cmd_run(
@@ -1240,6 +1254,7 @@ fn run_package_command(
         no_substitute,
         signing_key,
         trust_unsigned,
+        bin,
         run_args,
         &ctx.store,
         &ctx.resolved_state_dir,
@@ -1462,23 +1477,21 @@ fn build_from_expr_raw(
     build_cmd::run_build(&config)
 }
 
-/// Extract the first successful "out" output path from a pipeline result.
-fn first_output_path(
-    result: &crunch_pipeline::PipelineResult,
-    output_dir: &std::path::Path,
-    store_dir: &str,
-) -> Option<PathBuf> {
+fn output_host_path(path_info: &snix_store::path_info::PathInfo, output_dir: &Path, store_dir: &str) -> PathBuf {
+    debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
+    let abs = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+    if output_dir == Path::new(store_dir) {
+        return PathBuf::from(&abs);
+    }
+    let rel = abs.strip_prefix(store_dir).unwrap_or(&abs);
+    let rel = rel.strip_prefix('/').unwrap_or(rel);
+    output_dir.join(rel)
+}
+
+fn first_output_path(result: &crunch_pipeline::PipelineResult, output_dir: &Path, store_dir: &str) -> Option<PathBuf> {
     for outcome in &result.outcomes {
-        // Prefer the "out" output, fall back to first alphabetically.
         let path_info = outcome.outputs.get("out").or_else(|| outcome.outputs.values().next())?;
-        let abs = path_info.store_path.to_absolute_path_with_prefix(store_dir);
-        let host_path = if output_dir == std::path::Path::new(store_dir) {
-            PathBuf::from(&abs)
-        } else {
-            let rel = abs.strip_prefix(store_dir).unwrap_or(&abs);
-            let rel = rel.strip_prefix('/').unwrap_or(rel);
-            output_dir.join(rel)
-        };
+        let host_path = output_host_path(path_info, output_dir, store_dir);
         if host_path.exists() {
             return Some(host_path);
         }
@@ -1486,46 +1499,160 @@ fn first_output_path(
     None
 }
 
-/// Find the first executable in out_path/bin and exec it with args.
-fn exec_run(out_path: &std::path::Path, args: &[String]) -> Result<(), RunError> {
+fn selected_run_output_path(
+    result: &crunch_pipeline::PipelineResult,
+    output_dir: &Path,
+    store_dir: &str,
+    target_label: &str,
+) -> Result<PathBuf, RunError> {
+    let outcome_count = result.outcomes.len();
+    if outcome_count != EXPECTED_RUN_OUTCOME_COUNT {
+        return Err(RunError::Internal(format!(
+            "run target {target_label} produced {outcome_count} derivations; expected exactly {EXPECTED_RUN_OUTCOME_COUNT}",
+        )));
+    }
+    let outcome = result
+        .outcomes
+        .first()
+        .ok_or_else(|| RunError::Internal(format!("run target {target_label} produced no outputs")))?;
+    let path_info = outcome
+        .outputs
+        .get("out")
+        .or_else(|| outcome.outputs.values().next())
+        .ok_or_else(|| RunError::Internal(format!("run target {target_label} produced no outputs")))?;
+    let host_path = output_host_path(path_info, output_dir, store_dir);
+    if !host_path.exists() {
+        return Err(RunError::Internal(format!("selected run output is missing on disk: {}", host_path.display())));
+    }
+    Ok(host_path)
+}
+
+fn valid_run_bin_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    if name == "." || name == ".." {
+        return false;
+    }
+    if name.starts_with('/') {
+        return false;
+    }
+    if name.contains('/') || name.contains('\\') {
+        return false;
+    }
+    true
+}
+
+#[cfg(unix)]
+fn metadata_has_execute_bit(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & UNIX_EXECUTE_BITS != 0
+}
+
+#[cfg(not(unix))]
+fn metadata_has_execute_bit(_metadata: &std::fs::Metadata) -> bool {
+    true
+}
+
+fn executable_file_or_symlink(path: &Path) -> bool {
+    let Ok(symlink_metadata) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if symlink_metadata.is_dir() {
+        return false;
+    }
+    if !symlink_metadata.is_file() && !symlink_metadata.file_type().is_symlink() {
+        return false;
+    }
+    let Ok(target_metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !target_metadata.is_file() {
+        return false;
+    }
+    metadata_has_execute_bit(&target_metadata)
+}
+
+fn select_run_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunError> {
     let bin_dir = out_path.join("bin");
     if !bin_dir.is_dir() {
         return Err(RunError::Internal(format!("no bin/ directory in {}", out_path.display())));
     }
 
-    let mut entries: Vec<_> = std::fs::read_dir(&bin_dir)
+    if let Some(name) = bin {
+        if !valid_run_bin_name(name) {
+            return Err(RunError::Internal(format!("invalid --bin value '{name}': expected a single bin/ entry name")));
+        }
+        let exe_path = bin_dir.join(name);
+        if !executable_file_or_symlink(&exe_path) {
+            return Err(RunError::Internal(format!("selected binary is not executable: {}", exe_path.display())));
+        }
+        return Ok(exe_path);
+    }
+
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&bin_dir)
         .map_err(|e| RunError::Internal(format!("reading {}: {e}", bin_dir.display())))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_file() || t.is_symlink()).unwrap_or(false))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| executable_file_or_symlink(path))
         .collect();
-    entries.sort_by_key(|e| e.file_name());
+    candidates.sort_by_key(|path| path.file_name().map(|name| name.to_os_string()));
 
-    let exe = entries
+    candidates
         .first()
-        .ok_or_else(|| RunError::Internal(format!("no executables in {}", bin_dir.display())))?;
+        .cloned()
+        .ok_or_else(|| RunError::Internal(format!("no executables in {}", bin_dir.display())))
+}
 
-    let exe_path = exe.path();
+fn child_exit_code(status: std::process::ExitStatus) -> i32 {
+    status.code().unwrap_or(CHILD_NO_EXIT_CODE_STATUS)
+}
+
+fn exec_run(out_path: &Path, bin: Option<&str>, args: &[String]) -> Result<(), RunError> {
+    let exe_path = select_run_binary(out_path, bin)?;
     eprintln!("running: {}", exe_path.display());
-
-    let mut cmd_args: Vec<String> = vec![exe_path.to_string_lossy().to_string()];
-    cmd_args.extend(args.iter().cloned());
 
     let status = std::process::Command::new(&exe_path)
         .args(args)
         .status()
         .map_err(|e| RunError::Internal(format!("exec {}: {e}", exe_path.display())))?;
 
-    std::process::exit(status.code().unwrap_or(1));
+    std::process::exit(child_exit_code(status));
 }
 
-/// Resolve a CLI name argument into a project build target.
+fn explicit_run_file_target(target: &str) -> bool {
+    target.starts_with("./") || target.starts_with("../") || target.starts_with('/') || target.ends_with(".ncl")
+}
+
+/// Resolve a CLI name argument into a run build target.
 fn name_to_build_target(name: Option<&str>) -> project_build::BuildTarget {
     match name {
         None => project_build::BuildTarget::ProjectDefault,
-        Some(s) if s.starts_with(".#") => project_build::parse_build_target(Some(std::path::Path::new(s))),
+        Some(s) if s.starts_with(".#") => project_build::parse_build_target(Some(Path::new(s))),
+        Some(s) if explicit_run_file_target(s) => project_build::BuildTarget::File(PathBuf::from(s)),
         Some(s) => project_build::BuildTarget::Selector(project_build::Selector {
             segments: vec![s.to_string()],
         }),
+    }
+}
+
+fn generate_run_project_expr(root_file: &Path, target: &project_build::ProjectTarget) -> String {
+    match target {
+        project_build::ProjectTarget::Default => {
+            let root_path = root_file.to_string_lossy();
+            format!(
+                r#"let _proj = import "{root_path}" in
+let _pkg_name = if std.record.has_field "default" _proj
+  then (if std.record.has_field "package" _proj.default then _proj.default.package else null)
+  else null
+in
+if _pkg_name != null then
+  _proj.packages."%{{_pkg_name}}"
+else
+  std.fail_with "no default.package defined in crunch.ncl""#
+            )
+        }
+        _ => project_build::generate_extraction_expr(root_file, target),
     }
 }
 
@@ -1533,14 +1660,14 @@ fn name_to_build_target(name: Option<&str>) -> project_build::BuildTarget {
 #[allow(clippy::too_many_arguments)]
 fn build_project_expr(
     expr: &str,
-    resolved_import_paths: Vec<std::ffi::OsString>,
-    output_dir: &std::path::Path,
-    state_dir: &std::path::Path,
+    resolved_import_paths: Vec<OsString>,
+    output_dir: &Path,
+    state_dir: &Path,
     store_dir: &str,
     verbose: bool,
     max_jobs: u32,
     no_substitute: bool,
-    signing_key_path: Option<&std::path::Path>,
+    signing_key_path: Option<&Path>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
     let sub_url = if no_substitute {
@@ -1567,39 +1694,98 @@ fn build_project_expr(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn build_file_raw(
+    file: &Path,
+    import_paths: &[PathBuf],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    max_jobs: u32,
+    no_substitute: bool,
+    signing_key_path: Option<&Path>,
+    trust_unsigned: bool,
+) -> Result<crunch_pipeline::PipelineResult, RunError> {
+    let sub_url = if no_substitute {
+        None
+    } else {
+        Some("https://cache.nixos.org".to_string())
+    };
+    let import_paths = build_import_paths(import_paths)?;
+    let keypair = build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
+    let configured_trusted_keys = build_cmd::load_configured_trusted_public_keys(None, state_dir)?;
+    let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
+
+    let config = crunch_pipeline::BuildConfig {
+        file: file.to_path_buf(),
+        import_paths,
+        output_dir: output_dir.to_path_buf(),
+        state_dir: state_dir.to_path_buf(),
+        store_dir: store_dir.to_string(),
+        verbose,
+        max_jobs,
+        substituter_url: sub_url,
+        hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+        keypair,
+        trusted_keys,
+        trust_unsigned,
+        root_retention_source: None,
+    };
+
+    build_cmd::run_build(&config)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_run(
     name: Option<&str>,
     import_paths: &[PathBuf],
     jobs: Option<u32>,
     no_substitute: bool,
-    signing_key: Option<&std::path::Path>,
+    signing_key: Option<&Path>,
     trust_unsigned: bool,
+    bin: Option<&str>,
     run_args: &[String],
-    output_dir: &std::path::Path,
-    state_dir: &std::path::Path,
+    output_dir: &Path,
+    state_dir: &Path,
     store_prefix: &str,
     verbose: bool,
 ) -> Result<(), RunError> {
     let cwd = current_dir_or_error()?;
     let target = name_to_build_target(name);
-    let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
-    let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-    let result = build_project_expr(
-        &expr,
-        resolved.import_paths,
-        output_dir,
-        state_dir,
-        store_prefix,
-        verbose,
-        max_jobs,
-        no_substitute,
-        signing_key,
-        trust_unsigned,
-    )?;
-    let out_path = first_output_path(&result, output_dir, store_prefix)
-        .ok_or_else(|| RunError::Internal("no outputs built".into()))?;
-    exec_run(&out_path, run_args)
+    let target_label = name.unwrap_or("default").to_string();
+    let result = match &target {
+        project_build::BuildTarget::File(path) => build_file_raw(
+            path,
+            import_paths,
+            output_dir,
+            state_dir,
+            store_prefix,
+            verbose,
+            max_jobs,
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+        )?,
+        project_build::BuildTarget::ProjectDefault | project_build::BuildTarget::Selector(_) => {
+            let resolved = project_build::resolve_project_target(&target, &cwd, import_paths)?;
+            let expr = generate_run_project_expr(&resolved.root_file, &resolved.target);
+            build_project_expr(
+                &expr,
+                resolved.import_paths,
+                output_dir,
+                state_dir,
+                store_prefix,
+                verbose,
+                max_jobs,
+                no_substitute,
+                signing_key,
+                trust_unsigned,
+            )?
+        }
+    };
+    let out_path = selected_run_output_path(&result, output_dir, store_prefix, &target_label)?;
+    exec_run(&out_path, bin, run_args)
 }
 
 fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, verbose: bool) -> Result<(), RunError> {
@@ -1630,4 +1816,90 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
     eprintln!("Wrote {}", output.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    const TEST_EXEC_MODE: u32 = 0o755;
+    #[cfg(unix)]
+    const TEST_READ_MODE: u32 = 0o644;
+
+    #[cfg(unix)]
+    fn write_file_with_mode(path: &Path, contents: &str, mode: u32) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(path, contents).unwrap();
+        let permissions = std::fs::Permissions::from_mode(mode);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn run_target_resolves_selectors_before_file_suffix() {
+        let target = name_to_build_target(Some(".#foo.ncl"));
+        assert!(matches!(target, project_build::BuildTarget::Selector(_)));
+        assert!(!matches!(target, project_build::BuildTarget::File(_)));
+    }
+
+    #[test]
+    fn run_target_resolves_explicit_files_and_bare_packages() {
+        assert!(matches!(name_to_build_target(Some("tool.ncl")), project_build::BuildTarget::File(_)));
+        assert!(matches!(name_to_build_target(Some("./tool")), project_build::BuildTarget::File(_)));
+        assert!(matches!(name_to_build_target(Some("tool")), project_build::BuildTarget::Selector(_)));
+        assert!(matches!(name_to_build_target(None), project_build::BuildTarget::ProjectDefault));
+    }
+
+    #[test]
+    fn run_bin_name_rejects_path_like_values() {
+        assert!(valid_run_bin_name("tool"));
+        assert!(!valid_run_bin_name(""));
+        assert!(!valid_run_bin_name("."));
+        assert!(!valid_run_bin_name(".."));
+        assert!(!valid_run_bin_name("/tool"));
+        assert!(!valid_run_bin_name("../tool"));
+        assert!(!valid_run_bin_name("dir/tool"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_binary_fallback_skips_invalid_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let bin = temp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        write_file_with_mode(&bin.join("aaa"), "no execute", TEST_READ_MODE);
+        std::os::unix::fs::symlink(bin.join("missing"), bin.join("aab")).unwrap();
+        write_file_with_mode(&bin.join("bbb"), "#!/bin/sh\n", TEST_EXEC_MODE);
+
+        let selected = select_run_binary(temp.path(), None).unwrap();
+        assert_eq!(selected.file_name().unwrap(), "bbb");
+        assert!(selected.ends_with("bbb"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_binary_explicit_symlink_selects_executable_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let bin = temp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        write_file_with_mode(&bin.join("real"), "#!/bin/sh\n", TEST_EXEC_MODE);
+        std::os::unix::fs::symlink(bin.join("real"), bin.join("alias")).unwrap();
+
+        let selected = select_run_binary(temp.path(), Some("alias")).unwrap();
+        assert_eq!(selected.file_name().unwrap(), "alias");
+        assert!(selected.ends_with("alias"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_binary_explicit_rejects_non_executable_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let bin = temp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        write_file_with_mode(&bin.join("tool"), "no execute", TEST_READ_MODE);
+
+        let err = select_run_binary(temp.path(), Some("tool")).unwrap_err().to_string();
+        assert!(err.contains("not executable"));
+        assert!(err.contains("tool"));
+    }
 }

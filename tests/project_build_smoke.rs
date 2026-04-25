@@ -593,3 +593,178 @@ fn project_build_from_subdirectory() {
         serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("should parse JSON report: {e}\nstdout:\n{stdout}"));
     assert_eq!(report.outcomes[0].label, "hello", "should find default package");
 }
+
+#[test]
+fn project_run_bare_name_ignores_same_named_path() {
+    if !can_build() || !sandbox_has_coreutils() {
+        eprintln!("skipping: bwrap, /nix/store, or full busybox not available");
+        return;
+    }
+
+    let fixture = ProjectFixture::new(PROJECT_NCL_DIR);
+    std::fs::write(fixture.dir.path().join("hello"), "not a nickel file").unwrap();
+
+    let output = crunch_cmd()
+        .current_dir(fixture.dir.path())
+        .arg("--store")
+        .arg(fixture.store.path())
+        .arg("--state-dir")
+        .arg(fixture.state.path())
+        .arg("run")
+        .arg("--no-substitute")
+        .arg("hello")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "bare package run should succeed, stderr:\n{stderr}");
+    assert!(stdout.contains("Hello from crunch project!"), "stdout should come from package, got:\n{stdout}");
+}
+
+#[test]
+fn project_run_bin_selects_requested_binary() {
+    if !can_build() || !sandbox_has_coreutils() {
+        eprintln!("skipping: bwrap, /nix/store, or full busybox not available");
+        return;
+    }
+
+    let ncl = r#"let crunch = import "lib.ncl" in
+{
+  packages.multi = {
+    name = "multi-bin",
+    builder = "/bin/sh",
+    args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin && printf '#!/bin/sh\necho alpha\n' > $out/bin/alpha && printf '#!/bin/sh\necho beta\n' > $out/bin/beta && $BB chmod +x $out/bin/alpha $out/bin/beta"],
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+
+  default.package = "multi",
+} | crunch.Project
+"#;
+    let fixture = ProjectFixture::new(ncl);
+
+    let output = crunch_cmd()
+        .current_dir(fixture.dir.path())
+        .arg("--store")
+        .arg(fixture.store.path())
+        .arg("--state-dir")
+        .arg(fixture.state.path())
+        .arg("run")
+        .arg("--no-substitute")
+        .arg("--bin")
+        .arg("beta")
+        .arg(".#multi")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "--bin run should succeed, stderr:\n{stderr}");
+    assert!(stdout.contains("beta"), "requested binary should run, got:\n{stdout}");
+    assert!(!stdout.contains("alpha"), "unrequested binary should not run, got:\n{stdout}");
+}
+
+#[test]
+fn project_run_explicit_file_target() {
+    if !can_build() || !sandbox_has_coreutils() {
+        eprintln!("skipping: bwrap, /nix/store, or full busybox not available");
+        return;
+    }
+
+    let fixture = ProjectFixture::new(PROJECT_NCL_DIR);
+    let file = fixture.dir.path().join("tool.ncl");
+    std::fs::write(
+        &file,
+        r#"let crunch = import "lib.ncl" in
+{
+  name = "file-tool",
+  builder = "/bin/sh",
+  args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin && printf '#!/bin/sh\necho file-tool: $*\n' > $out/bin/tool && $BB chmod +x $out/bin/tool"],
+  addressing_mode = 'input-addressed,
+} | crunch.Derivation
+"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .current_dir(fixture.dir.path())
+        .arg("--store")
+        .arg(fixture.store.path())
+        .arg("--state-dir")
+        .arg(fixture.state.path())
+        .arg("run")
+        .arg("--no-substitute")
+        .arg("./tool.ncl")
+        .arg("--")
+        .arg("arg1")
+        .arg("arg2")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "file target run should succeed, stderr:\n{stderr}");
+    assert!(stdout.contains("file-tool: arg1 arg2"), "file target should pass args, got:\n{stdout}");
+}
+
+#[test]
+fn run_help_lists_bin_and_passthrough() {
+    let output = crunch_cmd().args(["run", "--help"]).output().unwrap();
+    assert!(output.status.success(), "run --help should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--bin"), "help should mention --bin, got:\n{stdout}");
+    assert!(stdout.contains("--"), "help should mention passthrough args, got:\n{stdout}");
+}
+
+#[test]
+fn run_rejects_strict_hermetic_flag() {
+    let output = crunch_cmd().args(["run", "--strict-hermetic"]).output().unwrap();
+    assert!(!output.status.success(), "run --strict-hermetic should be rejected");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("strict-hermetic") || stderr.contains("unexpected"),
+        "stderr should explain rejected flag, got:\n{stderr}"
+    );
+}
+
+#[test]
+fn project_run_explicit_file_singleton_record_target() {
+    if !can_build() || !sandbox_has_coreutils() {
+        eprintln!("skipping: bwrap, /nix/store, or full busybox not available");
+        return;
+    }
+
+    let fixture = ProjectFixture::new(PROJECT_NCL_DIR);
+    let file = fixture.dir.path().join("single-record.ncl");
+    std::fs::write(
+        &file,
+        r#"let crunch = import "lib.ncl" in
+{
+  tool = {
+    name = "singleton-tool",
+    builder = "/bin/sh",
+    args = ["-c", "BB=/bin/busybox; $BB mkdir -p $out/bin && printf '#!/bin/sh\necho singleton-record\n' > $out/bin/tool && $BB chmod +x $out/bin/tool"],
+    addressing_mode = 'input-addressed,
+  } | crunch.Derivation,
+}
+"#,
+    )
+    .unwrap();
+
+    let output = crunch_cmd()
+        .current_dir(fixture.dir.path())
+        .arg("--store")
+        .arg(fixture.store.path())
+        .arg("--state-dir")
+        .arg(fixture.state.path())
+        .arg("run")
+        .arg("--no-substitute")
+        .arg("./single-record.ncl")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "singleton record file target should run, stderr:\n{stderr}");
+    assert!(stdout.contains("singleton-record"), "singleton record binary should run, got:\n{stdout}");
+}

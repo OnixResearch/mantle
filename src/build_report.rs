@@ -257,14 +257,12 @@ mod tests {
 
     #[test]
     fn success_log_file_is_none_when_log_is_missing() {
-        use std::collections::HashMap;
-
         let logs_dir = tempfile::tempdir().unwrap();
         let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap();
         let outcome = crunch_build::BuildOutcome {
             drv_path,
-            outputs: HashMap::new(),
-            substitutions: HashMap::new(),
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: Some("body".into()),
         };
@@ -414,13 +412,16 @@ mod tests {
         };
         let outcome = crunch_build::BuildOutcome {
             drv_path: drv_path.clone(),
-            outputs: HashMap::from([("out".to_string(), path_info)]),
-            substitutions: HashMap::from([("out".to_string(), crunch_store::OutputSubstitutionReport {
-                mode: crunch_store::OutputSubstitutionMode::Delta,
-                transferred_bytes: 12,
-                reused_bytes: 34,
-                fallback_reason: None,
-            })]),
+            outputs: std::collections::BTreeMap::from([("out".to_string(), path_info)]),
+            substitutions: std::collections::BTreeMap::from([(
+                "out".to_string(),
+                crunch_store::OutputSubstitutionReport {
+                    mode: crunch_store::OutputSubstitutionMode::Delta,
+                    transferred_bytes: 12,
+                    reused_bytes: 34,
+                    fallback_reason: None,
+                },
+            )]),
             cached: false,
             log: None,
         };
@@ -498,13 +499,16 @@ mod tests {
         };
         let outcome = crunch_build::BuildOutcome {
             drv_path: drv_path.clone(),
-            outputs: HashMap::from([("out".to_string(), path_info)]),
-            substitutions: HashMap::from([("out".to_string(), crunch_store::OutputSubstitutionReport {
-                mode: crunch_store::OutputSubstitutionMode::Full,
-                transferred_bytes: 55,
-                reused_bytes: 0,
-                fallback_reason: Some("stream_application_failed".to_string()),
-            })]),
+            outputs: std::collections::BTreeMap::from([("out".to_string(), path_info)]),
+            substitutions: std::collections::BTreeMap::from([(
+                "out".to_string(),
+                crunch_store::OutputSubstitutionReport {
+                    mode: crunch_store::OutputSubstitutionMode::Full,
+                    transferred_bytes: 55,
+                    reused_bytes: 0,
+                    fallback_reason: Some("stream_application_failed".to_string()),
+                },
+            )]),
             cached: true,
             log: None,
         };

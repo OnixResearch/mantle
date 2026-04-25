@@ -527,8 +527,8 @@ mod tests {
     fn format_output_suffix_includes_full_substitution_report() {
         let outcome = crunch_build::BuildOutcome {
             drv_path: nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [1u8; 20]).unwrap(),
-            outputs: std::collections::HashMap::new(),
-            substitutions: std::collections::HashMap::from([(
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::from([(
                 "out".to_string(),
                 crunch_store::OutputSubstitutionReport {
                     mode: crunch_store::OutputSubstitutionMode::Full,
@@ -552,8 +552,8 @@ mod tests {
     fn format_output_suffix_includes_delta_substitution_report_without_fallback_reason() {
         let outcome = crunch_build::BuildOutcome {
             drv_path: nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [2u8; 20]).unwrap(),
-            outputs: std::collections::HashMap::new(),
-            substitutions: std::collections::HashMap::from([(
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::from([(
                 "out".to_string(),
                 crunch_store::OutputSubstitutionReport {
                     mode: crunch_store::OutputSubstitutionMode::Delta,

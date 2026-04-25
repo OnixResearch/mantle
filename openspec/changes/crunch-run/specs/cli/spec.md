@@ -12,7 +12,7 @@ package output.
 - no target: build and run the current `crunch.ncl` package project's default package
 - a bare name: build and run that package from the current `crunch.ncl` package project
 - `.#name` or `.#category.name`: build and run a package-project selector
-- an explicit Nickel file path: build and run that single derivation expression
+- an explicit Nickel file path: build and run that expression when it yields exactly one runnable derivation
 
 For this requirement, `crunch.ncl` is the package/build project file consumed by
 `crunch build`, `crunch shell`, `crunch develop`, and `crunch run`. It is
@@ -30,12 +30,12 @@ If no `crunch.ncl` package project is found for a project default, bare package
 name, or project selector, the command MUST fail with an error that mentions
 `crunch.ncl`. If a project default package is missing, an unknown selector or
 bare package name is requested, an explicit file path does not exist, or an
-explicit file does not evaluate to exactly one derivation, the command MUST fail
-before launching a package binary and identify the target that could not be run.
-Explicit file targets MUST evaluate directly to one derivation. Record-valued
-file targets MUST be rejected even when the record contains exactly one
-derivation; users must select one derivation through a project selector or a
-single-derivation file.
+explicit file does not produce exactly one runnable top-level derivation, the
+command MUST fail before launching a package binary and identify the target that
+could not be run. Explicit file targets MAY evaluate directly to one derivation
+or to a singleton record containing one derivation. Records containing multiple
+derivations MUST be rejected for `run`; users must select one derivation through
+a project selector or a single-derivation file.
 
 When the selected derivation has multiple outputs, `crunch run` MUST select the
 `out` output if present; otherwise it MUST select the first output name in
@@ -69,9 +69,9 @@ sorted order. Binary discovery then runs inside that selected output.
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `./missing.ncl` as the rejected target
 
-#### Scenario: Explicit file record is rejected
+#### Scenario: Explicit file multi-record is rejected
 
-- GIVEN `many.ncl` evaluates to a record containing one or more derivations
+- GIVEN `many.ncl` evaluates to a record containing multiple derivations
 - WHEN `crunch run ./many.ncl` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `./many.ncl` as not runnable by `run`

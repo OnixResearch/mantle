@@ -148,6 +148,7 @@ Short examples:
 crunch shell --command env
 crunch develop            # deprecated alias for shell
 crunch run .#hello -- --help
+crunch run ./tool.ncl --bin tool -- --version
 
 # Attestation and release evidence entry points
 crunch attest show /nix/store/<hash>-hello
@@ -1069,7 +1070,7 @@ crunch list-stale                Report which inputs would change on refresh
 crunch upgrade                   Migrate project files to the current schema
 crunch shell [name]              Enter or execute inside a dev shell
 crunch develop [name]            Deprecated alias for `crunch shell`
-crunch run [name] [-- args...]   Build and execute a package binary
+crunch run [target] [-- args...] Build and execute a package binary (`.#name`, bare project package, or .ncl file)
 
 # System configuration
 crunch system eval <inventory>   Evaluate a module inventory to fragments or derivations

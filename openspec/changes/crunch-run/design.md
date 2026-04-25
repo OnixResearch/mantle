@@ -8,7 +8,8 @@ first file or symlink under the selected output's `bin/` directory. The
 OpenSpec change closes the command into a documented operator surface: package
 project defaults, bare package names, project selectors, direct single-derivation
 file targets, binary selection, argument passthrough, and deterministic failure
-messages. This command uses the existing package/build project file
+messages. Explicit file targets may be direct derivations or singleton records,
+but must produce exactly one runnable top-level derivation. This command uses the existing package/build project file
 `crunch.ncl`; it does not consume the dependency-management manifest
 `crunch-project.ncl`.
 
@@ -47,7 +48,7 @@ output-name order for fallback.
 project's default package. `crunch run hello` resolves `packages.hello` from
 that project. `crunch run .#name` and nested selectors such as `crunch run
 .#packages.hello` resolve project selectors. `crunch run path/to/file.ncl`
-builds that file directly only when it evaluates directly to exactly one derivation, not a record.
+builds that file directly only when it produces exactly one runnable derivation outcome.
 
 **Rationale:** Project selectors and bare project package names cover the
 existing project workflow, while explicit files preserve the ad-hoc `nix run
@@ -61,7 +62,7 @@ registry.
 `BuildTarget::File` flows through a direct build path instead of project
 resolution. Direct file builds use the same import-path construction as
 `crunch build`, then require the evaluated target and pipeline result to contain
-exactly one top-level derivation before binary selection and reject record-valued files, including singleton records. Bare names continue to map to `ProjectTarget::Attribute`.
+exactly one top-level derivation before binary selection and reject records with multiple derivations. Bare names continue to map to `ProjectTarget::Attribute`.
 
 ### 3. Binary discovery is explicit when requested, deterministic otherwise
 
@@ -118,7 +119,7 @@ let clap reject `crunch run --strict-hermetic` as an unknown flag.
   non-executable regular files.
 - Resolver tests cover selector-before-filesystem precedence, bare package
   versus same-named path ambiguity, simple and nested selectors, explicit `.ncl`
-  file targets, record-valued file rejection, missing default-package selection,
+  file targets, multi-record file rejection, missing default-package selection,
   and missing project/file/selector failures; diagnostics must mention
   `crunch.ncl` for missing package projects and the rejected target for
   unrunnable targets.
