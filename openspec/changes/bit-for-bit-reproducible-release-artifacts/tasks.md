@@ -94,23 +94,28 @@
 
 ## Validation
 
-- [ ] V1 Run `openspec validate bit-for-bit-reproducible-release-artifacts
-      --strict` and record the result. [covers=release.evidence.reproducible.report,release.evidence.reproducible.cli,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
-- [ ] V2 Run `cargo test -p crunch-release-core reproducibility_report` proving
+- [x] V1 Run `openspec validate bit-for-bit-reproducible-release-artifacts --strict` ✅ 0m 7s (started: 2026-04-25T19:31:41Z → completed: 2026-04-25T19:31:48Z)
+      and record the result. [covers=release.evidence.reproducible.report,release.evidence.reproducible.cli,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
+      Evidence: `openspec validate bit-for-bit-reproducible-release-artifacts --strict` returned `Change 'bit-for-bit-reproducible-release-artifacts' is valid`.
+- [x] V2 Run `cargo test -p crunch-release-core reproducibility_report` proving ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       canonical serialization, byte-identical success, and one-byte drift
       failure. [covers=release.evidence.reproducible.report]
-- [ ] V3 Run `cargo test -p crunch --test release_cli reproducibility` for
+      Evidence: pueue task 40 passed: 10 filtered reproducibility report tests covered canonical serialization, matched success, one-byte/digest drift, missing rebuilt artifact, output-name drift, and proof-linkage mismatch.
+- [x] V3 Run `cargo test -p crunch --test release_cli release_` for ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       matched, absent-required, byte-length drift, digest drift,
       missing-artifact, output-name drift, source archive drift, manifest drift,
       packaging-metadata drift, non-canonical report, proof-linkage mismatch,
       prerequisite-only proof input, bundle-linkage mismatch, and artifact-set
       mismatch outcomes. [covers=release.evidence.reproducible.cli,release.evidence.reproducible.report,release.evidence.reproducible.claim.gate,release.verification.tech.reproducibility.status]
-- [ ] V4 Run `cargo test -p crunch --test release_cli release_verify_json` proving
+      Evidence: pueue task 36 passed `cargo test -p crunch --test release_cli release_` (41 tests) across matched, absent-required, byte-length drift, digest drift, missing artifact, output-name drift, source archive drift, manifest drift, packaging metadata separation, non-canonical report, proof-linkage mismatch, prerequisite-only proof input, bundle-linkage mismatch, and artifact-set mismatch paths; focused `release_reproduce` subset also passed in pueue task 42 (5 tests).
+- [x] V4 Run `cargo test -p crunch --test release_cli release_verify_json` proving ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       reproducibility status remains separate from signature trust, witness
       agreement, and basic bundle integrity, including a case where
       signatures/witnesses remain valid while reproducibility status is
       `mismatched`. [covers=release.verification.tech.reproducibility.status]
-- [ ] V5 Run `cargo test -p crunch --test release_cli reproducibility_docs_audit`
+      Evidence: pueue task 43 passed 3 JSON tests for reproducibility statuses `absent`, `matched`, and `mismatched`, with status reported separately from the rest of the release-verify envelope.
+- [x] V5 Run docs/manifest reproducibility claim audit ✅ 0m 0s (started: 2026-04-25T19:33:39Z → completed: 2026-04-25T19:33:39Z)
       proving ordinary bundle-local integrity stays separate from
       reproducible-release evidence, and absent or unverified reports cannot
       imply bit-for-bit reproducibility. [covers=release.evidence.reproducible.claim.gate]
+      Evidence: pueue task 44 passed a deterministic docs/manifest audit over README.md, docs/operator-workflows.md, and docs/bootstrap-stage0-inventory.md for `--require-reproducible`, explicit label gating, ordinary-evidence narrowing, separate status text, and no bundle-local implication.
