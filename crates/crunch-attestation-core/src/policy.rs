@@ -122,7 +122,7 @@ pub fn evaluate_policy(input: PolicyEvaluationInput) -> Result<PolicyEvaluation,
     let release_binary_digests = normalize_for_comparison(input.release.binary_digests);
     let (revoked_count, active_witnesses) = filter_active_witnesses(input.witnesses, &input.revocations);
     let (matching_count, distinct_identities) =
-        count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses, independence_selector);
+        count_matching_witnesses(&release_digest, &release_binary_digests, &active_witnesses, independence_selector)?;
     assert_matching_witness_counts(matching_count, active_witnesses.len(), distinct_identities);
     let active_witness_count = match u32::try_from(active_witnesses.len()) {
         Ok(count) => count,
@@ -216,7 +216,7 @@ fn count_matching_witnesses(
     release_binary_digests: &[BinaryDigest],
     active_witnesses: &[ValidatedWitness],
     independence_selector: IndependenceSelector,
-) -> (u32, u32) {
+) -> Result<(u32, u32), Error> {
     let mut matching_count: u32 = 0;
     let mut matching_domains: BTreeSet<&str> = BTreeSet::new();
 
@@ -231,22 +231,30 @@ fn count_matching_witnesses(
         {
             continue;
         }
+        let domain = independence_domain(witness, independence_selector)?;
         matching_count = matching_count.saturating_add(1);
-        matching_domains.insert(independence_domain(witness, independence_selector));
+        matching_domains.insert(domain);
     }
 
     let distinct_identities = count_with_overflow_marker(matching_domains.len(), matching_count);
-    (matching_count, distinct_identities)
+    Ok((matching_count, distinct_identities))
 }
 
-fn independence_domain<'a>(witness: &'a ValidatedWitness, selector: IndependenceSelector) -> &'a str {
-    let domain = match selector {
-        IndependenceSelector::WitnessIdentity => witness.attestation.witness_identity.as_str(),
-        IndependenceSelector::SignerKeyName => witness.signer_key_name.as_str(),
-        IndependenceSelector::RebuildHostClass => witness.attestation.rebuild_environment_summary.host_class.as_str(),
+fn independence_domain<'a>(witness: &'a ValidatedWitness, selector: IndependenceSelector) -> Result<&'a str, Error> {
+    let (field, domain) = match selector {
+        IndependenceSelector::WitnessIdentity => ("witness_identity", witness.attestation.witness_identity.as_str()),
+        IndependenceSelector::SignerKeyName => ("signer_key_name", witness.signer_key_name.as_str()),
+        IndependenceSelector::RebuildHostClass => (
+            "rebuild_environment_summary.host_class",
+            witness.attestation.rebuild_environment_summary.host_class.as_str(),
+        ),
     };
-    assert!(!domain.is_empty(), "validated witness independence domain must not be empty");
-    domain
+    if domain.is_empty() {
+        return Err(Error::EmptyField {
+            field: field.to_string(),
+        });
+    }
+    Ok(domain)
 }
 
 fn parse_independence_selector(field: &str) -> Result<IndependenceSelector, Error> {
@@ -560,6 +568,25 @@ mod tests {
         assert_eq!(result.independent_witness_identities, 2);
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
         assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
+    }
+
+    #[test]
+    fn empty_selected_independence_field_is_rejected() {
+        let release = sample_release();
+        let witness = make_matching_witness_with_details(&release, "witness-a", "", "org-a", b"empty-signer");
+        let policy = ReleasePolicy::new(1, INDEPENDENCE_FIELD_SIGNER_KEY_NAME.to_string(), Vec::new(), Vec::new());
+
+        let err = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: vec![witness],
+            policy,
+            revocations: ReleaseRevocations::empty(),
+        })
+        .unwrap_err();
+
+        assert_eq!(err, Error::EmptyField {
+            field: "signer_key_name".to_string()
+        });
     }
 
     #[test]

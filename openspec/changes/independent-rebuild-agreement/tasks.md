@@ -23,11 +23,15 @@
 
 ## Phase 2: Policy and verifier integration
 
-- [ ] I4 Extend verifier-local policy with independent agreement thresholds and
+- [x] I4 Extend verifier-local policy with independent agreement thresholds and ✅ 1m 14s (started: 2026-04-25T20:05:10Z → completed: 2026-04-25T20:06:24Z)
       selectors for `witness_identity`, `signer_key_name`, and
       `rebuild_environment_summary.host_class`, and reject countable witnesses
       whose selected independence field is absent or empty.
       [covers=release.verification.social.independent.agreement.policy,release.verification.tech.witness.independence.evidence]
+      Evidence: `cargo test -p crunch-attestation-core` passed in pueue task 16
+      (70 tests), including selector coverage for witness identity, signer key,
+      host class, duplicate-domain insufficiency, and empty selected
+      independence-field rejection.
 - [ ] I5 Extend release verification output with JSON field
       `independent_agreement_status`, class value
       `independent-rebuild-agreement` when satisfied, JSON fields
