@@ -270,8 +270,6 @@ order has no observable effect.
 - WHEN the orchestrator iterates over output infos
 - THEN the iteration order is deterministic (sorted by output name)
 
-## MODIFIED Requirements
-
 ### Requirement: SOURCE_DATE_EPOCH override policy
 
 The sandbox MUST keep `SOURCE_DATE_EPOCH` in
