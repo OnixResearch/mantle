@@ -232,9 +232,10 @@
 
 ## Validation
 
-- [ ] V1 Run `openspec validate host-tool-free-first-bootstrap --strict` and
+- [x] V1 Run `openspec validate host-tool-free-first-bootstrap --strict` and ✅ 0m 2s (started: 2026-04-25T22:47:01Z → completed: 2026-04-25T22:47:03Z)
       record the result. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint,bootstrap.hosttoolfree.proof.mode]
-- [ ] V2 Run fake-PATH and inventory validation tests proving `git`, `tar`,
+      Evidence: pueue task 174 printed `Change 'host-tool-free-first-bootstrap' is valid`.
+- [x] V2 Run fake-PATH and inventory validation tests proving `git`, `tar`, ✅ 0m 2s (started: 2026-04-25T22:47:01Z → completed: 2026-04-25T22:47:03Z)
       `cp`, `sh`, `cargo`, `bwrap`, and Nix commands are not invoked in the
       protected phase, declared seed sandbox/shell/toolchain acceptance and
       reporting succeeds, declared seed digest mismatches are rejected, missing
@@ -242,10 +243,16 @@
       source URLs and extraction rules are validated, provenance categories are
       enforced, and protected-phase behavior stays within the documented
       kernel-interface allowlist. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
-- [ ] V3 Run seccomp supervisor tests proving child `execve`/`execveat` events
+      Evidence: pueue task 174 passed `cargo test -p crunch protected_exec --
+      --nocapture`; the focused filter passed 23 lib tests and 23 bin tests.
+- [x] V3 Run seccomp supervisor tests proving child `execve`/`execveat` events ✅ 0m 2s (started: 2026-04-25T22:47:01Z → completed: 2026-04-25T22:47:03Z)
       are denied before execution when undeclared or mismatched, and proving
       supervisor-unavailable/filter-inheritance/path-resolution failures are
       fail-closed. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 174 passed `cargo test -p crunch seccomp_supervisor
+      -- --nocapture`; the focused filter passed 5 lib tests and 5 bin tests,
+      including mismatch denial, undeclared host-bwrap denial, execveat allow,
+      and unsupported audit-architecture fail-closed coverage.
 - [ ] V4 Run the full no-host-tools self-hosting proof and record proof bundle
       path, stage1/stage2/busybox/bwrap fixed-point status, protected execution
       audit summary, stage0 inventory digest, blocked host command set,
