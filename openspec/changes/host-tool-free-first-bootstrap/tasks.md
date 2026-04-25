@@ -173,11 +173,19 @@
       exported, executable-checked, store-name resolved, and BLAKE3-hashed;
       `SelfBuildReport` proof lines record the transition marker, selected
       paths, digests, and store names.
-- [ ] I15 Extend `scripts/prove-self-hosting.sh` with `--no-host-tools` and
+- [x] I15 Extend `scripts/prove-self-hosting.sh` with `--no-host-tools` and ✅ 0m 10s (started: 2026-04-25T22:36:48Z → completed: 2026-04-25T22:36:58Z)
       `--stage0-inventory <path>` so the proof poisons common host commands,
       launches only through the protected execution boundary, and preserves
       existing `self-build-proof: fallback-event=...` summary markers.
       [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 156 passed `bash -n scripts/prove-self-hosting.sh`
+      plus `cargo test -p crunch --test self_hosting prove_self_hosting_script
+      -- --nocapture`, with 27 proof-script tests passed. The helper now accepts
+      `--no-host-tools --stage0-inventory <path>`, exports the inventory and
+      blocked tool set to the proof harness, captures an absolute cargo path
+      before PATH poisoning, removes common host helpers from the proof PATH,
+      rejects missing inventory before launching cargo, and leaves existing
+      non-protected proof modes working.
 - [ ] I16 Extend `tests/self_hosting.rs` to run no-host-tools mode while
       preserving the existing stage1, stage2, busybox, and bwrap fixed-point
       checks. [covers=bootstrap.hosttoolfree.proof.mode]

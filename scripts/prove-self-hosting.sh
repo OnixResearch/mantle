@@ -12,6 +12,9 @@ readonly PROOF_BUNDLE_ENV="CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
 readonly PROOF_SCRATCH_ENV="CRUNCH_PROOF_SCRATCH_DIR"
 readonly PROOF_MODE_ENV="CRUNCH_SELF_HOSTING_PROOF_MODE"
 readonly PROOF_STAGE0_INVENTORY_DOC_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC"
+readonly PROOF_NO_HOST_TOOLS_ENV="CRUNCH_SELF_HOSTING_NO_HOST_TOOLS"
+readonly PROOF_STAGE0_INVENTORY_ENV="CRUNCH_SELF_HOSTING_STAGE0_INVENTORY"
+readonly PROOF_BLOCKED_HOST_TOOLS_ENV="CRUNCH_SELF_HOSTING_BLOCKED_HOST_TOOLS"
 readonly PROOF_LATER_STAGE_HERMETICITY_ENV="CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE"
 readonly PROOF_MODE_FIXED_POINT="fixed-point"
 readonly PROOF_MODE_NON_NIX_HOST="non-nix-host"
@@ -23,6 +26,7 @@ readonly SCRATCH_CARGO_TARGET_SUBDIR="cargo-target"
 readonly MAX_PATH_SOURCE_DIRS=128
 readonly MAX_PATH_LINKS=8192
 readonly BLOCKED_NIX_BINARIES=(nix-build nix-store nix-shell nix)
+readonly BLOCKED_HOST_TOOL_BINARIES=(git tar cp sh cargo bwrap nix-build nix-store nix-shell nix)
 
 path_prefix=""
 scratch_root=""
@@ -35,14 +39,19 @@ proof_path_dir=""
 mode="run"
 proof_mode="$PROOF_MODE_FIXED_POINT"
 proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
+no_host_tools="0"
+stage0_inventory=""
+proof_cargo=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--bundle-dir DIR]
+Usage: ./scripts/prove-self-hosting.sh [--check] [--non-nix-host] [--no-host-tools] [--stage0-inventory FILE] [--bundle-dir DIR]
 
-  --check            validate prerequisites, print the proof command, and exit
-  --non-nix-host     run proof with proof PATH scrubbed of nix-build/nix-store/nix-shell/nix
-  --bundle-dir DIR   write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
+  --check                   validate prerequisites, print the proof command, and exit
+  --non-nix-host            run proof with proof PATH scrubbed of nix-build/nix-store/nix-shell/nix
+  --no-host-tools           run proof with common host tools poisoned for stage0 self-build
+  --stage0-inventory FILE   stage0 inventory used by --no-host-tools
+  --bundle-dir DIR          write the proof bundle to DIR (default: target/self-hosting-proof/run-...)
 EOF
 }
 
@@ -66,6 +75,19 @@ blocked_nix_tool() {
   local blocked
 
   for blocked in "${BLOCKED_NIX_BINARIES[@]}"; do
+    if [[ "$tool_name" == "$blocked" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+blocked_host_tool() {
+  local tool_name="${1:?tool name is required}"
+  local blocked
+
+  for blocked in "${BLOCKED_HOST_TOOL_BINARIES[@]}"; do
     if [[ "$tool_name" == "$blocked" ]]; then
       return 0
     fi
@@ -480,7 +502,7 @@ configure_non_nix_path() {
   local tool_name
   local -a source_dirs
 
-  if [[ "$proof_mode" != "$PROOF_MODE_NON_NIX_HOST" ]]; then
+  if [[ "$proof_mode" != "$PROOF_MODE_NON_NIX_HOST" && "$no_host_tools" != "1" ]]; then
     return
   fi
 
@@ -512,7 +534,10 @@ configure_non_nix_path() {
         continue
       fi
       tool_name="$(basename -- "$candidate")"
-      if blocked_nix_tool "$tool_name"; then
+      if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]] && blocked_nix_tool "$tool_name"; then
+        continue
+      fi
+      if [[ "$no_host_tools" == "1" ]] && blocked_host_tool "$tool_name"; then
         continue
       fi
       if [[ -e "$proof_path_dir/$tool_name" ]]; then
@@ -530,11 +555,21 @@ configure_non_nix_path() {
 
   export PATH="$proof_path_dir"
 
-  for tool_name in "${BLOCKED_NIX_BINARIES[@]}"; do
-    if command -v -- "$tool_name" >/dev/null 2>&1; then
-      die "non-Nix-host proof PATH still exposes blocked tool: $tool_name"
-    fi
-  done
+  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]]; then
+    for tool_name in "${BLOCKED_NIX_BINARIES[@]}"; do
+      if command -v -- "$tool_name" >/dev/null 2>&1; then
+        die "non-Nix-host proof PATH still exposes blocked tool: $tool_name"
+      fi
+    done
+  fi
+
+  if [[ "$no_host_tools" == "1" ]]; then
+    for tool_name in "${BLOCKED_HOST_TOOL_BINARIES[@]}"; do
+      if command -v -- "$tool_name" >/dev/null 2>&1; then
+        die "no-host-tools proof PATH still exposes blocked tool: $tool_name"
+      fi
+    done
+  fi
 }
 
 default_proof_bundle_dir() {
@@ -576,8 +611,12 @@ show_scratch_summary() {
   if [[ -n "$bundle_dir" ]]; then
     note "proof bundle dir: $bundle_dir"
   fi
-  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" ]]; then
+  if [[ "$proof_mode" == "$PROOF_MODE_NON_NIX_HOST" || "$no_host_tools" == "1" ]]; then
     note "proof PATH dir: $proof_path_dir"
+  fi
+  if [[ "$no_host_tools" == "1" ]]; then
+    note "no-host-tools stage0 inventory: $stage0_inventory"
+    note "blocked host tools: ${BLOCKED_HOST_TOOL_BINARIES[*]}"
   fi
 }
 
@@ -594,13 +633,27 @@ resolve_later_stage_hermeticity() {
   esac
 }
 
+resolve_proof_cargo() {
+  proof_cargo="$(command -v -- cargo 2>/dev/null || true)"
+  if [[ -z "$proof_cargo" ]]; then
+    die "cargo not found before proof PATH scrubbing"
+  fi
+  if [[ ! -x "$proof_cargo" ]]; then
+    die "resolved cargo is not executable: $proof_cargo"
+  fi
+}
+
+proof_command_display() {
+  printf '%s test -p crunch --test self_hosting -- --ignored --nocapture\n' "$proof_cargo"
+}
+
 show_check_summary() {
   local bundle_dir
   bundle_dir="$(resolve_proof_bundle_dir)"
 
   note "self-hosting proof check passed"
   note "repo: $REPO_ROOT"
-  note "cargo: $(command -v cargo)"
+  note "cargo: $proof_cargo"
   note "rustc: $(command -v rustc)"
   note "clang: $(command -v clang)"
   note "mold: $(command -v mold)"
@@ -611,13 +664,19 @@ show_check_summary() {
   note "later proof-stage hermeticity: $proof_later_stage_hermeticity"
   show_scratch_summary "$bundle_dir"
   note "stage0 inventory doc: $REPO_ROOT/docs/bootstrap-stage0-inventory.md"
-  note "proof command: ${PROOF_COMMAND[*]}"
+  if [[ "$no_host_tools" == "1" ]]; then
+    note "no-host-tools stage0 inventory: $stage0_inventory"
+    note "blocked host tools: ${BLOCKED_HOST_TOOL_BINARIES[*]}"
+  fi
+  note "proof command: $(proof_command_display)"
 }
 
 parse_args() {
   mode="run"
   proof_mode="$PROOF_MODE_FIXED_POINT"
   proof_later_stage_hermeticity="$PROOF_LATER_STAGE_HERMETICITY_DEFAULT"
+  no_host_tools="0"
+  stage0_inventory=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -627,6 +686,17 @@ parse_args() {
         ;;
       --non-nix-host)
         proof_mode="$PROOF_MODE_NON_NIX_HOST"
+        shift
+        ;;
+      --no-host-tools)
+        no_host_tools="1"
+        shift
+        ;;
+      --stage0-inventory)
+        shift
+        [[ $# -gt 0 ]] || die "--stage0-inventory requires a file"
+        [[ "$1" != -* ]] || die "--stage0-inventory requires a file, got option-like value: $1"
+        stage0_inventory="$1"
         shift
         ;;
       --bundle-dir)
@@ -645,6 +715,17 @@ parse_args() {
         ;;
     esac
   done
+
+  if [[ "$no_host_tools" != "1" && -n "$stage0_inventory" ]]; then
+    die "--stage0-inventory requires --no-host-tools"
+  fi
+  if [[ "$no_host_tools" == "1" && -z "$stage0_inventory" ]]; then
+    die "--no-host-tools requires --stage0-inventory FILE"
+  fi
+  if [[ "$no_host_tools" == "1" ]]; then
+    stage0_inventory="$(normalize_repo_relative_path "$stage0_inventory")"
+    [[ -f "$stage0_inventory" ]] || die "stage0 inventory file does not exist: $stage0_inventory"
+  fi
 }
 
 update_latest_bundle_link() {
@@ -674,6 +755,7 @@ main() {
   configure_sandbox_shell
   configure_openssl_lookup
   require_nightly_rustc
+  resolve_proof_cargo
   proof_later_stage_hermeticity="$(resolve_later_stage_hermeticity)"
   configure_proof_scratch
   configure_non_nix_path
@@ -692,9 +774,18 @@ main() {
   export "$PROOF_MODE_ENV=$proof_mode"
   export "$PROOF_STAGE0_INVENTORY_DOC_ENV=$REPO_ROOT/docs/bootstrap-stage0-inventory.md"
   export "$PROOF_LATER_STAGE_HERMETICITY_ENV=$proof_later_stage_hermeticity"
+  if [[ "$no_host_tools" == "1" ]]; then
+    export "$PROOF_NO_HOST_TOOLS_ENV=1"
+    export "$PROOF_STAGE0_INVENTORY_ENV=$stage0_inventory"
+    export "$PROOF_BLOCKED_HOST_TOOLS_ENV=${BLOCKED_HOST_TOOL_BINARIES[*]}"
+  else
+    unset "$PROOF_NO_HOST_TOOLS_ENV"
+    unset "$PROOF_STAGE0_INVENTORY_ENV"
+    unset "$PROOF_BLOCKED_HOST_TOOLS_ENV"
+  fi
   show_scratch_summary "$bundle_dir"
 
-  if "${PROOF_COMMAND[@]}"; then
+  if "$proof_cargo" test -p crunch --test self_hosting -- --ignored --nocapture; then
     proof_status=0
   else
     proof_status=$?

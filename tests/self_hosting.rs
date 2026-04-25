@@ -1851,7 +1851,39 @@ impl ProofScriptFixture {
         std::fs::copy(&src_script, &dst_script).unwrap();
         chmod_executable(&dst_script);
 
-        let cargo_body = "#!/bin/sh\nset -eu\n: \"${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}\"\nif [ -n \"${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}\" ]; then\n  printf 'launched\\n' > \"$CRUNCH_TEST_PROOF_COMMAND_SENTINEL\"\nfi\nmkdir -p \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\"\nprintf '{\"schema\":\"fake-proof\"}\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json\"\nprintf 'summary\\n' > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt\"\nprintf '%s\\n' \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt\"\nprintf '%s\\n' \"$PWD\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt\"\nprintf '%s\\n' \"$*\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_PROOF_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt\"\nprintf '%s\\n' \"${CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/later-stage-hermeticity.txt\"\nprintf '%s\\n' \"${SNIX_BUILD_SANDBOX_SHELL:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/sandbox-shell.txt\"\nprintf '%s\\n' \"${TMPDIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt\"\nprintf '%s\\n' \"${CARGO_TARGET_DIR:-}\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt\"\nprintf '%s\\n' \"$PATH\" > \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt\"\nfor blocked in nix-build nix-store nix-shell nix; do\n  if command -v \"$blocked\" >/dev/null 2>&1; then\n    printf '%s\\n' \"$blocked\" >> \"$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt\"\n  fi\ndone\n";
+        let cargo_body = r#"#!/bin/sh
+set -eu
+: "${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:?}"
+if [ -n "${CRUNCH_TEST_PROOF_COMMAND_SENTINEL:-}" ]; then
+  printf 'launched\n' > "$CRUNCH_TEST_PROOF_COMMAND_SENTINEL"
+fi
+mkdir -p "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
+printf '{"schema":"fake-proof"}\n' > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/manifest.json"
+printf 'summary\n' > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/summary.txt"
+printf '%s\n' "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/env-path.txt"
+printf '%s\n' "$PWD" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cwd.txt"
+printf '%s\n' "$*" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/argv.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_PROOF_MODE:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/proof-mode.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/inventory-doc.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_NO_HOST_TOOLS:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/no-host-tools.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_STAGE0_INVENTORY:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/stage0-inventory.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_BLOCKED_HOST_TOOLS:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-host-tools.txt"
+printf '%s\n' "${CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/later-stage-hermeticity.txt"
+printf '%s\n' "${SNIX_BUILD_SANDBOX_SHELL:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/sandbox-shell.txt"
+printf '%s\n' "${TMPDIR:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/tmpdir.txt"
+printf '%s\n' "${CARGO_TARGET_DIR:-}" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/cargo-target-dir.txt"
+printf '%s\n' "$PATH" > "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/path.txt"
+for blocked in nix-build nix-store nix-shell nix; do
+  if command -v "$blocked" >/dev/null 2>&1; then
+    printf '%s\n' "$blocked" >> "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-tools-found.txt"
+  fi
+done
+for blocked in ${CRUNCH_SELF_HOSTING_BLOCKED_HOST_TOOLS:-}; do
+  if command -v "$blocked" >/dev/null 2>&1; then
+    printf '%s\n' "$blocked" >> "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/blocked-host-tools-found.txt"
+  fi
+done
+"#;
         write_executable_script(&tool_dir.join("cargo"), cargo_body);
         write_executable_script(
             &tool_dir.join("rustc"),
@@ -2449,6 +2481,70 @@ fn prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc() {
     assert_eq!(std::fs::read_to_string(bundle_dir.join("later-stage-hermeticity.txt")).unwrap().trim(), "strict");
     assert!(!bundle_dir.join("blocked-tools-found.txt").exists(), "blocked nix tools must stay off helper PATH");
     assert!(stderr.contains("proof mode: non-nix-host"));
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_exports_no_host_tools_inventory_and_blocks_host_tools() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let inventory = fixture.repo_dir.join("bootstrap/stage0-inventory.ncl");
+    std::fs::write(&inventory, "# fixture inventory\n").unwrap();
+    let bundle_dir = fixture.repo_dir.join("target/no-host-tools-proof");
+
+    let output = fixture.run_args(&[
+        "--no-host-tools",
+        "--stage0-inventory",
+        "bootstrap/stage0-inventory.ncl",
+        "--bundle-dir",
+        "target/no-host-tools-proof",
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert_eq!(std::fs::read_to_string(bundle_dir.join("no-host-tools.txt")).unwrap().trim(), "1");
+    assert_eq!(
+        std::fs::read_to_string(bundle_dir.join("stage0-inventory.txt")).unwrap().trim(),
+        inventory.display().to_string()
+    );
+    let blocked = std::fs::read_to_string(bundle_dir.join("blocked-host-tools.txt")).unwrap();
+    for tool in [
+        "git",
+        "tar",
+        "cp",
+        "sh",
+        "cargo",
+        "bwrap",
+        "nix",
+        "nix-build",
+        "nix-store",
+        "nix-shell",
+    ] {
+        assert!(blocked.split_whitespace().any(|found| found == tool), "blocked set must contain {tool}");
+    }
+    assert!(
+        !bundle_dir.join("blocked-host-tools-found.txt").exists(),
+        "blocked host tools must stay off helper PATH"
+    );
+    assert!(stderr.contains("no-host-tools stage0 inventory"), "summary must name inventory, stderr:\n{stderr}");
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_no_host_tools_requires_inventory_before_launch() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let launch_sentinel = fixture.proof_launch_sentinel("no-host-tools-missing-inventory");
+
+    let output = fixture.run_args_with_envs(&["--no-host-tools", "--bundle-dir", "target/no-host-tools-missing"], &[(
+        PROOF_COMMAND_SENTINEL_ENV,
+        launch_sentinel.display().to_string(),
+    )]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success(), "script should fail without inventory");
+    assert!(stderr.contains("--no-host-tools requires --stage0-inventory FILE"), "stderr:\n{stderr}");
+    assert!(!launch_sentinel.exists(), "proof command must not launch before inventory validation");
 }
 
 #[cfg(unix)]
