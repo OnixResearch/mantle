@@ -4,8 +4,9 @@
 
 - [x] I1 Add pure reproducibility-report types with canonical compact JSON over ✅ 6m 28s (started: 2026-04-25T18:53:32Z → completed: 2026-04-25T19:00:00Z)
       release identifier, source digest, proof digest, rebuild command identity,
-      artifact names, byte lengths, BLAKE3 digests, comparison results, and a
-      report identity that the core computes and exposes as the BLAKE3 digest of
+      artifact names, expected and observed byte lengths, expected and observed
+      BLAKE3 digests, comparison results, and a report identity that the core
+      computes and exposes as the BLAKE3 digest of
       the canonical compact JSON bytes. [covers=release.evidence.reproducible.report]
       Evidence: baseline `cargo test -p crunch-release-core` passed in pueue task 37
       after adding build-env PATH; post-change `cargo test -p crunch-release-core`
@@ -65,10 +66,11 @@
       Evidence: `cargo test -p crunch --test release_cli release_verify_`
       passed in pueue task 23 (24 tests), covering JSON statuses `absent`,
       `matched`, `mismatched`, and `--require-reproducible` success/failure.
-- [x] I7 Implement release evidence bundle creation/package placement for ✅ 6m 50s (started: 2026-04-25T19:20:07Z → completed: 2026-04-25T19:26:57Z)
-      reproducibility evidence: `crunch release create` MUST copy an optional
-      canonical reproducibility report sidecar into the bundle, record its
-      bundle-local path and BLAKE3 digest in manifest/report metadata, and keep
+- [x] I7 Implement optional reproducibility-report inclusion in release evidence bundle creation, manifest entries, and report summary packaging ✅ 6m 50s (started: 2026-04-25T19:20:07Z → completed: 2026-04-25T19:26:57Z)
+      work: `crunch release create` MUST copy an optional
+      canonical reproducibility report sidecar into the bundle, add the release
+      evidence manifest entry for that copied sidecar, and record its
+      bundle-local path and BLAKE3 digest in manifest/report summary metadata, and keep
       bundles without that sidecar verifying as ordinary non-reproducible release
       evidence. [covers=release.evidence.reproducible.report,release.evidence.reproducible.claim.gate]
       Evidence: `cargo test -p crunch --test release_cli release_create`
