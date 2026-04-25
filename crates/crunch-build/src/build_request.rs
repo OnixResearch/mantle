@@ -34,7 +34,7 @@ const SANDBOX_ENV_VARS: [(&str, &str); 19] = [
     ("LANG", "C"),
     ("LC_ALL", "C"),
     ("LOGNAME", "nixbld"),
-    ("NIX_BUILD_CORES", "0"),
+    ("NIX_BUILD_CORES", "1"),
     ("NIX_BUILD_TOP", "/build"),
     ("NIX_LOG_FD", "2"),
     ("NIX_STORE", "/nix/store"),
@@ -483,6 +483,7 @@ mod tests {
         assert_eq!(*env_map.get("TMPDIR").unwrap(), &b"/build"[..]);
         assert_eq!(*env_map.get("TZ").unwrap(), &b"UTC"[..]);
         assert_eq!(*env_map.get("USER").unwrap(), &b"nixbld"[..]);
+        assert_eq!(*env_map.get("NIX_BUILD_CORES").unwrap(), &b"1"[..]);
     }
 
     #[test]

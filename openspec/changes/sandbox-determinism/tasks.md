@@ -12,9 +12,9 @@
 
 ## Phase 2: Build environment defaults
 
-- [ ] Change `NIX_BUILD_CORES` default from `"0"` to `"1"` in `SANDBOX_ENV_VARS` (`crates/crunch-build/src/build_request.rs`)
-- [ ] Update unit test `build_request_has_sandbox_env_vars` to assert `NIX_BUILD_CORES=1`
-- [ ] Update bootstrap derivations that need parallelism (`bootstrap/*.ncl`) to set `NIX_BUILD_CORES` explicitly
+- [x] Change `NIX_BUILD_CORES` default from `"0"` to `"1"` in `SANDBOX_ENV_VARS` (`crates/crunch-build/src/build_request.rs`) ✅ 3m
+- [x] Update unit test `build_request_has_sandbox_env_vars` to assert `NIX_BUILD_CORES=1` ✅ 2m
+- [x] Update bootstrap derivations that need parallelism (`bootstrap/*.ncl`) to set `NIX_BUILD_CORES` explicitly ✅ 4m
 
 ## Phase 3: Output normalization in export
 

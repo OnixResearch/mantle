@@ -129,10 +129,10 @@ let busybox_src = crunch.fetchTarball {
         $BB ln -sf "$MUSL/libc.so" /lib/%{seed_dynamic_linker} 2>/dev/null || true
       fi
 
-      # Compute job count — NIX_BUILD_CORES is 0 in sandbox, which is
-      # invalid for make. Default to 4 if 0 or unset.
+      # NIX_BUILD_CORES defaults to 1 for determinism. Bootstrap
+      # builds are safe to parallelize, so default to 4 if 1 or unset.
       JOBS=${NIX_BUILD_CORES:-4}
-      if [ "$JOBS" = "0" ] || [ -z "$JOBS" ]; then JOBS=4; fi
+      if [ "$JOBS" = "0" ] || [ "$JOBS" = "1" ] || [ -z "$JOBS" ]; then JOBS=4; fi
 
       # Pin build metadata so stage0/stage2 bootstrap outputs can reach a
       # fixed point. Busybox's kbuild machinery otherwise records volatile
