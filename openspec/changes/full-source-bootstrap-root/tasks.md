@@ -2,14 +2,14 @@
 
 ## Phase 1: Source-root manifest foundation
 
-- [ ] I1 Add a pure manifest model and validator for full-source bootstrap
+- [x] I1 Add a pure manifest model and validator for full-source bootstrap ✅ 2m 37s (started: 2026-04-25T19:44:50Z → completed: 2026-04-25T19:47:27Z)
       roots, including version, artifacts, patches, extraction rules,
       network trust roots with rationale, expected outputs with kind and
       required contract role, explicit trust notes, provenance, trust-note
       scope/rationale, non-BLAKE3 reason validation, and digest validation for
       every artifact/patch/output/network/trust-note entry.
       [covers=bootstrap.fullsource.root.manifest]
-- [ ] I2 Add positive and negative manifest fixtures covering valid manifests,
+- [x] I2 Add positive and negative manifest fixtures covering valid manifests, ✅ 2m 37s (started: 2026-04-25T19:44:50Z → completed: 2026-04-25T19:47:27Z)
       missing, invalid, or unsupported manifest versions, missing artifact/patch/
       output/network/trust-note digests, missing provenance fields, missing
       trust-note scope/rationale, missing network trust-root rationale, missing
@@ -19,6 +19,12 @@
       failures, non-BLAKE3 digest reasons, legacy musl.cc URL/hash rejection,
       and output mismatch diagnostics.
       [covers=bootstrap.fullsource.root.manifest]
+      Evidence: pueue task 59 passed 13 positive/negative fixtures in
+      `bootstrap_source_root::tests`, including valid manifest acceptance,
+      missing/unsupported version rejection, missing digest, non-BLAKE3 without
+      reason, missing extraction, undeclared patch, missing network rationale,
+      missing trust-note scope, missing output role, legacy musl.cc URL/hash,
+      unmanifested URL, and unexpected provider output role.
 
 ## Phase 2: Source-built provider
 

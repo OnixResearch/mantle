@@ -2,6 +2,7 @@
 #![register_tool(tigerstyle)]
 mod attest_cmd;
 mod bootstrap;
+mod bootstrap_source_root;
 mod build_cmd;
 mod build_failure;
 mod build_log;
