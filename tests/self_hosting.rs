@@ -62,6 +62,8 @@ const PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
 const PROOF_COMMAND_SENTINEL_ENV: &str = "CRUNCH_TEST_PROOF_COMMAND_SENTINEL";
 const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
 const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
+const PROOF_NO_HOST_TOOLS_ENV: &str = "CRUNCH_SELF_HOSTING_NO_HOST_TOOLS";
+const PROOF_STAGE0_INVENTORY_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY";
 const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
 const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-crunch";
@@ -86,6 +88,18 @@ const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
 ];
 const STAGE0_PROOF_TOOL_NAMES: [&str; 8] = ["bwrap", "git", "cargo", "tar", "xz", "cp", "chmod", "bash"];
 const BLOCKED_NIX_BINARIES: [&str; 4] = ["nix-build", "nix-store", "nix-shell", "nix"];
+const BLOCKED_HOST_TOOL_BINARIES: [&str; 10] = [
+    "git",
+    "tar",
+    "cp",
+    "sh",
+    "cargo",
+    "bwrap",
+    "nix-build",
+    "nix-store",
+    "nix-shell",
+    "nix",
+];
 
 struct StageEvidence {
     stage_name: String,
@@ -159,6 +173,7 @@ struct ProofPrerequisiteSet {
     stage0_path_strategy: String,
     stage0_path_dir: Option<String>,
     stage0_nix_binaries_absent: Vec<String>,
+    stage0_host_binaries_absent: Vec<String>,
     cc: Option<String>,
     pkg_config_path: Option<String>,
 }
@@ -888,6 +903,48 @@ impl ProofMode {
     }
 }
 
+fn proof_no_host_tools_enabled() -> bool {
+    match std::env::var(PROOF_NO_HOST_TOOLS_ENV).ok().as_deref() {
+        Some("1") => true,
+        Some("0") | None => false,
+        Some(other) => panic!("unexpected {PROOF_NO_HOST_TOOLS_ENV} value: {other}"),
+    }
+}
+
+fn proof_stage0_inventory() -> Option<PathBuf> {
+    if !proof_no_host_tools_enabled() {
+        return None;
+    }
+    let path = std::env::var_os(PROOF_STAGE0_INVENTORY_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| panic!("{PROOF_STAGE0_INVENTORY_ENV} must be set when {PROOF_NO_HOST_TOOLS_ENV}=1"));
+    assert!(path.exists(), "stage0 inventory must exist: {}", path.display());
+    Some(path)
+}
+
+fn blocked_host_tool_name(tool: &str) -> bool {
+    assert!(!tool.is_empty(), "tool name must not be empty");
+    BLOCKED_HOST_TOOL_BINARIES.iter().any(|blocked| blocked == &tool)
+}
+
+fn filtered_proof_tool_names(tool_names: &[&'static str], no_host_tools: bool) -> Vec<&'static str> {
+    assert!(!tool_names.is_empty(), "tool_names must not be empty");
+    let filtered: Vec<&'static str> =
+        tool_names.iter().copied().filter(|tool| !no_host_tools || !blocked_host_tool_name(tool)).collect();
+    assert!(!filtered.is_empty(), "filtered proof tool set must not be empty");
+    filtered
+}
+
+fn append_no_host_tools_stage0_args(stage0_command: &mut Vec<String>, inventory: Option<&Path>) {
+    assert!(!stage0_command.is_empty(), "stage0 command must not be empty");
+    if let Some(inventory) = inventory {
+        assert!(inventory.exists(), "stage0 inventory must exist: {}", inventory.display());
+        stage0_command.push("--no-host-tools".to_string());
+        stage0_command.push("--stage0-inventory".to_string());
+        stage0_command.push(inventory.display().to_string());
+    }
+}
+
 fn proof_later_stage_hermeticity_mode() -> crunch_pipeline::HermeticityMode {
     match std::env::var(PROOF_LATER_STAGE_HERMETICITY_ENV).ok().as_deref() {
         Some("practical") => crunch_pipeline::HermeticityMode::Practical,
@@ -1015,7 +1072,9 @@ fn collect_prerequisites(
     let stage0_path = stage0_path_dir
         .map(|dir| std::env::join_paths([dir.to_path_buf()]).expect("join stage0 PATH"))
         .unwrap_or_else(|| helper_path.clone());
+    let no_host_tools = proof_no_host_tools_enabled();
     let stage0_nix_binaries_absent = collect_absent_binaries(stage0_path.as_os_str(), &BLOCKED_NIX_BINARIES);
+    let stage0_host_binaries_absent = collect_absent_binaries(stage0_path.as_os_str(), &BLOCKED_HOST_TOOL_BINARIES);
     if proof_mode.stage0_path_is_scrubbed() {
         assert_eq!(
             stage0_nix_binaries_absent.len(),
@@ -1023,16 +1082,27 @@ fn collect_prerequisites(
             "non-nix-host proof must block every Nix binary from stage0 PATH",
         );
     }
+    if no_host_tools {
+        assert_eq!(
+            stage0_host_binaries_absent.len(),
+            BLOCKED_HOST_TOOL_BINARIES.len(),
+            "no-host-tools proof must block every common host helper from stage0 PATH",
+        );
+    }
+
+    let helper_tool_names = filtered_proof_tool_names(&HELPER_PROOF_TOOL_NAMES, no_host_tools);
+    let stage0_tool_names = filtered_proof_tool_names(&STAGE0_PROOF_TOOL_NAMES, no_host_tools);
 
     ProofPrerequisiteSet {
         mode: proof_mode,
         inventory_doc,
         sandbox_shell,
-        helper_tools: collect_resolved_tools(&HELPER_PROOF_TOOL_NAMES, &helper_path),
-        stage0_tools: collect_resolved_tools(&STAGE0_PROOF_TOOL_NAMES, stage0_path.as_os_str()),
+        helper_tools: collect_resolved_tools(&helper_tool_names, &helper_path),
+        stage0_tools: collect_resolved_tools(&stage0_tool_names, stage0_path.as_os_str()),
         stage0_path_strategy: proof_mode.stage0_path_strategy().to_string(),
         stage0_path_dir: stage0_path_dir.map(|dir| dir.display().to_string()),
         stage0_nix_binaries_absent,
+        stage0_host_binaries_absent,
         cc: std::env::var("CC").ok(),
         pkg_config_path: std::env::var("PKG_CONFIG_PATH").ok(),
     }
@@ -1248,6 +1318,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
         manifest.prerequisites.stage0_path_dir.as_deref().unwrap_or("<inherited>")
     ));
     out.push_str(&format!("stage0_nix_binaries_absent: {:?}\n", manifest.prerequisites.stage0_nix_binaries_absent));
+    out.push_str(&format!("stage0_host_binaries_absent: {:?}\n", manifest.prerequisites.stage0_host_binaries_absent));
     out.push_str(&format!(
         "stage0_inventory_doc: {} {}\n",
         manifest.prerequisites.inventory_doc.digest_blake3, manifest.prerequisites.inventory_doc.path
@@ -2020,6 +2091,34 @@ fn proof_mode_defaults_to_fixed_point() {
     let _guard = EnvVarGuard::set(PROOF_MODE_ENV, PROOF_MODE_FIXED_POINT);
     assert_eq!(ProofMode::current(), ProofMode::FixedPoint);
     assert!(!ProofMode::current().stage0_path_is_scrubbed());
+}
+
+#[test]
+fn append_no_host_tools_stage0_args_preserves_base_command_and_adds_inventory() {
+    let temp = tempfile::tempdir().unwrap();
+    let inventory = temp.path().join("stage0-inventory.ncl");
+    std::fs::write(&inventory, "# inventory\n").unwrap();
+    let mut command = vec!["crunch".to_string(), "self-build".to_string()];
+
+    append_no_host_tools_stage0_args(&mut command, Some(&inventory));
+
+    assert_eq!(command[0], "crunch");
+    assert_eq!(command[1], "self-build");
+    assert_eq!(command[2], "--no-host-tools");
+    assert_eq!(command[3], "--stage0-inventory");
+    assert_eq!(command[4], inventory.display().to_string());
+}
+
+#[test]
+fn filtered_proof_tool_names_removes_blocked_host_tools_for_no_host_mode() {
+    let filtered = filtered_proof_tool_names(&STAGE0_PROOF_TOOL_NAMES, true);
+
+    assert!(filtered.contains(&"xz"));
+    assert!(filtered.contains(&"chmod"));
+    assert!(filtered.contains(&"bash"));
+    for blocked in ["bwrap", "git", "cargo", "tar", "cp"] {
+        assert!(!filtered.contains(&blocked), "no-host-tools stage0 tool record must omit {blocked}");
+    }
 }
 
 #[cfg(unix)]
@@ -2828,6 +2927,7 @@ fn self_hosting_stage0_stage1_stage2() {
     }
 
     let proof_mode = ProofMode::current();
+    let no_host_tools_inventory = proof_stage0_inventory();
     let later_stage_hermeticity = proof_later_stage_hermeticity_mode();
     let proof_dir = tempfile::tempdir().unwrap_or_else(|err| panic!("tempdir for proof: {err}"));
     eprintln!("proof dir: {}", proof_dir.path().display());
@@ -2848,7 +2948,7 @@ fn self_hosting_stage0_stage1_stage2() {
     let stage0_state = proof_dir.path().join("state0");
     std::fs::create_dir_all(&stage0_state).unwrap();
 
-    let stage0_command = vec![
+    let mut stage0_command = vec![
         "crunch".to_string(),
         "--verbose".to_string(),
         "--log-level".to_string(),
@@ -2863,13 +2963,24 @@ fn self_hosting_stage0_stage1_stage2() {
         "-j".to_string(),
         "4".to_string(),
     ];
-    if proof_mode.stage0_path_is_scrubbed() {
-        let helper_path = std::env::var_os("PATH").expect("non-nix-host proof PATH must be set");
-        for blocked in BLOCKED_NIX_BINARIES {
-            assert!(
-                find_executable_in_path_var(blocked, helper_path.as_os_str()).is_none(),
-                "non-nix-host proof PATH must block {blocked}",
-            );
+    append_no_host_tools_stage0_args(&mut stage0_command, no_host_tools_inventory.as_deref());
+    if proof_mode.stage0_path_is_scrubbed() || no_host_tools_inventory.is_some() {
+        let helper_path = std::env::var_os("PATH").expect("proof PATH must be set");
+        if proof_mode.stage0_path_is_scrubbed() {
+            for blocked in BLOCKED_NIX_BINARIES {
+                assert!(
+                    find_executable_in_path_var(blocked, helper_path.as_os_str()).is_none(),
+                    "non-nix-host proof PATH must block {blocked}",
+                );
+            }
+        }
+        if no_host_tools_inventory.is_some() {
+            for blocked in BLOCKED_HOST_TOOL_BINARIES {
+                assert!(
+                    find_executable_in_path_var(blocked, helper_path.as_os_str()).is_none(),
+                    "no-host-tools proof PATH must block {blocked}",
+                );
+            }
         }
     }
     eprintln!("stage0 store: {}", store.display());

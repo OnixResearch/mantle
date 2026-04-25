@@ -186,9 +186,17 @@
       before PATH poisoning, removes common host helpers from the proof PATH,
       rejects missing inventory before launching cargo, and leaves existing
       non-protected proof modes working.
-- [ ] I16 Extend `tests/self_hosting.rs` to run no-host-tools mode while
+- [x] I16 Extend `tests/self_hosting.rs` to run no-host-tools mode while ✅ 0m 16s (started: 2026-04-25T22:39:25Z → completed: 2026-04-25T22:39:41Z)
       preserving the existing stage1, stage2, busybox, and bwrap fixed-point
       checks. [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 158 passed `cargo test -p crunch --test
+      self_hosting no_host -- --nocapture` with 4 tests passed. The ignored
+      self-hosting fixed-point proof now reads the no-host-tools inventory from
+      the proof environment, appends `--no-host-tools --stage0-inventory <path>`
+      to stage0 `self-build`, asserts the poisoned proof PATH lacks common host
+      helpers, filters proof-tool inventory records so blocked helpers are
+      absent rather than required, and leaves the existing stage1/stage2 binary,
+      bwrap, and busybox fixed-point assertions unchanged.
 - [ ] I17 Write `protected-exec-audit.json` into proof bundles and summarize the
       audit in `summary.txt`, including the machine-readable execution audit,
       stage0 inventory digest, blocked host command set, declared seed sandbox
