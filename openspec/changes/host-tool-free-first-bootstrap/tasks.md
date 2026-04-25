@@ -24,7 +24,7 @@
       entries, source entries, digest/provenance validation, and source URL
       allowlisting; `bootstrap/stage0-inventory.ncl` provides the typed Nickel
       inventory schema. Pueue task 45 passed the focused model tests.
-- [ ] I3 Add the generated proof inventory helper that writes
+- [x] I3 Add the generated proof inventory helper that writes ✅ 6m 32s (started: 2026-04-25T21:30:38Z → completed: 2026-04-25T21:37:10Z)
       `target/host-tool-free-stage0/stage0-inventory.ncl` only from explicit
       `CRUNCH_STAGE0_SEED_SANDBOX_ENTRY`, `CRUNCH_STAGE0_SEED_SANDBOX_SHELL`,
       `CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT`, and explicit bootstrap-build-tool
@@ -33,6 +33,12 @@
       entries with paths/digests/provenance, computes BLAKE3 digests, and never
       searches `PATH` or `/nix/store`.
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 56 passed isolated-target
+      `cargo test -p crunch protected_exec -- --nocapture` with 12 tests. New
+      generated-inventory tests cover missing explicit env inputs, expansion of
+      sandbox/shell/toolchain/build-tool paths, ignoring unrelated `PATH` and
+      `NIX_STORE`, BLAKE3 digest rendering, Nickel file writing, and empty
+      toolchain fail-closed behavior.
 - [ ] I4 Route protected-phase network fetches through `Stage0Inventory` source
       URL allowlisting and extraction-rule validation so undeclared source URLs,
       missing source entries, digest mismatches, and missing provenance fail
