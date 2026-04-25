@@ -18,15 +18,15 @@
 
 ## Phase 3: Output normalization in export
 
-- [ ] Add `filetime` crate to `crates/crunch-store/Cargo.toml`
-- [ ] Set non-executable file permissions to `0o444` in `export_file_to_disk`
-- [ ] Set directory permissions to `0o555` after `create_dir_all` in `export_castore_to_disk`
-- [ ] Set mtime to Unix timestamp `1` on all exported files and directories
-- [ ] Set lmtime on exported symlinks via `filetime::set_symlink_file_times`
-- [ ] Add unit test: exported non-executable file has mode `0o444`
-- [ ] Add unit test: exported directory has mode `0o555`
-- [ ] Add unit test: exported file has mtime `1`
-- [ ] Add unit test: exported symlink has lmtime `1`
+- [x] Add `filetime` crate to `crates/crunch-store/Cargo.toml` ✅ 2m
+- [x] Set non-executable file permissions to `0o444` in `export_file_to_disk` ✅ 8m
+- [x] Set directory permissions to `0o555` after `create_dir_all` in `export_castore_to_disk` ✅ 8m
+- [x] Set mtime to Unix timestamp `1` on all exported files and directories ✅ 10m
+- [x] Set lmtime on exported symlinks via `filetime::set_symlink_file_times` ✅ 4m
+- [x] Add unit test: exported non-executable file has mode `0o444` ✅ 3m
+- [x] Add unit test: exported directory has mode `0o555` ✅ 3m
+- [x] Add unit test: exported file has mtime `1` ✅ 3m
+- [x] Add unit test: exported symlink has lmtime `1` ✅ 3m
 
 ## Phase 4: Orchestrator map ordering
 

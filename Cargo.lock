@@ -1443,6 +1443,7 @@ dependencies = [
  "crunch-delta",
  "data-encoding",
  "ed25519-dalek",
+ "filetime",
  "flate2",
  "fs2",
  "futures",

@@ -12,10 +12,24 @@ use tokio::io::AsyncReadExt;
 /// Prevents runaway recursion from malformed castore data.
 pub const MAX_EXPORT_DEPTH: u32 = 128;
 
+const MAX_WORKLIST_ENTRIES: usize = 1_000_000;
+const INITIAL_WORKLIST_CAPACITY: usize = 64;
+const NORMALIZED_MTIME_SECONDS: i64 = 1;
+const NORMALIZED_MTIME_NANOSECONDS: u32 = 0;
+const NORMALIZED_NON_EXECUTABLE_MODE: u32 = 0o444;
+const NORMALIZED_EXECUTABLE_MODE: u32 = 0o555;
+const NORMALIZED_DIRECTORY_MODE: u32 = 0o555;
+
+#[derive(Debug)]
+enum ExportWorkItem {
+    WriteNode { node: Node, dest: String, depth: u32 },
+    FinalizeDirectory { dest: String },
+}
+
 /// Export a castore Node to a filesystem path.
 ///
 /// Uses an explicit bounded worklist instead of recursion. Directories
-/// are created top-down, files/symlinks are written as encountered.
+/// are created top-down and metadata-normalized after children are written.
 pub async fn export_castore_to_disk(
     node: &Node,
     dest: &str,
@@ -24,43 +38,77 @@ pub async fn export_castore_to_disk(
 ) -> Result<(), String> {
     debug_assert!(dest.starts_with('/'), "export dest must be absolute path: {dest}");
 
-    // Work items: (node, destination path, depth).
-    const MAX_WORKLIST_ENTRIES: usize = 1_000_000;
-    let mut worklist: Vec<(Node, String, u32)> = Vec::with_capacity(64);
-    worklist.push((node.clone(), dest.to_string(), 0));
+    let mut worklist: Vec<ExportWorkItem> = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
+    worklist.push(ExportWorkItem::WriteNode {
+        node: node.clone(),
+        dest: dest.to_string(),
+        depth: 0,
+    });
 
-    while let Some((current, current_dest, depth)) = worklist.pop() {
-        if depth >= MAX_EXPORT_DEPTH {
-            return Err(format!("directory depth limit ({MAX_EXPORT_DEPTH}) exceeded at {current_dest}"));
-        }
-        match &current {
-            Node::File { digest, executable, .. } => {
-                export_file_to_disk(digest, *executable, &current_dest, blob_service).await?;
+    while let Some(item) = worklist.pop() {
+        match item {
+            ExportWorkItem::WriteNode { node, dest, depth } => {
+                export_node_to_disk(node, dest, depth, &mut worklist, blob_service, directory_service).await?;
             }
-            Node::Symlink { target, .. } => {
-                export_symlink_to_disk(target.as_ref(), &current_dest)?;
-            }
-            Node::Directory { digest, .. } => {
-                std::fs::create_dir_all(&current_dest).map_err(|e| format!("creating dir {current_dest}: {e}"))?;
-
-                let dir = directory_service
-                    .get(digest)
-                    .await
-                    .map_err(|e| format!("fetching directory {digest}: {e}"))?
-                    .ok_or_else(|| format!("directory {digest} not found in castore"))?;
-
-                // Push children onto the worklist (forward order preserved
-                // because we push in order and pop from the end, but order
-                // doesn't matter for correctness here — only depth).
-                for (name, child_node) in dir.nodes() {
-                    let name_str = std::str::from_utf8(name.as_ref())
-                        .map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
-                    let child_dest = format!("{current_dest}/{name_str}");
-                    assert!(worklist.len() < MAX_WORKLIST_ENTRIES, "export worklist exceeded {MAX_WORKLIST_ENTRIES} entries");
-                    worklist.push((child_node.clone(), child_dest, depth.saturating_add(1)));
-                }
+            ExportWorkItem::FinalizeDirectory { dest } => {
+                normalize_directory_metadata(&dest)?;
             }
         }
+    }
+    Ok(())
+}
+
+async fn export_node_to_disk(
+    node: Node,
+    dest: String,
+    depth: u32,
+    worklist: &mut Vec<ExportWorkItem>,
+    blob_service: &(impl BlobService + Clone),
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<(), String> {
+    if depth >= MAX_EXPORT_DEPTH {
+        return Err(format!("directory depth limit ({MAX_EXPORT_DEPTH}) exceeded at {dest}"));
+    }
+    match node {
+        Node::File { digest, executable, .. } => {
+            export_file_to_disk(&digest, executable, &dest, blob_service).await?;
+        }
+        Node::Symlink { target, .. } => {
+            export_symlink_to_disk(target.as_ref(), &dest)?;
+        }
+        Node::Directory { digest, .. } => {
+            export_directory_to_disk(&digest, &dest, depth, worklist, directory_service).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn export_directory_to_disk(
+    digest: &snix_castore::B3Digest,
+    dest: &str,
+    depth: u32,
+    worklist: &mut Vec<ExportWorkItem>,
+    directory_service: &(impl DirectoryService + Clone),
+) -> Result<(), String> {
+    std::fs::create_dir_all(dest).map_err(|e| format!("creating dir {dest}: {e}"))?;
+    let dir = directory_service
+        .get(digest)
+        .await
+        .map_err(|e| format!("fetching directory {digest}: {e}"))?
+        .ok_or_else(|| format!("directory {digest} not found in castore"))?;
+
+    assert!(worklist.len() < MAX_WORKLIST_ENTRIES, "export worklist exceeded {MAX_WORKLIST_ENTRIES} entries");
+    worklist.push(ExportWorkItem::FinalizeDirectory { dest: dest.to_string() });
+    for (name, child_node) in dir.nodes() {
+        let name_str =
+            std::str::from_utf8(name.as_ref()).map_err(|e| format!("non-UTF8 filename in directory: {e}"))?;
+        let child_dest = format!("{dest}/{name_str}");
+        assert!(worklist.len() < MAX_WORKLIST_ENTRIES, "export worklist exceeded {MAX_WORKLIST_ENTRIES} entries");
+        worklist.push(ExportWorkItem::WriteNode {
+            node: child_node.clone(),
+            dest: child_dest,
+            depth: depth.saturating_add(1),
+        });
     }
     Ok(())
 }
@@ -103,12 +151,9 @@ async fn export_file_to_disk(
         assert!(written_bytes <= MAX_BLOB_WRITE_BYTES, "blob write exceeded {MAX_BLOB_WRITE_BYTES} bytes");
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {dest}: {e}"))?;
     }
-    #[cfg(unix)]
-    if is_executable {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o555))
-            .map_err(|e| format!("setting executable permission: {e}"))?;
-    }
+    std::io::Write::flush(&mut file).map_err(|e| format!("flushing {dest}: {e}"))?;
+    drop(file);
+    normalize_file_metadata(dest, is_executable)?;
     Ok(())
 }
 
@@ -123,6 +168,54 @@ fn export_symlink_to_disk(target: &[u8], dest: &str) -> Result<(), String> {
         let target_os = std::ffi::OsStr::from_bytes(target);
         std::os::unix::fs::symlink(target_os, dest).map_err(|e| format!("creating symlink {dest}: {e}"))?;
     }
+    normalize_symlink_timestamp(dest)?;
+    Ok(())
+}
+
+fn normalized_file_time() -> filetime::FileTime {
+    filetime::FileTime::from_unix_time(NORMALIZED_MTIME_SECONDS, NORMALIZED_MTIME_NANOSECONDS)
+}
+
+fn normalize_file_metadata(dest: &str, is_executable: bool) -> Result<(), String> {
+    let mode = if is_executable {
+        NORMALIZED_EXECUTABLE_MODE
+    } else {
+        NORMALIZED_NON_EXECUTABLE_MODE
+    };
+    set_path_mode(dest, mode)?;
+    filetime::set_file_mtime(dest, normalized_file_time())
+        .map_err(|e| format!("setting file mtime for {dest}: {e}"))?;
+    Ok(())
+}
+
+fn normalize_directory_metadata(dest: &str) -> Result<(), String> {
+    set_path_mode(dest, NORMALIZED_DIRECTORY_MODE)?;
+    filetime::set_file_mtime(dest, normalized_file_time())
+        .map_err(|e| format!("setting directory mtime for {dest}: {e}"))?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_path_mode(dest: &str, mode: u32) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))
+        .map_err(|e| format!("setting permissions for {dest}: {e}"))
+}
+
+#[cfg(not(unix))]
+fn set_path_mode(_dest: &str, _mode: u32) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn normalize_symlink_timestamp(dest: &str) -> Result<(), String> {
+    let fixed_time = normalized_file_time();
+    filetime::set_symlink_file_times(dest, fixed_time, fixed_time)
+        .map_err(|e| format!("setting symlink mtime for {dest}: {e}"))
+}
+
+#[cfg(not(unix))]
+fn normalize_symlink_timestamp(_dest: &str) -> Result<(), String> {
     Ok(())
 }
 
@@ -153,6 +246,23 @@ mod tests {
         (digest, node)
     }
 
+    #[cfg(unix)]
+    fn mode_bits(path: &str) -> u32 {
+        const MODE_PERMISSION_MASK: u32 = 0o777;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & MODE_PERMISSION_MASK
+    }
+
+    fn mtime_seconds(path: &str) -> i64 {
+        let metadata = std::fs::metadata(path).unwrap();
+        filetime::FileTime::from_last_modification_time(&metadata).unix_seconds()
+    }
+
+    fn symlink_mtime_seconds(path: &str) -> i64 {
+        let metadata = std::fs::symlink_metadata(path).unwrap();
+        filetime::FileTime::from_last_modification_time(&metadata).unix_seconds()
+    }
+
     // -- File export --
 
     #[tokio::test]
@@ -169,6 +279,21 @@ mod tests {
 
         let written = std::fs::read(&dest).unwrap();
         assert_eq!(written, data);
+    }
+
+    #[tokio::test]
+    async fn export_file_non_executable_sets_permissions() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (_, node) = insert_blob(&bs, b"plain").await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/plain", tmp.path().display());
+
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
+
+        #[cfg(unix)]
+        assert_eq!(mode_bits(&dest), NORMALIZED_NON_EXECUTABLE_MODE);
     }
 
     #[tokio::test]
@@ -190,9 +315,22 @@ mod tests {
 
         export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
 
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(&dest).unwrap().permissions().mode();
-        assert_ne!(mode & 0o111, 0, "executable bit should be set");
+        #[cfg(unix)]
+        assert_eq!(mode_bits(&dest), NORMALIZED_EXECUTABLE_MODE);
+    }
+
+    #[tokio::test]
+    async fn export_file_sets_mtime() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (_, node) = insert_blob(&bs, b"mtime").await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/mtime", tmp.path().display());
+
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
+
+        assert_eq!(mtime_seconds(&dest), NORMALIZED_MTIME_SECONDS);
     }
 
     #[tokio::test]
@@ -243,6 +381,22 @@ mod tests {
         assert_eq!(target.to_str().unwrap(), "/some/target");
     }
 
+    #[tokio::test]
+    async fn export_symlink_sets_lmtime() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let node = Node::Symlink {
+            target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/link", tmp.path().display());
+
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
+
+        assert_eq!(symlink_mtime_seconds(&dest), NORMALIZED_MTIME_SECONDS);
+    }
+
     // -- Directory export --
 
     #[tokio::test]
@@ -283,6 +437,36 @@ mod tests {
 
         assert_eq!(std::fs::read(format!("{dest}/a.txt")).unwrap(), b"content-a");
         assert_eq!(std::fs::read(format!("{dest}/b.txt")).unwrap(), b"content-b");
+    }
+
+    #[tokio::test]
+    async fn export_directory_sets_permissions_and_mtime() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let mut dir = Directory::new();
+        let (file_digest, _) = insert_blob(&bs, b"child").await;
+        dir.add("child.txt".try_into().unwrap(), Node::File {
+            digest: file_digest,
+            size: 5,
+            executable: false,
+        })
+        .unwrap();
+        let dir_digest = dir.digest();
+        let dir_size = dir.size();
+        ds.put(dir).await.unwrap();
+        let node = Node::Directory {
+            digest: dir_digest,
+            size: dir_size,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/dir", tmp.path().display());
+
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
+
+        #[cfg(unix)]
+        assert_eq!(mode_bits(&dest), NORMALIZED_DIRECTORY_MODE);
+        assert_eq!(mtime_seconds(&dest), NORMALIZED_MTIME_SECONDS);
     }
 
     #[tokio::test]
