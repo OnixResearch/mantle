@@ -60,6 +60,13 @@ pub struct ReleaseReproducibilityReportInit {
     pub artifacts: Vec<ReproducibilityArtifactComparison>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseReproducibilityReportLinkage {
+    pub release_id: String,
+    pub source_archive_digest_blake3: String,
+    pub proof_bundle_digest_blake3: String,
+}
+
 impl ReleaseReproducibilityReport {
     pub fn new(init: ReleaseReproducibilityReportInit) -> Self {
         Self {
@@ -97,6 +104,70 @@ pub fn release_reproducibility_report_digest_blake3(
 ) -> Result<String, ReleaseEvidenceError> {
     let canonical_bytes = release_reproducibility_report_canonical_bytes(report)?;
     Ok(blake3::hash(&canonical_bytes).to_hex().to_string())
+}
+
+pub fn validate_release_reproducibility_report_linkage(
+    report: ReleaseReproducibilityReport,
+    expected: ReleaseReproducibilityReportLinkage,
+) -> Result<ReleaseReproducibilityReport, ReleaseEvidenceError> {
+    let report = canonical_release_reproducibility_report(report)?;
+    validate_linkage_field(&report.release_id, &expected.release_id, "release_id")?;
+    validate_linkage_field(
+        &report.source_archive_digest_blake3,
+        &expected.source_archive_digest_blake3,
+        "source_archive_digest_blake3",
+    )?;
+    validate_linkage_field(
+        &report.proof_bundle_digest_blake3,
+        &expected.proof_bundle_digest_blake3,
+        "proof_bundle_digest_blake3",
+    )?;
+    Ok(report)
+}
+
+pub fn validate_release_reproducibility_report_artifact_names(
+    report: ReleaseReproducibilityReport,
+    expected_names: Vec<String>,
+) -> Result<ReleaseReproducibilityReport, ReleaseEvidenceError> {
+    let report = canonical_release_reproducibility_report(report)?;
+    let actual_names = report.artifacts.iter().map(|artifact| artifact.name.clone()).collect::<Vec<_>>();
+    let expected_names = normalize_expected_artifact_names(expected_names)?;
+    if actual_names != expected_names {
+        return Err(validation_error(format!(
+            "release reproducibility report artifact set mismatch: expected {expected_names:?}, got {actual_names:?}"
+        )));
+    }
+    Ok(report)
+}
+
+fn validate_linkage_field(actual: &str, expected: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if actual != expected {
+        return Err(validation_error(format!(
+            "release reproducibility report {field_name} linkage mismatch: expected {expected}, got {actual}"
+        )));
+    }
+    Ok(())
+}
+
+fn normalize_expected_artifact_names(mut names: Vec<String>) -> Result<Vec<String>, ReleaseEvidenceError> {
+    let name_count =
+        u32_count(names.len(), "release reproducibility report expected artifact name count overflowed u32")?;
+    if name_count == 0 {
+        return Err(validation_error(
+            "release reproducibility report expected artifact names must not be empty".to_string(),
+        ));
+    }
+    names.sort();
+    let mut names_seen = BTreeSet::new();
+    for name in &names {
+        validate_artifact_name(name)?;
+        if !names_seen.insert(name.clone()) {
+            return Err(validation_error(format!(
+                "release reproducibility report expected artifact names contain duplicate {name}"
+            )));
+        }
+    }
+    Ok(names)
 }
 
 fn validate_report_header(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
@@ -319,6 +390,14 @@ mod tests {
         })
     }
 
+    fn sample_linkage() -> ReleaseReproducibilityReportLinkage {
+        ReleaseReproducibilityReportLinkage {
+            release_id: "crunch-0.1.0-rc1".to_string(),
+            source_archive_digest_blake3: sample_digest(1),
+            proof_bundle_digest_blake3: sample_digest(2),
+        }
+    }
+
     #[test]
     fn reproducibility_report_canonical_bytes_are_stable_and_sorted() {
         let mut first = sample_report();
@@ -373,5 +452,58 @@ mod tests {
         let canonical = canonical_release_reproducibility_report(report).unwrap();
 
         assert_eq!(canonical.artifacts[0].result, ReproducibilityComparisonResult::Mismatched);
+    }
+
+    #[test]
+    fn reproducibility_report_accepts_missing_rebuilt_artifact_fixture() {
+        let mut report = sample_report();
+        report.artifacts[0].result = ReproducibilityComparisonResult::MissingRebuiltArtifact;
+        report.artifacts[0].observed_size_bytes = None;
+        report.artifacts[0].observed_digest_blake3 = None;
+
+        let canonical = canonical_release_reproducibility_report(report).unwrap();
+
+        assert_eq!(canonical.artifacts[0].result, ReproducibilityComparisonResult::MissingRebuiltArtifact);
+    }
+
+    #[test]
+    fn reproducibility_report_rejects_output_name_drift_fixture() {
+        let report = sample_report();
+        let expected_names = vec!["crunch-x86_64-linux".to_string(), "renamed-crunch".to_string()];
+
+        let err = validate_release_reproducibility_report_artifact_names(report, expected_names).unwrap_err();
+
+        assert!(err.to_string().contains("artifact set mismatch"));
+    }
+
+    #[test]
+    fn reproducibility_report_accepts_matching_artifact_names_out_of_order() {
+        let report = sample_report();
+        let expected_names = vec!["crunch-x86_64-linux".to_string(), "crunch-aarch64-linux".to_string()];
+
+        let canonical = validate_release_reproducibility_report_artifact_names(report, expected_names).unwrap();
+
+        assert_eq!(canonical.artifacts[0].name, "crunch-aarch64-linux");
+    }
+
+    #[test]
+    fn reproducibility_report_rejects_proof_linkage_mismatch_fixture() {
+        let report = sample_report();
+        let mut expected = sample_linkage();
+        expected.proof_bundle_digest_blake3 = sample_digest(6);
+
+        let err = validate_release_reproducibility_report_linkage(report, expected).unwrap_err();
+
+        assert!(err.to_string().contains("proof_bundle_digest_blake3 linkage mismatch"));
+    }
+
+    #[test]
+    fn reproducibility_report_accepts_matching_linkage() {
+        let report = sample_report();
+        let expected = sample_linkage();
+
+        let canonical = validate_release_reproducibility_report_linkage(report, expected).unwrap();
+
+        assert_eq!(canonical.release_id, "crunch-0.1.0-rc1");
     }
 }

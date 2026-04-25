@@ -13,9 +13,13 @@
       crunch-release-core --target wasm32-unknown-unknown` passed in pueue task 46,
       and filtered `cargo test -p crunch-release-core reproducibility_report`
       passed in pueue task 49 (5 passed).
-- [ ] I2 Add report canonicalization tests plus negative fixtures for one-byte
+- [x] I2 Add report canonicalization tests plus negative fixtures for one-byte ✅ 0m 56s (started: 2026-04-25T19:03:57Z → completed: 2026-04-25T19:04:53Z)
       drift, missing artifact, output-name drift, and proof-linkage mismatch.
       [covers=release.evidence.reproducible.report]
+      Evidence: `cargo test -p crunch-release-core reproducibility_report` passed
+      in pueue task 51 (10 filtered tests), and `cargo test -p
+      crunch-release-core && cargo check -p crunch-release-core --target
+      wasm32-unknown-unknown` passed in pueue task 52 (16 unit tests).
 
 ## Phase 2: Rebuild and compare workflow
 
