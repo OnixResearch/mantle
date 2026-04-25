@@ -432,18 +432,20 @@ fn normalize_agreement_witness(
             value: &witness.independence_domain,
         })?;
     }
-    validate_env_field(NamedField {
-        name: "system",
-        value: &witness.environment_summary.system,
-    })?;
-    validate_env_field(NamedField {
-        name: "toolchain",
-        value: &witness.environment_summary.toolchain,
-    })?;
-    validate_env_field(NamedField {
-        name: "host_class",
-        value: &witness.environment_summary.host_class,
-    })?;
+    if witness.classification_reason != WitnessClassificationReason::MalformedEnvironmentEvidence {
+        validate_env_field(NamedField {
+            name: "system",
+            value: &witness.environment_summary.system,
+        })?;
+        validate_env_field(NamedField {
+            name: "toolchain",
+            value: &witness.environment_summary.toolchain,
+        })?;
+        validate_env_field(NamedField {
+            name: "host_class",
+            value: &witness.environment_summary.host_class,
+        })?;
+    }
     witness.rebuilt_output_digests = normalize_binary_digests(witness.rebuilt_output_digests)?;
     Ok(witness)
 }
@@ -1047,11 +1049,18 @@ mod tests {
                 WitnessClassificationReason::MissingIndependenceEvidence,
                 false,
             ),
+            sample_agreement_witness(
+                "witness-e",
+                "key-e",
+                "",
+                WitnessClassificationReason::MalformedEnvironmentEvidence,
+                false,
+            ),
         ]);
 
         assert_eq!(report.counted_witness_count, 0);
         assert_eq!(report.skipped_witness_count, 4);
-        assert_eq!(report.failed_witness_count, 0);
+        assert_eq!(report.failed_witness_count, 1);
         assert_eq!(report.status(), IndependentAgreementStatus::Unsatisfied);
     }
 

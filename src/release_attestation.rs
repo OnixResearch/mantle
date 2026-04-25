@@ -560,10 +560,7 @@ fn classify_agreement_witness(
     release_digest: &AttestationDigest,
     used_domains: &mut BTreeSet<String>,
 ) -> Result<AgreementWitnessClassification, RunError> {
-    let witness_digest = witness
-        .attestation
-        .canonical_digest()
-        .map_err(|err| RunError::Build(format!("witness attestation digest: {err}")))?;
+    let witness_digest = witness_attestation_digest_for_report(&witness.attestation)?;
     let (signature_valid, signer_key_name, mut reason) = classify_witness_signature(witness, trusted_public_keys)?;
     let is_identity_trusted = is_trusted_witness_identity(&material.policy, &witness.attestation);
     if signature_valid && !is_identity_trusted {
@@ -619,7 +616,17 @@ fn classify_witness_signature(
     witness: &crunch_attestation::discovery::DiscoveredWitness,
     trusted_public_keys: &[VerifyingKey],
 ) -> Result<(bool, String, WitnessClassificationReason), RunError> {
-    let canonical_bytes = canonical_witness_bytes(&witness.attestation)?;
+    let canonical_bytes = match canonical_witness_bytes(&witness.attestation) {
+        Ok(bytes) => bytes,
+        Err(RunError::Build(_)) => {
+            return Ok((
+                false,
+                witness.signature.key_name.clone(),
+                WitnessClassificationReason::MalformedEnvironmentEvidence,
+            ));
+        }
+        Err(err) => return Err(err),
+    };
     match verify_signature_bytes(&canonical_bytes, &witness.signature, trusted_public_keys, "witness attestation") {
         Ok(signer_key_name) => Ok((true, signer_key_name, WitnessClassificationReason::Counted)),
         Err(RunError::Build(message)) => {
@@ -631,6 +638,15 @@ fn classify_witness_signature(
             Ok((false, witness.signature.key_name.clone(), reason))
         }
         Err(err) => Err(err),
+    }
+}
+
+fn witness_attestation_digest_for_report(attestation: &WitnessAttestation) -> Result<AttestationDigest, RunError> {
+    match attestation.canonical_digest() {
+        Ok(digest) => Ok(digest),
+        Err(_) => serde_json::to_vec(attestation)
+            .map(AttestationDigest::from_canonical_bytes)
+            .map_err(|err| RunError::Build(format!("serializing malformed witness attestation: {err}"))),
     }
 }
 
@@ -709,7 +725,11 @@ fn validate_witness_for_policy(
     witness: &crunch_attestation::discovery::DiscoveredWitness,
     trusted_public_keys: &[VerifyingKey],
 ) -> Result<Option<ValidatedWitness>, RunError> {
-    let canonical_bytes = canonical_witness_bytes(&witness.attestation)?;
+    let canonical_bytes = match canonical_witness_bytes(&witness.attestation) {
+        Ok(bytes) => bytes,
+        Err(RunError::Build(_)) => return Ok(None),
+        Err(err) => return Err(err),
+    };
     let signer_key_name = match verify_signature_bytes(
         &canonical_bytes,
         &witness.signature,

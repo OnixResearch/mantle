@@ -65,13 +65,21 @@
 
 ## Phase 3: CLI tests and docs
 
-- [ ] I7 Add CLI tests for satisfying independent witnesses, same-domain witness
+- [x] I7 Add CLI tests for satisfying independent witnesses, same-domain witness ✅ 10m 52s (started: 2026-04-25T20:46:10Z → completed: 2026-04-25T20:57:02Z)
       rejection, unknown-key skip, invalid-signature witness classification,
       revoked witness skip, malformed environment evidence, missing selector
       evidence, digest-mismatch witness-set rejection, bundle without agreement
       remains basic-valid with absent status, duplicate agreement-report
       attachment rejection, and mismatched agreement attachment rejection.
       [covers=release.verification.tech.independent.agreement.report,release.verification.tech.independent.agreement.class,release.verification.social.independent.agreement.policy,release.evidence.independent.agreement.attachment,release.verification.tech.witness.independence.evidence]
+      Evidence: `cargo test -p crunch --test release_cli attest_release_verify`
+      passed in pueue task 22 (11 tests) after adding satisfying, same-domain,
+      invalid-signature, revoked, unknown-key, digest-mismatch, missing-evidence,
+      duplicate-attachment, mismatched-attachment, and no-report/basic-valid
+      assertions. Final expanded evidence in pueue task 31 passed 12
+      `attest_release_verify` tests including malformed environment evidence;
+      `cargo test -p crunch-attestation-core independent_agreement` passed 4
+      core report tests in pueue task 32.
 - [ ] I8 Update release verification docs to describe independent agreement as
       policy-scoped evidence from accepted witness files and verifier-local
       policy, name `independent_agreement_status`,

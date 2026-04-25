@@ -286,9 +286,25 @@ fn write_policy(
     trusted_witness_identities: Vec<String>,
     min_matching_witnesses: u32,
 ) {
+    write_policy_with_independence(
+        verification_dir,
+        release_signer_name,
+        trusted_witness_identities,
+        min_matching_witnesses,
+        "witness_identity",
+    );
+}
+
+fn write_policy_with_independence(
+    verification_dir: &Path,
+    release_signer_name: &str,
+    trusted_witness_identities: Vec<String>,
+    min_matching_witnesses: u32,
+    independence_field: &str,
+) {
     let policy = ReleasePolicy::new(
         min_matching_witnesses,
-        "witness_identity".to_string(),
+        independence_field.to_string(),
         vec![release_signer_name.to_string()],
         trusted_witness_identities,
     );
@@ -401,6 +417,37 @@ fn build_matching_agreement_report(
         artifact_digest_sets: release_attestation.binary_digests.clone(),
     })
     .unwrap()
+}
+
+fn write_witness_material_with_host_class(
+    verification_dir: &Path,
+    release_attestation: &ReleaseAttestation,
+    witness_keypair: &KeyPair,
+    identity: &str,
+    host_class: &str,
+) {
+    let witness = WitnessAttestation::new(
+        release_attestation.canonical_digest().unwrap(),
+        identity.to_string(),
+        release_attestation.binary_digests.clone(),
+        RebuildEnvironmentSummary {
+            system: "x86_64-linux".to_string(),
+            toolchain: "rust-1.91.1".to_string(),
+            host_class: host_class.to_string(),
+        },
+    );
+    let witness_bytes = witness.canonical_bytes().unwrap();
+    write_file(&verification_dir.join("witnesses").join(format!("{identity}.json")), witness_bytes.as_slice());
+
+    let signature = witness_keypair.signing_key.sign(&witness_bytes);
+    let detached_signature = DetachedSignature {
+        key_name: signature.name().to_string(),
+        signature_bytes: *signature.bytes(),
+    };
+    write_file(
+        &verification_dir.join("witnesses").join(format!("{identity}.json.sig")),
+        format!("{}\n", encode_detached_signature(&detached_signature)).as_bytes(),
+    );
 }
 
 fn invalid_signature_line(key_name: &str) -> String {
@@ -3155,6 +3202,309 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
 }
 
 #[test]
+fn attest_release_verify_reports_two_independent_witness_agreement() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_a_keypair = crunch_build::generate_keypair().0;
+    let witness_b_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_a_keypair, "witness-a");
+    write_witness_material(&verification_dir, &release_attestation, &witness_b_keypair, "witness-b");
+    write_policy(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-a".to_string(), "witness-b".to_string()],
+        2,
+    );
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_a_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_b_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["independent_agreement_status"], "satisfied");
+    assert_eq!(verify_json["independent_agreement_class"], "independent-rebuild-agreement");
+    assert_eq!(verify_json["independent_agreement_counted_witness_count"], 2);
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 0);
+}
+
+#[test]
+fn attest_release_verify_reports_unsatisfied_for_same_host_class() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_a_keypair = crunch_build::generate_keypair().0;
+    let witness_b_keypair = crunch_build::generate_keypair().0;
+    write_witness_material_with_host_class(
+        &verification_dir,
+        &release_attestation,
+        &witness_a_keypair,
+        "witness-a",
+        "shared-host",
+    );
+    write_witness_material_with_host_class(
+        &verification_dir,
+        &release_attestation,
+        &witness_b_keypair,
+        "witness-b",
+        "shared-host",
+    );
+    write_policy_with_independence(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-a".to_string(), "witness-b".to_string()],
+        2,
+        "rebuild_environment_summary.host_class",
+    );
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_a_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_b_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["independent_agreement_status"], "unsatisfied");
+    assert!(verify_json["independent_agreement_class"].is_null());
+    assert_eq!(verify_json["independent_agreement_counted_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][1]["classification_reason"],
+        "duplicate-independence-domain"
+    );
+}
+
+#[test]
+fn attest_release_verify_classifies_invalid_signature_witness() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let trusted_witness_keypair = crunch_build::generate_keypair().0;
+    let invalid_witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &trusted_witness_keypair, "witness-good");
+    write_witness_material(&verification_dir, &release_attestation, &invalid_witness_keypair, "witness-bad");
+    write_file(
+        &verification_dir.join("witnesses/witness-bad.json.sig"),
+        format!("{}\n", invalid_signature_line(invalid_witness_keypair.verifying_key.name())).as_bytes(),
+    );
+    write_policy(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-good".to_string(), "witness-bad".to_string()],
+        1,
+    );
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(trusted_witness_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(invalid_witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["independent_agreement_status"], "satisfied");
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_witnesses"][0]["classification_reason"], "invalid-signature");
+}
+
+#[test]
+fn attest_release_verify_classifies_malformed_witness_environment() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let trusted_witness_keypair = crunch_build::generate_keypair().0;
+    let malformed_witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &trusted_witness_keypair, "witness-good");
+    write_witness_material(&verification_dir, &release_attestation, &malformed_witness_keypair, "witness-malformed");
+    let malformed_path = verification_dir.join("witnesses/witness-malformed.json");
+    let mut malformed_json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&malformed_path).unwrap()).unwrap();
+    malformed_json["rebuild_environment_summary"]["host_class"] = serde_json::Value::String(String::new());
+    write_file(&malformed_path, serde_json::to_vec(&malformed_json).unwrap().as_slice());
+    write_policy(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-good".to_string(), "witness-malformed".to_string()],
+        1,
+    );
+    write_empty_revocations(&verification_dir);
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(trusted_witness_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(malformed_witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["independent_agreement_status"], "satisfied");
+    assert_eq!(verify_json["independent_agreement_failed_witness_count"], 1);
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][1]["classification_reason"],
+        "malformed-environment-evidence"
+    );
+}
+
+#[test]
+fn attest_release_verify_classifies_revoked_witness() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let trusted_witness_keypair = crunch_build::generate_keypair().0;
+    let revoked_witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &trusted_witness_keypair, "witness-good");
+    write_witness_material(&verification_dir, &release_attestation, &revoked_witness_keypair, "witness-revoked");
+    write_policy(
+        &verification_dir,
+        release_keypair.verifying_key.name(),
+        vec!["witness-good".to_string(), "witness-revoked".to_string()],
+        1,
+    );
+    let revoked_witness: WitnessAttestation =
+        serde_json::from_slice(&std::fs::read(verification_dir.join("witnesses/witness-revoked.json")).unwrap())
+            .unwrap();
+    let revocations = ReleaseRevocations::new(Vec::new(), vec![revoked_witness.canonical_digest().unwrap().to_hex()]);
+    write_file(
+        &verification_dir.join("revocations.json"),
+        serde_json::to_vec_pretty(&revocations).unwrap().as_slice(),
+    );
+
+    let verify_output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(trusted_witness_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(revoked_witness_keypair.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
+
+    assert_eq!(verify_json["independent_agreement_status"], "satisfied");
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_witnesses"][1]["classification_reason"], "revoked");
+}
+
+#[test]
 fn attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_holds() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let signing_key_path = temp.path().join("release.key");
@@ -3179,6 +3529,10 @@ fn attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_h
     let unknown_witness_keypair = crunch_build::generate_keypair().0;
     write_witness_material(&verification_dir, &release_attestation, &trusted_witness_keypair, "witness-good");
     write_witness_material(&verification_dir, &release_attestation, &unknown_witness_keypair, "witness-unknown");
+    write_file(
+        &verification_dir.join("witnesses/witness-unknown.json.sig"),
+        format!("{}\n", invalid_signature_line("untrusted-witness-key")).as_bytes(),
+    );
     write_policy(
         &verification_dir,
         release_keypair.verifying_key.name(),
@@ -3205,6 +3559,8 @@ fn attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_h
     assert_eq!(verify_json["matching_witness_count"], 1);
     assert_eq!(verify_json["policy_status"], "satisfied");
     assert_eq!(verify_json["final_class"], "quorum-satisfied");
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_witnesses"][1]["classification_reason"], "unknown-key");
 }
 
 #[test]
@@ -3297,6 +3653,8 @@ fn attest_release_verify_reports_policy_insufficient_for_wrong_release_digest_wi
     assert_eq!(verify_json["technical_class"], "self-proof-valid");
     assert_eq!(verify_json["policy_status"], "insufficient");
     assert_eq!(verify_json["final_class"], "self-proof-valid");
+    assert_eq!(verify_json["independent_agreement_failed_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_witnesses"][0]["classification_reason"], "digest-mismatch");
 }
 
 #[test]
@@ -3344,6 +3702,11 @@ fn attest_release_verify_reports_policy_insufficient_for_untrusted_witness_ident
     assert_eq!(verify_json["policy_status"], "insufficient");
     assert_eq!(verify_json["final_class"], "self-proof-valid");
     assert_eq!(verify_json["matching_witness_count"], 0);
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][0]["classification_reason"],
+        "missing-independence-evidence"
+    );
 }
 
 fn write_canonical_manifest(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) {
