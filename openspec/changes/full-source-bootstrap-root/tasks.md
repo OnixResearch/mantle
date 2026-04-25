@@ -40,7 +40,7 @@
       URLs, network trust roots, provider metadata, and recorded dependency trace
       for the legacy musl.cc URL/hash and fail before provider acceptance if
       found. [covers=bootstrap.fullsource.provider.contract]
-- [ ] I4 Add exact provider selection surfaces: `crunch bootstrap --source-root
+- [~] I4 Add exact provider selection surfaces: `crunch bootstrap --source-root ⏱ started: 2026-04-25T19:51:40Z
       <manifest>` for source-root provider generation, `crunch bootstrap --fetch`
       for legacy seed-assisted provider generation, fail-closed
       `crunch bootstrap --fetch --source-root <manifest>` before provider work,

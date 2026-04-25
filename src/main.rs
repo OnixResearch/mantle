@@ -28,6 +28,7 @@ mod witness_handoff;
 mod witness_rebuild;
 
 use std::ffi::OsString;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -182,6 +183,10 @@ enum Command {
         #[arg(long)]
         fetch: bool,
 
+        /// Validate a full-source root manifest and select the source-root provider path.
+        #[arg(long)]
+        source_root: Option<PathBuf>,
+
         /// Packages to include (nixpkgs attribute names, ignored with --fetch)
         #[arg(default_values_t = [
             "bash".to_string(),
@@ -271,6 +276,10 @@ enum Command {
         /// Reject degraded hermetic behavior once strict-mode blockers exist.
         #[arg(long)]
         strict_hermetic: bool,
+
+        /// Validate a full-source root manifest and bind self-build proof to source-root provider.
+        #[arg(long)]
+        source_root: Option<PathBuf>,
 
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
@@ -1112,22 +1121,74 @@ fn run_build_command(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SourceRootManifestCheck {
+    manifest_digest: String,
+    expected_output_role_count: u32,
+}
+
+fn validate_source_root_manifest_file(manifest_path: &Path) -> Result<SourceRootManifestCheck, RunError> {
+    let manifest_bytes = fs::read(manifest_path).map_err(|err| {
+        RunError::Internal(format!("reading source-root manifest {}: {err}", manifest_path.display()))
+    })?;
+    if manifest_bytes.is_empty() {
+        return Err(RunError::Internal(format!("source-root manifest {} is empty", manifest_path.display())));
+    }
+    let manifest =
+        bootstrap_source_root::parse_source_root_manifest_bytes(&manifest_bytes).map_err(RunError::Internal)?;
+    let validation = bootstrap_source_root::validate_source_root_manifest(&manifest)
+        .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
+    let expected_output_role_count = u32::try_from(validation.expected_output_roles.len()).map_err(|_| {
+        RunError::Internal("source-root manifest expected output role count overflowed u32".to_string())
+    })?;
+    let manifest_digest = bootstrap_source_root::source_root_manifest_digest(&manifest_bytes);
+    Ok(SourceRootManifestCheck {
+        manifest_digest,
+        expected_output_role_count,
+    })
+}
+
+fn bootstrap_source_root_provider(output: &Path, manifest_path: &Path) -> Result<(), RunError> {
+    let checked = validate_source_root_manifest_file(manifest_path)?;
+    Err(RunError::Build(format!(
+        "{}: manifest_digest={} expected_output_roles={} output={}",
+        bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON,
+        checked.manifest_digest,
+        checked.expected_output_role_count,
+        output.display()
+    )))
+}
+
 fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     match command {
         Command::Bootstrap {
             output,
             fetch,
+            source_root,
             packages,
-        } => run_bootstrap_command(ctx, output, *fetch, packages),
+        } => run_bootstrap_command(ctx, output, *fetch, source_root.as_deref(), packages),
         _ => unreachable!("bootstrap helper called with non-bootstrap command"),
     }
 }
 
-fn run_bootstrap_command(ctx: &RunContext, output: &Path, fetch: bool, packages: &[String]) -> Result<(), RunError> {
-    if fetch {
-        cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose)
-    } else {
-        cmd_bootstrap(output, packages)
+fn run_bootstrap_command(
+    ctx: &RunContext,
+    output: &Path,
+    fetch: bool,
+    source_root: Option<&Path>,
+    packages: &[String],
+) -> Result<(), RunError> {
+    match bootstrap_source_root::select_bootstrap_provider(fetch, source_root)
+        .map_err(|err| RunError::Internal(err.to_string()))?
+    {
+        bootstrap_source_root::BootstrapProviderMode::LegacyFetch => {
+            cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose)
+        }
+        bootstrap_source_root::BootstrapProviderMode::SourceRoot => {
+            let manifest_path = source_root.expect("source-root mode must carry manifest path");
+            bootstrap_source_root_provider(output, manifest_path)
+        }
+        bootstrap_source_root::BootstrapProviderMode::NixPackages => cmd_bootstrap(output, packages),
     }
 }
 
@@ -1308,6 +1369,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trusted_public_keys,
             trust_unsigned,
             strict_hermetic,
+            source_root,
             source_store_path,
             bootstrap_bwrap_path,
             bootstrap_busybox_path,
@@ -1320,6 +1382,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trusted_public_keys,
             *trust_unsigned,
             *strict_hermetic,
+            source_root.as_deref(),
             source_store_path.as_deref(),
             bootstrap_bwrap_path.as_deref(),
             bootstrap_busybox_path.as_deref(),
@@ -1338,6 +1401,7 @@ fn run_self_build_command(
     trusted_public_keys: &[String],
     trust_unsigned: bool,
     strict_hermetic: bool,
+    source_root: Option<&std::path::Path>,
     source_store_path: Option<&std::path::Path>,
     bootstrap_bwrap_path: Option<&std::path::Path>,
     bootstrap_busybox_path: Option<&std::path::Path>,
@@ -1348,6 +1412,16 @@ fn run_self_build_command(
     } else {
         crunch_pipeline::HermeticityMode::Practical
     };
+    if let Some(manifest_path) = source_root {
+        let checked = validate_source_root_manifest_file(manifest_path)?;
+        return Err(RunError::Build(format!(
+            "{}: manifest_digest={} expected_output_roles={}",
+            bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON,
+            checked.manifest_digest,
+            checked.expected_output_role_count
+        )));
+    }
+
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     self_build::cmd_self_build(
         &ctx.store,

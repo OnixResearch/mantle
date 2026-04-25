@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::fmt;
+use std::path::Path;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -12,6 +13,8 @@ pub(crate) const PROVIDER_NAME: &str = "musl-seed-toolchain";
 pub(crate) const PROVIDER_TARGET: &str = "x86_64-linux-musl";
 pub(crate) const PROVIDER_DYNAMIC_LINKER: &str = "ld-musl-x86_64.so.1";
 pub(crate) const PROVIDER_METADATA_ROLE: &str = "share/crunch-bootstrap/provider.json";
+pub(crate) const SOURCE_ROOT_BLOCKED_REASON: &str =
+    "source-built provider materialization is not implemented; full-source claim blocked";
 
 const MIN_REQUIRED_ITEM_COUNT: usize = 1;
 const MAX_MANIFEST_ITEM_COUNT: usize = 4_096;
@@ -131,6 +134,13 @@ pub(crate) struct ProviderDependencyTrace {
     pub provider_metadata: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootstrapProviderMode {
+    NixPackages,
+    LegacyFetch,
+    SourceRoot,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ManifestValidation {
     pub provider_name: &'static str,
@@ -159,6 +169,40 @@ impl fmt::Display for ManifestDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.path, self.message)
     }
+}
+
+pub(crate) fn select_bootstrap_provider(
+    fetch: bool,
+    source_root: Option<&Path>,
+) -> Result<BootstrapProviderMode, ManifestDiagnostic> {
+    if fetch && source_root.is_some() {
+        return Err(ManifestDiagnostic::new(
+            "provider-selection",
+            "ambiguous provider selection: --fetch cannot be combined with --source-root",
+        ));
+    }
+    if source_root.is_some() {
+        Ok(BootstrapProviderMode::SourceRoot)
+    } else if fetch {
+        Ok(BootstrapProviderMode::LegacyFetch)
+    } else {
+        Ok(BootstrapProviderMode::NixPackages)
+    }
+}
+
+pub(crate) fn parse_source_root_manifest_bytes(bytes: &[u8]) -> Result<SourceRootManifest, String> {
+    assert!(!bytes.is_empty(), "manifest bytes must not be empty");
+    serde_json::from_slice(bytes).map_err(|err| format!("parsing source-root manifest JSON: {err}"))
+}
+
+pub(crate) fn source_root_manifest_digest(bytes: &[u8]) -> String {
+    assert!(!bytes.is_empty(), "manifest bytes must not be empty");
+    blake3::hash(bytes).to_hex().to_string()
+}
+
+pub(crate) fn format_diagnostics(errors: &[ManifestDiagnostic]) -> String {
+    assert!(!errors.is_empty(), "formatting diagnostics requires at least one error");
+    errors.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ")
 }
 
 pub(crate) fn validate_source_root_manifest(
@@ -513,6 +557,30 @@ mod tests {
         assert_eq!(validated.provider_dynamic_linker, PROVIDER_DYNAMIC_LINKER);
         assert!(validated.expected_output_roles.contains(PROVIDER_METADATA_ROLE));
         assert_eq!(validated.expected_output_roles.len(), REQUIRED_PROVIDER_TOOL_ROLES.len());
+    }
+
+    #[test]
+    fn bootstrap_provider_selection_rejects_fetch_plus_source_root() {
+        let source_root = Path::new("source-root.json");
+        let err = select_bootstrap_provider(true, Some(source_root)).unwrap_err();
+        assert_eq!(err.path, "provider-selection");
+        assert!(err.message.contains("--fetch cannot be combined with --source-root"));
+    }
+
+    #[test]
+    fn bootstrap_provider_selection_accepts_each_single_mode() {
+        let source_root = Path::new("source-root.json");
+        assert_eq!(select_bootstrap_provider(false, Some(source_root)).unwrap(), BootstrapProviderMode::SourceRoot);
+        assert_eq!(select_bootstrap_provider(true, None).unwrap(), BootstrapProviderMode::LegacyFetch);
+        assert_eq!(select_bootstrap_provider(false, None).unwrap(), BootstrapProviderMode::NixPackages);
+    }
+
+    #[test]
+    fn source_root_manifest_digest_is_blake3_of_bytes() {
+        let bytes = br#"{"schema":"source-root"}"#;
+        let digest = source_root_manifest_digest(bytes);
+        assert_eq!(digest, blake3::hash(bytes).to_hex().to_string());
+        assert_eq!(digest.len(), BLAKE3_HEX_LEN);
     }
 
     #[test]
