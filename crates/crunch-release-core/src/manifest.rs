@@ -81,6 +81,8 @@ pub struct ReleaseEvidenceManifest {
     pub prerequisite_inventory: BundledArtifact,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_report: Option<BundledArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independent_agreement_report: Option<BundledArtifact>,
     pub proof_linkage: ReleaseProofLinkage,
 }
 
@@ -224,6 +226,20 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
         if report.kind != BundledArtifactKind::File {
             return Err(validation_error(
                 "release evidence reproducibility_report must be recorded as a file artifact".to_string(),
+            ));
+        }
+    }
+    if let Some(report) = &manifest.independent_agreement_report {
+        validate_and_record_path(report, "independent_agreement_report", &mut seen_paths)?;
+        if report.kind != BundledArtifactKind::File {
+            return Err(validation_error(
+                "release evidence independent_agreement_report must be recorded as a file artifact".to_string(),
+            ));
+        }
+        if report.relative_path != "independent-agreement/agreement-report.json" {
+            return Err(validation_error(
+                "release evidence independent_agreement_report must be independent-agreement/agreement-report.json"
+                    .to_string(),
             ));
         }
     }
@@ -476,6 +492,7 @@ mod tests {
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
             reproducibility_report: None,
+            independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

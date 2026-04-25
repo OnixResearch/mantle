@@ -12,15 +12,20 @@ use std::process::Output;
 use assert_cmd::Command;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use crunch_attestation::AgreementWitnessClassification;
 use crunch_attestation::AttestationDigest;
 use crunch_attestation::Canonicalize;
 use crunch_attestation::DetachedSignature;
+use crunch_attestation::IndependentAgreementReport;
+use crunch_attestation::IndependentAgreementReportInit;
 use crunch_attestation::RebuildEnvironmentSummary;
 use crunch_attestation::ReleaseAttestation;
 use crunch_attestation::ReleasePolicy;
 use crunch_attestation::ReleaseRevocations;
 use crunch_attestation::WitnessAttestation;
+use crunch_attestation::WitnessClassificationReason;
 use crunch_attestation::encode_detached_signature;
+use crunch_attestation::independent_agreement_report_canonical_bytes;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
 use crunch_release_core::ReleaseReproducibilityReport;
@@ -342,6 +347,60 @@ fn write_witness_material_with_release_digest(
         &verification_dir.join("witnesses").join(format!("{identity}.json.sig")),
         format!("{}\n", encode_detached_signature(&detached_signature)).as_bytes(),
     );
+}
+
+fn write_matching_agreement_report(
+    verification_dir: &Path,
+    release_attestation: &ReleaseAttestation,
+    policy: &ReleasePolicy,
+    witness_keypair: &KeyPair,
+    witness_identity: &str,
+) -> PathBuf {
+    let report = build_matching_agreement_report(release_attestation, policy, witness_keypair, witness_identity);
+    let bytes = independent_agreement_report_canonical_bytes(report).unwrap();
+    let report_path = verification_dir.join("agreement-report.json");
+    write_file(&report_path, &bytes);
+    report_path
+}
+
+fn build_matching_agreement_report(
+    release_attestation: &ReleaseAttestation,
+    policy: &ReleasePolicy,
+    witness_keypair: &KeyPair,
+    witness_identity: &str,
+) -> IndependentAgreementReport {
+    let release_digest = release_attestation.canonical_digest().unwrap();
+    let witness = WitnessAttestation::new(
+        release_digest,
+        witness_identity.to_string(),
+        release_attestation.binary_digests.clone(),
+        RebuildEnvironmentSummary {
+            system: "x86_64-linux".to_string(),
+            toolchain: "rust-1.91.1".to_string(),
+            host_class: "nixos-25.05".to_string(),
+        },
+    );
+    let policy_digest = AttestationDigest::from_canonical_bytes(serde_json::to_vec(policy).unwrap());
+    IndependentAgreementReport::new(IndependentAgreementReportInit {
+        release_attestation_digest_blake3: release_digest,
+        policy_digest_blake3: policy_digest,
+        independence_selector: policy.independence_field.clone(),
+        required_witness_count: policy.min_matching_witnesses,
+        witnesses: vec![AgreementWitnessClassification {
+            witness_identity: witness_identity.to_string(),
+            signer_key_name: witness_keypair.verifying_key.name().to_string(),
+            witness_digest_blake3: witness.canonical_digest().unwrap(),
+            signature_valid: true,
+            digest_match: true,
+            independence_domain: witness_identity.to_string(),
+            policy_counted: true,
+            classification_reason: WitnessClassificationReason::Counted,
+            rebuilt_output_digests: release_attestation.binary_digests.clone(),
+            environment_summary: witness.rebuild_environment_summary,
+        }],
+        artifact_digest_sets: release_attestation.binary_digests.clone(),
+    })
+    .unwrap()
 }
 
 fn invalid_signature_line(key_name: &str) -> String {
@@ -2899,6 +2958,138 @@ fn attest_release_show_prints_release_attestation_envelope() {
     assert_eq!(show_json["kind"], "crunch-release-attestation");
     assert_eq!(show_json["stored_path"], verification_dir.join("release-attestation.json").display().to_string());
     assert_eq!(show_json["attestation"]["release_id"], "crunch-0.1.0-rc1");
+}
+
+#[test]
+fn attest_release_verify_accepts_matching_agreement_attachment() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+    let policy = read_policy(&verification_dir);
+    write_matching_agreement_report(&verification_dir, &release_attestation, &policy, &witness_keypair, "witness-a");
+
+    crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("independent-rebuild-agreement"));
+}
+
+#[test]
+fn attest_release_verify_rejects_mismatched_agreement_attachment() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+    let mut policy = read_policy(&verification_dir);
+    policy.min_matching_witnesses = 2;
+    write_matching_agreement_report(&verification_dir, &release_attestation, &policy, &witness_keypair, "witness-a");
+
+    crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("independent agreement report digest mismatch"));
+}
+
+#[test]
+fn attest_release_verify_rejects_duplicate_agreement_attachment() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    let release_attestation = read_release_attestation(&verification_dir);
+    let release_keypair = release_keypair();
+    let witness_keypair = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "witness-a");
+    write_policy(&verification_dir, release_keypair.verifying_key.name(), vec!["witness-a".to_string()], 1);
+    write_empty_revocations(&verification_dir);
+    let policy = read_policy(&verification_dir);
+    let report_path = write_matching_agreement_report(
+        &verification_dir,
+        &release_attestation,
+        &policy,
+        &witness_keypair,
+        "witness-a",
+    );
+    let duplicate_path = verification_dir.join("nested/agreement-report.json");
+    write_file(&duplicate_path, &std::fs::read(report_path).unwrap());
+
+    crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ambiguous independent agreement report attachments"));
 }
 
 #[test]

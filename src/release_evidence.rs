@@ -115,6 +115,7 @@ pub(crate) fn create_release_evidence_bundle(
         proof_bundle,
         prerequisite_inventory: prerequisite_inventory.clone(),
         reproducibility_report,
+        independent_agreement_report: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
             source_archive_digest_blake3,
@@ -577,6 +578,9 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
     if let Some(report) = &manifest.reproducibility_report {
         verify_artifact_matches_bundle(report, bundle_dir, "reproducibility_report")?;
     }
+    if let Some(report) = &manifest.independent_agreement_report {
+        verify_artifact_matches_bundle(report, bundle_dir, "independent_agreement_report")?;
+    }
     Ok(())
 }
 
@@ -681,6 +685,7 @@ mod tests {
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
             reproducibility_report: None,
+            independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

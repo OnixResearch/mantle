@@ -51,6 +51,8 @@ const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
 const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
 const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
 const INDEPENDENT_AGREEMENT_CLASS: &str = "independent-rebuild-agreement";
+const AGREEMENT_REPORT_FILE_NAME: &str = "agreement-report.json";
+const MAX_AGREEMENT_REPORT_CANDIDATES: usize = 32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CreatedReleaseAttestation {
@@ -381,10 +383,11 @@ pub(crate) fn verify_release_attestation_directory(
     let material = VerificationDirectory::new(dir.to_path_buf())
         .discover()
         .map_err(|err| RunError::Build(format!("release verification discovery: {err}")))?;
-    evaluate_release_verification(&material, trusted_public_keys)
+    evaluate_release_verification(dir, &material, trusted_public_keys)
 }
 
 fn evaluate_release_verification(
+    verification_dir: &Path,
     material: &VerificationMaterial,
     trusted_public_keys: &[VerifyingKey],
 ) -> Result<ReleaseVerificationOutput, RunError> {
@@ -403,6 +406,7 @@ fn evaluate_release_verification(
     let considered_witness_count = u32::try_from(validated_witnesses.len())
         .map_err(|_| RunError::Internal("release verification considered witness count overflowed u32".to_string()))?;
     let agreement_report = build_independent_agreement_report(material, trusted_public_keys)?;
+    verify_optional_agreement_report_attachment(verification_dir, &agreement_report)?;
     let independent_agreement_report_digest =
         crunch_attestation::independent_agreement_report_canonical_digest(agreement_report.clone())
             .map_err(|err| RunError::Build(format!("independent agreement report digest: {err}")))?
@@ -436,6 +440,84 @@ fn evaluate_release_verification(
         independent_agreement_witnesses,
         policy_failure_reason: evaluation.policy_failure_reason,
     })
+}
+
+fn verify_optional_agreement_report_attachment(
+    verification_dir: &Path,
+    derived_report: &IndependentAgreementReport,
+) -> Result<(), RunError> {
+    let candidates = agreement_report_candidates(verification_dir)?;
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    if candidates.len() > 1 {
+        return Err(RunError::Build(format!(
+            "ambiguous independent agreement report attachments: {}",
+            candidates.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")
+        )));
+    }
+    let report_path = &candidates[0];
+    let expected_path = verification_dir.join(AGREEMENT_REPORT_FILE_NAME);
+    if report_path != &expected_path {
+        return Err(RunError::Build(format!(
+            "independent agreement report must be stored at {}, got {}",
+            expected_path.display(),
+            report_path.display()
+        )));
+    }
+    let attached_bytes = std::fs::read(report_path)
+        .map_err(|err| RunError::Internal(format!("reading {}: {err}", report_path.display())))?;
+    let attached_report: IndependentAgreementReport = serde_json::from_slice(&attached_bytes).map_err(|err| {
+        RunError::Build(format!("parsing independent agreement report {}: {err}", report_path.display()))
+    })?;
+    let canonical_attached = crunch_attestation::independent_agreement_report_canonical_bytes(attached_report)
+        .map_err(|err| RunError::Build(format!("canonicalizing independent agreement report: {err}")))?;
+    if attached_bytes != canonical_attached {
+        return Err(RunError::Build("independent agreement report is not canonical compact JSON".to_string()));
+    }
+    let canonical_derived = crunch_attestation::independent_agreement_report_canonical_bytes(derived_report.clone())
+        .map_err(|err| RunError::Build(format!("canonicalizing derived independent agreement report: {err}")))?;
+    if canonical_attached != canonical_derived {
+        let attached_digest = AttestationDigest::from_canonical_bytes(canonical_attached).to_hex();
+        let derived_digest = AttestationDigest::from_canonical_bytes(canonical_derived).to_hex();
+        return Err(RunError::Build(format!(
+            "independent agreement report digest mismatch: attached {attached_digest} derived {derived_digest}"
+        )));
+    }
+    Ok(())
+}
+
+fn agreement_report_candidates(verification_dir: &Path) -> Result<Vec<PathBuf>, RunError> {
+    let mut candidates = Vec::new();
+    collect_agreement_report_candidates(verification_dir, &mut candidates)?;
+    candidates.sort();
+    candidates.dedup();
+    if candidates.len() > MAX_AGREEMENT_REPORT_CANDIDATES {
+        return Err(RunError::Build(format!(
+            "too many independent agreement report candidates: {} > {}",
+            candidates.len(),
+            MAX_AGREEMENT_REPORT_CANDIDATES
+        )));
+    }
+    Ok(candidates)
+}
+
+fn collect_agreement_report_candidates(dir: &Path, candidates: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    for entry in
+        std::fs::read_dir(dir).map_err(|err| RunError::Internal(format!("reading {}: {err}", dir.display())))?
+    {
+        let entry = entry.map_err(|err| RunError::Internal(format!("reading {} entry: {err}", dir.display())))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|err| RunError::Internal(format!("reading {} type: {err}", path.display())))?;
+        if file_type.is_file() && path.file_name().and_then(|name| name.to_str()) == Some(AGREEMENT_REPORT_FILE_NAME) {
+            candidates.push(path);
+        } else if file_type.is_dir() {
+            collect_agreement_report_candidates(&path, candidates)?;
+        }
+    }
+    Ok(())
 }
 
 fn build_independent_agreement_report(
@@ -1143,6 +1225,7 @@ mod tests {
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 3),
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
             reproducibility_report: None,
+            independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "crunch-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

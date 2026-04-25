@@ -49,12 +49,19 @@
       counts, and per-witness `counted` classification remain visible beside
       existing technical/policy/final classes. Focused `release_verify` tests
       also passed in pueue task 19 (24 tests).
-- [ ] I6 Allow verification directories or release evidence to carry an optional
+- [x] I6 Allow verification directories or release evidence to carry an optional ✅ 5m 22s (started: 2026-04-25T20:40:30Z → completed: 2026-04-25T20:45:52Z)
       agreement report at `agreement-report.json` or bundle-local
       `independent-agreement/agreement-report.json`, reject ambiguous duplicate
       attachment filenames, and verify any present report against
       release/witness material when present.
       [covers=release.evidence.independent.agreement.attachment]
+      Evidence: `cargo test -p crunch --test release_cli agreement_attachment`
+      passed in pueue task 14 (3 tests), covering matching verification-dir
+      `agreement-report.json`, mismatched report digest rejection, and duplicate
+      attachment filename rejection. Release-evidence manifests now have optional
+      `independent_agreement_report` at
+      `independent-agreement/agreement-report.json` with normal artifact digest
+      verification while bundles without the field remain valid.
 
 ## Phase 3: CLI tests and docs
 
