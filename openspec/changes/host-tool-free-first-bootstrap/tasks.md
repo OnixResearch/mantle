@@ -126,10 +126,12 @@
       mismatch denial before execution. `src/protected_exec_seccomp.rs` installs
       a Linux seccomp user-notification filter for `execve`/`execveat`, reads
       the target path from `/proc/<tid>/mem` with notification-id revalidation,
-      validates BLAKE3/path against `ProtectedExecPolicy`, appends
-      `ProtectedSeccompAuditEvent`, continues allowed syscalls, returns EACCES
-      for denied syscalls, and fails closed on unsupported arch/kernel/filter or
-      unresolved/relative/empty target paths. `self-build --no-host-tools
+      validates the currently parsed executable path/digest against
+      `ProtectedExecPolicy`, appends `ProtectedSeccompAuditEvent`, continues
+      allowed syscalls, returns EACCES for denied syscalls, and fails closed on
+      unsupported arch/kernel/filter or empty/relative target paths. Full
+      tracee-root path resolution and unsupported `execveat` dirfd handling are
+      intentionally left to I20/V4a. `self-build --no-host-tools
       --stage0-inventory` now installs this supervisor after declared seed
       selection.
 - [x] I12 Add tests proving a declared seed sandbox executable with a matching ✅ 0m 7s (started: 2026-04-25T22:26:36Z → completed: 2026-04-25T22:26:43Z)
@@ -230,6 +232,38 @@
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.proof.mode]
       Evidence: `rg -n -- '--no-host-tools|protected-exec-audit|seccomp|bootstrap/stage0-inventory.ncl|sandbox-entry' README.md docs/bootstrap-stage0-inventory.md` found the updated operator docs; `openspec validate host-tool-free-first-bootstrap --strict` passed; `git diff --check` passed. Docs now describe the no-host-tools helper mode, protected phase start/end, allowed direct Linux interfaces, Nickel inventory path/schema, seed roles, fail-closed seccomp behavior, proof audit bundle file, and bounded proof claim.
 
+## Phase 4: V4 proof correctness hardening
+
+- [ ] I20 Resolve protected seccomp exec paths in the tracee execution
+      namespace before digesting: record the tracee path and resolved host path,
+      hash the resolved executable bytes, and fail closed for unsupported
+      `execveat` dirfd/path forms, relative paths, unreadable paths, or other
+      ambiguous resolution cases. [covers=bootstrap.hosttoolfree.exec.boundary]
+- [ ] I21 Thread actual `ProtectedSeccompAuditEvent` records from the stage0
+      supervisor into `SelfBuildReport` and `protected-exec-audit.json`, and make
+      the audit result derived from the observed proof outcome rather than a
+      hard-coded success string. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.proof.mode]
+- [ ] I22 Copy the concrete no-host-tools `stage0-inventory.ncl` into the proof
+      bundle, hash the copied file, and include declared seed artifact records
+      (id, role, phase, path, digest, provenance category/text, owner, required
+      flag) in `protected-exec-audit.json` and `summary.txt`.
+      [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+- [ ] I23 Add an operator-facing inventory generation/preflight path for V4 that
+      consumes only explicit seed paths, rejects discovery from `PATH` or
+      `/nix/store`, reports static-vs-dynamic seed closure risk, and emits the
+      concrete inventory path used by the full proof.
+      [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+- [ ] I24 Tighten protected source artifact extraction rules to the documented
+      `key=value` grammar (`format`, `strip-components`, `root`) and reject
+      malformed or ambiguous rules before fetch or extraction.
+      [covers=bootstrap.hosttoolfree.exec.boundary]
+- [ ] I25 Implement verified-output promotion for protected-phase fetched or
+      built outputs: after crunch validates a protected source/hash/extraction
+      contract, enumerate permitted executable files, compute BLAKE3 digests,
+      append promotion audit records including the source entry and accepted
+      extraction rules, and extend the supervisor policy before any child process
+      can execute those paths. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+
 ## Validation
 
 - [x] V1 Run `openspec validate host-tool-free-first-bootstrap --strict` and ✅ 0m 2s (started: 2026-04-25T22:47:01Z → completed: 2026-04-25T22:47:03Z)
@@ -247,17 +281,40 @@
       --nocapture`; the focused filter passed 23 lib tests and 23 bin tests.
 - [x] V3 Run seccomp supervisor tests proving child `execve`/`execveat` events ✅ 0m 2s (started: 2026-04-25T22:47:01Z → completed: 2026-04-25T22:47:03Z)
       are denied before execution when undeclared or mismatched, and proving
-      supervisor-unavailable/filter-inheritance/path-resolution failures are
-      fail-closed. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      supervisor-unavailable/filter-inheritance plus current raw path parse
+      failures are fail-closed; namespace-aware tracee-root resolution remains
+      covered by I20/V4a. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
       Evidence: pueue task 174 passed `cargo test -p crunch seccomp_supervisor
       -- --nocapture`; the focused filter passed 5 lib tests and 5 bin tests,
       including mismatch denial, undeclared host-bwrap denial, execveat allow,
       and unsupported audit-architecture fail-closed coverage.
-- [ ] V4 Run the full no-host-tools self-hosting proof and record proof bundle
-      path, stage1/stage2/busybox/bwrap fixed-point status, protected execution
-      audit summary, stage0 inventory digest, blocked host command set,
-      declared seed sandbox/shell/toolchain artifact records, final result, and
-      preserved `self-build-proof: fallback-event=...` markers.
+- [ ] V4a Run focused namespace-resolution tests for the seccomp supervisor:
+      sandbox `/bin/sh` resolves through the tracee root, relative paths fail
+      closed, unreadable paths fail closed, and unsupported `execveat` dirfd
+      forms fail closed before execution. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+- [ ] V4b Run proof-bundle audit tests showing actual child-exec event fields,
+      copied concrete inventory digest, declared seed records, blocked host
+      command set, and derived success/failure result are written to
+      `protected-exec-audit.json` and summarized in `summary.txt`.
+      [covers=bootstrap.hosttoolfree.proof.mode]
+- [ ] V4c Run extraction-rule and verified-output promotion tests showing
+      malformed source rules are rejected, accepted rules are carried into
+      promotion records, promoted executable digests are added before exec, and
+      unpromoted generated-output executables are denied.
+      [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+- [ ] V4d Run inventory preflight tests proving the V4 helper consumes only
+      explicit seed paths, rejects `PATH` and `/nix/store` discovery, reports
+      static-vs-dynamic seed closure risk, and emits the exact concrete
+      inventory path passed to the full proof.
+      [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+- [ ] V4 After I20-I25 are complete, run the full no-host-tools
+      self-hosting proof with a concrete bundled stage0 inventory and explicit
+      seed-toolchain strategy, then record proof bundle path,
+      stage1/stage2/busybox/bwrap fixed-point status, protected execution audit
+      summary, bundled stage0 inventory digest, blocked host command set,
+      declared seed sandbox/shell/toolchain artifact records, actual child-exec
+      event summary, final derived result, and preserved
+      `self-build-proof: fallback-event=...` markers.
       [covers=bootstrap.hosttoolfree.proof.mode]
 - [ ] V5 Run the hidden-host-tool proof failure fixture and record that the
       proof fails while identifying the injected undeclared host tool in the

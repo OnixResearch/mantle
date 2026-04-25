@@ -24,6 +24,10 @@ artifact is missing.
   stage0 and fail if an undeclared host path is executed.
 - **Harden proof mode.** Extend `--non-nix-host` into a broader no-host-tools
   proof rail.
+- **Make V4 evidence honest.** Require namespace-aware exec digesting, a bundled
+  concrete inventory, actual protected child-exec events, declared seed records,
+  an explicit seed-toolchain strategy, and a derived proof result before the full
+  no-host-tools proof can be claimed.
 
 ## Non-Goals
 
@@ -46,8 +50,9 @@ artifact is missing.
 
 ## Impact
 
-- **Files**: `src/self_build.rs`, `scripts/prove-self-hosting.sh`, sandbox
-  launch code, bootstrap docs, self-hosting tests.
+- **Files**: `src/self_build.rs`, `src/protected_exec_seccomp.rs`,
+  `scripts/prove-self-hosting.sh`, sandbox launch code, bootstrap docs,
+  self-hosting tests.
 - **APIs**: new strict proof flag or mode, plus report fields for stage0 execs.
 - **Dependencies**: may add internal Rust syscall/filesystem code, but not new
   host command dependencies.
@@ -65,4 +70,8 @@ This change controls host tool execution. It complements
 2. Unit tests prove stage0 rejects undeclared executable paths.
 3. Runner tests prove fake `git`, `tar`, `cp`, `sh`, `cargo`, `bwrap`, and Nix
    commands are not invoked during the protected phase.
-4. The full self-hosting proof passes in the no-host-tools mode.
+4. Proof bundle tests show copied concrete inventory, declared seed records,
+   actual protected child-exec events, blocked host command set, and a derived
+   final result.
+5. The full self-hosting proof passes in the no-host-tools mode using a concrete
+   stage0 inventory and explicit seed-toolchain strategy.

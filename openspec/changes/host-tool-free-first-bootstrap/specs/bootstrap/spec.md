@@ -9,7 +9,9 @@ The protected phase MUST begin at stage0 `crunch self-build` or no-host-tools pr
 
 Allowed protected-phase execution MUST be limited to the stage0 crunch binary itself, direct kernel interfaces, and executable seed artifacts declared in the stage0 inventory with digests. Direct kernel interfaces mean syscalls made by the stage0 process or its linked libraries without resolving or executing another filesystem path: file metadata/content I/O under declared workspace, store, state, proof, request, and scratch roots; deterministic hashing and serialization; network fetches only for declared bootstrap source artifacts; direct namespace, mount, chroot/pivot-root, uid/gid-map, pipe, socketpair, epoll/poll, wait, signal, mmap, futex, and clone/fork primitives needed to create a sandbox; and `execve` only when the target is the stage0 crunch binary itself or a declared seed executable with an allowed protected-phase role whose digest has already matched the inventory. Allowed protected-phase executable seed roles MUST be limited to `sandbox-entry`, `sandbox-shell`, `bootstrap-toolchain-tool`, and `bootstrap-build-tool`. Host commands such as `git`, `tar`, `cp`, `cargo`, ad hoc helper commands, host `sh`, and host `bwrap` MUST NOT be valid protected-phase seed identities and MUST NOT be invoked unless the executable path is a separately declared seed artifact with one of the allowed protected-phase roles and non-host provenance. Nix commands including `nix-build`, `nix-store`, `nix-shell`, `nix`, and `nix develop` MUST NOT be valid protected-phase seed executables and MUST NOT be invoked even if a matching digest is supplied.
 
-The stage0 inventory schema MUST be the single source of truth for protected-phase executable seed artifacts and protected-phase non-executable bootstrap source artifacts. Each executable entry MUST include `schema_version`, stable `id`, `role`, `phase`, absolute `executable_path`, `digest.algorithm`, `digest.hex`, `provenance`, `allowed_reason`, `owner`, and `required` fields. Each non-executable source entry that may be fetched in the protected phase MUST include `schema_version`, stable `id`, `role`, `phase`, `urls`, `digest.algorithm`, `digest.hex`, `provenance`, `allowed_reason`, `owner`, `required`, and extraction rules. `digest.algorithm` MUST be `blake3` unless the entry includes an interoperability reason naming the external format that requires another algorithm. `phase` MUST distinguish protected-phase seed use from post-bootstrap crunch-built outputs. Missing required entries, digest mismatches, undeclared executable paths or source URLs, and entries without provenance or allowed reason MUST fail closed before execution or fetch.
+The stage0 inventory schema MUST be the single source of truth for protected-phase executable seed artifacts and protected-phase non-executable bootstrap source artifacts. Each executable entry MUST include `schema_version`, stable `id`, `role`, `phase`, absolute `executable_path`, `digest.algorithm`, `digest.hex`, `provenance`, `allowed_reason`, `owner`, and `required` fields. Each non-executable source entry that may be fetched in the protected phase MUST include `schema_version`, stable `id`, `role`, `phase`, `urls`, `digest.algorithm`, `digest.hex`, `provenance`, `allowed_reason`, `owner`, `required`, and extraction rules. Extraction rules MUST use the checked `key=value` grammar for `format`, `strip-components`, and `root`, and malformed or ambiguous extraction rules MUST fail closed before fetch or extraction. `digest.algorithm` MUST be `blake3` unless the entry includes an interoperability reason naming the external format that requires another algorithm. `phase` MUST distinguish protected-phase seed use from post-bootstrap crunch-built outputs. Missing required entries, digest mismatches, undeclared executable paths or source URLs, and entries without provenance or allowed reason MUST fail closed before execution or fetch.
+
+Protected exec validation MUST resolve the executable bytes in the tracee's execution namespace before hashing. For absolute tracee paths, the supervisor MUST hash the file reachable through the tracee root or mount namespace, record both the tracee path and resolved host path, and fail closed when the path cannot be resolved deterministically. Unsupported `execveat` dirfd/path combinations MUST fail closed before execution rather than falling back to a host-path guess.
 
 #### Scenario: Fake host commands are not invoked
 
@@ -34,6 +36,8 @@ ID: bootstrap.hosttoolfree.sandbox.entrypoint
 
 The protected entry point MAY use Rust-owned namespace/syscall setup directly, or it MAY execute a declared seed sandbox binary whose path and digest are recorded in the stage0 inventory. It MUST NOT silently fall back to host `bwrap` or host shell execution.
 
+The no-host-tools proof MUST use a concrete stage0 inventory, not the checked-in empty schema file, and it MUST make the seed strategy explicit. If protected-phase build steps execute tools from a generated or fetched bootstrap output, crunch MUST promote the verified output's executable paths and digests into the protected policy before any child process can execute them.
+
 #### Scenario: Declared seed sandbox is accepted
 
 - GIVEN the stage0 inventory declares a sandbox executable path and digest
@@ -55,15 +59,27 @@ The protected entry point MAY use Rust-owned namespace/syscall setup directly, o
 Crunch MUST provide a no-host-tools proof mode that records every protected-phase executable and fails if any executable is not the stage0 crunch binary or a declared seed artifact.
 ID: bootstrap.hosttoolfree.proof.mode
 
-The proof bundle MUST include a machine-readable execution audit, the stage0 inventory digest, the blocked host command set, explicit `self-build-proof: fallback-event=...` markers for protected-phase host-tool fallback decisions, and the final result. The mode MUST keep the existing self-hosting fixed-point checks for stage1, stage2, busybox, and bwrap.
+The proof bundle MUST include a machine-readable execution audit, a bundled copy of the concrete stage0 inventory, the BLAKE3 digest of that bundled inventory file, the declared seed artifact records, the blocked host command set, explicit `self-build-proof: fallback-event=...` markers for protected-phase host-tool fallback decisions, the actual protected child-exec event records, and the final result. The mode MUST keep the existing self-hosting fixed-point checks for stage1, stage2, busybox, and bwrap. The final result MUST be derived from the proof outcome and MUST NOT be treated as evidence when written as a hard-coded success independent of the run result.
 
 #### Scenario: Audit records only allowed executables
 
 - GIVEN a no-host-tools proof run completes
 - WHEN the proof bundle is inspected
-- THEN the execution audit lists only the stage0 crunch binary and declared seed
-  artifact executables before crunch-built tools become available
+- THEN the execution audit lists only the stage0 crunch binary, declared seed
+  artifact executables, and any verified promoted bootstrap-output executables
+  before crunch-built tools become available
+- AND each protected child-exec event records the syscall, tracee path, resolved
+  path, digest, inventory or promotion entry, policy decision, and reason
 - AND the bundle still records stage1==stage2 fixed-point status
+
+#### Scenario: Concrete inventory is durable evidence
+
+- GIVEN a no-host-tools proof run uses a generated stage0 inventory
+- WHEN the proof bundle is inspected on another machine
+- THEN the bundle contains a copy of that exact inventory file
+- AND `protected-exec-audit.json` records the copied inventory file digest
+- AND declared seed entries include role, path, digest, provenance, owner, and
+  required flag
 
 #### Scenario: Hidden host tool fails the proof
 
