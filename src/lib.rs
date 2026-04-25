@@ -5,3 +5,5 @@
 pub mod bootstrap;
 pub mod errors;
 pub mod protected_exec;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub mod protected_exec_seccomp;

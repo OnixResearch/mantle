@@ -742,3 +742,4 @@ cd nickel && cargo build
 cd npins && cargo test
 cd nixtamal && nix-shell  # then dune build
 ```
+- **Host-tool-free seccomp supervisor seam**: `src/protected_exec_seccomp.rs` installs a current-thread Linux seccomp user-notification filter for `execve`/`execveat`, validates absolute exec paths against `ProtectedExecPolicy`, and appends `ProtectedSeccompAuditEvent`s before responding. Tests must run supervisor installs inside subprocessed exact libtest invocations because the filter cannot be removed from the installing thread. The implementation intentionally denies relative paths, empty `execveat` paths, digest mismatches, and unreadable target memory; unsupported kernel/arch/filter setup is fail-closed. `self-build --no-host-tools --stage0-inventory ...` now installs this supervisor after declared seed selection, so incomplete inventories will fail at first undeclared protected exec.

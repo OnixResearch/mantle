@@ -17,6 +17,8 @@ mod project_cmd;
 mod project_resolve;
 #[allow(dead_code)]
 mod protected_exec;
+#[allow(dead_code)]
+mod protected_exec_seccomp;
 mod release_attestation;
 mod release_cmd;
 mod release_evidence;

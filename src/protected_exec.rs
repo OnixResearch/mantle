@@ -25,7 +25,7 @@ const PROVENANCE_OPERATOR_BOOTSTRAP_SEED: &str = "operator-supplied-bootstrap-se
 const PROVENANCE_TEST_FIXTURE: &str = "test-fixture";
 const PROVENANCE_HOST_PATH_DISCOVERY: &str = "host-path-discovery";
 const PROVENANCE_NIX_STORE_DISCOVERY: &str = "nix-store-discovery";
-const PHASE_PROTECTED: &str = "protected";
+pub(crate) const PHASE_PROTECTED: &str = "protected";
 const PATH_SEPARATOR: char = '/';
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 const MAX_SEED_EXECUTABLES: u32 = 4096;
@@ -527,6 +527,18 @@ pub fn normalized_path_id(path: &Path) -> String {
     body
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ProtectedSeccompAuditEvent {
+    pub pid: u32,
+    pub syscall: String,
+    pub executable_path: PathBuf,
+    pub digest_hex: String,
+    pub reason: String,
+    pub phase: String,
+    pub inventory_entry_id: Option<String>,
+    pub policy_decision: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedLaunchAuditEvent {
     pub executable_path: PathBuf,
@@ -978,7 +990,7 @@ fn is_executable_metadata(_metadata: &fs::Metadata) -> bool {
     false
 }
 
-fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
+pub(crate) fn blake3_file_hex(path: &Path) -> Result<String, Stage0InventoryGenerationError> {
     let mut file = fs::File::open(path).map_err(|err| io_error(path, err))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; HASH_BUFFER_BYTES];

@@ -32,6 +32,8 @@ use crate::errors::RunError;
 use crate::protected_exec::ProtectedExecPolicy;
 use crate::protected_exec::ProtectedLaunchAuditEvent;
 use crate::protected_exec::select_declared_sandbox_seed;
+use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
+use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
 
 /// Maximum source tree size: 2 GiB.
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -2175,6 +2177,7 @@ struct SelfBuildSetup {
     src_dir: PathBuf,
     bootstrap_dir: PathBuf,
     fallback_events: Vec<SelfBuildFallbackEvent>,
+    _protected_exec_supervisor: Option<ProtectedSeccompSupervisor>,
     bootstrap_bwrap_source: Option<BwrapSource>,
     bootstrap_busybox_path: Option<PathBuf>,
 }
@@ -2204,6 +2207,12 @@ fn initialize_self_build(
     let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, bootstrap_bwrap_path)?;
     let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, bootstrap_busybox_path)?;
     let declared_seed_tools = stage0_policy.map(resolve_declared_seed_bootstrap_tools).transpose()?;
+    let protected_exec_supervisor = stage0_policy
+        .map(|policy| {
+            install_current_thread_exec_supervisor(policy.clone())
+                .map_err(|err| RunError::Build(format!("protected exec supervisor fail-closed: {err}")))
+        })
+        .transpose()?;
 
     let initial_bwrap = match (&explicit_bwrap_source, &declared_seed_tools) {
         (Some(source), _) => source.clone(),
@@ -2238,6 +2247,7 @@ fn initialize_self_build(
         src_dir,
         bootstrap_dir,
         fallback_events,
+        _protected_exec_supervisor: protected_exec_supervisor,
         bootstrap_bwrap_source: explicit_bwrap_source,
         bootstrap_busybox_path: explicit_busybox_path,
     })

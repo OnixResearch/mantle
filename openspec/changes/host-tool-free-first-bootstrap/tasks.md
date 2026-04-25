@@ -113,11 +113,25 @@
       inventory, selects `sandbox-entry` as `BwrapSource::DeclaredSeed`, sets
       the declared `sandbox-shell` as `SNIX_BUILD_SANDBOX_SHELL`, and does not
       record a host-bwrap fallback event for that protected-mode selection.
-- [ ] I11 Add Linux seccomp user-notification exec supervision for the declared
+- [x] I11 Add Linux seccomp user-notification exec supervision for the declared ✅ 3m 24s (started: 2026-04-25T22:21:44Z → completed: 2026-04-25T22:25:08Z)
       seed sandbox and descendants. The supervisor must trap `execve`/`execveat`
       before execution, validate path/digest against `Stage0Inventory`, append
       audit events, and fail closed when supervision, filter inheritance, or
       path resolution is unavailable. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 135 passed chained isolated-target
+      `cargo test -p crunch seccomp_supervisor -- --nocapture` and
+      `cargo test -p crunch protected_exec -- --nocapture`; the lib/bin
+      protected-exec runs each passed 21 tests, including seccomp user-notify
+      tests for allowed `execve`, allowed descendant `execveat`, and digest
+      mismatch denial before execution. `src/protected_exec_seccomp.rs` installs
+      a Linux seccomp user-notification filter for `execve`/`execveat`, reads
+      the target path from `/proc/<tid>/mem` with notification-id revalidation,
+      validates BLAKE3/path against `ProtectedExecPolicy`, appends
+      `ProtectedSeccompAuditEvent`, continues allowed syscalls, returns EACCES
+      for denied syscalls, and fails closed on unsupported arch/kernel/filter or
+      unresolved/relative/empty target paths. `self-build --no-host-tools
+      --stage0-inventory` now installs this supervisor after declared seed
+      selection.
 - [ ] I12 Add tests proving a declared seed sandbox executable with a matching
       digest starts successfully and is recorded as a declared seed artifact in
       proof/audit output. [covers=bootstrap.hosttoolfree.sandbox.entrypoint,bootstrap.hosttoolfree.proof.mode]
