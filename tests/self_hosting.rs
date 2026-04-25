@@ -43,7 +43,11 @@ use std::time::UNIX_EPOCH;
 use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
+use crunch::protected_exec::DigestSpec;
+use crunch::protected_exec::ExecutableSeedEntry;
 use crunch::protected_exec::ProtectedSeccompAuditEvent;
+use crunch::protected_exec::Stage0Inventory;
+use crunch::protected_exec::render_stage0_inventory_nickel;
 use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
@@ -69,6 +73,7 @@ const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
 const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-crunch";
 const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-crunch";
+const PROOF_STAGE0_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/stage0-inventory.ncl";
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
 const DEFAULT_PROOF_SCRATCH_SOURCE: &str = "default repo-local policy";
@@ -241,6 +246,7 @@ struct ProofProtectedExecAudit {
     no_host_tools: bool,
     stage0_inventory: Option<ProofHashedPath>,
     blocked_host_commands: Vec<&'static str>,
+    declared_seed_artifacts: Vec<ProofSeedArtifactRecord>,
     stage0_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     stage2_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     stage0_fallback_events: Vec<String>,
@@ -248,6 +254,20 @@ struct ProofProtectedExecAudit {
     stage0_transition: Option<ProofProtectedTransition>,
     stage2_transition: Option<ProofProtectedTransition>,
     result: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct ProofSeedArtifactRecord {
+    id: String,
+    role: String,
+    phase: String,
+    path: String,
+    digest_algorithm: String,
+    digest_hex: String,
+    provenance_category: String,
+    provenance: String,
+    owner: String,
+    required: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1373,12 +1393,15 @@ fn copy_stage_bundle_files(bundle_dir: &Path, stage: &StageEvidence) -> ProofSta
 fn write_protected_exec_audit(bundle_dir: &Path, manifest: &ProofBundleManifest) -> ProofHashedPath {
     assert!(bundle_dir.exists(), "bundle dir must exist before protected audit write");
     let no_host_tools = proof_no_host_tools_enabled();
-    let stage0_inventory = proof_stage0_inventory().map(|path| hash_file_record(&path, path.display().to_string()));
+    let (stage0_inventory, declared_seed_artifacts) = copy_stage0_inventory_into_bundle(bundle_dir)
+        .map(|(record, artifacts)| (Some(record), artifacts))
+        .unwrap_or_else(|| (None, Vec::new()));
     let audit = ProofProtectedExecAudit {
         schema: "crunch-protected-exec-audit-v1",
         no_host_tools,
         stage0_inventory,
         blocked_host_commands: BLOCKED_HOST_TOOL_BINARIES.to_vec(),
+        declared_seed_artifacts,
         stage0_seccomp_events: manifest.stage0.report.protected_seccomp_events.clone(),
         stage2_seccomp_events: manifest.stage2.report.protected_seccomp_events.clone(),
         stage0_fallback_events: manifest.stage0.report.fallback_events.clone(),
@@ -1391,6 +1414,53 @@ fn write_protected_exec_audit(bundle_dir: &Path, manifest: &ProofBundleManifest)
     let json = serde_json::to_vec_pretty(&audit).unwrap_or_else(|err| panic!("serialize protected exec audit: {err}"));
     std::fs::write(&path, json).unwrap_or_else(|err| panic!("write protected exec audit {}: {err}", path.display()));
     hash_file_record(&path, "protected-exec-audit.json".to_string())
+}
+
+fn copy_stage0_inventory_into_bundle(bundle_dir: &Path) -> Option<(ProofHashedPath, Vec<ProofSeedArtifactRecord>)> {
+    let source = proof_stage0_inventory()?;
+    let record = copy_bundle_file(&source, bundle_dir, PROOF_STAGE0_INVENTORY_RELATIVE_PATH);
+    let copied = bundle_dir.join(PROOF_STAGE0_INVENTORY_RELATIVE_PATH);
+    let inventory = load_stage0_inventory_for_proof(&copied);
+    let artifacts = seed_artifacts_from_inventory(&inventory);
+    Some((record, artifacts))
+}
+
+fn load_stage0_inventory_for_proof(path: &Path) -> Stage0Inventory {
+    let import_paths: Vec<std::ffi::OsString> = Vec::new();
+    crunch_eval::evaluate_and_deserialize(path, &import_paths)
+        .unwrap_or_else(|err| panic!("load bundled stage0 inventory {}: {err}", path.display()))
+}
+
+fn seed_artifacts_from_inventory(inventory: &Stage0Inventory) -> Vec<ProofSeedArtifactRecord> {
+    inventory
+        .executable_entries
+        .iter()
+        .map(|entry| ProofSeedArtifactRecord {
+            id: entry.id.clone(),
+            role: entry.role.clone(),
+            phase: entry.phase.clone(),
+            path: entry.executable_path.display().to_string(),
+            digest_algorithm: entry.digest.algorithm.clone(),
+            digest_hex: entry.digest.hex.clone(),
+            provenance_category: entry.provenance_category.clone(),
+            provenance: entry.provenance.clone(),
+            owner: entry.owner.clone(),
+            required: entry.required,
+        })
+        .collect()
+}
+
+fn bundled_stage0_inventory_record(manifest: &ProofBundleManifest) -> Option<ProofHashedPath> {
+    let path = PathBuf::from(&manifest.bundle_dir).join(PROOF_STAGE0_INVENTORY_RELATIVE_PATH);
+    path.exists().then(|| hash_file_record(&path, PROOF_STAGE0_INVENTORY_RELATIVE_PATH.to_string()))
+}
+
+fn declared_seed_artifacts_for_summary(manifest: &ProofBundleManifest) -> Vec<ProofSeedArtifactRecord> {
+    let path = PathBuf::from(&manifest.bundle_dir).join(PROOF_STAGE0_INVENTORY_RELATIVE_PATH);
+    if !path.exists() {
+        return Vec::new();
+    }
+    seed_artifacts_from_inventory(&load_stage0_inventory_for_proof(&path))
 }
 
 fn derived_proof_result(manifest: &ProofBundleManifest) -> &'static str {
@@ -1406,6 +1476,8 @@ fn derived_proof_result(manifest: &ProofBundleManifest) -> &'static str {
 fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: &ProofHashedPath) -> String {
     assert_eq!(manifest.schema, PROOF_BUNDLE_SCHEMA, "unexpected proof bundle schema");
     assert!(!manifest.bundle_dir.is_empty(), "bundle dir must not be empty");
+    let bundled_inventory = bundled_stage0_inventory_record(manifest);
+    let declared_seed_artifacts = declared_seed_artifacts_for_summary(manifest);
 
     let mut out = String::with_capacity(6144);
     out.push_str(&format!("schema: {}\n", manifest.schema));
@@ -1417,6 +1489,26 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
     out.push_str(&format!("protected_exec_result: {}\n", derived_proof_result(manifest)));
     out.push_str(&format!("protected_exec_audit: {} {}\n", protected_audit.digest_blake3, protected_audit.path));
+    match bundled_inventory {
+        Some(record) => out.push_str(&format!("stage0_inventory_copy: {} {}\n", record.digest_blake3, record.path)),
+        None => out.push_str("stage0_inventory_copy: none\n"),
+    }
+    out.push_str(&format!("declared_seed_artifacts: {}\n", declared_seed_artifacts.len()));
+    for artifact in &declared_seed_artifacts {
+        out.push_str(&format!(
+            "declared_seed_artifact: id={} role={} phase={} path={} digest={}:{} provenance_category={} provenance={} owner={} required={}\n",
+            artifact.id,
+            artifact.role,
+            artifact.phase,
+            artifact.path,
+            artifact.digest_algorithm,
+            artifact.digest_hex,
+            artifact.provenance_category,
+            artifact.provenance,
+            artifact.owner,
+            artifact.required,
+        ));
+    }
     out.push_str(&format!("stage0_path_strategy: {}\n", manifest.prerequisites.stage0_path_strategy));
     out.push_str(&format!(
         "stage0_path_dir: {}\n",
@@ -1615,6 +1707,39 @@ fn sample_proof_seccomp_event() -> ProtectedSeccompAuditEvent {
         phase: "protected".to_string(),
         inventory_entry_id: Some("sandbox-entry".to_string()),
         policy_decision: "allowed".to_string(),
+    }
+}
+
+fn write_sample_stage0_inventory(path: &Path, sandbox_entry: &Path, sandbox_shell: &Path) {
+    let inventory = Stage0Inventory {
+        executable_entries: vec![
+            sample_inventory_entry("sandbox-entry", "sandbox-entry", sandbox_entry),
+            sample_inventory_entry("sandbox-shell", "sandbox-shell", sandbox_shell),
+        ],
+        source_entries: Vec::new(),
+    };
+    let rendered = render_stage0_inventory_nickel(&inventory).unwrap();
+    std::fs::write(path, rendered).unwrap_or_else(|err| panic!("write sample inventory {}: {err}", path.display()));
+}
+
+fn sample_inventory_entry(id: &str, role: &str, path: &Path) -> ExecutableSeedEntry {
+    let digest_hex = blake3::hash(&std::fs::read(path).unwrap()).to_hex().to_string();
+    ExecutableSeedEntry {
+        schema_version: "host-tool-free-stage0-v1".to_string(),
+        id: id.to_string(),
+        role: role.to_string(),
+        phase: "protected".to_string(),
+        executable_path: path.to_path_buf(),
+        digest: DigestSpec {
+            algorithm: "blake3".to_string(),
+            hex: digest_hex,
+            interoperability_reason: None,
+        },
+        provenance_category: "test-fixture".to_string(),
+        provenance: "proof bundle fixture".to_string(),
+        allowed_reason: format!("allow {id}"),
+        owner: "bootstrap".to_string(),
+        required: true,
     }
 }
 
@@ -1832,6 +1957,11 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     std::fs::write(&stage2_binary, b"stage2-binary").unwrap();
     std::fs::write(&bwrap_bin, b"bwrap-binary").unwrap();
     std::fs::write(&busybox_bin, b"busybox-binary").unwrap();
+    #[cfg(unix)]
+    {
+        chmod_executable(&bwrap_bin);
+        chmod_executable(&busybox_bin);
+    }
     std::fs::write(staged_source.join("Cargo.toml"), b"[package]\nname='proof'\n").unwrap();
     let inventory_doc = proof_dir.path().join("bootstrap-stage0-inventory.md");
     std::fs::write(&inventory_doc, b"# inventory\n").unwrap();
@@ -1844,7 +1974,16 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     for tool in HELPER_PROOF_TOOL_NAMES {
         write_executable_script(&tool_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
     }
+    let stage0_clean_dir = proof_dir.path().join("stage0-clean-tools");
+    std::fs::create_dir_all(&stage0_clean_dir).unwrap();
+    for tool in ["xz", "chmod", "bash"] {
+        write_executable_script(&stage0_clean_dir.join(tool), "#!/bin/sh\nset -eu\nexit 0\n");
+    }
+    let stage0_inventory = proof_dir.path().join("stage0-inventory.ncl");
+    write_sample_stage0_inventory(&stage0_inventory, &bwrap_bin, &busybox_bin);
     let _inventory_guard = EnvVarGuard::set(PROOF_STAGE0_INVENTORY_DOC_ENV, &inventory_doc.display().to_string());
+    let _no_host_guard = EnvVarGuard::set(PROOF_NO_HOST_TOOLS_ENV, "1");
+    let _stage0_inventory_guard = EnvVarGuard::set(PROOF_STAGE0_INVENTORY_ENV, &stage0_inventory.display().to_string());
     let _mode_guard = EnvVarGuard::set(PROOF_MODE_ENV, PROOF_MODE_FIXED_POINT);
     let _shell_guard = EnvVarGuard::set("SNIX_BUILD_SANDBOX_SHELL", &sandbox_shell.display().to_string());
     let _path_guard = EnvVarGuard::set("PATH", &tool_dir.display().to_string());
@@ -1920,7 +2059,7 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
         &stage1_binary,
         &stage2_binary,
         ProofMode::FixedPoint,
-        None,
+        Some(&stage0_clean_dir),
     );
     let summary_path = bundle_dir.join("summary.txt");
     let protected_audit_path = bundle_dir.join("protected-exec-audit.json");
@@ -1954,6 +2093,12 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains("\"fallback_events\""));
     assert!(protected_audit_json.contains("crunch-protected-exec-audit-v1"));
     assert!(protected_audit_json.contains("\"blocked_host_commands\""));
+    assert!(protected_audit_json.contains("\"stage0_inventory\""));
+    assert!(protected_audit_json.contains(PROOF_STAGE0_INVENTORY_RELATIVE_PATH));
+    assert!(protected_audit_json.contains("\"declared_seed_artifacts\""));
+    assert!(protected_audit_json.contains("\"id\": \"sandbox-entry\""));
+    assert!(protected_audit_json.contains("\"role\": \"sandbox-shell\""));
+    assert!(protected_audit_json.contains("\"required\": true"));
     assert!(protected_audit_json.contains("\"stage0_seccomp_events\""));
     assert!(protected_audit_json.contains("\"tracee_path\""));
     assert!(protected_audit_json.contains("/bin/bwrap"));
@@ -1963,6 +2108,9 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(summary.contains("proof_mode:"));
     assert!(summary.contains("protected_exec_result: fixed-point-mismatch"));
     assert!(summary.contains("protected_exec_audit:"));
+    assert!(summary.contains("stage0_inventory_copy:"));
+    assert!(summary.contains("declared_seed_artifact: id=sandbox-entry role=sandbox-entry"));
+    assert!(summary.contains("declared_seed_artifact: id=sandbox-shell role=sandbox-shell"));
     assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));
     assert!(summary.contains("stage1_equals_stage2:"));

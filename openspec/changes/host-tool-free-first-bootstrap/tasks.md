@@ -255,11 +255,18 @@
       bundle coverage writes `stage0_seccomp_events`, tracee/resolved path
       fields, and a derived `fixed-point-mismatch` result instead of a hard-coded
       success string in the mismatch fixture.
-- [ ] I22 Copy the concrete no-host-tools `stage0-inventory.ncl` into the proof
+- [x] I22 Copy the concrete no-host-tools `stage0-inventory.ncl` into the proof ✅ 2m 15s (started: 2026-04-25T23:45:38Z → completed: 2026-04-25T23:47:53Z)
       bundle, hash the copied file, and include declared seed artifact records
       (id, role, phase, path, digest, provenance category/text, owner, required
       flag) in `protected-exec-audit.json` and `summary.txt`.
       [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 18 passed
+      `cargo test -p crunch --test self_hosting proof_bundle -- --nocapture`
+      with 3 tests. The proof-bundle fixture now runs in no-host-tools mode,
+      copies `stage0-prerequisites/stage0-inventory.ncl`, hashes the copied
+      file, serializes `declared_seed_artifacts` with id/role/phase/path/digest/
+      provenance/owner/required fields, and mirrors the inventory copy plus
+      artifact records in `summary.txt`.
 - [ ] I23 Add an operator-facing inventory generation/preflight path for V4 that
       consumes only explicit seed paths, rejects discovery from `PATH` or
       `/nix/store`, reports static-vs-dynamic seed closure risk, and emits the
