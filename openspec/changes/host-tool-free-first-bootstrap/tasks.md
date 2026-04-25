@@ -61,14 +61,28 @@
       inventory-entry/policy decision audit events, returns a `Command` only
       after the policy permits launch, and rejects digest mismatches before a
       command is returned.
-- [ ] I6 Replace protected-phase source staging helper use (`git`) with
+- [x] I6 Replace protected-phase source staging helper use (`git`) with ✅ 0m 8s (started: 2026-04-25T21:46:25Z → completed: 2026-04-25T21:46:33Z)
       Rust-owned source staging logic. [covers=bootstrap.hosttoolfree.exec.boundary]
-- [ ] I7 Replace protected-phase archive/copy helper use (`tar`, `cp`) with
+      Evidence: pueue task 69 passed
+      `cargo test -p crunch self_build -- --nocapture` with 87 filtered
+      `self_build` tests, including source staging and staged-source validation.
+      `src/self_build.rs` source staging uses Rust filesystem copying and grep
+      found no `Command::new("git")` / `git archive` staging path.
+- [x] I7 Replace protected-phase archive/copy helper use (`tar`, `cp`) with ✅ 0m 8s (started: 2026-04-25T21:46:25Z → completed: 2026-04-25T21:46:33Z)
       Rust-owned archive and copy logic. [covers=bootstrap.hosttoolfree.exec.boundary]
-- [ ] I8 Replace protected-phase shell/cargo/helper execution (`sh`, `cargo`, ad
+      Evidence: pueue task 69 passed the focused `self_build` suite; staging
+      copy paths use `std::fs::copy`, directory traversal, and symlink handling,
+      while grep found no protected-phase `Command::new("tar")` or
+      `Command::new("cp")` helper launch.
+- [x] I8 Replace protected-phase shell/cargo/helper execution (`sh`, `cargo`, ad ✅ 0m 8s (started: 2026-04-25T21:46:25Z → completed: 2026-04-25T21:46:33Z)
       hoc helper commands) with Rust-owned validation, vendored-input checks, or
       declared seed artifacts carrying inventory digests.
       [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: pueue task 69 passed `self_build` tests covering vendored-input
+      validation, missing/extra vendored packages, checksum mismatches, and
+      malformed lock data. `require_checked_vendor_inputs` validates Cargo
+      inputs in Rust instead of shelling out, and grep found no protected-phase
+      `Command::new("sh")` or `Command::new("cargo")` helper path.
 - [ ] I9 Add unit tests for allowed stage0 crunch, allowed declared seed roles,
       declared seed digest mismatch rejection, missing required seed artifact
       fail-closed diagnostics, forbidden absolute host executable, forbidden
