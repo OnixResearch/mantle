@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs::File;
@@ -26,6 +27,7 @@ const REPRODUCE_OUTPUT_DIR_ENV: &str = "CRUNCH_REPRODUCE_OUTPUT_DIR";
 const REPRODUCE_RELEASE_ID_ENV: &str = "CRUNCH_REPRODUCE_RELEASE_ID";
 const DEFAULT_REPORT_FILE_NAME: &str = "reproducibility-report.json";
 const HASH_BUFFER_BYTES: usize = 8192;
+const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReleaseReproduceRequest {
@@ -67,11 +69,13 @@ pub(crate) fn reproduce_release_artifacts(
     let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     prepare_rebuild_output_dir(&request.rebuild_output_dir)?;
     run_rebuild_command(request, &manifest.release_id)?;
+    let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &request.rebuild_output_dir)?;
     let report = build_reproducibility_report(&manifest, request)?;
     let counts = count_report_results(&report.artifacts);
     let report_digest_blake3 = release_reproducibility_report_digest_blake3(report.clone()).map_err(core_error)?;
     let report_path = resolve_report_path(&request.bundle_dir, request.report_path.as_deref());
-    write_report(&report_path, report)?;
+    write_report(&report_path, report.clone())?;
+    fail_if_reproduction_drifted(&report, &unexpected_outputs, &report_path)?;
     Ok(ReleaseReproduceSummary {
         release_id: manifest.release_id,
         report_path,
@@ -274,6 +278,127 @@ fn write_report(path: &Path, report: ReleaseReproducibilityReport) -> Result<(),
 
 fn resolve_report_path(bundle_dir: &Path, report_path: Option<&Path>) -> PathBuf {
     report_path.map(Path::to_path_buf).unwrap_or_else(|| bundle_dir.join(DEFAULT_REPORT_FILE_NAME))
+}
+
+fn collect_unexpected_rebuilt_outputs(
+    artifacts: &[BundledArtifact],
+    rebuild_output_dir: &Path,
+) -> Result<Vec<String>, RunError> {
+    let expected_paths = artifacts.iter().map(|artifact| artifact.relative_path.clone()).collect::<BTreeSet<_>>();
+    let mut files = Vec::new();
+    collect_output_files_sorted(rebuild_output_dir, &mut files)?;
+    let mut unexpected = Vec::new();
+    for file in files {
+        let relative = relative_path_text(rebuild_output_dir, &file)?;
+        if !expected_paths.contains(&relative) {
+            unexpected.push(relative);
+        }
+    }
+    Ok(unexpected)
+}
+
+fn collect_output_files_sorted(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    let mut children = Vec::new();
+    for child_result in
+        std::fs::read_dir(root).map_err(|err| RunError::Internal(format!("read_dir {}: {err}", root.display())))?
+    {
+        let child =
+            child_result.map_err(|err| RunError::Internal(format!("read_dir entry {}: {err}", root.display())))?;
+        children.push(child.path());
+    }
+    children.sort();
+    for child in children {
+        let entry_count: u32 = files
+            .len()
+            .try_into()
+            .map_err(|_| RunError::Internal("release reproducibility output entry count overflowed u32".to_string()))?;
+        if entry_count >= MAX_REBUILD_OUTPUT_ENTRIES {
+            return Err(RunError::Internal(format!(
+                "release reproducibility output tree exceeds {MAX_REBUILD_OUTPUT_ENTRIES} files"
+            )));
+        }
+        if child.is_dir() {
+            collect_output_files_sorted(&child, files)?;
+            continue;
+        }
+        if child.is_file() {
+            files.push(child);
+            continue;
+        }
+        return Err(RunError::Internal(format!(
+            "release reproducibility output contains unsupported entry: {}",
+            child.display()
+        )));
+    }
+    Ok(())
+}
+
+fn relative_path_text(root: &Path, file: &Path) -> Result<String, RunError> {
+    let relative = file.strip_prefix(root).map_err(|err| {
+        RunError::Internal(format!(
+            "release reproducibility output strip_prefix {} from {}: {err}",
+            root.display(),
+            file.display()
+        ))
+    })?;
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        let text = component.as_os_str().to_str().ok_or_else(|| {
+            RunError::Internal(format!("release reproducibility output path must be UTF-8: {}", file.display()))
+        })?;
+        parts.push(text.to_string());
+    }
+    Ok(parts.join("/"))
+}
+
+fn fail_if_reproduction_drifted(
+    report: &ReleaseReproducibilityReport,
+    unexpected_outputs: &[String],
+    report_path: &Path,
+) -> Result<(), RunError> {
+    if let Some(unexpected) = unexpected_outputs.first() {
+        return Err(RunError::Internal(format!(
+            "release reproducibility output-name drift: unexpected rebuilt artifact {unexpected}; report written to {}",
+            report_path.display()
+        )));
+    }
+    for artifact in &report.artifacts {
+        fail_if_artifact_drifted(artifact, report_path)?;
+    }
+    Ok(())
+}
+
+fn fail_if_artifact_drifted(artifact: &ReproducibilityArtifactComparison, report_path: &Path) -> Result<(), RunError> {
+    match artifact.result {
+        ReproducibilityComparisonResult::Matched => Ok(()),
+        ReproducibilityComparisonResult::MissingRebuiltArtifact => Err(RunError::Internal(format!(
+            "release reproducibility missing rebuilt artifact {}; report written to {}",
+            artifact.name,
+            report_path.display()
+        ))),
+        ReproducibilityComparisonResult::Mismatched => fail_mismatched_artifact(artifact, report_path),
+    }
+}
+
+fn fail_mismatched_artifact(artifact: &ReproducibilityArtifactComparison, report_path: &Path) -> Result<(), RunError> {
+    let observed_size_bytes = artifact.observed_size_bytes.unwrap_or_default();
+    if observed_size_bytes != artifact.expected_size_bytes {
+        return Err(RunError::Internal(format!(
+            "release reproducibility byte-length drift for {}: expected {} got {}; report written to {}",
+            artifact.name,
+            artifact.expected_size_bytes,
+            observed_size_bytes,
+            report_path.display()
+        )));
+    }
+    let observed_digest = artifact.observed_digest_blake3.as_deref().unwrap_or("missing");
+    Err(RunError::Internal(format!(
+        "release reproducibility digest drift for {}: expected {} got {}; report written to {}",
+        artifact.name,
+        artifact.expected_digest_blake3,
+        observed_digest,
+        report_path.display()
+    )))
 }
 
 fn count_report_results(comparisons: &[ReproducibilityArtifactComparison]) -> ComparisonCounts {

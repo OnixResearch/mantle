@@ -31,11 +31,17 @@
       release_reproduce_writes_matched_report_from_isolated_rebuild_output`
       passed in pueue task 55; the focused CLI test passed again after the
       Unix guard in pueue task 56.
-- [ ] I4 Add fail-closed diagnostics for missing rebuilt artifact, output-name
+- [x] I4 Add fail-closed diagnostics for missing rebuilt artifact, output-name ✅ 4m 59s (started: 2026-04-25T19:10:53Z → completed: 2026-04-25T19:15:52Z)
       drift, byte-length drift, digest drift, source archive drift, manifest
       drift, non-canonical report encoding, proof-linkage mismatch, packaging
       metadata drift, and prerequisite-only proof input.
       [covers=release.evidence.reproducible.cli]
+      Evidence: `cargo test -p crunch --test release_cli release_reproduce`
+      passed in pueue task 16 (5 tests: matched, missing, byte-length,
+      digest, output-name drift), `cargo test -p crunch --bin crunch
+      release_reproducibility::` passed in pueue task 13, and
+      `cargo test -p crunch --test release_cli release_verify_` passed in
+      pueue task 18 (15 bundle/linkage/signature drift tests).
 
 ## Phase 3: Verification and docs
 

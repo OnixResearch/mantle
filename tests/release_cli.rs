@@ -481,9 +481,16 @@ fn copy_directory_entries_for_test(source_dir: &Path, dest_dir: &Path) {
 }
 
 fn write_rebuild_copy_script(script_path: &Path, binary_relative_path: &str) {
-    let script = format!(
-        "#!/bin/sh\nset -eu\nmkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$CRUNCH_REPRODUCE_BUNDLE_DIR/{binary_relative_path}\" \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\n"
+    write_rebuild_script(
+        script_path,
+        &format!(
+            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$CRUNCH_REPRODUCE_BUNDLE_DIR/{binary_relative_path}\" \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\n"
+        ),
     );
+}
+
+fn write_rebuild_script(script_path: &Path, body: &str) {
+    let script = format!("#!/bin/sh\nset -eu\n{body}");
     write_file(script_path, script.as_bytes());
     #[cfg(unix)]
     {
@@ -683,6 +690,132 @@ fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
     assert_eq!(report["artifacts"][0]["name"], manifest.binaries[0].relative_path);
     assert_eq!(report["artifacts"][0]["result"], "matched");
     assert!(rebuild_output_dir.join(&manifest.binaries[0].relative_path).is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_fails_when_rebuilt_artifact_is_missing() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("missing-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("missing-output");
+    let report_path = temp.path().join("missing-report.json");
+    write_rebuild_script(&rebuild_script, "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\n");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("missing rebuilt artifact"));
+
+    let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+    assert_eq!(report["artifacts"][0]["result"], "missing-rebuilt-artifact");
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_fails_on_byte_length_drift() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("length-drift.sh");
+    let rebuild_output_dir = temp.path().join("length-output");
+    let report_path = temp.path().join("length-report.json");
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'short' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            manifest.binaries[0].relative_path
+        ),
+    );
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("byte-length drift"));
+
+    let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+    assert_eq!(report["artifacts"][0]["result"], "mismatched");
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_fails_on_digest_drift() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("digest-drift.sh");
+    let rebuild_output_dir = temp.path().join("digest-output");
+    let report_path = temp.path().join("digest-report.json");
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            manifest.binaries[0].relative_path
+        ),
+    );
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("digest drift"));
+
+    let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+    assert_eq!(report["artifacts"][0]["result"], "mismatched");
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_fails_on_output_name_drift() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("name-drift.sh");
+    let rebuild_output_dir = temp.path().join("name-output");
+    let report_path = temp.path().join("name-report.json");
+    write_rebuild_script(
+        &rebuild_script,
+        "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'crunch-binary' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries/renamed-crunch\"\n",
+    );
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("output-name drift"));
+
+    assert!(report_path.exists());
 }
 
 #[test]
