@@ -39,10 +39,16 @@
       sandbox/shell/toolchain/build-tool paths, ignoring unrelated `PATH` and
       `NIX_STORE`, BLAKE3 digest rendering, Nickel file writing, and empty
       toolchain fail-closed behavior.
-- [ ] I4 Route protected-phase network fetches through `Stage0Inventory` source
+- [x] I4 Route protected-phase network fetches through `Stage0Inventory` source ✅ 1m 19s (started: 2026-04-25T21:38:21Z → completed: 2026-04-25T21:39:40Z)
       URL allowlisting and extraction-rule validation so undeclared source URLs,
       missing source entries, digest mismatches, and missing provenance fail
       closed before fetch or extraction. [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: pueue task 61 passed isolated-target
+      `cargo test -p crunch protected_exec -- --nocapture` with 13 tests.
+      `ProtectedExecPolicy::source_fetch_plan` now returns only declared source
+      URLs with digest and extraction rules, `verify_source_digest` rejects
+      mismatches before extraction, and malformed source URL/extraction entries
+      fail during inventory validation.
 - [ ] I5 Route self-build/proof protected-phase process launches through one
       non-shell protected process-launch adapter that enforces
       `ProtectedExecPolicy` before crunch-owned `execve` calls and records

@@ -95,9 +95,18 @@ pub struct ExecDecision {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtectedSourceFetchPlan {
+    pub entry_id: String,
+    pub url: String,
+    pub digest: DigestSpec,
+    pub extraction_rules: Vec<String>,
+    pub allowed_reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedExecPolicy {
     executables_by_path: BTreeMap<PathBuf, ExecutableSeedEntry>,
-    source_urls: BTreeSet<String>,
+    sources_by_url: BTreeMap<String, SourceSeedEntry>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -154,6 +163,11 @@ pub enum ProtectedExecError {
     UndeclaredSourceUrl {
         url: String,
     },
+    SourceDigestMismatch {
+        url: String,
+        expected: String,
+        actual: String,
+    },
 }
 
 impl fmt::Display for ProtectedExecError {
@@ -188,6 +202,9 @@ impl fmt::Display for ProtectedExecError {
                 write!(f, "digest mismatch for {}: expected {expected}, got {actual}", path.display())
             }
             Self::UndeclaredSourceUrl { url } => write!(f, "undeclared protected source url: {url}"),
+            Self::SourceDigestMismatch { url, expected, actual } => {
+                write!(f, "source digest mismatch for {url}: expected {expected}, got {actual}")
+            }
         }
     }
 }
@@ -207,12 +224,13 @@ impl ProtectedExecPolicy {
             }
         }
 
-        let mut source_urls = BTreeSet::new();
+        let mut sources_by_url = BTreeMap::new();
         for entry in inventory.source_entries {
             validate_source_entry(&entry)?;
-            for url in entry.urls {
-                if !source_urls.insert(url.clone()) {
-                    return Err(ProtectedExecError::DuplicateSourceUrl { url });
+            for url in &entry.urls {
+                let previous = sources_by_url.insert(url.clone(), entry.clone());
+                if previous.is_some() {
+                    return Err(ProtectedExecError::DuplicateSourceUrl { url: url.clone() });
                 }
             }
         }
@@ -220,7 +238,7 @@ impl ProtectedExecPolicy {
         assert!(!executables_by_path.is_empty(), "policy must contain required executables");
         Ok(Self {
             executables_by_path,
-            source_urls,
+            sources_by_url,
         })
     }
 
@@ -247,12 +265,36 @@ impl ProtectedExecPolicy {
         })
     }
 
-    pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
+    pub fn source_fetch_plan(&self, url: &str) -> Result<ProtectedSourceFetchPlan, ProtectedExecError> {
         assert!(!url.is_empty(), "source url check must not be empty");
-        if self.source_urls.contains(url) {
+        let entry = self
+            .sources_by_url
+            .get(url)
+            .ok_or_else(|| ProtectedExecError::UndeclaredSourceUrl { url: url.to_string() })?;
+        Ok(ProtectedSourceFetchPlan {
+            entry_id: entry.id.clone(),
+            url: url.to_string(),
+            digest: entry.digest.clone(),
+            extraction_rules: entry.extraction_rules.clone(),
+            allowed_reason: entry.allowed_reason.clone(),
+        })
+    }
+
+    pub fn verify_source_digest(&self, url: &str, actual_digest_hex: &str) -> Result<(), ProtectedExecError> {
+        assert!(!actual_digest_hex.is_empty(), "source digest check must not be empty");
+        let plan = self.source_fetch_plan(url)?;
+        if plan.digest.hex == actual_digest_hex {
             return Ok(());
         }
-        Err(ProtectedExecError::UndeclaredSourceUrl { url: url.to_string() })
+        Err(ProtectedExecError::SourceDigestMismatch {
+            url: url.to_string(),
+            expected: plan.digest.hex,
+            actual: actual_digest_hex.to_string(),
+        })
+    }
+
+    pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
+        self.source_fetch_plan(url).map(|_| ())
     }
 }
 
@@ -314,11 +356,17 @@ fn validate_source_entry(entry: &SourceSeedEntry) -> Result<(), ProtectedExecErr
         &entry.owner,
     )?;
     validate_non_empty(entry.id.as_str(), "urls", entry.urls.first().map(String::as_str).unwrap_or_default())?;
+    for url in &entry.urls {
+        validate_non_empty(entry.id.as_str(), "urls[]", url)?;
+    }
     validate_non_empty(
         entry.id.as_str(),
         "extraction_rules",
         entry.extraction_rules.first().map(String::as_str).unwrap_or_default(),
     )?;
+    for rule in &entry.extraction_rules {
+        validate_non_empty(entry.id.as_str(), "extraction_rules[]", rule)?;
+    }
     Ok(())
 }
 
@@ -1209,7 +1257,14 @@ mod tests {
     #[test]
     fn policy_allows_only_declared_source_urls() {
         let policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
-        assert!(policy.ensure_source_url_allowed("https://example.invalid/musl.tar.xz").is_ok());
+        let plan = policy.source_fetch_plan("https://example.invalid/musl.tar.xz").unwrap();
+        assert_eq!(plan.entry_id, "musl");
+        assert_eq!(plan.digest.hex, DIGEST_A);
+        assert_eq!(plan.extraction_rules, vec!["strip-components=1".to_string()]);
+        assert!(policy.verify_source_digest("https://example.invalid/musl.tar.xz", DIGEST_A).is_ok());
+
+        let mismatch = policy.verify_source_digest("https://example.invalid/musl.tar.xz", DIGEST_B).unwrap_err();
+        assert!(matches!(mismatch, ProtectedExecError::SourceDigestMismatch { .. }));
         let err = policy.ensure_source_url_allowed("https://example.invalid/other.tar.xz").unwrap_err();
         assert_eq!(err, ProtectedExecError::UndeclaredSourceUrl {
             url: "https://example.invalid/other.tar.xz".to_string()
@@ -1225,6 +1280,25 @@ mod tests {
         let err = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
         assert_eq!(err, ProtectedExecError::MissingRequiredSeedRole {
             role: ROLE_SANDBOX_SHELL
+        });
+    }
+
+    #[test]
+    fn inventory_rejects_malformed_source_entries_before_fetch() {
+        let mut inv = inventory();
+        inv.source_entries[0].urls = vec![String::new()];
+        let err = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
+        assert_eq!(err, ProtectedExecError::EmptyField {
+            entry_id: "musl".to_string(),
+            field: "urls"
+        });
+
+        let mut missing_rule = inventory();
+        missing_rule.source_entries[0].extraction_rules = Vec::new();
+        let err = ProtectedExecPolicy::from_inventory(missing_rule).unwrap_err();
+        assert_eq!(err, ProtectedExecError::EmptyField {
+            entry_id: "musl".to_string(),
+            field: "extraction_rules"
         });
     }
 
