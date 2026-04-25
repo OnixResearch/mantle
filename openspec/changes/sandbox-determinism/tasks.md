@@ -1,7 +1,7 @@
 ## Phase 1: Sandbox hardening (bwrap)
 
 - [x] Add `--hostname localhost` to `COMMON_BWRAP_ARGS` in `vendor/snix-build/src/bwrap/mod.rs` ✅ 5m
-- [x] Add `/proc` masking args for `/proc/cpuinfo`, `/proc/meminfo`, `/proc/stat`, `/proc/loadavg`, `/proc/uptime`, and `/proc/version` after `--proc /proc` ✅ 3m
+- [x] Add `--ro-bind-try /dev/null` `/proc` masking args for `/proc/cpuinfo`, `/proc/meminfo`, `/proc/stat`, `/proc/loadavg`, `/proc/uptime`, and `/proc/version` after `--proc /proc` ✅ 3m
 - [x] Add `/dev/random` and `/dev/urandom` masking args (`--ro-bind /dev/null /dev/random` etc.) after `--dev /dev` ✅ 3m
 - [x] Add `--tmpfs /dev/shm` after `--dev /dev` to isolate shared memory per build ✅ 1m
 - [x] Add `--unshare-cgroup-try` to `COMMON_BWRAP_ARGS` ✅ 2m
@@ -41,6 +41,7 @@
 
 ## Phase 5: Validation
 
+- [x] Run `openspec validate sandbox-determinism --strict` and verify the change is valid ✅ 1s
 - [x] Run `cargo test -p snix-build -p crunch-build -p crunch-store -p crunch-pipeline` and verify all pass ✅ pueue#96 8s
 - [x] Run focused bwrap hardening tests (`cargo test -p snix-build --lib -- bwrap::tests`) ✅ 16s
 - [x] Run ambient-state determinism regression coverage varying `HOME`, `PATH`, `USER`, `TZ`, `LANG`, `TMPDIR`, current working directory, and umask; compare digest/audit or blocker stability ✅ `cargo test -p crunch-pipeline --test integration_build pipeline_determinism_` via package run; covers `pipeline_determinism_normal_derivation_stable_across_ambient_state`, `pipeline_determinism_fetcher_root_stable_across_ambient_state`, `pipeline_determinism_self_build_friendly_path_stable_across_ambient_state`, and `pipeline_determinism_strict_blocker_stable_across_ambient_state`
