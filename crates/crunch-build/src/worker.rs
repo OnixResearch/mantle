@@ -1072,8 +1072,8 @@ mod tests {
         // Simulate completing the leaf.
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: leaf_sp.clone(),
-            outputs: std::collections::HashMap::new(),
-            substitutions: std::collections::HashMap::new(),
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: None,
         };
@@ -1104,8 +1104,8 @@ mod tests {
         let key = sp.to_absolute_path();
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: sp.clone(),
-            outputs: std::collections::HashMap::new(),
-            substitutions: std::collections::HashMap::new(),
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
             cached: true,
             log: None,
         };
@@ -1158,8 +1158,8 @@ mod tests {
         let shared_key = shared_sp.to_absolute_path();
         let outcome = crate::orchestrate::BuildOutcome {
             drv_path: shared_sp.clone(),
-            outputs: std::collections::HashMap::new(),
-            substitutions: std::collections::HashMap::new(),
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: None,
         };

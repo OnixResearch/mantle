@@ -30,10 +30,10 @@
 
 ## Phase 4: Orchestrator map ordering
 
-- [ ] Replace `output_infos: HashMap<String, PathInfo>` with `BTreeMap` in `BuildOutcome` and `finish_build`
-- [ ] Replace `substitutions: HashMap<String, OutputSubstitutionReport>` with `BTreeMap` in `BuildOutcome`
-- [ ] Audit remaining `HashMap` uses in `orchestrate.rs`; convert any that are iterated into output
-- [ ] Add assertion: `BuildOutcome.outputs` iteration order matches sorted output names
+- [x] Replace `output_infos: HashMap<String, PathInfo>` with `BTreeMap` in `BuildOutcome` and `finish_build` ✅ 8m
+- [x] Replace `substitutions: HashMap<String, OutputSubstitutionReport>` with `BTreeMap` in `BuildOutcome` ✅ 4m
+- [x] Audit remaining `HashMap` uses in `orchestrate.rs`; convert any that are iterated into output ✅ 6m
+- [x] Add assertion: `BuildOutcome.outputs` iteration order matches sorted output names ✅ 4m
 
 ## Phase 5: Validation
 

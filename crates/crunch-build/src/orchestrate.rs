@@ -91,9 +91,9 @@ pub struct BuildOutcome {
     /// The derivation store path (the .drv path).
     pub drv_path: StorePath<String>,
     /// Output name → PathInfo for each output.
-    pub outputs: HashMap<String, PathInfo>,
+    pub outputs: BTreeMap<String, PathInfo>,
     /// Output name → substitution reporting for successful remote cache hits.
-    pub substitutions: HashMap<String, OutputSubstitutionReport>,
+    pub substitutions: BTreeMap<String, OutputSubstitutionReport>,
     /// Whether the build was served from cache (output already existed).
     pub cached: bool,
     /// Captured build stdout+stderr, if available.
@@ -101,8 +101,8 @@ pub struct BuildOutcome {
 }
 
 struct CacheCheckHit {
-    infos: HashMap<String, PathInfo>,
-    substitutions: HashMap<String, OutputSubstitutionReport>,
+    infos: BTreeMap<String, PathInfo>,
+    substitutions: BTreeMap<String, OutputSubstitutionReport>,
 }
 
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
@@ -465,7 +465,7 @@ where BServ: BuildService + 'static
         build_result: snix_build::buildservice::BuildResult,
         known_paths: &mut DerivationRegistry,
     ) -> Result<BuildOutcome, Error> {
-        let mut output_infos: HashMap<String, PathInfo> = HashMap::with_capacity(prepared.derivation.outputs.len());
+        let mut output_infos: BTreeMap<String, PathInfo> = BTreeMap::new();
         let output_names: Vec<String> = prepared.derivation.outputs.keys().cloned().collect();
         let is_multi_ca = prepared.is_ca && prepared.derivation.outputs.len() > 1;
         let artifact_provenance = self.build_artifact_provenance(&prepared.derivation, known_paths)?;
@@ -516,7 +516,7 @@ where BServ: BuildService + 'static
         Ok(BuildOutcome {
             drv_path: prepared.drv_path.clone(),
             outputs: output_infos,
-            substitutions: HashMap::new(),
+            substitutions: BTreeMap::new(),
             cached: false,
             log: build_result.log,
         })
@@ -535,7 +535,7 @@ where BServ: BuildService + 'static
         build_result: &snix_build::buildservice::BuildResult,
         known_paths: &mut DerivationRegistry,
         artifact_provenance: &ArtifactProvenance,
-    ) -> Result<HashMap<String, PathInfo>, Error> {
+    ) -> Result<BTreeMap<String, PathInfo>, Error> {
         let ca_plans = crate::ca_plan::plan_ca_outputs(
             &prepared.drv_name,
             &prepared.derivation.outputs,
@@ -627,7 +627,7 @@ where BServ: BuildService + 'static
         artifact_provenance: &ArtifactProvenance,
         ca_plans: &[crate::ca_plan::CaOutputPlan],
         intermediates: &[CaOutputIntermediate],
-    ) -> Result<HashMap<String, PathInfo>, Error> {
+    ) -> Result<BTreeMap<String, PathInfo>, Error> {
         let final_rewrites: Vec<(&[u8], Vec<u8>)> = ca_plans
             .iter()
             .filter_map(|plan| {
@@ -638,7 +638,7 @@ where BServ: BuildService + 'static
             .collect();
 
         let drv_abs = prepared.drv_path.to_absolute_path_with_prefix(self.store.store_dir());
-        let mut output_infos: HashMap<String, PathInfo> = HashMap::with_capacity(intermediates.len());
+        let mut output_infos: BTreeMap<String, PathInfo> = BTreeMap::new();
 
         for (idx, intermediate) in intermediates.iter().enumerate() {
             let final_node = self.rewrite_markers_to_final(&intermediate.marked_node, &final_rewrites).await?;
@@ -1175,9 +1175,10 @@ where BServ: BuildService + 'static
             .await
             .map_err(|e| Error::Store(format!("{e}")))?;
 
-        let Some(infos) = cached else {
+        let Some(cached_infos) = cached else {
             return Ok(None);
         };
+        let infos: BTreeMap<String, PathInfo> = cached_infos.into_iter().collect();
 
         let substitutions = infos
             .iter()
@@ -1186,7 +1187,7 @@ where BServ: BuildService + 'static
                     .take_output_substitution_report(&path_info.store_path)
                     .map(|report| (output_name.clone(), report))
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
 
         if self.trust_unsigned {
             return Ok(Some(CacheCheckHit { infos, substitutions }));
@@ -1221,7 +1222,7 @@ where BServ: BuildService + 'static
         &self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
-        infos: &HashMap<String, PathInfo>,
+        infos: &BTreeMap<String, PathInfo>,
         known_paths: &mut DerivationRegistry,
     ) -> Result<(), Error> {
         let is_ca = derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
@@ -1472,6 +1473,35 @@ mod tests {
             deriver: None,
             ca: None,
         }
+    }
+
+    #[test]
+    fn build_outcome_outputs_iterate_by_output_name() {
+        const Z_OUTPUT_DIGEST_BYTE: u8 = 1;
+        const A_OUTPUT_DIGEST_BYTE: u8 = 2;
+        const M_OUTPUT_DIGEST_BYTE: u8 = 3;
+        const DRV_DIGEST_BYTE: u8 = 4;
+        let mut outputs = BTreeMap::new();
+        let z_path = make_source_path("z-output", Z_OUTPUT_DIGEST_BYTE);
+        let a_path = make_source_path("a-output", A_OUTPUT_DIGEST_BYTE);
+        let m_path = make_source_path("m-output", M_OUTPUT_DIGEST_BYTE);
+        outputs.insert("zzz".to_string(), make_source_path_info(&z_path, vec![]));
+        outputs.insert("aaa".to_string(), make_source_path_info(&a_path, vec![]));
+        outputs.insert("mid".to_string(), make_source_path_info(&m_path, vec![]));
+
+        let outcome = BuildOutcome {
+            drv_path: make_source_path("drv", DRV_DIGEST_BYTE),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let output_names: Vec<&str> = outcome.outputs.keys().map(String::as_str).collect();
+        let insertion_order = vec!["zzz", "aaa", "mid"];
+        let sorted_order = vec!["aaa", "mid", "zzz"];
+
+        assert_eq!(output_names, sorted_order);
+        assert_ne!(output_names, insertion_order);
     }
 
     /// Build a nix_compat::Derivation, compute paths, register in DerivationRegistry.
