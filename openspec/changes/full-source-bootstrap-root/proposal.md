@@ -11,8 +11,8 @@ auditable source-root definition and proof rail.
 ## What Changes
 
 - **Define a source-root contract.** Add a manifest format for the minimal
-  source archives, patches, hashes, and bootstrap assumptions that form the
-  trusted root.
+  source archives, patches, hashes, extraction rules, expected provider outputs,
+  network trust roots, and bootstrap assumptions that form the trusted root.
 - **Build a reduced provider from source.** Introduce a provider that satisfies
   the existing `bootstrap/seed.ncl` contract without deriving from the musl.cc
   binary toolchain tarball.
@@ -43,8 +43,10 @@ auditable source-root definition and proof rail.
 
 - **Files**: `bootstrap/`, `src/bootstrap.rs`, `src/self_build.rs`, bootstrap
   docs, README, and tests/proof helpers.
-- **APIs**: likely new `crunch bootstrap --source-root` or equivalent provider
-  selection surface.
+- **APIs**: add `crunch bootstrap --source-root <manifest>` as the source-root
+  provider selection surface. `--fetch` remains the seed-assisted legacy
+  provider path, and specifying both `--fetch` and `--source-root` MUST fail
+  before provider work starts.
 - **Dependencies**: no new network trust roots without explicit manifest entries.
 - **Testing**: provider manifest validation, provider build tests, self-build
   proof replay with the source-built provider.
@@ -59,7 +61,14 @@ but the strongest claim requires both.
 
 1. `openspec validate full-source-bootstrap-root --strict` passes.
 2. The new source-root manifest checker rejects missing hashes, undeclared
-   patches, and unexpected provider outputs.
-3. A source-built provider satisfies the existing `bootstrap/seed.ncl` contract.
-4. `crunch self-build --no-substitute` succeeds with the source-built provider.
-5. Bootstrap docs update the claim only after evidence is captured.
+   patches, unexpected provider outputs, unmanifested network trust roots, and
+   trust notes without digest/provenance.
+3. `crunch bootstrap --source-root <manifest>` materializes a source-built
+   provider satisfying the existing `bootstrap/seed.ncl` contract, while
+   `crunch bootstrap --fetch --source-root <manifest>` fails closed.
+4. `crunch self-build --no-substitute --source-root <manifest>` succeeds with
+   the source-built provider and the proof records provider kind, manifest
+   digest, provider output digest, and proof bundle digest.
+5. Bootstrap docs update the claim only after evidence is captured and keep
+   remaining audited tiny seeds/trust notes separate from eliminated binary
+   provider trust.
