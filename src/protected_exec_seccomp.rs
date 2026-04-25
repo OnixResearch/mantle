@@ -485,6 +485,7 @@ mod linux {
             assert_eq!(events[0].policy_decision, "allowed");
             assert_eq!(events[0].syscall, "execve");
             assert_eq!(events[0].executable_path, current_exe);
+            assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
         }
 
         fn run_deny_child() {
@@ -519,6 +520,7 @@ mod linux {
             assert_eq!(events[0].policy_decision, "allowed");
             assert_eq!(events[0].syscall, "execveat");
             assert_eq!(events[0].executable_path, current_exe);
+            assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
         }
 
         fn execveat_current_exe_help(current_exe: &Path) -> ! {

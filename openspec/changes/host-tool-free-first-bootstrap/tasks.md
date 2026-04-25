@@ -132,9 +132,17 @@
       unresolved/relative/empty target paths. `self-build --no-host-tools
       --stage0-inventory` now installs this supervisor after declared seed
       selection.
-- [ ] I12 Add tests proving a declared seed sandbox executable with a matching
+- [x] I12 Add tests proving a declared seed sandbox executable with a matching ✅ 0m 7s (started: 2026-04-25T22:26:36Z → completed: 2026-04-25T22:26:43Z)
       digest starts successfully and is recorded as a declared seed artifact in
       proof/audit output. [covers=bootstrap.hosttoolfree.sandbox.entrypoint,bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 139 passed chained isolated-target
+      `cargo test -p crunch declared_seed -- --nocapture` and
+      `cargo test -p crunch seccomp_supervisor -- --nocapture`. The
+      declared-seed slice passed 1 lib test and 5 bin tests, including
+      declared `BwrapSource` proof-line roundtrip and declared sandbox
+      entry/shell audit selection; seccomp tests passed 3 lib and 3 bin tests,
+      with allowed `execve`/`execveat` audit events asserting
+      `inventory_entry_id == "sandbox-entry"`.
 - [ ] I13 Add tests proving host `bwrap` on `PATH` is ignored/rejected in
       host-tool-free mode when no declared sandbox seed exists, and proving
       seccomp/supervisor-unavailable conditions fail closed before sandbox

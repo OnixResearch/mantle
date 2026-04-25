@@ -3577,6 +3577,29 @@ mod tests {
     // ── SelfBuildReport tests ────────────────────────────────────
 
     #[test]
+    fn report_format_roundtrip_with_declared_seed_bwrap() {
+        let report = SelfBuildReport {
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            invoking_binary: PathBuf::from("/seed/crunch"),
+            staged_source: PathBuf::from("/store/src"),
+            bwrap_source: BwrapSource::DeclaredSeed(PathBuf::from("/seed/bin/bwrap")),
+            fallback_events: Vec::new(),
+            busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
+            output_binary: PathBuf::from("/store/out/bin/crunch"),
+        };
+
+        let lines = report.format_proof_lines();
+        let parsed = SelfBuildReport::parse_proof_lines(&lines).unwrap();
+
+        assert!(lines.contains("bwrap-source=declared-seed:/seed/bin/bwrap"));
+        assert!(lines.contains("fallback-event=none"));
+        assert!(lines.contains("busybox-path=/seed/bin/busybox"));
+        assert_eq!(parsed.bwrap_source, report.bwrap_source);
+        assert_eq!(parsed.busybox_path, report.busybox_path);
+        assert_eq!(parsed.fallback_events, report.fallback_events);
+    }
+
+    #[test]
     fn report_format_roundtrip_with_busybox() {
         let report = SelfBuildReport {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
