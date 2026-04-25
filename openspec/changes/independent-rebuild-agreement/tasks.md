@@ -95,18 +95,34 @@
 
 ## Validation
 
-- [ ] V1 Run `openspec validate independent-rebuild-agreement --strict` and
+- [x] V1 Run `openspec validate independent-rebuild-agreement --strict` and ✅ 0m 6s (started: 2026-04-25T20:58:55Z → completed: 2026-04-25T20:59:01Z)
       record the result. [covers=release.verification.tech.independent.agreement.report,release.verification.tech.independent.agreement.class,release.verification.social.independent.agreement.policy,release.evidence.independent.agreement.attachment,release.verification.tech.witness.independence.evidence,release.verification.tech.independent.agreement.docs]
-- [ ] V2 Run agreement core canonicalization and policy selector unit tests.
+      Evidence: `openspec validate independent-rebuild-agreement --strict`
+      printed `Change 'independent-rebuild-agreement' is valid`.
+- [x] V2 Run agreement core canonicalization and policy selector unit tests. ✅ 0m 0s (started: 2026-04-25T20:56:56Z → completed: 2026-04-25T20:56:56Z)
       [covers=release.verification.tech.independent.agreement.report,release.verification.social.independent.agreement.policy,release.verification.tech.witness.independence.evidence]
-- [ ] V3 Run release CLI agreement tests and record positive plus negative
+      Evidence: pueue task 32 passed
+      `cargo test -p crunch-attestation-core independent_agreement -- --nocapture`
+      with 4 passed core report tests.
+- [x] V3 Run release CLI agreement tests and record positive plus negative ✅ 0m 4s (started: 2026-04-25T20:56:40Z → completed: 2026-04-25T20:56:44Z)
       witness-set outcomes, including digest-mismatch witness sets,
       no-agreement basic-valid bundles, duplicate agreement attachments,
       mismatched agreement attachments, and invalid-signature witness
       classification while digest matching, signature validity, independence,
       and policy sufficiency remain separately visible.
       [covers=release.verification.tech.independent.agreement.report,release.verification.tech.independent.agreement.class,release.evidence.independent.agreement.attachment,release.verification.tech.witness.independence.evidence]
-- [ ] V4 Run docs bounded-claim checks proving independent agreement docs name
+      Evidence: pueue task 31 passed
+      `cargo test -p crunch --test release_cli attest_release_verify -- --nocapture`
+      with 12 passed tests, including satisfying independent witnesses,
+      same-domain rejection, unknown-key skip, invalid signature, revoked skip,
+      malformed environment evidence, missing evidence, digest mismatch,
+      no-report/basic-valid behavior, duplicate attachment rejection, and
+      mismatched attachment rejection.
+- [x] V4 Run docs bounded-claim checks proving independent agreement docs name ✅ 0m 10s (started: 2026-04-25T20:58:31Z → completed: 2026-04-25T20:58:40Z)
       required JSON fields/classifications and do not claim full-source
       bootstrap, global reproducibility, or public witness discovery.
       [covers=release.verification.tech.independent.agreement.docs]
+      Evidence: grep audit found `independent_agreement_status` and
+      `independent-agreement/agreement-report.json` in README/operator docs and
+      confirmed full-source bootstrap caveats remain explicit in README,
+      operator workflow docs, and the stage0 inventory.
