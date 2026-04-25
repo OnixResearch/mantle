@@ -10,6 +10,9 @@ use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
+use crate::release_reproducibility::DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION;
+use crate::release_reproducibility::ReleaseReproduceRequest;
+use crate::release_reproducibility::reproduce_release_artifacts;
 use crate::release_source::write_tracked_source_archive;
 use crate::witness_handoff::create_witness_request_directory;
 use crate::witness_handoff::default_witness_request_dir;
@@ -50,6 +53,23 @@ pub(crate) fn cmd_release(
             workflow_version,
         ),
         crate::ReleaseAction::Verify { bundle_dir } => cmd_release_verify(json, bundle_dir),
+        crate::ReleaseAction::Reproduce {
+            bundle_dir,
+            rebuild_output_dir,
+            rebuild_command,
+            rebuild_args,
+            workflow_version,
+            report_path,
+        } => cmd_release_reproduce(
+            current_dir,
+            json,
+            bundle_dir,
+            rebuild_output_dir,
+            rebuild_command,
+            rebuild_args,
+            workflow_version,
+            report_path,
+        ),
         crate::ReleaseAction::Attest {
             bundle_dir,
             verification_dir,
@@ -141,6 +161,54 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf) -> Result<(), RunError> {
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_release_reproduce(
+    current_dir: &Path,
+    json: bool,
+    bundle_dir: PathBuf,
+    rebuild_output_dir: PathBuf,
+    rebuild_command: PathBuf,
+    rebuild_args: Vec<std::ffi::OsString>,
+    workflow_version: String,
+    report_path: Option<PathBuf>,
+) -> Result<(), RunError> {
+    let normalized_workflow_version =
+        normalize_workflow_value(&workflow_version, DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION);
+    let request = ReleaseReproduceRequest {
+        bundle_dir: resolve_input_path(current_dir, bundle_dir),
+        rebuild_output_dir: resolve_input_path(current_dir, rebuild_output_dir),
+        rebuild_command: resolve_input_path(current_dir, rebuild_command),
+        rebuild_args,
+        workflow_version: normalized_workflow_version,
+        report_path: report_path.map(|path| resolve_input_path(current_dir, path)),
+    };
+    let summary = reproduce_release_artifacts(&request)?;
+    if json {
+        let rendered = serde_json::json!({
+            "release_id": summary.release_id,
+            "report_path": summary.report_path.display().to_string(),
+            "report_digest_blake3": summary.report_digest_blake3,
+            "matched_count": summary.matched_count,
+            "mismatched_count": summary.mismatched_count,
+            "missing_count": summary.missing_count,
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing reproducibility output: {err}")))?
+        );
+        return Ok(());
+    }
+
+    println!("release reproducibility report: {}", summary.report_path.display());
+    println!("release id: {}", summary.release_id);
+    println!("report digest: {}", summary.report_digest_blake3);
+    println!("matched artifacts: {}", summary.matched_count);
+    println!("mismatched artifacts: {}", summary.mismatched_count);
+    println!("missing artifacts: {}", summary.missing_count);
     Ok(())
 }
 

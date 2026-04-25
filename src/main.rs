@@ -17,6 +17,7 @@ mod project_resolve;
 mod release_attestation;
 mod release_cmd;
 mod release_evidence;
+mod release_reproducibility;
 mod release_source;
 mod self_build;
 mod shell_cmd;
@@ -422,6 +423,31 @@ pub enum ReleaseAction {
     Verify {
         /// Bundle directory to verify
         bundle_dir: PathBuf,
+    },
+    /// Rebuild and compare published release artifacts, then write a reproducibility report
+    Reproduce {
+        /// Bundle directory to verify and reproduce
+        bundle_dir: PathBuf,
+
+        /// Empty output directory where the rebuild command writes reproduced bundle artifact paths
+        #[arg(long)]
+        rebuild_output_dir: PathBuf,
+
+        /// Rebuild command to execute with CRUNCH_REPRODUCE_* environment variables
+        #[arg(long)]
+        rebuild_command: PathBuf,
+
+        /// Additional argument passed to the rebuild command (repeatable)
+        #[arg(long = "rebuild-arg")]
+        rebuild_args: Vec<OsString>,
+
+        /// Workflow version recorded in the reproducibility report
+        #[arg(long, default_value = "crunch-release-reproducibility-v1")]
+        workflow_version: String,
+
+        /// Output path for the canonical reproducibility report
+        #[arg(long)]
+        report_path: Option<PathBuf>,
     },
     /// Create and sign a release attestation for a verified release bundle
     Attest {

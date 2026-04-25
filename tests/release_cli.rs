@@ -37,6 +37,8 @@ const RELEASE_SIGNING_KEY: &str =
 const FAKE_WITNESS_DRIVER_MODE_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_MODE";
 const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_LAUNCH_SIGNAL";
 const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_CONTENT: &str = "launched";
+#[cfg(unix)]
+const TEST_SCRIPT_MODE: u32 = 0o755;
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -478,6 +480,19 @@ fn copy_directory_entries_for_test(source_dir: &Path, dest_dir: &Path) {
     }
 }
 
+fn write_rebuild_copy_script(script_path: &Path, binary_relative_path: &str) {
+    let script = format!(
+        "#!/bin/sh\nset -eu\nmkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$CRUNCH_REPRODUCE_BUNDLE_DIR/{binary_relative_path}\" \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\n"
+    );
+    write_file(script_path, script.as_bytes());
+    #[cfg(unix)]
+    {
+        let mut permissions = std::fs::metadata(script_path).unwrap().permissions();
+        permissions.set_mode(TEST_SCRIPT_MODE);
+        std::fs::set_permissions(script_path, permissions).unwrap();
+    }
+}
+
 #[test]
 fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();
@@ -631,6 +646,43 @@ fn release_verify_succeeds_using_bundle_local_contents_only() {
             "stage2 digest: {}",
             manifest.proof_linkage.stage2_binary_digest_blake3
         )));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("fake-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("rebuild-output");
+    let report_path = temp.path().join("reproducibility-report.json");
+    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+
+    let assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+
+    assert_eq!(stdout["release_id"], manifest.release_id);
+    assert_eq!(stdout["matched_count"], 1);
+    assert_eq!(stdout["mismatched_count"], 0);
+    assert_eq!(stdout["missing_count"], 0);
+    assert_eq!(report["schema"], "crunch-release-reproducibility-report-v1");
+    assert_eq!(report["release_id"], manifest.release_id);
+    assert_eq!(report["artifacts"][0]["name"], manifest.binaries[0].relative_path);
+    assert_eq!(report["artifacts"][0]["result"], "matched");
+    assert!(rebuild_output_dir.join(&manifest.binaries[0].relative_path).is_file());
 }
 
 #[test]

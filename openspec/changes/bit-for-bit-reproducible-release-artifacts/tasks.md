@@ -23,9 +23,14 @@
 
 ## Phase 2: Rebuild and compare workflow
 
-- [ ] I3 Add a release reproducibility CLI workflow that rebuilds published
+- [x] I3 Add a release reproducibility CLI workflow that rebuilds published ✅ 5m 5s (started: 2026-04-25T19:05:10Z → completed: 2026-04-25T19:10:15Z)
       artifacts into an isolated output area and compares only the manifest's
       named release artifacts. [covers=release.evidence.reproducible.cli]
+      Evidence: `cargo test -p crunch --bin crunch release_reproducibility::`
+      plus `cargo test -p crunch --test release_cli
+      release_reproduce_writes_matched_report_from_isolated_rebuild_output`
+      passed in pueue task 55; the focused CLI test passed again after the
+      Unix guard in pueue task 56.
 - [ ] I4 Add fail-closed diagnostics for missing rebuilt artifact, output-name
       drift, byte-length drift, digest drift, source archive drift, manifest
       drift, non-canonical report encoding, proof-linkage mismatch, packaging
