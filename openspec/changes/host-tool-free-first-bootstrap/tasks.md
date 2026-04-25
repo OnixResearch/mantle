@@ -143,10 +143,18 @@
       entry/shell audit selection; seccomp tests passed 3 lib and 3 bin tests,
       with allowed `execve`/`execveat` audit events asserting
       `inventory_entry_id == "sandbox-entry"`.
-- [ ] I13 Add tests proving host `bwrap` on `PATH` is ignored/rejected in
+- [x] I13 Add tests proving host `bwrap` on `PATH` is ignored/rejected in ✅ 0m 14s (started: 2026-04-25T22:28:40Z → completed: 2026-04-25T22:28:54Z)
       host-tool-free mode when no declared sandbox seed exists, and proving
       seccomp/supervisor-unavailable conditions fail closed before sandbox
       startup. [covers=bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 145 passed chained isolated-target
+      `cargo test -p crunch no_host_tools -- --nocapture` and
+      `cargo test -p crunch seccomp_supervisor -- --nocapture`. The
+      no-host-tools tests passed 2 bin tests, proving `--no-host-tools` rejects
+      a missing `--stage0-inventory` with a diagnostic that names the pre-bwrap
+      lookup boundary and rejects `--stage0-inventory` outside no-host-tools
+      mode. Seccomp tests passed 4 lib and 4 bin tests, including a deterministic
+      unsupported-audit-architecture fail-closed test before filter install.
 
 ## Phase 3: Proof rail
 

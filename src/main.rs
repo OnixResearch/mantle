@@ -1455,12 +1455,7 @@ fn run_self_build_command(
             checked.expected_output_role_count
         )));
     }
-    if stage0_inventory.is_some() && !no_host_tools {
-        return Err(RunError::Build("--stage0-inventory requires --no-host-tools".to_string()));
-    }
-    if no_host_tools && stage0_inventory.is_none() {
-        return Err(RunError::Build("--no-host-tools requires --stage0-inventory <path>".to_string()));
-    }
+    validate_stage0_inventory_args(no_host_tools, stage0_inventory)?;
     let stage0_policy = stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
 
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
@@ -1482,6 +1477,18 @@ fn run_self_build_command(
         bootstrap_busybox_path,
     )
     .map(|_report| ())
+}
+
+fn validate_stage0_inventory_args(no_host_tools: bool, stage0_inventory: Option<&Path>) -> Result<(), RunError> {
+    if stage0_inventory.is_some() && !no_host_tools {
+        return Err(RunError::Build("--stage0-inventory requires --no-host-tools".to_string()));
+    }
+    if no_host_tools && stage0_inventory.is_none() {
+        return Err(RunError::Build(
+            "--no-host-tools requires --stage0-inventory <path> before any host bwrap lookup".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn resolve_store_prefix(args: &Args) -> String {
@@ -1984,6 +1991,24 @@ mod tests {
         std::fs::write(path, contents).unwrap();
         let permissions = std::fs::Permissions::from_mode(mode);
         std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn no_host_tools_requires_stage0_inventory_before_host_bwrap_lookup() {
+        let err = validate_stage0_inventory_args(true, None).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "error: build failed\n--no-host-tools requires --stage0-inventory <path> before any host bwrap lookup"
+        );
+    }
+
+    #[test]
+    fn stage0_inventory_requires_no_host_tools_mode() {
+        let path = Path::new("/tmp/stage0-inventory.ncl");
+        let err = validate_stage0_inventory_args(false, Some(path)).unwrap_err();
+
+        assert_eq!(err.to_string(), "error: build failed\n--stage0-inventory requires --no-host-tools");
     }
 
     #[test]

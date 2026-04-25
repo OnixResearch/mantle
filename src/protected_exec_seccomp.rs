@@ -95,9 +95,7 @@ mod linux {
     }
 
     fn install_exec_filter() -> Result<RawFd, ProtectedSeccompError> {
-        let arch = current_audit_arch().ok_or_else(|| {
-            ProtectedSeccompError::Unsupported("unsupported Linux audit architecture for exec supervisor".to_string())
-        })?;
+        let arch = require_supported_audit_arch(current_audit_arch())?;
         let mut filter = exec_filter(arch);
         let mut program = libc::sock_fprog {
             len: FILTER_INSTRUCTION_COUNT,
@@ -146,6 +144,12 @@ mod linux {
             jf,
             k,
         }
+    }
+
+    fn require_supported_audit_arch(arch: Option<u32>) -> Result<u32, ProtectedSeccompError> {
+        arch.ok_or_else(|| {
+            ProtectedSeccompError::Unsupported("unsupported Linux audit architecture for exec supervisor".to_string())
+        })
     }
 
     fn current_audit_arch() -> Option<u32> {
@@ -408,6 +412,16 @@ mod linux {
                 owner: "bootstrap".to_string(),
                 required,
             }
+        }
+
+        #[test]
+        fn seccomp_supervisor_unsupported_arch_fails_closed_before_filter_install() {
+            let err = require_supported_audit_arch(None).unwrap_err();
+
+            assert_eq!(
+                err.to_string(),
+                "protected exec supervisor unsupported: unsupported Linux audit architecture for exec supervisor"
+            );
         }
 
         #[test]
