@@ -156,8 +156,11 @@ Derivations MAY override `NIX_BUILD_CORES` via their environment
 
 ### Requirement: Cgroup namespace isolation
 
-The sandbox MUST unshare the cgroup namespace so that build scripts
-cannot read host cgroup paths or resource limits.
+The sandbox MUST request cgroup namespace isolation with bwrap's
+best-effort `--unshare-cgroup-try` flag. On kernels that support cgroup
+namespace unsharing, build scripts MUST NOT see host cgroup paths through
+the cgroup namespace. On kernels that do not support it, the sandbox MUST
+continue instead of failing during startup.
 
 #### Scenario: bwrap args include cgroup unshare
 
@@ -195,6 +198,29 @@ The sandbox MUST NOT bind-mount the host's `/etc/resolv.conf` or
 `/etc/services` into the sandbox for network-enabled (fixed-output
 derivation) builds. The sandbox MUST provide synthetic versions of
 these files with deterministic content.
+
+The fixed synthetic `/etc/resolv.conf` content MUST be:
+
+```text
+nameserver 127.0.0.1
+nameserver 8.8.8.8
+```
+
+The fixed synthetic `/etc/services` table MUST contain exactly these
+service names and protocol pairs: `tcpmux` `1/tcp`, `echo` `7/tcp` and
+`7/udp`, `discard` `9/tcp` and `9/udp`, `systat` `11/tcp`, `daytime`
+`13/tcp` and `13/udp`, `qotd` `17/tcp`, `chargen` `19/tcp` and
+`19/udp`, `ftp-data` `20/tcp`, `ftp` `21/tcp`, `ssh` `22/tcp`,
+`telnet` `23/tcp`, `smtp` `25/tcp`, `time` `37/tcp` and `37/udp`,
+`nameserver` `42/tcp`, `nicname` `43/tcp`, `domain` `53/tcp` and
+`53/udp`, `bootps` `67/udp`, `bootpc` `68/udp`, `tftp` `69/udp`,
+`gopher` `70/tcp`, `http` `80/tcp`, `kerberos` `88/tcp` and `88/udp`,
+`pop3` `110/tcp`, `ident` `113/tcp`, `sftp` `115/tcp`, `nntp`
+`119/tcp`, `ntp` `123/udp`, `imap` `143/tcp`, `snmp` `161/udp`,
+`snmp-trap` `162/udp`, `bgp` `179/tcp`, `irc` `194/tcp`, `ldap`
+`389/tcp`, `https` `443/tcp`, `smtps` `465/tcp`, `submission`
+`587/tcp`, `ldaps` `636/tcp`, `imaps` `993/tcp`, and `pop3s`
+`995/tcp`.
 
 #### Scenario: FOD build sees synthetic resolv.conf
 

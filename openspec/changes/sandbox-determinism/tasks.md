@@ -43,7 +43,7 @@
 
 - [x] Run `cargo test -p snix-build -p crunch-build -p crunch-store -p crunch-pipeline` and verify all pass ✅ pueue#96 8s
 - [x] Run focused bwrap hardening tests (`cargo test -p snix-build --lib -- bwrap::tests`) ✅ 16s
-- [x] Run ambient-state determinism regression coverage varying `HOME`, `PATH`, `USER`, `TZ`, `LANG`, `TMPDIR`, current working directory, and umask; compare digest/audit or blocker stability ✅ covered by `crunch-pipeline` integration tests in pueue#88
+- [x] Run ambient-state determinism regression coverage varying `HOME`, `PATH`, `USER`, `TZ`, `LANG`, `TMPDIR`, current working directory, and umask; compare digest/audit or blocker stability ✅ `cargo test -p crunch-pipeline --test integration_build pipeline_determinism_` via package run; covers `pipeline_determinism_normal_derivation_stable_across_ambient_state`, `pipeline_determinism_fetcher_root_stable_across_ambient_state`, `pipeline_determinism_self_build_friendly_path_stable_across_ambient_state`, and `pipeline_determinism_strict_blocker_stable_across_ambient_state`
 - [x] Fix self-hosting proof invalidation helper so read-only normalized `*-crunch` outputs can be removed before stage2 ✅ pueue#102 2s
 - [x] Run full self-hosting proof (`./scripts/prove-self-hosting.sh --bundle-dir target/self-hosting-proof/sandbox-determinism-rerun`) ✅ pueue#103 35m9s
 - [x] Verify bootstrap builds succeed with `NIX_BUILD_CORES=1` (run `crunch self-build --store /tmp/sandbox-determinism-test --no-substitute -j 4`) ✅ pueue#93 18m29s

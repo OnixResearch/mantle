@@ -22,7 +22,7 @@ exceed that baseline.
 - **Output timestamp normalization**: reset mtimes on exported store paths
   (files, directories, and symlinks).
 - **`NIX_BUILD_CORES` default**: pin to a deterministic value.
-- **Cgroup namespace isolation**: unshare cgroups to hide host cgroup paths.
+- **Cgroup namespace isolation**: request best-effort cgroup namespace unsharing to hide host cgroup paths when kernel support is available.
 - **`HashMap` audit in orchestrator**: replace non-deterministic iteration
   with ordered maps where iteration order can affect output.
 

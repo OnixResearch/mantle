@@ -190,13 +190,27 @@ are hash-verified, but the leak is still observable in build logs.
 
 **Implementation:** Write synthetic `resolv.conf`
 (`nameserver 127.0.0.1` plus deterministic `nameserver 8.8.8.8`
-fallback) and `services` (minimal deterministic subset) alongside
-the existing synthetic `/etc/passwd`, `/etc/group`, and `/etc/hosts`.
+fallback) and `services` alongside the existing synthetic
+`/etc/passwd`, `/etc/group`, and `/etc/hosts`. The synthetic services
+contract is the fixed crunch-owned table containing these service names
+and protocol pairs: `tcpmux` `1/tcp`, `echo` `7/tcp` and `7/udp`,
+`discard` `9/tcp` and `9/udp`, `systat` `11/tcp`, `daytime` `13/tcp`
+and `13/udp`, `qotd` `17/tcp`, `chargen` `19/tcp` and `19/udp`,
+`ftp-data` `20/tcp`, `ftp` `21/tcp`, `ssh` `22/tcp`, `telnet`
+`23/tcp`, `smtp` `25/tcp`, `time` `37/tcp` and `37/udp`, `nameserver`
+`42/tcp`, `nicname` `43/tcp`, `domain` `53/tcp` and `53/udp`,
+`bootps` `67/udp`, `bootpc` `68/udp`, `tftp` `69/udp`, `gopher`
+`70/tcp`, `http` `80/tcp`, `kerberos` `88/tcp` and `88/udp`, `pop3`
+`110/tcp`, `ident` `113/tcp`, `sftp` `115/tcp`, `nntp` `119/tcp`,
+`ntp` `123/udp`, `imap` `143/tcp`, `snmp` `161/udp`, `snmp-trap`
+`162/udp`, `bgp` `179/tcp`, `irc` `194/tcp`, `ldap` `389/tcp`,
+`https` `443/tcp`, `smtps` `465/tcp`, `submission` `587/tcp`,
+`ldaps` `636/tcp`, `imaps` `993/tcp`, and `pop3s` `995/tcp`.
 Bind-mount the synthetic versions instead of the host files.
 
 ### 11. Mask `/dev/shm`
 
-**Choice:** Bind-mount a read-only tmpfs over `/dev/shm` after
+**Choice:** Mount a private writable tmpfs over `/dev/shm` after
 `--dev /dev`.
 
 **Rationale:** bwrap's `--dev` creates a full devtmpfs that includes
