@@ -83,10 +83,14 @@
       remains `packaged-integrity-evidence`, no `reproducible_release`
       manifest flag is emitted, and reproducibility status/report data stays
       separate in release verify output.
-- [ ] I9 Update release docs to reserve the bit-for-bit reproducible release
+- [x] I9 Update release docs to reserve the bit-for-bit reproducible release ✅ 1m 13s (started: 2026-04-25T19:30:09Z → completed: 2026-04-25T19:31:22Z)
       label for bundles with a verified reproducibility report whose artifact
       set matches the published release artifact set.
       [covers=release.evidence.reproducible.claim.gate]
+      Evidence: docs audit passed in pueue task 38, checking README,
+      docs/operator-workflows.md, and docs/bootstrap-stage0-inventory.md
+      for `--require-reproducible`, explicit bit-for-bit label gating,
+      separate reproducibility status, and no bundle-local implication.
 
 ## Validation
 

@@ -248,8 +248,16 @@ crunch release create \
   --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
   --proof-bundle target/self-hosting-proof/run-...
 
+# Rebuild published artifacts into an isolated output area and compare bytes
+crunch release reproduce target/release-evidence/<release-id> \
+  --rebuild-output-dir target/release-rebuild/<release-id> \
+  --rebuild-command ./scripts/rebuild-release-artifacts.sh
+
 # Re-check a saved bundle using only bundle-local contents
 crunch release verify target/release-evidence/<release-id>
+
+# Require a verified bit-for-bit reproducibility report
+crunch release verify target/release-evidence/<release-id> --require-reproducible
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
@@ -257,11 +265,15 @@ The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
 
-`crunch release verify` proves bundle-local integrity and proof-context only.
-It checks that required bundled artifacts exist, that the manifest stays
+`crunch release verify` proves bundle-local integrity and proof-context by
+itself. It checks that required bundled artifacts exist, that the manifest stays
 canonical, that recorded digests still match, and that the nested proof bundle
-is a full proof artifact. It does not prove a full-source bootstrap root,
-independent rebuild agreement, or globally reproducible release outputs.
+is a full proof artifact. Reproducibility is reported separately as `absent`,
+`matched`, or `mismatched`. The bit-for-bit reproducible release label requires
+a verified canonical reproducibility report whose artifact set matches the
+published release artifact set; ordinary bundle-local integrity never implies
+that label. This still does not prove a full-source bootstrap root or
+independent rebuild agreement.
 
 ## Sign and verify decentralized release material
 

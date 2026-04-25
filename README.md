@@ -838,6 +838,16 @@ crunch release create \
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
+If a separate byte-for-byte reproduction run has already produced a canonical
+report, package it explicitly:
+
+```bash
+crunch release create \
+  --release-id crunch-<version> \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
+  --proof-bundle target/self-hosting-proof/run-... \
+  --reproducibility-report target/release-evidence/<release-id>/reproducibility/reproducibility-report.json
+```
 
 That command builds a staged-source tarball from the current tracked worktree
 allowlist, the checked-in witness workflow driver (`scripts/prove-self-hosting.sh`),
@@ -858,13 +868,21 @@ crunch release verify target/release-evidence/<release-id>
 `crunch release verify` checks that every required bundled artifact exists,
 that the top-level manifest stays canonical, that bundled digests still match,
 and that the nested proof bundle is a full `crunch-self-hosting-proof-v2`
-artifact rather than prerequisite-only `--check` output.
+artifact rather than prerequisite-only `--check` output. It reports
+`reproducibility: absent`, `matched`, or `mismatched` separately from bundle
+integrity. Use `--require-reproducible` when callers need a verified
+byte-for-byte report:
 
-This verification claim is intentionally narrow. A release evidence bundle is
+```bash
+crunch release verify target/release-evidence/<release-id> --require-reproducible
+```
+
+The bit-for-bit reproducible release label is reserved for bundles whose
+canonical reproducibility report verifies and whose artifact set matches the
+published release artifact set. Ordinary bundle-local integrity is still only
 packaged integrity and proof-context evidence. It lets another operator inspect
 exact artifacts and verify they are internally consistent. It does not, by
-itself, prove a full-source bootstrap root, independent rebuild agreement, or
-bit-for-bit reproducible release outputs.
+itself, prove a full-source bootstrap root or independent rebuild agreement.
 
 ### Release attestations and witness verification
 

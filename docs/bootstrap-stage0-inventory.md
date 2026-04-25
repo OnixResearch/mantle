@@ -8,12 +8,14 @@ Today the repo has two proof modes:
 - stricter `--non-nix-host` proof: same fixed point, with the proof runner
   `PATH` scrubbed of `nix-build`, `nix-store`, `nix-shell`, and `nix`
 
-Neither mode yet proves a full-source bootstrap root or reproducible release
-artifacts. A later `crunch release create` bundle can package the proof bundle,
-release binary, source archive containing tracked worktree files plus verified
-vendored Cargo inputs, and this inventory for bundle-local integrity and
-proof-context checks, but that packaged evidence still does
-not widen the underlying bootstrap claim.
+Neither mode by itself proves a full-source bootstrap root or reproducible
+release artifacts. A later `crunch release create` bundle can package the proof
+bundle, release binary, source archive containing tracked worktree files plus
+verified vendored Cargo inputs, this inventory, and an optional canonical
+reproducibility report for bundle-local checks. Only a verified report whose
+artifact set matches the published release artifact set supports the
+bit-for-bit reproducible release label; the packaged proof bundle alone still
+does not widen the underlying bootstrap claim.
 
 ## Contract boundary
 
@@ -94,8 +96,9 @@ What the checked-in self-hosting proof demonstrates today:
 What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
-- bit-for-bit reproducible release artifacts from independent rebuilders
-- more than packaged integrity and proof-context evidence for releases;
-  `crunch release verify` checks bundle-local consistency, not independent
-  rebuild agreement
+- independent rebuild agreement for release artifacts
+- more than packaged integrity, proof-context evidence, and any separately
+  verified reproducibility report; `crunch release verify` keeps bundle-local
+  consistency and reproducibility status separate from independent rebuild
+  agreement
 - removal of remaining stage0 proof-helper host-tool edges such as the checkout-built Rust toolchain and host `bwrap`
