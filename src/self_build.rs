@@ -31,6 +31,7 @@ use crate::build_cmd::run_build;
 use crate::errors::RunError;
 use crate::protected_exec::ProtectedExecPolicy;
 use crate::protected_exec::ProtectedLaunchAuditEvent;
+use crate::protected_exec::blake3_file_hex;
 use crate::protected_exec::select_declared_sandbox_seed;
 use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
 use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
@@ -213,6 +214,28 @@ impl SelfBuildFallbackEvent {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtectedPhaseTransition {
+    pub bwrap_path: PathBuf,
+    pub bwrap_digest_hex: String,
+    pub bwrap_store_name: String,
+    pub busybox_path: PathBuf,
+    pub busybox_digest_hex: String,
+    pub busybox_store_name: String,
+}
+
+impl ProtectedPhaseTransition {
+    fn format_proof_lines(&self, out: &mut String) {
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition=bootstrap-tools-selected\n"));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-bwrap-path={}\n", self.bwrap_path.display()));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-bwrap-digest={}\n", self.bwrap_digest_hex));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-bwrap-store-name={}\n", self.bwrap_store_name));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-busybox-path={}\n", self.busybox_path.display()));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-busybox-digest={}\n", self.busybox_digest_hex));
+        out.push_str(&format!("{PROOF_PREFIX} protected-transition-busybox-store-name={}\n", self.busybox_store_name));
+    }
+}
+
 /// Structured report from a self-build run.
 ///
 /// Captures the facts a proof runner needs to verify that self-hosting
@@ -230,6 +253,8 @@ pub struct SelfBuildReport {
     pub bwrap_source: BwrapSource,
     /// Host-fallback events observed earlier in the stage.
     pub fallback_events: Vec<SelfBuildFallbackEvent>,
+    /// Protected-phase transition to crunch-built sandbox tools.
+    pub protected_transition: Option<ProtectedPhaseTransition>,
     /// Path to the busybox binary that the NCL script will use for
     /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no crunch-built busybox
     /// was found in the output store (falls back to `/bin/sh`).
@@ -261,6 +286,10 @@ impl SelfBuildReport {
                 out.push_str(&format!("{PROOF_PREFIX} fallback-event={}\n", event));
             }
         }
+        match &self.protected_transition {
+            Some(transition) => transition.format_proof_lines(&mut out),
+            None => out.push_str(&format!("{PROOF_PREFIX} protected-transition=none\n")),
+        }
         match &self.busybox_path {
             Some(p) => out.push_str(&format!("{PROOF_PREFIX} busybox-path={}\n", p.display(),)),
             None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
@@ -279,6 +308,14 @@ impl SelfBuildReport {
         let mut staged_source: Option<PathBuf> = None;
         let mut bwrap_source: Option<BwrapSource> = None;
         let mut fallback_events: Vec<SelfBuildFallbackEvent> = Vec::new();
+        let mut protected_transition: Option<Option<ProtectedPhaseTransition>> = None;
+        let mut transition_marker_seen = false;
+        let mut transition_bwrap_path: Option<PathBuf> = None;
+        let mut transition_bwrap_digest: Option<String> = None;
+        let mut transition_bwrap_store_name: Option<String> = None;
+        let mut transition_busybox_path: Option<PathBuf> = None;
+        let mut transition_busybox_digest: Option<String> = None;
+        let mut transition_busybox_store_name: Option<String> = None;
         let mut busybox_path: Option<Option<PathBuf>> = None;
         let mut output_binary: Option<PathBuf> = None;
 
@@ -305,6 +342,26 @@ impl SelfBuildReport {
                     let event = SelfBuildFallbackEvent::parse(val)?;
                     fallback_events.push(event);
                 }
+            } else if let Some(val) = rest.strip_prefix("protected-transition=") {
+                if val == "none" {
+                    protected_transition = Some(None);
+                } else if val == "bootstrap-tools-selected" {
+                    transition_marker_seen = true;
+                } else {
+                    return None;
+                }
+            } else if let Some(val) = rest.strip_prefix("protected-transition-bwrap-path=") {
+                transition_bwrap_path = Some(PathBuf::from(val));
+            } else if let Some(val) = rest.strip_prefix("protected-transition-bwrap-digest=") {
+                transition_bwrap_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("protected-transition-bwrap-store-name=") {
+                transition_bwrap_store_name = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("protected-transition-busybox-path=") {
+                transition_busybox_path = Some(PathBuf::from(val));
+            } else if let Some(val) = rest.strip_prefix("protected-transition-busybox-digest=") {
+                transition_busybox_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("protected-transition-busybox-store-name=") {
+                transition_busybox_store_name = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("busybox-path=") {
                 if val == "none" {
                     busybox_path = Some(None);
@@ -316,12 +373,24 @@ impl SelfBuildReport {
             }
         }
 
+        if protected_transition.is_none() && transition_marker_seen {
+            protected_transition = Some(Some(ProtectedPhaseTransition {
+                bwrap_path: transition_bwrap_path?,
+                bwrap_digest_hex: transition_bwrap_digest?,
+                bwrap_store_name: transition_bwrap_store_name?,
+                busybox_path: transition_busybox_path?,
+                busybox_digest_hex: transition_busybox_digest?,
+                busybox_store_name: transition_busybox_store_name?,
+            }));
+        }
+
         Some(SelfBuildReport {
             hermeticity_mode: hermeticity_mode?,
             invoking_binary: invoking_binary?,
             staged_source: staged_source?,
             bwrap_source: bwrap_source?,
             fallback_events,
+            protected_transition: protected_transition.unwrap_or(None),
             busybox_path: busybox_path?,
             output_binary: output_binary?,
         })
@@ -1673,6 +1742,7 @@ struct BootstrapTools {
     bwrap_store_name: String,
     busybox_path: Option<PathBuf>,
     busybox_store_name: String,
+    protected_transition: ProtectedPhaseTransition,
 }
 
 /// Build all required bootstrap tools and return their resolved paths.
@@ -1776,6 +1846,8 @@ fn build_all_bootstrap_tools(
 
     let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, output_dir, "bwrap")?;
     let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, output_dir, "busybox")?;
+    let protected_transition =
+        build_protected_phase_transition(&bwrap_path, &bwrap_store_name, &busybox_path, &busybox_store_name)?;
     let bwrap_source = match bootstrap_bwrap_source {
         Some(source) => source.clone(),
         None => BwrapSource::CrunchBuilt(bwrap_dir.to_path_buf()),
@@ -1791,6 +1863,29 @@ fn build_all_bootstrap_tools(
         bwrap_store_name,
         busybox_path: Some(busybox_path),
         busybox_store_name,
+        protected_transition,
+    })
+}
+
+fn build_protected_phase_transition(
+    bwrap_path: &Path,
+    bwrap_store_name: &str,
+    busybox_path: &Path,
+    busybox_store_name: &str,
+) -> Result<ProtectedPhaseTransition, RunError> {
+    assert!(!bwrap_store_name.is_empty(), "bwrap store name must not be empty");
+    assert!(!busybox_store_name.is_empty(), "busybox store name must not be empty");
+    ensure_executable_file(bwrap_path, "protected transition bwrap")?;
+    ensure_executable_file(busybox_path, "protected transition busybox")?;
+    let bwrap_digest_hex = blake3_file_hex(bwrap_path).map_err(|err| RunError::Internal(err.to_string()))?;
+    let busybox_digest_hex = blake3_file_hex(busybox_path).map_err(|err| RunError::Internal(err.to_string()))?;
+    Ok(ProtectedPhaseTransition {
+        bwrap_path: bwrap_path.to_path_buf(),
+        bwrap_digest_hex,
+        bwrap_store_name: bwrap_store_name.to_string(),
+        busybox_path: busybox_path.to_path_buf(),
+        busybox_digest_hex,
+        busybox_store_name: busybox_store_name.to_string(),
     })
 }
 
@@ -2375,6 +2470,7 @@ pub fn cmd_self_build(
         staged_source: shared.staged_source,
         bwrap_source: tools.bwrap_source,
         fallback_events: setup.fallback_events,
+        protected_transition: Some(tools.protected_transition),
         busybox_path: tools.busybox_path,
         output_binary,
     };
@@ -3576,6 +3672,68 @@ mod tests {
 
     // ── SelfBuildReport tests ────────────────────────────────────
 
+    fn sample_protected_transition() -> ProtectedPhaseTransition {
+        ProtectedPhaseTransition {
+            bwrap_path: PathBuf::from("/store/aaa-bwrap/bin/bwrap"),
+            bwrap_digest_hex: "a".repeat(64),
+            bwrap_store_name: "aaa-bwrap".to_string(),
+            busybox_path: PathBuf::from("/store/bbb-busybox/bin/busybox"),
+            busybox_digest_hex: "b".repeat(64),
+            busybox_store_name: "bbb-busybox".to_string(),
+        }
+    }
+
+    #[test]
+    fn report_format_roundtrip_with_protected_transition() {
+        let transition = sample_protected_transition();
+        let report = SelfBuildReport {
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            invoking_binary: PathBuf::from("/seed/crunch"),
+            staged_source: PathBuf::from("/store/src"),
+            bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/aaa-bwrap/bin")),
+            fallback_events: Vec::new(),
+            protected_transition: Some(transition.clone()),
+            busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
+            output_binary: PathBuf::from("/store/out/bin/crunch"),
+        };
+
+        let lines = report.format_proof_lines();
+        let parsed = SelfBuildReport::parse_proof_lines(&lines).unwrap();
+
+        assert!(lines.contains("protected-transition=bootstrap-tools-selected"));
+        assert!(lines.contains("protected-transition-bwrap-store-name=aaa-bwrap"));
+        assert!(lines.contains("protected-transition-busybox-store-name=bbb-busybox"));
+        assert_eq!(parsed.protected_transition, Some(transition));
+    }
+
+    #[test]
+    fn protected_phase_transition_hashes_selected_tools() {
+        let temp = tempfile::tempdir().unwrap();
+        let bwrap = temp.path().join("aaa-bwrap/bin/bwrap");
+        let busybox = temp.path().join("bbb-busybox/bin/busybox");
+        make_executable_file(&bwrap, b"bwrap bytes\n");
+        make_executable_file(&busybox, b"busybox bytes\n");
+
+        let transition = build_protected_phase_transition(&bwrap, "aaa-bwrap", &busybox, "bbb-busybox").unwrap();
+
+        assert_eq!(transition.bwrap_path, bwrap);
+        assert_eq!(transition.busybox_path, busybox);
+        assert_eq!(transition.bwrap_digest_hex, blake3::hash(b"bwrap bytes\n").to_hex().to_string());
+        assert_eq!(transition.busybox_digest_hex, blake3::hash(b"busybox bytes\n").to_hex().to_string());
+        assert_eq!(transition.bwrap_store_name, "aaa-bwrap");
+        assert_eq!(transition.busybox_store_name, "bbb-busybox");
+    }
+
+    fn make_executable_file(path: &Path, contents: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
     #[test]
     fn report_format_roundtrip_with_declared_seed_bwrap() {
         let report = SelfBuildReport {
@@ -3584,6 +3742,7 @@ mod tests {
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::DeclaredSeed(PathBuf::from("/seed/bin/bwrap")),
             fallback_events: Vec::new(),
+            protected_transition: None,
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/crunch"),
         };
@@ -3610,6 +3769,7 @@ mod tests {
                 SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from("/run/wrappers/bin/bwrap")),
                 SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from("/work/crunch")),
             ],
+            protected_transition: None,
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
             output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
         };
@@ -3640,6 +3800,7 @@ mod tests {
             fallback_events: vec![SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from(
                 "/usr/bin/bwrap",
             ))],
+            protected_transition: None,
             busybox_path: None,
             output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
         };

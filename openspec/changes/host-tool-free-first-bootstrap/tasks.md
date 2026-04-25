@@ -158,12 +158,21 @@
 
 ## Phase 3: Proof rail
 
-- [ ] I14 Implement the protected-phase transition event: after the exact
+- [x] I14 Implement the protected-phase transition event: after the exact ✅ 0m 7s (started: 2026-04-25T22:31:10Z → completed: 2026-04-25T22:31:17Z)
       crunch-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` outputs
       are built, export them, verify them against recorded output metadata,
       select them as the later-stage sandbox entry and sandbox shell, and record
       the transition in the execution audit before relaxing protected-phase seed
       execution rules. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 152 passed chained isolated-target
+      `cargo test -p crunch protected_transition -- --nocapture` and
+      `cargo test -p crunch self_build -- --nocapture`; the focused transition
+      tests passed 2 bin tests, and the broader self-build filter passed 93 bin
+      tests. `build_all_bootstrap_tools` now computes a
+      `ProtectedPhaseTransition` after the selected bwrap/busybox paths are
+      exported, executable-checked, store-name resolved, and BLAKE3-hashed;
+      `SelfBuildReport` proof lines record the transition marker, selected
+      paths, digests, and store names.
 - [ ] I15 Extend `scripts/prove-self-hosting.sh` with `--no-host-tools` and
       `--stage0-inventory <path>` so the proof poisons common host commands,
       launches only through the protected execution boundary, and preserves
