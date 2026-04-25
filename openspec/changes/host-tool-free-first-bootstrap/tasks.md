@@ -101,9 +101,18 @@
 
 ## Phase 2: Host-tool-free sandbox entry
 
-- [ ] I10 Replace protected-mode host `bwrap` fallback with the declared seed
+- [x] I10 Replace protected-mode host `bwrap` fallback with the declared seed ✅ 3m 19s (started: 2026-04-25T21:53:59Z → completed: 2026-04-25T21:57:18Z)
       `sandbox-entry` executable and declared `sandbox-shell`, both validated by
       inventory digest/provenance before use. [covers=bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 89 passed chained isolated-target tests:
+      `cargo test -p crunch declared_seed_bootstrap_tools -- --nocapture`
+      (2 focused self-build tests) and
+      `cargo test -p crunch protected_exec -- --nocapture` (18 protected exec
+      tests in lib and bin targets). `self-build --no-host-tools
+      --stage0-inventory <path>` now loads and validates the stage0 Nickel
+      inventory, selects `sandbox-entry` as `BwrapSource::DeclaredSeed`, sets
+      the declared `sandbox-shell` as `SNIX_BUILD_SANDBOX_SHELL`, and does not
+      record a host-bwrap fallback event for that protected-mode selection.
 - [ ] I11 Add Linux seccomp user-notification exec supervision for the declared
       seed sandbox and descendants. The supervisor must trap `execve`/`execveat`
       before execution, validate path/digest against `Stage0Inventory`, append

@@ -15,6 +15,8 @@ mod operator_diagnostics;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
+#[allow(dead_code)]
+mod protected_exec;
 mod release_attestation;
 mod release_cmd;
 mod release_evidence;
@@ -280,6 +282,14 @@ enum Command {
         /// Validate a full-source root manifest and bind self-build proof to source-root provider.
         #[arg(long)]
         source_root: Option<PathBuf>,
+
+        /// Require stage0 to use only declared inventory seed tools.
+        #[arg(long)]
+        no_host_tools: bool,
+
+        /// Stage0 executable/source seed inventory for --no-host-tools.
+        #[arg(long)]
+        stage0_inventory: Option<PathBuf>,
 
         /// Internal: reuse an exact staged source tree from a prior self-build.
         #[arg(long, hide = true)]
@@ -1167,6 +1177,14 @@ fn bootstrap_source_root_provider(output: &Path, manifest_path: &Path) -> Result
     )))
 }
 
+fn load_stage0_inventory_policy(path: &Path) -> Result<protected_exec::ProtectedExecPolicy, RunError> {
+    let import_paths: Vec<OsString> = Vec::new();
+    let inventory: protected_exec::Stage0Inventory = crunch_eval::evaluate_and_deserialize(path, &import_paths)
+        .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))?;
+    protected_exec::ProtectedExecPolicy::from_inventory(inventory)
+        .map_err(|e| RunError::Internal(format!("validating stage0 inventory {}: {e}", path.display())))
+}
+
 fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     match command {
         Command::Bootstrap {
@@ -1378,6 +1396,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trust_unsigned,
             strict_hermetic,
             source_root,
+            no_host_tools,
+            stage0_inventory,
             source_store_path,
             bootstrap_bwrap_path,
             bootstrap_busybox_path,
@@ -1391,6 +1411,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             *trust_unsigned,
             *strict_hermetic,
             source_root.as_deref(),
+            *no_host_tools,
+            stage0_inventory.as_deref(),
             source_store_path.as_deref(),
             bootstrap_bwrap_path.as_deref(),
             bootstrap_busybox_path.as_deref(),
@@ -1410,6 +1432,8 @@ fn run_self_build_command(
     trust_unsigned: bool,
     strict_hermetic: bool,
     source_root: Option<&std::path::Path>,
+    no_host_tools: bool,
+    stage0_inventory: Option<&std::path::Path>,
     source_store_path: Option<&std::path::Path>,
     bootstrap_bwrap_path: Option<&std::path::Path>,
     bootstrap_busybox_path: Option<&std::path::Path>,
@@ -1429,6 +1453,13 @@ fn run_self_build_command(
             checked.expected_output_role_count
         )));
     }
+    if stage0_inventory.is_some() && !no_host_tools {
+        return Err(RunError::Build("--stage0-inventory requires --no-host-tools".to_string()));
+    }
+    if no_host_tools && stage0_inventory.is_none() {
+        return Err(RunError::Build("--no-host-tools requires --stage0-inventory <path>".to_string()));
+    }
+    let stage0_policy = stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
 
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     self_build::cmd_self_build(
@@ -1444,6 +1475,7 @@ fn run_self_build_command(
         trust_unsigned,
         hermeticity_mode,
         source_store_path,
+        stage0_policy.as_ref(),
         bootstrap_bwrap_path,
         bootstrap_busybox_path,
     )

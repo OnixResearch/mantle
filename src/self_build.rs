@@ -29,6 +29,9 @@ use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::build_cmd::report_build_result;
 use crate::build_cmd::run_build;
 use crate::errors::RunError;
+use crate::protected_exec::ProtectedExecPolicy;
+use crate::protected_exec::ProtectedLaunchAuditEvent;
+use crate::protected_exec::select_declared_sandbox_seed;
 
 /// Maximum source tree size: 2 GiB.
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -104,6 +107,8 @@ pub enum BwrapSource {
     CrunchBuilt(PathBuf),
     /// Host-provided bwrap found on PATH.
     HostFallback(PathBuf),
+    /// Explicit stage0 inventory sandbox-entry seed.
+    DeclaredSeed(PathBuf),
 }
 
 impl fmt::Display for BwrapSource {
@@ -111,6 +116,7 @@ impl fmt::Display for BwrapSource {
         match self {
             BwrapSource::CrunchBuilt(p) => write!(f, "crunch-built:{}", p.display()),
             BwrapSource::HostFallback(p) => write!(f, "host-fallback:{}", p.display()),
+            BwrapSource::DeclaredSeed(p) => write!(f, "declared-seed:{}", p.display()),
         }
     }
 }
@@ -121,8 +127,10 @@ impl BwrapSource {
     pub fn parse(s: &str) -> Option<Self> {
         if let Some(rest) = s.strip_prefix("crunch-built:") {
             Some(BwrapSource::CrunchBuilt(PathBuf::from(rest)))
+        } else if let Some(rest) = s.strip_prefix("host-fallback:") {
+            Some(BwrapSource::HostFallback(PathBuf::from(rest)))
         } else {
-            s.strip_prefix("host-fallback:").map(|rest| BwrapSource::HostFallback(PathBuf::from(rest)))
+            s.strip_prefix("declared-seed:").map(|rest| BwrapSource::DeclaredSeed(PathBuf::from(rest)))
         }
     }
 
@@ -139,16 +147,37 @@ impl BwrapSource {
                 assert!(!dir.as_os_str().is_empty(), "crunch-built bwrap dir must not be empty",);
                 Ok(dir.clone())
             }
-            BwrapSource::HostFallback(path) => {
-                assert!(!path.as_os_str().is_empty(), "host fallback bwrap path must not be empty",);
-                let parent = path.parent().ok_or_else(|| {
-                    RunError::Internal(format!("host fallback bwrap has no parent directory: {}", path.display(),))
-                })?;
-                assert!(!parent.as_os_str().is_empty(), "host fallback bwrap parent dir must not be empty",);
-                Ok(parent.to_path_buf())
-            }
+            BwrapSource::HostFallback(path) => bwrap_executable_parent(path, "host fallback bwrap"),
+            BwrapSource::DeclaredSeed(path) => bwrap_executable_parent(path, "declared seed bwrap"),
         }
     }
+}
+
+fn bwrap_executable_parent(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    assert!(!path.as_os_str().is_empty(), "{label} path must not be empty");
+    let parent = path
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("{label} has no parent directory: {}", path.display())))?;
+    assert!(!parent.as_os_str().is_empty(), "{label} parent dir must not be empty");
+    Ok(parent.to_path_buf())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclaredBootstrapSeedTools {
+    pub bwrap_source: BwrapSource,
+    pub sandbox_shell: PathBuf,
+    pub audit_events: Vec<ProtectedLaunchAuditEvent>,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn resolve_declared_seed_bootstrap_tools(policy: &ProtectedExecPolicy) -> Result<DeclaredBootstrapSeedTools, RunError> {
+    let selected = select_declared_sandbox_seed(policy).map_err(|err| RunError::Internal(err.to_string()))?;
+    let audit_events = selected.audit_events().into_iter().collect();
+    Ok(DeclaredBootstrapSeedTools {
+        bwrap_source: BwrapSource::DeclaredSeed(selected.sandbox_entry.executable_path),
+        sandbox_shell: selected.sandbox_shell.executable_path,
+        audit_events,
+    })
 }
 
 /// Host-fallback events that a self-build stage observed.
@@ -2114,6 +2143,7 @@ fn fallback_event_for_bwrap_source(source: &BwrapSource) -> Option<SelfBuildFall
     match source {
         BwrapSource::CrunchBuilt(_) => None,
         BwrapSource::HostFallback(path) => Some(SelfBuildFallbackEvent::BwrapHostFallback(path.clone())),
+        BwrapSource::DeclaredSeed(_) => None,
     }
 }
 
@@ -2161,6 +2191,7 @@ fn initialize_self_build(
     output_dir: &Path,
     source_store_path: Option<&Path>,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
+    stage0_policy: Option<&ProtectedExecPolicy>,
     bootstrap_bwrap_path: Option<&Path>,
     bootstrap_busybox_path: Option<&Path>,
 ) -> Result<SelfBuildSetup, RunError> {
@@ -2172,18 +2203,26 @@ fn initialize_self_build(
 
     let explicit_bwrap_source = resolve_explicit_bootstrap_bwrap_source(&output_dir, bootstrap_bwrap_path)?;
     let explicit_busybox_path = resolve_explicit_bootstrap_busybox_path(&output_dir, bootstrap_busybox_path)?;
+    let declared_seed_tools = stage0_policy.map(resolve_declared_seed_bootstrap_tools).transpose()?;
 
-    let initial_bwrap = match &explicit_bwrap_source {
-        Some(source) => source.clone(),
-        None => resolve_bwrap_source(&output_dir, hermeticity_mode)?,
+    let initial_bwrap = match (&explicit_bwrap_source, &declared_seed_tools) {
+        (Some(source), _) => source.clone(),
+        (None, Some(tools)) => tools.bwrap_source.clone(),
+        (None, None) => resolve_bwrap_source(&output_dir, hermeticity_mode)?,
     };
     let mut fallback_events = Vec::new();
     if explicit_bwrap_source.is_none()
+        && declared_seed_tools.is_none()
         && let Some(event) = fallback_event_for_bwrap_source(&initial_bwrap)
     {
         fallback_events.push(event);
     }
     activate_bwrap_source(&initial_bwrap)?;
+    if explicit_busybox_path.is_none()
+        && let Some(tools) = declared_seed_tools.as_ref()
+    {
+        activate_declared_sandbox_shell(&tools.sandbox_shell)?;
+    }
 
     let (src_dir, source_events) = resolve_self_build_source_dir(&output_dir, source_store_path, hermeticity_mode)?;
     fallback_events.extend(source_events);
@@ -2202,6 +2241,13 @@ fn initialize_self_build(
         bootstrap_bwrap_source: explicit_bwrap_source,
         bootstrap_busybox_path: explicit_busybox_path,
     })
+}
+
+fn activate_declared_sandbox_shell(path: &Path) -> Result<(), RunError> {
+    ensure_executable_file(path, "declared seed sandbox shell")?;
+    unsafe { std::env::set_var("SNIX_BUILD_SANDBOX_SHELL", path) };
+    eprintln!("  sandbox shell: {} (declared seed)", path.display());
+    Ok(())
 }
 
 fn build_self_build_import_paths(src_dir: &Path, bootstrap_dir: &Path) -> Result<Vec<std::ffi::OsString>, RunError> {
@@ -2260,6 +2306,7 @@ pub fn cmd_self_build(
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_store_path: Option<&Path>,
+    stage0_policy: Option<&ProtectedExecPolicy>,
     bootstrap_bwrap_path: Option<&Path>,
     bootstrap_busybox_path: Option<&Path>,
 ) -> Result<SelfBuildReport, RunError> {
@@ -2267,6 +2314,7 @@ pub fn cmd_self_build(
         output_dir,
         source_store_path,
         hermeticity_mode,
+        stage0_policy,
         bootstrap_bwrap_path,
         bootstrap_busybox_path,
     )?;
@@ -2355,6 +2403,47 @@ mod tests {
 
     fn test_self_build_ncl() -> String {
         generate_self_build_ncl("abc123-crunch-src", "bwrap123-bwrap", "busybox123-busybox", "/nix/store")
+    }
+
+    fn test_seed_digest(path: &Path) -> crate::protected_exec::DigestSpec {
+        let bytes = std::fs::read(path).unwrap();
+        crate::protected_exec::DigestSpec {
+            algorithm: "blake3".to_string(),
+            hex: blake3::hash(&bytes).to_hex().to_string(),
+            interoperability_reason: None,
+        }
+    }
+
+    fn test_seed_entry(
+        id: &str,
+        role: &str,
+        path: &Path,
+        required: bool,
+    ) -> crate::protected_exec::ExecutableSeedEntry {
+        crate::protected_exec::ExecutableSeedEntry {
+            schema_version: "host-tool-free-stage0-v1".to_string(),
+            id: id.to_string(),
+            role: role.to_string(),
+            phase: "protected".to_string(),
+            executable_path: path.to_path_buf(),
+            digest: test_seed_digest(path),
+            provenance_category: "test-fixture".to_string(),
+            provenance: "unit test seed".to_string(),
+            allowed_reason: format!("allow {id}"),
+            owner: "bootstrap".to_string(),
+            required,
+        }
+    }
+
+    fn declared_seed_policy(entry: &Path, shell: &Path) -> crate::protected_exec::ProtectedExecPolicy {
+        let inventory = crate::protected_exec::Stage0Inventory {
+            executable_entries: vec![
+                test_seed_entry("sandbox-entry", "sandbox-entry", entry, true),
+                test_seed_entry("sandbox-shell", "sandbox-shell", shell, true),
+            ],
+            source_entries: Vec::new(),
+        };
+        crate::protected_exec::ProtectedExecPolicy::from_inventory(inventory).unwrap()
     }
 
     fn write_minimal_staged_source(dir: &Path) {
@@ -2883,6 +2972,9 @@ mod tests {
             BwrapSource::HostFallback(path) => {
                 panic!("expected crunch-built bwrap, got host fallback {}", path.display())
             }
+            BwrapSource::DeclaredSeed(path) => {
+                panic!("expected crunch-built bwrap, got declared seed {}", path.display())
+            }
         }
     }
 
@@ -2910,6 +3002,9 @@ mod tests {
             }
             BwrapSource::HostFallback(path) => {
                 panic!("expected crunch-built bwrap, got host fallback {}", path.display())
+            }
+            BwrapSource::DeclaredSeed(path) => {
+                panic!("expected crunch-built bwrap, got declared seed {}", path.display())
             }
         }
     }
@@ -3387,6 +3482,50 @@ mod tests {
     }
 
     // ── BwrapSource tests ─────────────────────────────────────────
+
+    #[test]
+    fn declared_seed_bootstrap_tools_select_inventory_bwrap_and_shell() {
+        let temp = tempfile::tempdir().unwrap();
+        let entry_dir = make_fake_executable(&temp.path().join("seed-bin"), "bwrap-seed");
+        let shell_dir = make_fake_executable(&temp.path().join("shell-bin"), "busybox-seed");
+        let entry_path = entry_dir.join("bwrap-seed");
+        let shell_path = shell_dir.join("busybox-seed");
+        let policy = declared_seed_policy(&entry_path, &shell_path);
+
+        let tools = resolve_declared_seed_bootstrap_tools(&policy).unwrap();
+
+        assert_eq!(tools.bwrap_source, BwrapSource::DeclaredSeed(entry_path.clone()));
+        assert_eq!(tools.sandbox_shell, shell_path.clone());
+        assert_eq!(tools.bwrap_source.bin_dir().unwrap(), entry_dir);
+        assert_eq!(tools.audit_events.len(), 2);
+        assert_eq!(tools.audit_events[0].inventory_entry_id, "sandbox-entry");
+        assert_eq!(tools.audit_events[1].inventory_entry_id, "sandbox-shell");
+    }
+
+    #[test]
+    fn declared_seed_bootstrap_tools_reject_shell_digest_drift() {
+        let temp = tempfile::tempdir().unwrap();
+        let entry_dir = make_fake_executable(&temp.path().join("seed-bin"), "bwrap-seed");
+        let shell_dir = make_fake_executable(&temp.path().join("shell-bin"), "busybox-seed");
+        let entry_path = entry_dir.join("bwrap-seed");
+        let shell_path = shell_dir.join("busybox-seed");
+        let policy = declared_seed_policy(&entry_path, &shell_path);
+        std::fs::write(&shell_path, "tampered shell\n").unwrap();
+
+        let err = resolve_declared_seed_bootstrap_tools(&policy).unwrap_err();
+
+        assert!(err.to_string().contains("digest mismatch"), "unexpected error: {err}");
+        assert!(err.to_string().contains("busybox-seed"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn bwrap_source_display_roundtrip_declared_seed() {
+        let src = BwrapSource::DeclaredSeed(PathBuf::from("/seed/bin/bwrap"));
+        let s = src.to_string();
+
+        assert_eq!(BwrapSource::parse(&s), Some(src));
+        assert!(s.starts_with("declared-seed:"));
+    }
 
     #[test]
     fn bwrap_source_display_roundtrip_crunch_built() {

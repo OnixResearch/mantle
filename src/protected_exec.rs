@@ -152,6 +152,10 @@ pub enum ProtectedExecError {
     MissingRequiredSeedRole {
         role: &'static str,
     },
+    AmbiguousRequiredSeedRole {
+        role: String,
+        count: u32,
+    },
     UndeclaredExecutable {
         path: PathBuf,
     },
@@ -197,6 +201,9 @@ impl fmt::Display for ProtectedExecError {
                 write!(f, "entry {entry_id} has invalid blake3 digest {digest_hex}")
             }
             Self::MissingRequiredSeedRole { role } => write!(f, "missing required seed role {role}"),
+            Self::AmbiguousRequiredSeedRole { role, count } => {
+                write!(f, "required seed role {role} has {count} entries; expected one")
+            }
             Self::UndeclaredExecutable { path } => write!(f, "undeclared executable path: {}", path.display()),
             Self::DigestMismatch { path, expected, actual } => {
                 write!(f, "digest mismatch for {}: expected {expected}, got {actual}", path.display())
@@ -295,6 +302,29 @@ impl ProtectedExecPolicy {
 
     pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
         self.source_fetch_plan(url).map(|_| ())
+    }
+
+    pub fn required_sandbox_entry(&self) -> Result<&ExecutableSeedEntry, ProtectedExecError> {
+        self.required_executable_for_role(ROLE_SANDBOX_ENTRY)
+    }
+
+    pub fn required_sandbox_shell(&self) -> Result<&ExecutableSeedEntry, ProtectedExecError> {
+        self.required_executable_for_role(ROLE_SANDBOX_SHELL)
+    }
+
+    fn required_executable_for_role(&self, role: &'static str) -> Result<&ExecutableSeedEntry, ProtectedExecError> {
+        let matches: Vec<&ExecutableSeedEntry> =
+            self.executables_by_path.values().filter(|entry| entry.required && entry.role == role).collect();
+        if matches.is_empty() {
+            return Err(ProtectedExecError::MissingRequiredSeedRole { role });
+        }
+        if matches.len() > 1 {
+            return Err(ProtectedExecError::AmbiguousRequiredSeedRole {
+                role: role.to_string(),
+                count: matches.len() as u32,
+            });
+        }
+        Ok(matches[0])
     }
 }
 
@@ -578,6 +608,29 @@ pub fn plan_protected_launch(
         inventory_entry_id: entry_id,
         reason: decision.reason,
         phase: PHASE_PROTECTED.to_string(),
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeclaredSandboxSeed {
+    pub sandbox_entry: ProtectedLaunchPlan,
+    pub sandbox_shell: ProtectedLaunchPlan,
+}
+
+impl DeclaredSandboxSeed {
+    pub fn audit_events(&self) -> [ProtectedLaunchAuditEvent; 2] {
+        [self.sandbox_entry.audit_event(), self.sandbox_shell.audit_event()]
+    }
+}
+
+pub fn select_declared_sandbox_seed(
+    policy: &ProtectedExecPolicy,
+) -> Result<DeclaredSandboxSeed, Stage0InventoryGenerationError> {
+    let sandbox_entry = policy.required_sandbox_entry()?;
+    let sandbox_shell = policy.required_sandbox_shell()?;
+    Ok(DeclaredSandboxSeed {
+        sandbox_entry: plan_protected_launch(policy, &sandbox_entry.executable_path)?,
+        sandbox_shell: plan_protected_launch(policy, &sandbox_shell.executable_path)?,
     })
 }
 
