@@ -50,6 +50,12 @@ const MAX_DIAGNOSTIC_ENTRIES: u32 = 64;
 const MAX_PROOF_STORE_ENTRIES: usize = 32;
 const MAX_EMBEDDED_STORE_PATHS: usize = 32;
 const MAX_RECORDED_PROOF_TOOLS: usize = 16;
+#[cfg(unix)]
+const PROOF_REMOVABLE_DIR_MODE: u32 = 0o755;
+#[cfg(all(test, unix))]
+const PROOF_READ_ONLY_DIR_MODE: u32 = 0o555;
+#[cfg(test)]
+const FAKE_STORE_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const CONTROLLED_FAILURE_ENV: &str = "CRUNCH_SELF_HOSTING_CONTROLLED_FAILURE";
 const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
@@ -393,6 +399,28 @@ fn find_crunch_binary(store: &Path) -> Option<PathBuf> {
     None
 }
 
+#[cfg(unix)]
+fn make_tree_removable(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_dir() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(path)? {
+        let child = entry?.path();
+        make_tree_removable(&child)?;
+    }
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(PROOF_REMOVABLE_DIR_MODE))
+}
+
+#[cfg(not(unix))]
+fn make_tree_removable(_path: &Path) -> io::Result<()> {
+    Ok(())
+}
+
 /// Remove all `*-crunch` output directories from a store.
 fn remove_crunch_outputs(store: &Path) -> u32 {
     let mut removed: u32 = 0;
@@ -401,9 +429,11 @@ fn remove_crunch_outputs(store: &Path) -> u32 {
         Err(_) => return 0,
     };
     for entry in entries.flatten() {
+        let path = entry.path();
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") && std::fs::remove_dir_all(entry.path()).is_ok() {
+        if name_str.ends_with("-crunch") && make_tree_removable(&path).is_ok() && std::fs::remove_dir_all(path).is_ok()
+        {
             removed += 1;
         }
     }
@@ -2554,6 +2584,35 @@ fn audit_hashing_rejects_excessively_deep_trees() {
     });
 
     assert!(result.is_err(), "audit hashing must panic on trees deeper than MAX_AUDIT_DEPTH");
+}
+
+#[test]
+fn remove_crunch_outputs_ignores_non_crunch_entries() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let store = tempdir.path();
+    let kept = store.join(format!("{FAKE_STORE_HASH}-kept"));
+    std::fs::create_dir_all(&kept).unwrap();
+
+    assert_eq!(remove_crunch_outputs(store), 0);
+    assert!(kept.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn remove_crunch_outputs_removes_read_only_crunch_output() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let store = tempdir.path();
+    let output = store.join(format!("{FAKE_STORE_HASH}-crunch"));
+    let bin = output.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("crunch"), b"binary").unwrap();
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(PROOF_READ_ONLY_DIR_MODE)).unwrap();
+    std::fs::set_permissions(&output, std::fs::Permissions::from_mode(PROOF_READ_ONLY_DIR_MODE)).unwrap();
+
+    assert_eq!(remove_crunch_outputs(store), 1);
+    assert!(!output.exists());
 }
 
 #[test]

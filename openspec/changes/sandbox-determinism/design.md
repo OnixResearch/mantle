@@ -150,11 +150,10 @@ Same for `substitutions`. Internal lookup tables (like
 `source_closure_cache`) can stay `HashMap` since they are never
 iterated into output.
 
-### 9. Mask `/sys` hardware topology
+### 9. Keep host `/sys` absent
 
-**Choice:** Bind-mount a read-only tmpfs over `/sys` to hide sysfs
-hardware information. Allow only `/sys/fs/cgroup` if cgroup namespace
-unsharing is unavailable.
+**Choice:** Do not mount host `/sys` into the sandbox. The `--tmpfs /`
+root leaves `/sys` absent unless a future code path adds it.
 
 **Rationale:** sysfs exposes CPU topology (`/sys/devices/system/cpu/`),
 block device info (`/sys/class/block/`), network interfaces
@@ -169,8 +168,9 @@ Since we add `--unshare-cgroup-try`, the cgroup tree is already
 isolated, so a full `/sys` absence is acceptable.
 
 **Implementation:** bwrap already does not explicitly mount `/sys`.
-Verify that no code path adds it. If the `--tmpfs /` root already
-excludes `/sys`, this is a no-op validation. Add an assertion test.
+Verify that no code path adds a host `/sys` bind mount. If the
+`--tmpfs /` root already excludes `/sys`, this is a no-op validation.
+Add an assertion test.
 
 ### 10. Synthetic `/etc` for FOD builds
 
@@ -189,7 +189,8 @@ first, timeouts, search domains) and log output.
 are hash-verified, but the leak is still observable in build logs.
 
 **Implementation:** Write synthetic `resolv.conf`
-(`nameserver 127.0.0.1`) and `services` (minimal subset) alongside
+(`nameserver 127.0.0.1` plus deterministic `nameserver 8.8.8.8`
+fallback) and `services` (minimal deterministic subset) alongside
 the existing synthetic `/etc/passwd`, `/etc/group`, and `/etc/hosts`.
 Bind-mount the synthetic versions instead of the host files.
 
@@ -230,10 +231,9 @@ The crate is well-maintained and widely used (1.3B downloads).
 
 **[Synthetic resolv.conf breaks some FOD fetches]** A `nameserver
 127.0.0.1` default requires a local DNS resolver. If no resolver is
-running, DNS resolution fails. Mitigated by also including
-`nameserver 8.8.8.8` as a fallback, or by keeping the host
-`resolv.conf` for the initial phase and deferring synthetic DNS
-to a future hardening pass.
+running, DNS resolution can fall back to the deterministic
+`nameserver 8.8.8.8` entry. This keeps host DNS config out of the
+sandbox while preserving common FOD fetch behavior.
 
 **[/sys absence breaks rare builds]** Some builds legitimately read
 sysfs for hardware feature detection. These builds will fail, which

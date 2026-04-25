@@ -14,7 +14,7 @@ exceed that baseline.
 
 - **Sandbox hostname**: set a fixed hostname inside the UTS namespace.
 - **`/proc` masking**: hide host-specific hardware topology files.
-- **`/dev` restriction**: replace full devtmpfs with a minimal device set.
+- **`/dev` restriction**: keep bwrap's device baseline but mask entropy devices and isolate `/dev/shm`.
 - **`/sys` masking**: hide sysfs hardware topology and device information.
 - **FOD `/etc` isolation**: use synthetic `/etc/resolv.conf` and `/etc/services`
   for network-enabled builds instead of bind-mounting host files.
@@ -32,7 +32,7 @@ exceed that baseline.
 - `sandbox-hostname`: fixed hostname inside all sandbox builds
 - `proc-masking`: hide `/proc/cpuinfo`, `/proc/meminfo`, and related files
 - `sys-masking`: hide `/sys/devices/system/cpu/` and related sysfs paths
-- `dev-restriction`: minimal `/dev` without random/urandom or /dev/shm
+- `dev-restriction`: bwrap-managed `/dev` with `/dev/random` and `/dev/urandom` masked and private `/dev/shm`
 - `fod-etc-isolation`: synthetic resolv.conf/services for FOD builds
 - `output-permission-normalization`: deterministic file modes on store outputs
 - `output-timestamp-normalization`: deterministic mtimes on store outputs
@@ -41,15 +41,13 @@ exceed that baseline.
 
 ### Modified Capabilities
 - `build-environment`: `NIX_BUILD_CORES` default changes from `0` to `1`
-- `hermeticity-audit`: new audit kinds for permission and timestamp drift
 
 ## Impact
 
 - **Files**: `vendor/snix-build/src/bwrap/mod.rs`,
   `crates/crunch-build/src/build_request.rs`,
   `crates/crunch-store/src/export.rs`,
-  `crates/crunch-build/src/orchestrate.rs`,
-  `crates/crunch-build/src/hermeticity.rs`
+  `crates/crunch-build/src/orchestrate.rs`
 - **APIs**: `export_castore_to_disk()` gains permission/timestamp normalization;
   `SANDBOX_ENV_VARS` changes `NIX_BUILD_CORES` default
 - **Dependencies**: `filetime` crate added to `crunch-store`
@@ -65,3 +63,6 @@ exceed that baseline.
   support it yet
 - **Full `/proc` virtualization**: current approach masks individual files;
   a procfs-filtering FUSE layer would be more complete but much heavier
+- **Permission/timestamp drift audit kinds**: export-time normalization is
+  deterministic; explicit drift detection/auditing is left to a later policy
+  change if operators need to report pre-normalized metadata

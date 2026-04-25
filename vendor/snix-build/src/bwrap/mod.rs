@@ -372,27 +372,59 @@ impl Bwrap {
 mod tests {
     use super::*;
 
+    const EXPECTED_PROC_MASKS: &[&str] = &[
+        "/proc/cpuinfo",
+        "/proc/meminfo",
+        "/proc/stat",
+        "/proc/loadavg",
+        "/proc/uptime",
+        "/proc/version",
+    ];
+
+    fn minimal_spec(host_workdir: &Path, allow_network: bool) -> SandboxSpec {
+        SandboxSpec::builder()
+            .host_workdir(host_workdir)
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .allow_network(allow_network)
+            .build()
+    }
+
+    fn arg_strings(bwrap: &Bwrap) -> Vec<String> {
+        bwrap.args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect()
+    }
+
+    fn bind_source_for(args: &[String], dest: &str) -> Option<String> {
+        args.windows(3)
+            .find(|window| window[0] == "--ro-bind" && window[2] == dest)
+            .map(|window| window[1].clone())
+    }
+
     #[test]
     fn common_bwrap_args_contains_hostname() {
         assert!(COMMON_BWRAP_ARGS.windows(2).any(|w| w == ["--hostname", "localhost"]));
     }
 
     #[test]
-    fn common_bwrap_args_contains_proc_masks() {
-        let masked = [
-            "/proc/cpuinfo",
-            "/proc/meminfo",
-            "/proc/stat",
-            "/proc/loadavg",
-            "/proc/uptime",
-            "/proc/version",
-        ];
-        for path in &masked {
-            assert!(
-                COMMON_BWRAP_ARGS.windows(3).any(|w| w[0] == "--ro-bind-try" && w[1] == "/dev/null" && w[2] == *path),
-                "/proc mask missing for {path}"
-            );
+    fn common_bwrap_args_contains_exact_proc_masks() {
+        let observed: Vec<&str> = COMMON_BWRAP_ARGS
+            .windows(3)
+            .filter(|window| window[0] == "--ro-bind-try" && window[1] == "/dev/null")
+            .map(|window| window[2])
+            .filter(|target| target.starts_with("/proc/"))
+            .collect();
+
+        assert_eq!(observed, EXPECTED_PROC_MASKS);
+        assert!(COMMON_BWRAP_ARGS.windows(2).any(|window| window == ["--proc", "/proc"]));
+    }
+
+    #[test]
+    fn common_bwrap_args_keep_proc_self_accessible() {
+        for target in EXPECTED_PROC_MASKS {
+            assert!(!target.starts_with("/proc/self/"));
         }
+        assert!(!COMMON_BWRAP_ARGS.iter().any(|arg| arg.starts_with("/proc/self/")));
     }
 
     #[test]
@@ -421,11 +453,7 @@ mod tests {
         for window in COMMON_BWRAP_ARGS.windows(2) {
             let bind_types = ["--bind", "--ro-bind", "--ro-bind-try", "--dev-bind"];
             if bind_types.contains(&window[0]) {
-                assert!(
-                    !window[1].starts_with("/sys"),
-                    "must not bind-mount host /sys: found {:?}",
-                    window
-                );
+                assert!(!window[1].starts_with("/sys"), "must not bind-mount host /sys: found {:?}", window);
             }
         }
     }
@@ -434,6 +462,35 @@ mod tests {
     fn synthetic_etc_files_are_not_empty() {
         assert!(!ETC_RESOLV_CONF.is_empty());
         assert!(!ETC_SERVICES.is_empty());
-        assert!(ETC_RESOLV_CONF.windows(10).any(|w| w == b"nameserver"));
+        assert!(ETC_RESOLV_CONF.windows("nameserver".len()).any(|w| w == b"nameserver"));
+        assert!(ETC_SERVICES.windows("https".len()).any(|w| w == b"https"));
+    }
+
+    #[test]
+    fn network_sandbox_binds_synthetic_resolv_conf_and_services() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let bwrap = Bwrap::initialize(minimal_spec(tempdir.path(), true)).expect("network sandbox should initialize");
+        let args = arg_strings(&bwrap);
+
+        let resolv_source = bind_source_for(&args, "/etc/resolv.conf").expect("resolv.conf must be bound");
+        let services_source = bind_source_for(&args, "/etc/services").expect("services must be bound");
+        assert_ne!(resolv_source, "/etc/resolv.conf");
+        assert_ne!(services_source, "/etc/services");
+        assert_eq!(fs::read(&resolv_source).expect("synthetic resolv.conf readable"), ETC_RESOLV_CONF);
+        assert_eq!(fs::read(&services_source).expect("synthetic services readable"), ETC_SERVICES);
+    }
+
+    #[test]
+    fn non_network_sandbox_omits_resolv_conf_and_services() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let bwrap =
+            Bwrap::initialize(minimal_spec(tempdir.path(), false)).expect("non-network sandbox should initialize");
+        let args = arg_strings(&bwrap);
+
+        assert!(args.iter().any(|arg| arg == "--unshare-net"));
+        assert!(bind_source_for(&args, "/etc/resolv.conf").is_none());
+        assert!(bind_source_for(&args, "/etc/services").is_none());
+        assert!(!tempdir.path().join("etc/resolv.conf").exists());
+        assert!(!tempdir.path().join("etc/services").exists());
     }
 }

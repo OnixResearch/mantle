@@ -444,6 +444,9 @@ mod tests {
         drv
     }
 
+    const OVERRIDE_CORE_COUNT: &str = "4";
+    const OVERRIDE_SOURCE_DATE_EPOCH: &str = "315532800";
+
     fn normalize_env_map(
         overrides: &[(&str, &str)],
         hermeticity_mode: HermeticityMode,
@@ -506,11 +509,33 @@ mod tests {
     }
 
     #[test]
-    fn strict_mode_allows_source_date_epoch_override() {
-        let normalized = normalize_env_map(&[("SOURCE_DATE_EPOCH", "1234")], HermeticityMode::Strict).unwrap();
+    fn practical_mode_allows_nix_build_cores_override_without_audit() {
+        let normalized =
+            normalize_env_map(&[("NIX_BUILD_CORES", OVERRIDE_CORE_COUNT)], HermeticityMode::Practical).unwrap();
+        let nix_build_cores = normalized.environment_vars.get("NIX_BUILD_CORES").unwrap();
+
+        assert_eq!(nix_build_cores.as_slice(), OVERRIDE_CORE_COUNT.as_bytes());
+        assert!(normalized.audit_events.is_empty());
+    }
+
+    #[test]
+    fn practical_mode_allows_source_date_epoch_override_without_audit() {
+        let normalized =
+            normalize_env_map(&[("SOURCE_DATE_EPOCH", OVERRIDE_SOURCE_DATE_EPOCH)], HermeticityMode::Practical)
+                .unwrap();
         let source_date_epoch = normalized.environment_vars.get("SOURCE_DATE_EPOCH").unwrap();
 
-        assert_eq!(source_date_epoch.as_slice(), b"1234");
+        assert_eq!(source_date_epoch.as_slice(), OVERRIDE_SOURCE_DATE_EPOCH.as_bytes());
+        assert!(normalized.audit_events.is_empty());
+    }
+
+    #[test]
+    fn strict_mode_allows_source_date_epoch_override_without_audit() {
+        let normalized =
+            normalize_env_map(&[("SOURCE_DATE_EPOCH", OVERRIDE_SOURCE_DATE_EPOCH)], HermeticityMode::Strict).unwrap();
+        let source_date_epoch = normalized.environment_vars.get("SOURCE_DATE_EPOCH").unwrap();
+
+        assert_eq!(source_date_epoch.as_slice(), OVERRIDE_SOURCE_DATE_EPOCH.as_bytes());
         assert!(normalized.audit_events.is_empty());
     }
 

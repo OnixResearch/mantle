@@ -51,18 +51,19 @@ The following paths MUST be masked (bind-mounted from `/dev/null`):
 - WHEN it reads `/proc/self/status` or `/proc/self/fd`
 - THEN the read succeeds with the process's own information
 
-### Requirement: Minimal /dev
+### Requirement: Deterministic /dev entropy surface
 
-The sandbox MUST provide a minimal `/dev` that excludes entropy
-sources capable of producing non-deterministic output at build time.
+The sandbox MUST provide a deterministic `/dev` entropy surface that
+prevents build-time entropy from entering outputs.
 
-The sandbox MUST NOT provide `/dev/random` or `/dev/urandom` as
+The sandbox MAY use bwrap's `--dev /dev` baseline for standard device
+nodes, but it MUST NOT expose `/dev/random` or `/dev/urandom` as
 working entropy sources. These paths MUST either be absent or
 bind-mounted from `/dev/null`.
 
-The sandbox MUST still provide: `/dev/null`, `/dev/zero`, `/dev/full`,
-`/dev/tty`, `/dev/console` (or a subset that bwrap's `--dev` provides
-minus the entropy sources).
+The sandbox MUST still provide `/dev/null`; other standard bwrap device
+nodes such as `/dev/zero`, `/dev/full`, `/dev/tty`, or `/dev/console`
+MAY be present when provided by bwrap's baseline.
 
 #### Scenario: Build script reads /dev/urandom
 
@@ -199,8 +200,15 @@ these files with deterministic content.
 
 - GIVEN a fixed-output derivation with network access
 - WHEN the build executes inside the sandbox
-- THEN `/etc/resolv.conf` contains a fixed, deterministic nameserver
-  configuration (not the host's resolv.conf)
+- THEN `/etc/resolv.conf` contains exactly the fixed, deterministic
+  nameserver configuration owned by crunch (not the host's resolv.conf)
+
+#### Scenario: FOD build sees synthetic services
+
+- GIVEN a fixed-output derivation with network access
+- WHEN the build executes inside the sandbox
+- THEN `/etc/services` contains exactly the fixed, deterministic service
+  table owned by crunch (not the host's services database)
 
 #### Scenario: Non-FOD build has no resolv.conf
 
@@ -243,21 +251,22 @@ order has no observable effect.
 The sandbox MUST keep `SOURCE_DATE_EPOCH` in
 `ALLOWED_SANDBOX_ENV_OVERRIDES`.
 
-When a derivation overrides `SOURCE_DATE_EPOCH`, the sandbox MUST
-still emit a hermeticity audit event of kind `EnvironmentOverride`
-in `Practical` mode and MUST reject the override in `Strict` mode.
-
-This is the existing behavior and MUST NOT change.
+When a derivation overrides `SOURCE_DATE_EPOCH`, the sandbox MUST use
+the derivation-provided value in both `Practical` and `Strict` modes
+without emitting a hermeticity audit event. This preserves the existing
+explicit-input policy while other protected sandbox variables remain
+audited in `Practical` mode and rejected in `Strict` mode.
 
 #### Scenario: SOURCE_DATE_EPOCH override in Practical mode
 
 - GIVEN a derivation that sets `SOURCE_DATE_EPOCH` to `315532800`
 - WHEN the sandbox environment is constructed in Practical mode
 - THEN `SOURCE_DATE_EPOCH` is `315532800`
-- AND a hermeticity audit event of kind `EnvironmentOverride` is emitted
+- AND no hermeticity audit event is emitted
 
 #### Scenario: SOURCE_DATE_EPOCH override in Strict mode
 
 - GIVEN a derivation that sets `SOURCE_DATE_EPOCH` to `315532800`
 - WHEN the sandbox environment is constructed in Strict mode
-- THEN the sandbox rejects the build with an error
+- THEN `SOURCE_DATE_EPOCH` is `315532800`
+- AND no hermeticity audit event is emitted
