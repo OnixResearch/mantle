@@ -402,7 +402,7 @@ fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), Rel
     Ok(())
 }
 
-fn validate_blake3_hex(digest_hex: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+pub(crate) fn validate_blake3_hex(digest_hex: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
     if digest_hex.len() != BLAKE3_HEX_LENGTH_CHARS {
         return Err(validation_error(format!(
             "{field_name} must be {BLAKE3_HEX_LENGTH_CHARS} lowercase hex chars, got {}",
@@ -419,11 +419,11 @@ fn parse_error(message: String) -> ReleaseEvidenceError {
     ReleaseEvidenceError::Parse(message)
 }
 
-fn validation_error(message: String) -> ReleaseEvidenceError {
+pub(crate) fn validation_error(message: String) -> ReleaseEvidenceError {
     ReleaseEvidenceError::Validation(message)
 }
 
-fn u32_count(count: usize, overflow_message: &str) -> Result<u32, ReleaseEvidenceError> {
+pub(crate) fn u32_count(count: usize, overflow_message: &str) -> Result<u32, ReleaseEvidenceError> {
     u32::try_from(count).map_err(|_| validation_error(overflow_message.to_string()))
 }
 

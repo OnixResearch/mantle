@@ -3,6 +3,7 @@ extern crate alloc;
 
 mod error;
 mod manifest;
+mod reproducibility;
 
 pub use error::ReleaseEvidenceError;
 pub use manifest::BLAKE3_HEX_LENGTH_CHARS;
@@ -20,3 +21,12 @@ pub use manifest::ReleaseWorkflowIdentity;
 pub use manifest::canonical_release_evidence_manifest;
 pub use manifest::extract_full_self_hosting_proof_identity_fields;
 pub use manifest::validate_bundled_artifact_record;
+pub use reproducibility::RELEASE_REPRODUCIBILITY_REPORT_SCHEMA;
+pub use reproducibility::RebuildWorkflowIdentity;
+pub use reproducibility::ReleaseReproducibilityReport;
+pub use reproducibility::ReleaseReproducibilityReportInit;
+pub use reproducibility::ReproducibilityArtifactComparison;
+pub use reproducibility::ReproducibilityComparisonResult;
+pub use reproducibility::canonical_release_reproducibility_report;
+pub use reproducibility::release_reproducibility_report_canonical_bytes;
+pub use reproducibility::release_reproducibility_report_digest_blake3;

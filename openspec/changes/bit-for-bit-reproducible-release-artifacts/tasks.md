@@ -2,11 +2,17 @@
 
 ## Phase 1: Reproducibility report core
 
-- [ ] I1 Add pure reproducibility-report types with canonical compact JSON over
+- [x] I1 Add pure reproducibility-report types with canonical compact JSON over ✅ 6m 28s (started: 2026-04-25T18:53:32Z → completed: 2026-04-25T19:00:00Z)
       release identifier, source digest, proof digest, rebuild command identity,
       artifact names, byte lengths, BLAKE3 digests, comparison results, and a
       report identity that the core computes and exposes as the BLAKE3 digest of
       the canonical compact JSON bytes. [covers=release.evidence.reproducible.report]
+      Evidence: baseline `cargo test -p crunch-release-core` passed in pueue task 37
+      after adding build-env PATH; post-change `cargo test -p crunch-release-core`
+      passed in pueue task 45 (11 passed), `cargo check -p
+      crunch-release-core --target wasm32-unknown-unknown` passed in pueue task 46,
+      and filtered `cargo test -p crunch-release-core reproducibility_report`
+      passed in pueue task 49 (5 passed).
 - [ ] I2 Add report canonicalization tests plus negative fixtures for one-byte
       drift, missing artifact, output-name drift, and proof-linkage mismatch.
       [covers=release.evidence.reproducible.report]
