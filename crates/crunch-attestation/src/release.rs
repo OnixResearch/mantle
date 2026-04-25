@@ -1,7 +1,12 @@
+pub use crunch_attestation_core::AgreementWitnessClassification;
 pub use crunch_attestation_core::BinaryDigest;
 pub use crunch_attestation_core::BinaryDigestMatchInput;
 pub use crunch_attestation_core::DetachedSignature;
 pub use crunch_attestation_core::FinalClass;
+pub use crunch_attestation_core::INDEPENDENT_AGREEMENT_REPORT_SCHEMA;
+pub use crunch_attestation_core::IndependentAgreementReport;
+pub use crunch_attestation_core::IndependentAgreementReportInit;
+pub use crunch_attestation_core::IndependentAgreementStatus;
 pub use crunch_attestation_core::PolicyStatus;
 pub use crunch_attestation_core::RELEASE_ATTESTATION_SCHEMA;
 pub use crunch_attestation_core::RebuildEnvironmentSummary;
@@ -12,7 +17,10 @@ pub use crunch_attestation_core::TechnicalClass;
 pub use crunch_attestation_core::TrustTier;
 pub use crunch_attestation_core::WITNESS_ATTESTATION_SCHEMA;
 pub use crunch_attestation_core::WitnessAttestation;
+pub use crunch_attestation_core::WitnessClassificationReason;
 pub use crunch_attestation_core::Workflow;
+pub use crunch_attestation_core::independent_agreement_report_canonical_bytes;
+pub use crunch_attestation_core::independent_agreement_report_canonical_digest;
 
 pub use crate::adapter::binary_digests_match;
 pub use crate::adapter::encode_detached_signature;

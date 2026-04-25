@@ -2954,6 +2954,13 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
     assert_eq!(verify_json["policy_status"], "satisfied");
     assert_eq!(verify_json["final_class"], "quorum-satisfied");
     assert_eq!(verify_json["matching_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_status"], "satisfied");
+    assert_eq!(verify_json["independent_agreement_class"], "independent-rebuild-agreement");
+    assert_eq!(verify_json["independent_agreement_report_digest"].as_str().unwrap().len(), 64);
+    assert_eq!(verify_json["independent_agreement_counted_witness_count"], 1);
+    assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 0);
+    assert_eq!(verify_json["independent_agreement_failed_witness_count"], 0);
+    assert_eq!(verify_json["independent_agreement_witnesses"][0]["classification_reason"], "counted");
 }
 
 #[test]

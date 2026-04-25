@@ -2,11 +2,15 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_attestation::AgreementWitnessClassification;
 use crunch_attestation::AttestationDigest;
 use crunch_attestation::BinaryDigest;
 use crunch_attestation::Canonicalize;
 use crunch_attestation::DetachedSignature;
 use crunch_attestation::FinalClass;
+use crunch_attestation::IndependentAgreementReport;
+use crunch_attestation::IndependentAgreementReportInit;
+use crunch_attestation::IndependentAgreementStatus;
 use crunch_attestation::PolicyFailureReason;
 use crunch_attestation::PolicyStatus;
 use crunch_attestation::RebuildEnvironmentSummary;
@@ -19,6 +23,7 @@ use crunch_attestation::ValidatedWitness;
 use crunch_attestation::VerificationDirectory;
 use crunch_attestation::VerificationMaterial;
 use crunch_attestation::WitnessAttestation;
+use crunch_attestation::WitnessClassificationReason;
 use crunch_attestation::encode_detached_signature;
 use crunch_build::KeyPair;
 use nix_compat::narinfo::SignatureRef;
@@ -43,6 +48,9 @@ const SELF_PROOF_ONLY_QUORUM: u32 = 0;
 const POLICY_INIT_REQUIRED_SIGNER_COUNT: u32 = 1;
 const POLICY_INIT_REQUIRED_WITNESS_COUNT: u32 = 1;
 const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
+const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
+const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
+const INDEPENDENT_AGREEMENT_CLASS: &str = "independent-rebuild-agreement";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CreatedReleaseAttestation {
@@ -93,6 +101,17 @@ pub(crate) struct CreatedPolicyFiles {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct AgreementWitnessOutput {
+    pub witness_identity: String,
+    pub signer_key_name: String,
+    pub signature_valid: bool,
+    pub digest_match: bool,
+    pub independence_domain: String,
+    pub policy_counted: bool,
+    pub classification_reason: WitnessClassificationReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ReleaseVerificationOutput {
     pub release_attestation_digest: String,
     pub release_signer_key_name: String,
@@ -104,6 +123,14 @@ pub(crate) struct ReleaseVerificationOutput {
     pub matching_witness_count: u32,
     pub independent_witness_identities: u32,
     pub revoked_witness_count: u32,
+    pub independent_agreement_status: IndependentAgreementStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub independent_agreement_class: Option<&'static str>,
+    pub independent_agreement_report_digest: String,
+    pub independent_agreement_counted_witness_count: u32,
+    pub independent_agreement_skipped_witness_count: u32,
+    pub independent_agreement_failed_witness_count: u32,
+    pub independent_agreement_witnesses: Vec<AgreementWitnessOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub policy_failure_reason: Option<PolicyFailureReason>,
 }
@@ -375,6 +402,19 @@ fn evaluate_release_verification(
         .map_err(|_| RunError::Internal("release verification witness count overflowed u32".to_string()))?;
     let considered_witness_count = u32::try_from(validated_witnesses.len())
         .map_err(|_| RunError::Internal("release verification considered witness count overflowed u32".to_string()))?;
+    let agreement_report = build_independent_agreement_report(material, trusted_public_keys)?;
+    let independent_agreement_report_digest =
+        crunch_attestation::independent_agreement_report_canonical_digest(agreement_report.clone())
+            .map_err(|err| RunError::Build(format!("independent agreement report digest: {err}")))?
+            .to_hex();
+    let independent_agreement_status = agreement_report.status();
+    let independent_agreement_class = if independent_agreement_status == IndependentAgreementStatus::Satisfied {
+        Some(INDEPENDENT_AGREEMENT_CLASS)
+    } else {
+        None
+    };
+    let independent_agreement_witnesses =
+        agreement_report.witnesses.iter().map(agreement_witness_output).collect::<Vec<_>>();
 
     Ok(ReleaseVerificationOutput {
         release_attestation_digest,
@@ -387,8 +427,182 @@ fn evaluate_release_verification(
         matching_witness_count: evaluation.matching_witness_count,
         independent_witness_identities: evaluation.independent_witness_identities,
         revoked_witness_count: evaluation.revoked_witness_count,
+        independent_agreement_status,
+        independent_agreement_class,
+        independent_agreement_report_digest,
+        independent_agreement_counted_witness_count: agreement_report.counted_witness_count,
+        independent_agreement_skipped_witness_count: agreement_report.skipped_witness_count,
+        independent_agreement_failed_witness_count: agreement_report.failed_witness_count,
+        independent_agreement_witnesses,
         policy_failure_reason: evaluation.policy_failure_reason,
     })
+}
+
+fn build_independent_agreement_report(
+    material: &VerificationMaterial,
+    trusted_public_keys: &[VerifyingKey],
+) -> Result<IndependentAgreementReport, RunError> {
+    let release_digest = material
+        .release_attestation
+        .canonical_digest()
+        .map_err(|err| RunError::Build(format!("release attestation digest: {err}")))?;
+    let policy_bytes = serde_json::to_vec(&material.policy)
+        .map_err(|err| RunError::Internal(format!("serializing release policy for agreement digest: {err}")))?;
+    let policy_digest = AttestationDigest::from_canonical_bytes(policy_bytes);
+    let mut used_domains = BTreeSet::new();
+    let mut witnesses = Vec::with_capacity(material.witnesses.len());
+    for witness in &material.witnesses {
+        witnesses.push(classify_agreement_witness(
+            material,
+            witness,
+            trusted_public_keys,
+            &release_digest,
+            &mut used_domains,
+        )?);
+    }
+    IndependentAgreementReport::new(IndependentAgreementReportInit {
+        release_attestation_digest_blake3: release_digest,
+        policy_digest_blake3: policy_digest,
+        independence_selector: material.policy.independence_field.clone(),
+        required_witness_count: material.policy.min_matching_witnesses,
+        witnesses,
+        artifact_digest_sets: material.release_attestation.binary_digests.clone(),
+    })
+    .map_err(|err| RunError::Build(format!("building independent agreement report: {err}")))
+}
+
+fn classify_agreement_witness(
+    material: &VerificationMaterial,
+    witness: &crunch_attestation::discovery::DiscoveredWitness,
+    trusted_public_keys: &[VerifyingKey],
+    release_digest: &AttestationDigest,
+    used_domains: &mut BTreeSet<String>,
+) -> Result<AgreementWitnessClassification, RunError> {
+    let witness_digest = witness
+        .attestation
+        .canonical_digest()
+        .map_err(|err| RunError::Build(format!("witness attestation digest: {err}")))?;
+    let (signature_valid, signer_key_name, mut reason) = classify_witness_signature(witness, trusted_public_keys)?;
+    let is_identity_trusted = is_trusted_witness_identity(&material.policy, &witness.attestation);
+    if signature_valid && !is_identity_trusted {
+        reason = WitnessClassificationReason::MissingIndependenceEvidence;
+    }
+    let is_revoked = witness_is_revoked(&witness_digest, &signer_key_name, &material.revocations);
+    if signature_valid && is_revoked {
+        reason = WitnessClassificationReason::Revoked;
+    }
+    let digest_match =
+        witness_digest_matches_release(&material.release_attestation, &witness.attestation, release_digest);
+    if signature_valid && !is_revoked && is_identity_trusted && !digest_match {
+        reason = WitnessClassificationReason::DigestMismatch;
+    }
+    let independence_domain = agreement_independence_domain(&material.policy, &witness.attestation, &signer_key_name);
+    if signature_valid && !is_revoked && is_identity_trusted && digest_match && independence_domain.is_empty() {
+        reason = WitnessClassificationReason::MissingIndependenceEvidence;
+    }
+    let policy_counted = signature_valid
+        && is_identity_trusted
+        && !is_revoked
+        && digest_match
+        && !independence_domain.is_empty()
+        && mark_domain_if_new(used_domains, &independence_domain);
+    if signature_valid
+        && is_identity_trusted
+        && !is_revoked
+        && digest_match
+        && !independence_domain.is_empty()
+        && !policy_counted
+    {
+        reason = WitnessClassificationReason::DuplicateIndependenceDomain;
+    }
+    if policy_counted {
+        reason = WitnessClassificationReason::Counted;
+    }
+
+    Ok(AgreementWitnessClassification {
+        witness_identity: witness.attestation.witness_identity.clone(),
+        signer_key_name,
+        witness_digest_blake3: witness_digest,
+        signature_valid,
+        digest_match,
+        independence_domain,
+        policy_counted,
+        classification_reason: reason,
+        rebuilt_output_digests: witness.attestation.rebuilt_digests.clone(),
+        environment_summary: witness.attestation.rebuild_environment_summary.clone(),
+    })
+}
+
+fn classify_witness_signature(
+    witness: &crunch_attestation::discovery::DiscoveredWitness,
+    trusted_public_keys: &[VerifyingKey],
+) -> Result<(bool, String, WitnessClassificationReason), RunError> {
+    let canonical_bytes = canonical_witness_bytes(&witness.attestation)?;
+    match verify_signature_bytes(&canonical_bytes, &witness.signature, trusted_public_keys, "witness attestation") {
+        Ok(signer_key_name) => Ok((true, signer_key_name, WitnessClassificationReason::Counted)),
+        Err(RunError::Build(message)) => {
+            let reason = if message.contains("missing from the trusted public key set") {
+                WitnessClassificationReason::UnknownKey
+            } else {
+                WitnessClassificationReason::InvalidSignature
+            };
+            Ok((false, witness.signature.key_name.clone(), reason))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn witness_is_revoked(
+    witness_digest: &AttestationDigest,
+    signer_key_name: &str,
+    revocations: &ReleaseRevocations,
+) -> bool {
+    let digest_hex = witness_digest.to_hex();
+    revocations.revoked_witness_keys.iter().any(|key| key == signer_key_name)
+        || revocations.revoked_witness_attestation_digests_blake3.iter().any(|digest| digest == &digest_hex)
+}
+
+fn witness_digest_matches_release(
+    release: &ReleaseAttestation,
+    witness: &WitnessAttestation,
+    release_digest: &AttestationDigest,
+) -> bool {
+    witness.release_attestation_digest_blake3 == *release_digest
+        && crunch_attestation::binary_digests_match(&release.binary_digests, &witness.rebuilt_digests)
+}
+
+fn agreement_independence_domain(
+    policy: &ReleasePolicy,
+    witness: &WitnessAttestation,
+    signer_key_name: &str,
+) -> String {
+    match policy.independence_field.as_str() {
+        INDEPENDENCE_FIELD_WITNESS_IDENTITY => witness.witness_identity.clone(),
+        INDEPENDENCE_FIELD_SIGNER_KEY_NAME => signer_key_name.to_string(),
+        INDEPENDENCE_FIELD_REBUILD_HOST_CLASS => witness.rebuild_environment_summary.host_class.clone(),
+        _ => String::new(),
+    }
+}
+
+fn mark_domain_if_new(used_domains: &mut BTreeSet<String>, domain: &str) -> bool {
+    if used_domains.contains(domain) {
+        false
+    } else {
+        used_domains.insert(domain.to_string());
+        true
+    }
+}
+
+fn agreement_witness_output(witness: &AgreementWitnessClassification) -> AgreementWitnessOutput {
+    AgreementWitnessOutput {
+        witness_identity: witness.witness_identity.clone(),
+        signer_key_name: witness.signer_key_name.clone(),
+        signature_valid: witness.signature_valid,
+        digest_match: witness.digest_match,
+        independence_domain: witness.independence_domain.clone(),
+        policy_counted: witness.policy_counted,
+        classification_reason: witness.classification_reason,
+    }
 }
 
 fn collect_trusted_validated_witnesses(

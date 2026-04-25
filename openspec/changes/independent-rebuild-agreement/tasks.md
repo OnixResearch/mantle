@@ -32,7 +32,7 @@
       (70 tests), including selector coverage for witness identity, signer key,
       host class, duplicate-domain insufficiency, and empty selected
       independence-field rejection.
-- [ ] I5 Extend release verification output with JSON field
+- [x] I5 Extend release verification output with JSON field ✅ 4m 52s (started: 2026-04-25T20:07:40Z → completed: 2026-04-25T20:12:32Z)
       `independent_agreement_status`, class value
       `independent-rebuild-agreement` when satisfied, JSON fields
       `independent_agreement_report_digest`,
@@ -42,6 +42,13 @@
       reasons, visible digest/signature/independence/policy sufficiency states,
       and unsatisfied domain diagnostics.
       [covers=release.verification.tech.independent.agreement.class,release.verification.tech.witness.independence.evidence]
+      Evidence: `cargo test -p crunch --test release_cli
+      attest_witness_show_and_release_verify_report_quorum_satisfied` passed in
+      pueue task 23, asserting `independent_agreement_status`,
+      `independent_agreement_class`, report digest, counted/skipped/failed
+      counts, and per-witness `counted` classification remain visible beside
+      existing technical/policy/final classes. Focused `release_verify` tests
+      also passed in pueue task 19 (24 tests).
 - [ ] I6 Allow verification directories or release evidence to carry an optional
       agreement report at `agreement-report.json` or bundle-local
       `independent-agreement/agreement-report.json`, reject ambiguous duplicate
