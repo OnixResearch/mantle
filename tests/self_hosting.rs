@@ -224,6 +224,29 @@ struct ProofStageFiles {
     diagnostics: ProofHashedPath,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct ProofProtectedTransition {
+    bwrap_path: String,
+    bwrap_digest: String,
+    bwrap_store_name: String,
+    busybox_path: String,
+    busybox_digest: String,
+    busybox_store_name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofProtectedExecAudit {
+    schema: &'static str,
+    no_host_tools: bool,
+    stage0_inventory: Option<ProofHashedPath>,
+    blocked_host_commands: Vec<&'static str>,
+    stage0_fallback_events: Vec<String>,
+    stage2_fallback_events: Vec<String>,
+    stage0_transition: Option<ProofProtectedTransition>,
+    stage2_transition: Option<ProofProtectedTransition>,
+    result: &'static str,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ProofReportManifest {
     hermeticity_mode: String,
@@ -231,6 +254,7 @@ struct ProofReportManifest {
     staged_source: String,
     bwrap_source: String,
     fallback_events: Vec<String>,
+    protected_transition: Option<ProofProtectedTransition>,
     busybox_path: Option<String>,
     output_binary: String,
 }
@@ -1108,6 +1132,34 @@ fn collect_prerequisites(
     }
 }
 
+fn parse_protected_transition(stage: &StageEvidence) -> Option<ProofProtectedTransition> {
+    let marker = extract_proof_field(&stage.stderr, "protected-transition")?;
+    if marker == "none" {
+        return None;
+    }
+    assert_eq!(marker, "bootstrap-tools-selected", "unexpected protected transition marker");
+    Some(ProofProtectedTransition {
+        bwrap_path: extract_proof_field(&stage.stderr, "protected-transition-bwrap-path")
+            .unwrap_or_else(|| panic!("{} missing transition bwrap path", stage.stage_name))
+            .to_string(),
+        bwrap_digest: extract_proof_field(&stage.stderr, "protected-transition-bwrap-digest")
+            .unwrap_or_else(|| panic!("{} missing transition bwrap digest", stage.stage_name))
+            .to_string(),
+        bwrap_store_name: extract_proof_field(&stage.stderr, "protected-transition-bwrap-store-name")
+            .unwrap_or_else(|| panic!("{} missing transition bwrap store name", stage.stage_name))
+            .to_string(),
+        busybox_path: extract_proof_field(&stage.stderr, "protected-transition-busybox-path")
+            .unwrap_or_else(|| panic!("{} missing transition busybox path", stage.stage_name))
+            .to_string(),
+        busybox_digest: extract_proof_field(&stage.stderr, "protected-transition-busybox-digest")
+            .unwrap_or_else(|| panic!("{} missing transition busybox digest", stage.stage_name))
+            .to_string(),
+        busybox_store_name: extract_proof_field(&stage.stderr, "protected-transition-busybox-store-name")
+            .unwrap_or_else(|| panic!("{} missing transition busybox store name", stage.stage_name))
+            .to_string(),
+    })
+}
+
 fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
     assert!(!stage.stage_name.is_empty(), "stage name must not be empty");
     assert!(!stage.stderr.is_empty(), "stage stderr must not be empty");
@@ -1143,6 +1195,7 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         staged_source: staged_source.to_string(),
         bwrap_source: bwrap_source.to_string(),
         fallback_events,
+        protected_transition: parse_protected_transition(stage),
         busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
         output_binary: output_binary.to_string(),
     }
@@ -1300,7 +1353,28 @@ fn copy_stage_bundle_files(bundle_dir: &Path, stage: &StageEvidence) -> ProofSta
     }
 }
 
-fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
+fn write_protected_exec_audit(bundle_dir: &Path, manifest: &ProofBundleManifest) -> ProofHashedPath {
+    assert!(bundle_dir.exists(), "bundle dir must exist before protected audit write");
+    let no_host_tools = proof_no_host_tools_enabled();
+    let stage0_inventory = proof_stage0_inventory().map(|path| hash_file_record(&path, path.display().to_string()));
+    let audit = ProofProtectedExecAudit {
+        schema: "crunch-protected-exec-audit-v1",
+        no_host_tools,
+        stage0_inventory,
+        blocked_host_commands: BLOCKED_HOST_TOOL_BINARIES.to_vec(),
+        stage0_fallback_events: manifest.stage0.report.fallback_events.clone(),
+        stage2_fallback_events: manifest.stage2.report.fallback_events.clone(),
+        stage0_transition: manifest.stage0.report.protected_transition.clone(),
+        stage2_transition: manifest.stage2.report.protected_transition.clone(),
+        result: "success",
+    };
+    let path = bundle_dir.join("protected-exec-audit.json");
+    let json = serde_json::to_vec_pretty(&audit).unwrap_or_else(|err| panic!("serialize protected exec audit: {err}"));
+    std::fs::write(&path, json).unwrap_or_else(|err| panic!("write protected exec audit {}: {err}", path.display()));
+    hash_file_record(&path, "protected-exec-audit.json".to_string())
+}
+
+fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: &ProofHashedPath) -> String {
     assert_eq!(manifest.schema, PROOF_BUNDLE_SCHEMA, "unexpected proof bundle schema");
     assert!(!manifest.bundle_dir.is_empty(), "bundle dir must not be empty");
 
@@ -1312,6 +1386,10 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
+    out.push_str(&format!(
+        "protected_exec_audit: {} {}\n",
+        protected_audit.digest_blake3, protected_audit.path
+    ));
     out.push_str(&format!("stage0_path_strategy: {}\n", manifest.prerequisites.stage0_path_strategy));
     out.push_str(&format!(
         "stage0_path_dir: {}\n",
@@ -1380,9 +1458,17 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest) -> String {
     out.push_str(&format!("stage0_hermeticity_mode: {}\n", manifest.stage0.report.hermeticity_mode));
     out.push_str(&format!("stage0_fallback_events: {:?}\n", manifest.stage0.report.fallback_events));
     out.push_str(&format!("stage0_report: {}\n", manifest.stage0.report.bwrap_source));
+    out.push_str(&format!(
+        "stage0_protected_transition: {:?}\n",
+        manifest.stage0.report.protected_transition
+    ));
     out.push_str(&format!("stage2_hermeticity_mode: {}\n", manifest.stage2.report.hermeticity_mode));
     out.push_str(&format!("stage2_fallback_events: {:?}\n", manifest.stage2.report.fallback_events));
     out.push_str(&format!("stage2_report: {}\n", manifest.stage2.report.bwrap_source));
+    out.push_str(&format!(
+        "stage2_protected_transition: {:?}\n",
+        manifest.stage2.report.protected_transition
+    ));
     out
 }
 
@@ -1485,11 +1571,12 @@ fn write_proof_bundle(
 
     let manifest_path = bundle_dir.join("manifest.json");
     let summary_path = bundle_dir.join("summary.txt");
+    let protected_audit = write_protected_exec_audit(bundle_dir, &manifest);
     let manifest_json =
         serde_json::to_vec_pretty(&manifest).unwrap_or_else(|err| panic!("serialize proof manifest: {err}"));
     std::fs::write(&manifest_path, manifest_json)
         .unwrap_or_else(|err| panic!("write proof manifest {}: {err}", manifest_path.display()));
-    let summary = render_proof_bundle_summary(&manifest);
+    let summary = render_proof_bundle_summary(&manifest, &protected_audit);
     std::fs::write(&summary_path, summary)
         .unwrap_or_else(|err| panic!("write proof summary {}: {err}", summary_path.display()));
     manifest_path
@@ -1797,11 +1884,14 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
         None,
     );
     let summary_path = bundle_dir.join("summary.txt");
+    let protected_audit_path = bundle_dir.join("protected-exec-audit.json");
     let manifest_json = std::fs::read_to_string(&manifest_path).unwrap();
+    let protected_audit_json = std::fs::read_to_string(&protected_audit_path).unwrap();
     let summary = std::fs::read_to_string(&summary_path).unwrap();
 
     assert!(manifest_path.exists(), "proof manifest should exist");
     assert!(summary_path.exists(), "proof summary should exist");
+    assert!(protected_audit_path.exists(), "protected exec audit should exist");
     assert!(bundle_dir.join("stage0/meta.json").exists(), "stage0 meta should be copied");
     assert!(bundle_dir.join("stage0/stderr.txt").exists(), "stage0 stderr should be copied");
     assert!(bundle_dir.join("stage2/stdout.txt").exists(), "stage2 stdout should be copied");
@@ -1823,8 +1913,12 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains("\"mode\": "));
     assert!(manifest_json.contains("\"hermeticity_mode\""));
     assert!(manifest_json.contains("\"fallback_events\""));
+    assert!(protected_audit_json.contains("crunch-protected-exec-audit-v1"));
+    assert!(protected_audit_json.contains("\"blocked_host_commands\""));
+    assert!(protected_audit_json.contains("bwrap-host-fallback"));
     assert!(bundle_dir.join("stage0-prerequisites/inventory.md").exists());
     assert!(summary.contains("proof_mode:"));
+    assert!(summary.contains("protected_exec_audit:"));
     assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));
     assert!(summary.contains("stage1_equals_stage2:"));
@@ -1832,7 +1926,9 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(summary.contains("stage0_hermeticity_mode: practical"));
     assert!(summary.contains("stage2_hermeticity_mode: strict"));
     assert!(summary.contains("stage0_fallback_events:"));
+    assert!(summary.contains("stage0_protected_transition:"));
     assert!(summary.contains("stage2_fallback_events: []"));
+    assert!(summary.contains("stage2_protected_transition:"));
     assert!(summary.contains(PROOF_STAGE2_BINARY_RELATIVE_PATH));
 }
 

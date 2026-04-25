@@ -197,11 +197,18 @@
       helpers, filters proof-tool inventory records so blocked helpers are
       absent rather than required, and leaves the existing stage1/stage2 binary,
       bwrap, and busybox fixed-point assertions unchanged.
-- [ ] I17 Write `protected-exec-audit.json` into proof bundles and summarize the
+- [x] I17 Write `protected-exec-audit.json` into proof bundles and summarize the ✅ 0m 2s (started: 2026-04-25T22:42:43Z → completed: 2026-04-25T22:42:45Z)
       audit in `summary.txt`, including the machine-readable execution audit,
       stage0 inventory digest, blocked host command set, declared seed sandbox
       and shell/toolchain artifact records, fallback-event markers, and final
       result. [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 162 passed `cargo test -p crunch --test
+      self_hosting proof_bundle -- --nocapture` with 3 tests passed. Proof
+      bundle generation now writes `protected-exec-audit.json`, records schema
+      `crunch-protected-exec-audit-v1`, no-host-tools mode, optional stage0
+      inventory BLAKE3 digest, blocked host command set, stage0/stage2 fallback
+      events, stage0/stage2 protected transition records, and result; summary
+      output includes the audit digest/path and transition summaries.
 - [ ] I18 Add a no-host-tools proof failure fixture that injects an undeclared
       protected-phase executable or child exec, verifies the proof fails, and
       verifies the proof bundle identifies the hidden host tool.
