@@ -16,6 +16,12 @@ const MAX_VENDOR_SOURCE_PATHS: u32 = 200_000;
 const MAX_PARENT_DIRS: u32 = 200_000;
 const TAR_MODE_DIR_DEFAULT: u32 = 0o755;
 const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
+const RELEASE_SOURCE_EXTRA_TRACKED_PATHS: &[&str] = &[
+    "docs/bootstrap-stage0-inventory.md",
+    "scripts/prove-self-hosting.sh",
+    "tests/audit_support.rs",
+    "tests/self_hosting.rs",
+];
 
 pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path) -> Result<(), RunError> {
     assert!(repo_root.is_dir(), "repo root must exist: {}", repo_root.display());
@@ -136,11 +142,22 @@ fn collect_vendor_source_child(repo_root: &Path, child: &Path, paths: &mut Vec<P
 }
 
 fn is_allowlisted_source_path(relative_path: &Path) -> bool {
+    assert!(!relative_path.as_os_str().is_empty(), "source path must not be empty");
+    if is_extra_release_source_path(relative_path) {
+        return true;
+    }
     let Some(first_component) = relative_path.components().next() else {
         return false;
     };
     let first_component = first_component.as_os_str();
     STAGED_SOURCE_TOP_LEVEL_ENTRIES.iter().any(|entry| first_component == std::ffi::OsStr::new(entry))
+}
+
+fn is_extra_release_source_path(relative_path: &Path) -> bool {
+    assert!(!relative_path.is_absolute(), "source path must be relative");
+    RELEASE_SOURCE_EXTRA_TRACKED_PATHS
+        .iter()
+        .any(|allowed_path| relative_path == Path::new(allowed_path))
 }
 
 fn append_source_paths_to_archive(
@@ -416,6 +433,12 @@ mod tests {
         );
         write_file(&repo_root.join("bootstrap/seed.ncl"), b"{}\n");
         write_file(&repo_root.join("builders/default.ncl"), b"{}\n");
+        write_file(&repo_root.join("docs/bootstrap-stage0-inventory.md"), b"# inventory\n");
+        write_file(&repo_root.join("scripts/prove-self-hosting.sh"), b"#!/usr/bin/env bash\n");
+        write_file(&repo_root.join("scripts/unrelated-helper.sh"), b"#!/usr/bin/env bash\n");
+        write_file(&repo_root.join("tests/audit_support.rs"), b"pub fn audit() {}\n");
+        write_file(&repo_root.join("tests/self_hosting.rs"), b"#[test]\nfn proof() {}\n");
+        write_file(&repo_root.join("tests/unrelated.rs"), b"#[test]\nfn unrelated() {}\n");
         write_file(&repo_root.join("crates/demo/src/lib.rs"), b"pub fn demo() {}\n");
         write_file(&repo_root.join("lib/lib.ncl"), b"{}\n");
         write_file(&repo_root.join("rust-toolchain.toml"), b"[toolchain]\nchannel=\"nightly\"\n");
@@ -444,6 +467,12 @@ mod tests {
         let mut found_main = false;
         let mut found_untracked = false;
         let mut found_ignored_vendor = false;
+        let mut found_proof_driver = false;
+        let mut found_inventory_doc = false;
+        let mut found_unrelated_script = false;
+        let mut found_self_hosting_test = false;
+        let mut found_audit_support = false;
+        let mut found_unrelated_test = false;
         for entry_result in tar.entries().unwrap() {
             let mut entry = entry_result.unwrap();
             let path = entry.path().unwrap().into_owned();
@@ -459,10 +488,34 @@ mod tests {
             if path == std::path::Path::new("vendor-deps/dep/Cargo.toml") {
                 found_ignored_vendor = true;
             }
+            if path == std::path::Path::new("scripts/prove-self-hosting.sh") {
+                found_proof_driver = true;
+            }
+            if path == std::path::Path::new("docs/bootstrap-stage0-inventory.md") {
+                found_inventory_doc = true;
+            }
+            if path == std::path::Path::new("scripts/unrelated-helper.sh") {
+                found_unrelated_script = true;
+            }
+            if path == std::path::Path::new("tests/self_hosting.rs") {
+                found_self_hosting_test = true;
+            }
+            if path == std::path::Path::new("tests/audit_support.rs") {
+                found_audit_support = true;
+            }
+            if path == std::path::Path::new("tests/unrelated.rs") {
+                found_unrelated_test = true;
+            }
         }
 
         assert!(found_main, "archive must contain tracked modified file");
         assert!(found_ignored_vendor, "archive must include verified ignored vendor-deps");
+        assert!(found_proof_driver, "archive must include witness rebuild workflow driver");
+        assert!(found_inventory_doc, "archive must include proof inventory consumed by workflow driver");
+        assert!(found_self_hosting_test, "archive must include self-hosting test target used by workflow driver");
+        assert!(found_audit_support, "archive must include self-hosting test support module");
         assert!(!found_untracked, "archive must skip untracked file");
+        assert!(!found_unrelated_script, "archive must not include unrelated scripts by directory prefix");
+        assert!(!found_unrelated_test, "archive must not include unrelated tests by directory prefix");
     }
 }

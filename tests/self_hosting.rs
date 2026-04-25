@@ -58,6 +58,8 @@ const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
 const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
 const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
 const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
+const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-crunch";
+const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-crunch";
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
 const DEFAULT_PROOF_SCRATCH_SOURCE: &str = "default repo-local policy";
@@ -1305,12 +1307,17 @@ fn write_proof_bundle(
     std::fs::create_dir_all(bundle_dir)
         .unwrap_or_else(|err| panic!("create proof bundle dir {}: {err}", bundle_dir.display()));
 
-    let stage0_report = parse_stage_report(stage0);
-    let stage2_report = parse_stage_report(stage2);
+    let mut stage0_report = parse_stage_report(stage0);
+    let mut stage2_report = parse_stage_report(stage2);
     assert_eq!(
         stage0_report.staged_source, stage2_report.staged_source,
         "proof bundle expects stage0 and stage2 to use the same staged source",
     );
+
+    let durable_stage1_binary = copy_bundle_file(stage1_binary, bundle_dir, PROOF_STAGE1_BINARY_RELATIVE_PATH);
+    let durable_stage2_binary = copy_bundle_file(stage2_binary, bundle_dir, PROOF_STAGE2_BINARY_RELATIVE_PATH);
+    stage0_report.output_binary = durable_stage1_binary.path.clone();
+    stage2_report.output_binary = durable_stage2_binary.path.clone();
 
     let checkout_binary_path = PathBuf::from(&stage0_report.invoking_binary);
     let stage0_bwrap_report_path = extract_bwrap_binary_path(&stage0.stderr)
@@ -1326,8 +1333,8 @@ fn write_proof_bundle(
 
     let binaries = ProofBinarySet {
         checkout: hash_file_record(&checkout_binary_path, checkout_binary_path.display().to_string()),
-        stage1: hash_file_record(stage1_binary, stage1_binary.display().to_string()),
-        stage2: hash_file_record(stage2_binary, stage2_binary.display().to_string()),
+        stage1: durable_stage1_binary,
+        stage2: durable_stage2_binary,
     };
     let tools = ProofToolSet {
         stage0_bwrap: hash_file_record(&stage0_bwrap_binary, stage0_bwrap_binary.display().to_string()),
@@ -1698,9 +1705,15 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(bundle_dir.join("stage0/stderr.txt").exists(), "stage0 stderr should be copied");
     assert!(bundle_dir.join("stage2/stdout.txt").exists(), "stage2 stdout should be copied");
     assert!(bundle_dir.join("stage2/diagnostics.txt").exists(), "stage2 diagnostics should be copied");
+    let bundled_stage1_binary = bundle_dir.join(PROOF_STAGE1_BINARY_RELATIVE_PATH);
+    let bundled_stage2_binary = bundle_dir.join(PROOF_STAGE2_BINARY_RELATIVE_PATH);
+    assert!(bundled_stage1_binary.exists(), "stage1 binary should be durably copied");
+    assert!(bundled_stage2_binary.exists(), "stage2 binary should be durably copied");
+    assert_eq!(std::fs::read(&bundled_stage1_binary).unwrap(), b"stage1-binary");
+    assert_eq!(std::fs::read(&bundled_stage2_binary).unwrap(), b"stage2-binary");
     assert!(manifest_json.contains(PROOF_BUNDLE_SCHEMA));
-    assert!(manifest_json.contains(&stage1_binary.display().to_string()));
-    assert!(manifest_json.contains(&stage2_binary.display().to_string()));
+    assert!(manifest_json.contains(PROOF_STAGE1_BINARY_RELATIVE_PATH));
+    assert!(manifest_json.contains(PROOF_STAGE2_BINARY_RELATIVE_PATH));
     assert!(manifest_json.contains(&busybox_bin.display().to_string()));
     assert!(manifest_json.contains(&bwrap_bin.display().to_string()));
     assert!(manifest_json.contains("\"fixed_point\""));
@@ -1719,7 +1732,7 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(summary.contains("stage2_hermeticity_mode: strict"));
     assert!(summary.contains("stage0_fallback_events:"));
     assert!(summary.contains("stage2_fallback_events: []"));
-    assert!(summary.contains(&stage2_binary.display().to_string()));
+    assert!(summary.contains(PROOF_STAGE2_BINARY_RELATIVE_PATH));
 }
 
 struct EnvVarGuard {
@@ -2363,6 +2376,28 @@ fn prove_self_hosting_script_preserves_absolute_bundle_dir_and_updates_latest() 
         absolute_bundle.display().to_string()
     );
     assert!(stderr.contains(&format!("proof bundle: {}", absolute_bundle.display())));
+}
+
+#[cfg(unix)]
+#[test]
+fn prove_self_hosting_script_uses_bundle_dir_env_when_cli_arg_absent() {
+    let fixture = ProofScriptFixture::new();
+    std::fs::create_dir_all(fixture.repo_dir.join("tmp")).unwrap();
+    let bundle_arg = "target/env-selected-bundle";
+    let expected_bundle = fixture.repo_dir.join(bundle_arg);
+    let output = fixture.run_args_with_envs(&[], &[(PROOF_BUNDLE_ENV, bundle_arg.to_string())]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let latest_link = fixture.repo_dir.join("target/self-hosting-proof/latest");
+
+    assert!(output.status.success(), "script should succeed, stderr:\n{stderr}");
+    assert!(expected_bundle.join("manifest.json").exists(), "env-selected bundle must receive manifest");
+    assert!(expected_bundle.join("summary.txt").exists(), "env-selected bundle must receive summary");
+    assert_eq!(std::fs::read_link(&latest_link).unwrap(), expected_bundle);
+    assert_eq!(
+        std::fs::read_to_string(expected_bundle.join("env-path.txt")).unwrap().trim(),
+        expected_bundle.display().to_string()
+    );
+    assert!(stderr.contains(&format!("proof bundle: {}", expected_bundle.display())));
 }
 
 #[cfg(unix)]

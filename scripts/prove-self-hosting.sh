@@ -371,6 +371,25 @@ require_nightly_rustc() {
   esac
 }
 
+configure_rust_build_env() {
+  local rustc_path
+
+  rustc_path="$(command -v -- rustc 2>/dev/null || true)"
+  if [[ -z "$rustc_path" ]]; then
+    die "rustc not found after PATH setup"
+  fi
+
+  # Keep witness and proof runs independent from stale caller-local wrappers.
+  # In particular, a previous non-Nix proof can leave a dead rustc shim path in
+  # the parent environment; cargo+sccache otherwise try to reuse it.
+  export RUSTC="$rustc_path"
+  export RUSTC_WRAPPER=""
+  export CARGO_BUILD_RUSTC_WRAPPER=""
+  unset CARGO_BUILD_RUSTC
+  unset CARGO_ENCODED_RUSTFLAGS
+  unset RUSTFLAGS
+}
+
 read_free_space_kib() {
   local dir="${1:?directory is required}"
   local stat_output
@@ -537,6 +556,11 @@ resolve_proof_bundle_dir() {
     return
   fi
 
+  if [[ -n "${CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR:-}" ]]; then
+    normalize_bundle_dir "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
+    return
+  fi
+
   default_proof_bundle_dir
 }
 
@@ -653,6 +677,7 @@ main() {
   proof_later_stage_hermeticity="$(resolve_later_stage_hermeticity)"
   configure_proof_scratch
   configure_non_nix_path
+  configure_rust_build_env
 
   cd "$REPO_ROOT"
 

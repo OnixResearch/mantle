@@ -83,8 +83,8 @@ What the checked-in self-hosting proof demonstrates today:
 - the stage0 and stage2 crunch-built `busybox` and `bwrap` outputs must match
 - in `--non-nix-host` mode, the stage0 command path completes with
   `nix-build`, `nix-store`, `nix-shell`, and `nix` absent from `PATH`
-- successful proof bundles copy this inventory and record the resolved stage0
-  prerequisite paths they used
+- successful proof bundles copy this inventory, durable stage1/stage2 binary
+  artifacts, and the resolved stage0 prerequisite paths they used
 - `crunch release create` can copy a full proof bundle plus this inventory into
   a release-evidence bundle, and `crunch release verify` can later re-check
   bundle-local integrity and proof-context using bundle-local contents only

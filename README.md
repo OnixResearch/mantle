@@ -810,6 +810,9 @@ Each proof bundle contains:
   store or state locations, copied stage metadata, proof mode, and recorded
   stage0 prerequisite paths
 - `summary.txt` — a short human-readable digest summary
+- `binaries/stage1-crunch` and `binaries/stage2-crunch` — durable copies of
+  the fixed-point binaries, so release packaging and witness rebuilds do not
+  depend on temporary proof scratch paths surviving after the proof exits
 - `stage0/` and `stage2/` — copied `meta.json`, `stdout.txt`, `stderr.txt`, and
   `diagnostics.txt` files from the stage audit bundles
 - `stage0-prerequisites/inventory.md` — copied stage0 trust inventory used by
@@ -829,15 +832,17 @@ A successful proof bundle can be packaged as release evidence:
 ```bash
 crunch release create \
   --release-id crunch-<version> \
-  --binary /path/to/crunch \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
   --proof-bundle target/self-hosting-proof/run-...
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
 
 That command builds a staged-source tarball from the current tracked worktree
-plus verified vendored Cargo inputs needed by self-build, then copies the release
-binary, proof bundle, and prerequisite inventory into a
+allowlist, the checked-in witness workflow driver (`scripts/prove-self-hosting.sh`),
+the stage0 inventory document it consumes, the self-hosting test target/support
+files needed by that driver, and verified vendored Cargo inputs, then copies the
+release binary, proof bundle, and prerequisite inventory into a
 new release-evidence bundle under `target/release-evidence/<release-id>/` by
 default. The top-level `manifest.json` records BLAKE3 digests for the source
 archive, bundled binary or binaries, proof-bundle directory, prerequisite
@@ -921,8 +926,11 @@ operator-facing path for replaying that request. It preflights `bwrap`, resolves
 an absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch
 root (`<request-dir>.work/` by default or `$CRUNCH_WITNESS_SCRATCH_DIR`), and
 then calls the machine-readable core command `crunch release witness-rebuild
-<request-dir> ...`. The request directory stays immutable after validation; the
-rebuild output lands under the scratch verification directory together with
+<request-dir> ...`. The core replay preserves the published proof mode, so a
+`non-nix-host` release proof is rebuilt with the helper's `--non-nix-host` path
+scrub instead of silently weakening to the default fixed-point mode. The
+request directory stays immutable after validation; the rebuild output lands
+under the scratch verification directory together with
 `witnesses/<identity>.json`, the matching `.sig`, and
 `witness-rebuild-audit/meta.json` describing the replayed workflow, scratch
 paths, timestamps, and rebuilt output digests. `crunch attest witness-import`

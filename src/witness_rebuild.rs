@@ -44,6 +44,32 @@ const WORKFLOW_VERIFICATION_SEED_DIR_ENV: &str = "CRUNCH_WITNESS_VERIFICATION_SE
 const WORKFLOW_RELEASE_ID_ENV: &str = "CRUNCH_WITNESS_RELEASE_ID";
 const SELF_HOSTING_PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const SELF_HOSTING_PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
+const SELF_HOSTING_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
+const STRICT_HERMETICITY_MODE: &str = "strict";
+const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
+const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
+const WORKFLOW_NON_NIX_HOST_ARG: &str = "--non-nix-host";
+const WORKFLOW_ENV_REMOVE: &[&str] = &[
+    "CARGO_BUILD_RUSTC",
+    "CARGO_BUILD_RUSTC_WRAPPER",
+    "CARGO_BUILD_TARGET",
+    "CARGO_ENCODED_RUSTFLAGS",
+    "CRUNCH_PROOF_OPENSSL_PKGCONFIG",
+    "CRUNCH_PROOF_RUSTUP_TOOLCHAIN",
+    "CRUNCH_PROOF_SCRATCH_DIR",
+    "CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE",
+    "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE",
+    "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR",
+    "RUSTC",
+    "RUSTC_WRAPPER",
+    "RUSTFLAGS",
+    "SCCACHE_DIR",
+    "SCCACHE_ERROR_LOG",
+    "SCCACHE_IGNORE_SERVER_IO_ERROR",
+    "SCCACHE_LOG",
+];
+const WORKFLOW_ARGS_FIXED_POINT: &[&str] = &[];
+const WORKFLOW_ARGS_NON_NIX_HOST: &[&str] = &[WORKFLOW_NON_NIX_HOST_ARG];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExpectedRebuiltOutput {
@@ -78,6 +104,7 @@ pub(crate) struct WitnessRebuildPlan {
     pub request_source_archive_path: PathBuf,
     pub workflow_command: String,
     pub workflow_version: String,
+    pub proof_mode: String,
     pub expected_outputs: Vec<ExpectedRebuiltOutput>,
     pub scratch_layout: WitnessRebuildLayout,
 }
@@ -190,6 +217,7 @@ pub(crate) fn plan_witness_rebuild(request_dir: &Path, scratch_root: &Path) -> R
         request_source_archive_path,
         workflow_command: manifest.workflow.command,
         workflow_version: manifest.workflow.version,
+        proof_mode: manifest.proof_linkage.proof_mode,
         expected_outputs,
         scratch_layout,
     })
@@ -204,10 +232,14 @@ pub(crate) fn prepare_witness_rebuild_scratch(plan: &WitnessRebuildPlan) -> Resu
 
 pub(crate) fn run_witness_rebuild_workflow(plan: &WitnessRebuildPlan) -> Result<WitnessRebuildExecution, RunError> {
     let workflow_driver_path = resolve_workflow_driver_path(plan)?;
+    let workflow_args = workflow_args_for_proof_mode(&plan.proof_mode)?;
     let mut command = Command::new(&workflow_driver_path);
     command.current_dir(&plan.scratch_layout.repo_dir);
+    command.args(workflow_args);
+    sanitize_workflow_environment(&mut command);
     command.env(SELF_HOSTING_PROOF_BUNDLE_ENV, &plan.scratch_layout.proof_bundle_dir);
     command.env(SELF_HOSTING_PROOF_SCRATCH_ENV, &plan.scratch_layout.proof_scratch_dir);
+    command.env(SELF_HOSTING_LATER_STAGE_HERMETICITY_ENV, STRICT_HERMETICITY_MODE);
     command.env(WORKFLOW_REQUEST_DIR_ENV, &plan.request_dir);
     command.env(WORKFLOW_RELEASE_BUNDLE_DIR_ENV, &plan.request_bundle_dir);
     command.env(WORKFLOW_VERIFICATION_SEED_DIR_ENV, &plan.request_verification_seed_dir);
@@ -591,6 +623,22 @@ fn validate_workflow_driver_path(path: PathBuf) -> Result<PathBuf, RunError> {
     Err(RunError::Internal(format!("witness rebuild workflow driver missing: {}", path.display())))
 }
 
+fn workflow_args_for_proof_mode(proof_mode: &str) -> Result<&'static [&'static str], RunError> {
+    if proof_mode == PROOF_MODE_FIXED_POINT {
+        return Ok(WORKFLOW_ARGS_FIXED_POINT);
+    }
+    if proof_mode == PROOF_MODE_NON_NIX_HOST {
+        return Ok(WORKFLOW_ARGS_NON_NIX_HOST);
+    }
+    Err(RunError::Internal(format!("unsupported witness rebuild proof mode: {proof_mode}")))
+}
+
+fn sanitize_workflow_environment(command: &mut Command) {
+    for env_name in WORKFLOW_ENV_REMOVE {
+        command.env_remove(env_name);
+    }
+}
+
 fn write_command_logs(plan: &WitnessRebuildPlan, output: &Output) -> Result<(), RunError> {
     std::fs::create_dir_all(&plan.scratch_layout.audit_dir)
         .map_err(|err| RunError::Internal(format!("creating {}: {err}", plan.scratch_layout.audit_dir.display())))?;
@@ -609,7 +657,10 @@ fn collect_rebuilt_output_paths(plan: &WitnessRebuildPlan) -> Result<Vec<PathBuf
         .map_err(|err| RunError::Build(format!("reading {}: {err}", proof_manifest_path.display())))?;
     let proof_manifest: ProofBundleManifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|err| RunError::Build(format!("parsing {}: {err}", proof_manifest_path.display())))?;
-    let stage2_binary_path = PathBuf::from(proof_manifest.stage2.report.output_binary);
+    let stage2_binary_path = resolve_proof_bundle_artifact_path(
+        &plan.scratch_layout.proof_bundle_dir,
+        &proof_manifest.stage2.report.output_binary,
+    )?;
     if !stage2_binary_path.is_file() {
         return Err(RunError::Build(format!(
             "witness rebuild workflow did not produce stage2 binary: {}",
@@ -632,6 +683,24 @@ fn collect_rebuilt_output_paths(plan: &WitnessRebuildPlan) -> Result<Vec<PathBuf
         .join(parse_request_relative_path(&expected_output.published_name, "published output")?);
     copy_rebuilt_output(&stage2_binary_path, &staged_output_path)?;
     Ok(vec![staged_output_path])
+}
+
+fn resolve_proof_bundle_artifact_path(proof_bundle_dir: &Path, recorded_path: &str) -> Result<PathBuf, RunError> {
+    if recorded_path.trim().is_empty() {
+        return Err(RunError::Build("proof manifest stage2 output_binary is empty".to_string()));
+    }
+    let path = PathBuf::from(recorded_path);
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    for component in path.components() {
+        if matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)) {
+            return Err(RunError::Build(format!(
+                "proof manifest stage2 output_binary must stay inside proof bundle: {recorded_path}"
+            )));
+        }
+    }
+    Ok(proof_bundle_dir.join(path))
 }
 
 fn copy_rebuilt_output(source_path: &Path, dest_path: &Path) -> Result<(), RunError> {
@@ -703,7 +772,7 @@ fn build_audit_meta(
     failure_message: Option<String>,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
     let rebuilt_outputs = build_audit_outputs(&plan.expected_outputs, rebuilt_output_paths)?;
-    let launched_command = vec![workflow_driver_path.display().to_string()];
+    let launched_command = launched_workflow_command(workflow_driver_path, &plan.proof_mode)?;
     Ok(WitnessRebuildAuditMeta {
         schema: WITNESS_REBUILD_AUDIT_SCHEMA.to_string(),
         release_id: plan.release_id.clone(),
@@ -730,6 +799,14 @@ fn build_audit_meta(
         witness_signature_path: signature_path.map(|path| path.display().to_string()),
         failure_message,
     })
+}
+
+fn launched_workflow_command(workflow_driver_path: &Path, proof_mode: &str) -> Result<Vec<String>, RunError> {
+    let mut command = vec![workflow_driver_path.display().to_string()];
+    for arg in workflow_args_for_proof_mode(proof_mode)? {
+        command.push((*arg).to_string());
+    }
+    Ok(command)
 }
 
 fn build_audit_outputs(
@@ -789,6 +866,42 @@ mod tests {
     fn validate_supported_workflow_identity_rejects_unknown_pair() {
         let err = validate_supported_workflow_identity("./scripts/other.sh", "v9").unwrap_err();
         assert!(err.message().contains("unsupported witness rebuild workflow"));
+    }
+
+    #[test]
+    fn resolve_proof_bundle_artifact_path_anchors_relative_paths() {
+        let proof_bundle = PathBuf::from("/tmp/proof-bundle");
+        let path = resolve_proof_bundle_artifact_path(&proof_bundle, "binaries/stage2-crunch").unwrap();
+        assert_eq!(path, proof_bundle.join("binaries/stage2-crunch"));
+    }
+
+    #[test]
+    fn resolve_proof_bundle_artifact_path_rejects_parent_escape() {
+        let proof_bundle = PathBuf::from("/tmp/proof-bundle");
+        let err = resolve_proof_bundle_artifact_path(&proof_bundle, "../stage2-crunch").unwrap_err();
+        assert!(err.message().contains("must stay inside proof bundle"));
+    }
+
+    #[test]
+    fn workflow_args_preserve_non_nix_proof_mode_and_reject_unknown_modes() {
+        let fixed_point = workflow_args_for_proof_mode(PROOF_MODE_FIXED_POINT).unwrap();
+        assert!(fixed_point.is_empty(), "fixed-point workflow uses default helper mode");
+
+        let non_nix = workflow_args_for_proof_mode(PROOF_MODE_NON_NIX_HOST).unwrap();
+        assert_eq!(non_nix, [WORKFLOW_NON_NIX_HOST_ARG]);
+
+        let err = workflow_args_for_proof_mode("future-mode").unwrap_err();
+        assert!(err.message().contains("unsupported witness rebuild proof mode"));
+    }
+
+    #[test]
+    fn launched_workflow_command_records_proof_mode_arguments() {
+        let command =
+            launched_workflow_command(Path::new("/tmp/prove-self-hosting.sh"), PROOF_MODE_NON_NIX_HOST).unwrap();
+        assert_eq!(command, vec![
+            "/tmp/prove-self-hosting.sh".to_string(),
+            WORKFLOW_NON_NIX_HOST_ARG.to_string()
+        ]);
     }
 
     #[test]

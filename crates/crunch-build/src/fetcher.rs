@@ -17,6 +17,7 @@ use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
 use tracing::info;
+use tracing::warn;
 use url::Url;
 
 /// Maximum download size: 4 GiB. Prevents unbounded memory/disk use
@@ -306,6 +307,29 @@ fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
 const FETCH_CONNECT_TIMEOUT_SECS: u64 = 60;
 /// Total read timeout for HTTP fetches (seconds).
 const FETCH_READ_TIMEOUT_SECS: u64 = 600;
+/// Maximum attempts for transient HTTP transport/server failures.
+const FETCH_MAX_ATTEMPTS: u32 = 5;
+/// Initial retry backoff for transient HTTP fetch failures.
+const FETCH_RETRY_BASE_DELAY_MS: u64 = 1_000;
+/// Exponential retry backoff multiplier.
+const FETCH_RETRY_BACKOFF_FACTOR: u64 = 2;
+
+const HTTP_STATUS_REQUEST_TIMEOUT: u16 = 408;
+const HTTP_STATUS_TOO_EARLY: u16 = 425;
+const HTTP_STATUS_TOO_MANY_REQUESTS: u16 = 429;
+const HTTP_STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
+const HTTP_STATUS_BAD_GATEWAY: u16 = 502;
+const HTTP_STATUS_SERVICE_UNAVAILABLE: u16 = 503;
+const HTTP_STATUS_GATEWAY_TIMEOUT: u16 = 504;
+const RETRYABLE_HTTP_STATUS_CODES: &[u16] = &[
+    HTTP_STATUS_REQUEST_TIMEOUT,
+    HTTP_STATUS_TOO_EARLY,
+    HTTP_STATUS_TOO_MANY_REQUESTS,
+    HTTP_STATUS_INTERNAL_SERVER_ERROR,
+    HTTP_STATUS_BAD_GATEWAY,
+    HTTP_STATUS_SERVICE_UNAVAILABLE,
+    HTTP_STATUS_GATEWAY_TIMEOUT,
+];
 
 fn fetch_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -319,6 +343,19 @@ fn fetch_agent() -> ureq::Agent {
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 #[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
 pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
+    fetch_with_retry(
+        || {
+            let result = fetch_flat_once(url, out);
+            if result.is_err() {
+                cleanup_fetch_output(out);
+            }
+            result
+        },
+        sleep_fetch_retry,
+    )
+}
+
+fn fetch_flat_once(url: &str, out: &str) -> Result<(), FetchError> {
     let reader: Box<dyn Read + Send> = open_url_reader(url)?;
     let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(out)?;
@@ -330,10 +367,134 @@ pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
 /// Download a tarball, decompress, and extract to a directory.
 #[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
+    fetch_with_retry(
+        || {
+            let result = fetch_and_unpack_once(url, out);
+            if result.is_err() {
+                cleanup_fetch_output(out);
+            }
+            result
+        },
+        sleep_fetch_retry,
+    )
+}
+
+fn fetch_and_unpack_once(url: &str, out: &str) -> Result<(), FetchError> {
     let reader = open_url_reader(url)?;
     let decompressed = decompress_reader(url, reader)?;
     extract_tar(decompressed, out)?;
     Ok(())
+}
+
+fn fetch_with_retry<F, S>(mut operation: F, mut sleep_ms: S) -> Result<(), FetchError>
+where
+    F: FnMut() -> Result<(), FetchError>,
+    S: FnMut(u64),
+{
+    let mut attempt_number: u32 = 1;
+    loop {
+        assert!(attempt_number >= 1, "attempt numbers are one-based");
+        assert!(attempt_number <= FETCH_MAX_ATTEMPTS, "attempt number must stay bounded");
+        match operation() {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if !should_retry_fetch_error(&error, attempt_number) {
+                    return Err(error);
+                }
+                let delay_ms = fetch_retry_delay_ms(attempt_number);
+                warn!(attempt = attempt_number, max_attempts = FETCH_MAX_ATTEMPTS, delay_ms, error = %error, "transient fetch failed; retrying");
+                sleep_ms(delay_ms);
+                attempt_number = attempt_number.checked_add(1).expect("fetch attempt count must not overflow");
+            }
+        }
+    }
+}
+
+fn should_retry_fetch_error(error: &FetchError, attempt_number: u32) -> bool {
+    assert!(attempt_number >= 1, "attempt numbers are one-based");
+    assert!(FETCH_MAX_ATTEMPTS > 1, "retry policy must allow at least one retry");
+    if attempt_number >= FETCH_MAX_ATTEMPTS {
+        return false;
+    }
+
+    match error {
+        FetchError::HttpError { reason, .. } => is_transient_http_reason(reason),
+        FetchError::Io(err) => is_transient_io_error(err),
+        _ => false,
+    }
+}
+
+fn fetch_retry_delay_ms(attempt_number: u32) -> u64 {
+    assert!(attempt_number >= 1, "attempt numbers are one-based");
+    assert!(attempt_number < FETCH_MAX_ATTEMPTS, "retry delay is only defined before final attempt");
+    let exponent = attempt_number.checked_sub(1).expect("attempt number is nonzero");
+    let multiplier =
+        FETCH_RETRY_BACKOFF_FACTOR.checked_pow(exponent).expect("fetch retry multiplier must not overflow");
+    FETCH_RETRY_BASE_DELAY_MS.checked_mul(multiplier).expect("fetch retry delay must not overflow")
+}
+
+fn sleep_fetch_retry(delay_ms: u64) {
+    assert!(delay_ms > 0, "retry delay must be positive");
+    std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+}
+
+fn is_transient_http_reason(reason: &str) -> bool {
+    assert!(!reason.is_empty(), "HTTP error reason must not be empty");
+    let lower = reason.to_ascii_lowercase();
+    if lower.contains("network unreachable") {
+        return true;
+    }
+    if lower.contains("timed out") {
+        return true;
+    }
+    if lower.contains("connection reset") {
+        return true;
+    }
+    if lower.contains("temporary failure") {
+        return true;
+    }
+    if lower.contains("failed to lookup address information") {
+        return true;
+    }
+    if lower.contains("try again") {
+        return true;
+    }
+    if lower.contains("connection refused") {
+        return true;
+    }
+
+    RETRYABLE_HTTP_STATUS_CODES.iter().any(|status| contains_http_status(&lower, *status))
+}
+
+fn contains_http_status(lower_reason: &str, status: u16) -> bool {
+    assert!(!lower_reason.is_empty(), "HTTP error reason must not be empty");
+    assert!(status >= 100, "HTTP status code must have three digits");
+    let exact_status = format!("http status: {status}");
+    let generic_status = format!("status: {status}");
+    lower_reason.contains(&exact_status) || lower_reason.contains(&generic_status)
+}
+
+fn is_transient_io_error(err: &io::Error) -> bool {
+    matches!(
+        err.kind(),
+        io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::NotConnected
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::Interrupted
+            | io::ErrorKind::WouldBlock
+    )
+}
+
+fn cleanup_fetch_output(path: &str) {
+    assert!(!path.is_empty(), "cleanup path must not be empty");
+    if let Err(error) = std::fs::remove_file(path) {
+        tracing::debug!(%path, %error, "fetch cleanup remove_file skipped");
+    }
+    if let Err(error) = std::fs::remove_dir_all(path) {
+        tracing::debug!(%path, %error, "fetch cleanup remove_dir_all skipped");
+    }
 }
 
 /// Open a reader for a URL. Supports http(s):// and file:// schemes.
@@ -978,9 +1139,7 @@ fn resolve_existing_path_contained(
             return Ok(current);
         }
     }
-    Err(FetchError::TarError(format!(
-        "{context} exceeds {MAX_TAR_SYMLINK_EXPANSIONS} symlink expansions"
-    )))
+    Err(FetchError::TarError(format!("{context} exceeds {MAX_TAR_SYMLINK_EXPANSIONS} symlink expansions")))
 }
 
 // ── Git fetch ──────────────────────────────────────────────────────────
@@ -1558,6 +1717,83 @@ mod tests {
         assert!(err.contains("exceeded timeout"), "timeout path must report timeout: {err}");
         let status = child.try_wait().unwrap();
         assert!(status.is_some(), "timeout path must reap inetd child");
+    }
+
+    #[test]
+    fn fetch_retry_classifies_transient_and_permanent_failures() {
+        let transient_status = FetchError::HttpError {
+            url: "https://mirror.example/src.tar.gz".to_string(),
+            reason: "http status: 502".to_string(),
+        };
+        let transient_transport = FetchError::HttpError {
+            url: "https://mirror.example/src.tar.gz".to_string(),
+            reason: "io: Network unreachable (os error 101)".to_string(),
+        };
+        let transient_dns = FetchError::HttpError {
+            url: "https://mirror.example/src.tar.gz".to_string(),
+            reason: "io: failed to lookup address information: Try again".to_string(),
+        };
+        let permanent_status = FetchError::HttpError {
+            url: "https://mirror.example/missing.tar.gz".to_string(),
+            reason: "http status: 404".to_string(),
+        };
+        let permanent_hash = FetchError::HashMismatch {
+            name: "src".to_string(),
+            expected: "sha256-expected".to_string(),
+            actual: "sha256-actual".to_string(),
+        };
+
+        assert!(should_retry_fetch_error(&transient_status, 1));
+        assert!(should_retry_fetch_error(&transient_transport, 1));
+        assert!(should_retry_fetch_error(&transient_dns, 1));
+        assert!(!should_retry_fetch_error(&permanent_status, 1));
+        assert!(!should_retry_fetch_error(&permanent_hash, 1));
+        assert!(!should_retry_fetch_error(&transient_status, FETCH_MAX_ATTEMPTS));
+    }
+
+    #[test]
+    fn fetch_retry_core_retries_then_returns_success_without_sleeping_in_tests() {
+        let mut calls: u32 = 0;
+        let mut observed_delays = Vec::new();
+
+        let result = fetch_with_retry(
+            || {
+                calls = calls.checked_add(1).unwrap();
+                if calls < 3 {
+                    return Err(FetchError::HttpError {
+                        url: "https://mirror.example/src.tar.gz".to_string(),
+                        reason: "status: 503".to_string(),
+                    });
+                }
+                Ok(())
+            },
+            |delay_ms| observed_delays.push(delay_ms),
+        );
+
+        assert!(result.is_ok(), "transient failures should eventually succeed");
+        assert_eq!(calls, 3);
+        assert_eq!(observed_delays, vec![FETCH_RETRY_BASE_DELAY_MS, FETCH_RETRY_BASE_DELAY_MS * 2]);
+    }
+
+    #[test]
+    fn fetch_retry_core_stops_on_permanent_failure() {
+        let mut calls: u32 = 0;
+        let mut observed_delays = Vec::new();
+
+        let result = fetch_with_retry(
+            || {
+                calls = calls.checked_add(1).unwrap();
+                Err(FetchError::HttpError {
+                    url: "https://mirror.example/missing.tar.gz".to_string(),
+                    reason: "http status: 404".to_string(),
+                })
+            },
+            |delay_ms| observed_delays.push(delay_ms),
+        );
+
+        assert!(result.is_err(), "permanent failures must not be hidden");
+        assert_eq!(calls, 1);
+        assert!(observed_delays.is_empty(), "permanent failures must not sleep before returning");
     }
 
     // ── parse_fetch tests ──────────────────────────────────────────

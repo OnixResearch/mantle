@@ -241,10 +241,11 @@ Release evidence starts from a full proof run, not from
 # Produce a full proof bundle first
 ./scripts/prove-self-hosting.sh
 
-# Package release evidence from tracked worktree files plus verified vendored Cargo inputs
+# Package release evidence from tracked worktree files, witness workflow driver,
+# stage0 inventory, self-hosting test files, and verified vendored Cargo inputs
 crunch release create \
   --release-id crunch-<version> \
-  --binary /path/to/crunch \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
   --proof-bundle target/self-hosting-proof/run-...
 
 # Re-check a saved bundle using only bundle-local contents
@@ -252,6 +253,9 @@ crunch release verify target/release-evidence/<release-id>
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
+The checked-in proof bundle keeps durable copies of stage1 and stage2 under
+`binaries/`, so the packaged release binary can be the proven stage2 output
+rather than a scratch-store path that disappears when the proof exits.
 
 `crunch release verify` proves bundle-local integrity and proof-context only.
 It checks that required bundled artifacts exist, that the manifest stays
@@ -323,9 +327,11 @@ absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch root
 (`target/release-witness-requests/<release-id>.work/` by default or
 `$CRUNCH_WITNESS_SCRATCH_DIR`), rewrites `TMPDIR` and `CARGO_TARGET_DIR` under
 that root, and then calls the machine-readable core command `crunch release
-witness-rebuild <request-dir> ...`. Use `--check` when you want prerequisite and
-request-validation preflight only; successful `--check` output is not rebuild
-proof. The request directory stays immutable after validation. Witness sidecars
+witness-rebuild <request-dir> ...`. The replay preserves the release bundle's
+recorded proof mode, including `--non-nix-host` for non-Nix-host proofs. Use
+`--check` when you want prerequisite and request-validation preflight only;
+successful `--check` output is not rebuild proof. The request directory stays
+immutable after validation. Witness sidecars
 and the rebuild audit directory land under the scratch verification output,
 not back inside the exported request tree.
 
