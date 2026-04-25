@@ -1138,6 +1138,14 @@ fn validate_source_root_manifest_file(manifest_path: &Path) -> Result<SourceRoot
         bootstrap_source_root::parse_source_root_manifest_bytes(&manifest_bytes).map_err(RunError::Internal)?;
     let validation = bootstrap_source_root::validate_source_root_manifest(&manifest)
         .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
+    let empty_provider_trace = bootstrap_source_root::ProviderDependencyTrace {
+        urls: Vec::new(),
+        hashes: Vec::new(),
+        emitted_output_roles: Vec::new(),
+        provider_metadata: Vec::new(),
+    };
+    bootstrap_source_root::validate_provider_dependency_trace(&manifest, &empty_provider_trace)
+        .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
     let expected_output_role_count = u32::try_from(validation.expected_output_roles.len()).map_err(|_| {
         RunError::Internal("source-root manifest expected output role count overflowed u32".to_string())
     })?;
