@@ -30,9 +30,7 @@ struct RawShellSidecar {
 
 impl<'de> Deserialize<'de> for ShellSidecar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawShellSidecar::deserialize(deserializer)?;
         Ok(Self {
             version: raw.version,

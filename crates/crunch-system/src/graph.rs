@@ -45,12 +45,8 @@ pub fn build_dependency_graph_with_limits(
     let module_by_name = index_modules(modules)?;
     let mut edges = initialize_edges(&module_by_name);
     add_input_edges(&module_by_name, &mut edges)?;
-    let provider_edges = add_provider_edges(
-        &module_by_name,
-        &mut edges,
-        max_provider_types_per_module,
-        max_provider_edges,
-    )?;
+    let provider_edges =
+        add_provider_edges(&module_by_name, &mut edges, max_provider_types_per_module, max_provider_edges)?;
     enforce_chain_depth(&module_by_name, &edges, max_chain_depth)?;
 
     Ok(DependencyGraph {
@@ -60,7 +56,10 @@ pub fn build_dependency_graph_with_limits(
     })
 }
 
-pub fn topological_sort(graph: &DependencyGraph, modules: &[ValidatedModule]) -> Result<Vec<String>, SystemConfigError> {
+pub fn topological_sort(
+    graph: &DependencyGraph,
+    modules: &[ValidatedModule],
+) -> Result<Vec<String>, SystemConfigError> {
     let module_priorities = module_priority_map(modules)?;
     let mut indegree = initialize_indegree(&graph.module_names);
     for consumers in graph.edges_from_dependency_to_consumer.values() {
@@ -95,7 +94,9 @@ pub fn topological_sort(graph: &DependencyGraph, modules: &[ValidatedModule]) ->
     Ok(ordered)
 }
 
-fn index_modules<'a>(modules: &'a [ValidatedModule]) -> Result<BTreeMap<String, &'a ValidatedModule>, SystemConfigError> {
+fn index_modules<'a>(
+    modules: &'a [ValidatedModule],
+) -> Result<BTreeMap<String, &'a ValidatedModule>, SystemConfigError> {
     let mut module_by_name = BTreeMap::new();
     for module in modules {
         let replaced = module_by_name.insert(module.module_name.clone(), module);
@@ -110,11 +111,7 @@ fn index_modules<'a>(modules: &'a [ValidatedModule]) -> Result<BTreeMap<String, 
 }
 
 fn initialize_edges(module_by_name: &BTreeMap<String, &ValidatedModule>) -> BTreeMap<String, BTreeSet<String>> {
-    module_by_name
-        .keys()
-        .cloned()
-        .map(|name| (name, BTreeSet::new()))
-        .collect()
+    module_by_name.keys().cloned().map(|name| (name, BTreeSet::new())).collect()
 }
 
 fn add_input_edges(
@@ -164,10 +161,7 @@ fn add_provider_edges(
             ));
         }
         for provider_type in &module.produces_providers {
-            producers_by_type
-                .entry(provider_type.clone())
-                .or_default()
-                .push(module.module_name.clone());
+            producers_by_type.entry(provider_type.clone()).or_default().push(module.module_name.clone());
         }
     }
 
@@ -211,11 +205,7 @@ fn enforce_chain_depth(
         .iter()
         .filter_map(|(name, degree)| if *degree == 0 { Some(name.clone()) } else { None })
         .collect();
-    let mut longest = module_by_name
-        .keys()
-        .cloned()
-        .map(|name| (name, 1usize))
-        .collect::<BTreeMap<_, _>>();
+    let mut longest = module_by_name.keys().cloned().map(|name| (name, 1usize)).collect::<BTreeMap<_, _>>();
     let mut seen_count = 0usize;
 
     while let Some(module_name) = ready.pop_front() {
@@ -432,10 +422,7 @@ mod tests {
 
     #[test]
     fn provider_cycle_names_modules_and_provider_types() {
-        let modules = vec![
-            module("a", &[], &["q"], &["p"], 0),
-            module("b", &[], &["p"], &["q"], 0),
-        ];
+        let modules = vec![module("a", &[], &["q"], &["p"], 0), module("b", &[], &["p"], &["q"], 0)];
         let graph = build_dependency_graph(&modules).unwrap();
         let error = topological_sort(&graph, &modules).unwrap_err();
 

@@ -43,11 +43,7 @@ pub fn validate_inventory_with_limits(
         errors.push(inventory_error(format!("total instance count exceeds configured limit {max_total_instances}")));
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
 fn inventory_error(message: String) -> SystemConfigError {
@@ -62,17 +58,13 @@ fn inventory_error(message: String) -> SystemConfigError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn inventory(machine_count: usize, instance_count_per_service: usize, service_count: usize) -> Inventory {
         let machines = (0..machine_count)
-            .map(|index| {
-                (
-                    format!("machine{index}"),
-                    json!({ "system": "x86_64-linux", "class": "nixos" }),
-                )
-            })
+            .map(|index| (format!("machine{index}"), json!({ "system": "x86_64-linux", "class": "nixos" })))
             .collect::<serde_json::Map<String, serde_json::Value>>();
         let services = (0..service_count)
             .map(|service_index| {
@@ -106,7 +98,9 @@ mod tests {
         let inv = inventory(3, 1, 1);
         let errors = validate_inventory_with_limits(&inv, 2, 10, 10).unwrap_err();
 
-        assert!(errors.iter().any(|error| matches!(error, SystemConfigError::Inventory { message, .. } if message.contains("machine count"))));
+        assert!(errors.iter().any(
+            |error| matches!(error, SystemConfigError::Inventory { message, .. } if message.contains("machine count"))
+        ));
     }
 
     #[test]
@@ -114,7 +108,9 @@ mod tests {
         let inv = inventory(2, 3, 1);
         let errors = validate_inventory_with_limits(&inv, 10, 2, 10).unwrap_err();
 
-        assert!(errors.iter().any(|error| matches!(error, SystemConfigError::Inventory { message, .. } if message.contains("instance count"))));
+        assert!(errors.iter().any(
+            |error| matches!(error, SystemConfigError::Inventory { message, .. } if message.contains("instance count"))
+        ));
     }
 
     #[test]

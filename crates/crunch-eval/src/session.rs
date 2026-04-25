@@ -169,15 +169,10 @@ impl EvaluationSession {
         let source: Arc<str> = source.into();
         let scope: Arc<[OsString]> = import_paths.to_vec().into();
         let source_name: Arc<str> = source_name.to_string().into();
-        let mut ctx = Context::new()
-            .with_added_import_paths(scope.to_vec())
-            .with_source_name(source_name.to_string());
+        let mut ctx = Context::new().with_added_import_paths(scope.to_vec()).with_source_name(source_name.to_string());
 
         assert!(!source.is_empty(), "source must not be empty");
-        assert!(
-            !scope.iter().any(|path| path.is_empty()),
-            "import paths must not contain empty entries"
-        );
+        assert!(!scope.iter().any(|path| path.is_empty()), "import paths must not contain empty entries");
 
         if let Some(labels) = discover_static_record_labels(&source) {
             let init = SessionInit {
@@ -636,7 +631,8 @@ impl AssignmentExecutor for ThreadedExecutor {
 
 const MIN_ROOTS_PER_WORKER: usize = 8;
 const SESSION_REUSE_ALL_ROOTS_MAX_WORKERS: u32 = 2;
-const SESSION_REUSE_ALL_ROOTS_MAX_ROOTS: usize = MIN_ROOTS_PER_WORKER * usize_from_u32_const(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS);
+const SESSION_REUSE_ALL_ROOTS_MAX_ROOTS: usize =
+    MIN_ROOTS_PER_WORKER * usize_from_u32_const(SESSION_REUSE_ALL_ROOTS_MAX_WORKERS);
 
 const fn usize_from_u32_const(value: u32) -> usize {
     value as usize
@@ -849,10 +845,7 @@ fn force_worker_assignment<T: DeserializeOwned + Send>(
     assignment: WorkerAssignment,
 ) -> Result<Vec<IndexedRoot<T>>, WorkerFailure> {
     assert!(!assignment.labels.is_empty(), "worker assignments must not be empty");
-    assert!(
-        u32::try_from(assignment.labels.len()).is_ok(),
-        "worker assignment length must fit in u32"
-    );
+    assert!(u32::try_from(assignment.labels.len()).is_ok(), "worker assignment length must fit in u32");
 
     let worker_labels =
         select_worker_labels(&worker_input.labels, &assignment.labels).map_err(|detail| WorkerFailure {
@@ -927,8 +920,11 @@ fn label_error(label: &str, err: Error) -> Error {
 }
 
 fn discover_static_record_labels(source: &str) -> Option<Vec<RootLabel>> {
-    use nickel_lang_core::cache::{CacheHub, SourcePath};
-    use nickel_lang_core::parser::{ErrorTolerantParserCompat, grammar::TermParser, lexer::Lexer};
+    use nickel_lang_core::cache::CacheHub;
+    use nickel_lang_core::cache::SourcePath;
+    use nickel_lang_core::parser::ErrorTolerantParserCompat;
+    use nickel_lang_core::parser::grammar::TermParser;
+    use nickel_lang_core::parser::lexer::Lexer;
     use nickel_lang_core::position::PosTable;
 
     let mut cache = CacheHub::new();
@@ -949,7 +945,9 @@ fn static_record_labels_from_value(value: &nickel_lang_core::eval::value::Nickel
         Term::Annotated(data) => static_record_labels_from_value(&data.inner),
         Term::Sealed(data) => static_record_labels_from_value(&data.inner),
         Term::Closurize(value) => static_record_labels_from_value(value),
-        Term::RecRecord(data) => collect_static_record_labels(&data.record, data.includes.is_empty(), data.dyn_fields.is_empty()),
+        Term::RecRecord(data) => {
+            collect_static_record_labels(&data.record, data.includes.is_empty(), data.dyn_fields.is_empty())
+        }
         _ => None,
     }
 }
@@ -1135,19 +1133,16 @@ let crunch = import "lib.ncl" in {
 "#;
 
         let labels = discover_static_record_labels(source).unwrap();
-        assert_eq!(
-            labels,
-            vec![
-                RootLabel {
-                    label: "alpha".to_string(),
-                    index: 0,
-                },
-                RootLabel {
-                    label: "beta".to_string(),
-                    index: 1,
-                },
-            ]
-        );
+        assert_eq!(labels, vec![
+            RootLabel {
+                label: "alpha".to_string(),
+                index: 0,
+            },
+            RootLabel {
+                label: "beta".to_string(),
+                index: 1,
+            },
+        ]);
     }
 
     #[test]

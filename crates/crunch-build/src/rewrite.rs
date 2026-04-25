@@ -112,7 +112,10 @@ async fn flatten_tree(
     root: &Node,
     directory_service: &(impl DirectoryService + Clone),
 ) -> Result<Vec<WorkItem>, crate::Error> {
-    assert!(!matches!(root, Node::Symlink { target, .. } if target.as_ref().is_empty()), "root symlink target must not be empty");
+    assert!(
+        !matches!(root, Node::Symlink { target, .. } if target.as_ref().is_empty()),
+        "root symlink target must not be empty"
+    );
     debug_assert!(MAX_REWRITE_NODES > 0, "rewrite node limit must be positive");
     let mut worklist: Vec<WorkItem> = Vec::with_capacity(64);
     let mut expand_stack: Vec<(Node, Option<snix_castore::PathComponent>, Option<u32>, u32)> = Vec::with_capacity(64);
@@ -183,9 +186,10 @@ async fn rewrite_leaf_to_root(
                         if child_found {
                             has_any_rewrite = true;
                         }
-                        let child_name = child_item.name.clone().ok_or_else(|| {
-                            crate::Error::Store(format!("rewrite: directory child {j} has no name"))
-                        })?;
+                        let child_name = child_item
+                            .name
+                            .clone()
+                            .ok_or_else(|| crate::Error::Store(format!("rewrite: directory child {j} has no name")))?;
                         new_dir
                             .add(child_name, child_node)
                             .map_err(|e| crate::Error::Store(format!("rebuilding directory: {e}")))?;

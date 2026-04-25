@@ -55,15 +55,13 @@ impl Assembler for NixosPhase1Assembler {
         machine: &MachineRecord,
         config: &MergedConfig,
     ) -> Result<Vec<CrunchDerivation>, AssemblerError> {
-        let nixos_config = config
-            .data
-            .get("output")
-            .and_then(|value| value.get("nixos"))
-            .cloned()
-            .ok_or_else(|| AssemblerError::Assemble {
-                assembler_name: self.name().to_string(),
-                machine_name: machine_name.to_string(),
-                message: "merged config is missing output.nixos".to_string(),
+        let nixos_config =
+            config.data.get("output").and_then(|value| value.get("nixos")).cloned().ok_or_else(|| {
+                AssemblerError::Assemble {
+                    assembler_name: self.name().to_string(),
+                    machine_name: machine_name.to_string(),
+                    message: "merged config is missing output.nixos".to_string(),
+                }
             })?;
         let config_json = serde_json::to_string(&nixos_config).map_err(|err| AssemblerError::Assemble {
             assembler_name: self.name().to_string(),
@@ -159,8 +157,9 @@ pub fn nixos_output(config: &MergedConfig) -> Option<&Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     struct DummyAssembler {
         assembler_name: String,

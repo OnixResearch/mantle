@@ -25,10 +25,13 @@ pub struct EvalOptions {
 
 pub trait NickelEvaluator {
     fn evaluate_file(&mut self, path: &Path, options: &EvalOptions) -> Result<NickelValue, EvalError>;
-    fn merge(&mut self, left: &NickelValue, right: &NickelValue, options: &EvalOptions)
-        -> Result<NickelValue, EvalError>;
-    fn call(&mut self, func: &NickelValue, arg: &NickelValue, options: &EvalOptions)
-        -> Result<NickelValue, EvalError>;
+    fn merge(
+        &mut self,
+        left: &NickelValue,
+        right: &NickelValue,
+        options: &EvalOptions,
+    ) -> Result<NickelValue, EvalError>;
+    fn call(&mut self, func: &NickelValue, arg: &NickelValue, options: &EvalOptions) -> Result<NickelValue, EvalError>;
     fn get_field(
         &mut self,
         value: &NickelValue,

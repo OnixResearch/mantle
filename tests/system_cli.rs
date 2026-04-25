@@ -1,7 +1,8 @@
+use std::path::Path;
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::Value;
-use std::path::Path;
 
 const EXAMPLE_INVENTORY: &str = "examples/system-config/inventory.ncl";
 const EXAMPLE_PARTIAL_FAILURE_INVENTORY: &str = "examples/system-config/inventory-partial-failure.ncl";
@@ -10,13 +11,7 @@ const EXAMPLE_BAD_MODULES: &str = "examples/system-config/bad-modules";
 
 #[test]
 fn system_eval_produces_machine_envelope_for_two_machines() {
-    let output = run_system_eval(&[
-        "system",
-        "eval",
-        EXAMPLE_INVENTORY,
-        "--modules",
-        EXAMPLE_MODULES,
-    ]);
+    let output = run_system_eval(&["system", "eval", EXAMPLE_INVENTORY, "--modules", EXAMPLE_MODULES]);
 
     let stdout_json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(stdout_json["machines"]["server1"].is_object());
@@ -125,13 +120,7 @@ fn system_build_json_outputs_build_envelope() {
 #[test]
 fn system_build_human_summary_lists_successful_machines() {
     let mut cmd = crunch_command();
-    cmd.args([
-        "system",
-        "build",
-        EXAMPLE_INVENTORY,
-        "--modules",
-        EXAMPLE_MODULES,
-    ]);
+    cmd.args(["system", "build", EXAMPLE_INVENTORY, "--modules", EXAMPLE_MODULES]);
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("server1"))

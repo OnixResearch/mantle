@@ -82,9 +82,7 @@ pub struct ReleaseEvidenceManifest {
     pub proof_linkage: ReleaseProofLinkage,
 }
 
-pub fn canonical_release_evidence_manifest(
-    manifest: ReleaseEvidenceManifest,
-) -> Result<Vec<u8>, ReleaseEvidenceError> {
+pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) -> Result<Vec<u8>, ReleaseEvidenceError> {
     validate_release_evidence_manifest(&manifest)?;
     serde_json::to_vec(&manifest).map_err(|err| parse_error(format!("serializing release evidence manifest: {err}")))
 }

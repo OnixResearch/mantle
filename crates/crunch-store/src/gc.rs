@@ -84,11 +84,7 @@ struct GcPlan {
     reclaimable_bytes_total: u64,
 }
 
-pub async fn run_gc(
-    ctx: &GcContext<'_>,
-    ca_mappings: &mut CaMappings,
-    is_dry_run: bool,
-) -> Result<GcReport, Error> {
+pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_run: bool) -> Result<GcReport, Error> {
     assert!(!ctx.store_dir.is_empty(), "store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "store_dir must be absolute");
 
@@ -137,7 +133,9 @@ pub async fn run_gc(
         .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
         .collect();
     ca_mappings.retain_output_paths(&live_paths);
-    ca_mappings.save_checked(ctx.state_dir).map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
+    ca_mappings
+        .save_checked(ctx.state_dir)
+        .map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
     gc_result.operations.push(GcOperationKind::CaMappings);
 
     Ok(gc_result)
@@ -460,16 +458,14 @@ fn scan_blob_dir(
         for entry in std::fs::read_dir(&current_dir)
             .map_err(|err| Error::Gc(format!("reading {}: {err}", current_dir.display())))?
         {
-            let entry =
-                entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current_dir.display())))?;
+            let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current_dir.display())))?;
             *scanned_entries = scanned_entries.saturating_add(1);
             if *scanned_entries > MAX_GC_FILE_SCAN_ENTRIES {
                 return Err(Error::Gc(format!("blob scan exceeded {} entries", MAX_GC_FILE_SCAN_ENTRIES)));
             }
             let path = entry.path();
-            let file_type = entry
-                .file_type()
-                .map_err(|err| Error::Gc(format!("reading {} file type: {err}", path.display())))?;
+            let file_type =
+                entry.file_type().map_err(|err| Error::Gc(format!("reading {} file type: {err}", path.display())))?;
             if file_type.is_dir() {
                 worklist.push(path);
                 continue;
@@ -529,10 +525,7 @@ fn path_size_bytes(root: &Path) -> Result<u64, Error> {
     worklist.push(root.to_path_buf());
 
     while let Some(current) = worklist.pop() {
-        assert!(
-            worklist.len() < MAX_WORKLIST,
-            "path walk directory nesting exceeded {MAX_WORKLIST}"
-        );
+        assert!(worklist.len() < MAX_WORKLIST, "path walk directory nesting exceeded {MAX_WORKLIST}");
         seen_entries = seen_entries.saturating_add(1);
         if seen_entries > MAX_GC_BYTES_WALK_ENTRIES {
             return Err(Error::Gc(format!("path walk exceeded {} entries", MAX_GC_BYTES_WALK_ENTRIES)));
@@ -550,11 +543,10 @@ fn path_size_bytes(root: &Path) -> Result<u64, Error> {
             continue;
         }
 
-        for entry in std::fs::read_dir(&current)
-            .map_err(|err| Error::Gc(format!("reading {}: {err}", current.display())))?
+        for entry in
+            std::fs::read_dir(&current).map_err(|err| Error::Gc(format!("reading {}: {err}", current.display())))?
         {
-            let entry =
-                entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current.display())))?;
+            let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current.display())))?;
             worklist.push(entry.path());
         }
     }
@@ -600,10 +592,7 @@ async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> R
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
     assert!(state_dir.is_dir(), "rewrite_pathinfo_db: state_dir must exist");
-    assert!(
-        live_pathinfos.iter().all(|pi| !pi.signatures.is_empty()),
-        "all retained PathInfos must be signed"
-    );
+    assert!(live_pathinfos.iter().all(|pi| !pi.signatures.is_empty()), "all retained PathInfos must be signed");
 
     let final_path = state_dir.join("pathinfo.redb");
     let tmp_path = state_dir.join("pathinfo.redb.gc-tmp");
@@ -661,10 +650,7 @@ async fn rewrite_directory_db<'a>(
             .map_err(|err| Error::Gc(format!("writing rewritten directory DB: {err}")))?;
     }
     drop(tmp_service);
-    assert!(
-        tmp_path.exists(),
-        "rewrite_directory_db: tmp file must exist before rename"
-    );
+    assert!(tmp_path.exists(), "rewrite_directory_db: tmp file must exist before rename");
     std::fs::rename(&tmp_path, &final_path)
         .map_err(|err| Error::Gc(format!("renaming {} -> {}: {err}", tmp_path.display(), final_path.display())))?;
     Ok(())

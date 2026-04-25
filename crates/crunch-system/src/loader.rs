@@ -23,37 +23,21 @@ pub fn discover_module_files_with_limit(
 ) -> Result<Vec<(String, PathBuf)>, SystemConfigError> {
     assert!(module_limit > 0, "module limit must be positive");
     if !dir.exists() {
-        return Err(loader_error(
-            format!("module directory does not exist: {}", dir.display()),
-            None,
-            None,
-        ));
+        return Err(loader_error(format!("module directory does not exist: {}", dir.display()), None, None));
     }
     if !dir.is_dir() {
-        return Err(loader_error(
-            format!("module path is not a directory: {}", dir.display()),
-            None,
-            None,
-        ));
+        return Err(loader_error(format!("module path is not a directory: {}", dir.display()), None, None));
     }
 
     let entries = std::fs::read_dir(dir).map_err(|err| {
-        loader_error(
-            format!("reading module directory {}", dir.display()),
-            None,
-            Some(err.to_string()),
-        )
+        loader_error(format!("reading module directory {}", dir.display()), None, Some(err.to_string()))
     })?;
     let mut discovered = Vec::new();
     let mut stem_paths = BTreeMap::<String, PathBuf>::new();
 
     for entry_result in entries {
         let entry = entry_result.map_err(|err| {
-            loader_error(
-                format!("reading module directory entry in {}", dir.display()),
-                None,
-                Some(err.to_string()),
-            )
+            loader_error(format!("reading module directory entry in {}", dir.display()), None, Some(err.to_string()))
         })?;
         let path = entry.path();
         if !path.is_file() {
@@ -63,11 +47,7 @@ pub fn discover_module_files_with_limit(
             continue;
         }
         if discovered.len() >= module_limit {
-            return Err(loader_error(
-                format!("module count exceeds configured limit {module_limit}"),
-                None,
-                None,
-            ));
+            return Err(loader_error(format!("module count exceeds configured limit {module_limit}"), None, None));
         }
         let stem = path
             .file_stem()
@@ -98,32 +78,31 @@ pub async fn validate_module(
         timeout: None,
         import_paths: Vec::new(),
     };
-    let interface_id = handle
-        .get_field(value_id, "interface".to_string(), options.clone())
-        .await
-        .map_err(|err| loader_error(format!("module '{name}' is missing interface"), Some(name.to_string()), Some(err.to_string())))?;
-    let roles_id = handle
-        .get_field(interface_id, "roles".to_string(), options.clone())
-        .await
-        .map_err(|err| loader_error(format!("module '{name}' is missing interface.roles"), Some(name.to_string()), Some(err.to_string())))?;
-    let roles_json = handle
-        .to_json(roles_id, options.clone())
-        .await
-        .map_err(|err| loader_error(format!("module '{name}' has invalid interface.roles"), Some(name.to_string()), Some(err.to_string())))?;
-    let impl_id = handle
-        .get_field(value_id, "impl".to_string(), options.clone())
-        .await
-        .map_err(|err| loader_error(format!("module '{name}' is missing impl"), Some(name.to_string()), Some(err.to_string())))?;
-    let impl_is_function = handle
-        .is_function(impl_id, options.clone())
-        .await
-        .map_err(|err| loader_error(format!("module '{name}' impl validation failed"), Some(name.to_string()), Some(err.to_string())))?;
-    if !impl_is_function {
-        return Err(loader_error(
-            format!("module '{name}' impl is not a function"),
+    let interface_id = handle.get_field(value_id, "interface".to_string(), options.clone()).await.map_err(|err| {
+        loader_error(format!("module '{name}' is missing interface"), Some(name.to_string()), Some(err.to_string()))
+    })?;
+    let roles_id = handle.get_field(interface_id, "roles".to_string(), options.clone()).await.map_err(|err| {
+        loader_error(
+            format!("module '{name}' is missing interface.roles"),
             Some(name.to_string()),
-            None,
-        ));
+            Some(err.to_string()),
+        )
+    })?;
+    let roles_json = handle.to_json(roles_id, options.clone()).await.map_err(|err| {
+        loader_error(
+            format!("module '{name}' has invalid interface.roles"),
+            Some(name.to_string()),
+            Some(err.to_string()),
+        )
+    })?;
+    let impl_id = handle.get_field(value_id, "impl".to_string(), options.clone()).await.map_err(|err| {
+        loader_error(format!("module '{name}' is missing impl"), Some(name.to_string()), Some(err.to_string()))
+    })?;
+    let impl_is_function = handle.is_function(impl_id, options.clone()).await.map_err(|err| {
+        loader_error(format!("module '{name}' impl validation failed"), Some(name.to_string()), Some(err.to_string()))
+    })?;
+    if !impl_is_function {
+        return Err(loader_error(format!("module '{name}' impl is not a function"), Some(name.to_string()), None));
     }
     let _ = options;
 
@@ -172,20 +151,12 @@ async fn extract_optional_string_array(
         )
     })?;
     let Value::Array(items) = value else {
-        return Err(loader_error(
-            format!("module field '{field_name}' must be an array"),
-            None,
-            None,
-        ));
+        return Err(loader_error(format!("module field '{field_name}' must be an array"), None, None));
     };
     let mut values = Vec::with_capacity(items.len());
     for item in items {
         let Some(string_value) = item.as_str() else {
-            return Err(loader_error(
-                format!("module field '{field_name}' must contain only strings"),
-                None,
-                None,
-            ));
+            return Err(loader_error(format!("module field '{field_name}' must contain only strings"), None, None));
         };
         values.push(string_value.to_string());
     }
@@ -235,9 +206,10 @@ fn loader_error(message: String, module_name: Option<String>, detail: Option<Str
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::threading::EvalThread;
-    use std::time::Duration;
 
     fn eval_options() -> EvalOptions {
         EvalOptions {
@@ -344,7 +316,9 @@ mod tests {
 
         let result = validate_module("missing_interface", value_id, &handle).await;
 
-        assert!(matches!(result, Err(SystemConfigError::Loader { message, .. }) if message.contains("missing interface")));
+        assert!(
+            matches!(result, Err(SystemConfigError::Loader { message, .. }) if message.contains("missing interface"))
+        );
         handle.shutdown().await.unwrap();
     }
 

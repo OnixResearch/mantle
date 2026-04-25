@@ -189,12 +189,16 @@ fn validate_registry(registry: &BTreeMap<String, GcRootRecord>) -> Result<(), Er
     Ok(())
 }
 
-#[allow(tigerstyle::ambient_clock, reason = "shell boundary clock read for persisted GC root metadata")]
+#[allow(
+    tigerstyle::ambient_clock,
+    reason = "shell boundary clock read for persisted GC root metadata"
+)]
 fn current_unix_seconds() -> Result<i64, Error> {
     let since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| Error::RootRegistry(format!("system clock before unix epoch: {err}")))?;
-    i64::try_from(since_epoch.as_secs()).map_err(|_| Error::RootRegistry("unix timestamp exceeds i64 range".to_string()))
+    i64::try_from(since_epoch.as_secs())
+        .map_err(|_| Error::RootRegistry("unix timestamp exceeds i64 range".to_string()))
 }
 
 #[cfg(test)]
@@ -329,13 +333,10 @@ mod tests {
         });
         save_registry(state_dir.path(), &registry).unwrap();
 
-        let removed = unpin_root(
-            state_dir.path(),
-            LogicalStorePathRef {
-                logical_path: &path,
-                store_dir: "/nix/store",
-            },
-        )
+        let removed = unpin_root(state_dir.path(), LogicalStorePathRef {
+            logical_path: &path,
+            store_dir: "/nix/store",
+        })
         .unwrap();
         let listed = list_roots(state_dir.path()).unwrap();
 

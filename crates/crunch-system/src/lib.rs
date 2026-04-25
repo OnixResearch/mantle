@@ -10,16 +10,13 @@ pub mod inventory_validate;
 pub mod loader;
 pub mod threading;
 
-pub use crunch_eval::Expr as NickelValue;
-
 use std::collections::BTreeMap;
+
+pub use crunch_eval::Expr as NickelValue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FragmentSource {
-    Module {
-        module_name: String,
-        role_name: String,
-    },
+    Module { module_name: String, role_name: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,9 +46,15 @@ pub struct MergedConfig {
 
 #[derive(Debug, Clone)]
 pub enum MachineOutcome {
-    Fragments { merged_config: MergedConfig },
-    Derivations { derivations: Vec<crunch_glue::CrunchDerivation> },
-    Build { reports: Vec<serde_json::Value> },
+    Fragments {
+        merged_config: MergedConfig,
+    },
+    Derivations {
+        derivations: Vec<crunch_glue::CrunchDerivation>,
+    },
+    Build {
+        reports: Vec<serde_json::Value>,
+    },
     Failed,
 }
 

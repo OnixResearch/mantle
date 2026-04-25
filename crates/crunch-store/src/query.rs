@@ -14,9 +14,8 @@ use snix_store::nar::NarCalculationService;
 use snix_store::nar::SimpleRenderer;
 use snix_store::pathinfoservice::PathInfoService;
 
-use crate::gc::saturating_u32;
-
 use crate::Error;
+use crate::gc::saturating_u32;
 
 /// Info for a single store path, returned by `store_info`.
 #[derive(Debug)]
@@ -112,10 +111,7 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
 /// Optionally filters to paths matching `path_filter`. Returns per-path
 /// results (Ok, Missing, or Mismatch).
 pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) -> Result<Vec<VerifyResult>, Error> {
-    assert!(
-        path_filter.map_or(true, |f| !f.is_empty()),
-        "store_verify: use None instead of empty filter"
-    );
+    assert!(path_filter.map_or(true, |f| !f.is_empty()), "store_verify: use None instead of empty filter");
 
     #[allow(tigerstyle::explicit_defaults)]
     let bs = MemoryBlobService::default();
@@ -124,7 +120,7 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
         cache_size: None,
         read_only: false,
     })
-        .map_err(|e| Error::DirectoryService(format!("{e}")))?;
+    .map_err(|e| Error::DirectoryService(format!("{e}")))?;
 
     const MAX_VERIFY_ENTRIES: u32 = 1_000_000;
     let mut stream = svc.list();

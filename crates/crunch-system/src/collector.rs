@@ -58,7 +58,15 @@ pub fn merge_fragments_with_limit(
     let mut errors = Vec::new();
 
     for fragment in fragments {
-        let next = merge_value(&merged, &fragment.data, &fragment.module_name, &fragment.module_name, "$", &mut provenance, &mut errors);
+        let next = merge_value(
+            &merged,
+            &fragment.data,
+            &fragment.module_name,
+            &fragment.module_name,
+            "$",
+            &mut provenance,
+            &mut errors,
+        );
         merged = next;
     }
 
@@ -92,7 +100,9 @@ fn merge_value(
             for (key, right_value) in right_map {
                 let next_path = next_path(path, key);
                 let next_value = match merged.get(key) {
-                    Some(left_value) => merge_value(left_value, right_value, left_module, right_module, &next_path, provenance, errors),
+                    Some(left_value) => {
+                        merge_value(left_value, right_value, left_module, right_module, &next_path, provenance, errors)
+                    }
                     None => right_value.clone(),
                 };
                 if path == "$" {
@@ -161,10 +171,12 @@ fn fragment_error(message: String, field_path: Option<String>) -> SystemConfigEr
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use serde_json::json;
+
     use super::*;
     use crate::FragmentSource;
-    use serde_json::json;
-    use std::collections::BTreeSet;
 
     fn inventory() -> Inventory {
         serde_json::from_value(json!({

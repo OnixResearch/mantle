@@ -20,8 +20,14 @@ pub(crate) async fn nar_hash(
     directory_service: impl DirectoryService,
 ) -> Result<NixHash, Error> {
     use nix_compat::nixhash::HashAlgo;
-    assert!(!matches!(node, Node::Symlink { target, .. } if target.as_ref().is_empty()), "symlink node target must not be empty");
-    assert!(matches!(node, Node::Symlink { .. } | Node::File { .. } | Node::Directory { .. }), "node must be a known variant");
+    assert!(
+        !matches!(node, Node::Symlink { target, .. } if target.as_ref().is_empty()),
+        "symlink node target must not be empty"
+    );
+    assert!(
+        matches!(node, Node::Symlink { .. } | Node::File { .. } | Node::Directory { .. }),
+        "node must be a known variant"
+    );
 
     match algo {
         HashAlgo::Md5 => {

@@ -1,13 +1,14 @@
 //! Binary cache directory push: export signed PathInfo as narinfo + NAR files.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 use nix_compat::nixbase32;
 use snix_store::path_info::PathInfo;
 use tokio::io::AsyncWriteExt;
 
-use crate::handle::StoreHandle;
 use crate::Error;
+use crate::handle::StoreHandle;
 
 /// Options controlling push behavior.
 #[derive(Debug, Clone)]
@@ -195,20 +196,17 @@ fn temp_path_for(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::StoreConfig;
-    use crate::StoreFallbackMode;
     use nix_compat::store_path::StorePath;
     use snix_castore::Node;
     use snix_store::path_info::PathInfo;
     use tokio::io::AsyncWriteExt;
 
+    use super::*;
+    use crate::StoreConfig;
+    use crate::StoreFallbackMode;
+
     /// Build a minimal signed PathInfo with a single blob in the store.
-    async fn make_signed_pathinfo(
-        handle: &StoreHandle,
-        name: &str,
-        content: &[u8],
-    ) -> PathInfo {
+    async fn make_signed_pathinfo(handle: &StoreHandle, name: &str, content: &[u8]) -> PathInfo {
         // Ingest blob.
         let mut writer = handle.blob_service().open_write().await;
         writer.write_all(content).await.unwrap();
@@ -257,14 +255,8 @@ mod tests {
     fn sign_pathinfo(pi: &mut PathInfo) {
         let signing_key = test_signing_key();
         let store_path_ref: nix_compat::store_path::StorePathRef = pi.store_path.as_ref();
-        let refs: Vec<nix_compat::store_path::StorePathRef> =
-            pi.references.iter().map(StorePath::as_ref).collect();
-        let fp = nix_compat::narinfo::fingerprint(
-            &store_path_ref,
-            &pi.nar_sha256,
-            pi.nar_size,
-            refs.iter(),
-        );
+        let refs: Vec<nix_compat::store_path::StorePathRef> = pi.references.iter().map(StorePath::as_ref).collect();
+        let fp = nix_compat::narinfo::fingerprint(&store_path_ref, &pi.nar_sha256, pi.nar_size, refs.iter());
         let sig = signing_key.sign(fp.as_bytes()).to_owned();
         pi.signatures.push(sig);
     }
@@ -277,9 +269,7 @@ mod tests {
         let node = node.clone();
         let blob_service = handle.blob_service();
         let directory_service = handle.directory_service();
-        let write_task = tokio::spawn(async move {
-            write_nar(writer, &node, blob_service, directory_service).await
-        });
+        let write_task = tokio::spawn(async move { write_nar(writer, &node, blob_service, directory_service).await });
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).await.unwrap();
         write_task.await.unwrap().unwrap();
@@ -309,14 +299,9 @@ mod tests {
         let pi = make_signed_pathinfo(&handle, "hello", b"hello world").await;
 
         let dest = tmp.path().join("cache");
-        let report = export_paths_to_cache_dir(
-            &handle,
-            &[pi.clone()],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        let report = export_paths_to_cache_dir(&handle, &[pi.clone()], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         assert_eq!(report.pushed_count, 1);
         assert_eq!(report.skipped_unsigned_count, 0);
@@ -360,14 +345,9 @@ mod tests {
         pi.signatures.clear(); // make it unsigned
 
         let dest = tmp.path().join("cache");
-        let report = export_paths_to_cache_dir(
-            &handle,
-            &[pi],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        let report = export_paths_to_cache_dir(&handle, &[pi], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         assert_eq!(report.pushed_count, 0);
         assert_eq!(report.skipped_unsigned_count, 1);
@@ -382,14 +362,9 @@ mod tests {
         pi.signatures.clear();
 
         let dest = tmp.path().join("cache");
-        let report = export_paths_to_cache_dir(
-            &handle,
-            &[pi],
-            &dest,
-            &PushOptions { trust_unsigned: true },
-        )
-        .await
-        .unwrap();
+        let report = export_paths_to_cache_dir(&handle, &[pi], &dest, &PushOptions { trust_unsigned: true })
+            .await
+            .unwrap();
 
         assert_eq!(report.pushed_count, 1);
         assert_eq!(report.skipped_unsigned_count, 0);
@@ -423,14 +398,9 @@ mod tests {
         let c = make_signed_pathinfo(&handle, "pkg-c", b"ccc").await;
 
         let dest = tmp.path().join("cache");
-        let report = export_paths_to_cache_dir(
-            &handle,
-            &[a, b, c],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        let report = export_paths_to_cache_dir(&handle, &[a, b, c], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         assert_eq!(report.pushed_count, 3);
         assert_eq!(report.paths.len(), 3);
@@ -460,14 +430,9 @@ mod tests {
         sign_pathinfo(&mut pi);
 
         let dest = tmp.path().join("cache");
-        export_paths_to_cache_dir(
-            &handle,
-            &[pi.clone()],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        export_paths_to_cache_dir(&handle, &[pi.clone()], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         let digest_str = nixbase32::encode(pi.store_path.digest());
         let narinfo_text = std::fs::read_to_string(dest.join(format!("{digest_str}.narinfo"))).unwrap();
@@ -482,10 +447,7 @@ mod tests {
             narinfo_text.contains(&format!("NarHash: sha256:{expected_hash_str}")),
             "NarHash must match PathInfo"
         );
-        assert!(
-            narinfo_text.contains(&format!("NarSize: {}", pi.nar_size)),
-            "NarSize must match PathInfo"
-        );
+        assert!(narinfo_text.contains(&format!("NarSize: {}", pi.nar_size)), "NarSize must match PathInfo");
     }
 
     #[tokio::test]
@@ -499,14 +461,9 @@ mod tests {
         let existing = "StoreDir: /custom/store\nPriority: 10\n";
         std::fs::write(dest.join("nix-cache-info"), existing).unwrap();
 
-        export_paths_to_cache_dir(
-            &handle,
-            &[pi],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        export_paths_to_cache_dir(&handle, &[pi], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         let cache_info = std::fs::read_to_string(dest.join("nix-cache-info")).unwrap();
         assert_eq!(cache_info, existing, "existing nix-cache-info must be preserved");
@@ -535,14 +492,9 @@ mod tests {
         let pi = make_signed_pathinfo(&handle, "hello", b"hello world").await;
 
         let dest = tmp.path().join("cache");
-        let report = export_paths_to_cache_dir(
-            &handle,
-            &[pi.clone()],
-            &dest,
-            &PushOptions { trust_unsigned: false },
-        )
-        .await
-        .unwrap();
+        let report = export_paths_to_cache_dir(&handle, &[pi.clone()], &dest, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
 
         assert_eq!(report.pushed_count, 1);
 
@@ -560,9 +512,6 @@ mod tests {
             narinfo_text.contains("StorePath: /crunch/store/"),
             "narinfo must use /crunch/store prefix, got: {narinfo_text}"
         );
-        assert!(
-            !narinfo_text.contains("/nix/store/"),
-            "narinfo must not contain /nix/store/, got: {narinfo_text}"
-        );
+        assert!(!narinfo_text.contains("/nix/store/"), "narinfo must not contain /nix/store/, got: {narinfo_text}");
     }
 }

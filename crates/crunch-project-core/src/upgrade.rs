@@ -43,9 +43,9 @@ fn migrate_one_step(lock: Lockfile) -> Result<Lockfile, Error> {
             version: SchemaVersion::CURRENT,
             ..lock
         }),
-        (major, minor, patch) => Err(Error::Upgrade(format!(
-            "no migration defined from version {major}.{minor}.{patch}"
-        ))),
+        (major, minor, patch) => {
+            Err(Error::Upgrade(format!("no migration defined from version {major}.{minor}.{patch}")))
+        }
     }
 }
 

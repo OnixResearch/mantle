@@ -918,9 +918,7 @@ fn store_pull_rejects_http_url_with_userinfo() {
         .arg("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test")
         .assert()
         .code(3)
-        .stderr(predicate::str::contains(
-            "HTTP pull source must not include URL credentials",
-        ));
+        .stderr(predicate::str::contains("HTTP pull source must not include URL credentials"));
 }
 
 #[test]
@@ -939,9 +937,7 @@ fn store_pull_rejects_unsupported_url_scheme() {
         .arg("/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test")
         .assert()
         .code(3)
-        .stderr(predicate::str::contains(
-            "unsupported pull source URL scheme",
-        ));
+        .stderr(predicate::str::contains("unsupported pull source URL scheme"));
 }
 
 #[test]

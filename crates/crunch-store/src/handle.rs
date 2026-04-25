@@ -513,13 +513,10 @@ impl StoreHandle {
     }
 
     pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
-        roots::unpin_root(
-            &self.state_dir,
-            roots::LogicalStorePathRef {
-                logical_path,
-                store_dir: &self.store_dir,
-            },
-        )
+        roots::unpin_root(&self.state_dir, roots::LogicalStorePathRef {
+            logical_path,
+            store_dir: &self.store_dir,
+        })
     }
 
     pub async fn register_retained_root(
@@ -560,16 +557,13 @@ impl StoreHandle {
         let blob_service = self.blob_service();
         let directory_service = self.directory_service();
 
-        let write_task =
-            tokio::spawn(async move { write_nar(writer, &node, blob_service, directory_service).await });
+        let write_task = tokio::spawn(async move { write_nar(writer, &node, blob_service, directory_service).await });
 
-        tokio::io::copy(&mut reader, dest)
-            .await
-            .map_err(|e| Error::Export(format!("streaming NAR: {e}")))?;
+        tokio::io::copy(&mut reader, dest).await.map_err(|e| Error::Export(format!("streaming NAR: {e}")))?;
 
         write_task
             .await
-            .map_err(|e| Error::Export(format!("NAR writer task panicked: {e}")))?  
+            .map_err(|e| Error::Export(format!("NAR writer task panicked: {e}")))?
             .map_err(|e| Error::Export(format!("rendering NAR: {e}")))?;
 
         Ok(())
@@ -1786,10 +1780,7 @@ impl StoreHandle {
     /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
     /// "always sign before persist" invariant at the storage boundary,
     /// even if a caller constructs the PathInfo itself.
-    pub async fn persist_and_export_signed_output(
-        &mut self,
-        req: PersistOutputRequest<'_>,
-    ) -> Result<PathInfo, Error> {
+    pub async fn persist_and_export_signed_output(&mut self, req: PersistOutputRequest<'_>) -> Result<PathInfo, Error> {
         assert!(!req.output_name.is_empty(), "output_name must not be empty");
 
         if req.path_info.store_path != *req.output_path {
@@ -1820,7 +1811,9 @@ impl StoreHandle {
         self.built_outputs.insert(abs_path, req.path_info.clone());
         self.output_nodes.insert(req.output_path.clone(), req.final_node.clone());
         self.export_output_if_needed(req.output_path, &req.final_node, req.is_root).await?;
-        if req.is_root && let Some(source) = req.root_source {
+        if req.is_root
+            && let Some(source) = req.root_source
+        {
             self.register_retained_root(req.output_path, source).await?;
         }
 
@@ -1855,8 +1848,6 @@ impl StoreHandle {
             Err(e) => Err(Error::Export(format!("exporting output {abs_path} to disk: {e}"))),
         }
     }
-
-
 
     pub async fn get_artifact_attestation(
         &self,
@@ -1978,10 +1969,7 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
             let frame = serde_json::from_slice::<DeltaTransferFrameWire>(&line)
                 .map_err(|e| format!("decoding delta stream frame: {e}"))?;
             frames.push(frame);
-            assert!(
-                frames.len() <= MAX_FRAME_COUNT,
-                "delta transfer frame count exceeded {MAX_FRAME_COUNT}"
-            );
+            assert!(frames.len() <= MAX_FRAME_COUNT, "delta transfer frame count exceeded {MAX_FRAME_COUNT}");
         }
     }
 
@@ -1990,10 +1978,7 @@ async fn decode_delta_transfer_frames(response: reqwest::Response) -> Result<Vec
             .map_err(|e| format!("decoding trailing delta stream frame: {e}"))?;
         frames.push(frame);
     }
-    assert!(
-        frames.len() <= MAX_FRAME_COUNT,
-        "final delta transfer frame count exceeded {MAX_FRAME_COUNT}"
-    );
+    assert!(frames.len() <= MAX_FRAME_COUNT, "final delta transfer frame count exceeded {MAX_FRAME_COUNT}");
 
     Ok(frames)
 }
@@ -2023,11 +2008,7 @@ fn parse_remote_trusted_public_keys(url_str: &str) -> Result<Vec<VerifyingKey>, 
             VerifyingKey::parse(&key_text).map_err(|e| format!("parsing trusted public key '{key_text}': {e}"))?;
         trusted_public_keys.push(key);
     }
-    assert_eq!(
-        trusted_public_keys.len(),
-        expected_key_count,
-        "every indexed key must produce a verifying key"
-    );
+    assert_eq!(trusted_public_keys.len(), expected_key_count, "every indexed key must produce a verifying key");
     Ok(trusted_public_keys)
 }
 
@@ -2127,7 +2108,7 @@ async fn open_pathinfo_service(
                 cache_size: None,
                 read_only: false,
             })
-                .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
+            .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
             let detail = format!("{detail}; using in-memory fallback");
             Ok((Arc::new(svc), vec![StoreAuditEvent::new(StoreAuditKind::PathInfoFallback, detail)]))
         }

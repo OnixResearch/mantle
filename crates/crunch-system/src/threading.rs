@@ -130,12 +130,13 @@ impl EvalThreadHandle {
         field_name: String,
         options: EvalOptions,
     ) -> Result<ValueId, EvalError> {
-        match self.send_request(EvalRequest::GetField {
-            value_id,
-            field_name,
-            options,
-        })
-        .await?
+        match self
+            .send_request(EvalRequest::GetField {
+                value_id,
+                field_name,
+                options,
+            })
+            .await?
         {
             EvalResponse::Value(next_value_id) => Ok(next_value_id),
             _ => Err(EvalError::NickelError("unexpected response type for get_field".to_string())),
@@ -149,18 +150,14 @@ impl EvalThreadHandle {
         }
     }
 
-    pub async fn merge(
-        &self,
-        left_id: ValueId,
-        right_id: ValueId,
-        options: EvalOptions,
-    ) -> Result<ValueId, EvalError> {
-        match self.send_request(EvalRequest::Merge {
-            left_id,
-            right_id,
-            options,
-        })
-        .await?
+    pub async fn merge(&self, left_id: ValueId, right_id: ValueId, options: EvalOptions) -> Result<ValueId, EvalError> {
+        match self
+            .send_request(EvalRequest::Merge {
+                left_id,
+                right_id,
+                options,
+            })
+            .await?
         {
             EvalResponse::Value(value_id) => Ok(value_id),
             _ => Err(EvalError::NickelError("unexpected response type for merge".to_string())),
@@ -173,12 +170,13 @@ impl EvalThreadHandle {
         argument_id: ValueId,
         options: EvalOptions,
     ) -> Result<ValueId, EvalError> {
-        match self.send_request(EvalRequest::Call {
-            function_id,
-            argument_id,
-            options,
-        })
-        .await?
+        match self
+            .send_request(EvalRequest::Call {
+                function_id,
+                argument_id,
+                options,
+            })
+            .await?
         {
             EvalResponse::Value(value_id) => Ok(value_id),
             _ => Err(EvalError::NickelError("unexpected response type for call".to_string())),
@@ -297,9 +295,9 @@ impl OnThreadEvaluator {
         let source = fs::read_to_string(path)
             .map_err(|err| EvalError::NickelError(format!("reading {}: {err}", path.display())))?;
         let import_paths = build_import_paths(path, options, &self.import_paths)?;
-        let os_import_paths: Vec<OsString> = import_paths.into_iter().map(|path_buf| path_buf.into_os_string()).collect();
-        crunch_eval::evaluate_str(&source, &os_import_paths)
-            .map_err(|err| map_eval_error(err, path))
+        let os_import_paths: Vec<OsString> =
+            import_paths.into_iter().map(|path_buf| path_buf.into_os_string()).collect();
+        crunch_eval::evaluate_str(&source, &os_import_paths).map_err(|err| map_eval_error(err, path))
     }
 
     fn insert_value(&mut self, value: NickelValue) -> ValueId {
@@ -350,7 +348,9 @@ fn build_import_paths(
 
 fn has_denied_import_path(import_paths: &[PathBuf]) -> bool {
     const DENIED_SEGMENT: &str = "..";
-    import_paths.iter().any(|path| path.components().any(|component| component.as_os_str() == DENIED_SEGMENT))
+    import_paths
+        .iter()
+        .any(|path| path.components().any(|component| component.as_os_str() == DENIED_SEGMENT))
 }
 
 fn map_eval_error(error: crunch_eval::Error, path: &Path) -> EvalError {
@@ -381,7 +381,6 @@ mod tests {
         tokio::fs::write(&path, body).await.unwrap();
         path
     }
-
 
     #[tokio::test(flavor = "current_thread")]
     async fn spawn_eval_thread_and_evaluate_simple_file() {
@@ -414,7 +413,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn eval_thread_is_function_distinguishes_functions_from_records() {
         let dir = tempfile::tempdir().unwrap();
-        let path = write_module(dir.path(), "kinds.ncl", "{ handler = (fun x => x), record_value = { done = true } }").await;
+        let path =
+            write_module(dir.path(), "kinds.ncl", "{ handler = (fun x => x), record_value = { done = true } }").await;
         let handle = EvalThread::spawn(import_paths());
 
         let root_id = handle.evaluate_file(path, eval_options()).await.unwrap();

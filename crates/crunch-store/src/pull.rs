@@ -327,15 +327,7 @@ pub async fn import_paths_from_http_cache(
     };
 
     for requested_path in paths {
-        pull_single_http_path(
-            handle,
-            &client,
-            &normalized_cache_url,
-            requested_path,
-            options,
-            &mut report,
-        )
-        .await?;
+        pull_single_http_path(handle, &client, &normalized_cache_url, requested_path, options, &mut report).await?;
     }
 
     Ok(report)
@@ -841,10 +833,8 @@ mod tests {
     }
 
     fn default_test_pathinfo_service() -> Arc<dyn PathInfoService> {
-        Arc::new(LruPathInfoService::with_capacity(
-            "pull-test-pathinfo".to_string(),
-            NonZeroUsize::new(32).unwrap(),
-        )) as Arc<dyn PathInfoService>
+        Arc::new(LruPathInfoService::with_capacity("pull-test-pathinfo".to_string(), NonZeroUsize::new(32).unwrap()))
+            as Arc<dyn PathInfoService>
     }
 
     fn test_service_backed_store(
@@ -1118,19 +1108,13 @@ mod tests {
     }
 
     fn compress_gzip(bytes: &[u8]) -> Vec<u8> {
-        let mut encoder = flate2::write::GzEncoder::new(
-            Vec::new(),
-            flate2::Compression::default(),
-        );
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(bytes).unwrap();
         encoder.finish().unwrap()
     }
 
     fn compress_bzip2(bytes: &[u8]) -> Vec<u8> {
-        let mut encoder = bzip2::write::BzEncoder::new(
-            Vec::new(),
-            bzip2::Compression::default(),
-        );
+        let mut encoder = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::default());
         encoder.write_all(bytes).unwrap();
         encoder.finish().unwrap()
     }
@@ -1466,7 +1450,10 @@ mod tests {
 
         assert_eq!(second_report.imported_count, 0);
         assert_eq!(second_report.skipped_already_present_count, 1);
-        assert_eq!(after_second_stats.nix_cache_info_requests, after_first_stats.nix_cache_info_requests.saturating_add(1));
+        assert_eq!(
+            after_second_stats.nix_cache_info_requests,
+            after_first_stats.nix_cache_info_requests.saturating_add(1)
+        );
         assert_eq!(after_first_stats.narinfo_requests, after_second_stats.narinfo_requests);
         assert_eq!(after_first_stats.nar_requests, after_second_stats.nar_requests);
     }
@@ -1508,14 +1495,11 @@ mod tests {
             .await
             .unwrap();
         let mut routes = cache_routes(&cache_dir);
-        routes.insert(
-            format!("/{}", narinfo_file_name(&pi.store_path)),
-            HttpResponse::Fixed {
-                status_line: "HTTP/1.1 500 Internal Server Error".to_string(),
-                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                body: b"boom".to_vec(),
-            },
-        );
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::Fixed {
+            status_line: "HTTP/1.1 500 Internal Server Error".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"boom".to_vec(),
+        });
         let server = HttpTestServer::spawn(routes);
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
         let report = import_paths_from_http_cache(
@@ -1541,14 +1525,11 @@ mod tests {
             .await
             .unwrap();
         let mut routes = cache_routes(&cache_dir);
-        routes.insert(
-            format!("/{}", narinfo_file_name(&pi.store_path)),
-            HttpResponse::Fixed {
-                status_line: "HTTP/1.1 403 Forbidden".to_string(),
-                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                body: b"forbidden".to_vec(),
-            },
-        );
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::Fixed {
+            status_line: "HTTP/1.1 403 Forbidden".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"forbidden".to_vec(),
+        });
         let server = HttpTestServer::spawn(routes);
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
         let report = import_paths_from_http_cache(
@@ -1581,14 +1562,11 @@ mod tests {
 
         for (case_name, status_line) in cases {
             let mut routes = cache_routes(&cache_dir);
-            routes.insert(
-                format!("/{}", narinfo_file_name(&pi.store_path)),
-                HttpResponse::Fixed {
-                    status_line: status_line.to_string(),
-                    headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                    body: case_name.as_bytes().to_vec(),
-                },
-            );
+            routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::Fixed {
+                status_line: status_line.to_string(),
+                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                body: case_name.as_bytes().to_vec(),
+            });
             let server = HttpTestServer::spawn(routes);
             let pull_store = open_test_store(&tmp.path().join(format!("pull-narinfo-{case_name}"))).await;
             let report = import_paths_from_http_cache(
@@ -1733,14 +1711,9 @@ mod tests {
         let mut pi = make_signed_pathinfo(&push_store, "http-unsigned-reject", b"unsigned reject").await;
         pi.signatures.clear();
         let cache_dir = tmp.path().join("cache");
-        export_paths_to_cache_dir(
-            &push_store,
-            &[pi.clone()],
-            &cache_dir,
-            &PushOptions { trust_unsigned: true },
-        )
-        .await
-        .unwrap();
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: true })
+            .await
+            .unwrap();
         let server = HttpTestServer::spawn(cache_routes(&cache_dir));
 
         let pull_store = open_test_store(&tmp.path().join("pull-reject-unsigned")).await;
@@ -1765,14 +1738,9 @@ mod tests {
         let mut pi = make_signed_pathinfo(&push_store, "http-unsigned", b"unsigned").await;
         pi.signatures.clear();
         let cache_dir = tmp.path().join("cache");
-        export_paths_to_cache_dir(
-            &push_store,
-            &[pi.clone()],
-            &cache_dir,
-            &PushOptions { trust_unsigned: true },
-        )
-        .await
-        .unwrap();
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: true })
+            .await
+            .unwrap();
         let server = HttpTestServer::spawn(cache_routes(&cache_dir));
 
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
@@ -2019,7 +1987,8 @@ mod tests {
                 HttpResponse::ok_text(replace_narinfo_field(&narinfo_text, "References", &invalid_references)),
             );
             let server = HttpTestServer::spawn(routes);
-            let pull_store = open_test_store_with_store_dir(&tmp.path().join(format!("pull-{case_name}")), store_dir).await;
+            let pull_store =
+                open_test_store_with_store_dir(&tmp.path().join(format!("pull-{case_name}")), store_dir).await;
             let report = import_paths_from_http_cache(
                 &pull_store,
                 &server.base_url,
@@ -2031,11 +2000,7 @@ mod tests {
             )
             .await
             .unwrap();
-            let imported_pi = pull_store
-                .pathinfo_service()
-                .get((*root.store_path.digest()).into())
-                .await
-                .unwrap();
+            let imported_pi = pull_store.pathinfo_service().get((*root.store_path.digest()).into()).await.unwrap();
 
             assert_eq!(report.imported_count, 0, "case={case_name}");
             assert_eq!(report.skipped_parse_error_count, 1, "case={case_name}");
@@ -2081,21 +2046,15 @@ mod tests {
         export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
             .await
             .unwrap();
-        let cases = [
-            ("401", "HTTP/1.1 401 Unauthorized"),
-            ("410", "HTTP/1.1 410 Gone"),
-        ];
+        let cases = [("401", "HTTP/1.1 401 Unauthorized"), ("410", "HTTP/1.1 410 Gone")];
 
         for (case_name, status_line) in cases {
             let mut routes = cache_routes(&cache_dir);
-            routes.insert(
-                format!("/{NIX_CACHE_INFO_FILE_NAME}"),
-                HttpResponse::Fixed {
-                    status_line: status_line.to_string(),
-                    headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                    body: case_name.as_bytes().to_vec(),
-                },
-            );
+            routes.insert(format!("/{NIX_CACHE_INFO_FILE_NAME}"), HttpResponse::Fixed {
+                status_line: status_line.to_string(),
+                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                body: case_name.as_bytes().to_vec(),
+            });
             let server = HttpTestServer::spawn(routes);
             let pull_store = open_test_store(&tmp.path().join(format!("pull-cache-info-{case_name}"))).await;
             let report = import_paths_from_http_cache(
@@ -2121,10 +2080,7 @@ mod tests {
             .await
             .unwrap();
         let mut routes = cache_routes(&cache_dir);
-        routes.insert(
-            format!("/{NIX_CACHE_INFO_FILE_NAME}"),
-            HttpResponse::redirect("/elsewhere"),
-        );
+        routes.insert(format!("/{NIX_CACHE_INFO_FILE_NAME}"), HttpResponse::redirect("/elsewhere"));
         let server = HttpTestServer::spawn(routes);
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
         let report = import_paths_from_http_cache(
@@ -2150,14 +2106,11 @@ mod tests {
             .unwrap();
         let nar_route = format!("/nar/{}.nar", nixbase32::encode(&pi.nar_sha256));
         let mut routes = cache_routes(&cache_dir);
-        routes.insert(
-            nar_route,
-            HttpResponse::Fixed {
-                status_line: "HTTP/1.1 500 Internal Server Error".to_string(),
-                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                body: b"boom".to_vec(),
-            },
-        );
+        routes.insert(nar_route, HttpResponse::Fixed {
+            status_line: "HTTP/1.1 500 Internal Server Error".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"boom".to_vec(),
+        });
         let server = HttpTestServer::spawn(routes);
 
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
@@ -2192,14 +2145,11 @@ mod tests {
 
         for (case_name, status_line) in cases {
             let mut routes = cache_routes(&cache_dir);
-            routes.insert(
-                nar_route.clone(),
-                HttpResponse::Fixed {
-                    status_line: status_line.to_string(),
-                    headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
-                    body: case_name.as_bytes().to_vec(),
-                },
-            );
+            routes.insert(nar_route.clone(), HttpResponse::Fixed {
+                status_line: status_line.to_string(),
+                headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+                body: case_name.as_bytes().to_vec(),
+            });
             let server = HttpTestServer::spawn(routes);
             let pull_store = open_test_store(&tmp.path().join(format!("pull-nar-{case_name}"))).await;
             let report = import_paths_from_http_cache(
@@ -2266,28 +2216,17 @@ mod tests {
             let compressed_nar = encode(&original_nar);
             let compressed_name = format!("{nar_hash_b32}.nar.{compression}");
             let mut routes = cache_routes(&cache_dir);
-            routes.insert(
-                format!("/nar/{compressed_name}"),
-                HttpResponse::ok_bytes(compressed_nar.clone()),
-            );
+            routes.insert(format!("/nar/{compressed_name}"), HttpResponse::ok_bytes(compressed_nar.clone()));
             let narinfo_text = read_narinfo_text(&cache_dir, &pi.store_path);
-            let narinfo_text = replace_narinfo_field(
-                &narinfo_text,
-                "URL",
-                &format!("nar/{compressed_name}"),
-            );
+            let narinfo_text = replace_narinfo_field(&narinfo_text, "URL", &format!("nar/{compressed_name}"));
             let narinfo_text = replace_narinfo_field(&narinfo_text, "Compression", compression);
             let narinfo_text = replace_narinfo_field(
                 &narinfo_text,
                 "FileHash",
                 &format!("sha256:{}", nix_base32_sha256(&compressed_nar)),
             );
-            let narinfo_text =
-                replace_narinfo_field(&narinfo_text, "FileSize", &compressed_nar.len().to_string());
-            routes.insert(
-                format!("/{}", narinfo_file_name(&pi.store_path)),
-                HttpResponse::ok_text(narinfo_text),
-            );
+            let narinfo_text = replace_narinfo_field(&narinfo_text, "FileSize", &compressed_nar.len().to_string());
+            routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::ok_text(narinfo_text));
             let server = HttpTestServer::spawn(routes);
             let pull_store = open_test_store(&tmp.path().join(format!("pull-{compression}"))).await;
             let report = import_paths_from_http_cache(
@@ -2309,26 +2248,21 @@ mod tests {
         let ok_pi = make_signed_pathinfo(&push_store, "http-narinfo-ok", b"ok").await;
         let drop_pi = make_signed_pathinfo(&push_store, "http-narinfo-drop", b"drop").await;
         let cache_dir = tmp.path().join("cache");
-        export_paths_to_cache_dir(
-            &push_store,
-            &[ok_pi.clone(), drop_pi.clone()],
-            &cache_dir,
-            &PushOptions { trust_unsigned: false },
-        )
+        export_paths_to_cache_dir(&push_store, &[ok_pi.clone(), drop_pi.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
         .await
         .unwrap();
         let mut routes = cache_routes(&cache_dir);
-        routes.insert(
-            format!("/{}", narinfo_file_name(&drop_pi.store_path)),
-            HttpResponse::DropConnection,
-        );
+        routes.insert(format!("/{}", narinfo_file_name(&drop_pi.store_path)), HttpResponse::DropConnection);
         let server = HttpTestServer::spawn(routes);
 
         let pull_store = open_test_store(&tmp.path().join("pull")).await;
         let requested_paths = vec![ok_pi.store_path.clone(), drop_pi.store_path.clone()];
-        let report = import_paths_from_http_cache(&pull_store, &server.base_url, &requested_paths, &default_pull_options())
-            .await
-            .unwrap();
+        let report =
+            import_paths_from_http_cache(&pull_store, &server.base_url, &requested_paths, &default_pull_options())
+                .await
+                .unwrap();
 
         assert_eq!(report.imported_count, 1);
         assert_eq!(report.skipped_parse_error_count, 1);

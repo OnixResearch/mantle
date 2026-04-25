@@ -265,7 +265,9 @@ impl Worker {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
         let mut state = WorkerLoopState {
-            sem: Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?)),
+            sem: Arc::new(Semaphore::new(
+                usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?,
+            )),
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
@@ -278,7 +280,12 @@ impl Worker {
             let dispatched = self.dispatch_ready(builder, known_paths, &mut state).await?;
 
             if self.registry.all_roots_terminal() {
-                info!(completed = state.completed_count, succeeded = state.outcomes.len(), failed = state.failed.len(), "worker finished");
+                info!(
+                    completed = state.completed_count,
+                    succeeded = state.outcomes.len(),
+                    failed = state.failed.len(),
+                    "worker finished"
+                );
                 return Ok(WorkerResult { outcomes, failed });
             }
 
@@ -320,7 +327,9 @@ impl Worker {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
         let mut state = WorkerLoopState {
-            sem: Arc::new(Semaphore::new(usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?)),
+            sem: Arc::new(Semaphore::new(
+                usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?,
+            )),
             join_set: JoinSet::new(),
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
@@ -844,8 +853,6 @@ impl Worker {
         &self.registry
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

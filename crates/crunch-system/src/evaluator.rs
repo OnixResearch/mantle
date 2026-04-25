@@ -35,12 +35,7 @@ pub struct ModuleExecutionResult {
 
 pub trait EvalBoundary {
     fn merge_settings(&self, defaults: &Value, settings: &Value) -> Result<Value, String>;
-    fn invoke_impl(
-        &self,
-        module: &ValidatedModule,
-        args: &Value,
-        timeout_secs: u64,
-    ) -> Result<Value, String>;
+    fn invoke_impl(&self, module: &ValidatedModule, args: &Value, timeout_secs: u64) -> Result<Value, String>;
 }
 
 pub fn validate_inventory_cross_references(
@@ -88,11 +83,7 @@ pub fn validate_inventory_cross_references_for_machines(
         }
     }
 
-    if errors.is_empty() {
-        Ok(instances)
-    } else {
-        Err(errors)
-    }
+    if errors.is_empty() { Ok(instances) } else { Err(errors) }
 }
 
 pub fn evaluate_modules(
@@ -152,11 +143,8 @@ pub fn evaluate_modules_for_machines(
         let mut machine_failed_modules = BTreeMap::<String, String>::new();
 
         for module_name in &order {
-            let relevant_instances: Vec<&ModuleInstance> = machine_instances
-                .iter()
-                .copied()
-                .filter(|instance| &instance.module_name == module_name)
-                .collect();
+            let relevant_instances: Vec<&ModuleInstance> =
+                machine_instances.iter().copied().filter(|instance| &instance.module_name == module_name).collect();
             if relevant_instances.is_empty() {
                 continue;
             }
@@ -180,7 +168,8 @@ pub fn evaluate_modules_for_machines(
                 continue;
             }
 
-            let providers_json = build_provider_input(module, &provider_values, &mut warnings, &machine_name, module_name);
+            let providers_json =
+                build_provider_input(module, &provider_values, &mut warnings, &machine_name, module_name);
             let upstream_json = build_upstream_input(module, &upstream_exports);
             for instance in relevant_instances {
                 let defaults = role_defaults
@@ -192,7 +181,10 @@ pub fn evaluate_modules_for_machines(
                     Ok(settings) => settings,
                     Err(message) => {
                         let error = eval_error(
-                            format!("settings merge failed for module '{}' role '{}': {message}", module.module_name, instance.role_name),
+                            format!(
+                                "settings merge failed for module '{}' role '{}': {message}",
+                                module.module_name, instance.role_name
+                            ),
                             Some(machine_name.clone()),
                             Some(module_name.clone()),
                         );
@@ -215,23 +207,14 @@ pub fn evaluate_modules_for_machines(
                         continue;
                     }
                 };
-                if let Some(exports) = output
-                    .get("output")
-                    .and_then(|value| value.get("exports"))
-                    .cloned()
-                {
+                if let Some(exports) = output.get("output").and_then(|value| value.get("exports")).cloned() {
                     upstream_exports.insert(module_name.clone(), exports);
                 }
-                if let Some(providers) = output
-                    .get("output")
-                    .and_then(|value| value.get("providers"))
-                    .and_then(Value::as_object)
+                if let Some(providers) =
+                    output.get("output").and_then(|value| value.get("providers")).and_then(Value::as_object)
                 {
                     for (provider_type, provider_value) in providers {
-                        provider_values
-                            .entry(provider_type.clone())
-                            .or_default()
-                            .push(provider_value.clone());
+                        provider_values.entry(provider_type.clone()).or_default().push(provider_value.clone());
                     }
                 }
                 fragments.push(EvaluatedFragment {
@@ -352,12 +335,7 @@ fn build_upstream_input(module: &ValidatedModule, upstream_exports: &BTreeMap<St
     Value::Object(upstream)
 }
 
-fn build_impl_args(
-    instance: &ModuleInstance,
-    merged_settings: &Value,
-    upstream: &Value,
-    providers: &Value,
-) -> Value {
+fn build_impl_args(instance: &ModuleInstance, merged_settings: &Value, upstream: &Value, providers: &Value) -> Value {
     let mut object = JsonMap::new();
     object.insert("settings".to_string(), merged_settings.clone());
     object.insert("machine_name".to_string(), Value::String(instance.machine_name.clone()));
@@ -416,8 +394,9 @@ fn eval_error(message: String, machine_name: Option<String>, module_name: Option
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[derive(Default)]
     struct FakeBoundary {
@@ -429,12 +408,7 @@ mod tests {
             merge_json(defaults, settings)
         }
 
-        fn invoke_impl(
-            &self,
-            module: &ValidatedModule,
-            args: &Value,
-            _timeout_secs: u64,
-        ) -> Result<Value, String> {
+        fn invoke_impl(&self, module: &ValidatedModule, args: &Value, _timeout_secs: u64) -> Result<Value, String> {
             if let Some(result) = self.outputs.get(&module.module_name) {
                 return result.clone();
             }
@@ -499,7 +473,9 @@ mod tests {
         .unwrap();
         let result = validate_inventory_cross_references(&inventory, &[module("a", &["default"], &[], &[], &[])]);
 
-        assert!(matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown module")))));
+        assert!(
+            matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown module"))))
+        );
     }
 
     #[test]
@@ -511,7 +487,9 @@ mod tests {
         .unwrap();
         let result = validate_inventory_cross_references(&inventory, &[module("a", &["default"], &[], &[], &[])]);
 
-        assert!(matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown role")))));
+        assert!(
+            matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown role"))))
+        );
     }
 
     #[test]
@@ -523,14 +501,19 @@ mod tests {
         .unwrap();
         let result = validate_inventory_cross_references(&inventory, &[module("a", &["default"], &[], &[], &[])]);
 
-        assert!(matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown machine")))));
+        assert!(
+            matches!(result, Err(errors) if errors.iter().any(|error| matches!(error, SystemConfigError::CrossRef { message, .. } if message.contains("unknown machine"))))
+        );
     }
 
     #[test]
     fn settings_merge_with_fake_boundary_returns_merged_value() {
         let boundary = FakeBoundary::default();
         let merged = boundary
-            .merge_settings(&json!({ "a": 1, "nested": { "left": true } }), &json!({ "b": 2, "nested": { "right": true } }))
+            .merge_settings(
+                &json!({ "a": 1, "nested": { "left": true } }),
+                &json!({ "b": 2, "nested": { "right": true } }),
+            )
             .unwrap();
 
         assert_eq!(merged["a"], 1);
@@ -542,10 +525,9 @@ mod tests {
     #[test]
     fn impl_invocation_args_record_shape_is_preserved() {
         let mut boundary = FakeBoundary::default();
-        boundary.outputs.insert(
-            "a".to_string(),
-            Ok(json!({ "output": { "exports": { "ok": true }, "providers": {} } })),
-        );
+        boundary
+            .outputs
+            .insert("a".to_string(), Ok(json!({ "output": { "exports": { "ok": true }, "providers": {} } })));
         let inventory = inventory();
         let modules = vec![module("a", &["default"], &[], &[], &[])];
 
@@ -567,7 +549,10 @@ mod tests {
             }
         }))
         .unwrap();
-        let modules = vec![module("a", &["default"], &[], &[], &[]), module("b", &["default"], &["a"], &[], &[])];
+        let modules = vec![
+            module("a", &["default"], &[], &[], &[]),
+            module("b", &["default"], &["a"], &[], &[]),
+        ];
 
         let result = evaluate_modules(&inventory, &modules, &boundary);
 
@@ -606,9 +591,7 @@ mod tests {
 
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
         let c_fragment = result.fragments.iter().find(|fragment| fragment.module_name == "c").unwrap();
-        let provider_array = c_fragment.data["output"]["exports"]["args"]["providers"]["firewall"]
-            .as_array()
-            .unwrap();
+        let provider_array = c_fragment.data["output"]["exports"]["args"]["providers"]["firewall"].as_array().unwrap();
         assert_eq!(provider_array.len(), 2);
     }
 
@@ -627,12 +610,20 @@ mod tests {
             }
         }))
         .unwrap();
-        let modules = vec![module("a", &["default"], &[], &[], &[]), module("b", &["default"], &[], &[], &[])];
+        let modules = vec![
+            module("a", &["default"], &[], &[], &[]),
+            module("b", &["default"], &[], &[], &[]),
+        ];
 
         let result = evaluate_modules(&inventory, &modules, &boundary);
 
         assert!(result.fragments.iter().any(|fragment| fragment.module_name == "b"));
-        assert!(result.errors.iter().any(|error| matches!(error, SystemConfigError::Eval { message, .. } if message.contains("boom"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| matches!(error, SystemConfigError::Eval { message, .. } if message.contains("boom")))
+        );
     }
 
     #[test]
@@ -664,7 +655,10 @@ mod tests {
             }
         }))
         .unwrap();
-        let modules = vec![module("a", &["default"], &[], &[], &[]), module("c", &["default"], &["a"], &[], &[])];
+        let modules = vec![
+            module("a", &["default"], &[], &[], &[]),
+            module("c", &["default"], &["a"], &[], &[]),
+        ];
 
         let result = evaluate_modules(&inventory, &modules, &boundary);
 
@@ -675,7 +669,10 @@ mod tests {
     fn evaluator_is_deterministic_for_same_inputs() {
         let boundary = FakeBoundary::default();
         let inventory = inventory();
-        let modules = vec![module("a", &["default"], &[], &[], &[]), module("b", &["default"], &[], &[], &[])];
+        let modules = vec![
+            module("a", &["default"], &[], &[], &[]),
+            module("b", &["default"], &[], &[], &[]),
+        ];
 
         let left = evaluate_modules(&inventory, &modules, &boundary);
         let right = evaluate_modules(&inventory, &modules, &boundary);

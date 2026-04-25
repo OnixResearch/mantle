@@ -149,10 +149,7 @@ impl Goal {
         }
 
         let dep_count = unbuilt_dep_keys.len();
-        debug_assert!(
-            u32::try_from(dep_count).is_ok_and(|n| n <= MAX_GOALS),
-            "dep count exceeds MAX_GOALS"
-        );
+        debug_assert!(u32::try_from(dep_count).is_ok_and(|n| n <= MAX_GOALS), "dep count exceeds MAX_GOALS");
 
         self.waitees = unbuilt_dep_keys;
 

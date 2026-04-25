@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 pub use crunch_shell_core::ShellError;
 use crunch_shell_core::ShellSidecar as CoreShellSidecar;
-use crunch_shell_core::parse_shell_sidecar_json;
 pub use crunch_shell_core::ShellWarning;
+use crunch_shell_core::parse_shell_sidecar_json;
 use serde::Deserialize;
 use serde::Serialize;
 

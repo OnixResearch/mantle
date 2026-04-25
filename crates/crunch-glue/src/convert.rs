@@ -151,27 +151,19 @@ fn build_nix_derivation(
         .outputs
         .iter()
         .map(|output_name| {
-            (
-                output_name.clone(),
-                Output {
-                    path: None,
-                    ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
-                },
-            )
+            (output_name.clone(), Output {
+                path: None,
+                ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
+            })
         })
         .collect();
 
-    let mut environment: BTreeMap<String, BString> = drv
-        .env
-        .iter()
-        .map(|(key, value)| (key.clone(), value.as_bytes().into()))
-        .collect();
+    let mut environment: BTreeMap<String, BString> =
+        drv.env.iter().map(|(key, value)| (key.clone(), value.as_bytes().into())).collect();
     environment.insert("system".to_string(), drv.system.as_bytes().into());
     environment.insert("builder".to_string(), drv.builder.as_bytes().into());
     environment.insert("name".to_string(), drv.name.as_bytes().into());
-    environment.extend(drv.outputs.iter().map(|output_name| {
-        (output_name.clone(), BString::from(""))
-    }));
+    environment.extend(drv.outputs.iter().map(|output_name| (output_name.clone(), BString::from(""))));
     environment.insert("outputs".to_string(), drv.outputs.join(" ").as_bytes().into());
 
     Derivation {

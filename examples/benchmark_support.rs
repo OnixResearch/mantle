@@ -1233,31 +1233,30 @@ fn benchmark_lazy_eval_workload(
             )
         }
         PARALLEL_ALL_ROOTS_WORKLOAD_NAME => {
-            let timed =
-                time_repeated_operation_with_phase_metrics(repeat_count, || {
-                    let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
-                        .map_err(|e| Error::Command {
-                            tool: "EvaluationSession".into(),
-                            detail: e.to_string(),
-                        })?;
-                    let roots = session
-                        .force_all_roots_bounded::<CrunchDerivation>(DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY)
-                        .map_err(|e| Error::Command {
-                            tool: "force_all_roots_bounded".into(),
-                            detail: e.to_string(),
-                        })?;
-                    let root_count = usize_to_u32(roots.len())?;
-                    Ok(PhasedSample {
-                        root_count,
-                        phase_metrics: vec![
-                            named_metric(PARALLEL_ALL_ROOTS_METRIC_NAME, 0),
-                            named_metric(
-                                PARALLEL_ROOT_CONCURRENCY_METRIC_NAME,
-                                DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64,
-                            ),
-                        ],
-                    })
-                })?;
+            let timed = time_repeated_operation_with_phase_metrics(repeat_count, || {
+                let mut session = EvaluationSession::open_file(&workload.workload_path, &workload.import_paths)
+                    .map_err(|e| Error::Command {
+                        tool: "EvaluationSession".into(),
+                        detail: e.to_string(),
+                    })?;
+                let roots = session
+                    .force_all_roots_bounded::<CrunchDerivation>(DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY)
+                    .map_err(|e| Error::Command {
+                        tool: "force_all_roots_bounded".into(),
+                        detail: e.to_string(),
+                    })?;
+                let root_count = usize_to_u32(roots.len())?;
+                Ok(PhasedSample {
+                    root_count,
+                    phase_metrics: vec![
+                        named_metric(PARALLEL_ALL_ROOTS_METRIC_NAME, 0),
+                        named_metric(
+                            PARALLEL_ROOT_CONCURRENCY_METRIC_NAME,
+                            DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64,
+                        ),
+                    ],
+                })
+            })?;
             build_result(
                 &workload.descriptor,
                 command_argv,

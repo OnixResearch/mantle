@@ -55,9 +55,7 @@ struct RawCrunchDerivation {
 
 impl<'de> Deserialize<'de> for CrunchDerivation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawCrunchDerivation::deserialize(deserializer)?;
         Ok(Self {
             name: raw.name,
@@ -68,10 +66,7 @@ impl<'de> Deserialize<'de> for CrunchDerivation {
             env: raw.env.unwrap_or_else(HashMap::new),
             inputs: raw.inputs.unwrap_or_else(Vec::new),
             fixed_output: raw.fixed_output,
-            addressing_mode: raw
-                .addressing_mode
-                .map(|value| value.0)
-                .unwrap_or_else(default_addressing_mode),
+            addressing_mode: raw.addressing_mode.map(|value| value.0).unwrap_or_else(default_addressing_mode),
             provenance: raw.provenance,
         })
     }
@@ -139,9 +134,7 @@ struct RawInputRecordFields {
 
 impl<'de> Deserialize<'de> for RawInputRecord {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let raw = RawInputRecordFields::deserialize(deserializer)?;
         Ok(Self {
             drv: raw.drv,
@@ -154,10 +147,7 @@ impl<'de> Deserialize<'de> for RawInputRecord {
             env: raw.env.unwrap_or_else(HashMap::new),
             inputs: raw.inputs.unwrap_or_else(Vec::new),
             fixed_output: raw.fixed_output,
-            addressing_mode: raw
-                .addressing_mode
-                .map(|value| value.0)
-                .unwrap_or_else(default_addressing_mode),
+            addressing_mode: raw.addressing_mode.map(|value| value.0).unwrap_or_else(default_addressing_mode),
             provenance: raw.provenance,
         })
     }

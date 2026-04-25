@@ -21,9 +21,7 @@ pub fn evaluate_against_inventory_contract(
 fn wrap_with_contract(contract_name: &str, body_source: &str) -> String {
     assert!(!contract_name.is_empty(), "contract name must not be empty");
     assert!(!body_source.is_empty(), "body source must not be empty");
-    format!(
-        "let crunch = import \"lib.ncl\" in\n({body_source}) | crunch.{contract_name}\n"
-    )
+    format!("let crunch = import \"lib.ncl\" in\n({body_source}) | crunch.{contract_name}\n")
 }
 
 #[cfg(test)]
@@ -74,7 +72,9 @@ mod tests {
 
         assert!(error_text.contains("interface"), "error should mention missing interface: {error_text}");
         assert!(
-            error_text.contains("missing definition") || error_text.contains("blame") || error_text.contains("contract"),
+            error_text.contains("missing definition")
+                || error_text.contains("blame")
+                || error_text.contains("contract"),
             "error should be contract-related: {error_text}"
         );
     }
