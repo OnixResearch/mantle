@@ -31,6 +31,7 @@ use crate::build_cmd::run_build;
 use crate::errors::RunError;
 use crate::protected_exec::ProtectedExecPolicy;
 use crate::protected_exec::ProtectedLaunchAuditEvent;
+use crate::protected_exec::ProtectedSeccompAuditEvent;
 use crate::protected_exec::blake3_file_hex;
 use crate::protected_exec::select_declared_sandbox_seed;
 use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
@@ -255,6 +256,8 @@ pub struct SelfBuildReport {
     pub fallback_events: Vec<SelfBuildFallbackEvent>,
     /// Protected-phase transition to crunch-built sandbox tools.
     pub protected_transition: Option<ProtectedPhaseTransition>,
+    /// Actual protected exec events observed by the stage0 seccomp supervisor.
+    pub protected_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     /// Path to the busybox binary that the NCL script will use for
     /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no crunch-built busybox
     /// was found in the output store (falls back to `/bin/sh`).
@@ -290,6 +293,14 @@ impl SelfBuildReport {
             Some(transition) => transition.format_proof_lines(&mut out),
             None => out.push_str(&format!("{PROOF_PREFIX} protected-transition=none\n")),
         }
+        if self.protected_seccomp_events.is_empty() {
+            out.push_str(&format!("{PROOF_PREFIX} protected-seccomp-event=none\n"));
+        } else {
+            for event in &self.protected_seccomp_events {
+                let json = serde_json::to_string(event).expect("protected seccomp audit event must serialize");
+                out.push_str(&format!("{PROOF_PREFIX} protected-seccomp-event={json}\n"));
+            }
+        }
         match &self.busybox_path {
             Some(p) => out.push_str(&format!("{PROOF_PREFIX} busybox-path={}\n", p.display(),)),
             None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
@@ -316,6 +327,7 @@ impl SelfBuildReport {
         let mut transition_busybox_path: Option<PathBuf> = None;
         let mut transition_busybox_digest: Option<String> = None;
         let mut transition_busybox_store_name: Option<String> = None;
+        let mut protected_seccomp_events: Vec<ProtectedSeccompAuditEvent> = Vec::new();
         let mut busybox_path: Option<Option<PathBuf>> = None;
         let mut output_binary: Option<PathBuf> = None;
 
@@ -362,6 +374,10 @@ impl SelfBuildReport {
                 transition_busybox_digest = Some(val.to_string());
             } else if let Some(val) = rest.strip_prefix("protected-transition-busybox-store-name=") {
                 transition_busybox_store_name = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("protected-seccomp-event=") {
+                if val != "none" {
+                    protected_seccomp_events.push(serde_json::from_str(val).ok()?);
+                }
             } else if let Some(val) = rest.strip_prefix("busybox-path=") {
                 if val == "none" {
                     busybox_path = Some(None);
@@ -391,6 +407,7 @@ impl SelfBuildReport {
             bwrap_source: bwrap_source?,
             fallback_events,
             protected_transition: protected_transition.unwrap_or(None),
+            protected_seccomp_events,
             busybox_path: busybox_path?,
             output_binary: output_binary?,
         })
@@ -2272,7 +2289,7 @@ struct SelfBuildSetup {
     src_dir: PathBuf,
     bootstrap_dir: PathBuf,
     fallback_events: Vec<SelfBuildFallbackEvent>,
-    _protected_exec_supervisor: Option<ProtectedSeccompSupervisor>,
+    protected_exec_supervisor: Option<ProtectedSeccompSupervisor>,
     bootstrap_bwrap_source: Option<BwrapSource>,
     bootstrap_busybox_path: Option<PathBuf>,
 }
@@ -2342,7 +2359,7 @@ fn initialize_self_build(
         src_dir,
         bootstrap_dir,
         fallback_events,
-        _protected_exec_supervisor: protected_exec_supervisor,
+        protected_exec_supervisor,
         bootstrap_bwrap_source: explicit_bwrap_source,
         bootstrap_busybox_path: explicit_busybox_path,
     })
@@ -2464,6 +2481,12 @@ pub fn cmd_self_build(
     )?;
     verify_self_build_output(&output_binary, no_verify)?;
 
+    let protected_seccomp_events = setup
+        .protected_exec_supervisor
+        .as_ref()
+        .map(ProtectedSeccompSupervisor::audit_events)
+        .unwrap_or_default();
+
     let report = SelfBuildReport {
         hermeticity_mode,
         invoking_binary: setup.invoking_binary,
@@ -2471,6 +2494,7 @@ pub fn cmd_self_build(
         bwrap_source: tools.bwrap_source,
         fallback_events: setup.fallback_events,
         protected_transition: Some(tools.protected_transition),
+        protected_seccomp_events,
         busybox_path: tools.busybox_path,
         output_binary,
     };
@@ -3683,9 +3707,25 @@ mod tests {
         }
     }
 
+    fn sample_protected_seccomp_event() -> ProtectedSeccompAuditEvent {
+        ProtectedSeccompAuditEvent {
+            pid: 42,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from("/seed/bin/bwrap"),
+            tracee_path: PathBuf::from("/bin/bwrap"),
+            resolved_host_path: PathBuf::from("/seed/bin/bwrap"),
+            digest_hex: "c".repeat(64),
+            reason: "declared sandbox entry".to_string(),
+            phase: "protected".to_string(),
+            inventory_entry_id: Some("sandbox-entry".to_string()),
+            policy_decision: "allowed".to_string(),
+        }
+    }
+
     #[test]
     fn report_format_roundtrip_with_protected_transition() {
         let transition = sample_protected_transition();
+        let seccomp_event = sample_protected_seccomp_event();
         let report = SelfBuildReport {
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/seed/crunch"),
@@ -3693,6 +3733,7 @@ mod tests {
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/aaa-bwrap/bin")),
             fallback_events: Vec::new(),
             protected_transition: Some(transition.clone()),
+            protected_seccomp_events: vec![seccomp_event.clone()],
             busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/crunch"),
         };
@@ -3703,7 +3744,9 @@ mod tests {
         assert!(lines.contains("protected-transition=bootstrap-tools-selected"));
         assert!(lines.contains("protected-transition-bwrap-store-name=aaa-bwrap"));
         assert!(lines.contains("protected-transition-busybox-store-name=bbb-busybox"));
+        assert!(lines.contains("protected-seccomp-event={"));
         assert_eq!(parsed.protected_transition, Some(transition));
+        assert_eq!(parsed.protected_seccomp_events, vec![seccomp_event]);
     }
 
     #[test]
@@ -3743,6 +3786,7 @@ mod tests {
             bwrap_source: BwrapSource::DeclaredSeed(PathBuf::from("/seed/bin/bwrap")),
             fallback_events: Vec::new(),
             protected_transition: None,
+            protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/crunch"),
         };
@@ -3770,6 +3814,7 @@ mod tests {
                 SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from("/work/crunch")),
             ],
             protected_transition: None,
+            protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
             output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
         };
@@ -3801,6 +3846,7 @@ mod tests {
                 "/usr/bin/bwrap",
             ))],
             protected_transition: None,
+            protected_seccomp_events: Vec::new(),
             busybox_path: None,
             output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
         };

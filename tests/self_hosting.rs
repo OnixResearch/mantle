@@ -43,6 +43,7 @@ use std::time::UNIX_EPOCH;
 use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
+use crunch::protected_exec::ProtectedSeccompAuditEvent;
 use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
@@ -240,6 +241,8 @@ struct ProofProtectedExecAudit {
     no_host_tools: bool,
     stage0_inventory: Option<ProofHashedPath>,
     blocked_host_commands: Vec<&'static str>,
+    stage0_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
+    stage2_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     stage0_fallback_events: Vec<String>,
     stage2_fallback_events: Vec<String>,
     stage0_transition: Option<ProofProtectedTransition>,
@@ -255,6 +258,7 @@ struct ProofReportManifest {
     bwrap_source: String,
     fallback_events: Vec<String>,
     protected_transition: Option<ProofProtectedTransition>,
+    protected_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     busybox_path: Option<String>,
     output_binary: String,
 }
@@ -1160,6 +1164,18 @@ fn parse_protected_transition(stage: &StageEvidence) -> Option<ProofProtectedTra
     })
 }
 
+fn parse_protected_seccomp_events(stage: &StageEvidence) -> Vec<ProtectedSeccompAuditEvent> {
+    extract_proof_fields(&stage.stderr, "protected-seccomp-event")
+        .into_iter()
+        .filter(|value| *value != "none")
+        .map(|value| {
+            serde_json::from_str(value).unwrap_or_else(|err| {
+                panic!("{} has invalid protected seccomp event JSON: {err}\n{value}", stage.stage_name)
+            })
+        })
+        .collect()
+}
+
 fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
     assert!(!stage.stage_name.is_empty(), "stage name must not be empty");
     assert!(!stage.stderr.is_empty(), "stage stderr must not be empty");
@@ -1196,6 +1212,7 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         bwrap_source: bwrap_source.to_string(),
         fallback_events,
         protected_transition: parse_protected_transition(stage),
+        protected_seccomp_events: parse_protected_seccomp_events(stage),
         busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
         output_binary: output_binary.to_string(),
     }
@@ -1362,16 +1379,28 @@ fn write_protected_exec_audit(bundle_dir: &Path, manifest: &ProofBundleManifest)
         no_host_tools,
         stage0_inventory,
         blocked_host_commands: BLOCKED_HOST_TOOL_BINARIES.to_vec(),
+        stage0_seccomp_events: manifest.stage0.report.protected_seccomp_events.clone(),
+        stage2_seccomp_events: manifest.stage2.report.protected_seccomp_events.clone(),
         stage0_fallback_events: manifest.stage0.report.fallback_events.clone(),
         stage2_fallback_events: manifest.stage2.report.fallback_events.clone(),
         stage0_transition: manifest.stage0.report.protected_transition.clone(),
         stage2_transition: manifest.stage2.report.protected_transition.clone(),
-        result: "success",
+        result: derived_proof_result(manifest),
     };
     let path = bundle_dir.join("protected-exec-audit.json");
     let json = serde_json::to_vec_pretty(&audit).unwrap_or_else(|err| panic!("serialize protected exec audit: {err}"));
     std::fs::write(&path, json).unwrap_or_else(|err| panic!("write protected exec audit {}: {err}", path.display()));
     hash_file_record(&path, "protected-exec-audit.json".to_string())
+}
+
+fn derived_proof_result(manifest: &ProofBundleManifest) -> &'static str {
+    if manifest.fixed_point.stage1_equals_stage2
+        && manifest.fixed_point.stage0_bwrap_equals_stage2_bwrap
+        && manifest.fixed_point.stage0_busybox_equals_stage2_busybox
+    {
+        return "success";
+    }
+    "fixed-point-mismatch"
 }
 
 fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: &ProofHashedPath) -> String {
@@ -1386,6 +1415,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
+    out.push_str(&format!("protected_exec_result: {}\n", derived_proof_result(manifest)));
     out.push_str(&format!("protected_exec_audit: {} {}\n", protected_audit.digest_blake3, protected_audit.path));
     out.push_str(&format!("stage0_path_strategy: {}\n", manifest.prerequisites.stage0_path_strategy));
     out.push_str(&format!(
@@ -1571,6 +1601,21 @@ fn write_proof_bundle(
     std::fs::write(&summary_path, summary)
         .unwrap_or_else(|err| panic!("write proof summary {}: {err}", summary_path.display()));
     manifest_path
+}
+
+fn sample_proof_seccomp_event() -> ProtectedSeccompAuditEvent {
+    ProtectedSeccompAuditEvent {
+        pid: 7,
+        syscall: "execve".to_string(),
+        executable_path: PathBuf::from("/seed/bin/bwrap"),
+        tracee_path: PathBuf::from("/bin/bwrap"),
+        resolved_host_path: PathBuf::from("/seed/bin/bwrap"),
+        digest_hex: "d".repeat(64),
+        reason: "declared sandbox entry".to_string(),
+        phase: "protected".to_string(),
+        inventory_entry_id: Some("sandbox-entry".to_string()),
+        policy_decision: "allowed".to_string(),
+    }
 }
 
 #[test]
@@ -1803,6 +1848,7 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     let _mode_guard = EnvVarGuard::set(PROOF_MODE_ENV, PROOF_MODE_FIXED_POINT);
     let _shell_guard = EnvVarGuard::set("SNIX_BUILD_SANDBOX_SHELL", &sandbox_shell.display().to_string());
     let _path_guard = EnvVarGuard::set("PATH", &tool_dir.display().to_string());
+    let stage0_seccomp_event = serde_json::to_string(&sample_proof_seccomp_event()).unwrap();
 
     let stage0_output = std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -1813,11 +1859,13 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
              printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
              printf 'self-build-proof: fallback-event=bwrap-host-fallback:/run/wrappers/bin/bwrap\\n' >&2; \
              printf 'self-build-proof: fallback-event=source-host-discovery:/work/crunch\\n' >&2; \
+             printf 'self-build-proof: protected-seccomp-event={}\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \
              printf 'self-build-proof: output-binary={}\\n' >&2",
             checkout_binary.display(),
             staged_source.display(),
             bwrap_bin_dir.display(),
+            stage0_seccomp_event,
             busybox_bin.display(),
             stage1_binary.display(),
         ))
@@ -1906,9 +1954,14 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     assert!(manifest_json.contains("\"fallback_events\""));
     assert!(protected_audit_json.contains("crunch-protected-exec-audit-v1"));
     assert!(protected_audit_json.contains("\"blocked_host_commands\""));
+    assert!(protected_audit_json.contains("\"stage0_seccomp_events\""));
+    assert!(protected_audit_json.contains("\"tracee_path\""));
+    assert!(protected_audit_json.contains("/bin/bwrap"));
     assert!(protected_audit_json.contains("bwrap-host-fallback"));
+    assert!(protected_audit_json.contains("fixed-point-mismatch"));
     assert!(bundle_dir.join("stage0-prerequisites/inventory.md").exists());
     assert!(summary.contains("proof_mode:"));
+    assert!(summary.contains("protected_exec_result: fixed-point-mismatch"));
     assert!(summary.contains("protected_exec_audit:"));
     assert!(summary.contains("stage0_bwrap:"));
     assert!(summary.contains("stage2_bwrap:"));

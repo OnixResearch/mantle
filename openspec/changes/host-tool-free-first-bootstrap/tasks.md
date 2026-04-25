@@ -244,10 +244,17 @@
       tracee-root join coverage for `/bin/sh`, symlink resolution before
       digesting, relative path denial, unreadable path denial, and unsupported
       non-`AT_FDCWD` `execveat` dirfd denial.
-- [ ] I21 Thread actual `ProtectedSeccompAuditEvent` records from the stage0
+- [x] I21 Thread actual `ProtectedSeccompAuditEvent` records from the stage0 ✅ 3m 59s (started: 2026-04-25T23:41:07Z → completed: 2026-04-25T23:45:06Z)
       supervisor into `SelfBuildReport` and `protected-exec-audit.json`, and make
       the audit result derived from the observed proof outcome rather than a
       hard-coded success string. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 14 passed
+      `cargo test -p crunch report_format_roundtrip_with_protected_transition -- --nocapture`
+      and `cargo test -p crunch --test self_hosting proof_bundle -- --nocapture`.
+      The report roundtrip preserves protected seccomp event JSON, and proof
+      bundle coverage writes `stage0_seccomp_events`, tracee/resolved path
+      fields, and a derived `fixed-point-mismatch` result instead of a hard-coded
+      success string in the mismatch fixture.
 - [ ] I22 Copy the concrete no-host-tools `stage0-inventory.ncl` into the proof
       bundle, hash the copied file, and include declared seed artifact records
       (id, role, phase, path, digest, provenance category/text, owner, required
