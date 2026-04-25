@@ -14,6 +14,9 @@ artifact is missing.
 - **Define the host-tool-free boundary.** State exactly which kernel interfaces
   and predeclared seed artifacts remain allowed before crunch builds its own
   tools.
+- **Define the stage0 inventory schema.** Make executable path, digest,
+  provenance, allowed reason, and protected-phase ownership explicit so the
+  audit has one source of truth.
 - **Remove host command execution.** Replace host `bwrap`, shell, copy, tar,
   git, cargo, and helper invocations in the first-bootstrap path with Rust-owned
   logic or declared seed artifacts.
