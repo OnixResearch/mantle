@@ -22,7 +22,7 @@
 
 ## Phase 2: GNU mes (M2-Planet → mes)
 
-- [ ] I4 Write `bootstrap/mes.ncl`: build GNU mes 0.27.x from source using
+- [x] I4 Write `bootstrap/mes.ncl`: build GNU mes 0.27.x from source using
       M2-Planet and mescc-tools from stage0-posix output. Adapt build steps from
       live-bootstrap `steps/mes-0.27.1/`. Output: mes Scheme interpreter + mescc
       C compiler + mes libc.
