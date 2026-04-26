@@ -12,7 +12,7 @@
 
 ## Phase 1: stage0-posix (hex0 → mescc-tools + M2-Planet)
 
-- [ ] I3 Write `bootstrap/stage0-posix.ncl`: fetch stage0-posix source tarball
+- [x] I3 Write `bootstrap/stage0-posix.ncl`: fetch stage0-posix source tarball
       (pinned hash), mount hex0 seed, run `kaem.run` for AMD64. Output: mescc-tools
       (M1, hex2, kaem, blood-elf, get_machine), M2-Planet, mescc-tools-extra (catm,
       cp, chmod, mkdir, untar, ungz, unbz2, unxz, sha256sum). Build uses only the
