@@ -31,9 +31,9 @@
 
 ## Phase 3: tinycc (mes → tinycc self-hosted)
 
-- [ ] I5 Write `bootstrap/tinycc-mes.ncl`: build tinycc 0.9.26 using mes C
+- [x] I5 Write `bootstrap/tinycc-mes.ncl`: build tinycc 0.9.26 using mes C
       compiler. Adapt from live-bootstrap `steps/tcc-0.9.26/`.
-- [ ] I6 Write `bootstrap/tinycc.ncl`: rebuild tinycc 0.9.27 using tinycc 0.9.26
+- [x] I6 Write `bootstrap/tinycc.ncl`: rebuild tinycc 0.9.27 using tinycc 0.9.26
       (self-hosting step). Adapt from live-bootstrap `steps/tcc-0.9.27/`. Output:
       a self-hosted tinycc that can build early GCC.
 - [ ] V3 Validate: both tinycc derivations build. The self-hosted tinycc can
