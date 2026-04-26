@@ -337,11 +337,15 @@
       [covers=bootstrap.hosttoolfree.proof.mode]
       Evidence: pueue tasks 42+44 passed `write_proof_bundle_copies_stage_artifacts_and_manifest` (1)
       and `prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds` (1).
-- [ ] V4c Run extraction-rule and verified-output promotion tests showing
+- [x] V4c Run extraction-rule and verified-output promotion tests showing ✅ <1m (completed: 2026-04-26T00:23:55Z)
       malformed source rules are rejected, accepted rules are carried into
       promotion records, promoted executable digests are added before exec, and
       unpromoted generated-output executables are denied.
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 48 passed 6 tests: `inventory_rejects_malformed_source_entries_before_fetch`,
+      `inventory_rejects_malformed_or_ambiguous_extraction_rules` (2), `promote_verified_output_extends_policy_and_records_audit`,
+      `promote_verified_output_rejects_empty_set`, `promote_verified_output_rejects_duplicate_path`,
+      `unpromoted_executable_is_denied_after_promotion` (1).
 - [x] V4d Run inventory preflight tests proving the V4 helper consumes only ✅ <1m (completed: 2026-04-26T00:16:50Z)
       explicit seed paths, rejects `PATH` and `/nix/store` discovery, reports
       static-vs-dynamic seed closure risk, and emits the exact concrete
@@ -359,6 +363,10 @@
       event summary, final derived result, and preserved
       `self-build-proof: fallback-event=...` markers.
       [covers=bootstrap.hosttoolfree.proof.mode]
-- [ ] V5 Run the hidden-host-tool proof failure fixture and record that the
+- [x] V5 Run the hidden-host-tool proof failure fixture and record that the ✅ <1m (completed: 2026-04-26T00:25:55Z)
       proof fails while identifying the injected undeclared host tool in the
       proof bundle. [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue tasks 49+50 passed `seccomp_supervisor_denies_undeclared_host_bwrap_before_execve` (1)
+      and `seccomp_supervisor_denies_digest_mismatch_before_execve` (1). Both prove the seccomp
+      supervisor blocks execution and records audit events identifying the undeclared/mismatched
+      host tool before the tracee exec succeeds.
