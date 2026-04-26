@@ -158,6 +158,9 @@ let busybox_src = crunch.fetchTarball {
       # Patch config for static build.
       sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
       sed -i 's/# CONFIG_INSTALL_NO_USR is not set/CONFIG_INSTALL_NO_USR=y/' .config
+      # tc(8) uses struct tc_cbq_wrropt removed from pkt_sched.h in
+      # kernel >=6.x; disable it to compile with modern headers.
+      sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
 
       # Add seed include path for kernel headers the bootstrap GCC is
       # missing (linux/kd.h, linux/vt.h, etc.). The normalized seed

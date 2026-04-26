@@ -163,9 +163,11 @@ let binutils_src = crunch.fetchTarball {
 
       echo "=== Building binutils ==="
       "$MAKE" -j4 SHELL="$DASH" MAKEINFO=true 2>&1 || exit 1
+      echo "=== make completed ok ==="
 
       echo "=== Installing binutils ==="
-      "$MAKE" install SHELL="$DASH" MAKEINFO=true 2>&1 || exit 1
+      "$MAKE" install SHELL="$DASH" MAKEINFO=true DESTDIR= 2>&1 || exit 1
+      echo "=== install completed ok ==="
 
       echo "=== Verify ==="
       $out/bin/%{seed_target}-as --version | head -1

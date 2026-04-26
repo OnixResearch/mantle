@@ -239,12 +239,22 @@ WRAPEOF
         am_cv_ar_interface=ar \
         2>&1 || exit 1
 
+      # gmp demos need bison/yacc which are unavailable in the sandbox;
+      # remove demos from gmp's SUBDIRS in Makefile.in so configure never
+      # creates the demos build directory (make re-runs sub-configures)
+      if [ -f /tmp/gcc-src/gmp/Makefile.in ]; then
+        $BB sed -i 's/demos//g' /tmp/gcc-src/gmp/Makefile.in
+      fi
+      if [ -f /tmp/gcc-src/gmp/Makefile.am ]; then
+        $BB sed -i 's/demos//g' /tmp/gcc-src/gmp/Makefile.am
+      fi
+
       echo "=== Building gcc ==="
-      "$MAKE" -j4 SHELL="$DASH" MAKEINFO=true \
+      "$MAKE" -j4 SHELL="$DASH" MAKEINFO=true MISSING=true \
         2>&1 || exit 1
 
       echo "=== Installing gcc ==="
-      "$MAKE" install SHELL="$DASH" MAKEINFO=true \
+      "$MAKE" install SHELL="$DASH" MAKEINFO=true MISSING=true \
         2>&1 || exit 1
 
       echo "=== Verify ==="

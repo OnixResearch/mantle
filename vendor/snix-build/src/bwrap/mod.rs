@@ -16,7 +16,9 @@ const COMMON_BWRAP_ARGS: &[&str] = &[
     "localhost",
     "--unshare-ipc",
     "--unshare-pid",
-    "--die-with-parent",
+    // NOTE: --die-with-parent removed because PR_SET_PDEATHSIG(SIGKILL)
+    // fires when the spawning tokio worker thread exits, killing long-running
+    // sandbox builds. The parent (tokio process) already waits on the child.
     "--as-pid-1",
     "--unshare-user",
     "--unshare-cgroup-try",

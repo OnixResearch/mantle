@@ -302,15 +302,21 @@ where
                     tokio::runtime::Handle::current(),
                 );
                 // FUTUREWORK: make fuse daemon threads configurable?
-                match FuseDaemon::new(fs, path, 4, false) {
-                    Ok(daemon) => Ok(ProvidedInputs::Fuse { _daemon: daemon }),
-                    Err(error) => {
-                        if !should_materialize_inputs_fallback(&error) {
-                            return Err(error);
+                if std::env::var_os("CRUNCH_NO_FUSE").is_some() {
+                    info!(?path, "CRUNCH_NO_FUSE set, materializing inputs to disk");
+                    materialize_inputs_blocking(path, &root_nodes, &blob_service, &directory_service)?;
+                    Ok(ProvidedInputs::Materialized)
+                } else {
+                    match FuseDaemon::new(fs, path, 4, false) {
+                        Ok(daemon) => Ok(ProvidedInputs::Fuse { _daemon: daemon }),
+                        Err(error) => {
+                            if !should_materialize_inputs_fallback(&error) {
+                                return Err(error);
+                            }
+                            warn!(?error, ?path, "fusermount mount failed, materializing inputs to disk");
+                            materialize_inputs_blocking(path, &root_nodes, &blob_service, &directory_service)?;
+                            Ok(ProvidedInputs::Materialized)
                         }
-                        warn!(?error, ?path, "fusermount mount failed, materializing inputs to disk");
-                        materialize_inputs_blocking(path, &root_nodes, &blob_service, &directory_service)?;
-                        Ok(ProvidedInputs::Materialized)
                     }
                 }
             })

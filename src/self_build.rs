@@ -575,8 +575,8 @@ let rust = (import "bootstrap/rust.ncl") in
       make --version | head -1
 
       $BB mkdir -p /tmp/build
-      cp -r "$CRUNCH_SRC" /tmp/build/crunch 2>/dev/null
-      chmod -R u+w /tmp/build/crunch
+      $BB cp -r "$CRUNCH_SRC" /tmp/build/crunch
+      $BB chmod -R u+w /tmp/build/crunch
       cd /tmp/build/crunch
 
       GCC_LIB=""
@@ -1190,7 +1190,10 @@ fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), Ru
                 format!("required staged source entry missing: {}", source_path.display(),),
             ));
         }
-        copy_tree_entry(&source_path, &dest_path, 0, &mut copied_entry_count)?;
+        // Follow symlinks so the staged tree is self-contained inside sandboxed builds.
+        let resolved = std::fs::canonicalize(&source_path)
+            .map_err(|e| RunError::Internal(format!("canonicalize {}: {e}", source_path.display())))?;
+        copy_tree_entry(&resolved, &dest_path, 0, &mut copied_entry_count)?;
     }
     assert!(copied_entry_count > 0, "source staging must copy at least one entry");
     assert!(copied_entry_count <= MAX_STAGE_SOURCE_ENTRIES, "source staging copied too many entries");
