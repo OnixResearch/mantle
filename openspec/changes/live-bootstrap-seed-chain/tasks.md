@@ -5,7 +5,7 @@
 - [x] I1 Check in the hex0 AMD64 seed binary under `bootstrap/seeds/AMD64/hex0-seed`
       (256 bytes from stage0-posix). Add a README in `bootstrap/seeds/` explaining
       provenance and audit expectations.
-- [ ] I2 Rename current `bootstrap/seed.ncl` to `bootstrap/seed-legacy.ncl`. Update
+- [x] I2 Rename current `bootstrap/seed.ncl` to `bootstrap/seed-legacy.ncl`. Update
       all downstream `import "seed.ncl"` to work with either path. Add a
       `bootstrap/seed.ncl` that selects between legacy and full-source based on
       a `CRUNCH_LEGACY_SEED` env var or similar mechanism.
