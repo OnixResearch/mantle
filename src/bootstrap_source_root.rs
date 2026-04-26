@@ -139,6 +139,32 @@ pub(crate) enum BootstrapProviderMode {
     NixPackages,
     LegacyFetch,
     SourceRoot,
+    StagexLineage,
+}
+
+impl BootstrapProviderMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NixPackages => "nix-packages",
+            Self::LegacyFetch => "legacy-fetch",
+            Self::SourceRoot => "source-root",
+            Self::StagexLineage => "stagex-lineage",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "nix-packages" => Some(Self::NixPackages),
+            "legacy-fetch" => Some(Self::LegacyFetch),
+            "source-root" => Some(Self::SourceRoot),
+            "stagex-lineage" => Some(Self::StagexLineage),
+            _ => None,
+        }
+    }
+
+    pub fn satisfies_stagex_requirement(self) -> bool {
+        matches!(self, Self::StagexLineage)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,14 +200,19 @@ impl fmt::Display for ManifestDiagnostic {
 pub(crate) fn select_bootstrap_provider(
     fetch: bool,
     source_root: Option<&Path>,
+    stagex_lineage: Option<&Path>,
 ) -> Result<BootstrapProviderMode, ManifestDiagnostic> {
-    if fetch && source_root.is_some() {
+    let mode_count =
+        u32::from(fetch) + u32::from(source_root.is_some()) + u32::from(stagex_lineage.is_some());
+    if mode_count > 1 {
         return Err(ManifestDiagnostic::new(
             "provider-selection",
-            "ambiguous provider selection: --fetch cannot be combined with --source-root",
+            "ambiguous provider selection: only one of --fetch, --source-root, --stagex-lineage may be specified",
         ));
     }
-    if source_root.is_some() {
+    if stagex_lineage.is_some() {
+        Ok(BootstrapProviderMode::StagexLineage)
+    } else if source_root.is_some() {
         Ok(BootstrapProviderMode::SourceRoot)
     } else if fetch {
         Ok(BootstrapProviderMode::LegacyFetch)
@@ -454,6 +485,65 @@ fn validate_emitted_roles(
     }
 }
 
+pub(crate) const STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED: &str =
+    "StageX-class lineage provider materialization not yet implemented: \
+     the hex0-seed to normalized-provider stage0 chain requires a separate integration change";
+
+pub(crate) fn validate_stagex_lineage_manifest(
+    manifest_bytes: &[u8],
+) -> Result<crunch_bootstrap_core::LineageManifest, Vec<ManifestDiagnostic>> {
+    assert!(!manifest_bytes.is_empty(), "lineage manifest bytes must not be empty");
+    let manifest: crunch_bootstrap_core::LineageManifest =
+        serde_json::from_slice(manifest_bytes).map_err(|err| {
+            vec![ManifestDiagnostic::new(
+                "stagex-lineage-manifest",
+                format!("parsing StageX lineage manifest: {err}"),
+            )]
+        })?;
+
+    let result = crunch_bootstrap_core::validate_lineage(&manifest);
+    if !result.is_valid() {
+        let diagnostics = result
+            .errors
+            .into_iter()
+            .map(|e| ManifestDiagnostic::new("stagex-lineage-validation", e.to_string()))
+            .collect();
+        return Err(diagnostics);
+    }
+
+    Ok(manifest)
+}
+
+pub(crate) fn classify_stagex_provider_evidence(
+    manifest: &crunch_bootstrap_core::LineageManifest,
+) -> StagexProviderEvidence {
+    let seed_class = manifest.seed.seed_class.as_str().to_string();
+    let seed_digest = manifest.seed.seed_digest.hex_value.clone();
+    let environment_assumptions: Vec<String> = manifest
+        .environment_assumptions
+        .iter()
+        .map(|a| format!("{}: {}", a.category, a.description))
+        .collect();
+    StagexProviderEvidence {
+        seed_class,
+        seed_digest,
+        audit_seed_max_bytes: manifest.seed.audit_seed_max_bytes,
+        provider_output_count: manifest.provider_outputs.len() as u32,
+        environment_assumptions,
+        materialized: false,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StagexProviderEvidence {
+    pub seed_class: String,
+    pub seed_digest: String,
+    pub audit_seed_max_bytes: u32,
+    pub provider_output_count: u32,
+    pub environment_assumptions: Vec<String>,
+    pub materialized: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,19 +650,183 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_provider_selection_rejects_fetch_plus_source_root() {
+    fn bootstrap_provider_selection_rejects_ambiguous_modes() {
         let source_root = Path::new("source-root.json");
-        let err = select_bootstrap_provider(true, Some(source_root)).unwrap_err();
+        let err = select_bootstrap_provider(true, Some(source_root), None).unwrap_err();
         assert_eq!(err.path, "provider-selection");
-        assert!(err.message.contains("--fetch cannot be combined with --source-root"));
+
+        let lineage = Path::new("lineage.json");
+        let err = select_bootstrap_provider(true, None, Some(lineage)).unwrap_err();
+        assert_eq!(err.path, "provider-selection");
+
+        let err = select_bootstrap_provider(false, Some(source_root), Some(lineage)).unwrap_err();
+        assert_eq!(err.path, "provider-selection");
     }
 
     #[test]
     fn bootstrap_provider_selection_accepts_each_single_mode() {
         let source_root = Path::new("source-root.json");
-        assert_eq!(select_bootstrap_provider(false, Some(source_root)).unwrap(), BootstrapProviderMode::SourceRoot);
-        assert_eq!(select_bootstrap_provider(true, None).unwrap(), BootstrapProviderMode::LegacyFetch);
-        assert_eq!(select_bootstrap_provider(false, None).unwrap(), BootstrapProviderMode::NixPackages);
+        let lineage = Path::new("lineage.json");
+        assert_eq!(
+            select_bootstrap_provider(false, Some(source_root), None).unwrap(),
+            BootstrapProviderMode::SourceRoot
+        );
+        assert_eq!(select_bootstrap_provider(true, None, None).unwrap(), BootstrapProviderMode::LegacyFetch);
+        assert_eq!(select_bootstrap_provider(false, None, None).unwrap(), BootstrapProviderMode::NixPackages);
+        assert_eq!(
+            select_bootstrap_provider(false, None, Some(lineage)).unwrap(),
+            BootstrapProviderMode::StagexLineage
+        );
+    }
+
+    #[test]
+    fn stagex_lineage_manifest_valid_json_passes_validation() {
+        let manifest_json = serde_json::json!({
+            "seed": {
+                "seed_class": "hex0_seed",
+                "instruction_set": "x86",
+                "entry_point": "0x00",
+                "io_contract": "stdin/stdout",
+                "host_interface_surface": "linux syscalls",
+                "human_readable_source": "bootstrap/hex0.hex0",
+                "reproduction_transcript": "hex0 self-hosts",
+                "audit_note": "Hand-audited seed",
+                "audit_seed_max_bytes": 4096,
+                "seed_bytes_len": 357,
+                "seed_digest": {"algorithm": "blake3", "hex_value": "a".repeat(64)}
+            },
+            "source_artifacts": [{
+                "id": "hex0-src", "name": "hex0 source",
+                "digest": {"algorithm": "blake3", "hex_value": "b".repeat(64)},
+                "provenance": "stage0-posix"
+            }],
+            "generated_artifacts": [{
+                "id": "hex0-bin", "name": "hex0 binary",
+                "producing_tool_id": "hex0-asm",
+                "digest": {"algorithm": "blake3", "hex_value": "c".repeat(64)}
+            }],
+            "transition_tools": [{
+                "id": "hex0-asm", "name": "hex0 assembler",
+                "source_artifact_ids": ["hex0-src"],
+                "input_artifact_ids": [],
+                "output_artifact_ids": ["hex0-bin"],
+                "digest": {"algorithm": "blake3", "hex_value": "d".repeat(64)}
+            }],
+            "patches": [],
+            "provider_outputs": [
+                {"role": "target_prefixed_tools", "producing_artifact_id": "hex0-bin"}
+            ],
+            "environment_assumptions": [
+                {"id": "kernel", "description": "Linux x86_64", "category": "kernel"}
+            ],
+            "stage_graph": [{"from_node_id": "seed", "to_node_id": "hex0-src"}]
+        });
+        let bytes = serde_json::to_vec(&manifest_json).unwrap();
+        let manifest = validate_stagex_lineage_manifest(&bytes).unwrap();
+        assert_eq!(manifest.seed.seed_class, crunch_bootstrap_core::SeedClass::Hex0Seed);
+    }
+
+    #[test]
+    fn stagex_lineage_manifest_invalid_json_rejected() {
+        let result = validate_stagex_lineage_manifest(b"not json");
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
+        assert!(diags[0].path.contains("stagex-lineage"));
+    }
+
+    #[test]
+    fn stagex_lineage_manifest_forbidden_root_rejected() {
+        let manifest_json = serde_json::json!({
+            "seed": {
+                "seed_class": "hex0_seed",
+                "instruction_set": "x86", "entry_point": "0x00",
+                "io_contract": "io", "host_interface_surface": "linux",
+                "human_readable_source": "src", "reproduction_transcript": "t",
+                "audit_note": "n", "audit_seed_max_bytes": 4096, "seed_bytes_len": 100,
+                "seed_digest": {"algorithm": "blake3", "hex_value": "a".repeat(64)}
+            },
+            "source_artifacts": [],
+            "generated_artifacts": [],
+            "transition_tools": [{
+                "id": "host-gcc", "name": "gcc",
+                "source_artifact_ids": [], "input_artifact_ids": [],
+                "output_artifact_ids": [],
+                "digest": {"algorithm": "blake3", "hex_value": "b".repeat(64)}
+            }],
+            "patches": [],
+            "provider_outputs": [],
+            "environment_assumptions": [],
+            "stage_graph": []
+        });
+        let bytes = serde_json::to_vec(&manifest_json).unwrap();
+        let result = validate_stagex_lineage_manifest(&bytes);
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
+        assert!(diags.iter().any(|d| d.message.contains("forbidden")));
+    }
+
+    #[test]
+    fn stagex_provider_evidence_classification() {
+        let manifest_json = serde_json::json!({
+            "seed": {
+                "seed_class": "hex0_seed",
+                "instruction_set": "x86", "entry_point": "0x00",
+                "io_contract": "io", "host_interface_surface": "linux",
+                "human_readable_source": "src", "reproduction_transcript": "t",
+                "audit_note": "n", "audit_seed_max_bytes": 4096, "seed_bytes_len": 100,
+                "seed_digest": {"algorithm": "blake3", "hex_value": "a".repeat(64)}
+            },
+            "source_artifacts": [{
+                "id": "s1", "name": "source",
+                "digest": {"algorithm": "blake3", "hex_value": "b".repeat(64)},
+                "provenance": "stage0"
+            }],
+            "generated_artifacts": [{"id": "g1", "name": "gen", "producing_tool_id": "t1",
+                "digest": {"algorithm": "blake3", "hex_value": "c".repeat(64)}
+            }],
+            "transition_tools": [{"id": "t1", "name": "tool",
+                "source_artifact_ids": ["s1"], "input_artifact_ids": [],
+                "output_artifact_ids": ["g1"],
+                "digest": {"algorithm": "blake3", "hex_value": "d".repeat(64)}
+            }],
+            "patches": [],
+            "provider_outputs": [{"role": "target_prefixed_tools", "producing_artifact_id": "g1"}],
+            "environment_assumptions": [{"id": "k", "description": "Linux", "category": "kernel"}],
+            "stage_graph": [{"from_node_id": "seed", "to_node_id": "s1"}]
+        });
+        let bytes = serde_json::to_vec(&manifest_json).unwrap();
+        let manifest = validate_stagex_lineage_manifest(&bytes).unwrap();
+        let evidence = classify_stagex_provider_evidence(&manifest);
+        assert_eq!(evidence.seed_class, "hex0-seed");
+        assert_eq!(evidence.audit_seed_max_bytes, 4096);
+        assert_eq!(evidence.provider_output_count, 1);
+        assert!(!evidence.materialized);
+        assert!(evidence.environment_assumptions.iter().any(|a| a.contains("kernel")));
+    }
+
+    #[test]
+    fn provider_mode_stagex_satisfies_requirement() {
+        assert!(BootstrapProviderMode::StagexLineage.satisfies_stagex_requirement());
+    }
+
+    #[test]
+    fn provider_mode_legacy_does_not_satisfy_stagex() {
+        assert!(!BootstrapProviderMode::LegacyFetch.satisfies_stagex_requirement());
+        assert!(!BootstrapProviderMode::SourceRoot.satisfies_stagex_requirement());
+        assert!(!BootstrapProviderMode::NixPackages.satisfies_stagex_requirement());
+    }
+
+    #[test]
+    fn provider_mode_roundtrip() {
+        for mode in [
+            BootstrapProviderMode::NixPackages,
+            BootstrapProviderMode::LegacyFetch,
+            BootstrapProviderMode::SourceRoot,
+            BootstrapProviderMode::StagexLineage,
+        ] {
+            let parsed = BootstrapProviderMode::parse(mode.as_str()).unwrap();
+            assert_eq!(parsed, mode);
+        }
     }
 
     #[test]

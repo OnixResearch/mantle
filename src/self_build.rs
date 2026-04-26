@@ -244,6 +244,8 @@ impl ProtectedPhaseTransition {
 /// selected, and where the output landed.
 #[derive(Debug, Clone)]
 pub struct SelfBuildReport {
+    /// Which bootstrap provider mode was used for this self-build.
+    pub provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
     /// Hermeticity mode selected for this self-build.
     pub hermeticity_mode: crunch_pipeline::HermeticityMode,
     /// Path to the crunch binary that drove this self-build.
@@ -264,6 +266,30 @@ pub struct SelfBuildReport {
     pub busybox_path: Option<PathBuf>,
     /// Path to the produced output binary.
     pub output_binary: PathBuf,
+    /// Optional StageX-class lineage proof metadata.
+    pub stagex_metadata: Option<StagexProofMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagexProofMetadata {
+    pub seed_class: String,
+    pub audit_seed_max_bytes: u32,
+    pub seed_digest_blake3: String,
+    pub lineage_manifest_digest_blake3: String,
+    pub stage_graph_digest_blake3: String,
+    pub provider_output_digest_blake3: String,
+    pub staged_source_digest_blake3: String,
+    pub stage1_binary_digest_blake3: String,
+    pub stage2_binary_digest_blake3: String,
+    pub bootstrap_tool_digests: Vec<BootstrapToolDigestEntry>,
+    pub protected_exec_audit_digest_blake3: String,
+    pub proof_bundle_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootstrapToolDigestEntry {
+    pub name: String,
+    pub digest_blake3: String,
 }
 
 fn emit_progress_marker(marker: &str) {
@@ -278,6 +304,7 @@ impl SelfBuildReport {
     /// filter stderr for this prefix and parse the key-value pairs.
     pub fn format_proof_lines(&self) -> String {
         let mut out = String::with_capacity(512);
+        out.push_str(&format!("{PROOF_PREFIX} provider-mode={}\n", self.provider_mode.as_str()));
         out.push_str(&format!("{PROOF_PREFIX} hermeticity-mode={}\n", self.hermeticity_mode.as_str(),));
         out.push_str(&format!("{PROOF_PREFIX} invoking-binary={}\n", self.invoking_binary.display(),));
         out.push_str(&format!("{PROOF_PREFIX} staged-source={}\n", self.staged_source.display(),));
@@ -306,14 +333,33 @@ impl SelfBuildReport {
             None => out.push_str(&format!("{PROOF_PREFIX} busybox-path=none\n",)),
         }
         out.push_str(&format!("{PROOF_PREFIX} output-binary={}\n", self.output_binary.display(),));
+        match &self.stagex_metadata {
+            Some(meta) => {
+                out.push_str(&format!("{PROOF_PREFIX} stagex-seed-class={}\n", meta.seed_class));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-audit-seed-max-bytes={}\n", meta.audit_seed_max_bytes));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-seed-digest={}\n", meta.seed_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-lineage-manifest-digest={}\n", meta.lineage_manifest_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-stage-graph-digest={}\n", meta.stage_graph_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-provider-output-digest={}\n", meta.provider_output_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-staged-source-digest={}\n", meta.staged_source_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-stage1-binary-digest={}\n", meta.stage1_binary_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-stage2-binary-digest={}\n", meta.stage2_binary_digest_blake3));
+                for tool in &meta.bootstrap_tool_digests {
+                    out.push_str(&format!("{PROOF_PREFIX} stagex-bootstrap-tool-digest={}:{}\n", tool.name, tool.digest_blake3));
+                }
+                out.push_str(&format!("{PROOF_PREFIX} stagex-protected-exec-audit-digest={}\n", meta.protected_exec_audit_digest_blake3));
+                out.push_str(&format!("{PROOF_PREFIX} stagex-proof-bundle-digest={}\n", meta.proof_bundle_digest_blake3));
+            }
+            None => out.push_str(&format!("{PROOF_PREFIX} stagex-metadata=none\n")),
+        }
         out
     }
 
     /// Parse a report from lines previously produced by
     /// `format_proof_lines`. Returns `None` when any required field
     /// is missing.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn parse_proof_lines(text: &str) -> Option<Self> {
+        let mut provider_mode: Option<crate::bootstrap_source_root::BootstrapProviderMode> = None;
         let mut hermeticity_mode: Option<crunch_pipeline::HermeticityMode> = None;
         let mut invoking_binary: Option<PathBuf> = None;
         let mut staged_source: Option<PathBuf> = None;
@@ -330,6 +376,19 @@ impl SelfBuildReport {
         let mut protected_seccomp_events: Vec<ProtectedSeccompAuditEvent> = Vec::new();
         let mut busybox_path: Option<Option<PathBuf>> = None;
         let mut output_binary: Option<PathBuf> = None;
+        let mut stagex_seed_class: Option<String> = None;
+        let mut stagex_audit_seed_max_bytes: Option<u32> = None;
+        let mut stagex_seed_digest: Option<String> = None;
+        let mut stagex_lineage_manifest_digest: Option<String> = None;
+        let mut stagex_stage_graph_digest: Option<String> = None;
+        let mut stagex_provider_output_digest: Option<String> = None;
+        let mut stagex_staged_source_digest: Option<String> = None;
+        let mut stagex_stage1_binary_digest: Option<String> = None;
+        let mut stagex_stage2_binary_digest: Option<String> = None;
+        let mut stagex_bootstrap_tool_digests: Vec<BootstrapToolDigestEntry> = Vec::new();
+        let mut stagex_protected_exec_audit_digest: Option<String> = None;
+        let mut stagex_proof_bundle_digest: Option<String> = None;
+        let mut stagex_metadata_none = false;
 
         for line in text.lines() {
             let trimmed = line.trim();
@@ -337,7 +396,9 @@ impl SelfBuildReport {
                 Some(r) => r.trim(),
                 None => continue,
             };
-            if let Some(val) = rest.strip_prefix("hermeticity-mode=") {
+            if let Some(val) = rest.strip_prefix("provider-mode=") {
+                provider_mode = crate::bootstrap_source_root::BootstrapProviderMode::parse(val);
+            } else if let Some(val) = rest.strip_prefix("hermeticity-mode=") {
                 hermeticity_mode = match val {
                     "practical" => Some(crunch_pipeline::HermeticityMode::Practical),
                     "strict" => Some(crunch_pipeline::HermeticityMode::Strict),
@@ -386,6 +447,37 @@ impl SelfBuildReport {
                 }
             } else if let Some(val) = rest.strip_prefix("output-binary=") {
                 output_binary = Some(PathBuf::from(val));
+            } else if let Some(val) = rest.strip_prefix("stagex-seed-class=") {
+                stagex_seed_class = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-audit-seed-max-bytes=") {
+                stagex_audit_seed_max_bytes = val.parse().ok();
+            } else if let Some(val) = rest.strip_prefix("stagex-seed-digest=") {
+                stagex_seed_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-lineage-manifest-digest=") {
+                stagex_lineage_manifest_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-stage-graph-digest=") {
+                stagex_stage_graph_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-provider-output-digest=") {
+                stagex_provider_output_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-staged-source-digest=") {
+                stagex_staged_source_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-stage1-binary-digest=") {
+                stagex_stage1_binary_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-stage2-binary-digest=") {
+                stagex_stage2_binary_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-bootstrap-tool-digest=") {
+                if let Some((name, digest)) = val.split_once(':') {
+                    stagex_bootstrap_tool_digests.push(BootstrapToolDigestEntry {
+                        name: name.to_string(),
+                        digest_blake3: digest.to_string(),
+                    });
+                }
+            } else if let Some(val) = rest.strip_prefix("stagex-protected-exec-audit-digest=") {
+                stagex_protected_exec_audit_digest = Some(val.to_string());
+            } else if let Some(val) = rest.strip_prefix("stagex-proof-bundle-digest=") {
+                stagex_proof_bundle_digest = Some(val.to_string());
+            } else if rest.strip_prefix("stagex-metadata=").is_some() {
+                stagex_metadata_none = true;
             }
         }
 
@@ -401,6 +493,7 @@ impl SelfBuildReport {
         }
 
         Some(SelfBuildReport {
+            provider_mode: provider_mode?,
             hermeticity_mode: hermeticity_mode?,
             invoking_binary: invoking_binary?,
             staged_source: staged_source?,
@@ -410,6 +503,26 @@ impl SelfBuildReport {
             protected_seccomp_events,
             busybox_path: busybox_path?,
             output_binary: output_binary?,
+            stagex_metadata: if stagex_metadata_none {
+                None
+            } else if stagex_seed_class.is_some() {
+                Some(StagexProofMetadata {
+                    seed_class: stagex_seed_class?,
+                    audit_seed_max_bytes: stagex_audit_seed_max_bytes?,
+                    seed_digest_blake3: stagex_seed_digest?,
+                    lineage_manifest_digest_blake3: stagex_lineage_manifest_digest?,
+                    stage_graph_digest_blake3: stagex_stage_graph_digest?,
+                    provider_output_digest_blake3: stagex_provider_output_digest?,
+                    staged_source_digest_blake3: stagex_staged_source_digest?,
+                    stage1_binary_digest_blake3: stagex_stage1_binary_digest?,
+                    stage2_binary_digest_blake3: stagex_stage2_binary_digest?,
+                    bootstrap_tool_digests: stagex_bootstrap_tool_digests,
+                    protected_exec_audit_digest_blake3: stagex_protected_exec_audit_digest?,
+                    proof_bundle_digest_blake3: stagex_proof_bundle_digest?,
+                })
+            } else {
+                None
+            },
         })
     }
 }
@@ -2412,6 +2525,96 @@ fn verify_self_build_output(output_binary: &Path, no_verify: bool) -> Result<(),
     verify_binary(output_binary)
 }
 
+const FORBIDDEN_EXEC_BASENAMES: &[&str] = &[
+    "cc", "c++", "gcc", "g++", "clang", "clang++",
+    "make", "gmake", "ar", "ranlib", "ld",
+    "nix", "nix-build", "nix-store", "nix-shell", "nix-env",
+];
+
+const FORBIDDEN_EXEC_PATH_PATTERNS: &[&str] = &[
+    "musl.cc", "musl-gcc-raw", "legacy-fetched",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagexEligibilityFailure {
+    pub reason: String,
+}
+
+pub fn validate_stagex_proof_eligibility(
+    report: &SelfBuildReport,
+) -> Result<(), Vec<StagexEligibilityFailure>> {
+    let mut failures = Vec::new();
+    let max_seccomp_events: u32 = 100_000;
+
+    if !report.provider_mode.satisfies_stagex_requirement() {
+        failures.push(StagexEligibilityFailure {
+            reason: format!(
+                "provider mode '{}' does not satisfy StageX requirement",
+                report.provider_mode.as_str()
+            ),
+        });
+    }
+
+    if report.stagex_metadata.is_none() {
+        failures.push(StagexEligibilityFailure {
+            reason: "StageX lineage metadata is missing from proof".to_string(),
+        });
+    }
+
+    if report.protected_transition.is_none() {
+        failures.push(StagexEligibilityFailure {
+            reason: "protected-phase transition to crunch-built tools is missing".to_string(),
+        });
+    }
+
+    for (idx, event) in report.protected_seccomp_events.iter().enumerate() {
+        if idx as u32 >= max_seccomp_events {
+            failures.push(StagexEligibilityFailure {
+                reason: format!("seccomp event count exceeds limit {max_seccomp_events}"),
+            });
+            break;
+        }
+        if event.policy_decision != "allowed" {
+            continue;
+        }
+        let basename = std::path::Path::new(&event.executable_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if FORBIDDEN_EXEC_BASENAMES.contains(&basename) {
+            failures.push(StagexEligibilityFailure {
+                reason: format!(
+                    "undeclared host tool execution observed: {} ({})",
+                    basename,
+                    event.executable_path.display()
+                ),
+            });
+        }
+        let path_str = event.executable_path.to_string_lossy();
+        for pattern in FORBIDDEN_EXEC_PATH_PATTERNS {
+            if path_str.contains(pattern) {
+                failures.push(StagexEligibilityFailure {
+                    reason: format!(
+                        "legacy provider executable observed: {} in {}",
+                        pattern,
+                        event.executable_path.display()
+                    ),
+                });
+            }
+        }
+    }
+
+    if !report.fallback_events.is_empty() {
+        for event in &report.fallback_events {
+            failures.push(StagexEligibilityFailure {
+                reason: format!("host fallback event observed: {event}"),
+            });
+        }
+    }
+
+    if failures.is_empty() { Ok(()) } else { Err(failures) }
+}
+
 fn emit_self_build_completion(report: &SelfBuildReport) {
     eprint!("{}", report.format_proof_lines());
     eprintln!("\n=== self-build complete ===");
@@ -2434,6 +2637,7 @@ pub fn cmd_self_build(
     stage0_policy: Option<&ProtectedExecPolicy>,
     bootstrap_bwrap_path: Option<&Path>,
     bootstrap_busybox_path: Option<&Path>,
+    provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
 ) -> Result<SelfBuildReport, RunError> {
     let setup = initialize_self_build(
         output_dir,
@@ -2491,6 +2695,7 @@ pub fn cmd_self_build(
         .unwrap_or_default();
 
     let report = SelfBuildReport {
+        provider_mode,
         hermeticity_mode,
         invoking_binary: setup.invoking_binary,
         staged_source: shared.staged_source,
@@ -2500,6 +2705,7 @@ pub fn cmd_self_build(
         protected_seccomp_events,
         busybox_path: tools.busybox_path,
         output_binary,
+        stagex_metadata: None,
     };
     emit_self_build_completion(&report);
     Ok(report)
@@ -3730,6 +3936,7 @@ mod tests {
         let transition = sample_protected_transition();
         let seccomp_event = sample_protected_seccomp_event();
         let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/seed/crunch"),
             staged_source: PathBuf::from("/store/src"),
@@ -3739,15 +3946,18 @@ mod tests {
             protected_seccomp_events: vec![seccomp_event.clone()],
             busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/crunch"),
+            stagex_metadata: None,
         };
 
         let lines = report.format_proof_lines();
         let parsed = SelfBuildReport::parse_proof_lines(&lines).unwrap();
 
+        assert!(lines.contains("provider-mode=legacy-fetch"));
         assert!(lines.contains("protected-transition=bootstrap-tools-selected"));
         assert!(lines.contains("protected-transition-bwrap-store-name=aaa-bwrap"));
         assert!(lines.contains("protected-transition-busybox-store-name=bbb-busybox"));
         assert!(lines.contains("protected-seccomp-event={"));
+        assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::LegacyFetch);
         assert_eq!(parsed.protected_transition, Some(transition));
         assert_eq!(parsed.protected_seccomp_events, vec![seccomp_event]);
     }
@@ -3783,6 +3993,7 @@ mod tests {
     #[test]
     fn report_format_roundtrip_with_declared_seed_bwrap() {
         let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::SourceRoot,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/seed/crunch"),
             staged_source: PathBuf::from("/store/src"),
@@ -3792,14 +4003,17 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
             output_binary: PathBuf::from("/store/out/bin/crunch"),
+            stagex_metadata: None,
         };
 
         let lines = report.format_proof_lines();
         let parsed = SelfBuildReport::parse_proof_lines(&lines).unwrap();
 
         assert!(lines.contains("bwrap-source=declared-seed:/seed/bin/bwrap"));
+        assert!(lines.contains("provider-mode=source-root"));
         assert!(lines.contains("fallback-event=none"));
         assert!(lines.contains("busybox-path=/seed/bin/busybox"));
+        assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::SourceRoot);
         assert_eq!(parsed.bwrap_source, report.bwrap_source);
         assert_eq!(parsed.busybox_path, report.busybox_path);
         assert_eq!(parsed.fallback_events, report.fallback_events);
@@ -3808,6 +4022,7 @@ mod tests {
     #[test]
     fn report_format_roundtrip_with_busybox() {
         let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/tmp/checkout/target/debug/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
@@ -3820,6 +4035,7 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
             output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
+            stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
 
@@ -3829,6 +4045,7 @@ mod tests {
         }
 
         let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
+        assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage);
         assert_eq!(parsed.hermeticity_mode, report.hermeticity_mode);
         assert_eq!(parsed.invoking_binary, report.invoking_binary);
         assert_eq!(parsed.staged_source, report.staged_source);
@@ -3841,6 +4058,7 @@ mod tests {
     #[test]
     fn report_format_roundtrip_without_busybox() {
         let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::NixPackages,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             invoking_binary: PathBuf::from("/usr/bin/crunch"),
             staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
@@ -3852,15 +4070,68 @@ mod tests {
             protected_seccomp_events: Vec::new(),
             busybox_path: None,
             output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
+            stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
         assert!(lines.contains("busybox-path=none"));
         assert!(lines.contains("fallback-event=bwrap-host-fallback:/usr/bin/bwrap"));
 
         let parsed = SelfBuildReport::parse_proof_lines(&lines).expect("should parse back");
+        assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::NixPackages);
         assert_eq!(parsed.fallback_events, report.fallback_events);
         assert!(parsed.busybox_path.is_none());
         assert!(!parsed.bwrap_source.is_crunch_built());
+    }
+
+    #[test]
+    fn report_format_roundtrip_with_stagex_metadata() {
+        let meta = StagexProofMetadata {
+            seed_class: "hex0-seed".to_string(),
+            audit_seed_max_bytes: 4096,
+            seed_digest_blake3: "a".repeat(64),
+            lineage_manifest_digest_blake3: "b".repeat(64),
+            stage_graph_digest_blake3: "c".repeat(64),
+            provider_output_digest_blake3: "d".repeat(64),
+            staged_source_digest_blake3: "e".repeat(64),
+            stage1_binary_digest_blake3: "f".repeat(64),
+            stage2_binary_digest_blake3: "1".repeat(64),
+            bootstrap_tool_digests: vec![
+                BootstrapToolDigestEntry { name: "bwrap".to_string(), digest_blake3: "2".repeat(64) },
+                BootstrapToolDigestEntry { name: "busybox".to_string(), digest_blake3: "3".repeat(64) },
+            ],
+            protected_exec_audit_digest_blake3: "4".repeat(64),
+            proof_bundle_digest_blake3: "5".repeat(64),
+        };
+        let report = SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            invoking_binary: PathBuf::from("/bin/crunch"),
+            staged_source: PathBuf::from("/store/src"),
+            bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
+            fallback_events: Vec::new(),
+            protected_transition: None,
+            protected_seccomp_events: Vec::new(),
+            busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
+            output_binary: PathBuf::from("/store/crunch/bin/crunch"),
+            stagex_metadata: Some(meta.clone()),
+        };
+        let lines = report.format_proof_lines();
+        assert!(lines.contains("stagex-seed-class=hex0-seed"));
+        assert!(lines.contains("stagex-audit-seed-max-bytes=4096"));
+        assert!(lines.contains(&format!("stagex-seed-digest={}", "a".repeat(64))));
+        assert!(lines.contains(&format!("stagex-bootstrap-tool-digest=bwrap:{}", "2".repeat(64))));
+        assert!(lines.contains(&format!("stagex-bootstrap-tool-digest=busybox:{}", "3".repeat(64))));
+        assert!(lines.contains(&format!("stagex-proof-bundle-digest={}", "5".repeat(64))));
+        assert!(!lines.contains("stagex-metadata=none"));
+
+        let parsed = SelfBuildReport::parse_proof_lines(&lines).unwrap();
+        let parsed_meta = parsed.stagex_metadata.expect("stagex metadata must be present");
+        assert_eq!(parsed_meta.seed_class, meta.seed_class);
+        assert_eq!(parsed_meta.audit_seed_max_bytes, meta.audit_seed_max_bytes);
+        assert_eq!(parsed_meta.seed_digest_blake3, meta.seed_digest_blake3);
+        assert_eq!(parsed_meta.lineage_manifest_digest_blake3, meta.lineage_manifest_digest_blake3);
+        assert_eq!(parsed_meta.bootstrap_tool_digests, meta.bootstrap_tool_digests);
+        assert_eq!(parsed_meta.proof_bundle_digest_blake3, meta.proof_bundle_digest_blake3);
     }
 
     #[test]
@@ -3886,6 +4157,7 @@ mod tests {
         let mixed = format!(
             "some random log line\n\
              {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-start:bwrap.ncl\n\
+             {PROOF_PREFIX} provider-mode=legacy-fetch\n\
              {PROOF_PREFIX} hermeticity-mode=strict\n\
              {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
              {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
@@ -3895,6 +4167,7 @@ mod tests {
              {PROOF_PREFIX} fallback-event=source-host-discovery:/work/crunch\n\
              {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
              {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n\
+             {PROOF_PREFIX} stagex-metadata=none\n\
              {PROOF_PREFIX} {PROGRESS_KEY}crunch-build-done\n"
         );
         let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite progress markers");
@@ -3905,6 +4178,160 @@ mod tests {
         assert_eq!(parsed.fallback_events, vec![SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from(
             "/work/crunch"
         ))]);
+    }
+
+    // ── StageX eligibility tests ────────────────────────────────
+
+    fn stagex_eligible_report() -> SelfBuildReport {
+        SelfBuildReport {
+            provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            invoking_binary: PathBuf::from("/bin/crunch"),
+            staged_source: PathBuf::from("/store/src"),
+            bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
+            fallback_events: Vec::new(),
+            protected_transition: Some(sample_protected_transition()),
+            protected_seccomp_events: Vec::new(),
+            busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
+            output_binary: PathBuf::from("/store/crunch/bin/crunch"),
+            stagex_metadata: Some(StagexProofMetadata {
+                seed_class: "hex0-seed".to_string(),
+                audit_seed_max_bytes: 4096,
+                seed_digest_blake3: "a".repeat(64),
+                lineage_manifest_digest_blake3: "b".repeat(64),
+                stage_graph_digest_blake3: "c".repeat(64),
+                provider_output_digest_blake3: "d".repeat(64),
+                staged_source_digest_blake3: "e".repeat(64),
+                stage1_binary_digest_blake3: "f".repeat(64),
+                stage2_binary_digest_blake3: "1".repeat(64),
+                bootstrap_tool_digests: Vec::new(),
+                protected_exec_audit_digest_blake3: "2".repeat(64),
+                proof_bundle_digest_blake3: "3".repeat(64),
+            }),
+        }
+    }
+
+    #[test]
+    fn stagex_eligible_report_passes_validation() {
+        let report = stagex_eligible_report();
+        assert!(validate_stagex_proof_eligibility(&report).is_ok());
+    }
+
+    #[test]
+    fn legacy_fetch_provider_fails_stagex_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.provider_mode = crate::bootstrap_source_root::BootstrapProviderMode::LegacyFetch;
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("provider mode")));
+    }
+
+    #[test]
+    fn source_root_provider_fails_stagex_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.provider_mode = crate::bootstrap_source_root::BootstrapProviderMode::SourceRoot;
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("provider mode")));
+    }
+
+    #[test]
+    fn missing_stagex_metadata_fails_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.stagex_metadata = None;
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("lineage metadata is missing")));
+    }
+
+    #[test]
+    fn missing_protected_transition_fails_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.protected_transition = None;
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("protected-phase transition")));
+    }
+
+    #[test]
+    fn host_gcc_in_seccomp_events_fails_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.protected_seccomp_events.push(ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from("/usr/bin/gcc"),
+            tracee_path: PathBuf::from("/usr/bin/gcc"),
+            resolved_host_path: PathBuf::from("/usr/bin/gcc"),
+            digest_hex: "0".repeat(64),
+            reason: "test".to_string(),
+            phase: "build".to_string(),
+            inventory_entry_id: None,
+            policy_decision: "allowed".to_string(),
+        });
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("undeclared host tool")));
+    }
+
+    #[test]
+    fn nix_store_in_seccomp_events_fails_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.protected_seccomp_events.push(ProtectedSeccompAuditEvent {
+            pid: 2,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from("/nix/store/xxx/bin/nix-build"),
+            tracee_path: PathBuf::from("/nix/store/xxx/bin/nix-build"),
+            resolved_host_path: PathBuf::from("/nix/store/xxx/bin/nix-build"),
+            digest_hex: "0".repeat(64),
+            reason: "test".to_string(),
+            phase: "build".to_string(),
+            inventory_entry_id: None,
+            policy_decision: "allowed".to_string(),
+        });
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("undeclared host tool")));
+    }
+
+    #[test]
+    fn legacy_provider_exec_path_fails_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.protected_seccomp_events.push(ProtectedSeccompAuditEvent {
+            pid: 3,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from("/tmp/musl.cc-native/bin/musl-gcc"),
+            tracee_path: PathBuf::from("/tmp/musl.cc-native/bin/musl-gcc"),
+            resolved_host_path: PathBuf::from("/tmp/musl.cc-native/bin/musl-gcc"),
+            digest_hex: "0".repeat(64),
+            reason: "test".to_string(),
+            phase: "build".to_string(),
+            inventory_entry_id: None,
+            policy_decision: "allowed".to_string(),
+        });
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("legacy provider executable")));
+    }
+
+    #[test]
+    fn denied_seccomp_events_do_not_fail_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.protected_seccomp_events.push(ProtectedSeccompAuditEvent {
+            pid: 4,
+            syscall: "execve".to_string(),
+            executable_path: PathBuf::from("/usr/bin/gcc"),
+            tracee_path: PathBuf::from("/usr/bin/gcc"),
+            resolved_host_path: PathBuf::from("/usr/bin/gcc"),
+            digest_hex: "0".repeat(64),
+            reason: "test".to_string(),
+            phase: "build".to_string(),
+            inventory_entry_id: None,
+            policy_decision: "denied".to_string(),
+        });
+        assert!(validate_stagex_proof_eligibility(&report).is_ok());
+    }
+
+    #[test]
+    fn host_fallback_events_fail_eligibility() {
+        let mut report = stagex_eligible_report();
+        report.fallback_events.push(SelfBuildFallbackEvent::BwrapHostFallback(
+            PathBuf::from("/usr/bin/bwrap"),
+        ));
+        let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
+        assert!(failures.iter().any(|f| f.reason.contains("host fallback")));
     }
 
     // ── find_crunch_busybox tests ───────────────────────────────

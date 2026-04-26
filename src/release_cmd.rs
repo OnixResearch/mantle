@@ -60,7 +60,8 @@ pub(crate) fn cmd_release(
         crate::ReleaseAction::Verify {
             bundle_dir,
             require_reproducible,
-        } => cmd_release_verify(json, bundle_dir, require_reproducible),
+            require_stagex_no_quorum,
+        } => cmd_release_verify(json, bundle_dir, require_reproducible, require_stagex_no_quorum),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
             rebuild_output_dir,
@@ -160,12 +161,29 @@ fn cmd_release_create(
     Ok(())
 }
 
-fn cmd_release_verify(json: bool, bundle_dir: PathBuf, require_reproducible: bool) -> Result<(), RunError> {
+fn cmd_release_verify(
+    json: bool,
+    bundle_dir: PathBuf,
+    require_reproducible: bool,
+    require_stagex_no_quorum: bool,
+) -> Result<(), RunError> {
     let manifest = verify_release_evidence_bundle(&bundle_dir)?;
     let reproducibility = load_bundle_reproducibility_report(&bundle_dir, &manifest)?;
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
+
+    let stagex_result = if require_stagex_no_quorum {
+        Some(evaluate_stagex_profile(&manifest, &bundle_dir, reproducibility.as_ref()))
+    } else {
+        None
+    };
+
     if json {
-        print_release_verify_json(&manifest, reproducibility.as_ref(), reproducibility_status)?;
+        print_release_verify_json(
+            &manifest,
+            reproducibility.as_ref(),
+            reproducibility_status,
+            stagex_result.as_ref(),
+        )?;
     } else {
         println!("release evidence verified: {}", bundle_dir.display());
         println!("release id: {}", manifest.release_id);
@@ -174,12 +192,28 @@ fn cmd_release_verify(json: bool, bundle_dir: PathBuf, require_reproducible: boo
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
         print_reproducibility_summary(reproducibility.as_ref());
+        if let Some(ref result) = stagex_result {
+            println!("stagex no-quorum profile: {}", result.status);
+            if !result.failure_reasons.is_empty() {
+                for reason in &result.failure_reasons {
+                    println!("  failure: {reason}");
+                }
+            }
+        }
     }
     if require_reproducible && reproducibility_status != ReproducibilityStatus::Matched {
         return Err(RunError::Internal(format!(
             "reproducibility evidence required but status is {}",
             reproducibility_status.as_str()
         )));
+    }
+    if let Some(ref result) = stagex_result {
+        if !result.status.is_satisfied() {
+            return Err(RunError::Internal(format!(
+                "StageX no-quorum profile unsatisfied: {}",
+                result.failure_reasons.join("; ")
+            )));
+        }
     }
     Ok(())
 }
@@ -188,6 +222,7 @@ fn print_release_verify_json(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     reproducibility: Option<&VerifiedReproducibilityReport>,
     status: ReproducibilityStatus,
+    stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
 ) -> Result<(), RunError> {
     let report_json = reproducibility.map(|report| {
         serde_json::json!({
@@ -195,13 +230,17 @@ fn print_release_verify_json(
             "digest_blake3": report.digest_blake3,
         })
     });
-    let rendered = serde_json::json!({
+    let mut rendered = serde_json::json!({
         "kind": "crunch-release-verify-v1",
         "release_id": manifest.release_id,
         "manifest": manifest,
         "reproducibility_status": status.as_str(),
         "reproducibility_report": report_json,
     });
+    if let Some(result) = stagex_result {
+        rendered["stagex_no_quorum"] = serde_json::to_value(result)
+            .map_err(|err| RunError::Internal(format!("serializing stagex profile: {err}")))?;
+    }
     println!(
         "{}",
         serde_json::to_string(&rendered)
@@ -225,6 +264,74 @@ fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilit
             println!("reproducibility: {}", ReproducibilityStatus::Absent.as_str());
         }
     }
+}
+
+fn evaluate_stagex_profile(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+    reproducibility: Option<&VerifiedReproducibilityReport>,
+) -> crunch_bootstrap_core::StagexNoQuorumResult {
+    let proof_block = extract_stagex_proof_block(manifest, bundle_dir);
+    let repro_verified = reproducibility
+        .map(|r| r.status == ReproducibilityStatus::Matched)
+        .unwrap_or(false);
+    let repro_digest = reproducibility
+        .map(|r| r.digest_blake3.as_str())
+        .unwrap_or("");
+    let artifact_set_digest = compute_artifact_set_digest(&manifest.binaries);
+    crunch_bootstrap_core::evaluate_stagex_no_quorum(
+        true, // bundle already verified by verify_release_evidence_bundle
+        proof_block.as_ref(),
+        repro_verified,
+        repro_digest,
+        &manifest.release_id,
+        &artifact_set_digest,
+    )
+}
+
+fn extract_stagex_proof_block(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+) -> Option<crunch_bootstrap_core::StagexLineageProofBlock> {
+    let proof_bundle_dir = bundle_dir.join(&manifest.proof_bundle.relative_path);
+    let summary_path = proof_bundle_dir.join("summary.txt");
+    let summary_text = std::fs::read_to_string(&summary_path).ok()?;
+    let report = crate::self_build::SelfBuildReport::parse_proof_lines(&summary_text)?;
+    let meta = report.stagex_metadata?;
+    Some(crunch_bootstrap_core::StagexLineageProofBlock {
+        seed_class: meta.seed_class,
+        audit_seed_max_bytes: meta.audit_seed_max_bytes,
+        seed_digest: meta.seed_digest_blake3,
+        lineage_manifest_digest: meta.lineage_manifest_digest_blake3,
+        stage_graph_digest: meta.stage_graph_digest_blake3,
+        normalized_provider_digest: meta.provider_output_digest_blake3,
+        staged_source_digest: meta.staged_source_digest_blake3,
+        stage1_crunch_digest: meta.stage1_binary_digest_blake3,
+        stage2_crunch_digest: meta.stage2_binary_digest_blake3,
+        bootstrap_tool_digests: meta
+            .bootstrap_tool_digests
+            .into_iter()
+            .map(|t| crunch_bootstrap_core::BootstrapToolDigest {
+                name: t.name,
+                digest: t.digest_blake3,
+            })
+            .collect(),
+        protected_exec_audit_digest: Some(meta.protected_exec_audit_digest_blake3),
+        proof_bundle_digest: meta.proof_bundle_digest_blake3,
+    })
+}
+
+fn compute_artifact_set_digest(
+    binaries: &[crate::release_evidence::BundledArtifact],
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    let mut sorted_digests: Vec<&str> = binaries.iter().map(|b| b.digest_blake3.as_str()).collect();
+    sorted_digests.sort();
+    for digest in &sorted_digests {
+        hasher.update(digest.as_bytes());
+        hasher.update(b"\n");
+    }
+    hasher.finalize().to_hex().to_string()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -573,4 +680,274 @@ fn print_witness_rebuild_success(
     println!("signature: {}", signature_path.display());
     println!("rebuild audit: {}", audit_path.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_artifact_set_digest_is_deterministic() {
+        let a = crate::release_evidence::BundledArtifact {
+            kind: crate::release_evidence::BundledArtifactKind::File,
+            relative_path: "binaries/crunch".to_string(),
+            size_bytes: 100,
+            digest_blake3: "a".repeat(64),
+        };
+        let b = crate::release_evidence::BundledArtifact {
+            kind: crate::release_evidence::BundledArtifactKind::File,
+            relative_path: "binaries/crunch-alt".to_string(),
+            size_bytes: 200,
+            digest_blake3: "b".repeat(64),
+        };
+        let digest_ab = compute_artifact_set_digest(&[a.clone(), b.clone()]);
+        let digest_ba = compute_artifact_set_digest(&[b, a]);
+        assert_eq!(digest_ab, digest_ba, "order must not affect digest");
+        assert_eq!(digest_ab.len(), 64, "must be lowercase BLAKE3 hex");
+        assert!(digest_ab.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn compute_artifact_set_digest_differs_for_different_sets() {
+        let a = crate::release_evidence::BundledArtifact {
+            kind: crate::release_evidence::BundledArtifactKind::File,
+            relative_path: "binaries/crunch".to_string(),
+            size_bytes: 100,
+            digest_blake3: "a".repeat(64),
+        };
+        let b = crate::release_evidence::BundledArtifact {
+            kind: crate::release_evidence::BundledArtifactKind::File,
+            relative_path: "binaries/crunch".to_string(),
+            size_bytes: 100,
+            digest_blake3: "b".repeat(64),
+        };
+        assert_ne!(
+            compute_artifact_set_digest(&[a]),
+            compute_artifact_set_digest(&[b]),
+        );
+    }
+
+    #[test]
+    fn stagex_profile_json_never_says_quorum_satisfied() {
+        let result = crunch_bootstrap_core::StagexNoQuorumResult::unsatisfied(
+            vec!["test".to_string()],
+        );
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(!json.contains("quorum-satisfied"));
+        assert!(!json.contains("quorum_satisfied"));
+    }
+
+    #[test]
+    fn extract_stagex_proof_block_returns_none_for_missing_summary() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        let manifest = crate::release_evidence::ReleaseEvidenceManifest {
+            schema: "crunch-release-evidence-v1".to_string(),
+            release_id: "test-release".to_string(),
+            claim_scope: "self-hosting".to_string(),
+            workflow: crunch_release_core::ReleaseWorkflowIdentity {
+                command: "test".to_string(),
+                version: "1".to_string(),
+            },
+            source_archive: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::File,
+                relative_path: "source.tar".to_string(),
+                size_bytes: 1,
+                digest_blake3: "a".repeat(64),
+            },
+            binaries: vec![],
+            proof_bundle: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::Directory,
+                relative_path: "proof/self-hosting".to_string(),
+                size_bytes: 1,
+                digest_blake3: "b".repeat(64),
+            },
+            prerequisite_inventory: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::File,
+                relative_path: "inventory.md".to_string(),
+                size_bytes: 1,
+                digest_blake3: "c".repeat(64),
+            },
+            reproducibility_report: None,
+            independent_agreement_report: None,
+            proof_linkage: crunch_release_core::ReleaseProofLinkage {
+                release_id: "test-release".to_string(),
+                source_archive_digest_blake3: "a".repeat(64),
+                proof_bundle_schema: "v2".to_string(),
+                proof_mode: "fixed-point".to_string(),
+                staged_source: "src".to_string(),
+                stage2_binary_digest_blake3: "d".repeat(64),
+                prerequisite_inventory_digest_blake3: "e".repeat(64),
+                proof_manifest_digest_blake3: "f".repeat(64),
+            },
+        };
+        let result = extract_stagex_proof_block(&manifest, bundle_dir);
+        assert!(result.is_none(), "missing summary.txt must return None");
+    }
+
+    fn test_manifest() -> crate::release_evidence::ReleaseEvidenceManifest {
+        crate::release_evidence::ReleaseEvidenceManifest {
+            schema: "crunch-release-evidence-v1".to_string(),
+            release_id: "test-release".to_string(),
+            claim_scope: "self-hosting".to_string(),
+            workflow: crunch_release_core::ReleaseWorkflowIdentity {
+                command: "test".to_string(),
+                version: "1".to_string(),
+            },
+            source_archive: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::File,
+                relative_path: "source.tar".to_string(),
+                size_bytes: 1,
+                digest_blake3: "a".repeat(64),
+            },
+            binaries: vec![crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::File,
+                relative_path: "binaries/crunch".to_string(),
+                size_bytes: 100,
+                digest_blake3: "b".repeat(64),
+            }],
+            proof_bundle: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::Directory,
+                relative_path: "proof/self-hosting".to_string(),
+                size_bytes: 1,
+                digest_blake3: "c".repeat(64),
+            },
+            prerequisite_inventory: crate::release_evidence::BundledArtifact {
+                kind: crate::release_evidence::BundledArtifactKind::File,
+                relative_path: "inventory.md".to_string(),
+                size_bytes: 1,
+                digest_blake3: "d".repeat(64),
+            },
+            reproducibility_report: None,
+            independent_agreement_report: None,
+            proof_linkage: crunch_release_core::ReleaseProofLinkage {
+                release_id: "test-release".to_string(),
+                source_archive_digest_blake3: "a".repeat(64),
+                proof_bundle_schema: "v2".to_string(),
+                proof_mode: "fixed-point".to_string(),
+                staged_source: "src".to_string(),
+                stage2_binary_digest_blake3: "e".repeat(64),
+                prerequisite_inventory_digest_blake3: "f".repeat(64),
+                proof_manifest_digest_blake3: "1".repeat(64),
+            },
+        }
+    }
+
+    fn write_summary_with_provider_mode(proof_dir: &Path, provider_mode: &str) {
+        let summary = format!(
+            "self-build-proof: provider-mode={provider_mode}\n\
+             self-build-proof: hermeticity-mode=practical\n\
+             self-build-proof: invoking-binary=/tmp/crunch\n\
+             self-build-proof: staged-source=/tmp/src\n\
+             self-build-proof: bwrap-source=bootstrap\n\
+             self-build-proof: fallback-event=none\n\
+             self-build-proof: protected-transition=none\n\
+             self-build-proof: protected-seccomp-event=none\n\
+             self-build-proof: busybox-path=/tmp/busybox\n\
+             self-build-proof: output-binary=/tmp/out\n\
+             self-build-proof: stagex-metadata=none\n"
+        );
+        std::fs::write(proof_dir.join("summary.txt"), summary.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn stagex_profile_rejects_missing_reproducibility() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        write_summary_with_provider_mode(&proof_dir, "legacy-fetch");
+        let manifest = test_manifest();
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, None);
+        assert!(!result.status.is_satisfied());
+        assert!(result.failure_reasons.iter().any(|r| r.contains("reproducibility")));
+    }
+
+    #[test]
+    fn stagex_profile_rejects_legacy_fetch_provider() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        write_summary_with_provider_mode(&proof_dir, "legacy-fetch");
+        let manifest = test_manifest();
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, None);
+        assert!(!result.status.is_satisfied());
+        assert!(
+            result.failure_reasons.iter().any(|r| r.contains("no StageX-class lineage proof")),
+            "legacy-fetch must not produce a proof block: {:?}",
+            result.failure_reasons
+        );
+    }
+
+    #[test]
+    fn stagex_profile_rejects_source_root_provider() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        write_summary_with_provider_mode(&proof_dir, "source-root");
+        let manifest = test_manifest();
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, None);
+        assert!(!result.status.is_satisfied());
+        assert!(
+            result.failure_reasons.iter().any(|r| r.contains("no StageX-class lineage proof")),
+            "source-root must not produce a proof block: {:?}",
+            result.failure_reasons
+        );
+    }
+
+    #[test]
+    fn stagex_profile_rejects_self_proof_only_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        write_summary_with_provider_mode(&proof_dir, "nix-packages");
+        let manifest = test_manifest();
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, None);
+        assert!(!result.status.is_satisfied());
+        assert!(
+            result.failure_reasons.iter().any(|r| r.contains("no StageX-class lineage proof")),
+            "nix-packages must not produce a proof block: {:?}",
+            result.failure_reasons
+        );
+    }
+
+    #[test]
+    fn stagex_profile_rejects_prerequisite_only_proof() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        // No summary.txt at all -> no proof block
+        let manifest = test_manifest();
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, None);
+        assert!(!result.status.is_satisfied());
+        assert!(result.failure_reasons.iter().any(|r| r.contains("no StageX-class lineage proof")));
+    }
+
+    #[test]
+    fn stagex_profile_rejects_witness_agreement_without_lineage_proof() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path();
+        let proof_dir = bundle_dir.join("proof/self-hosting");
+        std::fs::create_dir_all(&proof_dir).unwrap();
+        write_summary_with_provider_mode(&proof_dir, "legacy-fetch");
+        let manifest = test_manifest();
+        let fake_repro = VerifiedReproducibilityReport {
+            status: ReproducibilityStatus::Matched,
+            path: temp.path().join("repro.json"),
+            digest_blake3: "9".repeat(64),
+        };
+        let result = evaluate_stagex_profile(&manifest, bundle_dir, Some(&fake_repro));
+        assert!(!result.status.is_satisfied());
+        assert!(
+            result.failure_reasons.iter().any(|r| r.contains("no StageX-class lineage proof")),
+            "witness agreement without lineage proof must fail: {:?}",
+            result.failure_reasons
+        );
+    }
 }

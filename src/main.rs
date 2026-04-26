@@ -198,6 +198,10 @@ enum Command {
         #[arg(long)]
         source_root: Option<PathBuf>,
 
+        /// Validate a StageX-class lineage manifest and select the lineage provider path.
+        #[arg(long)]
+        stagex_lineage: Option<PathBuf>,
+
         /// Packages to include (nixpkgs attribute names, ignored with --fetch)
         #[arg(default_values_t = [
             "bash".to_string(),
@@ -460,6 +464,10 @@ pub enum ReleaseAction {
         /// Fail unless a verified reproducibility report is present and matched
         #[arg(long)]
         require_reproducible: bool,
+
+        /// Require StageX-class lineage proof with no-quorum profile
+        #[arg(long)]
+        require_stagex_no_quorum: bool,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {
@@ -1242,8 +1250,16 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
             output,
             fetch,
             source_root,
+            stagex_lineage,
             packages,
-        } => run_bootstrap_command(ctx, output, *fetch, source_root.as_deref(), packages),
+        } => run_bootstrap_command(
+            ctx,
+            output,
+            *fetch,
+            source_root.as_deref(),
+            stagex_lineage.as_deref(),
+            packages,
+        ),
         _ => unreachable!("bootstrap helper called with non-bootstrap command"),
     }
 }
@@ -1253,9 +1269,10 @@ fn run_bootstrap_command(
     output: &Path,
     fetch: bool,
     source_root: Option<&Path>,
+    stagex_lineage: Option<&Path>,
     packages: &[String],
 ) -> Result<(), RunError> {
-    match bootstrap_source_root::select_bootstrap_provider(fetch, source_root)
+    match bootstrap_source_root::select_bootstrap_provider(fetch, source_root, stagex_lineage)
         .map_err(|err| RunError::Internal(err.to_string()))?
     {
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch => {
@@ -1265,8 +1282,32 @@ fn run_bootstrap_command(
             let manifest_path = source_root.expect("source-root mode must carry manifest path");
             bootstrap_source_root_provider(output, manifest_path)
         }
+        bootstrap_source_root::BootstrapProviderMode::StagexLineage => {
+            let manifest_path = stagex_lineage.expect("stagex-lineage mode must carry manifest path");
+            cmd_bootstrap_stagex_lineage(output, manifest_path)
+        }
         bootstrap_source_root::BootstrapProviderMode::NixPackages => cmd_bootstrap(output, packages),
     }
+}
+
+fn cmd_bootstrap_stagex_lineage(output: &Path, manifest_path: &Path) -> Result<(), RunError> {
+    let manifest_bytes = std::fs::read(manifest_path)
+        .map_err(|e| RunError::Internal(format!("reading {}: {e}", manifest_path.display())))?;
+    let manifest = bootstrap_source_root::validate_stagex_lineage_manifest(&manifest_bytes)
+        .map_err(|diags| RunError::Internal(bootstrap_source_root::format_diagnostics(&diags)))?;
+
+    let evidence = bootstrap_source_root::classify_stagex_provider_evidence(&manifest);
+    eprintln!("StageX lineage manifest validated:");
+    eprintln!("  seed_class: {}", evidence.seed_class);
+    eprintln!("  audit_seed_max_bytes: {}", evidence.audit_seed_max_bytes);
+    eprintln!("  provider_outputs: {}", evidence.provider_output_count);
+    eprintln!("  environment_assumptions: {}", evidence.environment_assumptions.len());
+
+    Err(RunError::Internal(format!(
+        "{}: output={}",
+        bootstrap_source_root::STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED,
+        output.display()
+    )))
 }
 
 fn run_project_command(command: &Command) -> Result<(), RunError> {
@@ -1524,6 +1565,7 @@ fn run_self_build_command(
         stage0_policy.as_ref(),
         bootstrap_bwrap_path,
         bootstrap_busybox_path,
+        bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
     )
     .map(|_report| ())
 }

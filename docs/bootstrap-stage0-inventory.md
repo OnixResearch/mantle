@@ -138,6 +138,33 @@ What the checked-in self-hosting proof demonstrates today:
 - a prerequisite-only `./scripts/prove-self-hosting.sh --check` result is not
   release proof evidence and does not satisfy the release-bundle proof slot
 
+### StageX-class no-quorum release profile
+
+The `stagex-verified-no-quorum` profile is the strictest release-verification
+target. It requires:
+
+- Provider kind `stagex-lineage` with `hex0-seed` seed class (max 4096 bytes)
+- Complete StageX lineage metadata in the self-build proof: seed, lineage
+  manifest, stage graph, normalized provider, staged source, stage1/stage2
+  binary, bootstrap tool, and protected-exec audit digests
+- All Crunch-owned digests lowercase BLAKE3 hex
+- No undeclared host compiler, build tool, archive tool, Nix command, or
+  legacy provider execution observed by the protected-exec supervisor
+- A verified byte-identical reproducibility report
+- Quorum is intentionally `not_evaluated`: the profile never emits
+  `quorum-satisfied` as a success label
+
+This profile rejects seed-assisted, source-root, self-proof-only, and
+prerequisite-only evidence. External witness agreement alone does not
+satisfy it. Verify with:
+`crunch release verify <bundle-dir> --require-stagex-no-quorum`
+
+Remaining environmental assumptions:
+
+- Stage0 Rust compiler is a fetched stable binary, not hex0-bootstrapped
+- Linux kernel and bwrap/FUSE sandbox runtime are trusted host components
+- Network transport for bootstrap fetches is trusted
+
 What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider

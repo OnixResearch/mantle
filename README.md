@@ -626,6 +626,36 @@ Today the repo has seed-assisted bootstrap, a checked-in self-hosting proof,
 and packaged release evidence. It does not yet claim a full-source bootstrap
 or bit-for-bit reproducible release outputs.
 
+### StageX-class no-quorum target
+
+The repo defines a `stagex-verified-no-quorum` release profile that requires
+a fully auditable seed-to-binary chain without trusting host compilers.
+It is stricter than seed-assisted or source-root evidence:
+
+- The bootstrap provider must be `stagex-lineage` — the only accepted seed
+  class is `hex0-seed` (a small hand-audited byte seed, max 4096 bytes).
+- The self-build proof must include StageX lineage metadata: seed/lineage
+  manifest/stage-graph/provider/staged-source/stage1/stage2/bootstrap-tool
+  digests plus a protected-exec audit digest, all lowercase BLAKE3 hex.
+- Protected execution must not observe undeclared host compiler, build tool,
+  archive tool, Nix command, or legacy provider executables.
+- A verified reproducibility report must be present and matched.
+- Quorum policy is intentionally deferred: `quorum_status` is always
+  `not_evaluated`. The profile never emits `quorum-satisfied`.
+
+Seed-assisted bootstrap, source-root evidence, and self-proof-only evidence
+do not satisfy this profile. External witness agreement alone does not
+satisfy it either — StageX-class lineage proof is required.
+
+Remaining environmental assumptions not yet eliminated:
+
+- The Rust compiler used for stage0 is a fetched stable binary, not
+  bootstrapped from the hex0 seed.
+- The Linux kernel and FUSE/bwrap sandbox runtime are trusted host components.
+- Network transport for bootstrap artifact fetches is trusted.
+
+Verify with: `crunch release verify <bundle-dir> --require-stagex-no-quorum`
+
 ### Trust inventory by entry point
 
 For the stricter stage0 view, see [`docs/bootstrap-stage0-inventory.md`](docs/bootstrap-stage0-inventory.md).
