@@ -2,7 +2,7 @@
 
 ## Phase 0: Seed and scaffolding
 
-- [ ] I1 Check in the hex0 AMD64 seed binary under `bootstrap/seeds/AMD64/hex0-seed`
+- [x] I1 Check in the hex0 AMD64 seed binary under `bootstrap/seeds/AMD64/hex0-seed`
       (256 bytes from stage0-posix). Add a README in `bootstrap/seeds/` explaining
       provenance and audit expectations.
 - [ ] I2 Rename current `bootstrap/seed.ncl` to `bootstrap/seed-legacy.ncl`. Update
