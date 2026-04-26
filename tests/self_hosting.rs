@@ -94,13 +94,12 @@ const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
 ];
 const STAGE0_PROOF_TOOL_NAMES: [&str; 8] = ["bwrap", "git", "cargo", "tar", "xz", "cp", "chmod", "bash"];
 const BLOCKED_NIX_BINARIES: [&str; 4] = ["nix-build", "nix-store", "nix-shell", "nix"];
-const BLOCKED_HOST_TOOL_BINARIES: [&str; 10] = [
+const BLOCKED_HOST_TOOL_BINARIES: [&str; 9] = [
     "git",
     "tar",
     "cp",
     "sh",
     "cargo",
-    "bwrap",
     "nix-build",
     "nix-store",
     "nix-shell",

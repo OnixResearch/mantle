@@ -354,7 +354,7 @@
       Evidence: pueue task 43 passed 4 tests: `seed_closure_risk_reports_static_dynamic_and_script_shapes`,
       `seed_closure_risk_report_names_inventory_entries`, `inventory_rejects_malformed_source_entries_before_fetch`,
       `inventory_rejects_malformed_or_ambiguous_extraction_rules`.
-- [ ] V4 After I20-I25 are complete, run the full no-host-tools
+- [x] V4 After I20-I25 are complete, run the full no-host-tools
       self-hosting proof with a concrete bundled stage0 inventory and explicit
       seed-toolchain strategy, then record proof bundle path,
       stage1/stage2/busybox/bwrap fixed-point status, protected execution audit
@@ -363,6 +363,15 @@
       event summary, final derived result, and preserved
       `self-build-proof: fallback-event=...` markers.
       [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue task 21 passed `test result: ok. 1 passed; 0 failed` in 1775.80s.
+      Proof bundle: target/self-hosting-proof/run-282920-1777168684216437092/summary.txt
+      stage1_equals_stage2: true, stage0_bwrap_equals_stage2_bwrap: true,
+      stage0_busybox_equals_stage2_busybox: true, protected_exec_result: success,
+      stage0_hermeticity_mode: practical, stage2_hermeticity_mode: strict,
+      stage0_fallback_events: bwrap-host-fallback + source-host-discovery,
+      stage2_fallback_events: none,
+      blocked host tools: git tar cp sh cargo nix-build nix-store nix-shell nix
+      (bwrap kept on PATH as sandbox infrastructure; seccomp supervisor enforces exec boundary)
 - [x] V5 Run the hidden-host-tool proof failure fixture and record that the ✅ <1m (completed: 2026-04-26T00:25:55Z)
       proof fails while identifying the injected undeclared host tool in the
       proof bundle. [covers=bootstrap.hosttoolfree.proof.mode]

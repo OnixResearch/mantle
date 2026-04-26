@@ -205,7 +205,8 @@ mod linux {
     ) {
         loop {
             let mut notif: libc::seccomp_notif = unsafe { std::mem::zeroed() };
-            let recv_rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_RECV, &mut notif) };
+            #[allow(clippy::unnecessary_cast)]
+            let recv_rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_RECV as libc::Ioctl, &mut notif) };
             if recv_rc != 0 {
                 let err = io::Error::last_os_error();
                 if err.raw_os_error() == Some(libc::EINTR) {
@@ -458,7 +459,8 @@ mod linux {
 
     fn validate_notification_id(listener_fd: RawFd, id: u64) -> Result<(), String> {
         let mut id_value = id;
-        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_ID_VALID, &mut id_value) };
+        #[allow(clippy::unnecessary_cast)]
+        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_ID_VALID as libc::Ioctl, &mut id_value) };
         if rc == 0 {
             return Ok(());
         }
@@ -473,7 +475,8 @@ mod linux {
         } else {
             resp.error = -libc::EACCES;
         }
-        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND, &mut resp) };
+        #[allow(clippy::unnecessary_cast)]
+        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND as libc::Ioctl, &mut resp) };
         if rc == 0 {
             return Ok(());
         }
