@@ -279,10 +279,15 @@
       against explicit `CRUNCH_STAGE0_SEED_*` paths and verified the generated
       inventory path, no-`PATH`/no-`/nix/store` discovery policy text, and
       static/script seed closure risk report.
-- [ ] I24 Tighten protected source artifact extraction rules to the documented
+- [x] I24 Tighten protected source artifact extraction rules to the documented ✅ 1m 18s (started: 2026-04-25T23:53:44Z → completed: 2026-04-25T23:55:02Z)
       `key=value` grammar (`format`, `strip-components`, `root`) and reject
       malformed or ambiguous rules before fetch or extraction.
       [covers=bootstrap.hosttoolfree.exec.boundary]
+      Evidence: pueue task 19 passed
+      `cargo test -p crunch protected_exec -- --nocapture` with 32 lib and 32
+      bin tests. New `inventory_rejects_malformed_or_ambiguous_extraction_rules`
+      test covers empty value, multiple separators, unsupported key, non-integer
+      strip-components, parent traversal in root, and duplicate key rejection.
 - [ ] I25 Implement verified-output promotion for protected-phase fetched or
       built outputs: after crunch validates a protected source/hash/extraction
       contract, enumerate permitted executable files, compute BLAKE3 digests,

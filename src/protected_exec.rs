@@ -38,6 +38,10 @@ const GENERATED_INVENTORY_HEADER: &str = "# Generated host-tool-free stage0 inve
 const ELF_MAGIC: &[u8] = b"\x7fELF";
 const SHEBANG_MAGIC: &[u8] = b"#!";
 const DYNAMIC_LINKER_MARKERS: [&[u8]; 4] = [b"ld-linux", b"ld-musl", b"/lib/ld", b"/lib64/ld"];
+const EXTRACTION_RULE_SEPARATOR: char = '=';
+const EXTRACTION_RULE_FORMAT: &str = "format";
+const EXTRACTION_RULE_STRIP_COMPONENTS: &str = "strip-components";
+const EXTRACTION_RULE_ROOT: &str = "root";
 const KIB_BYTES: u64 = 1024;
 const MIB_BYTES: u64 = KIB_BYTES * KIB_BYTES;
 const MAX_SEED_CLOSURE_RISK_SCAN_BYTES: u64 = MIB_BYTES;
@@ -206,6 +210,11 @@ pub enum ProtectedExecError {
         expected: String,
         actual: String,
     },
+    InvalidExtractionRule {
+        entry_id: String,
+        rule: String,
+        reason: String,
+    },
 }
 
 impl fmt::Display for ProtectedExecError {
@@ -245,6 +254,9 @@ impl fmt::Display for ProtectedExecError {
             Self::UndeclaredSourceUrl { url } => write!(f, "undeclared protected source url: {url}"),
             Self::SourceDigestMismatch { url, expected, actual } => {
                 write!(f, "source digest mismatch for {url}: expected {expected}, got {actual}")
+            }
+            Self::InvalidExtractionRule { entry_id, rule, reason } => {
+                write!(f, "entry {entry_id} has invalid extraction rule {rule}: {reason}")
             }
         }
     }
@@ -431,7 +443,69 @@ fn validate_source_entry(entry: &SourceSeedEntry) -> Result<(), ProtectedExecErr
     for rule in &entry.extraction_rules {
         validate_non_empty(entry.id.as_str(), "extraction_rules[]", rule)?;
     }
+    validate_extraction_rules(entry.id.as_str(), &entry.extraction_rules)?;
     Ok(())
+}
+
+fn validate_extraction_rules(entry_id: &str, rules: &[String]) -> Result<(), ProtectedExecError> {
+    let mut seen = BTreeSet::new();
+    for rule in rules {
+        let (key, value) = parse_extraction_rule(entry_id, rule)?;
+        if !is_allowed_extraction_rule_key(key) {
+            return invalid_extraction_rule(entry_id, rule, format!("unsupported key {key}"));
+        }
+        if !seen.insert(key.to_string()) {
+            return invalid_extraction_rule(entry_id, rule, format!("duplicate key {key}"));
+        }
+        validate_extraction_rule_value(entry_id, rule, key, value)?;
+    }
+    Ok(())
+}
+
+fn parse_extraction_rule<'rule>(
+    entry_id: &str,
+    rule: &'rule str,
+) -> Result<(&'rule str, &'rule str), ProtectedExecError> {
+    let mut parts = rule.split(EXTRACTION_RULE_SEPARATOR);
+    let key = parts.next().unwrap_or_default();
+    let value = parts.next().unwrap_or_default();
+    if parts.next().is_some() {
+        return invalid_extraction_rule(entry_id, rule, "multiple separators".to_string());
+    }
+    if key.is_empty() {
+        return invalid_extraction_rule(entry_id, rule, "empty key".to_string());
+    }
+    if value.is_empty() {
+        return invalid_extraction_rule(entry_id, rule, "empty value".to_string());
+    }
+    Ok((key, value))
+}
+
+fn is_allowed_extraction_rule_key(key: &str) -> bool {
+    matches!(key, EXTRACTION_RULE_FORMAT | EXTRACTION_RULE_STRIP_COMPONENTS | EXTRACTION_RULE_ROOT)
+}
+
+fn validate_extraction_rule_value(
+    entry_id: &str,
+    rule: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), ProtectedExecError> {
+    if key == EXTRACTION_RULE_STRIP_COMPONENTS && value.parse::<u32>().is_err() {
+        return invalid_extraction_rule(entry_id, rule, "strip-components must be an unsigned integer".to_string());
+    }
+    if key == EXTRACTION_RULE_ROOT && value.contains("..") {
+        return invalid_extraction_rule(entry_id, rule, "root must not contain parent traversal".to_string());
+    }
+    Ok(())
+}
+
+fn invalid_extraction_rule<T>(entry_id: &str, rule: &str, reason: String) -> Result<T, ProtectedExecError> {
+    Err(ProtectedExecError::InvalidExtractionRule {
+        entry_id: entry_id.to_string(),
+        rule: rule.to_string(),
+        reason,
+    })
 }
 
 fn validate_common_fields(
@@ -1719,6 +1793,34 @@ mod tests {
             entry_id: "musl".to_string(),
             field: "extraction_rules"
         });
+    }
+
+    #[test]
+    fn inventory_rejects_malformed_or_ambiguous_extraction_rules() {
+        for (rule, expected_reason) in [
+            ("strip-components", "empty value"),
+            ("strip-components=1=2", "multiple separators"),
+            ("unknown=value", "unsupported key unknown"),
+            ("strip-components=abc", "unsigned integer"),
+            ("root=../escape", "parent traversal"),
+        ] {
+            let mut inv = inventory();
+            inv.source_entries[0].extraction_rules = vec![rule.to_string()];
+            let err = ProtectedExecPolicy::from_inventory(inv).unwrap_err();
+            match err {
+                ProtectedExecError::InvalidExtractionRule { reason, .. } => {
+                    assert!(reason.contains(expected_reason), "rule={rule} reason={reason}");
+                }
+                other => panic!("rule={rule} expected InvalidExtractionRule, got {other:?}"),
+            }
+        }
+
+        let mut duplicate = inventory();
+        duplicate.source_entries[0].extraction_rules = vec!["format=tar".to_string(), "format=tar.xz".to_string()];
+        let err = ProtectedExecPolicy::from_inventory(duplicate).unwrap_err();
+        assert!(
+            matches!(err, ProtectedExecError::InvalidExtractionRule { reason, .. } if reason.contains("duplicate key"))
+        );
     }
 
     #[test]
