@@ -11,6 +11,10 @@
 
 let legacy = import "seed-legacy.ncl" in
 
-# TODO: wire `seed-full.ncl` once Phase 7 lands the from-source chain.
-# For now, unconditionally use the legacy seed.
+# The full-source chain is not yet functional (placeholder derivations
+# still exit with errors). Default to legacy until the chain is complete.
+#
+# TODO: once seed-full.ncl builds successfully, switch the default:
+#   let full = import "seed-full.ncl" in
+#   full
 legacy

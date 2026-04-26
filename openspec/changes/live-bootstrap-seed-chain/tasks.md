@@ -41,23 +41,23 @@
 
 ## Phase 4: Supporting tools for GCC build
 
-- [ ] I7 Write `bootstrap/make-tcc.ncl`: build GNU make 3.82 using tinycc.
+- [x] I7 Write `bootstrap/make-tcc.ncl`: build GNU make 3.82 using tinycc.
       Adapt from live-bootstrap `steps/make-3.82/`.
-- [ ] I8 Write supporting tool derivations needed by gcc-4.0.4 build: at minimum
+- [x] I8 Write supporting tool derivations needed by gcc-4.0.4 build: at minimum
       `bootstrap/binutils-tcc.ncl` (binutils 2.30 from tinycc), plus any other
       tools live-bootstrap requires between tinycc and gcc-4.0.4 (sed, patch,
       gawk as needed). Each adapted from corresponding live-bootstrap `steps/`.
 
 ## Phase 5: GCC version ladder
 
-- [ ] I9 Write `bootstrap/gcc-4.0.ncl`: build gcc-4.0.4 using tinycc + make +
+- [x] I9 Write `bootstrap/gcc-4.0.ncl`: build gcc-4.0.4 using tinycc + make +
       binutils from Phase 4. Adapt from live-bootstrap `steps/gcc-4.0.4/`.
-- [ ] I10 Write supporting tool upgrades needed between gcc-4.0 and gcc-4.7:
+- [x] I10 Write supporting tool upgrades needed between gcc-4.0 and gcc-4.7:
       musl-1.1.24, updated binutils, make-4.2.1, bash, m4, flex, bison, etc.
       Each adapted from corresponding live-bootstrap steps.
-- [ ] I11 Write `bootstrap/gcc-4.7.ncl`: build gcc-4.7.4 using gcc-4.0.4 + musl
+- [x] I11 Write `bootstrap/gcc-4.7.ncl`: build gcc-4.7.4 using gcc-4.0.4 + musl
       + updated tools. Adapt from live-bootstrap `steps/gcc-4.7.4/`.
-- [ ] I12 Write `bootstrap/gcc-10.ncl`: build gcc-10.5.0 (or latest in
+- [x] I12 Write `bootstrap/gcc-10.ncl`: build gcc-10.5.0 (or latest in
       live-bootstrap) using gcc-4.7.4. Adapt from live-bootstrap `steps/gcc-10.5.0/`.
       This also requires gmp, mpfr, mpc libraries.
 - [ ] V4 Validate: each GCC version builds from the previous. gcc-10 can compile
@@ -65,12 +65,12 @@
 
 ## Phase 6: Modern musl + binutils from modern GCC
 
-- [ ] I13 Write `bootstrap/musl-full.ncl`: build musl-1.2.x using gcc-10.
-- [ ] I14 Write `bootstrap/binutils-full.ncl`: build binutils-2.41 using gcc-10.
+- [x] I13 Write `bootstrap/musl-full.ncl`: build musl-1.2.x using gcc-10.
+- [x] I14 Write `bootstrap/binutils-full.ncl`: build binutils-2.41 using gcc-10.
 
 ## Phase 7: Normalized seed and integration
 
-- [ ] I15 Rewrite `bootstrap/seed.ncl` to expose the gcc-10 + musl-1.2 +
+- [x] I15 Rewrite `bootstrap/seed.ncl` to expose the gcc-10 + musl-1.2 +
       binutils-2.41 output through the normalized seed contract (target-prefixed
       binutils in `bin/`, sysroot at `<target>/`, provider metadata).
 - [ ] V5 Validate: `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl`

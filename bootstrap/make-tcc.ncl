@@ -1,0 +1,108 @@
+# Build GNU make 3.82 using tinycc 0.9.27.
+#
+# make is the first build system in the chain. Earlier stages used
+# kaem scripts; from here on, Makefiles drive compilation.
+#
+# Adapted from live-bootstrap steps/make-3.82/pass1.kaem.
+
+let crunch = import "lib.ncl" in
+
+let stage0 = import "stage0-posix.ncl" in
+let mes = import "mes.ncl" in
+let tcc = import "tinycc.ncl" in
+
+let make_src = crunch.fetchTarball {
+  url = "https://ftpmirror.gnu.org/make/make-3.82.tar.bz2",
+  hash = "sha256-4sBCIFZ9VwXMy1yJpabaDR/bRMPaa0lNaeIf0nnbwiI=",
+  name = "make-3.82-src",
+} in
+
+{
+  name = "make-3.82-tcc",
+  builder = "/bin/sh",
+  args = [
+    "-c",
+    m%"
+      set -eu
+      BB=/bin/busybox
+
+      find_input() {
+        for d in $NIX_STORE/*-"$1"; do
+          if [ -d "$d" ]; then echo "$d"; return; fi
+        done
+        echo "ERROR: input $1 not found" >&2; exit 1
+      }
+
+      TCC=$(find_input tinycc-0.9.27)
+      MES_OUT=$(find_input mes)
+      STAGE0=$(find_input stage0-posix)
+      MAKE_SRC=$(find_input make-3.82-src)
+
+      export PATH="$TCC/bin:$STAGE0/bin:$MES_OUT/bin:$PATH"
+
+      WORK=/tmp/make-build
+      $BB mkdir -p "$WORK"
+      cd "$WORK"
+
+      # Find make source dir
+      MAKE_DIR=""
+      for d in "$MAKE_SRC"/make-*; do
+        if [ -d "$d" ]; then MAKE_DIR="$d"; break; fi
+      done
+      $BB cp -r "$MAKE_DIR" make-3.82
+      $BB chmod -R u+w make-3.82
+      cd make-3.82
+
+      # Create empty config.h
+      : > config.h
+
+      # Compile each source file with tcc
+      tcc -c getopt.c
+      tcc -c getopt1.c
+      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 commands.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DSCCS_GET=\"/nullop\" default.c
+      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 file.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -Dvfork=fork function.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR -Dvfork=fork job.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DLOCALEDIR=\"/fake\" -DPACKAGE=\"make\" -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STRERROR -DHAVE_VPRINTF -DHAVE_ANSI_COMPILER -DHAVE_STDARG_H misc.c
+      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DINCLUDEDIR=\"/include\" read.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 -DHAVE_FCNTL_H -DLIBDIR=\"/lib\" remake.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART rule.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART signame.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART strcache.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART variable.c
+      tcc -c -I. -DVERSION=\"3.82\" version.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART vpath.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART hash.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART remote-stub.c
+      tcc -c -DHAVE_FCNTL_H getloadavg.c
+      tcc -c -Iglob -DSTDC_HEADERS glob/fnmatch.c
+      tcc -c -Iglob -DHAVE_STRDUP -DHAVE_DIRENT_H glob/glob.c
+
+      # Link
+      tcc -static -o make \
+        getopt.o getopt1.o ar.o arscan.o commands.o default.o dir.o \
+        expand.o file.o function.o implicit.o job.o main.o misc.o \
+        read.o remake.o rule.o signame.o strcache.o variable.o \
+        version.o vpath.o hash.o remote-stub.o getloadavg.o \
+        fnmatch.o glob.o
+
+      # Verify
+      ./make --version
+
+      # Install
+      $BB mkdir -p "$out/bin"
+      $BB cp make "$out/bin/make"
+      $BB chmod 755 "$out/bin/make"
+
+      test -x "$out/bin/make"
+    "%,
+  ],
+  inputs = [stage0, mes, tcc, make_src],
+} | crunch.Derivation
