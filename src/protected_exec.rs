@@ -215,6 +215,13 @@ pub enum ProtectedExecError {
         rule: String,
         reason: String,
     },
+    PromotionDuplicatePath {
+        path: PathBuf,
+        source_entry_id: String,
+    },
+    PromotionEmptySet {
+        source_entry_id: String,
+    },
 }
 
 impl fmt::Display for ProtectedExecError {
@@ -257,6 +264,12 @@ impl fmt::Display for ProtectedExecError {
             }
             Self::InvalidExtractionRule { entry_id, rule, reason } => {
                 write!(f, "entry {entry_id} has invalid extraction rule {rule}: {reason}")
+            }
+            Self::PromotionDuplicatePath { path, source_entry_id } => {
+                write!(f, "promotion from source {source_entry_id} collides at {}", path.display())
+            }
+            Self::PromotionEmptySet { source_entry_id } => {
+                write!(f, "promotion from source {source_entry_id} produced no executables")
             }
         }
     }
@@ -348,6 +361,55 @@ impl ProtectedExecPolicy {
 
     pub fn ensure_source_url_allowed(&self, url: &str) -> Result<(), ProtectedExecError> {
         self.source_fetch_plan(url).map(|_| ())
+    }
+
+    pub fn promote_verified_output(
+        &mut self,
+        source_entry_id: &str,
+        extraction_rules: &[String],
+        executables: &[PromotedExecutable],
+    ) -> Result<OutputPromotionRecord, ProtectedExecError> {
+        if executables.is_empty() {
+            return Err(ProtectedExecError::PromotionEmptySet {
+                source_entry_id: source_entry_id.to_string(),
+            });
+        }
+        for exe in executables {
+            assert!(exe.path.is_absolute(), "promoted executable path must be absolute");
+            assert!(!exe.digest_hex.is_empty(), "promoted executable digest must be present");
+            if self.executables_by_path.contains_key(&exe.path) {
+                return Err(ProtectedExecError::PromotionDuplicatePath {
+                    path: exe.path.clone(),
+                    source_entry_id: source_entry_id.to_string(),
+                });
+            }
+        }
+        for exe in executables {
+            let entry = ExecutableSeedEntry {
+                schema_version: SCHEMA_VERSION_V1.to_string(),
+                id: format!("promoted:{source_entry_id}:{}", exe.path.display()),
+                role: ROLE_BOOTSTRAP_BUILD_TOOL.to_string(),
+                phase: "protected".to_string(),
+                executable_path: exe.path.clone(),
+                digest: DigestSpec {
+                    algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+                    hex: exe.digest_hex.clone(),
+                    interoperability_reason: None,
+                },
+                provenance_category: PROVENANCE_OPERATOR_SOURCE_BUILD.to_string(),
+                provenance: format!("promoted from source {source_entry_id}"),
+                allowed_reason: format!("verified output of declared source {source_entry_id}"),
+                owner: "crunch-protected-exec".to_string(),
+                required: false,
+            };
+            self.executables_by_path.insert(exe.path.clone(), entry);
+        }
+        Ok(OutputPromotionRecord {
+            source_entry_id: source_entry_id.to_string(),
+            extraction_rules: extraction_rules.to_vec(),
+            promoted_executables: executables.to_vec(),
+            promoted_at_policy_size: self.executables_by_path.len() as u32,
+        })
     }
 
     pub fn required_sandbox_entry(&self) -> Result<&ExecutableSeedEntry, ProtectedExecError> {
@@ -669,6 +731,20 @@ pub struct ProtectedLaunchPlan {
     pub inventory_entry_id: String,
     pub reason: String,
     pub phase: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PromotedExecutable {
+    pub path: PathBuf,
+    pub digest_hex: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OutputPromotionRecord {
+    pub source_entry_id: String,
+    pub extraction_rules: Vec<String>,
+    pub promoted_executables: Vec<PromotedExecutable>,
+    pub promoted_at_policy_size: u32,
 }
 
 pub struct ProtectedProcessLauncher<'policy> {
@@ -1828,5 +1904,85 @@ mod tests {
         let id = normalized_path_id(Path::new("/seed/bin/bwrap"));
         assert_eq!(id, "/seed/bin/bwrap");
         assert_ne!(id, "/seed/bin/busybox");
+    }
+
+    #[test]
+    fn promote_verified_output_extends_policy_and_records_audit() {
+        let mut policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
+        let initial_size = policy.executables_by_path.len();
+
+        let promoted = vec![
+            PromotedExecutable {
+                path: PathBuf::from("/build/out/bin/make"),
+                digest_hex: "a".repeat(64),
+            },
+            PromotedExecutable {
+                path: PathBuf::from("/build/out/bin/gcc"),
+                digest_hex: "b".repeat(64),
+            },
+        ];
+        let record = policy
+            .promote_verified_output("src-gnu-make", &["format=tar".to_string()], &promoted)
+            .unwrap();
+
+        assert_eq!(record.source_entry_id, "src-gnu-make");
+        assert_eq!(record.promoted_executables.len(), 2);
+        assert_eq!(record.extraction_rules, vec!["format=tar"]);
+        assert_eq!(record.promoted_at_policy_size, (initial_size + 2) as u32);
+
+        let make_request = ExecRequest {
+            path: PathBuf::from("/build/out/bin/make"),
+            digest_hex: "a".repeat(64),
+        };
+        let decision = policy.decide_exec(&make_request).unwrap();
+        assert!(decision.allowed);
+        assert!(decision.entry_id.unwrap().contains("promoted:src-gnu-make"));
+    }
+
+    #[test]
+    fn promote_verified_output_rejects_empty_set() {
+        let mut policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
+        let err = policy.promote_verified_output("src-empty", &[], &[]).unwrap_err();
+        match err {
+            ProtectedExecError::PromotionEmptySet { source_entry_id } => {
+                assert_eq!(source_entry_id, "src-empty");
+            }
+            other => panic!("expected PromotionEmptySet, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn promote_verified_output_rejects_duplicate_path() {
+        let mut policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
+        let existing_path = policy.executables_by_path.keys().next().cloned().unwrap();
+        let promoted = vec![PromotedExecutable {
+            path: existing_path.clone(),
+            digest_hex: "c".repeat(64),
+        }];
+        let err = policy.promote_verified_output("src-dup", &[], &promoted).unwrap_err();
+        match err {
+            ProtectedExecError::PromotionDuplicatePath { path, source_entry_id } => {
+                assert_eq!(path, existing_path);
+                assert_eq!(source_entry_id, "src-dup");
+            }
+            other => panic!("expected PromotionDuplicatePath, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unpromoted_executable_is_denied_after_promotion() {
+        let mut policy = ProtectedExecPolicy::from_inventory(inventory()).unwrap();
+        let promoted = vec![PromotedExecutable {
+            path: PathBuf::from("/build/out/bin/promoted-tool"),
+            digest_hex: "d".repeat(64),
+        }];
+        policy.promote_verified_output("src-x", &[], &promoted).unwrap();
+
+        let unpromoted_request = ExecRequest {
+            path: PathBuf::from("/build/out/bin/not-promoted"),
+            digest_hex: "e".repeat(64),
+        };
+        let err = policy.decide_exec(&unpromoted_request).unwrap_err();
+        assert!(matches!(err, ProtectedExecError::UndeclaredExecutable { .. }));
     }
 }

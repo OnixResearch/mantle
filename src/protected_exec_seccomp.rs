@@ -11,10 +11,13 @@ mod linux {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::RwLock;
     use std::thread;
 
     use crate::protected_exec::ExecRequest;
+    use crate::protected_exec::OutputPromotionRecord;
     use crate::protected_exec::PHASE_PROTECTED;
+    use crate::protected_exec::PromotedExecutable;
     use crate::protected_exec::ProtectedExecError;
     use crate::protected_exec::ProtectedExecPolicy;
     use crate::protected_exec::ProtectedSeccompAuditEvent;
@@ -56,6 +59,7 @@ mod linux {
     #[derive(Debug)]
     pub struct ProtectedSeccompSupervisor {
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+        shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         listener_fd: RawFd,
     }
 
@@ -67,6 +71,18 @@ mod linux {
         pub fn listener_fd(&self) -> RawFd {
             self.listener_fd
         }
+
+        pub fn promote_verified_output(
+            &self,
+            source_entry_id: &str,
+            extraction_rules: &[String],
+            executables: &[PromotedExecutable],
+        ) -> Result<OutputPromotionRecord, ProtectedExecError> {
+            self.shared_policy
+                .write()
+                .expect("seccomp policy rwlock poisoned")
+                .promote_verified_output(source_entry_id, extraction_rules, executables)
+        }
     }
 
     pub fn install_current_thread_exec_supervisor(
@@ -76,9 +92,11 @@ mod linux {
         set_no_new_privileges()?;
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
-        spawn_supervisor_thread(listener_fd, policy, audit_events.clone())?;
+        let shared_policy = Arc::new(RwLock::new(policy));
+        spawn_supervisor_thread(listener_fd, shared_policy.clone(), audit_events.clone())?;
         Ok(ProtectedSeccompSupervisor {
             audit_events,
+            shared_policy,
             listener_fd,
         })
     }
@@ -170,19 +188,19 @@ mod linux {
 
     fn spawn_supervisor_thread(
         listener_fd: RawFd,
-        policy: ProtectedExecPolicy,
+        shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
     ) -> Result<(), ProtectedSeccompError> {
         thread::Builder::new()
             .name("crunch-protected-exec-supervisor".to_string())
-            .spawn(move || supervisor_loop(listener_fd, policy, audit_events))
+            .spawn(move || supervisor_loop(listener_fd, shared_policy, audit_events))
             .map(|_| ())
             .map_err(|err| ProtectedSeccompError::Supervisor(format!("spawning supervisor thread: {err}")))
     }
 
     fn supervisor_loop(
         listener_fd: RawFd,
-        policy: ProtectedExecPolicy,
+        shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
     ) {
         loop {
@@ -198,7 +216,9 @@ mod linux {
                 }
                 return;
             }
+            let policy = shared_policy.read().expect("seccomp policy rwlock poisoned");
             let decision = classify_notification(listener_fd, &policy, &notif);
+            drop(policy);
             audit_events.lock().expect("seccomp audit mutex poisoned").push(decision.audit_event);
             let _ = send_response(listener_fd, notif.id, decision.allowed);
         }

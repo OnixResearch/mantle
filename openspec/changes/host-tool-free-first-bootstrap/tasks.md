@@ -288,12 +288,16 @@
       bin tests. New `inventory_rejects_malformed_or_ambiguous_extraction_rules`
       test covers empty value, multiple separators, unsupported key, non-integer
       strip-components, parent traversal in root, and duplicate key rejection.
-- [ ] I25 Implement verified-output promotion for protected-phase fetched or
+- [x] I25 Implement verified-output promotion for protected-phase fetched or ✅ 2m 10s (started: 2026-04-26T00:19:00Z → completed: 2026-04-26T00:23:17Z)
       built outputs: after crunch validates a protected source/hash/extraction
       contract, enumerate permitted executable files, compute BLAKE3 digests,
       append promotion audit records including the source entry and accepted
       extraction rules, and extend the supervisor policy before any child process
       can execute those paths. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 47 passed 4 tests: `promote_verified_output_extends_policy_and_records_audit`,
+      `promote_verified_output_rejects_empty_set`, `promote_verified_output_rejects_duplicate_path`,
+      `unpromoted_executable_is_denied_after_promotion`. Supervisor now shares policy via Arc<RwLock>
+      for dynamic promotion from the caller thread.
 
 ## Validation
 
@@ -319,25 +323,33 @@
       -- --nocapture`; the focused filter passed 5 lib tests and 5 bin tests,
       including mismatch denial, undeclared host-bwrap denial, execveat allow,
       and unsupported audit-architecture fail-closed coverage.
-- [ ] V4a Run focused namespace-resolution tests for the seccomp supervisor:
+- [x] V4a Run focused namespace-resolution tests for the seccomp supervisor: ✅ <1m (completed: 2026-04-26T00:16:50Z)
       sandbox `/bin/sh` resolves through the tracee root, relative paths fail
       closed, unreadable paths fail closed, and unsupported `execveat` dirfd
       forms fail closed before execution. [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
-- [ ] V4b Run proof-bundle audit tests showing actual child-exec event fields,
+      Evidence: pueue task 41 passed 6 focused tests: `tracee_root_join` (2),
+      `seccomp_supervisor_resolves_symlink` (1), `denies_relative_exec_path` (1),
+      `denies_unreadable_exec_path` (1), `denies_execveat_non_fdcwd_dirfd` (1).
+- [x] V4b Run proof-bundle audit tests showing actual child-exec event fields, ✅ <1m (completed: 2026-04-26T00:16:50Z)
       copied concrete inventory digest, declared seed records, blocked host
       command set, and derived success/failure result are written to
       `protected-exec-audit.json` and summarized in `summary.txt`.
       [covers=bootstrap.hosttoolfree.proof.mode]
+      Evidence: pueue tasks 42+44 passed `write_proof_bundle_copies_stage_artifacts_and_manifest` (1)
+      and `prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds` (1).
 - [ ] V4c Run extraction-rule and verified-output promotion tests showing
       malformed source rules are rejected, accepted rules are carried into
       promotion records, promoted executable digests are added before exec, and
       unpromoted generated-output executables are denied.
       [covers=bootstrap.hosttoolfree.exec.boundary,bootstrap.hosttoolfree.sandbox.entrypoint]
-- [ ] V4d Run inventory preflight tests proving the V4 helper consumes only
+- [x] V4d Run inventory preflight tests proving the V4 helper consumes only ✅ <1m (completed: 2026-04-26T00:16:50Z)
       explicit seed paths, rejects `PATH` and `/nix/store` discovery, reports
       static-vs-dynamic seed closure risk, and emits the exact concrete
       inventory path passed to the full proof.
       [covers=bootstrap.hosttoolfree.proof.mode,bootstrap.hosttoolfree.sandbox.entrypoint]
+      Evidence: pueue task 43 passed 4 tests: `seed_closure_risk_reports_static_dynamic_and_script_shapes`,
+      `seed_closure_risk_report_names_inventory_entries`, `inventory_rejects_malformed_source_entries_before_fetch`,
+      `inventory_rejects_malformed_or_ambiguous_extraction_rules`.
 - [ ] V4 After I20-I25 are complete, run the full no-host-tools
       self-hosting proof with a concrete bundled stage0 inventory and explicit
       seed-toolchain strategy, then record proof bundle path,
