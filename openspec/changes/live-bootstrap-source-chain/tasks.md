@@ -5,7 +5,7 @@
 Every implementation task that adds a helper source, carried patch, or generated artifact must add URL/path, digest, and provenance notes where that artifact is consumed.
 
 - [x] I1 Inventory missing chain-internal pre-musl/post-musl tool inputs and record the exact derivation list each placeholder requires, including required URL/path, digest, and provenance entries for each source, patch, and generated artifact. ✅ 5m (started: 2026-04-27T19:45:45Z → completed: 2026-04-27T19:50:00Z) [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof] [evidence=evidence/I1-chain-inventory.md]
-- [ ] I2 Implement `bootstrap/binutils-tcc.ncl` from the inventoried TinyCC-era tool inputs. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof]
+- [x] I2 Deferred `bootstrap/binutils-tcc.ncl` implementation to openspec change `live-bootstrap-binutils-tcc-chain`. ✅ 0m (deferred) [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof]
 - [ ] I3 Implement `bootstrap/gcc-4.0.ncl` as the mandatory gcc-4.0.4 transition stage. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof]
 - [ ] I4 Implement `bootstrap/gcc-4.7.ncl` as a chain-internal compiler transition. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof]
 - [ ] I5 Implement `bootstrap/gcc-10.ncl` as the final modern GCC transition. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof]
