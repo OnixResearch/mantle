@@ -122,8 +122,8 @@ fn bootstrap_entrypoints_do_not_inline_raw_seed_provider_details() {
 }
 
 #[test]
-fn seed_derivation_writes_shared_provider_metadata_schema() {
-    let text = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
+fn legacy_seed_derivation_writes_shared_provider_metadata_schema() {
+    let text = std::fs::read_to_string(bootstrap_path("seed-legacy.ncl")).unwrap();
 
     assert!(text.contains("\"raw_size_bytes\": $RAW_SIZE_BYTES"));
     assert!(text.contains("\"reduced_size_bytes\": $REDUCED_SIZE_BYTES"));
@@ -131,6 +131,17 @@ fn seed_derivation_writes_shared_provider_metadata_schema() {
     assert!(text.contains("\"notes\": %{std.serialize 'Json provider_notes_list}"));
     assert!(!text.contains("raw_size_mb"));
     assert!(!text.contains("reduced_size_mb"));
+}
+
+#[test]
+fn seed_selector_delegates_to_legacy_without_self_recursion() {
+    let selector_text = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
+    let legacy_text = std::fs::read_to_string(bootstrap_path("seed-legacy.ncl")).unwrap();
+
+    assert!(selector_text.contains("import \"seed-legacy.ncl\""));
+    assert!(selector_text.contains("legacy"));
+    assert!(!legacy_text.contains("import \"seed-legacy.ncl\""));
+    assert!(legacy_text.contains("musl.cc-native-reduced-v1"));
 }
 
 #[test]

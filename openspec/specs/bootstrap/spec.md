@@ -5,9 +5,7 @@
 Defines crunch bootstrap requirements for source lineage, provider contracts,
 self-build proof evidence, seed-chain replacement, and intermediate tool
 derivations.
-
 ## Requirements
-
 ### Requirement: Full-source bootstrap root manifest
 
 Crunch MUST define a versioned full-source bootstrap root manifest that names every source artifact, patch, digest, extraction rule, and expected provider output needed before the normalized seed contract is available.
@@ -107,7 +105,7 @@ The source-built provider MUST expose the same contract fields later bootstrap s
 Crunch MUST withhold the full-source bootstrap claim until a source-root manifest validates, the source-built provider satisfies the normalized seed contract, and a self-build proof completes with that provider.
 ID: bootstrap.fullsource.claim.evidence
 
-The claim evidence MUST include the provider kind, manifest digest, provider output digest, proof bundle digest, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check MUST NOT count as full-source bootstrap evidence. Self-build proof metadata MUST bind those digests to the selected source-built provider so a legacy fetched-provider run cannot satisfy the full-source claim.
+The claim evidence MUST include the provider kind, manifest digest, provider output digest, proof bundle digest, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, or archived partial-scaffolding change MUST NOT count as full-source bootstrap evidence. Self-build proof metadata MUST bind those digests to the selected source-built provider so a legacy fetched-provider run cannot satisfy the full-source claim.
 
 #### Scenario: Claim remains blocked before proof
 
@@ -132,6 +130,22 @@ The claim evidence MUST include the provider kind, manifest digest, provider out
 - WHEN bootstrap maturity is reported
 - THEN the report may state full-source bootstrap root evidence exists
 - AND it includes the manifest, provider, and proof bundle digests
+
+#### Scenario: Deferred live-bootstrap archive is not completion evidence
+
+- GIVEN a live-bootstrap archive contains deferred validation or placeholder derivations
+- WHEN an operator checks whether the full-source bootstrap chain is complete
+- THEN the archive is treated as partial scaffolding only
+- AND full-source bootstrap status remains blocked until real build proof exists
+
+#### Scenario: Deferred successor is not completion evidence
+
+- GIVEN unfinished live-bootstrap work has been moved to an active successor change
+- AND that successor still has unchecked implementation or proof tasks
+- WHEN an operator checks whether the full-source bootstrap chain is complete
+- THEN the deferral is treated as work tracking only
+- AND full-source bootstrap status remains blocked until the successor records fresh proof transcripts
+
 ### Requirement: StageX-class bootstrap lineage root
 
 Crunch MUST define a StageX-class bootstrap lineage whose trusted bootstrap root is an auditable seed plus source artifacts, not a prebuilt compiler, prebuilt build tool, Nix store path, or musl.cc-derived binary provider.
@@ -387,10 +401,11 @@ content hash in its `.ncl` file. The hash MUST use the same algorithm as
 
 ### Requirement: Legacy seed as development fast-path
 
-The musl.cc-based seed MUST remain available as an opt-in development
-fast-path while the full-source chain is being built out. Once the full chain
-passes all validation (selftest, integration-test, self-build), the legacy
-seed MAY be removed.
+The musl.cc-based seed MUST remain available as an opt-in development fast-path
+while the full-source chain is being built out. Once the full chain passes all
+validation (selftest, integration-test, self-build), the legacy seed MAY be
+removed.
+ID: bootstrap.legacy.seed.fastpath
 
 #### Scenario: Developer uses legacy seed
 
@@ -398,8 +413,12 @@ seed MAY be removed.
 - WHEN they build with the legacy seed option
 - THEN the existing musl.cc tarball path is used and all downstream builds work
 
-The following intermediate-tool requirements define the tool chain between
-tinycc-0.9.27 and gcc-4.0.4 in the live-bootstrap seed chain.
+#### Scenario: Legacy seed selector is concrete
+
+- GIVEN the full-source seed chain still contains placeholder derivations
+- WHEN `bootstrap/seed.ncl` selects the legacy seed path
+- THEN `bootstrap/seed-legacy.ncl` provides the concrete reduced musl.cc provider
+- AND the legacy path does not import `seed-legacy.ncl` recursively
 
 ### Requirement: Intermediate tools build from tcc only
 
@@ -434,3 +453,4 @@ gcc-4.0.4 can use as its assembler and linker.
 - GIVEN binutils-2.30 built from the intermediate chain
 - WHEN `as` assembles a trivial `.s` file
 - THEN a valid ELF object file is produced
+

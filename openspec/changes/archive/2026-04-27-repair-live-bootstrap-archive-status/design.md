@@ -35,10 +35,12 @@ owns unresolved live-bootstrap work. The archived paths
 archived as historical partial-scaffolding records only. They are not moved,
 renamed, or re-synced as completion proof.
 
-Completion status is derived from the successor's open tasks and from current
-source-tree checks, not from archived checkboxes. Any report that mentions the
-2026-04-26 archives must label them `partial scaffolding` unless the successor
-has later recorded V2/V3 proof transcripts.
+Completion status is derived from active successor tasks and from current
+source-tree checks, not from archived checkboxes. This repair slice creates
+`openspec/changes/live-bootstrap-source-chain/` as the scoped implementation
+successor. Any report that mentions the 2026-04-26 archives must label them
+`partial scaffolding` unless that successor has later recorded stage-build and
+source-built self-build proof transcripts.
 
 ## Legacy seed restoration source
 
@@ -47,6 +49,16 @@ The source of truth for the restored legacy provider is the pre-selector
 The shell repair copies that content into `bootstrap/seed-legacy.ncl`; the
 acceptance check is that `bootstrap/seed-legacy.ncl` contains the reduced
 musl.cc provider fields and no `import "seed-legacy.ncl"` self-reference.
+
+## Out-of-scope implementation successor
+
+`live-bootstrap-source-chain` owns the work that is too large for this status
+repair: functional replacements for `bootstrap/binutils-tcc.ncl`,
+`bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`,
+`bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and
+`bootstrap/seed-full.ncl`, plus stage-by-stage build transcripts and final
+source-built provider self-build proof. This repair may archive only after the
+successor exists and the parent tasks record the deferral.
 
 ## Rejecting invalid completion evidence
 
@@ -72,10 +84,14 @@ Immediate repair checks:
 
 - `rg 'import "seed-legacy.ncl"' bootstrap/seed-legacy.ncl` must return no
   matches.
+- `cargo test -p crunch --test bootstrap_eval -- --nocapture` must pass to
+  prove the selector still exposes the legacy musl.cc provider to downstream
+  bootstrap entrypoints.
 - `openspec validate repair-live-bootstrap-archive-status` must pass.
-- `openspec_gate stage=proposal change=repair-live-bootstrap-archive-status`
-  and `openspec_gate stage=design change=repair-live-bootstrap-archive-status`
-  must not report blockers.
+- `openspec_gate stage=proposal change=repair-live-bootstrap-archive-status`,
+  `openspec_gate stage=design change=repair-live-bootstrap-archive-status`, and
+  `openspec_gate stage=tasks change=repair-live-bootstrap-archive-status` must
+  not report blockers.
 
 Future full-chain checks stay open in tasks V2/V3 until real transcripts exist:
 

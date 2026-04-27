@@ -38,6 +38,14 @@ The claim evidence MUST include the provider kind, manifest digest, provider out
 - THEN the archive is treated as partial scaffolding only
 - AND full-source bootstrap status remains blocked until real build proof exists
 
+#### Scenario: Deferred successor is not completion evidence
+
+- GIVEN unfinished live-bootstrap work has been moved to an active successor change
+- AND that successor still has unchecked implementation or proof tasks
+- WHEN an operator checks whether the full-source bootstrap chain is complete
+- THEN the deferral is treated as work tracking only
+- AND full-source bootstrap status remains blocked until the successor records fresh proof transcripts
+
 ### Requirement: Legacy seed as development fast-path
 
 The musl.cc-based seed MUST remain available as an opt-in development fast-path

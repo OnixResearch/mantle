@@ -41,20 +41,27 @@ intended to delegate to.
 ## Verification
 
 This repair is valid when `bootstrap/seed-legacy.ncl` no longer imports itself,
+`cargo test -p crunch --test bootstrap_eval -- --nocapture` proves the selector
+still exposes the legacy musl.cc provider to downstream bootstrap entrypoints,
 `openspec validate repair-live-bootstrap-archive-status` passes, and proposal /
-design gates accept that remaining live-bootstrap implementation stays active.
-The full-source chain itself remains unverified until the open V2/V3 tasks pass.
+design / tasks gates
+accept that remaining live-bootstrap implementation is deferred to the active
+`live-bootstrap-source-chain` successor. The full-source chain itself remains
+unverified until that successor records stage-build and self-build proof
+transcripts.
 
 ## Status Repair Mechanism
 
-The active successor is
-`openspec/changes/repair-live-bootstrap-archive-status/`. The two existing
-archives stay in place as historical partial-scaffolding records:
+This repair change is the status-correction successor for the false archives.
+The implementation successor is `openspec/changes/live-bootstrap-source-chain/`.
+The two existing archives stay in place as historical partial-scaffolding
+records:
 
 - `openspec/changes/archive/2026-04-26-live-bootstrap-seed-chain/`
 - `openspec/changes/archive/2026-04-26-live-bootstrap-intermediate-tools/`
 
 No archive-sync action will mark those archived paths as fresh completion proof.
-Instead, this successor change owns the open work. Its `tasks.md` keeps V2
-(stage-by-stage live-bootstrap validation) and V3 (final source-built provider
-self-build proof) unchecked until real command transcripts exist.
+Instead, this repair change owns the status correction and creates the active
+`live-bootstrap-source-chain` successor for the implementation work. That
+successor keeps stage-by-stage live-bootstrap validation and final source-built
+provider self-build proof unchecked until real command transcripts exist.
