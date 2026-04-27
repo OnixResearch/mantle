@@ -28,7 +28,7 @@ let stage0 = import "stage0-posix.ncl" in
 
 let binutils_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/binutils/binutils-2.41.tar.xz",
-  hash = "sha256-rppXieI0WeWWBuZalksFOLB+MmN1HNb1y+n0HGNX2MA=",
+  hash = "sha256-8dGjwSZTk28XKXwkODNezqFVLXDA6Ycf/dLF+RoYGWo=",
   name = "binutils-2.41-src",
 } in
 

@@ -13,7 +13,7 @@ let bash = import "bash-2.05b-tcc.ncl" in
 let prev_am = import "automake-1.7.ncl" in
 let src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/autoconf/autoconf-2.55.tar.bz2",
-  hash = "sha256-91cVigSImyZSA+7NjKklaOKmfDuQYvpr/3oKbv0iRKw=",
+  hash = "sha256-n7fIRRdwsUC78qbTxmLbrnIFim+0jqBoe+bFcMwl7kA=",
   name = "autoconf-2.55-src",
 } in
 {

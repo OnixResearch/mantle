@@ -19,7 +19,7 @@ let stage0 = import "stage0-posix.ncl" in
 
 let mpfr_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/mpfr/mpfr-4.1.0.tar.xz",
-  hash = "sha256-MFoqCFj5ihkVOBn2vaMRjVENRKJW1ziAr4+Pyih6mCE=",
+  hash = "sha256-Q8xRKVAvE1c0uPSWy/Kav0Hfw0UxlnWzePXE13u6sDw=",
   name = "mpfr-4.1.0-src",
 } in
 

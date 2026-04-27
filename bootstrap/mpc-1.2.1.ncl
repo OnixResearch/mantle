@@ -20,7 +20,7 @@ let stage0 = import "stage0-posix.ncl" in
 
 let mpc_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz",
-  hash = "sha256-V0rJYJSqdDmFo9xd0UYbsqfYpyJRxAHOacYaNVoisKg=",
+  hash = "sha256-nyt5XHt58wWilbLRlIDuECmD3qBqmKTx4jiGL/7n5Ws=",
   name = "mpc-1.2.1-src",
 } in
 

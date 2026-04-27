@@ -15,7 +15,7 @@ let flex = import "flex-2.6.4-musl.ncl" in
 
 let bison_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/bison/bison-2.3.tar.bz2",
-  hash = "sha256-sQ1+njVL5yruTkkRzxndJ7XFJ9TnIAhXNltfze6g3/s=",
+  hash = "sha256-A7EYDEuY+Hw8DHostT2RBv+kjkMumqDlshfpCi2I77U=",
   name = "bison-2.3-src",
 } in
 

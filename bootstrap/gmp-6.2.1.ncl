@@ -21,7 +21,7 @@ let stage0 = import "stage0-posix.ncl" in
 
 let gmp_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.xz",
-  hash = "sha256-/UgpkSzd0s4MBqGdNkhcmCFSbMF+dG/wYrKVjMVMNpI=",
+  hash = "sha256-69A2yy9AY8/OFO5FfNmsvd01vTknitC/wrQSjaZq86A=",
   name = "gmp-6.2.1-src",
 } in
 

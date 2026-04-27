@@ -19,7 +19,7 @@ let musl_old = import "musl-1.1.24-tcc-musl.ncl" in
 
 let musl_src = crunch.fetchTarball {
   url = "https://musl.libc.org/releases/musl-1.2.5.tar.gz",
-  hash = "sha256-m1rVnLRMPTWyaHJx/SUe2AfyikDHqmz1YPKRG32cFcE=",
+  hash = "sha256-WLIl4Mb82rsOQm/nQ9TmBD067Nxqm6yNwGGDZ1jS+Y8=",
   name = "musl-1.2.5-src",
 } in
 

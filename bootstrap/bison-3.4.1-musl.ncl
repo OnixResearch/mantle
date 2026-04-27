@@ -16,7 +16,7 @@ let bison_old = import "bison-2.3-musl.ncl" in
 
 let bison_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/bison/bison-3.4.1.tar.xz",
-  hash = "sha256-JxWaxev3Nt/9Vjb9LNYldnyeQ33mW6pjyw3oNXC9gg0=",
+  hash = "sha256-vKqyf0sdiIdtfaEILKmi1ULhs+AqVSboYSpGhgEsYsI=",
   name = "bison-3.4.1-src",
 } in
 

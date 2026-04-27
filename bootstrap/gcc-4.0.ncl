@@ -33,7 +33,7 @@ let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let gcc_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.0.4/gcc-4.0.4.tar.bz2",
-  hash = "sha256-kJLkxw84mjCJeH/VHgVVVfWq8LtTa4nRwHjy+e/hdf0=",
+  hash = "sha256-QNHCUqWDcOtqVLokzAd3MfsWWR/jN3HdAld/Pm+GSM0=",
   name = "gcc-4.0.4-src",
 } in
 

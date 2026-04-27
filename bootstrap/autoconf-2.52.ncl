@@ -18,7 +18,7 @@ let bash = import "bash-2.05b-tcc.ncl" in
 
 let src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/autoconf/autoconf-2.52.tar.bz2",
-  hash = "sha256-RoG8u5ySmMUG9kBafetixU/DsznTI5qPNqXfg9quyU8=",
+  hash = "sha256-vCx4E2/YyJCkwgInpyyrGhJTYDyl70WVSkVHLeYr7Fg=",
   name = "autoconf-2.52-src",
 } in
 

@@ -14,7 +14,7 @@ let autoconf = import "autoconf-2.52.ncl" in
 
 let src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/automake/automake-1.6.3.tar.bz2",
-  hash = "sha256-Dbr6yvIeE1yrNdNXoUvc2YHS8tAOE4eAG+gJGjG3u4E=",
+  hash = "sha256-5gX3QsW95k/3hksMMINEYthaHm5o7iv9NXLHAWRA7fc=",
   name = "automake-1.6.3-src",
 } in
 

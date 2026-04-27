@@ -14,7 +14,7 @@ let perl_old = import "perl-5.004_05-musl.ncl" in
 
 let perl_src = crunch.fetchTarball {
   url = "https://www.cpan.org/src/5.0/perl5.005_03.tar.gz",
-  hash = "sha256-k/Qc2Hq47oM5HPo5pjsHat63w1AdLvoxuY0O8DcSK9E=",
+  hash = "sha256-kCOk2JSW1a8RamFwrsDo42EOkImA0qk2UFykKR0eC3E=",
   name = "perl-5.005_03-src",
 } in
 

@@ -35,7 +35,7 @@ let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let gcc10_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gcc/gcc-10.5.0/gcc-10.5.0.tar.xz",
-  hash = "sha256-JBIJ24Wq7Jnl8KHfRf7Q2Bv01VNbptVxOP+drvrJJjM=",
+  hash = "sha256-t4vO308XvqCAgwrl2jS1llkIvHHfSV4wlkdLMkYfrkU=",
   name = "gcc-10.5.0-src",
 } in
 

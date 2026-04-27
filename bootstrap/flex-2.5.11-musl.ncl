@@ -15,7 +15,7 @@ let heirloom = import "heirloom-devtools.ncl" in
 
 let flex_src = crunch.fetchTarball {
   url = "https://github.com/westes/flex/archive/d160f0247ba1611aa59d28f027d6292ba24abb50.tar.gz",
-  hash = "sha256-aKoQxHO2AQ/61oDK2gn8TuxrPMbkFcwjOeX8I4XMwUI=",
+  hash = "sha256-FZW6ydHxZ2gUpxDcAfMkwNoYp32RbpG5T2y6MuSe86Y=",
   name = "flex-2.5.11-src",
 } in
 

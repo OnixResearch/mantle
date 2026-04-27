@@ -15,7 +15,7 @@ let flex_old = import "flex-2.5.11-musl.ncl" in
 
 let flex_src = crunch.fetchTarball {
   url = "https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz",
-  hash = "sha256-6HquAyvwfCb4WsDtMlCZjDdiHZX4vXSLMfFbM8Re6ZU=",
+  hash = "sha256-HBPAUDpqF4HYocMD3YDIk6OaIUrZw8Gk3K59OmHB6xU=",
   name = "flex-2.6.4-src",
 } in
 

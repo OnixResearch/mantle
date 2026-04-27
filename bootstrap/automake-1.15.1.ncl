@@ -11,7 +11,7 @@ let bash = import "bash-2.05b-tcc.ncl" in
 let autoconf = import "autoconf-2.69.ncl" in
 let src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/automake/automake-1.15.1.tar.xz",
-  hash = "sha256-r2ujkUIiBofFAPebSqLxgdmyTk+NjsSXzqS6JsZL7a8=",
+  hash = "sha256-/KHwBUWoEgUxjLuLFOpqM4c0UXUDWiyiBV4HBTwOcZU=",
   name = "automake-1.15.1-src",
 } in
 {

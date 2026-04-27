@@ -31,7 +31,7 @@ let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let binutils_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz",
-  hash = "sha256-bka4rq4vcno28L2VBeQFdopyIY8XlvDQl1fUUgmHGuY=",
+  hash = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT4xqpoc=",
   name = "binutils-2.30-src",
 } in
 

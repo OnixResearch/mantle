@@ -17,7 +17,7 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 
 let perl_src = crunch.fetchTarball {
   url = "https://github.com/Perl/perl5/archive/perl-5.000.tar.gz",
-  hash = "sha256-GuQ8jSmDQEue7GHJbj/6J+ewfgghXJXAFaSrAJU3PvM=",
+  hash = "sha256-s9LMsFfFf6Ws84cG/GW55znYlQBbn56U/C9TSiWczFE=",
   name = "perl-5.000-src",
 } in
 
