@@ -165,6 +165,41 @@ Remaining environmental assumptions:
 - Linux kernel and bwrap/FUSE sandbox runtime are trusted host components
 - Network transport for bootstrap fetches is trusted
 
+## Trust-root separation: full-source chain impact
+
+When the live-bootstrap source chain (`bootstrap/seed-full.ncl`) passes
+validation and replaces the legacy musl.cc seed, the trust-root picture
+changes:
+
+### Eliminated by full-source chain
+
+| Former trust root | Eliminated by | Notes |
+|---|---|---|
+| musl.cc native tarball (`x86_64-linux-musl-native.tgz`) | `bootstrap/seed-full.ncl` normalizing gcc-10 + musl-1.2.5 + binutils-2.41 outputs built from source through the live-bootstrap ladder | The ~56-stage chain from `stage0-posix` through `seed-full` replaces the single fetched binary provider |
+| Implicit trust in musl.cc binary provenance | Source-pin audit (`scripts/check-bootstrap-source-pins.rs`) covering all 84 fetch blocks | Each source is individually pinned with URL + SRI hash |
+
+### Remaining trust roots (not eliminated by this chain)
+
+| Trust root | Why it remains | Path to elimination |
+|---|---|---|
+| Host Linux kernel | bwrap sandbox and FUSE mounts require kernel interfaces | Out of scope for application-level bootstrap |
+| Host `bwrap` (first stage only) | First sandbox needs a working bubblewrap before crunch builds its own | `--no-host-tools` mode with declared seed narrows this to a single digest-checked executable |
+| Static `SNIX_BUILD_SANDBOX_SHELL` (first stage only) | First sandbox stage needs a static shell | Same as bwrap: declared seed with digest |
+| Stage0 Rust compiler | Fetched stable binary, not hex0-bootstrapped | Requires a Rust-from-C bootstrap chain (future work) |
+| Checkout source tree | stage0 starts from the current repo checkout | Source staging copies a fixed allowlist and validates vendored inputs |
+| Host Rust/clang/mold/pkg-config/OpenSSL (proof-only) | Proof helper builds the test binary | Not required by `crunch bootstrap --fetch` or `crunch self-build` |
+| Network transport for bootstrap fetches | Downloads use HTTPS but transport is trusted | Content-addressed hashes verify integrity post-fetch |
+
+### Status promotion rules
+
+Bootstrap maturity status reads proof fields from `SelfBuildReport`:
+- `provider_mode` must be `source-root` or `stagex-lineage` for full-source claims
+- `stagex_metadata` must include lineage manifest digest, stage graph digest,
+  normalized provider digest, and all crunch-built tool digests
+- Stage transcript index must cover all stages from `stage0-posix` through `seed-full`
+- Placeholder, deferred, or archived partial-scaffolding evidence is always rejected
+- Missing proof fields or transcripts block promotion and name the missing item
+
 What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
