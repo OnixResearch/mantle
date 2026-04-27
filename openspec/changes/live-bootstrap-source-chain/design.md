@@ -129,6 +129,11 @@ and `Covers` metadata. Every stage transcript records:
 - provider selection (`legacy`, `source-root`, or `stagex-lineage`);
 - exit status;
 - output path or failure class;
+- stage-local fallback status for ordinary stage builds, and explicit
+  `self-build-proof: fallback-event=<kind>` markers or `self-build-proof:
+  fallback-event=none` for self-build proof transcripts, including provider
+  fallback, host-bwrap fallback, and checkout/source-discovery fallback when
+  present;
 - placeholder/deferred/archive rejection result.
 
 The required command set is literal:
@@ -154,8 +159,9 @@ The required command set is literal:
 
 A stage is incomplete if its log contains `ERROR: ... is a placeholder`, if the
 matching task is deferred, if a referenced archive is only partial scaffolding,
-or if provider selection reports the legacy musl.cc seed for a source-built or
-StageX-class claim.
+if provider selection reports the legacy musl.cc seed for a source-built or
+StageX-class claim, or if proof-audit fallback markers report host-bwrap,
+legacy-provider, or checkout/source-discovery fallback for a promoted claim.
 
 ## Proof metadata and status-promotion mechanics
 
@@ -169,11 +175,13 @@ transition source is `self-build-proof: protected-transition=bootstrap-tools-sel
 plus the crunch-built bwrap/busybox digests.
 
 The proof bundle summary must expose provider kind, manifest digest, provider
-output digest, proof bundle digest, and stage1/stage2 binary digests. StageX-class
-proof also records audited seed digest, lineage manifest digest, stage graph
-digest, normalized provider digest, staged source digest, bootstrap-tool digests,
-protected execution audit digest when used, final proof bundle digest, and
-canonical reproducibility report digest.
+output digest, proof bundle digest, explicit `self-build-proof:
+fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`, and
+stage1/stage2 binary digests. StageX-class proof also records audited seed digest, lineage manifest
+digest, stage graph digest, normalized provider digest, staged source digest,
+bootstrap-tool digests, protected execution audit digest when used, final proof
+bundle digest, canonical reproducibility report digest, and the same explicit
+fallback-event marker format.
 
 Bootstrap maturity docs/status may promote full-source or StageX-class status
 only by reading those proof fields plus the stage transcript index. The docs

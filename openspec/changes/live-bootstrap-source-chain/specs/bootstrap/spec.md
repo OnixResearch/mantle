@@ -5,7 +5,7 @@
 Crunch MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.
 ID: bootstrap.source.chain.implementation
 
-The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl` placeholder derivations before they can satisfy bootstrap completion status. Stage validation MUST record command transcripts for each transition stage, `bootstrap/selftest.ncl`, `bootstrap/integration-test.ncl`, and final self-build proof. Validation MUST fail closed when a stage emits placeholder text, exits through a deferred task, or falls back to the legacy provider. The final provider MUST expose the normalized seed contract fields consumed by later bootstrap derivations.
+The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl` placeholder derivations before they can satisfy bootstrap completion status. Stage validation MUST record command transcripts for the ordered inventory (`bootstrap/stage0-posix.ncl`, `bootstrap/mes.ncl`, `bootstrap/tinycc.ncl`, `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl`), `bootstrap/selftest.ncl`, `bootstrap/integration-test.ncl`, and final self-build proof. Validation MUST fail closed when a stage emits placeholder text, exits through a deferred task, or falls back to the legacy provider. The final provider MUST expose the normalized seed contract fields consumed by later bootstrap derivations.
 
 #### Scenario: Stage placeholder is rejected
 
@@ -17,15 +17,15 @@ The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `b
 #### Scenario: Stage chain validates in order
 
 - GIVEN each source-chain derivation has been implemented
-- WHEN validation runs stage-by-stage from `stage0-posix` through `seed-full`
-- THEN every stage transcript records the command, provider selection, exit status, and output path
+- WHEN validation runs the ordered stage inventory from `bootstrap/stage0-posix.ncl` through `bootstrap/seed-full.ncl`
+- THEN every stage transcript records the command, provider selection, exit status, output path, and stage-local fallback status
 - AND later stages consume only the normalized provider contract
 
 #### Scenario: Final proof binds provider evidence
 
 - GIVEN `bootstrap/seed-full.ncl` satisfies the normalized provider contract
 - WHEN `crunch self-build` completes with the source-built provider
-- THEN proof metadata records provider kind, manifest digest, provider output digest, and proof bundle digest
+- THEN proof metadata records provider kind, manifest digest, provider output digest, proof bundle digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`
 - AND docs separate remaining trust roots from eliminated binary-provider trust
 
 #### Scenario: Final bootstrap tests use source-built provider
@@ -39,10 +39,10 @@ The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `b
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
-Crunch MUST withhold the full-source bootstrap claim until every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the source-built provider.
+Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
 ID: bootstrap.fullsource.claim.evidence
 
-The claim evidence MUST include provider kind, manifest digest, provider output digest, proof bundle digest, stage-by-stage build transcripts through `bootstrap/seed-full.ncl`, `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` transcripts, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, archived partial-scaffolding change, or unfinished successor task MUST NOT count as full-source bootstrap evidence.
+The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manifest digest, provider output digest, proof bundle digest, stage-by-stage build transcripts through `bootstrap/seed-full.ncl`, `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` transcripts, proof metadata bound to the selected source-built provider, explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, archived partial-scaffolding change, unfinished successor task, legacy-provider fallback, host-bwrap fallback, or checkout/source-discovery fallback MUST NOT count as full-source bootstrap evidence.
 
 #### Scenario: Placeholder blocks full-source claim
 
@@ -63,15 +63,15 @@ The claim evidence MUST include provider kind, manifest digest, provider output 
 Crunch MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
 ID: bootstrap.stagex.selfbuild.proof
 
-The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, and canonical reproducibility report digest. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected, or when forbidden host executables run during the protected stage.
+The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage.
 
 #### Scenario: StageX proof records complete evidence tuple
 
 - GIVEN the live-bootstrap source chain materializes a normalized provider
 - AND a full protected self-build proof completes with that provider
 - WHEN StageX-class proof metadata is written
-- THEN it records audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 digest, stage2 digest, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, and canonical reproducibility report digest
-- AND it records provider kind as StageX-class lineage
+- THEN it records audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 digest, stage2 digest, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`
+- AND it records provider kind as StageX-class lineage serialized as `stagex-lineage`
 
 #### Scenario: StageX proof rejects legacy fallback
 
