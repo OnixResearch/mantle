@@ -13,13 +13,13 @@ let stage0 = import "stage0-posix.ncl" in
 
 let mes_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/mes/mes-0.27.1.tar.gz",
-  hash = "sha256-GDpA6kfqSfjRvX1p0dLmZzR01k33TXQE8vE+o2sFbWE=",
+  hash = "sha256-pWARnEISClTfRHAhu69MRaVilq2UFuWsBcKMREsixmk=",
   name = "mes-src",
 } in
 
 let nyacc_src = crunch.fetchTarball {
   url = "https://github.com/Googulator/nyacc/releases/download/V1.00.2-lb1/nyacc-1.00.2-lb1.tar.gz",
-  hash = "sha256-cIyUP4nJcpDplUTpOJIqvRw2wvz2M0lvr1WCZE22Uic=",
+  hash = "sha256-QKSPdXF1oEUAo4yZcPXKhxeCiUJ3us4CynQVzNsMXWc=",
   name = "nyacc-src",
 } in
 
@@ -57,24 +57,10 @@ let nyacc_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      # Find mes and nyacc source dirs.
-      MES_DIR=""
-      for d in "$MES_SRC"/mes-*; do
-        if [ -d "$d" ]; then MES_DIR="$d"; break; fi
-      done
-      NYACC_DIR=""
-      for d in "$NYACC_SRC"/nyacc-*; do
-        if [ -d "$d" ]; then NYACC_DIR="$d"; break; fi
-      done
-
-      if [ -z "$MES_DIR" ] || [ -z "$NYACC_DIR" ]; then
-        echo "ERROR: could not find mes or nyacc source dir" >&2
-        exit 1
-      fi
-
-      # Copy sources (build writes in-place).
-      $BB cp -r "$MES_DIR" mes-0.27.1
-      $BB cp -r "$NYACC_DIR" nyacc
+      # fetchTarball strips the single top-level directory, so source
+      # files are directly in the store path root.
+      $BB cp -r "$MES_SRC" mes-0.27.1
+      $BB cp -r "$NYACC_SRC" nyacc
       $BB chmod -R u+w mes-0.27.1 nyacc
 
       MES_PREFIX="$WORK/mes-0.27.1"

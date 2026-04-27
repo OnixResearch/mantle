@@ -42,11 +42,8 @@ let patch_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      PATCH_DIR=""
-      for d in "$PATCH_SRC"/patch-*; do
-        if [ -d "$d" ]; then PATCH_DIR="$d"; break; fi
-      done
-      $BB cp -r "$PATCH_DIR" patch-2.5.9
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$PATCH_SRC" patch-2.5.9
       $BB chmod -R u+w patch-2.5.9
       cd patch-2.5.9
 

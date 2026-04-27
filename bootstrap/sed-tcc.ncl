@@ -44,11 +44,8 @@ let sed_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      SED_DIR=""
-      for d in "$SED_SRC"/sed-*; do
-        if [ -d "$d" ]; then SED_DIR="$d"; break; fi
-      done
-      $BB cp -r "$SED_DIR" sed-4.0.9
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$SED_SRC" sed-4.0.9
       $BB chmod -R u+w sed-4.0.9
       cd sed-4.0.9
 

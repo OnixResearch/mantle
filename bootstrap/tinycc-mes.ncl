@@ -16,7 +16,7 @@ let mes = import "mes.ncl" in
 
 let tcc_src = crunch.fetchTarball {
   url = "https://lilypond.org/janneke/tcc/tcc-0.9.26-1147-gee75a10c.tar.gz",
-  hash = "sha256-a4y9Cl/tA21k8Px2gwLCe5k+E24BzS+GK4LkLqmOgZ8=",
+  hash = "sha256-Bkmpev9x8vKh2P9X8Z4VSpcy4BJtzc0Tra3WPImnuhc=",
   name = "tcc-0.9.26-src",
 } in
 
@@ -57,12 +57,8 @@ let tcc_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      # Find and copy tcc source
-      TCC_DIR=""
-      for d in "$TCC_SRC"/tcc-*; do
-        if [ -d "$d" ]; then TCC_DIR="$d"; break; fi
-      done
-      $BB cp -r "$TCC_DIR" tcc-0.9.26
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$TCC_SRC" tcc-0.9.26
       $BB chmod -R u+w tcc-0.9.26
 
       # Create empty config.h

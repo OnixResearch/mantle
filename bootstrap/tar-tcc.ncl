@@ -47,11 +47,8 @@ let tar_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      TAR_DIR=""
-      for d in "$TAR_SRC"/tar-*; do
-        if [ -d "$d" ]; then TAR_DIR="$d"; break; fi
-      done
-      $BB cp -r "$TAR_DIR" tar-1.12
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$TAR_SRC" tar-1.12
       $BB chmod -R u+w tar-1.12
       cd tar-1.12
 

@@ -44,12 +44,8 @@ let make_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      # Find make source dir
-      MAKE_DIR=""
-      for d in "$MAKE_SRC"/make-*; do
-        if [ -d "$d" ]; then MAKE_DIR="$d"; break; fi
-      done
-      $BB cp -r "$MAKE_DIR" make-3.82
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$MAKE_SRC" make-3.82
       $BB chmod -R u+w make-3.82
       cd make-3.82
 

@@ -49,12 +49,8 @@ let tcc27_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      # Find and copy tcc-0.9.27 source
-      TCC_DIR=""
-      for d in "$TCC27_SRC"/tcc-*; do
-        if [ -d "$d" ]; then TCC_DIR="$d"; break; fi
-      done
-      $BB cp -r "$TCC_DIR" tcc-0.9.27
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$TCC27_SRC" tcc-0.9.27
       $BB chmod -R u+w tcc-0.9.27
       cd tcc-0.9.27
 

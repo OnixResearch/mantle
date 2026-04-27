@@ -51,11 +51,8 @@ let gzip_src = crunch.fetchTarball {
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
-      GZIP_DIR=""
-      for d in "$GZIP_SRC"/gzip-*; do
-        if [ -d "$d" ]; then GZIP_DIR="$d"; break; fi
-      done
-      $BB cp -r "$GZIP_DIR" gzip-1.2.4
+      # fetchTarball strips single top-level dir
+      $BB cp -r "$GZIP_SRC" gzip-1.2.4
       $BB chmod -R u+w gzip-1.2.4
       cd gzip-1.2.4
 
