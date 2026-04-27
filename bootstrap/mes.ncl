@@ -98,7 +98,7 @@ EOF
       kaem --verbose --strict --file kaem.${MES_ARCH}
 
       $BB mkdir -p "$out/bin" "$out/lib" "$out/lib/${MES_ARCH}-mes" "$out/lib/linux/${MES_ARCH}-mes"
-      $BB mkdir -p "$out/include" "$out/share/mes"
+      $BB mkdir -p "$out/include" "$out/mes"
 
       # Install mes-m2 binary
       $BB cp bin/mes-m2 "$out/bin/mes-m2"
@@ -129,11 +129,12 @@ EOF
       # Install mes headers for later stages (tinycc)
       $BB cp -r include "$out/include/mes-include"
 
-      # Install mes Scheme modules
-      $BB cp -r mes/module "$out/share/mes/module"
+      # Install mes Scheme modules at $out/mes/module so mes finds
+      # them when MES_PREFIX=$out (it searches $MES_PREFIX/mes/module/)
+      $BB cp -r mes/module "$out/mes/module"
 
-      # Install nyacc modules (needed for mescc)
-      $BB cp -r "$NYACC_PREFIX/module" "$out/share/nyacc-module"
+      # Merge nyacc modules into the same tree
+      $BB cp -r "$NYACC_PREFIX/module"/* "$out/mes/module/"
 
       # Install M2libc for later M2-Planet-based builds
       $BB cp -r "$STAGE0/lib/M2libc" "$out/lib/M2libc"

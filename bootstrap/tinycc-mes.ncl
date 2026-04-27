@@ -52,6 +52,7 @@ let tcc_src = crunch.fetchTarball {
 
       export PATH="$STAGE0/bin:$MES_OUT/bin:$PATH"
       export MES_PREFIX="$MES_OUT"
+      export GUILE_LOAD_PATH="$MES_OUT/mes/module"
 
       WORK=/tmp/tcc-build
       $BB mkdir -p "$WORK"
