@@ -11,7 +11,7 @@ let make = import "make-tcc.ncl" in
 
 let patch_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/patch/patch-2.5.9.tar.gz",
-  hash = "sha256-7LXGRp1zK88B1uwa/p5k8WaMq6W/2xA8KNf1N7o824o=",
+  hash = "sha256-LiyweTmLg8H9PeHjwfJAPO34y//rF+mD+7IdsozDzLM=",
   name = "patch-2.5.9-src",
 } in
 

@@ -15,7 +15,7 @@ let sed = import "sed-4.0.9-musl.ncl" in
 
 let heirloom_src = crunch.fetchTarball {
   url = "http://downloads.sourceforge.net/project/heirloom/heirloom-devtools/070527/heirloom-devtools-070527.tar.bz2",
-  hash = "sha256-nyM9i3jkNR/p3S1Q2DlYoOWvNvVOmBhSFFigjgWGkbo=",
+  hash = "sha256-yJ2pXfdovrJ9VwR1kq0Op5J8bRq8zXMohk8GCRfX7ZY=",
   name = "heirloom-devtools-070527-src",
 } in
 

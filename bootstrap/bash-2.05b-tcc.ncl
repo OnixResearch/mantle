@@ -18,7 +18,7 @@ let oyacc = import "oyacc-tcc.ncl" in
 
 let bash_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/bash/bash-2.05b.tar.gz",
-  hash = "sha256-ugPUEpmMxUvQsPLWwyEAln0xNwmK/9wtMubnwRsWP+Q=",
+  hash = "sha256-TsSxfIbg+xOIMfOVzjszOKbEG7Hj4b19D8oqMg0ek0g=",
   name = "bash-2.05b-src",
 } in
 

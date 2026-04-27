@@ -14,7 +14,7 @@ let gzip = import "gzip-tcc.ncl" in
 
 let tar_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/tar/tar-1.12.tar.gz",
-  hash = "sha256-xsN+iIsTbM76uQPFEUn0t71lnWnUrqISRfYQU6V6pgo=",
+  hash = "sha256-5LM4ezQqPKZECBwzpVjxpe923L358cGsdH6jHyCdpLY=",
   name = "tar-1.12-src",
 } in
 

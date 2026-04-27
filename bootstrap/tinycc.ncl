@@ -16,7 +16,7 @@ let tcc26 = import "tinycc-mes.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
   url = "https://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
-  hash = "sha256-3ija9gaKo/IKzXsGmFEzEaACxzBN1Im6+MhIv4KI7cw=",
+  hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
   name = "tcc-0.9.27-src",
 } in
 

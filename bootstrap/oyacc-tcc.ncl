@@ -14,7 +14,7 @@ let make = import "make-tcc.ncl" in
 
 let oyacc_src = crunch.fetchTarball {
   url = "https://github.com/ibara/yacc/releases/download/oyacc-6.6/oyacc-6.6.tar.gz",
-  hash = "sha256-6whm50C3m9OiPgykeIXrMUiqsY13pL7bqW6XnYtOv+E=",
+  hash = "sha256-cnz6/3/RGk6t1XsJIrFhzkEEQqaw4rilMWHn+Ay2DUc=",
   name = "oyacc-6.6-src",
 } in
 

@@ -12,7 +12,7 @@ let sed = import "sed-4.0.9-musl.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-5.0.tar.bz2",
-  hash = "sha256-wls2uK9uCtKoddr01hlr0N8opivn3SUuX5mk1dcojZU=",
+  hash = "sha256-VtfMrIYHZZ4YT21zYxctKfFEvGXDKerxOvCO7mmOPlA=",
   name = "coreutils-5.0-src",
 } in
 

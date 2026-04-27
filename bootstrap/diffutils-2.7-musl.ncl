@@ -12,7 +12,7 @@ let sed = import "sed-4.0.9-musl.ncl" in
 
 let diffutils_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/diffutils/diffutils-2.7.tar.gz",
-  hash = "sha256-1fJInEBWoxUo462krazCPUmFMrCvGpgPL3YVgWKxOdY=",
+  hash = "sha256-AdsuvMN3btb0J5q9xxJs2zrSSO8+V7gd7yBMO4LVpxs=",
   name = "diffutils-2.7-src",
 } in
 

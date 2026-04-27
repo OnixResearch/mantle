@@ -13,7 +13,7 @@ let sed = import "sed-4.0.9-musl.ncl" in
 
 let gawk_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/gawk/gawk-3.0.4.tar.gz",
-  hash = "sha256-XMNd7x/0N1qLmpjC/3npXoCYfSTw1C/bt7cDmz3bP7A=",
+  hash = "sha256-Vvj7dAxXMJhOHjWRd6ikD4eyjIERORHR9UcWfBDjAkY=",
   name = "gawk-3.0.4-src",
 } in
 

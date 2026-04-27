@@ -16,7 +16,7 @@ let patch = import "patch-tcc.ncl" in
 
 let bzip2_src = crunch.fetchTarball {
   url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
-  hash = "sha256-q1oDF27hBtPw+pDjgdpHjdrkBZGBU8yiSOaCzQxKImk=",
+  hash = "sha256-Uvi4JZPPERK3gym4yoaeTEJwKXF5brBAEN7GgF+iF6g=",
   name = "bzip2-1.0.8-src",
 } in
 

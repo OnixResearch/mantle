@@ -18,7 +18,7 @@ let patch = import "patch-tcc.ncl" in
 
 let gzip_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gzip/gzip-1.2.4.tar.gz",
-  hash = "sha256-HKQYGKI8nFnvHV4dAMDV6qIoXZMcD7BZY318DMAq2Wc=",
+  hash = "sha256-s2cf/BeNFNWkTRjMvJU2F9PKGNrLwxWK3RtK67AcXNo=",
   name = "gzip-1.2.4-src",
 } in
 

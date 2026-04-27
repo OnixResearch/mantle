@@ -15,7 +15,7 @@ let sed = import "sed-tcc.ncl" in
 
 let musl_src = crunch.fetchTarball {
   url = "https://musl.libc.org/releases/musl-1.1.24.tar.gz",
-  hash = "sha256-E3DJqBKyzyp9koAlEMygBYzDfmanvt1wBR8KNAFQIqM=",
+  hash = "sha256-mSl3003jmxfRju1tcJlRGT75yWw13QJ89diR6M6prkE=",
   name = "musl-1.1.24-src",
 } in
 

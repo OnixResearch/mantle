@@ -15,7 +15,7 @@ let sed = import "sed-4.0.9-musl.ncl" in
 
 let m4_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/m4/m4-1.4.7.tar.bz2",
-  hash = "sha256-qI892qfInPTDQoQ4W+QcqF6RNTacMz/fojLzv0giMhM=",
+  hash = "sha256-4SO98HrHjkV6a+NazK3EatKsynMNhfWXUpi1L5SeMMc=",
   name = "m4-1.4.7-src",
 } in
 

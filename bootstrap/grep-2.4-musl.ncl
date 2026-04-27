@@ -13,7 +13,7 @@ let sed = import "sed-tcc.ncl" in
 
 let grep_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/grep/grep-2.4.tar.gz",
-  hash = "sha256-oyAyurNiCFCUZmVN8S9QdgDf4DE/7rvNIYwypwv3KhY=",
+  hash = "sha256-v9xxK5dLi3FxvpCbRjPorpK+bPNcAXwj/jgX4eslWxI=",
   name = "grep-2.4-src",
 } in
 

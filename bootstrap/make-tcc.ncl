@@ -13,7 +13,7 @@ let tcc = import "tinycc.ncl" in
 
 let make_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/make/make-3.82.tar.bz2",
-  hash = "sha256-4sBCIFZ9VwXMy1yJpabaDR/bRMPaa0lNaeIf0nnbwiI=",
+  hash = "sha256-GwvLvcEtBMdaC/3YqmUkE9aoNTmrj9yQ39Vyd+Fw+M4=",
   name = "make-3.82-src",
 } in
 

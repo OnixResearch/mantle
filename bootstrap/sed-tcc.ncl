@@ -12,7 +12,7 @@ let make = import "make-tcc.ncl" in
 
 let sed_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/sed/sed-4.0.9.tar.gz",
-  hash = "sha256-w2WHR5QYf4RE5dIpmM1YiP+kfzbe9Ld1F6gI3sJ8BgA=",
+  hash = "sha256-k2YhQtIAYx0rPNFootM1VKppNsaoJsaTFpJ34SSPkIk=",
   name = "sed-4.0.9-src",
 } in
 
