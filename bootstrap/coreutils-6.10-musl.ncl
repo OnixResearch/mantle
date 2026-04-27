@@ -17,8 +17,8 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
-  url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-6.10.tar.lzma",
-  hash = "sha256-iwW7obJyahZOREwxTj81lgS1gha+cEvtjy4ChEnMYgQ=",
+  url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-6.10.tar.gz",
+  hash = "sha256-WZ798TmMBEj5l+W0liycJjR4LmB0eBNy3YjsxB55Y+I=",
   name = "coreutils-6.10-src",
 } in
 
