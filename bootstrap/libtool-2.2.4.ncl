@@ -16,7 +16,7 @@ let autoconf = import "autoconf-2.69.ncl" in
 let automake = import "automake-1.15.1.ncl" in
 
 let src = crunch.fetchTarball {
-  url = "https://mirrors.kernel.org/gnu/libtool/libtool-2.2.4.tar.gz",
+  url = "https://mirrors.kernel.org/gnu/libtool/libtool-2.2.4.tar.bz2",
   hash = "sha256-v2lZrGlw6Mvrv9Fld/G8u3753WBU7Vupwbc2EeRjzwo=",
   name = "libtool-2.2.4-src",
 } in
