@@ -1,4 +1,12 @@
-## ADDED Requirements
+# Bootstrap Specification
+
+## Purpose
+
+Defines crunch bootstrap requirements for source lineage, provider contracts,
+self-build proof evidence, seed-chain replacement, and intermediate tool
+derivations.
+
+## Requirements
 
 ### Requirement: Full-source bootstrap root manifest
 
@@ -273,14 +281,8 @@ check MUST NOT count as StageX-class proof evidence.
 - THEN StageX-class proof evidence remains absent
 - AND the report names the missing full proof run
 
-# Bootstrap Seed Chain Specification
-
-## Purpose
-
-Defines requirements for replacing the musl.cc binary seed with a
-live-bootstrap-derived chain from hex0 to a modern GCC+musl+binutils toolchain.
-
-## ADDED Requirements
+The following seed-chain requirements define the live-bootstrap-derived
+replacement path from hex0 to a modern GCC, musl, and binutils toolchain.
 
 ### Requirement: Hex0 seed as trust root
 
@@ -396,14 +398,8 @@ seed MAY be removed.
 - WHEN they build with the legacy seed option
 - THEN the existing musl.cc tarball path is used and all downstream builds work
 
-# Intermediate Tools Specification
-
-## Purpose
-
-Defines requirements for the intermediate tool chain between tinycc-0.9.27
-and gcc-4.0.4 in the live-bootstrap seed chain.
-
-## ADDED Requirements
+The following intermediate-tool requirements define the tool chain between
+tinycc-0.9.27 and gcc-4.0.4 in the live-bootstrap seed chain.
 
 ### Requirement: Intermediate tools build from tcc only
 
