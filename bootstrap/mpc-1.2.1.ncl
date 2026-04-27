@@ -1,30 +1,31 @@
-# Build musl 1.2.5 using GCC 10.
+# Build MPC 1.2.1 using GCC 4.7.4 + GMP + MPFR.
 #
-# This is the final musl libc for the seed toolchain, built from source
-# using the modern GCC compiler.
+# MPC is the last math library prerequisite for GCC 10.
 #
-# Adapted from live-bootstrap steps/musl-1.2.5.
+# Adapted from live-bootstrap steps/mpc-1.2.1.
 
 let crunch = import "lib.ncl" in
 
-let gcc10 = import "gcc-10.ncl" in
+let gcc47 = import "gcc-4.7.ncl" in
 let binutils = import "binutils-tcc.ncl" in
+let musl = import "musl-1.1.24-tcc-musl.ncl" in
 let make = import "make-tcc.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
 let coreutils = import "coreutils-6.10-musl.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 let grep = import "grep-2.4-musl.ncl" in
+let gmp = import "gmp-6.2.1.ncl" in
+let mpfr = import "mpfr-4.1.0.ncl" in
 let stage0 = import "stage0-posix.ncl" in
-let musl_old = import "musl-1.1.24-tcc-musl.ncl" in
 
-let musl_src = crunch.fetchTarball {
-  url = "https://musl.libc.org/releases/musl-1.2.5.tar.gz",
-  hash = "sha256-m1rVnLRMPTWyaHJx/SUe2AfyikDHqmz1YPKRG32cFcE=",
-  name = "musl-1.2.5-src",
+let mpc_src = crunch.fetchTarball {
+  url = "https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz",
+  hash = "sha256-V0rJYJSqdDmFo9xd0UYbsqfYpyJRxAHOacYaNVoisKg=",
+  name = "mpc-1.2.1-src",
 } in
 
 {
-  name = "musl-1.2.5-full",
+  name = "mpc-1.2.1",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -39,52 +40,51 @@ let musl_src = crunch.fetchTarball {
         echo "ERROR: input $1 not found" >&2; exit 1
       }
 
-      GCC=$(find_input gcc-10.5.0)
+      GCC=$(find_input gcc-4.7.4)
       BINUTILS=$(find_input binutils-2.30-tcc)
+      MUSL=$(find_input musl-1.1.24-tcc-musl)
       MAKE=$(find_input make-3.82-tcc)
       BASH=$(find_input bash-2.05b-tcc)
       CU=$(find_input coreutils-6.10-musl)
       SED=$(find_input sed-4.0.9-musl)
       GREP=$(find_input grep-2.4-musl)
-      MUSL_OLD=$(find_input musl-1.1.24-tcc-musl)
-      SRC=$(find_input musl-1.2.5-src)
+      GMP=$(find_input gmp-6.2.1)
+      MPFR=$(find_input mpfr-4.1.0)
+      SRC=$(find_input mpc-1.2.1-src)
 
       export PATH="$GCC/bin:$BINUTILS/bin:$MAKE/bin:$BASH/bin:$CU/bin:$SED/bin:$GREP/bin:$PATH"
       export CONFIG_SHELL="$BASH/bin/bash"
       export SHELL="$BASH/bin/bash"
 
-      WORK=/tmp/musl-full-build
+      WORK=/tmp/mpc-build
       $BB mkdir -p "$WORK"
       cd "$WORK"
-      $BB cp -r "$SRC" musl-1.2.5
-      $BB chmod -R u+w musl-1.2.5
-      cd musl-1.2.5
+      $BB cp -r "$SRC" mpc-1.2.1
+      $BB chmod -R u+w mpc-1.2.1
+      cd mpc-1.2.1
 
       "$BASH/bin/bash" ./configure \
         --prefix="$out" \
-        --syslibdir="$out/lib" \
+        --build=x86_64-unknown-linux-musl \
         --host=x86_64-unknown-linux-musl \
+        --disable-shared \
+        --enable-static \
+        --with-gmp="$GMP" \
+        --with-mpfr="$MPFR" \
         CC="$GCC/bin/gcc" \
-        CFLAGS="-I$MUSL_OLD/include -O2" \
-        LDFLAGS="-L$MUSL_OLD/lib" \
+        CFLAGS="-I$MUSL/include -I$GMP/include -I$MPFR/include -D_GNU_SOURCE -O2" \
+        LDFLAGS="-static -L$MUSL/lib -L$GMP/lib -L$MPFR/lib" \
         2>&1
 
       make -j1 2>&1
       make -j1 install 2>&1
 
-      test -f "$out/lib/libc.a" || { echo "ERROR: libc.a not built" >&2; exit 1; }
-      test -d "$out/include" || { echo "ERROR: headers not installed" >&2; exit 1; }
-
-      # Create dynamic linker symlink
-      if [ -f "$out/lib/libc.so" ]; then
-        $BB ln -sf libc.so "$out/lib/ld-musl-x86_64.so.1" 2>/dev/null || true
-      fi
-
-      echo "musl-1.2.5 build complete"
+      test -f "$out/lib/libmpc.a" || { echo "ERROR: libmpc.a not built" >&2; exit 1; }
+      echo "mpc-1.2.1 build complete"
     "%,
   ],
   inputs = [
-    gcc10, binutils, make, bash, coreutils, sed, grep,
-    stage0, musl_old, musl_src,
+    gcc47, binutils, musl, make, bash, coreutils, sed, grep,
+    gmp, mpfr, stage0, mpc_src,
   ],
 } | crunch.Derivation
