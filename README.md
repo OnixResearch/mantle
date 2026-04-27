@@ -1233,3 +1233,7 @@ crunch system build <inventory>  Build a module inventory through the system pip
 - **Multi-output**: outputs work end-to-end. Output *selection* is
   supported via `crunch.select dep "dev"` to mount a single output of
   a multi-output dependency in the sandbox (like Nix's `pkg.dev`).
+
+## References
+
+- [fosslinux/live-bootstrap](https://github.com/fosslinux/live-bootstrap) — reference stage order and source provenance for the hex0 → mes → tinycc → GCC bootstrap ladder.
