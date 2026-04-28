@@ -1,6 +1,6 @@
 ## Implementation
 
-- [ ] I1 Confirm `mpc 3.2.1` ordering, source notes, and expected output contract from `parts.rst` and the matching `steps/` script.
+- [ ] I1 Confirm `mpc-1.2.1` ordering, source notes, and expected output contract from `steps/manifest`, `steps/mpc-1.2.1/`, and the mismatched `parts.rst` heading.
 - [ ] I2 Audit `bootstrap/mpc-1.2.1.ncl` against the upstream part and record intentional Crunch deviations.
 - [ ] I3 Fix `bootstrap/mpc-1.2.1.ncl` so its source pins, patches, inputs, and output contract are self-contained.
 

@@ -1,6 +1,8 @@
 # Live-bootstrap Part OpenSpec Index
 
-Generated from `~/git/pi-repos/fosslinux--live-bootstrap/parts.rst` and current Crunch bootstrap derivations.
+Generated from `~/git/pi-repos/fosslinux--live-bootstrap/parts.rst`, `steps/manifest`, and current Crunch bootstrap derivations.
+
+These `live-part-*` changes are scaffolds only: implementation, build, smoke, leakage, and evidence tasks are intentionally unchecked until each part is worked and verified.
 
 | Change | Upstream part | Crunch file | Phase |
 | --- | --- | --- | --- |
@@ -61,7 +63,7 @@ Generated from `~/git/pi-repos/fosslinux--live-bootstrap/parts.rst` and current 
 | `live-part-gcc-4-0-4` | `gcc 4.0.4` | `bootstrap/gcc-4.0.ncl` | first gcc |
 | `live-part-gmp-6-2-1` | `gmp 6.2.1` | `bootstrap/gmp-6.2.1.ncl` | modern gcc prerequisites |
 | `live-part-mpfr-4-1-0` | `mpfr 4.1.0` | `bootstrap/mpfr-4.1.0.ncl` | modern gcc prerequisites |
-| `live-part-mpc-1-2-1` | `mpc 3.2.1` | `bootstrap/mpc-1.2.1.ncl` | modern gcc prerequisites |
+| `live-part-mpc-1-2-1` | `mpc-1.2.1` (`parts.rst` heading currently says `mpc 3.2.1`) | `bootstrap/mpc-1.2.1.ncl` | modern gcc prerequisites |
 | `live-part-gcc-4-7-4` | `gcc 4.7.4` | `bootstrap/gcc-4.7.ncl` | C++ capable gcc |
 | `live-part-musl-1-2-5-full` | `musl 1.2.5` | `bootstrap/musl-full.ncl` | final seed toolchain |
 | `live-part-gcc-10-5-0` | `gcc 10.5.0` | `bootstrap/gcc-10.ncl` | final seed toolchain |

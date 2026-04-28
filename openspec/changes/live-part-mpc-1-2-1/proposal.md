@@ -1,6 +1,6 @@
 ## Why
 
-The live-bootstrap drain is too broad: one blocked stage such as `bootstrap/mpc-1.2.1.ncl` can stall grouped changes and hide the exact part that needs evidence. Upstream live-bootstrap documents `mpc 3.2.1` as its own part in `parts.rst`; Crunch should track the matching derivation independently.
+The live-bootstrap drain is too broad: one blocked stage such as `bootstrap/mpc-1.2.1.ncl` can stall grouped changes and hide the exact part that needs evidence. Upstream live-bootstrap's checked-in `steps/manifest` and `steps/mpc-1.2.1/` implementation use `mpc-1.2.1`; its current `parts.rst` heading says `mpc 3.2.1`, which this change records as an upstream documentation mismatch instead of changing Crunch's part identity.
 
 ## What Changes
 
@@ -22,4 +22,6 @@ The live-bootstrap drain is too broad: one blocked stage such as `bootstrap/mpc-
 
 ## Reference
 
-- `~/git/pi-repos/fosslinux--live-bootstrap/parts.rst`, section `mpc 3.2.1`.
+- `~/git/pi-repos/fosslinux--live-bootstrap/parts.rst`, heading `mpc 3.2.1` (upstream documentation mismatch).
+- `~/git/pi-repos/fosslinux--live-bootstrap/steps/manifest`, entry `build: mpc-1.2.1`.
+- `~/git/pi-repos/fosslinux--live-bootstrap/steps/mpc-1.2.1/`.

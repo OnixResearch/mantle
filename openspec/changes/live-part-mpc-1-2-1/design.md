@@ -1,6 +1,6 @@
 ## Context
 
-Crunch currently has broad live-bootstrap OpenSpec changes that group many upstream parts together. Upstream `parts.rst` treats `mpc 3.2.1` as a named part, while Crunch represents it in `bootstrap/mpc-1.2.1.ncl`.
+Crunch currently has broad live-bootstrap OpenSpec changes that group many upstream parts together. Upstream `steps/manifest` and `steps/mpc-1.2.1/` identify this implemented part as `mpc-1.2.1`, while upstream `parts.rst` currently labels the narrative heading `mpc 3.2.1`; Crunch represents the implemented part in `bootstrap/mpc-1.2.1.ncl`.
 
 ## Goals / Non-Goals
 

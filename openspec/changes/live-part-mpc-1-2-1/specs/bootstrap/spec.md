@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Live-bootstrap part mpc 1.2.1 is independently tracked
-Crunch MUST track the live-bootstrap part `mpc 3.2.1` as an independent bootstrap change bound to `bootstrap/mpc-1.2.1.ncl`.
+Crunch MUST track the live-bootstrap implemented part `mpc-1.2.1` as an independent bootstrap change bound to `bootstrap/mpc-1.2.1.ncl`, while recording that upstream `parts.rst` currently labels the corresponding narrative heading `mpc 3.2.1`.
 ID: bootstrap.part.mpc.1.2.1
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/mpc-1.2.1.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
