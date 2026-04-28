@@ -1,6 +1,10 @@
+## Evidence format
+
+Every task records evidence under `openspec/changes/live-part-mes-0-27/evidence/`. Markdown evidence files include `Task-ID:` and `Covers:` metadata. Raw command transcripts and scans are stored beside the markdown evidence as `*-full.log`, `*-output.txt`, or `*-transcript-only.log` files and are referenced from the owning task.
+
 ## Implementation
 
-- [ ] I1 Confirm `mes 0.27` ordering, source notes, and expected output contract from `parts.rst` and the matching `steps/` script.
+- [x] I1 Confirm `mes 0.27` ordering, source notes, and expected output contract from `parts.rst` and upstream script `steps/mes-0.27.1/pass1.kaem`. ✅ 3m (started: 2026-04-28T23:44:10Z → completed: 2026-04-28T23:44:35Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/I1-upstream-ordering.md]
 - [ ] I2 Audit `bootstrap/mes.ncl` against the upstream part and record intentional Crunch deviations.
 - [ ] I3 Fix `bootstrap/mes.ncl` so its source pins, patches, inputs, and output contract are self-contained.
 
