@@ -78,8 +78,16 @@ let nyacc_src = crunch.fetchTarball {
 #define MES_VERSION "0.27.1"
 EOF
 
-      # Patch wait4.c (upstreamed after 0.27.1)
+      # Match live-bootstrap's mes-m2 load address adjustment. The stock
+      # kaem.run base can leave the generated mescc path subtly broken even
+      # when mes-m2 starts and compiles small files.
       cd "$MES_PREFIX"
+      $BB sed -i 's/0x1000000/0x8048000/g' kaem.run
+
+      # Patch wait4.c (upstreamed after 0.27.1)
+      if ! $BB grep -q '\*long_status_ptr = 0;' lib/linux/wait4.c; then
+        $BB sed -i '/long long_rusage = cast_voidp_to_long (rusage);/a\  *long_status_ptr = 0;' lib/linux/wait4.c
+      fi
 
       # Set up arch includes
       $BB mkdir -p include/arch
