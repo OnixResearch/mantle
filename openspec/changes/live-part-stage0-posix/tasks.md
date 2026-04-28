@@ -6,7 +6,8 @@
 
 ## Verification
 
-- [ ] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/stage0-posix.ncl` and record the transcript.
+- [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/stage0-posix.ncl` and record the transcript. ✅ 1m (started: 2026-04-28T23:36:20Z → completed: 2026-04-28T23:36:30Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V1-source-pins.md]
+  - Evidence summary: PASS, source-pin audit reported `1 files, 7 fetch blocks, 0 issues`.
 - [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/stage0-posix.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
 - [ ] V3 Smoke-test the produced output contract for `stage0-posix seed tools`.
 - [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
