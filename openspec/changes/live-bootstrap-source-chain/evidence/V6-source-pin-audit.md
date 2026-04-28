@@ -1,33 +1,29 @@
-# V6 Source Pin Audit Evidence
+Task-ID: V6
+Covers: bootstrap.source.chain.implementation
+Status: pass
 
-Timestamp: 2026-04-27T20:00:00Z
+## Source-Pin Audit Results
 
-## Command
+Command: `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/*.ncl`
 
-```
-scripts/check-bootstrap-source-pins.rs bootstrap/*.ncl
-```
+Result: 78 files, 84 fetch blocks, 1 known false positive.
 
-## Result
+The single issue is `bootstrap/seed-legacy.ncl:57` which uses variable
+indirection (`raw_hash`) instead of a literal SRI hash string. This is by
+design - the legacy seed provider computes the hash at evaluation time.
 
-```
-source-pin audit: 78 files, 84 fetch blocks, 1 issues
-```
+All 83 other fetch blocks have:
+- Required fields present (url, hash, name; +rev for fetchGit)
+- Valid SRI-format hashes (sha256-<base64>)
 
-## Issues
+## Hash Correction Summary
 
-1. `bootstrap/seed-legacy.ncl:57` — `fetchTarball hash is not SRI format: 'raw_hash'`
-   - **False positive**: seed-legacy.ncl uses Nickel variable indirection for the hash field
-   - The actual hash value is bound at runtime from the `raw_hash` variable above
+All source hashes were corrected from flat-archive SHA-256 to NAR/recursive
+hashes across three commits:
+- `5b893314`: 23 files, 16 unique sources (early tcc-chain)
+- `ee62a580`: 35 files, 33 unique sources (late chain + gcc/gmp/mpfr/mpc/musl/binutils)
+- `4480b7b6`: libtool-2.2.4 switched from .tar.gz to .tar.bz2 (tar extraction bug workaround)
 
-## Summary
-
-All 83 real fetch blocks across 77 bootstrap .ncl files have valid SRI-format
-hashes (`sha256-<base64>`), required fields (url, hash, name; +rev for fetchGit),
-and consistent naming. The single reported issue is a known false positive from
-variable indirection in seed-legacy.ncl.
-
-Hash corrections applied in this session:
-- Round 1: 16 unique source hashes across 23 files (early chain: patch, tcc, bzip2, make, sed, etc.)
-- Round 2: 33 unique source hashes across 35 files (autoconf, automake, binutils, bison, flex, gcc, gmp, mpc, mpfr, musl, perl)
-- Round 3: 2 tar format fixes (coreutils-6.10: .tar.lzma->.tar.gz, libtool-2.2.4: .tar.lzma->.tar.bz2)
+Remaining issue: `coreutils-6.10.tar.gz` triggers a Rust tar crate bug with
+non-UTF-8 numeric fields in old GNU tar headers. No .tar.bz2 alternative
+exists for this version. Needs a crunch tar extraction fix.
