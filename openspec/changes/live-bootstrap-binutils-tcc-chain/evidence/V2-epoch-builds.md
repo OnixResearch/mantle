@@ -5,16 +5,28 @@ Status: blocked.
 
 ## Blocker
 
-No `crunch` binary available in this environment:
-- `~/.cargo-target/debug/crunch` does not exist
-- Building crunch requires nightly Rust + clang + mold + pkg-config + openssl-dev + SNIX_BUILD_SANDBOX_SHELL
-- This worktree is detached HEAD with no dev shell
+A working `crunch` binary is now available at `/tmp/crunch-build/debug/crunch`,
+and source-pin/hash/source-format blockers are resolved. Chain validation is
+currently blocked at `bootstrap/tinycc-mes.ncl` pass1:
 
-## Prerequisite
+- Mes module loading failures are fixed (`mes/getopt-long`, `ice-9 syncase`,
+  Mes-safe NYACC overlap stubs).
+- `bootstrap/mes.ncl` successfully built `/nix/store/gcsg6qiyqgl7x3w8qp2krgi5kqxnwhnx-mes`
+  with required Mes link artifacts (`crt1.o`, `libmescc.a`, `libc.a`,
+  `libc+tcc.a`, `libtcc1.a`).
+- Manual linking proved the next issue: Mes `libc+tcc.a` lacks `abort`; adding
+  an M1-assembled `abort` object lets `tcc-mes -version` run.
+- Boot0 still needs live-bootstrap's next pass: create amd64 empty `crti.o` /
+  `crtn.o`, rebuild Mes `crt1.o`, `libc.a`, and `libtcc1.a` with `tcc-mes`,
+  then compile boot0/boot1/final with tcc-readable archives.
 
-V2 also depends on V1 hash correction: 39 of 46 source pins use flat archive
-SHA-256 hashes instead of NAR/recursive hashes required by `crunch.fetchTarball`.
-Each first build will fail with a hash mismatch and report the correct NAR hash.
+Recent blocked runs:
+
+- pueue task 44: `crunch build bootstrap/tinycc-mes.ncl` failed with missing
+  `abort` during Mes link (`Target label abort is not valid`).
+- pueue tasks 47-50: experimental local abort-object patches progressed past
+  the missing-archive permission issue, but did not complete pass1; long
+  `mescc` tcc.s generations were killed before producing V2 evidence.
 
 ## Required when unblocked
 

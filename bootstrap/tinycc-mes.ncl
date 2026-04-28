@@ -48,7 +48,8 @@ let tcc_src = crunch.fetchTarball {
       MESCC="$MES_OUT/bin/mescc.scm"
 
       MES_ARCH=x86_64
-      ARCH_BITS=64
+      MES_LIB="$MES_OUT/lib/${MES_ARCH}-mes"
+      MES_TCC_BASE_ADDRESS=0x08048000
 
       export PATH="$STAGE0/bin:$MES_OUT/bin:$PATH"
       export MES_PREFIX="$MES_OUT"
@@ -80,10 +81,10 @@ let tcc_src = crunch.fetchTarball {
         -D inline= \
         -D CONFIG_TCCDIR=\"/tmp/tcc-lib\" \
         -D CONFIG_SYSROOT=\"/\" \
-        -D CONFIG_TCC_CRTPREFIX=\"$MES_OUT/lib\" \
+        -D CONFIG_TCC_CRTPREFIX=\"$MES_LIB\" \
         -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
         -D 'CONFIG_TCC_SYSINCLUDEPATHS="'"$MES_OUT/include/mes-include"'"' \
-        -D TCC_LIBGCC=\"$MES_OUT/lib/${MES_ARCH}-mes/libc.a\" \
+        -D TCC_LIBGCC=\"$MES_LIB/libc.a\" \
         -D CONFIG_TCC_LIBTCC1_MES=0 \
         -D CONFIG_TCCBOOT=1 \
         -D CONFIG_TCC_STATIC=1 \
@@ -92,17 +93,15 @@ let tcc_src = crunch.fetchTarball {
         -D ONE_SOURCE=1 \
         tcc.c
 
-      # Assemble with stage0-posix M1 + hex2
-      M1 -f "$MES_OUT/lib/${MES_ARCH}-mes/${MES_ARCH}.M1" \
-         -f tcc.s \
-         --little-endian --architecture amd64 \
-         -o tcc.o
-      hex2 -f "$MES_OUT/lib/linux/${MES_ARCH}-mes/elf${ARCH_BITS}-header.hex2" \
-           -f tcc.o \
-           -f "$MES_OUT/lib/linux/${MES_ARCH}-mes/elf${ARCH_BITS}-footer-single-main.hex2" \
-           --little-endian --architecture amd64 --base-address 0x00600000 \
-           -o tcc-mes
+      # Link through mescc so mes-provided crt/libc+tcc objects are applied.
+      "$MES" --no-auto-compile -e main "$MESCC" -- \
+        --base-address "$MES_TCC_BASE_ADDRESS" \
+        -o tcc-mes \
+        -L "$MES_LIB" \
+        tcc.s \
+        -l c+tcc
       $BB chmod 755 tcc-mes
+      ./tcc-mes -version
 
       ################################################################
       # Step 2: Bootstrap passes -- each tcc rebuilds itself         #
@@ -118,10 +117,10 @@ let tcc_src = crunch.fetchTarball {
         -D inline= \
         -D CONFIG_TCCDIR=\"/tmp/tcc-lib\" \
         -D CONFIG_SYSROOT=\"/\" \
-        -D CONFIG_TCC_CRTPREFIX=\"$MES_OUT/lib\" \
+        -D CONFIG_TCC_CRTPREFIX=\"$MES_LIB\" \
         -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
         -D 'CONFIG_TCC_SYSINCLUDEPATHS="'"$MES_OUT/include/mes-include"'"' \
-        -D TCC_LIBGCC=\"$MES_OUT/lib/${MES_ARCH}-mes/libc.a\" \
+        -D TCC_LIBGCC=\"$MES_LIB/libc.a\" \
         -D CONFIG_TCC_LIBTCC1_MES=0 \
         -D CONFIG_TCCBOOT=1 \
         -D CONFIG_TCC_STATIC=1 \
@@ -141,10 +140,10 @@ let tcc_src = crunch.fetchTarball {
         -D inline= \
         -D CONFIG_TCCDIR=\"/tmp/tcc-lib\" \
         -D CONFIG_SYSROOT=\"/\" \
-        -D CONFIG_TCC_CRTPREFIX=\"$MES_OUT/lib\" \
+        -D CONFIG_TCC_CRTPREFIX=\"$MES_LIB\" \
         -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
         -D 'CONFIG_TCC_SYSINCLUDEPATHS="'"$MES_OUT/include/mes-include"'"' \
-        -D TCC_LIBGCC=\"$MES_OUT/lib/${MES_ARCH}-mes/libc.a\" \
+        -D TCC_LIBGCC=\"$MES_LIB/libc.a\" \
         -D CONFIG_TCC_LIBTCC1_MES=0 \
         -D CONFIG_TCCBOOT=1 \
         -D CONFIG_TCC_STATIC=1 \
@@ -164,10 +163,10 @@ let tcc_src = crunch.fetchTarball {
         -D inline= \
         -D CONFIG_TCCDIR=\"/tmp/tcc-lib\" \
         -D CONFIG_SYSROOT=\"/\" \
-        -D CONFIG_TCC_CRTPREFIX=\"$MES_OUT/lib\" \
+        -D CONFIG_TCC_CRTPREFIX=\"$MES_LIB\" \
         -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
         -D 'CONFIG_TCC_SYSINCLUDEPATHS="'"$MES_OUT/include/mes-include"'"' \
-        -D TCC_LIBGCC=\"$MES_OUT/lib/${MES_ARCH}-mes/libc.a\" \
+        -D TCC_LIBGCC=\"$MES_LIB/libc.a\" \
         -D CONFIG_TCC_LIBTCC1_MES=0 \
         -D CONFIG_TCCBOOT=1 \
         -D CONFIG_TCC_STATIC=1 \
@@ -186,7 +185,7 @@ let tcc_src = crunch.fetchTarball {
       $BB cp tcc "$out/bin/tcc"
 
       # Copy mes libc for tcc to use
-      $BB cp -r "$MES_OUT/lib/${MES_ARCH}-mes" "$out/lib/${MES_ARCH}-mes"
+      $BB cp -r "$MES_LIB" "$out/lib/${MES_ARCH}-mes"
       $BB cp -r "$MES_OUT/include" "$out/include"
 
       test -x "$out/bin/tcc"

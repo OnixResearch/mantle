@@ -530,6 +530,13 @@ pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Resul
         lzma_rs::xz_decompress(&mut input, &mut output).map_err(|e| FetchError::DecompressError(format!("xz: {e}")))?;
         return Ok(Box::new(io::Cursor::new(output)));
     }
+    if url.ends_with(".lzma") || url.ends_with(".tlz") {
+        let mut input = io::BufReader::new(reader);
+        let mut output = Vec::new();
+        lzma_rs::lzma_decompress(&mut input, &mut output)
+            .map_err(|e| FetchError::DecompressError(format!("lzma: {e}")))?;
+        return Ok(Box::new(io::Cursor::new(output)));
+    }
     if url.ends_with(".bz2") || url.ends_with(".tbz2") {
         return Ok(Box::new(bzip2_rs::DecoderReader::new(reader)));
     }
@@ -2257,6 +2264,30 @@ mod tests {
             .read_to_end(&mut out)
             .unwrap();
         assert_eq!(out, b"xz content");
+    }
+
+    #[test]
+    fn decompress_lzma() {
+        let mut compressed = Vec::new();
+        lzma_rs::lzma_compress(&mut io::Cursor::new(b"lzma content"), &mut compressed).unwrap();
+
+        let mut out = Vec::new();
+        decompress_reader("file.tar.lzma", io::Cursor::new(compressed))
+            .unwrap()
+            .read_to_end(&mut out)
+            .unwrap();
+        assert_eq!(out, b"lzma content");
+    }
+
+    #[test]
+    fn decompress_lzma_rejects_invalid_stream() {
+        let invalid_lzma = b"not an lzma stream";
+        let result = decompress_reader("file.tar.lzma", io::Cursor::new(invalid_lzma.to_vec()));
+        let Err(err) = result else {
+            panic!("invalid lzma stream must be rejected");
+        };
+        assert!(err.to_string().contains("lzma"));
+        assert!(matches!(err, FetchError::DecompressError(_)));
     }
 
     #[test]
