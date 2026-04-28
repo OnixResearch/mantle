@@ -5,7 +5,7 @@ Every task records evidence under `openspec/changes/live-part-mes-0-27/evidence/
 ## Implementation
 
 - [x] I1 Confirm `mes 0.27` ordering, source notes, and expected output contract from `parts.rst` and upstream script `steps/mes-0.27.1/pass1.kaem`. ✅ 3m (started: 2026-04-28T23:44:10Z → completed: 2026-04-28T23:44:35Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/I1-upstream-ordering.md]
-- [ ] I2 Audit `bootstrap/mes.ncl` against the upstream part and record intentional Crunch deviations.
+- [x] I2 Audit `bootstrap/mes.ncl` against the upstream part and record intentional Crunch deviations. ✅ 3m (started: 2026-04-28T23:44:42Z → completed: 2026-04-28T23:44:55Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/I2-derivation-audit.md]
 - [ ] I3 Fix `bootstrap/mes.ncl` so its source pins, patches, inputs, and output contract are self-contained.
 
 ## Verification
