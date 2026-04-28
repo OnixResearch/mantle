@@ -12,5 +12,6 @@
   - Evidence summary: PASS, rebuilt after the output-contract fix and produced `target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix` with `hermeticity: practical (no degraded facts)`.
 - [x] V3 Smoke-test the produced output contract for `stage0-posix seed tools`. ✅ 3m (started: 2026-04-28T23:37:55Z → completed: 2026-04-28T23:39:50Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V3-smoke.md]
   - Evidence summary: PASS, all declared tools are executable, `hex0` assembles one byte, and `get_machine` returns `amd64`.
-- [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
+- [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. ✅ 1m (started: 2026-04-28T23:40:00Z → completed: 2026-04-28T23:40:20Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V4-host-leakage.md]
+  - Evidence summary: PASS, derivation and stage-local build transcript have no forbidden `/usr`, Nix command, musl.cc, host home, Cargo, clang, or gcc references; only declared sandbox `/bin/sh` and `/bin/busybox` are present.
 - [ ] V5 Run `openspec validate live-part-stage0-posix` after evidence is recorded.

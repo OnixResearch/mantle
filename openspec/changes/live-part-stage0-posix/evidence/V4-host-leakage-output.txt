@@ -1,0 +1,13 @@
+derivation scan: forbidden host refs
+ok: no forbidden host refs in derivation (allowed sandbox /bin/sh and /bin/busybox are present)
+
+build transcript scan: forbidden host refs
+ok: no forbidden host refs in stage build transcript
+
+allowed sandbox shell refs in derivation:
+68:  builder = "/bin/sh",
+73:      BB=/bin/busybox
+127:f7c0fcae688ec01050d836771392f4d81f5ad6788590278ec76ccd17cdd89e48  AMD64/bin/sha256sum
+
+build transcript line count:
+858 openspec/changes/live-part-stage0-posix/evidence/V4-build-transcript-only.log
