@@ -22,6 +22,7 @@ All validation evidence files must include `Task-ID:` and `Covers:` metadata, co
 
 - [ ] V1 Validate stage builds from `bootstrap/stage0-posix.ncl` through `bootstrap/tinycc.ncl`. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof] [evidence=evidence/V1-early-stage-builds.md]
   - Commands: `crunch build bootstrap/stage0-posix.ncl`; `crunch build bootstrap/mes.ncl`; `crunch build bootstrap/tinycc.ncl`.
+  - Part handoff: `live-part-stage0-posix` owns the detailed `bootstrap/stage0-posix.ncl` source-pin, build, smoke, and host-leakage evidence; this umbrella V1 should consume that archived part evidence for the stage0 portion instead of duplicating it.
   - Evidence summary must include the common transcript metadata for each command.
 - [ ] V2 Validate transition builds from `bootstrap/binutils-tcc.ncl` through `bootstrap/gcc-10.ncl`. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof] [evidence=evidence/V2-compiler-transitions.md]
   - Commands: `crunch build bootstrap/binutils-tcc.ncl`; assert intermediate tool transcripts contain no host compiler, host libc, or host shell leakage; assert post-musl `m4`, `flex`, `bison`, and `grep` link against musl; assert binutils-2.30 `as` assembles a trivial ELF object; `crunch build bootstrap/gcc-4.0.ncl`; smoke gcc-4.0 C/C++ compilation; `crunch build bootstrap/gcc-4.7.ncl`; smoke gcc-4.7 C/C++ compilation; `crunch build bootstrap/gcc-10.ncl`; smoke gcc-10 C/C++ compilation.

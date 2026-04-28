@@ -69,3 +69,7 @@ These `live-part-*` changes are scaffolds only: implementation, build, smoke, le
 | `live-part-gcc-10-5-0` | `gcc 10.5.0` | `bootstrap/gcc-10.ncl` | final seed toolchain |
 | `live-part-binutils-2-41` | `binutils 2.41` | `bootstrap/binutils-full.ncl` | final seed toolchain |
 | `live-part-seed-full` | `gcc 10.5.0 through binutils 2.41` | `bootstrap/seed-full.ncl` | final seed toolchain |
+
+## Completed part evidence handoffs
+
+- `live-part-stage0-posix`: owns completed source-pin, build, smoke, and host-leakage evidence for `bootstrap/stage0-posix.ncl`. Umbrella roll-up change `live-bootstrap-source-chain` should consume this part evidence for the `bootstrap/stage0-posix.ncl` portion of V1 instead of duplicating the detailed transcript. Completed output path: `target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix`.

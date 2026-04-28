@@ -17,4 +17,4 @@ Output:
 Change 'live-part-stage0-posix' is valid
 ```
 
-Status: PASS. All implementation and verification tasks for this part now carry evidence.
+Status: PASS after adding the umbrella handoff task/evidence. All implementation and verification tasks for this part now carry evidence.
