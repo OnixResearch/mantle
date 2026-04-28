@@ -10,7 +10,8 @@ Every task records evidence under `openspec/changes/live-part-mes-0-27/evidence/
 
 ## Verification
 
-- [ ] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/mes.ncl` and record the transcript.
+- [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/mes.ncl` and record the transcript. ✅ 1m (started: 2026-04-28T23:45:05Z → completed: 2026-04-28T23:45:15Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V1-source-pins.md]
+  - Evidence summary: PASS, source-pin audit reported `1 files, 2 fetch blocks, 0 issues`.
 - [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/mes.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
 - [ ] V3 Smoke-test the produced output contract for `mes 0.27`.
 - [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
