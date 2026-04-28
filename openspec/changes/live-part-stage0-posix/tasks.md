@@ -9,7 +9,8 @@
 - [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/stage0-posix.ncl` and record the transcript. ✅ 1m (started: 2026-04-28T23:36:20Z → completed: 2026-04-28T23:36:30Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V1-source-pins.md]
   - Evidence summary: PASS, source-pin audit reported `1 files, 7 fetch blocks, 0 issues`.
 - [x] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/stage0-posix.ncl` with the documented bootstrap build environment and record output path plus elapsed time. ✅ 2m (started: 2026-04-28T23:36:50Z → completed: 2026-04-28T23:37:45Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V2-build.md]
-  - Evidence summary: PASS, pueue task 15 built `target/live-part-stage0-posix/store/bkq165k4gddjp3m6mk1qvr6h0mfrhvli-stage0-posix` in 11s with `hermeticity: practical (no degraded facts)`.
-- [ ] V3 Smoke-test the produced output contract for `stage0-posix seed tools`.
+  - Evidence summary: PASS, rebuilt after the output-contract fix and produced `target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix` with `hermeticity: practical (no degraded facts)`.
+- [x] V3 Smoke-test the produced output contract for `stage0-posix seed tools`. ✅ 3m (started: 2026-04-28T23:37:55Z → completed: 2026-04-28T23:39:50Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/V3-smoke.md]
+  - Evidence summary: PASS, all declared tools are executable, `hex0` assembles one byte, and `get_machine` returns `amd64`.
 - [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
 - [ ] V5 Run `openspec validate live-part-stage0-posix` after evidence is recorded.

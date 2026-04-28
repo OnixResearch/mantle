@@ -1,0 +1,25 @@
+output=target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
+check executables
+ok executable hex0
+ok executable hex1
+ok executable hex2
+ok executable M1
+ok executable M0
+ok executable catm
+ok executable blood-elf
+ok executable kaem
+ok executable get_machine
+ok executable M2-Planet
+ok executable cp
+ok executable chmod
+ok executable mkdir
+ok executable untar
+ok executable ungz
+ok executable unbz2
+ok executable unxz
+ok executable sha256sum
+ok executable match
+ok executable replace
+ok executable wrap
+ok hex0 assembled one zero byte
+get_machine=amd64

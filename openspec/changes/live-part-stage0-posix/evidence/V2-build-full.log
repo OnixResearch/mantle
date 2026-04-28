@@ -1,56 +1,34 @@
-Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/config/signing-key)
-2026-04-28T23:36:51.085628Z  INFO crunch_store::handle: blob service opened path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/blobs
-2026-04-28T23:36:51.085915Z  INFO redb::db: Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/directories.redb\", read: true, write: true } }"
-2026-04-28T23:36:51.090410Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
-2026-04-28T23:36:51.096477Z  INFO redb::db: Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/pathinfo.redb\", read: true, write: true } }"
-2026-04-28T23:36:51.099754Z  WARN redb::db: Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
-2026-04-28T23:36:51.105483Z  INFO crunch_store::handle: PathInfo database opened path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/pathinfo.redb
-2026-04-28T23:36:51.105588Z  INFO crunch_build::worker: worker streaming started jobs=1
-2026-04-28T23:36:51.161168Z  INFO crunch_pipeline: converted, sending to worker drv=rz849galkdm397dpqxagcpa1rn3rr2cy-stage0-posix.drv label=stage0-posix entries=8
-2026-04-28T23:36:51.161662Z  INFO crunch_build::orchestrate: building drv=M2-Mesoplanet.drv
-2026-04-28T23:36:51.161828Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/M2-Mesoplanet.git rev=4b011a85da73
-2026-04-28T23:36:51.161837Z  INFO crunch_build::orchestrate: building drv=mescc-tools-extra.drv
-2026-04-28T23:36:51.162021Z  INFO crunch_build::orchestrate: building drv=M2libc.drv
-2026-04-28T23:36:51.162100Z  INFO crunch_build::orchestrate: building drv=mescc-tools.drv
-2026-04-28T23:36:51.162170Z  INFO crunch_build::orchestrate: building drv=bootstrap-seeds.drv
-2026-04-28T23:36:51.162238Z  INFO crunch_build::orchestrate: building drv=stage0-posix-amd64.drv
-2026-04-28T23:36:51.162305Z  INFO crunch_build::orchestrate: building drv=M2-Planet.drv
-2026-04-28T23:36:51.558180Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/M2-Mesoplanet.git" rev="4b011a85da73" out="/tmp/.tmpkCC9KE/output"
-2026-04-28T23:36:51.581370Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/mescc-tools-extra.git rev=a151c245e512
-2026-04-28T23:36:51.589830Z  INFO crunch_build::orchestrate: build succeeded drv=M2-Mesoplanet.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/3nf4wqjyh5lykxigvf9yp1ggvq13qhj4-M2-Mesoplanet"]
-2026-04-28T23:36:51.986311Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/mescc-tools-extra.git" rev="a151c245e512" out="/tmp/.tmpsiefel/output"
-2026-04-28T23:36:52.009118Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/M2libc.git rev=68a23cfd05d5
-2026-04-28T23:36:52.020552Z  INFO crunch_build::orchestrate: build succeeded drv=mescc-tools-extra.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/hqvrdrs1yn8lwvnsv61v47sjl1cp8csn-mescc-tools-extra"]
-2026-04-28T23:36:52.473716Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/M2libc.git" rev="68a23cfd05d5" out="/tmp/.tmpILguya/output"
-2026-04-28T23:36:52.519192Z  INFO crunch_build::fetch_build_service: fetching git url=https://git.savannah.nongnu.org/git/mescc-tools.git rev=5adfbf336426
-2026-04-28T23:36:52.536239Z  INFO crunch_build::orchestrate: build succeeded drv=M2libc.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/q2jc8ih2zp8c9w2gsf5wnxmdamfh27p4-M2libc"]
-2026-04-28T23:36:53.804105Z  INFO crunch_build::fetcher: git fetch complete url="https://git.savannah.nongnu.org/git/mescc-tools.git" rev="5adfbf336426" out="/tmp/.tmpvRBm65/output"
-2026-04-28T23:36:53.848994Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/bootstrap-seeds.git rev=cedec6b8066d
-2026-04-28T23:36:53.873680Z  INFO crunch_build::orchestrate: build succeeded drv=mescc-tools.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/zakiab0cbb3vyg3p52dnwrgylb7zl76q-mescc-tools"]
-2026-04-28T23:36:54.241224Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/bootstrap-seeds.git" rev="cedec6b8066d" out="/tmp/.tmpQmsTgR/output"
-2026-04-28T23:36:54.269330Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/stage0-posix-amd64.git rev=82efa0d6be1c
-2026-04-28T23:36:54.278811Z  INFO crunch_build::orchestrate: build succeeded drv=bootstrap-seeds.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/gkxas7d1i0b1q98w2za0475xa9lxh2qf-bootstrap-seeds"]
-2026-04-28T23:36:54.805697Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/stage0-posix-amd64.git" rev="82efa0d6be1c" out="/tmp/.tmpRlnGX3/output"
-2026-04-28T23:36:54.841100Z  INFO crunch_build::fetch_build_service: fetching git url=https://github.com/oriansj/M2-Planet.git rev=bd2fe4b0659f
-2026-04-28T23:36:54.860579Z  INFO crunch_build::orchestrate: build succeeded drv=stage0-posix-amd64.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/gwglxhll4jjm9gxy40r8w5glm3klff4g-stage0-posix-amd64"]
-2026-04-28T23:36:55.798254Z  INFO crunch_build::fetcher: git fetch complete url="https://github.com/oriansj/M2-Planet.git" rev="bd2fe4b0659f" out="/tmp/.tmps8HYPL/output"
-2026-04-28T23:36:55.898795Z  INFO crunch_build::orchestrate: build succeeded drv=M2-Planet.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/5jgzdfavmjzgid6pfa1snrz20yyfsjik-M2-Planet"]
-2026-04-28T23:36:55.899182Z  INFO crunch_build::orchestrate: building drv=stage0-posix.drv
-2026-04-28T23:36:55.899395Z  INFO do_build: snix_build::buildservice::bwrap: Starting bwrap build build_name=a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1 sandbox_path=/tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL
-2026-04-28T23:36:55.910792Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: mount source snix-castore dest /tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL/host_inputs_dir with fstype fuse opts default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998 fd 12
-2026-04-28T23:36:55.910840Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: raw opts=default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998
-2026-04-28T23:36:55.910862Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: cleaned opts=fsname=snix-castore,default_permissions,ro,nosuid,nodev,exec,async,noatime, fusermount=/run/wrappers/bin/fusermount3
-2026-04-28T23:36:55.910877Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/a6bb2a86-23dc-4eb1-b4f8-bb55189c43d1-fFXOOL/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: _FUSE_COMMFD=13
-2026-04-28T23:36:55.912685Z  INFO fuse_backend_rs::api::server::sync_io: FUSE INIT major 7 minor 45
+2026-04-28T23:38:39.705290Z  INFO crunch_store::handle: blob service opened path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/blobs
+2026-04-28T23:38:39.705650Z  INFO redb::db: Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/directories.redb\", read: true, write: true } }"
+2026-04-28T23:38:39.706081Z  INFO redb::db: Found valid allocator state, full repair not needed
+2026-04-28T23:38:39.717467Z  INFO redb::db: Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/pathinfo.redb\", read: true, write: true } }"
+2026-04-28T23:38:39.717697Z  INFO redb::db: Found valid allocator state, full repair not needed
+2026-04-28T23:38:39.719666Z  INFO crunch_store::handle: PathInfo database opened path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/state/pathinfo.redb
+2026-04-28T23:38:39.719834Z  INFO crunch_build::worker: worker streaming started jobs=1
+2026-04-28T23:38:39.775780Z  INFO crunch_pipeline: converted, sending to worker drv=rn0cn57djjhckaivl50mk8vj76mdrbpf-stage0-posix.drv label=stage0-posix entries=8
+2026-04-28T23:38:39.779499Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=M2-Mesoplanet.drv
+2026-04-28T23:38:39.782656Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=mescc-tools-extra.drv
+2026-04-28T23:38:39.785812Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=M2libc.drv
+2026-04-28T23:38:39.788941Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=mescc-tools.drv
+2026-04-28T23:38:39.791989Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=bootstrap-seeds.drv
+2026-04-28T23:38:39.795069Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=stage0-posix-amd64.drv
+2026-04-28T23:38:39.798256Z  INFO crunch_build::orchestrate: all outputs cached, skipping build drv=M2-Planet.drv
+2026-04-28T23:38:39.798458Z  INFO crunch_build::orchestrate: building drv=stage0-posix.drv
+2026-04-28T23:38:39.798658Z  INFO do_build: snix_build::buildservice::bwrap: Starting bwrap build build_name=d137849a-be9d-465c-a80b-6f0009c3aa22 sandbox_path=/tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo
+2026-04-28T23:38:39.809950Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: mount source snix-castore dest /tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo/host_inputs_dir with fstype fuse opts default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998 fd 12
+2026-04-28T23:38:39.809980Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: raw opts=default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998
+2026-04-28T23:38:39.810004Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: cleaned opts=fsname=snix-castore,default_permissions,ro,nosuid,nodev,exec,async,noatime, fusermount=/run/wrappers/bin/fusermount3
+2026-04-28T23:38:39.810019Z  INFO do_build:new{num_threads=4 allow_other=false mountpoint="/tmp/crunch-builds/d137849a-be9d-465c-a80b-6f0009c3aa22-N8ckfo/host_inputs_dir"}: fuse_backend_rs::transport::fusedev::linux_session: fuse_fusermount_mount: _FUSE_COMMFD=13
+2026-04-28T23:38:39.811843Z  INFO fuse_backend_rs::api::server::sync_io: FUSE INIT major 7 minor 45
  in_opts: ASYNC_READ | POSIX_LOCKS | ATOMIC_O_TRUNC | EXPORT_SUPPORT | BIG_WRITES | DONT_MASK | SPLICE_WRITE | SPLICE_MOVE | SPLICE_READ | FLOCK_LOCKS | HAS_IOCTL_DIR | AUTO_INVAL_DATA | DO_READDIRPLUS | READDIRPLUS_AUTO | ASYNC_DIO | WRITEBACK_CACHE | ZERO_MESSAGE_OPEN | PARALLEL_DIROPS | HANDLE_KILLPRIV | POSIX_ACL | ABORT_ERROR | MAX_PAGES | CACHE_SYMLINKS | ZERO_MESSAGE_OPENDIR | EXPLICIT_INVAL_DATA | HANDLE_KILLPRIV_V2 | INIT_EXT | PERFILE_DAX
 out_opts: ASYNC_READ | DO_READDIRPLUS | READDIRPLUS_AUTO | PARALLEL_DIROPS | CACHE_SYMLINKS
-2026-04-28T23:37:02.499641Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
-2026-04-28T23:37:02.499641Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
-2026-04-28T23:37:02.499641Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
-2026-04-28T23:37:02.499644Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
-2026-04-28T23:37:02.682469Z  INFO crunch_build::orchestrate: CA output path resolved drv=stage0-posix.drv output=out ca_path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/bkq165k4gddjp3m6mk1qvr6h0mfrhvli-stage0-posix
-2026-04-28T23:37:02.713281Z  INFO crunch_build::orchestrate: build succeeded drv=stage0-posix.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/bkq165k4gddjp3m6mk1qvr6h0mfrhvli-stage0-posix"]
-2026-04-28T23:37:02.713402Z  INFO crunch_build::worker: worker streaming finished completed=8 succeeded=1 failed=0 roots=1
+2026-04-28T23:38:46.325854Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
+2026-04-28T23:38:46.325854Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
+2026-04-28T23:38:46.325854Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
+2026-04-28T23:38:46.325854Z  INFO fuse_backend_rs::transport::fusedev::linux_session: FUSE channel already closed!
+2026-04-28T23:38:46.497973Z  INFO crunch_build::orchestrate: CA output path resolved drv=stage0-posix.drv output=out ca_path=/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
+2026-04-28T23:38:46.526109Z  INFO crunch_build::orchestrate: build succeeded drv=stage0-posix.drv outputs=["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix"]
+2026-04-28T23:38:46.526167Z  INFO crunch_build::worker: worker streaming finished completed=1 succeeded=1 failed=0 roots=1
 --- build log: stage0-posix ---
  +> ./bootstrap-seeds/POSIX/AMD64/hex0-seed ./AMD64/hex0_AMD64.hex0 ./AMD64/artifact/hex0 
  +> ./AMD64/artifact/hex0 ./AMD64/kaem-minimal.hex0 ./AMD64/artifact/kaem-0 
@@ -912,4 +890,4 @@ hex2 --file ../M2libc/amd64/ELF-amd64-debug.hex2 --file ../AMD64/artifact/M1-mac
 
 --- end log ---
 hermeticity: practical (no degraded facts)
-/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/bkq165k4gddjp3m6mk1qvr6h0mfrhvli-stage0-posix
+/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-stage0-posix/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix

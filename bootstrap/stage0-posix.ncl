@@ -167,10 +167,13 @@ AFTERKAEM
       # hex0 lives in AMD64/artifact/, not AMD64/bin/
       $BB cp "AMD64/artifact/hex0" "$out/bin/hex0"
 
-      # mescc-tools binaries (built into AMD64/bin/ by the kaem chain)
+      # mescc-tools binaries. Some early bootstrap artifacts stay under
+      # AMD64/artifact while later rebuilds land under AMD64/bin.
       for tool in hex1 hex2 M1 M0 catm blood-elf kaem get_machine; do
         if [ -x "AMD64/bin/$tool" ]; then
           $BB cp "AMD64/bin/$tool" "$out/bin/$tool"
+        elif [ -x "AMD64/artifact/$tool" ]; then
+          $BB cp "AMD64/artifact/$tool" "$out/bin/$tool"
         fi
       done
 
@@ -191,10 +194,12 @@ AFTERKAEM
 
       # Verify critical outputs exist
       test -x "$out/bin/hex0"
+      test -x "$out/bin/hex1"
+      test -x "$out/bin/hex2"
+      test -x "$out/bin/M0"
+      test -x "$out/bin/M1"
       test -x "$out/bin/kaem"
       test -x "$out/bin/M2-Planet"
-      test -x "$out/bin/M1"
-      test -x "$out/bin/hex2"
       test -x "$out/bin/blood-elf"
 
       $BB chmod -R 0555 "$out/bin"
