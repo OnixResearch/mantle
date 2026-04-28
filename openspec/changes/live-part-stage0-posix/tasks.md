@@ -2,7 +2,7 @@
 
 - [x] I1 Confirm `bootstrap-seeds through mescc-tools-extra` ordering, source notes, and expected output contract from `parts.rst` and the matching `steps/` script. ✅ 3m (started: 2026-04-28T23:32:30Z → completed: 2026-04-28T23:35:40Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/I1-upstream-ordering.md]
 - [x] I2 Audit `bootstrap/stage0-posix.ncl` against the upstream part and record intentional Crunch deviations. ✅ 4m (started: 2026-04-28T23:35:50Z → completed: 2026-04-28T23:36:05Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/I2-derivation-audit.md]
-- [ ] I3 Fix `bootstrap/stage0-posix.ncl` so its source pins, patches, inputs, and output contract are self-contained.
+- [x] I3 Fix `bootstrap/stage0-posix.ncl` so its source pins, patches, inputs, and output contract are self-contained. ✅ 2m (started: 2026-04-28T23:36:05Z → completed: 2026-04-28T23:36:15Z) [covers=bootstrap.part.stage0.posix] [evidence=evidence/I3-self-contained-check.md]
 
 ## Verification
 
