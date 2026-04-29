@@ -1,6 +1,7 @@
 ## Implementation
 
-- [ ] I1 Reproduce and minimize the `BufferedFile` diagnostics from `bootstrap/tinycc-mes.ncl`; record why `tcc-mes -version` remains insufficient evidence.
+- [x] I1 Reproduce and minimize the `BufferedFile` diagnostics from `bootstrap/tinycc-mes.ncl`; record why `tcc-mes -version` remains insufficient evidence. ✅ 1m (started: 2026-04-29T00:28:20Z → completed: 2026-04-29T00:28:31Z) [covers=bootstrap.part.tinycc.0.9.26.selfcompile] [evidence=evidence/I1-reproduction.md]
+  - Evidence summary: PASS, failure is minimized to `tcc-boot0` segfault after `BufferedFile` diagnostics; `tcc-mes -version` succeeds before failure and is insufficient.
 - [ ] I2 Compare Crunch `bootstrap/tinycc-mes.ncl` against upstream `steps/tcc-0.9.26/pass1.kaem` and required simple patches; classify the defect as missing upstream patch, local source normalization, or Mes/mescc setup.
 - [ ] I3 Fix the smallest classified derivation/source-normalization/Mes setup issue that makes `tcc-boot0` compile without segfaulting.
 
