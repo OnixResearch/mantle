@@ -77,6 +77,48 @@ let tcc_src = crunch.fetchTarball {
         $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
         $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
         $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
+
+        # tcc-mes miscompiles variable doublings through the power-of-two
+        # multiply shortcut as `shl $0`. Spell bootstrap allocator growth as
+        # addition so boot0 does not loop forever in the first CString resize.
+        $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+        $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+        $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+        $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+        $BB sed -i 's/loc = 0;/loc = 0;\
+    ind = cur_text_section->data_offset;/' x86_64-gen.c
+
+        # The Mes/TCC varargs path corrupts snprintf/sprintf string expansion
+        # in the first boot compiler. Spell the bootstrap path constructors and
+        # preprocessor base-file string as direct string appends.
+        $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
+        if (fmt[3] == '\''l'\'') {\
+            strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
+        } else {\
+            strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        }' libtcc.c
+        $BB sed -i '/sprintf(buf,/c\
+    buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
+        $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    if (-1 == tcc_add_library_internal(s, "",\
+        filename, 0, s->crt_paths, s->nb_crt_paths))\
+        tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
+
+        # tcc-mes emits x86_64 PLT entries even for the static boot compiler.
+        # Relocate those PLT slots after final section layout; otherwise the
+        # generated boot0 binary jumps through unrelocated offsets into .plt.
+        $BB sed -i '/if (file_type == TCC_OUTPUT_EXE && s1->static_link)/,/        fill_got(s1);/c\
+    if (file_type == TCC_OUTPUT_EXE && s1->static_link) {\
+        if (s1->plt)\
+            relocate_plt(s1);\
+        fill_got(s1);\
+    }' tccelf.c
       }
 
       append_abort_object() {
@@ -191,17 +233,21 @@ EOF
         mode=${2:-full}
         echo "tinycc-mes: rebuild-mes-runtime compiler=$compiler mode=$mode" >&2
         cd "$MES_BUILD"
-        echo "tinycc-mes: compile crt1.o" >&2
-        "$compiler" -c -D HAVE_CONFIG_H=1 -I include -I include/linux/${MES_ARCH} \
-          -o "$LIBDIR/crt1.o" lib/linux/${MES_ARCH}-mes-gcc/crt1.c
-        : > "$LIBDIR/crtn.o"
-        : > "$LIBDIR/crti.o"
+        if [ "$mode" = full-no-crt ]; then
+          echo "tinycc-mes: reuse crt objects" >&2
+        else
+          echo "tinycc-mes: compile crt1.o" >&2
+          "$compiler" -c -D HAVE_CONFIG_H=1 -I include -I include/linux/${MES_ARCH} \
+            -o "$LIBDIR/crt1.o" lib/linux/${MES_ARCH}-mes-gcc/crt1.c
+          : > "$LIBDIR/crtn.o"
+          : > "$LIBDIR/crti.o"
+        fi
         echo "tinycc-mes: compile libtcc1.o" >&2
         "$compiler" -c -D HAVE_CONFIG_H=1 -D HAVE_LONG_LONG=1 -D HAVE_FLOAT=1 \
           -I include -I include/linux/${MES_ARCH} -o libtcc1.o lib/libtcc1.c
         $BB rm -f "$LIBDIR/tcc/libtcc1.a"
         "$compiler" -ar cr "$LIBDIR/tcc/libtcc1.a" libtcc1.o
-        if [ "$mode" = full ]; then
+        if [ "$mode" = full ] || [ "$mode" = full-no-crt ]; then
           echo "tinycc-mes: compile unified-libc.o" >&2
           "$compiler" -c -D HAVE_CONFIG_H=1 -I include -I include/linux/${MES_ARCH} \
             -o unified-libc.o unified-libc.c
@@ -222,7 +268,6 @@ EOF
         echo "tinycc-mes: compile $output with $compiler" >&2
         "$compiler" \
           -g \
-          -v \
           -static \
           -o "$output" \
           -D BOOTSTRAP=1 \
@@ -298,6 +343,7 @@ EOF
 #undef SYSTEM_LIBC
 #define MES_VERSION "0.27.1"
 EOF
+      $BB sed -i '/^int oputs (char const \*s);$/d' "$MES_BUILD/include/mes/lib.h"
       $BB mkdir -p "$MES_BUILD/include/arch"
       $BB cp "$MES_BUILD/include/linux/${MES_ARCH}/kernel-stat.h" "$MES_BUILD/include/arch/kernel-stat.h"
       $BB cp "$MES_BUILD/include/linux/${MES_ARCH}/signal.h" "$MES_BUILD/include/arch/signal.h"
@@ -354,17 +400,14 @@ EOF
 
       compile_tcc "$BINDIR/tcc-mes" tcc-boot0
       $BB cp tcc-boot0 "$BINDIR/tcc-boot0"
-      rebuild_mes_runtime "$BINDIR/tcc-boot0"
       "$BINDIR/tcc-boot0" -version
 
       compile_tcc "$BINDIR/tcc-boot0" tcc-boot1
       $BB cp tcc-boot1 "$BINDIR/tcc-boot1"
-      rebuild_mes_runtime "$BINDIR/tcc-boot1"
       "$BINDIR/tcc-boot1" -version
 
       compile_tcc "$BINDIR/tcc-boot1" tcc-boot2
       $BB cp tcc-boot2 "$BINDIR/tcc-boot2"
-      rebuild_mes_runtime "$BINDIR/tcc-boot2"
       "$BINDIR/tcc-boot2" -version
 
       $BB cp "$BINDIR/tcc-boot2" "$BINDIR/tcc"
