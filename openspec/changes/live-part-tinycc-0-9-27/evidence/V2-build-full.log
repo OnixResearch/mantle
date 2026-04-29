@@ -1,0 +1,44 @@
+$ /usr/bin/time -p ./target/debug/crunch build bootstrap/tinycc.ncl --store "$PWD/target/live-part-tinycc-0-9-27/run-current/store" --state-dir "$PWD/target/live-part-tinycc-0-9-27/run-current/state" --no-substitute -j 1 --verbose --log-level info
+[2m2026-04-29T18:32:08.203369Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/blobs
+[2m2026-04-29T18:32:08.203620Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/directories.redb\", read: true, write: true } }"
+[2m2026-04-29T18:32:08.203911Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-29T18:32:08.215342Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-04-29T18:32:08.215507Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-29T18:32:08.217333Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb
+[2m2026-04-29T18:32:08.217517Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming started [3mjobs[0m[2m=[0m1
+[2m2026-04-29T18:32:08.301649Z[0m [32m INFO[0m [2mcrunch_pipeline[0m[2m:[0m converted, sending to worker [3mdrv[0m[2m=[0mdgbhv6issnv82jy5zsrcqpdhc05dhmss-tinycc-0.9.27.drv [3mlabel[0m[2m=[0mtinycc-0.9.27 [3mentries[0m[2m=[0m43
+[2m2026-04-29T18:32:08.305881Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtcc-0.9.27-src.drv
+[2m2026-04-29T18:32:08.309394Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtcc-0.9.26-src.drv
+[2m2026-04-29T18:32:08.312915Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes-0.27.1-src.drv
+[2m2026-04-29T18:32:08.316220Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes-src.drv
+[2m2026-04-29T18:32:08.319391Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mnyacc-src.drv
+[2m2026-04-29T18:32:08.322477Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Mesoplanet.drv
+[2m2026-04-29T18:32:08.325623Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools-extra.drv
+[2m2026-04-29T18:32:08.328800Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2libc.drv
+[2m2026-04-29T18:32:08.331982Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools.drv
+[2m2026-04-29T18:32:08.335121Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mbootstrap-seeds.drv
+[2m2026-04-29T18:32:08.338282Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix-amd64.drv
+[2m2026-04-29T18:32:08.341478Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Planet.drv
+[2m2026-04-29T18:32:08.344730Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix.drv
+[2m2026-04-29T18:32:08.347859Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes.drv
+[2m2026-04-29T18:32:08.350991Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtinycc-0.9.26.drv
+[2m2026-04-29T18:32:08.351254Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mtinycc-0.9.27.drv
+[2m2026-04-29T18:32:08.351471Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m Starting bwrap build [3mbuild_name[0m[2m=[0m3f4709ca-7c70-4d21-8834-caa5fbccb331 [3msandbox_path[0m[2m=[0m/tmp/crunch-builds/3f4709ca-7c70-4d21-8834-caa5fbccb331-Lvxvhs
+[2m2026-04-29T18:32:08.363968Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m CRUNCH_NO_FUSE set, materializing inputs to disk [3mpath[0m[2m=[0m"/tmp/crunch-builds/3f4709ca-7c70-4d21-8834-caa5fbccb331-Lvxvhs/host_inputs_dir"
+[2m2026-04-29T18:32:08.721444Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mtinycc-0.9.27.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27"]
+[2m2026-04-29T18:32:08.721517Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming finished [3mcompleted[0m[2m=[0m1 [3msucceeded[0m[2m=[0m1 [3mfailed[0m[2m=[0m0 [3mroots[0m[2m=[0m1
+--- build log: tinycc-0.9.27 ---
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc-final
+tcc version 0.9.27 (x86_64 Linux)
+
+tinycc-0.9.27: compile tcc-final with /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/bin/tcc-0.9.26
+
+--- end log ---
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27
+real 0.58
+user 0.46
+sys 0.10
+exit=0

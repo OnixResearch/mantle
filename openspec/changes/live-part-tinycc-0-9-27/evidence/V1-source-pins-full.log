@@ -1,4 +1,4 @@
-$ PATH="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:$PATH" CARGO_TARGET_DIR=$PWD/target/cargo-script cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/tinycc.ncl
+$ PATH="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:$HOME/.cargo/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH" PKG_CONFIG_PATH="/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig:${PKG_CONFIG_PATH:-}" CARGO_TARGET_DIR=target/check-bootstrap-source-pins cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/tinycc.ncl
 warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
 source-pin audit: 1 files, 1 fetch blocks, 0 issues
 exit=0

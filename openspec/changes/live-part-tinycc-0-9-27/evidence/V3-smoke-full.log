@@ -1,0 +1,11 @@
+$ OUT=/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27
+$ test output contract and run versions
+tcc version 0.9.27 (x86_64 Linux)
+tcc version 0.9.27 (x86_64 Linux)
+$ embedded runtime-path sample
+/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes/libc.a
+/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes/libc.a
+/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes/libc.a
+/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes/tcc
+/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes:/crunch/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/lib/mes/tcc
+V3-smoke-pass

@@ -1,0 +1,5 @@
+$ grep for absolute host paths in bootstrap/tinycc.ncl
+$ grep for unqualified shell utilities in bootstrap/tinycc.ncl (excluding declared tcc tools and shell builtins)
+$ build hermeticity summary
+39:hermeticity: practical (no degraded facts)
+$ undeclared host path scan result: none in derivation body

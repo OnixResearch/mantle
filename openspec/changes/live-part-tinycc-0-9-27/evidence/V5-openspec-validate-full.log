@@ -1,0 +1,3 @@
+$ openspec validate live-part-tinycc-0-9-27 --strict
+Change 'live-part-tinycc-0-9-27' is valid
+exit=0
