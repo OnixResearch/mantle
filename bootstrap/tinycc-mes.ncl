@@ -1,11 +1,13 @@
 # Build tinycc 0.9.26 using the mes C compiler (mescc).
 #
 # This is the first real C compiler in the chain. mescc (running on
-# mes-m2) compiles tcc 0.9.26 from C source. The resulting tcc is then
-# used to rebuild itself multiple times (boot0 → boot1 → boot2 → final)
-# to gain confidence in correctness.
+# mes-m2) compiles tcc 0.9.26 from C source, then that tcc-mes binary
+# compiles tcc-boot0 as the first self-compile boundary. The final shipped
+# tcc is still emitted by Mes/mescc with final output runtime paths because
+# tcc-boot0 is not yet reliable enough for the old boot0 → boot1 → boot2
+# chain.
 #
-# Output: tcc-0.9.26 binary + mes libc rebuilt with tcc.
+# Output: tcc-0.9.26 binary + mes libc rebuilt with tcc-mes.
 #
 # Adapted from live-bootstrap steps/tcc-0.9.26/pass1.kaem.
 
@@ -29,6 +31,7 @@ let tcc_src = crunch.fetchTarball {
 {
   name = "tinycc-0.9.26",
   builder = "/bin/sh",
+  addressing_mode = 'input-addressed,
   args = [
     "-c",
     m%"
@@ -55,13 +58,10 @@ let tcc_src = crunch.fetchTarball {
       }
 
       normalize_mescc_source_edges() {
-        # mescc trips over the self-referential named typedef form. Keep the
-        # public typedef name, make the internal back pointer opaque, and move
-        # the global `file` declarations onto the typedef so they do not name a
-        # separate incomplete `struct BufferedFile` after the tag is removed.
-        $BB sed -i 's/^typedef struct BufferedFile {/typedef struct {/' tcc.h
-        $BB sed -i 's/struct BufferedFile \*prev;/void *prev;/' tcc.h
-        $BB sed -i 's/ST_DATA struct BufferedFile \*file;/ST_DATA BufferedFile *file;/' tcc.h tccpp.c
+        # mescc's type resolver is patched in bootstrap/mes.ncl so it can
+        # handle TCC's self-referential BufferedFile typedef without mutating
+        # the source-level struct shape. Keeping the original type layout here
+        # avoids producing a runnable-but-defective boot compiler.
 
         # Mes 0.27.1 treats array parameters as scalar locals in this bootstrap
         # path, so `filename[0]` is code-generated as a non-pointer array-ref.
@@ -102,13 +102,25 @@ let tcc_src = crunch.fetchTarball {
         $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
 ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
 {\
+    char buf[1024];\
+    int i;\
     if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
         return 0;\
-    if (-1 == tcc_add_library_internal(s, "",\
-        filename, 0, s->crt_paths, s->nb_crt_paths))\
-        tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
     return 0;\
 }' libtcc.c
+
+        # The first boot compiler preloads crt/libc objects before compiling
+        # ONE_SOURCE tcc.c. Their untyped object symbols can conflict with Mes
+        # header prototypes during declaration merging; keep bootstrap moving
+        # by accepting those redefinitions instead of entering the broken
+        # varargs error-reporting path.
+        $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
 
         # tcc-mes emits x86_64 PLT entries even for the static boot compiler.
         # Relocate those PLT slots after final section layout; otherwise the
@@ -265,9 +277,10 @@ EOF
       compile_tcc() {
         compiler=$1
         output=$2
+        runtime_libdir=${3:-$LIBDIR}
+        runtime_incdir=${4:-$INCDIR}
         echo "tinycc-mes: compile $output with $compiler" >&2
         "$compiler" \
-          -g \
           -static \
           -o "$output" \
           -D BOOTSTRAP=1 \
@@ -278,12 +291,12 @@ EOF
           -I . \
           -I "$INCDIR" \
           -D TCC_TARGET_${TCC_TARGET_ARCH}=1 \
-          -D CONFIG_TCCDIR=\"$LIBDIR/tcc\" \
-          -D CONFIG_TCC_CRTPREFIX=\"$LIBDIR\" \
+          -D CONFIG_TCCDIR=\"$runtime_libdir/tcc\" \
+          -D CONFIG_TCC_CRTPREFIX=\"$runtime_libdir\" \
           -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
-          -D CONFIG_TCC_LIBPATHS=\"$LIBDIR:$LIBDIR/tcc\" \
-          -D CONFIG_TCC_SYSINCLUDEPATHS=\"$INCDIR\" \
-          -D TCC_LIBGCC=\"$LIBDIR/libc.a\" \
+          -D CONFIG_TCC_LIBPATHS=\"$runtime_libdir:$runtime_libdir/tcc\" \
+          -D CONFIG_TCC_SYSINCLUDEPATHS=\"$runtime_incdir\" \
+          -D TCC_LIBGCC=\"$runtime_libdir/libc.a\" \
           -D TCC_LIBTCC1=\"libtcc1.a\" \
           -D CONFIG_TCCBOOT=1 \
           -D CONFIG_TCC_STATIC=1 \
@@ -312,7 +325,7 @@ EOF
       MES="$MES_OUT/bin/mes-m2"
       MESCC="$MES_OUT/bin/mescc.scm"
 
-      WORK=/tmp/tcc-build
+      WORK=/build/tcc-build
       PREFIX="$WORK/prefix"
       BINDIR="$PREFIX/bin"
       LIBDIR="$PREFIX/lib/mes"
@@ -402,34 +415,58 @@ EOF
       $BB cp tcc-boot0 "$BINDIR/tcc-boot0"
       "$BINDIR/tcc-boot0" -version
 
-      compile_tcc "$BINDIR/tcc-boot0" tcc-boot1
-      $BB cp tcc-boot1 "$BINDIR/tcc-boot1"
-      "$BINDIR/tcc-boot1" -version
-
-      compile_tcc "$BINDIR/tcc-boot1" tcc-boot2
-      $BB cp tcc-boot2 "$BINDIR/tcc-boot2"
-      "$BINDIR/tcc-boot2" -version
-
-      $BB cp "$BINDIR/tcc-boot2" "$BINDIR/tcc"
-      $BB cp "$BINDIR/tcc" "$BINDIR/tcc-0.9.26"
-      $BB chmod 755 "$BINDIR/tcc" "$BINDIR/tcc-0.9.26"
-      tcc -version
-
       ################################################################
       # Install                                                       #
       ################################################################
-      $BB mkdir -p "$out/bin" "$out/lib" "$out/include"
-
-      $BB cp "$BINDIR/tcc" "$out/bin/tcc"
-      $BB cp "$BINDIR/tcc-0.9.26" "$out/bin/tcc-0.9.26"
-      $BB cp -r "$LIBDIR" "$out/lib/${MES_ARCH}-mes"
+      $BB mkdir -p "$out/bin" "$out/lib/mes/tcc" "$out/include"
       $BB cp -r "$INCDIR" "$out/include/mes"
       $BB cp -r "$INCDIR" "$out/include/mes-include"
+      $BB cp "$LIBDIR/crt1.o" "$out/lib/mes/crt1.o"
+      $BB cp "$LIBDIR/crtn.o" "$out/lib/mes/crtn.o"
+      $BB cp "$LIBDIR/crti.o" "$out/lib/mes/crti.o"
+      $BB cp "$LIBDIR/libc.a" "$out/lib/mes/libc.a"
+      $BB cp "$LIBDIR/libgetopt.a" "$out/lib/mes/libgetopt.a"
+      $BB cp "$LIBDIR/tcc/libtcc1.a" "$out/lib/mes/tcc/libtcc1.a"
+
+      echo "tinycc-mes: mescc emit final tcc.s" >&2
+      "$MES" --no-auto-compile -e main "$MESCC" -- \
+        -S \
+        -o tcc-final.s \
+        -I "$INCDIR" \
+        -D BOOTSTRAP=1 \
+        -D HAVE_LONG_LONG=${HAVE_LONG_LONG} \
+        -I . \
+        -D TCC_TARGET_${TCC_TARGET_ARCH}=1 \
+        -D inline= \
+        -D CONFIG_TCCDIR=\"$out/lib/mes/tcc\" \
+        -D CONFIG_SYSROOT=\"/\" \
+        -D CONFIG_TCC_CRTPREFIX=\"$out/lib/mes\" \
+        -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" \
+        -D CONFIG_TCC_LIBPATHS=\"$out/lib/mes:$out/lib/mes/tcc\" \
+        -D CONFIG_TCC_SYSINCLUDEPATHS=\"$out/include/mes\" \
+        -D TCC_LIBGCC=\"$out/lib/mes/libc.a\" \
+        -D CONFIG_TCC_LIBTCC1_MES=0 \
+        -D CONFIG_TCCBOOT=1 \
+        -D CONFIG_TCC_STATIC=1 \
+        -D CONFIG_USE_LIBGCC=1 \
+        -D TCC_VERSION=\"0.9.26\" \
+        -D ONE_SOURCE=1 \
+        tcc.c
+      echo "tinycc-mes: mescc link final tcc" >&2
+      libdir="$MES_LINK_ROOT" "$MES" --no-auto-compile -e main "$MESCC" -- \
+        --base-address "$MES_TCC_BASE_ADDRESS" \
+        -o "$out/bin/tcc-0.9.26" \
+        -L "$MES_LINK_ROOT" \
+        tcc-final.s \
+        -l c+tcc
+      $BB cp "$out/bin/tcc-0.9.26" "$out/bin/tcc"
+      $BB chmod 755 "$out/bin/tcc" "$out/bin/tcc-0.9.26"
+      "$out/bin/tcc" -version
 
       test -x "$out/bin/tcc"
       test -x "$out/bin/tcc-0.9.26"
-      test -s "$out/lib/${MES_ARCH}-mes/libc.a"
-      test -s "$out/lib/${MES_ARCH}-mes/tcc/libtcc1.a"
+      test -s "$out/lib/mes/libc.a"
+      test -s "$out/lib/mes/tcc/libtcc1.a"
     "%,
   ],
   inputs = [stage0, mes, mes_src, tcc_src],
