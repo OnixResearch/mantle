@@ -1,0 +1,16 @@
+openspec/changes/live-part-mes-0-27/evidence/V2-build-transcript-only.log:16:/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-mes-0-27/store/anqp2lm1qgppznmndhgj7ighp8fbx6wn-mes
+bootstrap/mes.ncl:28:  builder = "/bin/sh",
+bootstrap/mes.ncl:33:      BB=/bin/busybox
+bootstrap/mes.ncl:127:      "$MES_PREFIX/bin/mes-m2" -L module gen-cpp-files.scm
+bootstrap/mes.ncl:128:      MES_ARENA="$NYACC_C99_ARENA" "$MES_PREFIX/bin/mes-m2" -L module gen-c99-files.scm
+bootstrap/mes.ncl:129:      MES_ARENA=20000000 "$MES_PREFIX/bin/mes-m2" -L module gen-c99cx-files.scm
+bootstrap/mes.ncl:136:      $BB cp bin/mes-m2 "$out/bin/mes-m2"
+bootstrap/mes.ncl:137:      $BB chmod 755 "$out/bin/mes-m2"
+bootstrap/mes.ncl:147:        -e "s|@GUILE@|$out/bin/mes-m2|g" \
+bootstrap/mes.ncl:148:        scripts/mescc.scm.in > "$out/bin/mescc.scm"
+bootstrap/mes.ncl:149:      $BB chmod 755 "$out/bin/mescc.scm"
+bootstrap/mes.ncl:225:        -e 's|@SHELL@|/bin/sh|g' \
+bootstrap/mes.ncl:231:#!/bin/sh
+bootstrap/mes.ncl:232:exec "$out/bin/mes-m2" --no-auto-compile -e main "$out/bin/mescc.scm" -- "\$@"
+bootstrap/mes.ncl:267:        /bin/sh "$MES_PREFIX/build-aux/build-lib.sh"
+bootstrap/mes.ncl:275:      test -x "$out/bin/mes-m2"

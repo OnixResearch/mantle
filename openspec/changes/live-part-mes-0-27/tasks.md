@@ -13,7 +13,11 @@ Every task records evidence under `openspec/changes/live-part-mes-0-27/evidence/
 
 - [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/mes.ncl` and record the transcript. ✅ 1m (started: 2026-04-28T23:45:05Z → completed: 2026-04-28T23:45:15Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V1-source-pins.md]
   - Evidence summary: PASS, source-pin audit reported `1 files, 2 fetch blocks, 0 issues`.
-- [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/mes.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
-- [ ] V3 Smoke-test the produced output contract for `mes 0.27`.
-- [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
-- [ ] V5 Run `openspec validate live-part-mes-0-27` after evidence is recorded.
+- [x] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/mes.ncl` with the documented bootstrap build environment and record output path plus elapsed time. ✅ 15m (started: 2026-04-28T23:44:10Z → completed: 2026-04-28T23:58:36Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V2-build.md]
+  - Evidence summary: PASS, output `target/live-part-mes-0-27/store/anqp2lm1qgppznmndhgj7ighp8fbx6wn-mes`, hermeticity `practical (no degraded facts)`.
+- [x] V3 Smoke-test the produced output contract for `mes 0.27`. ✅ 2m (started: 2026-04-28T23:59:16Z → completed: 2026-04-29T00:00:13Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V3-smoke.md]
+  - Evidence summary: PASS, required binaries/libs/headers/modules exist, `mes-m2` evaluates a Scheme smoke, and mescc help reports `C99 compiler in Scheme`.
+- [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. ✅ 1m (started: 2026-04-29T00:00:45Z → completed: 2026-04-29T00:01:05Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V4-host-leakage.md]
+  - Evidence summary: PASS, findings are limited to declared `/bin/sh`/`/bin/busybox`, output-internal paths, final output path, source URLs, comments, and post-build smoke harness paths.
+- [x] V5 Run `openspec validate live-part-mes-0-27` after evidence is recorded. ✅ 1m (started: 2026-04-29T00:01:08Z → completed: 2026-04-29T00:01:10Z) [covers=bootstrap.part.mes.0.27] [evidence=evidence/V5-openspec-validate.md]
+  - Evidence summary: PASS, `Change 'live-part-mes-0-27' is valid`.
