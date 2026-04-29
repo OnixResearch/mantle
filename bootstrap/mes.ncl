@@ -212,6 +212,13 @@ EOF
   (apply system* args)\
   0)' "$out/mes/module/mescc/mescc.scm"
 
+      # Mes 0.27.1 leaves typedef names unresolved for pointer-array struct
+      # fields. Resolve the base type before applying array rank so TCC's
+      # `BufferedFile *include_stack[...]` field does not poison generated code.
+      $BB sed -i \
+        's/(make-c-array (rank+= type rank) count)/(make-c-array (rank+= (ast->type type info) rank) count)/g' \
+        "$out/mes/module/mescc/compile.scm"
+
       # Build mes libc archives with mescc's own mescc-flavored source files.
       # The gcc-flavored sources contain GNU inline assembly that mescc cannot
       # parse; compiler=mescc selects the Mes assembly syntax variants.

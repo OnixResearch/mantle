@@ -56,10 +56,12 @@ let tcc_src = crunch.fetchTarball {
 
       normalize_buffered_file_typedef() {
         # mescc trips over the self-referential named typedef form. Keep the
-        # public typedef name but make the internal back pointer opaque so the
-        # parser never has to resolve `struct BufferedFile` while defining it.
+        # public typedef name, make the internal back pointer opaque, and move
+        # the global `file` declarations onto the typedef so they do not name a
+        # separate incomplete `struct BufferedFile` after the tag is removed.
         $BB sed -i 's/^typedef struct BufferedFile {/typedef struct {/' tcc.h
         $BB sed -i 's/struct BufferedFile \*prev;/void *prev;/' tcc.h
+        $BB sed -i 's/ST_DATA struct BufferedFile \*file;/ST_DATA BufferedFile *file;/' tcc.h tccpp.c
       }
 
       append_abort_object() {
@@ -334,7 +336,7 @@ EOF
       ################################################################
       # Step 2: Rebuild Mes libc, then bootstrap tcc                 #
       ################################################################
-      rebuild_mes_runtime "$BINDIR/tcc-mes" bootstrap
+      rebuild_mes_runtime "$BINDIR/tcc-mes"
 
       compile_tcc "$BINDIR/tcc-mes" tcc-boot0
       $BB cp tcc-boot0 "$BINDIR/tcc-boot0"
