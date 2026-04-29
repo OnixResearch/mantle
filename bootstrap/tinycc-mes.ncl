@@ -54,7 +54,7 @@ let tcc_src = crunch.fetchTarball {
 ' "$tcc_tools"
       }
 
-      normalize_buffered_file_typedef() {
+      normalize_mescc_source_edges() {
         # mescc trips over the self-referential named typedef form. Keep the
         # public typedef name, make the internal back pointer opaque, and move
         # the global `file` declarations onto the typedef so they do not name a
@@ -62,6 +62,21 @@ let tcc_src = crunch.fetchTarball {
         $BB sed -i 's/^typedef struct BufferedFile {/typedef struct {/' tcc.h
         $BB sed -i 's/struct BufferedFile \*prev;/void *prev;/' tcc.h
         $BB sed -i 's/ST_DATA struct BufferedFile \*file;/ST_DATA BufferedFile *file;/' tcc.h tccpp.c
+
+        # Mes 0.27.1 treats array parameters as scalar locals in this bootstrap
+        # path, so `filename[0]` is code-generated as a non-pointer array-ref.
+        # Spell the single affected TCC parameter in the decayed pointer form.
+        $BB sed -i 's/const char filename\[\]/const char *filename/' tccelf.c
+
+        # Mes 0.27.1's local initializer path only emits scalar stores. The
+        # x86_64 call shuffler copies the 42-byte SValue struct through a local
+        # initializer and direct struct assignments; route those copies through
+        # memcpy so mescc emits byte-safe calls instead of a bogus scalar store.
+        $BB sed -i 's/SValue tmp = vtop\[0\];/SValue tmp;\
+            memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
       }
 
       append_abort_object() {
@@ -234,7 +249,6 @@ EOF
           -L "$LIBDIR" \
           tcc.c
         $BB chmod 755 "$output"
-        "./$output" -version
       }
 
       STAGE0=$(find_input stage0-posix)
@@ -293,7 +307,7 @@ EOF
       cd "$TCC_BUILD"
       : > config.h
       apply_tcctools_ar_patch tcctools.c
-      normalize_buffered_file_typedef
+      normalize_mescc_source_edges
 
       ################################################################
       # Step 1: Compile tcc with mescc (Scheme-based C compiler)     #
@@ -341,14 +355,17 @@ EOF
       compile_tcc "$BINDIR/tcc-mes" tcc-boot0
       $BB cp tcc-boot0 "$BINDIR/tcc-boot0"
       rebuild_mes_runtime "$BINDIR/tcc-boot0"
+      "$BINDIR/tcc-boot0" -version
 
       compile_tcc "$BINDIR/tcc-boot0" tcc-boot1
       $BB cp tcc-boot1 "$BINDIR/tcc-boot1"
       rebuild_mes_runtime "$BINDIR/tcc-boot1"
+      "$BINDIR/tcc-boot1" -version
 
       compile_tcc "$BINDIR/tcc-boot1" tcc-boot2
       $BB cp tcc-boot2 "$BINDIR/tcc-boot2"
       rebuild_mes_runtime "$BINDIR/tcc-boot2"
+      "$BINDIR/tcc-boot2" -version
 
       $BB cp "$BINDIR/tcc-boot2" "$BINDIR/tcc"
       $BB cp "$BINDIR/tcc" "$BINDIR/tcc-0.9.26"
