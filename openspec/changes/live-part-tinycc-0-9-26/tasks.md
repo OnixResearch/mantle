@@ -20,4 +20,5 @@ Every task records evidence under `openspec/changes/live-part-tinycc-0-9-26/evid
   - Evidence summary: PASS, produced `bin/tcc` and `bin/tcc-0.9.26` both print `tcc version 0.9.26 (x86_64 Linux)` and compile/run a trivial static C program under the logical `/crunch/store/...` binding.
 - [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. ✅ 1m (completed: 2026-04-29T13:31:12Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V4-host-leakage.md]
   - Evidence summary: PASS, source scan found no hardcoded `/usr`, `/run`, `/nix/store`, or host tool path; only sandbox `/bin/sh` and `/bin/busybox` are present, and the successful build transcript reports no degraded hermeticity facts.
-- [ ] V5 Run `openspec validate live-part-tinycc-0-9-26` after evidence is recorded.
+- [x] V5 Run `openspec validate live-part-tinycc-0-9-26` after evidence is recorded. ✅ 1m (completed: 2026-04-29T13:32:34Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V5-openspec-validate.md]
+  - Evidence summary: PASS, `openspec validate live-part-tinycc-0-9-26` reported the change is valid.
