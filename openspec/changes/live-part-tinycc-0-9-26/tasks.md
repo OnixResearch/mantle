@@ -16,6 +16,7 @@ Every task records evidence under `openspec/changes/live-part-tinycc-0-9-26/evid
   - Evidence summary: PASS, source-pin audit reported `1 files, 2 fetch blocks, 0 issues`.
 - [x] V2 Run `CRUNCH_NO_FUSE=1 ./target/debug/crunch build bootstrap/tinycc-mes.ncl --no-substitute -j 1 --verbose --log-level info` with the documented bootstrap build environment and record output path plus elapsed time. ✅ 8m (completed: 2026-04-29T14:33:44Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V2-build-success.md]
   - Evidence summary: PASS, archived blocker-fix transcript records successful output `/home/brittonr/git/crunch/crunch/target/fix-tinycc-mes-bufferedfile-codegen/run-current-nofuse/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26`, `tcc-boot0` compilation, no `Segmentation fault`, and `hermeticity: practical (no degraded facts)`.
-- [ ] V3 Smoke-test the produced output contract for `tinycc 0.9.26`.
+- [x] V3 Smoke-test the produced output contract for `tinycc 0.9.26`. ✅ 1m (completed: 2026-04-29T14:35:16Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V3-smoke.md]
+  - Evidence summary: PASS, produced `bin/tcc` and `bin/tcc-0.9.26` both print `tcc version 0.9.26 (x86_64 Linux)` and compile/run a trivial static C program under the logical `/crunch/store/...` binding.
 - [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
 - [ ] V5 Run `openspec validate live-part-tinycc-0-9-26` after evidence is recorded.
