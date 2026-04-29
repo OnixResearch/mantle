@@ -20,6 +20,7 @@ Assertions:
 
 - `bin/mes-m2` exists and runs with `MES_PREFIX` + `GUILE_LOAD_PATH`.
 - `bin/mescc.scm` exists and Mes can show mescc help containing `C99 compiler in Scheme`.
+- `mescc.scm` compiles a trivial C source (`int main() { return 0; }`) with `-S` and emits output containing the `:main` label.
 - Required library/object files are non-empty:
   - `lib/x86_64-mes/x86_64.M1`
   - `lib/x86_64-mes/crt1.o`
