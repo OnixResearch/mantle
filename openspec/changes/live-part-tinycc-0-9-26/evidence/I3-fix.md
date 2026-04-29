@@ -1,5 +1,5 @@
 Task-ID: I3
-Covers: bootstrap.part.tinycc.0.9.26
+Covers: bootstrap.part.tinycc.0.9.26,bootstrap.part.tinycc.0.9.26.selfcompile
 
 # Tinycc 0.9.26 derivation fix
 

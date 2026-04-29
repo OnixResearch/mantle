@@ -1,5 +1,5 @@
 Task-ID: V5
-Covers: bootstrap.part.tinycc.0.9.26
+Covers: bootstrap.part.tinycc.0.9.26,bootstrap.part.tinycc.0.9.26.selfcompile
 
 # OpenSpec validation
 
@@ -9,7 +9,7 @@ Command:
 openspec validate live-part-tinycc-0-9-26
 ```
 
-Result: PASS.
+Result: PASS after I3/V2/V3/V4 evidence and selfcompile traceability updates.
 
 Transcript:
 
