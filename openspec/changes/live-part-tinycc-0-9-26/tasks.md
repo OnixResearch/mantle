@@ -18,5 +18,6 @@ Every task records evidence under `openspec/changes/live-part-tinycc-0-9-26/evid
   - Evidence summary: PASS, archived blocker-fix transcript records successful output `/home/brittonr/git/crunch/crunch/target/fix-tinycc-mes-bufferedfile-codegen/run-current-nofuse/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26`, `tcc-boot0` compilation, no `Segmentation fault`, and `hermeticity: practical (no degraded facts)`.
 - [x] V3 Smoke-test the produced output contract for `tinycc 0.9.26`. ✅ 1m (completed: 2026-04-29T14:35:16Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V3-smoke.md]
   - Evidence summary: PASS, produced `bin/tcc` and `bin/tcc-0.9.26` both print `tcc version 0.9.26 (x86_64 Linux)` and compile/run a trivial static C program under the logical `/crunch/store/...` binding.
-- [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
+- [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. ✅ 1m (completed: 2026-04-29T13:31:12Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V4-host-leakage.md]
+  - Evidence summary: PASS, source scan found no hardcoded `/usr`, `/run`, `/nix/store`, or host tool path; only sandbox `/bin/sh` and `/bin/busybox` are present, and the successful build transcript reports no degraded hermeticity facts.
 - [ ] V5 Run `openspec validate live-part-tinycc-0-9-26` after evidence is recorded.
