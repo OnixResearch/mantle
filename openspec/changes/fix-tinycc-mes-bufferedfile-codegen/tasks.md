@@ -8,7 +8,8 @@
 
 ## Verification
 
-- [ ] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/tinycc-mes.ncl`.
+- [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/tinycc-mes.ncl`. ✅ 1m (started: 2026-04-29T01:20:15Z → completed: 2026-04-29T01:20:20Z) [covers=bootstrap.part.tinycc.0.9.26.selfcompile] [evidence=evidence/V1-source-pins.md]
+  - Evidence summary: PASS, `source-pin audit: 1 files, 2 fetch blocks, 0 issues`.
 - [ ] V2 Run `crunch build bootstrap/tinycc-mes.ncl --no-substitute -j 1 --verbose --log-level info` and record successful output path, `bin/tcc`, `bin/tcc-0.9.26`, and no `Segmentation fault` during `tcc-boot0`.
 - [ ] V3 Smoke-test produced `bin/tcc` and `bin/tcc-0.9.26` by checking `--version` and compiling a trivial C program; explicitly reject `tcc-mes -version` alone as acceptance evidence.
 - [ ] V4 Run `openspec validate fix-tinycc-mes-bufferedfile-codegen`.
