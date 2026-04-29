@@ -1,0 +1,187 @@
+┌─────────────────────────────────────┐
+│ Task 17:    failed with exit code 1 │
+└─────────────────────────────────────┘
+Command: set -euo pipefail                                                                                                                                                                                                                                                                                                                                                                                 
+         export PATH="$PWD/target/debug:$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:$HOME/.cargo/bin:/nix/store/qn1pfnn2xgfwdr6avw1fnvwsabi83973-bubblewrap-0.11.0/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH" 
+         export PKG_CONFIG_PATH="/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig:${PKG_CONFIG_PATH:-}"                                                                                                                                                                                                                                                                         
+         export SNIX_BUILD_SANDBOX_SHELL=/nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox                                                                                                                                                                                                                                                           
+         export CRUNCH_CONFIG_DIR="$PWD/target/live-part-tinycc-0-9-26/config"                                                                                                                                                                                                                                                                                                                             
+         store="$PWD/target/live-part-tinycc-0-9-26/store"                                                                                                                                                                                                                                                                                                                                                 
+         state="$PWD/target/live-part-tinycc-0-9-26/state"                                                                                                                                                                                                                                                                                                                                                 
+         mkdir -p "$store" "$state" "$CRUNCH_CONFIG_DIR"                                                                                                                                                                                                                                                                                                                                                   
+         ./target/debug/crunch build bootstrap/tinycc-mes.ncl --store "$store" --state-dir "$state" --no-substitute -j 1 --verbose --log-level info                                                                                                                                                                                                                                                        
+   Path: /home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4                                                                                                                                                                                                                                                                                                                         
+  Label: tinycc-0-9-26-build-evidence                                                                                                                                                                                                                                                                                                                                                                      
+  Start: Tue, 28 Apr 2026 20:05:46 -0400                                                                                                                                                                                                                                                                                                                                                                   
+    End: Tue, 28 Apr 2026 20:22:50 -0400                                                                                                                                                                                                                                                                                                                                                                   
+
+output:
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/config/signing-key)
+[2m2026-04-29T00:05:46.986787Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/blobs
+[2m2026-04-29T00:05:46.986998Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/directories.redb\", read: true, write: true } }"
+[2m2026-04-29T00:05:46.991201Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-04-29T00:05:46.997211Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-04-29T00:05:47.000865Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-04-29T00:05:47.006636Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/pathinfo.redb
+[2m2026-04-29T00:05:47.006772Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming started [3mjobs[0m[2m=[0m1
+[2m2026-04-29T00:05:47.074136Z[0m [32m INFO[0m [2mcrunch_pipeline[0m[2m:[0m converted, sending to worker [3mdrv[0m[2m=[0mh09jigy7c8acwjkpfkhafx6qlpxc3b83-tinycc-0.9.26.drv [3mlabel[0m[2m=[0mtinycc-0.9.26 [3mentries[0m[2m=[0m22
+[2m2026-04-29T00:05:47.074657Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mtcc-0.9.26-src.drv
+[2m2026-04-29T00:05:47.074827Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mmes-0.27.1-src.drv
+[2m2026-04-29T00:05:47.074936Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching tarball [3murl[0m[2m=[0mhttps://lilypond.org/janneke/tcc/tcc-0.9.26-1147-gee75a10c.tar.gz
+[2m2026-04-29T00:05:47.074999Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mmes-src.drv
+[2m2026-04-29T00:05:47.075166Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mnyacc-src.drv
+[2m2026-04-29T00:05:47.075257Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mM2-Mesoplanet.drv
+[2m2026-04-29T00:05:47.075342Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mmescc-tools-extra.drv
+[2m2026-04-29T00:05:47.075410Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mM2libc.drv
+[2m2026-04-29T00:05:47.075473Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mmescc-tools.drv
+[2m2026-04-29T00:05:47.075537Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mbootstrap-seeds.drv
+[2m2026-04-29T00:05:47.075631Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mstage0-posix-amd64.drv
+[2m2026-04-29T00:05:47.075699Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mM2-Planet.drv
+[2m2026-04-29T00:05:47.608594Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching tarball [3murl[0m[2m=[0mhttps://mirrors.kernel.org/gnu/mes/mes-0.27.1.tar.gz
+[2m2026-04-29T00:05:47.686312Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mtcc-0.9.26-src.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/xrkkdk32a0b0z4kjri0127ky5s7isihj-tcc-0.9.26-src"]
+[2m2026-04-29T00:05:48.320468Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching tarball [3murl[0m[2m=[0mhttps://mirrors.kernel.org/gnu/mes/mes-0.27.1.tar.gz
+[2m2026-04-29T00:05:48.473521Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mmes-0.27.1-src.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/a9lmn7b74gf7d9ib6ajcix4pl16ak5s9-mes-0.27.1-src"]
+[2m2026-04-29T00:05:49.722006Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching tarball [3murl[0m[2m=[0mhttps://github.com/Googulator/nyacc/releases/download/V1.00.2-lb1/nyacc-1.00.2-lb1.tar.gz
+[2m2026-04-29T00:05:49.874098Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mmes-src.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/vk70095f86hibw98d0c2p799ml8rnn3b-mes-src"]
+[2m2026-04-29T00:05:50.097761Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/M2-Mesoplanet.git [3mrev[0m[2m=[0m4b011a85da73
+[2m2026-04-29T00:05:50.172287Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mnyacc-src.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/22wqm0hshnz0nyav4kdncsd994z5hfli-nyacc-src"]
+[2m2026-04-29T00:05:50.483351Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/M2-Mesoplanet.git" [3mrev[0m[2m=[0m"4b011a85da73" [3mout[0m[2m=[0m"/tmp/.tmpL1AMTz/output"
+[2m2026-04-29T00:05:50.502032Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/mescc-tools-extra.git [3mrev[0m[2m=[0ma151c245e512
+[2m2026-04-29T00:05:50.509052Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mM2-Mesoplanet.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/3nf4wqjyh5lykxigvf9yp1ggvq13qhj4-M2-Mesoplanet"]
+[2m2026-04-29T00:05:50.892027Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/mescc-tools-extra.git" [3mrev[0m[2m=[0m"a151c245e512" [3mout[0m[2m=[0m"/tmp/.tmpkOgCp0/output"
+[2m2026-04-29T00:05:50.911863Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/M2libc.git [3mrev[0m[2m=[0m68a23cfd05d5
+[2m2026-04-29T00:05:50.919155Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mmescc-tools-extra.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/hqvrdrs1yn8lwvnsv61v47sjl1cp8csn-mescc-tools-extra"]
+[2m2026-04-29T00:05:51.356140Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/M2libc.git" [3mrev[0m[2m=[0m"68a23cfd05d5" [3mout[0m[2m=[0m"/tmp/.tmptgGQUG/output"
+[2m2026-04-29T00:05:51.391987Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://git.savannah.nongnu.org/git/mescc-tools.git [3mrev[0m[2m=[0m5adfbf336426
+[2m2026-04-29T00:05:51.407857Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mM2libc.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/q2jc8ih2zp8c9w2gsf5wnxmdamfh27p4-M2libc"]
+[2m2026-04-29T00:05:52.196137Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://git.savannah.nongnu.org/git/mescc-tools.git" [3mrev[0m[2m=[0m"5adfbf336426" [3mout[0m[2m=[0m"/tmp/.tmpxFa5xa/output"
+[2m2026-04-29T00:05:52.240664Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/bootstrap-seeds.git [3mrev[0m[2m=[0mcedec6b8066d
+[2m2026-04-29T00:05:52.262534Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mmescc-tools.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/zakiab0cbb3vyg3p52dnwrgylb7zl76q-mescc-tools"]
+[2m2026-04-29T00:05:52.602691Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/bootstrap-seeds.git" [3mrev[0m[2m=[0m"cedec6b8066d" [3mout[0m[2m=[0m"/tmp/.tmpLHfvuq/output"
+[2m2026-04-29T00:05:52.624834Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/stage0-posix-amd64.git [3mrev[0m[2m=[0m82efa0d6be1c
+[2m2026-04-29T00:05:52.633679Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mbootstrap-seeds.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/gkxas7d1i0b1q98w2za0475xa9lxh2qf-bootstrap-seeds"]
+[2m2026-04-29T00:05:53.140747Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/stage0-posix-amd64.git" [3mrev[0m[2m=[0m"82efa0d6be1c" [3mout[0m[2m=[0m"/tmp/.tmputIARk/output"
+[2m2026-04-29T00:05:53.174070Z[0m [32m INFO[0m [2mcrunch_build::fetch_build_service[0m[2m:[0m fetching git [3murl[0m[2m=[0mhttps://github.com/oriansj/M2-Planet.git [3mrev[0m[2m=[0mbd2fe4b0659f
+[2m2026-04-29T00:05:53.193495Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mstage0-posix-amd64.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/gwglxhll4jjm9gxy40r8w5glm3klff4g-stage0-posix-amd64"]
+[2m2026-04-29T00:05:54.124872Z[0m [32m INFO[0m [2mcrunch_build::fetcher[0m[2m:[0m git fetch complete [3murl[0m[2m=[0m"https://github.com/oriansj/M2-Planet.git" [3mrev[0m[2m=[0m"bd2fe4b0659f" [3mout[0m[2m=[0m"/tmp/.tmpogDzkd/output"
+[2m2026-04-29T00:05:54.230464Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mM2-Planet.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/5jgzdfavmjzgid6pfa1snrz20yyfsjik-M2-Planet"]
+[2m2026-04-29T00:05:54.230698Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mstage0-posix.drv
+[2m2026-04-29T00:05:54.230824Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m Starting bwrap build [3mbuild_name[0m[2m=[0m061facd0-cf84-4690-a302-05b498df3bc2 [3msandbox_path[0m[2m=[0m/tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF
+[2m2026-04-29T00:05:54.242023Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m mount source snix-castore dest /tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF/host_inputs_dir with fstype fuse opts default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998 fd 12
+[2m2026-04-29T00:05:54.242058Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: raw opts=default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998
+[2m2026-04-29T00:05:54.242078Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: cleaned opts=fsname=snix-castore,default_permissions,ro,nosuid,nodev,exec,async,noatime, fusermount=/run/wrappers/bin/fusermount3
+[2m2026-04-29T00:05:54.242093Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/061facd0-cf84-4690-a302-05b498df3bc2-fojGIF/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: _FUSE_COMMFD=13
+[2m2026-04-29T00:05:54.244054Z[0m [32m INFO[0m [2mfuse_backend_rs::api::server::sync_io[0m[2m:[0m FUSE INIT major 7 minor 45
+ in_opts: ASYNC_READ | POSIX_LOCKS | ATOMIC_O_TRUNC | EXPORT_SUPPORT | BIG_WRITES | DONT_MASK | SPLICE_WRITE | SPLICE_MOVE | SPLICE_READ | FLOCK_LOCKS | HAS_IOCTL_DIR | AUTO_INVAL_DATA | DO_READDIRPLUS | READDIRPLUS_AUTO | ASYNC_DIO | WRITEBACK_CACHE | ZERO_MESSAGE_OPEN | PARALLEL_DIROPS | HANDLE_KILLPRIV | POSIX_ACL | ABORT_ERROR | MAX_PAGES | CACHE_SYMLINKS | ZERO_MESSAGE_OPENDIR | EXPLICIT_INVAL_DATA | HANDLE_KILLPRIV_V2 | INIT_EXT | PERFILE_DAX
+out_opts: ASYNC_READ | DO_READDIRPLUS | READDIRPLUS_AUTO | PARALLEL_DIROPS | CACHE_SYMLINKS
+[2m2026-04-29T00:06:00.695392Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:06:00.695392Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:06:00.695392Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:06:00.695392Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:06:00.887467Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m CA output path resolved [3mdrv[0m[2m=[0mstage0-posix.drv [3moutput[0m[2m=[0mout [3mca_path[0m[2m=[0m/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
+[2m2026-04-29T00:06:00.898589Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mstage0-posix.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix"]
+[2m2026-04-29T00:06:00.898807Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mmes.drv
+[2m2026-04-29T00:06:00.898940Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m Starting bwrap build [3mbuild_name[0m[2m=[0mf1795584-7072-41ac-bb68-4887a0ba671d [3msandbox_path[0m[2m=[0m/tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL
+[2m2026-04-29T00:06:00.910432Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m mount source snix-castore dest /tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL/host_inputs_dir with fstype fuse opts default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998 fd 12
+[2m2026-04-29T00:06:00.910467Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: raw opts=default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998
+[2m2026-04-29T00:06:00.910489Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: cleaned opts=fsname=snix-castore,default_permissions,ro,nosuid,nodev,exec,async,noatime, fusermount=/run/wrappers/bin/fusermount3
+[2m2026-04-29T00:06:00.910503Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/f1795584-7072-41ac-bb68-4887a0ba671d-B86BYL/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: _FUSE_COMMFD=13
+[2m2026-04-29T00:06:00.912460Z[0m [32m INFO[0m [2mfuse_backend_rs::api::server::sync_io[0m[2m:[0m FUSE INIT major 7 minor 45
+ in_opts: ASYNC_READ | POSIX_LOCKS | ATOMIC_O_TRUNC | EXPORT_SUPPORT | BIG_WRITES | DONT_MASK | SPLICE_WRITE | SPLICE_MOVE | SPLICE_READ | FLOCK_LOCKS | HAS_IOCTL_DIR | AUTO_INVAL_DATA | DO_READDIRPLUS | READDIRPLUS_AUTO | ASYNC_DIO | WRITEBACK_CACHE | ZERO_MESSAGE_OPEN | PARALLEL_DIROPS | HANDLE_KILLPRIV | POSIX_ACL | ABORT_ERROR | MAX_PAGES | CACHE_SYMLINKS | ZERO_MESSAGE_OPENDIR | EXPLICIT_INVAL_DATA | HANDLE_KILLPRIV_V2 | INIT_EXT | PERFILE_DAX
+out_opts: ASYNC_READ | DO_READDIRPLUS | READDIRPLUS_AUTO | PARALLEL_DIROPS | CACHE_SYMLINKS
+[2m2026-04-29T00:19:19.298193Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:19:19.298197Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:19:19.298211Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:19:19.298219Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:19:19.673996Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m CA output path resolved [3mdrv[0m[2m=[0mmes.drv [3moutput[0m[2m=[0mout [3mca_path[0m[2m=[0m/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/anqp2lm1qgppznmndhgj7ighp8fbx6wn-mes
+[2m2026-04-29T00:19:19.675389Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m build succeeded [3mdrv[0m[2m=[0mmes.drv [3moutputs[0m[2m=[0m["/home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/store/anqp2lm1qgppznmndhgj7ighp8fbx6wn-mes"]
+[2m2026-04-29T00:19:19.675591Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m building [3mdrv[0m[2m=[0mtinycc-0.9.26.drv
+[2m2026-04-29T00:19:19.675722Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m Starting bwrap build [3mbuild_name[0m[2m=[0m93bc799e-b4dd-4e44-85a3-38f8028b3005 [3msandbox_path[0m[2m=[0m/tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT
+[2m2026-04-29T00:19:19.687278Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m mount source snix-castore dest /tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT/host_inputs_dir with fstype fuse opts default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998 fd 12
+[2m2026-04-29T00:19:19.687312Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: raw opts=default_permissions,fd=12,rootmode=40000,user_id=1555,group_id=998
+[2m2026-04-29T00:19:19.687334Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: cleaned opts=fsname=snix-castore,default_permissions,ro,nosuid,nodev,exec,async,noatime, fusermount=/run/wrappers/bin/fusermount3
+[2m2026-04-29T00:19:19.687349Z[0m [32m INFO[0m [1mdo_build[0m[2m:[0m[1mnew[0m[1m{[0m[3mnum_threads[0m[2m=[0m4 [3mallow_other[0m[2m=[0mfalse [3mmountpoint[0m[2m=[0m"/tmp/crunch-builds/93bc799e-b4dd-4e44-85a3-38f8028b3005-q1OVVT/host_inputs_dir"[1m}[0m[2m:[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m fuse_fusermount_mount: _FUSE_COMMFD=13
+[2m2026-04-29T00:19:19.689162Z[0m [32m INFO[0m [2mfuse_backend_rs::api::server::sync_io[0m[2m:[0m FUSE INIT major 7 minor 45
+ in_opts: ASYNC_READ | POSIX_LOCKS | ATOMIC_O_TRUNC | EXPORT_SUPPORT | BIG_WRITES | DONT_MASK | SPLICE_WRITE | SPLICE_MOVE | SPLICE_READ | FLOCK_LOCKS | HAS_IOCTL_DIR | AUTO_INVAL_DATA | DO_READDIRPLUS | READDIRPLUS_AUTO | ASYNC_DIO | WRITEBACK_CACHE | ZERO_MESSAGE_OPEN | PARALLEL_DIROPS | HANDLE_KILLPRIV | POSIX_ACL | ABORT_ERROR | MAX_PAGES | CACHE_SYMLINKS | ZERO_MESSAGE_OPENDIR | EXPLICIT_INVAL_DATA | HANDLE_KILLPRIV_V2 | INIT_EXT | PERFILE_DAX
+out_opts: ASYNC_READ | DO_READDIRPLUS | READDIRPLUS_AUTO | PARALLEL_DIROPS | CACHE_SYMLINKS
+[2m2026-04-29T00:22:49.838675Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:22:49.838675Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:22:49.838678Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:22:49.838678Z[0m [32m INFO[0m [2mfuse_backend_rs::transport::fusedev::linux_session[0m[2m:[0m FUSE channel already closed!
+[2m2026-04-29T00:22:49.842083Z[0m [33m WARN[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m build failed [3mstdout[0m[2m=[0m#<<type> type: signed size: 1 description: #f>#<<type> type: signed size: 1 description: #f>tcc version 0.9.26 (x86_64 Linux)
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+ [3mstderr[0m[2m=[0mtinycc-mes: mescc emit tcc.s
+->type--: not a <type>: (typename "BufferedFile")
+->type--: not a <type>: (typename "BufferedFile")
+rank--: not a pointer: 
+rank--: not a pointer: 
+unexpected size:42
+tinycc-mes: mescc link tcc-mes
+tinycc-mes: rebuild-mes-runtime compiler=/tmp/tcc-build/prefix/bin/tcc-mes mode=bootstrap
+tinycc-mes: compile crt1.o
+tinycc-mes: compile libtcc1.o
+tinycc-mes: compile tcc-boot0 with /tmp/tcc-build/prefix/bin/tcc-mes
+Segmentation fault (core dumped)
+ [3mexit_code[0m[2m=[0mexit status: 139
+[2m2026-04-29T00:22:49.842270Z[0m [31mERROR[0m [1mdo_build[0m[2m:[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m [3merror[0m[2m=[0mnonzero exit code: exit status: 139
+#<<type> type: signed size: 1 description: #f>#<<type> type: signed size: 1 description: #f>tcc version 0.9.26 (x86_64 Linux)
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+
+tinycc-mes: mescc emit tcc.s
+->type--: not a <type>: (typename "BufferedFile")
+->type--: not a <type>: (typename "BufferedFile")
+rank--: not a pointer: 
+rank--: not a pointer: 
+unexpected size:42
+tinycc-mes: mescc link tcc-mes
+tinycc-mes: rebuild-mes-runtime compiler=/tmp/tcc-build/prefix/bin/tcc-mes mode=bootstrap
+tinycc-mes: compile crt1.o
+tinycc-mes: compile libtcc1.o
+tinycc-mes: compile tcc-boot0 with /tmp/tcc-build/prefix/bin/tcc-mes
+Segmentation fault (core dumped)
+
+[2m2026-04-29T00:22:49.842382Z[0m [33m WARN[0m [2mcrunch_build::worker[0m[2m:[0m sandbox build failed [3mdrv[0m[2m=[0m/nix/store/h09jigy7c8acwjkpfkhafx6qlpxc3b83-tinycc-0.9.26.drv [3merr[0m[2m=[0mstore error: build: nonzero exit code: exit status: 139
+#<<type> type: signed size: 1 description: #f>#<<type> type: signed size: 1 description: #f>tcc version 0.9.26 (x86_64 Linux)
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+
+tinycc-mes: mescc emit tcc.s
+->type--: not a <type>: (typename "BufferedFile")
+->type--: not a <type>: (typename "BufferedFile")
+rank--: not a pointer: 
+rank--: not a pointer: 
+unexpected size:42
+tinycc-mes: mescc link tcc-mes
+tinycc-mes: rebuild-mes-runtime compiler=/tmp/tcc-build/prefix/bin/tcc-mes mode=bootstrap
+tinycc-mes: compile crt1.o
+tinycc-mes: compile libtcc1.o
+tinycc-mes: compile tcc-boot0 with /tmp/tcc-build/prefix/bin/tcc-mes
+Segmentation fault (core dumped)
+
+[2m2026-04-29T00:22:49.842439Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m goal failed [3mdrv[0m[2m=[0m"/nix/store/h09jigy7c8acwjkpfkhafx6qlpxc3b83-tinycc-0.9.26.drv" [3mname[0m[2m=[0mtinycc-0.9.26.drv [3mwaiters[0m[2m=[0m0
+[2m2026-04-29T00:22:49.842458Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming finished [3mcompleted[0m[2m=[0m14 [3msucceeded[0m[2m=[0m0 [3mfailed[0m[2m=[0m1 [3mroots[0m[2m=[0m1
+hermeticity: practical (no degraded facts)
+FAILED root: tinycc-0.9.26
+  phase: build
+  error_class: builder
+  saved_log_path: /home/brittonr/git/crunch/crunch/.pi/worktrees/session-1777419117392-yvw4/target/live-part-tinycc-0-9-26/state/logs/h09jigy7c8acwjkpfkhafx6qlpxc3b83-tinycc-0.9.26.drv.log
+  message: store error: build: nonzero exit code: exit status: 139
+#<<type> type: signed size: 1 description: #f>#<<type> type: signed size: 1 description: #f>tcc version 0.9.26 (x86_64 Linux)
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+
+tinycc-mes: mescc emit tcc.s
+->type--: not a <type>: (typename "BufferedFile")
+->type--: not a <type>: (typename "BufferedFile")
+rank--: not a pointer: 
+rank--: not a pointer: 
+unexpected size:42
+tinycc-mes: mescc link tcc-mes
+tinycc-mes: rebuild-mes-runtime compiler=/tmp/tcc-build/prefix/bin/tcc-mes mode=bootstrap
+tinycc-mes: compile crt1.o
+tinycc-mes: compile libtcc1.o
+tinycc-mes: compile tcc-boot0 with /tmp/tcc-build/prefix/bin/tcc-mes
+Segmentation fault (core dumped)
+

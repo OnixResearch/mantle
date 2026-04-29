@@ -13,7 +13,8 @@ Every task records evidence under `openspec/changes/live-part-tinycc-0-9-26/evid
 
 - [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/tinycc-mes.ncl` and record the transcript. ✅ 1m (started: 2026-04-28T23:48:20Z → completed: 2026-04-28T23:49:01Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V1-source-pins.md]
   - Evidence summary: PASS, source-pin audit reported `1 files, 2 fetch blocks, 0 issues`.
-- [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/tinycc-mes.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
+- [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/tinycc-mes.ncl` with the documented bootstrap build environment and record output path plus elapsed time. BLOCKED (attempted: 2026-04-29T00:05:46Z → failed: 2026-04-29T00:22:50Z) [covers=bootstrap.part.tinycc.0.9.26] [evidence=evidence/V2-build.md]
+  - Evidence summary: FAIL, Mes/stage0 predecessors built and `tcc-mes -version` ran, but `tcc-boot0` segfaulted after mescc emitted `BufferedFile` type diagnostics; no successful output path exists yet.
 - [ ] V3 Smoke-test the produced output contract for `tinycc 0.9.26`.
 - [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
 - [ ] V5 Run `openspec validate live-part-tinycc-0-9-26` after evidence is recorded.

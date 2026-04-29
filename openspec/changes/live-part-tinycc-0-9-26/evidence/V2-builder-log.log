@@ -1,0 +1,24 @@
+# crunch build log
+# derivation: tinycc-0.9.26
+# drv_path: h09jigy7c8acwjkpfkhafx6qlpxc3b83-tinycc-0.9.26.drv
+# status: failure
+# timestamp: 1777422169
+
+store error: build: nonzero exit code: exit status: 139
+#<<type> type: signed size: 1 description: #f>#<<type> type: signed size: 1 description: #f>tcc version 0.9.26 (x86_64 Linux)
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+
+tinycc-mes: mescc emit tcc.s
+->type--: not a <type>: (typename "BufferedFile")
+->type--: not a <type>: (typename "BufferedFile")
+rank--: not a pointer: 
+rank--: not a pointer: 
+unexpected size:42
+tinycc-mes: mescc link tcc-mes
+tinycc-mes: rebuild-mes-runtime compiler=/tmp/tcc-build/prefix/bin/tcc-mes mode=bootstrap
+tinycc-mes: compile crt1.o
+tinycc-mes: compile libtcc1.o
+tinycc-mes: compile tcc-boot0 with /tmp/tcc-build/prefix/bin/tcc-mes
+Segmentation fault (core dumped)
+
