@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/tcc-musl-v2.ncl
+  # provenance: fosslinux/live-bootstrap steps/tcc-0.9.27 musl-v2 pass source input
   url = "https://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
   hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
   name = "tcc-0.9.27-src",
@@ -96,11 +98,22 @@ let tcc27_src = crunch.fetchTarball {
       $BB cp tcc "$out/bin/tcc-0.9.27-musl-v2"
       $BB chmod 755 "$out/bin/tcc" "$out/bin/tcc-0.9.27-musl-v2"
 
-      if [ -f libtcc1.a ]; then
-        $BB cp libtcc1.a "$out/lib/tcc/"
+      # libtcc1.a is required by downstream post-musl tools.  The final
+      # self-hosted tcc-musl-v2 output must not be silently missing it.
+      if [ ! -f libtcc1.a ]; then
+        echo "ERROR: tcc musl v2 build did not produce libtcc1.a" >&2
+        exit 1
       fi
+      $BB cp libtcc1.a "$out/lib/tcc/"
 
       test -x "$out/bin/tcc"
+      test -x "$out/bin/tcc-0.9.27-musl-v2"
+      test -s "$out/lib/tcc/libtcc1.a"
+      $BB cat > smoke.c <<'EOF'
+int main(void) { return 0; }
+EOF
+      "$out/bin/tcc" -static smoke.c -o smoke
+      test -s smoke
     "%,
   ],
   inputs = [stage0, tcc_musl, musl, make, sed, tcc27_src],
