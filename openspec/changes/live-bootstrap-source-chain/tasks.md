@@ -20,7 +20,8 @@ Every implementation task that adds a helper source, carried patch, or generated
 
 All validation evidence files must include `Task-ID:` and `Covers:` metadata, command line, provider selection (`legacy`, `source-root`, or `stagex-lineage`), exit status, output path or failure class, stage-local fallback status for ordinary stage builds, explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none` for self-build proof transcripts, and placeholder/deferred/archive rejection result when applicable.
 
-- [ ] V1 Validate stage builds from `bootstrap/stage0-posix.ncl` through `bootstrap/tinycc.ncl`. [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof] [evidence=evidence/V1-early-stage-builds.md]
+- [x] V1 Validate stage builds from `bootstrap/stage0-posix.ncl` through `bootstrap/tinycc.ncl`. ✅ 1m (started: 2026-04-30T15:37:30Z → completed: 2026-04-30T15:38:47Z) [covers=bootstrap.source.chain.implementation,bootstrap.fullsource.claim.evidence,bootstrap.stagex.selfbuild.proof] [evidence=evidence/V1-early-stage-builds.md]
+  - Evidence summary: PASS, `stage0-posix`, `mes`, and `tinycc-0.9.27` all returned cached output paths with `hermeticity: practical (no degraded facts)`; no placeholder text observed.
   - Commands: `crunch build bootstrap/stage0-posix.ncl`; `crunch build bootstrap/mes.ncl`; `crunch build bootstrap/tinycc.ncl`.
   - Part handoff: `live-part-stage0-posix` owns the detailed `bootstrap/stage0-posix.ncl` source-pin, build, smoke, and host-leakage evidence; this umbrella V1 should consume that archived part evidence for the stage0 portion instead of duplicating it.
   - Evidence summary must include the common transcript metadata for each command.

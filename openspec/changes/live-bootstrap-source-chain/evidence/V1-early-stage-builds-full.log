@@ -1,0 +1,89 @@
+--- command: ./target/debug/crunch build bootstrap/stage0-posix.ncl --store /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store --state-dir /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state --no-substitute -j 1 --verbose --log-level info
+provider-selection: legacy
+fallback-event: none
+[2m2026-04-30T15:38:34.176119Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/blobs
+[2m2026-04-30T15:38:34.176463Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/directories.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.176767Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.188306Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.188514Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.190515Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb
+[2m2026-04-30T15:38:34.190754Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming started [3mjobs[0m[2m=[0m1
+[2m2026-04-30T15:38:34.252400Z[0m [32m INFO[0m [2mcrunch_pipeline[0m[2m:[0m converted, sending to worker [3mdrv[0m[2m=[0mrn0cn57djjhckaivl50mk8vj76mdrbpf-stage0-posix.drv [3mlabel[0m[2m=[0mstage0-posix [3mentries[0m[2m=[0m8
+[2m2026-04-30T15:38:34.256568Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Mesoplanet.drv
+[2m2026-04-30T15:38:34.260340Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools-extra.drv
+[2m2026-04-30T15:38:34.264086Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2libc.drv
+[2m2026-04-30T15:38:34.267677Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools.drv
+[2m2026-04-30T15:38:34.271150Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mbootstrap-seeds.drv
+[2m2026-04-30T15:38:34.274597Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix-amd64.drv
+[2m2026-04-30T15:38:34.278073Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Planet.drv
+[2m2026-04-30T15:38:34.281747Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix.drv
+[2m2026-04-30T15:38:34.281777Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming finished [3mcompleted[0m[2m=[0m0 [3msucceeded[0m[2m=[0m1 [3mfailed[0m[2m=[0m0 [3mroots[0m[2m=[0m1
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix (cached)
+real 0.17
+user 0.15
+sys 0.00
+exit-status: 0
+--- command: ./target/debug/crunch build bootstrap/mes.ncl --store /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store --state-dir /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state --no-substitute -j 1 --verbose --log-level info
+provider-selection: legacy
+fallback-event: none
+[2m2026-04-30T15:38:34.346985Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/blobs
+[2m2026-04-30T15:38:34.347264Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/directories.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.347506Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.350505Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.350667Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.352561Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb
+[2m2026-04-30T15:38:34.352776Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming started [3mjobs[0m[2m=[0m1
+[2m2026-04-30T15:38:34.419948Z[0m [32m INFO[0m [2mcrunch_pipeline[0m[2m:[0m converted, sending to worker [3mdrv[0m[2m=[0mkg2mgbqnrqwabh3rm99pxm0pnby1i589-mes.drv [3mlabel[0m[2m=[0mmes [3mentries[0m[2m=[0m11
+[2m2026-04-30T15:38:34.423926Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes-src.drv
+[2m2026-04-30T15:38:34.427304Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mnyacc-src.drv
+[2m2026-04-30T15:38:34.430678Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Mesoplanet.drv
+[2m2026-04-30T15:38:34.434051Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools-extra.drv
+[2m2026-04-30T15:38:34.437382Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2libc.drv
+[2m2026-04-30T15:38:34.440741Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools.drv
+[2m2026-04-30T15:38:34.444143Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mbootstrap-seeds.drv
+[2m2026-04-30T15:38:34.447547Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix-amd64.drv
+[2m2026-04-30T15:38:34.450923Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Planet.drv
+[2m2026-04-30T15:38:34.454258Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix.drv
+[2m2026-04-30T15:38:34.514110Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes.drv
+[2m2026-04-30T15:38:34.514152Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming finished [3mcompleted[0m[2m=[0m0 [3msucceeded[0m[2m=[0m1 [3mfailed[0m[2m=[0m0 [3mroots[0m[2m=[0m1
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes (cached)
+real 0.23
+user 0.19
+sys 0.02
+exit-status: 0
+--- command: ./target/debug/crunch build bootstrap/tinycc.ncl --store /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store --state-dir /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state --no-substitute -j 1 --verbose --log-level info
+provider-selection: legacy
+fallback-event: none
+[2m2026-04-30T15:38:34.582162Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/blobs
+[2m2026-04-30T15:38:34.582466Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/directories.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.582750Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.585818Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-04-30T15:38:34.586020Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-04-30T15:38:34.588044Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/state/pathinfo.redb
+[2m2026-04-30T15:38:34.588255Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming started [3mjobs[0m[2m=[0m1
+[2m2026-04-30T15:38:34.678246Z[0m [32m INFO[0m [2mcrunch_pipeline[0m[2m:[0m converted, sending to worker [3mdrv[0m[2m=[0mdgbhv6issnv82jy5zsrcqpdhc05dhmss-tinycc-0.9.27.drv [3mlabel[0m[2m=[0mtinycc-0.9.27 [3mentries[0m[2m=[0m43
+[2m2026-04-30T15:38:34.683374Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtcc-0.9.27-src.drv
+[2m2026-04-30T15:38:34.686932Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtcc-0.9.26-src.drv
+[2m2026-04-30T15:38:34.690510Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes-0.27.1-src.drv
+[2m2026-04-30T15:38:34.693981Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes-src.drv
+[2m2026-04-30T15:38:34.697298Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mnyacc-src.drv
+[2m2026-04-30T15:38:34.700646Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Mesoplanet.drv
+[2m2026-04-30T15:38:34.704140Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools-extra.drv
+[2m2026-04-30T15:38:34.707879Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2libc.drv
+[2m2026-04-30T15:38:34.711313Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmescc-tools.drv
+[2m2026-04-30T15:38:34.714669Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mbootstrap-seeds.drv
+[2m2026-04-30T15:38:34.718132Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix-amd64.drv
+[2m2026-04-30T15:38:34.721537Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mM2-Planet.drv
+[2m2026-04-30T15:38:34.725043Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mstage0-posix.drv
+[2m2026-04-30T15:38:34.728869Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mmes.drv
+[2m2026-04-30T15:38:34.732492Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtinycc-0.9.26.drv
+[2m2026-04-30T15:38:34.736326Z[0m [32m INFO[0m [2mcrunch_build::orchestrate[0m[2m:[0m all outputs cached, skipping build [3mdrv[0m[2m=[0mtinycc-0.9.27.drv
+[2m2026-04-30T15:38:34.736368Z[0m [32m INFO[0m [2mcrunch_build::worker[0m[2m:[0m worker streaming finished [3mcompleted[0m[2m=[0m0 [3msucceeded[0m[2m=[0m1 [3mfailed[0m[2m=[0m0 [3mroots[0m[2m=[0m1
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27 (cached)
+real 0.22
+user 0.18
+sys 0.02
+exit-status: 0
