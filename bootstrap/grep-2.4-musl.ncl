@@ -12,6 +12,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
 let grep_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/grep-2.4-musl.ncl
+  # provenance: fosslinux/live-bootstrap steps/grep-2.4 source input
   url = "https://mirrors.kernel.org/gnu/grep/grep-2.4.tar.gz",
   hash = "sha256-v9xxK5dLi3FxvpCbRjPorpK+bPNcAXwj/jgX4eslWxI=",
   name = "grep-2.4-src",
@@ -54,14 +56,20 @@ let grep_src = crunch.fetchTarball {
 
       CFLAGS="-I. -I$MUSL/include -DSTDC_HEADERS -DHAVE_MEMCHR -DHAVE_STRING_H -DHAVE_STDLIB_H -DHAVE_UNISTD_H -DHAVE_DIRENT_H -DVERSION=\\\"2.4\\\" -DPACKAGE=\\\"grep\\\""
 
-      # Compile sources
+      # Compile the complete source set needed by grep 2.4.  Fail closed:
+      # downstream bootstrap stages must not consume a binary assembled from a
+      # partial object set after hidden compile errors.
       for src in grep dfa kwset obstack getopt getopt1 search grepmat savedir stpcpy; do
-        tcc -c $CFLAGS src/$src.c -o src/$src.o 2>/dev/null || true
+        tcc -c $CFLAGS src/$src.c -o src/$src.o
+        test -s "src/$src.o"
       done
 
       # Link what compiled
       OBJS=""
       for f in src/*.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
+      for obj in grep dfa kwset obstack getopt getopt1 search grepmat savedir stpcpy; do
+        test -s "src/$obj.o"
+      done
       tcc -static $OBJS -o grep
 
       # Verify
@@ -75,6 +83,8 @@ let grep_src = crunch.fetchTarball {
       $BB ln -s grep fgrep
 
       test -x "$out/bin/grep"
+      test -L "$out/bin/egrep"
+      test -L "$out/bin/fgrep"
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, grep_src],
