@@ -1,0 +1,135 @@
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+glob/glob.c:681: warning: implicit declaration of function 'getpwnam'
+glob/glob.c:681: warning: assignment makes pointer from integer without a cast
+glob/glob.c:765: warning: assignment makes pointer from integer without a cast
+glob/glob.c:827: warning: implicit declaration of function 'strdup'
+glob/glob.c:827: warning: assignment makes pointer from integer without a cast
+
+--- end log ---
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/z3afbs20lnnksdj09zdhf0zn57fhh0cp-make-3.82-tcc
+real 0.61
+user 0.49
+sys 0.10
+
+--- saved derivation log ---
+path: target/live-part-tinycc-0-9-27/run-current/state/logs/s4ccmgd8xfdxdr73zcyfmh4pfa9603dg-make-3.82-tcc.drv.log
+# crunch build log
+# derivation: make-3.82-tcc
+# drv_path: s4ccmgd8xfdxdr73zcyfmh4pfa9603dg-make-3.82-tcc.drv
+# status: success
+# timestamp: 1777562376
+
+GNU Make 3.82
+Built for x86_64-linux
+
+In file included from ar.c:20:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+ar.c:270: warning: assignment from incompatible pointer type
+In file included from arscan.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from commands.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from default.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from dir.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from expand.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from file.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from function.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+function.c:936: warning: assignment from incompatible pointer type
+function.c:959: warning: assignment from incompatible pointer type
+function.c:2218: warning: assignment from incompatible pointer type
+In file included from implicit.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+implicit.c:746: warning: assignment from incompatible pointer type
+In file included from job.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+job.c:2201: warning: assignment from incompatible pointer type
+In file included from main.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+main.c:2692: warning: assignment from incompatible pointer type
+main.c:2813: warning: assignment from incompatible pointer type
+main.c:2826: warning: assignment from incompatible pointer type
+main.c:2829: warning: assignment from incompatible pointer type
+main.c:2834: warning: assignment from incompatible pointer type
+main.c:2850: warning: assignment from incompatible pointer type
+main.c:2855: warning: assignment from incompatible pointer type
+main.c:2873: warning: assignment from incompatible pointer type
+main.c:3086: warning: implicit declaration of function 'ctime'
+In file included from misc.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from read.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+read.c:2791: warning: implicit declaration of function 'getpwnam'
+read.c:2791: warning: assignment makes pointer from integer without a cast
+read.c:2812: warning: assignment makes pointer from integer without a cast
+In file included from remake.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from rule.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from signame.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from strcache.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from variable.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from vpath.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from hash.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from remote-stub.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/inttypes.h:31:
+/crunch/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+glob/glob.c:681: warning: implicit declaration of function 'getpwnam'
+glob/glob.c:681: warning: assignment makes pointer from integer without a cast
+glob/glob.c:765: warning: assignment makes pointer from integer without a cast
+glob/glob.c:827: warning: implicit declaration of function 'strdup'
+glob/glob.c:827: warning: assignment makes pointer from integer without a cast
+

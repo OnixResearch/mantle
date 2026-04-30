@@ -1,0 +1,7 @@
+Task-ID: V5 transcript
+Command: openspec validate live-part-make-3-82 --strict
+Change 'live-part-make-3-82' is valid
+Command: openspec_gate stage=tasks change=live-part-make-3-82
+
+--- tasks gate result ---
+OpenSpec tasks gate failed because this parent spec requires its own successful build and smoke evidence. The parent remains open; repair is tracked by repair-make-tcc-amd64-varargs.

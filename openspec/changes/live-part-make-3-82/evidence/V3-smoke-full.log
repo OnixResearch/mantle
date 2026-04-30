@@ -1,0 +1,10 @@
+Task-ID: V3 transcript
+Command: bwrap smoke for make --version, simple target, missing target negative case
+Output path: /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/z3afbs20lnnksdj09zdhf0zn57fhh0cp-make-3.82-tcc
+--- files ---
+-r-xr-xr-x 1 brittonr brittonr    215 Dec 31  1969 /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/z3afbs20lnnksdj09zdhf0zn57fhh0cp-make-3.82-tcc/bin/make
+-r-xr-xr-x 1 brittonr brittonr 382824 Dec 31  1969 /home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/z3afbs20lnnksdj09zdhf0zn57fhh0cp-make-3.82-tcc/bin/make.real
+--- version positive case ---
+GNU Make 3.82
+Built for x86_64-linux
+--- positive makefile ---
