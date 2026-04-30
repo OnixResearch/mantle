@@ -19,7 +19,9 @@ let mes = import "mes.ncl" in
 let tcc26 = import "tinycc-mes.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
-  url = "https://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
+  # download.savannah.gnu.org returned 502 during repair-make-tcc-amd64-varargs validation;
+  # use the stable Savannah mirror for the same fixed-output tarball.
+  url = "https://download-mirror.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
   hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
   name = "tcc-0.9.27-src",
 } in

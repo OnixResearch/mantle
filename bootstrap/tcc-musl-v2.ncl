@@ -16,7 +16,7 @@ let sed = import "sed-tcc.ncl" in
 let tcc27_src = crunch.fetchTarball {
   # first-consumer: bootstrap/tcc-musl-v2.ncl
   # provenance: fosslinux/live-bootstrap steps/tcc-0.9.27 musl-v2 pass source input
-  url = "https://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
+  url = "https://download-mirror.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
   hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
   name = "tcc-0.9.27-src",
 } in

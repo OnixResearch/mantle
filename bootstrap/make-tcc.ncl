@@ -12,7 +12,11 @@ let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
 
 let make_src = crunch.fetchTarball {
-  url = "https://ftpmirror.gnu.org/make/make-3.82.tar.bz2",
+  # first-consumer: bootstrap/make-tcc.ncl
+  # provenance: fosslinux/live-bootstrap steps/make-3.82/pass1.kaem source input
+  # ftpmirror.gnu.org returned 502 during runtime validation; use the stable
+  # kernel.org GNU mirror for the same fixed-output tarball.
+  url = "https://mirrors.kernel.org/gnu/make/make-3.82.tar.bz2",
   hash = "sha256-GwvLvcEtBMdaC/3YqmUkE9aoNTmrj9yQ39Vyd+Fw+M4=",
   name = "make-3.82-src",
 } in

@@ -1,0 +1,11 @@
+Task-ID: V2
+Covers: bootstrap.part.make.3.82.amd64.execution
+
+Command: timeout 360 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --no-substitute --store .crunch-drain/make-repair-v2-store --state-dir .crunch-drain/make-repair-v2-state bootstrap/make-tcc.ncl
+Provider: crunch local builder; substituters disabled; bubblewrap from nixpkgs; fresh local store/state
+Started: 2026-04-30T23:40:54Z
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.crunch-drain/make-repair-v2-state/signing-key)
+[2m2026-04-30T23:40:54.884434Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/make-repair-v2-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-04-30T23:40:54.894014Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/make-repair-v2-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+Exit status: 124
+Completed: 2026-04-30T23:46:54Z
