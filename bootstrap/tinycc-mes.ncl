@@ -87,6 +87,7 @@ let tcc_src = crunch.fetchTarball {
         $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
         $BB sed -i 's/loc = 0;/loc = 0;\
     ind = cur_text_section->data_offset;/' x86_64-gen.c
+        $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
 
         # The Mes/TCC varargs path corrupts snprintf/sprintf string expansion
         # in the first boot compiler. Spell the bootstrap path constructors and

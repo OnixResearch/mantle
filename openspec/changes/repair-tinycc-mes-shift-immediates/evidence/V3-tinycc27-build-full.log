@@ -1,0 +1,16 @@
+2026-04-30T17:00:16Z crunch build bootstrap/tinycc.ncl
+
+build succeeded drv=tinycc-0.9.27.drv outputs=["/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27"]
+worker streaming finished completed=1 succeeded=1 failed=0 roots=1
+
+--- build log: tinycc-0.9.27 ---
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc-final
+tcc version 0.9.27 (x86_64 Linux)
+
+tinycc-0.9.27: compile tcc-final with /crunch/store/idif5ffznlbrn0ji82q6fjix3pkw1n6s-tinycc-0.9.26/bin/tcc-0.9.26
+
+--- end log ---
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27

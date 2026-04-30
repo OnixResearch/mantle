@@ -1,0 +1,11 @@
+tcc version 0.9.27 (x86_64 Linux)
+hello_size=672
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+getopt_size=15516
+malformed_rc=1
+%s:%d: error: %s expected
+%s:%d: error: %s expected
+workdir=/tmp/tmp.uto24a2yIk
