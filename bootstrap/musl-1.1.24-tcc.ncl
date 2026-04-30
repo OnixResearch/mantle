@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
 let musl_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/musl-1.1.24-tcc.ncl
+  # provenance: fosslinux/live-bootstrap steps/musl-1.1.24/pass1.sh source input
   url = "https://musl.libc.org/releases/musl-1.1.24.tar.gz",
   hash = "sha256-mSl3003jmxfRju1tcJlRGT75yWw13QJ89diR6M6prkE=",
   name = "musl-1.1.24-src",
@@ -67,10 +69,15 @@ let musl_src = crunch.fetchTarball {
       # Install headers, static lib, and crt files
       make install
 
-      # Verify
+      # Verify the first-musl output contract.  This pass must fail closed:
+      # downstream tcc-musl stages need libc.a, installed headers, and at
+      # least one startup object rather than a silently incomplete install.
       test -f "$out/lib/libc.a"
       test -f "$out/include/stdio.h"
-      test -f "$out/lib/crt1.o" || test -f "$out/lib/Scrt1.o" || true
+      if [ ! -f "$out/lib/crt1.o" ] && [ ! -f "$out/lib/Scrt1.o" ]; then
+        echo "ERROR: musl install did not produce crt1.o or Scrt1.o" >&2
+        exit 1
+      fi
     "%,
   ],
   inputs = [stage0, mes, tcc_prep, make, sed, musl_src],
