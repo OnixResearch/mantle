@@ -1,6 +1,7 @@
 ## Implementation
 
-- [ ] I1 Reproduce the Mes-built TinyCC 0.9.26 immediate-shift bug and record disassembly. [covers=bootstrap.part.tinycc.0.9.26.shift-immediates] [evidence=evidence/I1-reproduction.md]
+- [x] I1 Reproduce the Mes-built TinyCC 0.9.26 immediate-shift bug and record disassembly. ✅ 1m (started: 2026-04-30T16:40:00Z → completed: 2026-04-30T16:40:19Z) [covers=bootstrap.part.tinycc.0.9.26.shift-immediates] [evidence=evidence/I1-reproduction.md]
+  - Evidence summary: PASS, `x >> 8` disassembles as `shr $0x0,%eax` and `x << 3` as `shl $0x0,%eax`, while `x & 31` correctly emits `and $0x1f,%eax`.
 - [ ] I2 Implement the smallest `bootstrap/tinycc-mes.ncl` codegen repair for immediate shift counts. [covers=bootstrap.part.tinycc.0.9.26.shift-immediates] [evidence=evidence/I2-fix.md]
 - [ ] I3 Apply and document any remaining narrow TinyCC 0.9.27 varargs/path patch exposed after the predecessor shift repair, or record that none was needed. [covers=bootstrap.part.tinycc.0.9.26.shift-immediates] [evidence=evidence/I3-tinycc27-followup.md]
 

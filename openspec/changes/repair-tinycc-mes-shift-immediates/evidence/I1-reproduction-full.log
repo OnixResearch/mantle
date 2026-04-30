@@ -1,0 +1,41 @@
+Task-ID: I1
+Covers: bootstrap.part.tinycc.0.9.26.shift-immediates
+compiler=/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/miymhdmqink0c81drn4y1f1chc73vdf9-tinycc-0.9.26/bin/tcc
+--- compile
+compile_rc=0
+--- disassembly
+
+shift.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <f>:
+   0:	55                   	push   %rbp
+   1:	48 89 e5             	mov    %rsp,%rbp
+   4:	48 81 ec 10 00 00 00 	sub    $0x10,%rsp
+   b:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)
+   f:	8b 45 f8             	mov    -0x8(%rbp),%eax
+  12:	c1 e8 00             	shr    $0x0,%eax
+  15:	c9                   	leave
+  16:	c3                   	ret
+
+0000000000000017 <g>:
+  17:	55                   	push   %rbp
+  18:	48 89 e5             	mov    %rsp,%rbp
+  1b:	48 81 ec 10 00 00 00 	sub    $0x10,%rsp
+  22:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)
+  26:	8b 45 f8             	mov    -0x8(%rbp),%eax
+  29:	c1 e0 00             	shl    $0x0,%eax
+  2c:	c9                   	leave
+  2d:	c3                   	ret
+
+000000000000002e <h>:
+  2e:	55                   	push   %rbp
+  2f:	48 89 e5             	mov    %rsp,%rbp
+  32:	48 81 ec 10 00 00 00 	sub    $0x10,%rsp
+  39:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)
+  3d:	8b 45 f8             	mov    -0x8(%rbp),%eax
+  40:	83 e0 1f             	and    $0x1f,%eax
+  43:	c9                   	leave
+  44:	c3                   	ret
