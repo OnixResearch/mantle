@@ -1,0 +1,16 @@
+{
+  "live-part-patch-2-5-9": [
+    {
+      "severity": "warning",
+      "message": "specs/bootstrap/spec.md:3 heading missing r[...] id"
+    },
+    {
+      "severity": "warning",
+      "message": "specs/bootstrap/spec.md:9 heading missing r[...] id"
+    },
+    {
+      "severity": "warning",
+      "message": "specs/bootstrap/spec.md:17 heading missing r[...] id"
+    }
+  ]
+}
