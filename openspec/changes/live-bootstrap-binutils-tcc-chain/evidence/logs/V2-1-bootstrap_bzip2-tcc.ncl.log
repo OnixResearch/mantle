@@ -1,0 +1,3 @@
+command: nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --no-substitute --state-dir /home/brittonr/git/crunch/crunch/.crunch-drain/binutils-tcc-state --store /home/brittonr/git/crunch/crunch/.crunch-drain/store bootstrap/bzip2-tcc.ncl
+provider: crunch local builder; substituters disabled
+started: 2026-04-30T21:24:00Z
