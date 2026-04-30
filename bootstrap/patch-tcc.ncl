@@ -10,6 +10,8 @@ let tcc = import "tinycc.ncl" in
 let make = import "make-tcc.ncl" in
 
 let patch_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/patch-tcc.ncl
+  # provenance: fosslinux/live-bootstrap steps/patch-2.5.9/pass1.kaem source input
   url = "https://ftpmirror.gnu.org/patch/patch-2.5.9.tar.gz",
   hash = "sha256-LiyweTmLg8H9PeHjwfJAPO34y//rF+mD+7IdsozDzLM=",
   name = "patch-2.5.9-src",
@@ -58,6 +60,7 @@ let patch_src = crunch.fetchTarball {
                  dirname inp maketime partime patch pch quote quotearg \
                  quotesys util version xmalloc; do
         tcc -c $CFLAGS $src.c -o $src.o
+        test -s "$src.o"
       done
 
       # Link
@@ -69,6 +72,16 @@ let patch_src = crunch.fetchTarball {
 
       # Verify
       ./patch --version
+      $BB printf 'old\n' > smoke.txt
+      $BB cat > smoke.diff <<'EOF'
+--- smoke.txt
++++ smoke.txt
+@@ -1 +1 @@
+-old
++new
+EOF
+      ./patch smoke.txt smoke.diff
+      $BB grep '^new$' smoke.txt
 
       # Install
       $BB mkdir -p "$out/bin"
@@ -76,6 +89,7 @@ let patch_src = crunch.fetchTarball {
       $BB chmod 755 "$out/bin/patch"
 
       test -x "$out/bin/patch"
+      "$out/bin/patch" --version
     "%,
   ],
   inputs = [stage0, mes, tcc, make, patch_src],
