@@ -1,0 +1,7 @@
+Task-ID: V4
+Covers: bootstrap.part.tinycc.0.9.27.amd64.compile
+Command: grep -nE '/usr/bin|/bin/(cc|gcc|ld|ar)|nix-|nix |/nix/store/.+-(gcc|binutils|glibc)' bootstrap/tinycc.ncl evidence/V2-build-full.log
+Allowed sandbox shell references: /bin/sh builder and /bin/busybox inside sandbox.
+--- matches
+grep_rc=1
+host_leakage=none

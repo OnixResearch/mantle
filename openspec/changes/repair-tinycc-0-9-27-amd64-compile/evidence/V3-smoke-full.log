@@ -1,0 +1,16 @@
+Task-ID: V3
+Covers: bootstrap.part.tinycc.0.9.27.amd64.compile
+compiler=/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/aqq1ifqcckz0nllskfqz3sz36mz23n8i-tinycc-0.9.27/bin/tcc
+--- version
+tcc version 0.9.27 (x86_64 Linux)
+version_rc=0
+--- positive compile
+hello_rc=0
+hello_object_nonempty=yes
+---x--x--- 1 brittonr brittonr 668 Apr 30 12:20 hello.o
+--- malformed negative compile
+%s:%d: error: %s expected
+%s:%d: error: %s expected
+malformed_rc=1
+malformed_clean_failure=yes
+ls: cannot access 'malformed.o': No such file or directory

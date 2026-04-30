@@ -1,0 +1,4 @@
+Task-ID: V5
+Covers: bootstrap.part.tinycc.0.9.27.amd64.compile
+--- openspec validate --strict
+Change 'repair-tinycc-0-9-27-amd64-compile' is valid
