@@ -1,10 +1,6 @@
 Task-ID: V3
 Covers: bootstrap.gcc47.transition
 
-Status: blocked.
+Status: deferred
 
-## Blocker
-
-Depends on V2 build transcript and transcript checker (parent source-chain I10).
-
-Verified: 2026-04-27 (blocker recorded)
+Host-leakage validation depends on the deferred gcc-4.7 build transcript and shared transcript checker work. Deferred to OpenSpec change `live-bootstrap-gcc-4-7-runtime-validation`.
