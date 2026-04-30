@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
 let tcc27_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/tcc-musl-prep.ncl
+  # provenance: fosslinux/live-bootstrap steps/tcc-0.9.27 musl-prep pass source input
   url = "https://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
   hash = "sha256-J1qVIv8ti91hOO6Gp2Wqho3t8C7jQHcXpTI85IPwZn0=",
   name = "tcc-0.9.27-src",
@@ -85,6 +87,10 @@ let tcc27_src = crunch.fetchTarball {
       $BB cp -r "$MES_OUT/include/mes-include" "$out/include/mes"
 
       test -x "$out/bin/tcc"
+      test -x "$out/bin/tcc-musl-prep"
+      test -f "$out/lib/${MES_ARCH}-mes/libc.a"
+      test -f "$out/include/mes/stdio.h"
+      "$out/bin/tcc" -v
     "%,
   ],
   inputs = [stage0, mes, tcc, make, sed, tcc27_src],

@@ -7,7 +7,7 @@ Every task records evidence under `openspec/changes/live-part-tcc-musl-prep/evid
 - [x] I1 Confirm `musl 1.1.24 and musl_target` ordering, source notes, and expected output contract from `parts.rst` and the matching `steps/` script. ✅ 2m (started: 2026-04-28T23:53:02Z → completed: 2026-04-28T23:53:56Z) [covers=bootstrap.part.tcc.musl.prep] [evidence=evidence/I1-upstream-ordering.md]
 - [x] I2 Audit `bootstrap/tcc-musl-prep.ncl` against the upstream part and record intentional Crunch deviations. ✅ 2m (started: 2026-04-28T23:53:56Z → completed: 2026-04-28T23:54:03Z) [covers=bootstrap.part.tcc.musl.prep] [evidence=evidence/I2-derivation-audit.md]
   - Evidence summary: PARTIAL, bridge compiler shape matches but upstream patch/runtime assumptions must be resolved before build proof.
-- [ ] I3 Fix `bootstrap/tcc-musl-prep.ncl` so its source pins, patches, inputs, and output contract are self-contained.
+- [x] I3 Fix `bootstrap/tcc-musl-prep.ncl` so its source pins, patches, inputs, and output contract are self-contained. ✅ 5m (started: 2026-04-30T22:46:00Z → completed: 2026-04-30T22:51:00Z) [covers=bootstrap.part.tcc.musl.prep] [evidence=evidence/I3-fix.md]
 
 ## Verification
 
