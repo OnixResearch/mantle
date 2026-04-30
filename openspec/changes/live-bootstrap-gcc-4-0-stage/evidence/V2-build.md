@@ -1,20 +1,10 @@
 Task-ID: V2
 Covers: bootstrap.gcc40.transition
 
-Status: blocked.
+Status: deferred
 
-## Blocker
+`bootstrap/gcc-4.0.ncl` runtime validation depends on binutils-tcc runtime validation. The drain attempt for `live-bootstrap-binutils-tcc-chain` resolved the missing `crunch`/`bubblewrap` prerequisite but exceeded the local budget in the Mes prerequisite for the first binutils-tcc epoch.
 
-No `crunch` binary available. `~/.cargo-target/debug/crunch` does not exist.
-Building crunch requires nightly Rust + clang + mold + pkg-config + openssl-dev.
+Deferred to OpenSpec change `live-bootstrap-gcc-4-0-runtime-validation`.
 
-Also depends on binutils-tcc-chain V2 (all 48 chain dependencies must build
-first, and their hashes need NAR correction).
-
-## Required when unblocked
-
-Command: `crunch build bootstrap/gcc-4.0.ncl`
-Record: command, exit status, output path, build duration, provider selection,
-fallback status, languages built (c,c++ or c only).
-
-Verified: 2026-04-27 (blocker recorded)
+Verified: 2026-04-30T21:55:51Z
