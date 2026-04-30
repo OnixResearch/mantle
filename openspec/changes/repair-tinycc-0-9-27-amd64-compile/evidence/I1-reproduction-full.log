@@ -1,0 +1,101 @@
+tcc=/home/brittonr/git/crunch/crunch/target/live-part-tinycc-0-9-27/run-current/store/0vz94d750q8wbylhln3sza1zwcwsvb1p-tinycc-0.9.27/bin/tcc
+--- version
+tcc version 0.9.27 (x86_64 Linux)
+version_rc=0
+--- bounded object compile
+hello_rc=124
+ls: cannot access 'hello.o': No such file or directory
+--- verbose compile
+tcc version 0.9.27 (x86_64 Linux)
+%s %*s%s
+ /bin/bash: line 32: 3523175 Segmentation fault         (core dumped) timeout 5s "$TCC" -vv -c hello.c -o hello-vv.o
+vv_rc=139
+ls: cannot access 'hello-vv.o': No such file or directory
+--- malformed compile
+%s:%d: error: %s expected
+/bin/bash: line 32: 3523229 Segmentation fault         (core dumped) timeout 5s "$TCC" -c malformed.c -o malformed.o
+malformed_rc=139
+ls: cannot access 'malformed.o': No such file or directory
+--- strace tail for hello compile
+strace_rc=124
+brk(0x30272c50)                         = 0x30272c50
+brk(0x30272c80)                         = 0x30272c80
+brk(0x30332c80)                         = 0x30332c80
+brk(0x30332cb0)                         = 0x30332cb0
+brk(0x30372cb0)                         = 0x30372cb0
+brk(0x303730b0)                         = 0x303730b0
+brk(0x303740b0)                         = 0x303740b0
+brk(0x303760b0)                         = 0x303760b0
+brk(0x303780a0)                         = 0x303780a0
+brk(0x303780a8)                         = 0x303780a8
+brk(0x303780c0)                         = 0x303780c0
+brk(0x30378529)                         = 0x30378529
+brk(0x3037898a)                         = 0x3037898a
+brk(0x30378df8)                         = 0x30378df8
+brk(0x30379259)                         = 0x30379259
+brk(0x303796bc)                         = 0x303796bc
+brk(0x30379b1a)                         = 0x30379b1a
+brk(0x30379f78)                         = 0x30379f78
+brk(0x3037a3ce)                         = 0x3037a3ce
+brk(0x3037a82b)                         = 0x3037a82b
+brk(0x3037ac89)                         = 0x3037ac89
+brk(0x3037b0fb)                         = 0x3037b0fb
+brk(0x3037b565)                         = 0x3037b565
+brk(0x3037b9c2)                         = 0x3037b9c2
+brk(0x3037be2a)                         = 0x3037be2a
+brk(0x3037c29a)                         = 0x3037c29a
+brk(0x3037c72a)                         = 0x3037c72a
+brk(0x3037cbc6)                         = 0x3037cbc6
+brk(0x3037d03a)                         = 0x3037d03a
+brk(0x3037d04a)                         = 0x3037d04a
+brk(0x3037d058)                         = 0x3037d058
+brk(0x3037d067)                         = 0x3037d067
+brk(0x3037d0b1)                         = 0x3037d0b1
+brk(0x3037d0c0)                         = 0x3037d0c0
+brk(0x3037d105)                         = 0x3037d105
+brk(0x3037d110)                         = 0x3037d110
+brk(0x3037d159)                         = 0x3037d159
+brk(0x3037d170)                         = 0x3037d170
+brk(0x3037d1b5)                         = 0x3037d1b5
+brk(0x3037d1c0)                         = 0x3037d1c0
+open("hello.c", O_RDONLY)               = 3
+brk(0x303811c4)                         = 0x303811c4
+brk(0x304091c8)                         = 0x304091c8
+brk(0x3040b618)                         = 0x3040b618
+brk(0x3040b620)                         = 0x3040b620
+brk(0x3040b628)                         = 0x3040b628
+brk(0x3040ba8f)                         = 0x3040ba8f
+brk(0x3040bad0)                         = 0x3040bad0
+brk(0x3040bae0)                         = 0x3040bae0
+read(3, "int main(){return 0;}\n", 8192) = 22
+brk(0x3040bb60)                         = 0x3040bb60
+brk(0x3040bb70)                         = 0x3040bb70
+brk(0x3040bb90)                         = 0x3040bb90
+brk(0x3040bbd0)                         = 0x3040bbd0
+brk(0x3040bc50)                         = 0x3040bc50
+brk(0x3040bd50)                         = 0x3040bd50
+brk(0x3040bf50)                         = 0x3040bf50
+brk(0x3040c350)                         = 0x3040c350
+brk(0x3040cb50)                         = 0x3040cb50
+brk(0x3040db50)                         = 0x3040db50
+brk(0x3040fb50)                         = 0x3040fb50
+brk(0x30413b50)                         = 0x30413b50
+brk(0x3041bb50)                         = 0x3041bb50
+brk(0x3042bb50)                         = 0x3042bb50
+brk(0x3044bb50)                         = 0x3044bb50
+brk(0x3048bb50)                         = 0x3048bb50
+brk(0x3050bb50)                         = 0x3050bb50
+brk(0x3060bb50)                         = 0x3060bb50
+brk(0x3080bb50)                         = 0x3080bb50
+brk(0x30c0bb50)                         = 0x30c0bb50
+brk(0x3140bb50)                         = 0x3140bb50
+brk(0x3240bb50)                         = 0x3240bb50
+brk(0x3440bb50)                         = 0x3440bb50
+brk(0x3840bb50)                         = 0x3840bb50
+brk(0x4040bb50)                         = 0x4040bb50
+brk(0x5040bb50)                         = 0x5040bb50
+brk(0x7040bb50)                         = 0x7040bb50
+brk(0xb040bb50)                         = 0xb040bb50
+--- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=3523360, si_uid=1555} ---
++++ killed by SIGTERM +++
+--- strace stderr

@@ -1,6 +1,7 @@
 ## Implementation
 
-- [ ] I1 Reproduce and localize the `tinycc 0.9.27` amd64 compile hang with bounded `tcc -c` probes. [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I1-reproduction.md]
+- [x] I1 Reproduce and localize the `tinycc 0.9.27` amd64 compile hang with bounded `tcc -c` probes. ✅ 1m (started: 2026-04-30T15:50:40Z → completed: 2026-04-30T15:51:20Z) [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I1-reproduction.md]
+  - Evidence summary: PASS, version exits 0 but `tcc -c hello.c` times out with no object after repeated `brk()` growth; verbose and malformed-input probes segfault through Mes-libc-corrupted diagnostics.
 - [ ] I2 Implement the smallest stable `bootstrap/tinycc.ncl` repair for amd64 object compilation. [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I2-fix.md]
 
 ## Verification
