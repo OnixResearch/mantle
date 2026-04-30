@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
 let musl_src = crunch.fetchTarball {
+  # first-consumer: bootstrap/musl-1.1.24-tcc-musl.ncl
+  # provenance: fosslinux/live-bootstrap steps/musl-1.1.24/pass2.sh source input
   url = "https://musl.libc.org/releases/musl-1.1.24.tar.gz",
   hash = "sha256-mSl3003jmxfRju1tcJlRGT75yWw13QJ89diR6M6prkE=",
   name = "musl-1.1.24-src",
@@ -63,8 +65,15 @@ let musl_src = crunch.fetchTarball {
       make -j1 AR="tcc -ar" RANLIB=true
       make install
 
+      # Verify the rebuilt-musl output contract.  The later tcc-musl-v2 and
+      # post-musl toolchain stages need a complete static libc install with
+      # headers and startup objects, not just libc.a.
       test -f "$out/lib/libc.a"
       test -f "$out/include/stdio.h"
+      if [ ! -f "$out/lib/crt1.o" ] && [ ! -f "$out/lib/Scrt1.o" ]; then
+        echo "ERROR: rebuilt musl install did not produce crt1.o or Scrt1.o" >&2
+        exit 1
+      fi
     "%,
   ],
   inputs = [stage0, tcc_musl, musl_prev, make, sed, musl_src],
