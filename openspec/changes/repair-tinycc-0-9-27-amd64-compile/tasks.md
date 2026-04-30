@@ -2,7 +2,8 @@
 
 - [x] I1 Reproduce and localize the `tinycc 0.9.27` amd64 compile hang with bounded `tcc -c` probes. ✅ 1m (started: 2026-04-30T15:50:40Z → completed: 2026-04-30T15:51:20Z) [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I1-reproduction.md]
   - Evidence summary: PASS, version exits 0 but `tcc -c hello.c` times out with no object after repeated `brk()` growth; verbose and malformed-input probes segfault through Mes-libc-corrupted diagnostics.
-- [ ] I2 Implement the smallest stable `bootstrap/tinycc.ncl` repair for amd64 object compilation. [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I2-fix.md]
+- [x] I2 Implement the smallest stable `bootstrap/tinycc.ncl` repair for amd64 object compilation. ✅ 29m (started: 2026-04-30T15:51:30Z → completed: 2026-04-30T16:20:24Z) [covers=bootstrap.part.tinycc.0.9.27.amd64.compile] [evidence=evidence/I2-fix.md]
+  - Evidence summary: PASS, tcc-0.9.26 emitted `shr $0` for TinyCC 0.9.27 byte-emission shifts; `bootstrap/tinycc.ncl` now patches x86_64 byte emitters/REX helpers to avoid power-of-two shifts and patches error cleanup so malformed input exits cleanly.
 
 ## Verification
 

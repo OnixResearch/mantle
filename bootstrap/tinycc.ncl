@@ -78,6 +78,54 @@ static void fill_local_got_entries(TCCState *s1)\
         $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
         $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
         $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+        $BB sed -i 's/#define REX_BASE(reg).*/#define REX_BASE(reg) ((reg) >= 8 ? 1 : 0)/' x86_64-gen.c
+        $BB sed -i 's/(REX_BASE(r2) << 2) | (ll << 3)/(REX_BASE(r2) ? 4 : 0) | (ll ? 8 : 0)/' x86_64-gen.c
+        $BB sed -i 's/(REX_BASE(r) << 8)/(REX_BASE(r) ? 256 : 0)/g' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void o(unsigned int c)/,/^}/c\
+ST_FUNC void o(unsigned int c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    int n = sizeof(c);\
+    int i;\
+    while (n > 0 && p[n - 1] == 0)\
+        n--;\
+    for (i = 0; i < n; i++)\
+        g(p[i]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le16(int v)/,/^}/c\
+ST_FUNC void gen_le16(int v)\
+{\
+    unsigned char *p = (unsigned char *)&v;\
+    g(p[0]);\
+    g(p[1]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le32(int c)/,/^}/c\
+ST_FUNC void gen_le32(int c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    g(p[0]);\
+    g(p[1]);\
+    g(p[2]);\
+    g(p[3]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le64(int64_t c)/,/^}/c\
+ST_FUNC void gen_le64(int64_t c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    g(p[0]);\
+    g(p[1]);\
+    g(p[2]);\
+    g(p[3]);\
+    g(p[4]);\
+    g(p[5]);\
+    g(p[6]);\
+    g(p[7]);\
+}\
+' x86_64-gen.c
+        $BB sed -i 's/g(func_ret_sub >> 8);/{ unsigned char *p = (unsigned char *)\&func_ret_sub; g(p[1]); }/g' x86_64-gen.c
 
         # The predecessor Mes runtime varargs path corrupts snprintf/sprintf
         # string expansion in the first tcc-0.9.27 binary. Spell bootstrap
@@ -87,6 +135,8 @@ static void fill_local_got_entries(TCCState *s1)\
         $BB sed -i 's|snprintf(buf, sizeof(buf), fmt, paths.*|if (fmt[3] == '\''l'\'') { strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a"); } else { strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename); }|' libtcc.c
         $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
         $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
+        $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
+        $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
         $BB sed -i '/s1->tcc_lib_path, filename);/s|.*|    strcpy(buf, s1->tcc_lib_path); strcat(buf, "/"); strcat(buf, filename);|' tccelf.c
         $BB sed -i 's/const char filename../const char *filename/' tccelf.c
       }
