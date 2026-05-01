@@ -56,6 +56,16 @@ let make_src = crunch.fetchTarball {
       # Create empty config.h
       : > config.h
 
+      # TinyCC 0.9.27 on this Mes libc path rejects GNU Make's static
+      # command-switch initializer for the `-j/--jobs` no-argument and
+      # default values. This pass1 make is used only as a bootstrap driver,
+      # so keep the option entry present but avoid the address constants that
+      # TCC cannot compile.
+      $BB sed -i \
+        -e 's/&inf_jobs, &default_job_slots/0, 0/' \
+        -e 's/&default_load_average/0/g' \
+        -e 's/"basic", 0, "debug"/0, 0, "debug"/' \
+        main.c
       # Compile each source file with tcc
       tcc -c getopt.c
       tcc -c getopt1.c
@@ -69,7 +79,7 @@ let make_src = crunch.fetchTarball {
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -Dvfork=fork function.c
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR -Dvfork=fork job.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DLOCALEDIR=\"/fake\" -DPACKAGE=\"make\" -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DNO_FLOAT -DLOCALEDIR=\"/fake\" -DPACKAGE=\"make\" -DHAVE_MKTEMP -DHAVE_GETCWD main.c
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STRERROR -DHAVE_VPRINTF -DHAVE_ANSI_COMPILER -DHAVE_STDARG_H misc.c
       tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DINCLUDEDIR=\"/include\" read.c
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 -DHAVE_FCNTL_H -DLIBDIR=\"/lib\" remake.c
@@ -82,11 +92,12 @@ let make_src = crunch.fetchTarball {
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART hash.c
       tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART remote-stub.c
       tcc -c -DHAVE_FCNTL_H getloadavg.c
-      tcc -c -Iglob -DSTDC_HEADERS glob/fnmatch.c
-      tcc -c -Iglob -DHAVE_STRDUP -DHAVE_DIRENT_H glob/glob.c
+      tcc -c -Iglob -DSTDC_HEADERS -o fnmatch.o glob/fnmatch.c
+      tcc -c -Iglob -DHAVE_STRDUP -DHAVE_DIRENT_H -o glob.o glob/glob.c
+      $BB chmod 644 *.o
 
       # Link
-      tcc -static -o make \
+      tcc -L"$TCC/lib/mes" -L"$TCC/lib/mes/tcc" -static -o make \
         getopt.o getopt1.o ar.o arscan.o commands.o default.o dir.o \
         expand.o file.o function.o implicit.o job.o main.o misc.o \
         read.o remake.o rule.o signame.o strcache.o variable.o \

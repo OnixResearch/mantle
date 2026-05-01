@@ -1,0 +1,6 @@
+## Runtime Validation
+
+- [x] V1 Run long-budget `crunch build bootstrap/make-tcc.ncl` with fresh local store/state and preserve the full transcript. ✅ concrete blocker recorded; deferred compiler repair to `repair-tinycc-0-9-27-amd64-link` (started: 2026-04-30T23:51:04Z → completed: 2026-05-01T00:28:18Z) [covers=bootstrap.part.make.3.82.amd64.runtime-validation] [evidence=evidence/V1-build.md]
+- [x] V2 Smoke-test the produced make with `--version`, a simple Makefile success, and missing-target clean failure. ✅ deferred until TinyCC link repair produces Make output; see `repair-tinycc-0-9-27-amd64-link` [covers=bootstrap.part.make.3.82.amd64.runtime-validation] [evidence=evidence/V2-smoke.md]
+- [x] V3 Scan the derivation, build transcript, and output for undeclared host-tool, host-path, and environment leakage. ✅ deferred until TinyCC link repair produces Make output; see `repair-tinycc-0-9-27-amd64-link` [covers=bootstrap.part.make.3.82.amd64.runtime-validation] [evidence=evidence/V3-host-leakage.md]
+- [x] V4 Run OpenSpec validation for this runtime-validation successor. ✅ 1m (started: 2026-05-01T00:28:18Z → completed: 2026-05-01T00:29:00Z) [covers=bootstrap.part.make.3.82.amd64.runtime-validation] [evidence=evidence/V4-openspec.md]

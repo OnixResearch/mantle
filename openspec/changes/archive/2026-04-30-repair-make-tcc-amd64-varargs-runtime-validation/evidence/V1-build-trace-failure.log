@@ -1,0 +1,1273 @@
+[2m2026-05-01T00:17:33.739460Z[0m [33m WARN[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m build failed [3mstdout[0m[2m=[0m [3mstderr[0m[2m=[0m+ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27 ]
++ echo /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ return
++ TCC=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ find_input mes
++ '[' -d /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes ]
++ echo /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ return
++ MES_OUT=/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ find_input make-3.82-src
++ '[' -d /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src ]
++ echo /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ return
++ MAKE_SRC=/crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ export 'PATH=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes/bin:/path-not-set'
++ WORK=/tmp/make-build
++ /bin/busybox mkdir -p /tmp/make-build
++ cd /tmp/make-build
++ /bin/busybox cp -r /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src make-3.82
++ /bin/busybox chmod -R u+w make-3.82
++ cd make-3.82
++ :
++ /bin/busybox sed -i -e 's/&inf_jobs, &default_job_slots/0, 0/' -e 's/&default_load_average/0/g' -e 's/"basic", 0, "debug"/0, 0, "debug"/' main.c
++ /bin/busybox grep -n 'jobs\|load-average' main.c
++ /bin/busybox head -20
+77:static void clean_jobserver (int status);
+229:static unsigned int inf_jobs = 0;
+231:/* File descriptors for the jobs pipe.  */
+233:static struct stringlist *jobserver_fds = 0;
+238:/* Maximum load average at which multiple jobs will be run.
+240:   zero load (which could be useful to start infinite jobs remotely
+331:  -j [N], --jobs[=N]          Allow N jobs at once; infinite jobs with no arg.\n"),
+335:  -l [N], --load-average[=N], --max-load[=N]\n\
+336:                              Don't start multiple jobs unless load is below N.\n"),
+393:      "jobs" },
+394:    { CHAR_MAX+2, string, &jobserver_fds, 1, 1, 0, 0, 0, "jobserver-fds" },
+399:      0, "load-average" },
+402:      0, "load-average" },
+1146:                           " jobserver"
+1576:     If we're using the jobs pipe we need a signal handler so that
+1578:     jobserver pipe in job.c if we're waiting for a token.
+1703:             _("Parallel jobs (-j) are not supported on this platform."));
+1710:  /* If the jobserver-fds option is seen, make sure that -j is reasonable.  */
+1712:  if (jobserver_fds)
+1717:      for (ui=1; ui < jobserver_fds->idx; ++ui)
++ tcc -c getopt.c
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c getopt1.c
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' commands.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DSCCS_GET="/nullop"' default.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' file.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-Dvfork=fork' function.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR '-Dvfork=fork' job.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DLOCALEDIR="/fake"' '-DPACKAGE="make"' -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: error: initializer element is not constant
+%s:%d: error: initializer element is not constant
+ [3mexit_code[0m[2m=[0mexit status: 1
+[2m2026-05-01T00:17:33.739665Z[0m [31mERROR[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m [3merror[0m[2m=[0mnonzero exit code: exit status: 1
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27 ]
++ echo /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ return
++ TCC=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ find_input mes
++ '[' -d /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes ]
++ echo /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ return
++ MES_OUT=/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ find_input make-3.82-src
++ '[' -d /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src ]
++ echo /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ return
++ MAKE_SRC=/crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ export 'PATH=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes/bin:/path-not-set'
++ WORK=/tmp/make-build
++ /bin/busybox mkdir -p /tmp/make-build
++ cd /tmp/make-build
++ /bin/busybox cp -r /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src make-3.82
++ /bin/busybox chmod -R u+w make-3.82
++ cd make-3.82
++ :
++ /bin/busybox sed -i -e 's/&inf_jobs, &default_job_slots/0, 0/' -e 's/&default_load_average/0/g' -e 's/"basic", 0, "debug"/0, 0, "debug"/' main.c
++ /bin/busybox grep -n 'jobs\|load-average' main.c
++ /bin/busybox head -20
+77:static void clean_jobserver (int status);
+229:static unsigned int inf_jobs = 0;
+231:/* File descriptors for the jobs pipe.  */
+233:static struct stringlist *jobserver_fds = 0;
+238:/* Maximum load average at which multiple jobs will be run.
+240:   zero load (which could be useful to start infinite jobs remotely
+331:  -j [N], --jobs[=N]          Allow N jobs at once; infinite jobs with no arg.\n"),
+335:  -l [N], --load-average[=N], --max-load[=N]\n\
+336:                              Don't start multiple jobs unless load is below N.\n"),
+393:      "jobs" },
+394:    { CHAR_MAX+2, string, &jobserver_fds, 1, 1, 0, 0, 0, "jobserver-fds" },
+399:      0, "load-average" },
+402:      0, "load-average" },
+1146:                           " jobserver"
+1576:     If we're using the jobs pipe we need a signal handler so that
+1578:     jobserver pipe in job.c if we're waiting for a token.
+1703:             _("Parallel jobs (-j) are not supported on this platform."));
+1710:  /* If the jobserver-fds option is seen, make sure that -j is reasonable.  */
+1712:  if (jobserver_fds)
+1717:      for (ui=1; ui < jobserver_fds->idx; ++ui)
++ tcc -c getopt.c
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c getopt1.c
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' commands.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DSCCS_GET="/nullop"' default.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' file.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-Dvfork=fork' function.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR '-Dvfork=fork' job.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DLOCALEDIR="/fake"' '-DPACKAGE="make"' -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: error: initializer element is not constant
+%s:%d: error: initializer element is not constant
+
+[2m2026-05-01T00:17:33.740065Z[0m [33m WARN[0m [2mcrunch_build::worker[0m[2m:[0m sandbox build failed [3mdrv[0m[2m=[0m/nix/store/0v4pbkrvq7zs70vfg8fpqli9vjlg3r2v-make-3.82-tcc.drv [3merr[0m[2m=[0mstore error: build: nonzero exit code: exit status: 1
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27 ]
++ echo /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ return
++ TCC=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ find_input mes
++ '[' -d /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes ]
++ echo /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ return
++ MES_OUT=/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ find_input make-3.82-src
++ '[' -d /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src ]
++ echo /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ return
++ MAKE_SRC=/crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ export 'PATH=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes/bin:/path-not-set'
++ WORK=/tmp/make-build
++ /bin/busybox mkdir -p /tmp/make-build
++ cd /tmp/make-build
++ /bin/busybox cp -r /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src make-3.82
++ /bin/busybox chmod -R u+w make-3.82
++ cd make-3.82
++ :
++ /bin/busybox sed -i -e 's/&inf_jobs, &default_job_slots/0, 0/' -e 's/&default_load_average/0/g' -e 's/"basic", 0, "debug"/0, 0, "debug"/' main.c
++ /bin/busybox grep -n 'jobs\|load-average' main.c
++ /bin/busybox head -20
+77:static void clean_jobserver (int status);
+229:static unsigned int inf_jobs = 0;
+231:/* File descriptors for the jobs pipe.  */
+233:static struct stringlist *jobserver_fds = 0;
+238:/* Maximum load average at which multiple jobs will be run.
+240:   zero load (which could be useful to start infinite jobs remotely
+331:  -j [N], --jobs[=N]          Allow N jobs at once; infinite jobs with no arg.\n"),
+335:  -l [N], --load-average[=N], --max-load[=N]\n\
+336:                              Don't start multiple jobs unless load is below N.\n"),
+393:      "jobs" },
+394:    { CHAR_MAX+2, string, &jobserver_fds, 1, 1, 0, 0, 0, "jobserver-fds" },
+399:      0, "load-average" },
+402:      0, "load-average" },
+1146:                           " jobserver"
+1576:     If we're using the jobs pipe we need a signal handler so that
+1578:     jobserver pipe in job.c if we're waiting for a token.
+1703:             _("Parallel jobs (-j) are not supported on this platform."));
+1710:  /* If the jobserver-fds option is seen, make sure that -j is reasonable.  */
+1712:  if (jobserver_fds)
+1717:      for (ui=1; ui < jobserver_fds->idx; ++ui)
++ tcc -c getopt.c
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c getopt1.c
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' commands.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DSCCS_GET="/nullop"' default.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' file.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-Dvfork=fork' function.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR '-Dvfork=fork' job.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DLOCALEDIR="/fake"' '-DPACKAGE="make"' -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: error: initializer element is not constant
+%s:%d: error: initializer element is not constant
+
+hermeticity: practical (no degraded facts)
+FAILED root: make-3.82-tcc
+  phase: build
+  error_class: builder
+  saved_log_path: /home/brittonr/git/crunch/crunch/.crunch-drain/make-runtime-state/logs/0v4pbkrvq7zs70vfg8fpqli9vjlg3r2v-make-3.82-tcc.drv.log
+  message: store error: build: nonzero exit code: exit status: 1
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27 ]
++ echo /crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ return
++ TCC=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27
++ find_input mes
++ '[' -d /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes ]
++ echo /crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ return
++ MES_OUT=/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ find_input make-3.82-src
++ '[' -d /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src ]
++ echo /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ return
++ MAKE_SRC=/crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src
++ export 'PATH=/crunch/store/44mb0vkwi7i3cs5r5dj8l92645a250g6-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/crunch/store/5kfa2griyaqdm9jrkvj8v9s26hww0x1w-mes/bin:/path-not-set'
++ WORK=/tmp/make-build
++ /bin/busybox mkdir -p /tmp/make-build
++ cd /tmp/make-build
++ /bin/busybox cp -r /crunch/store/adixn0z7lq2abpddqp1xmf9r0wka7chn-make-3.82-src make-3.82
++ /bin/busybox chmod -R u+w make-3.82
++ cd make-3.82
++ :
++ /bin/busybox sed -i -e 's/&inf_jobs, &default_job_slots/0, 0/' -e 's/&default_load_average/0/g' -e 's/"basic", 0, "debug"/0, 0, "debug"/' main.c
++ /bin/busybox grep -n 'jobs\|load-average' main.c
++ /bin/busybox head -20
+77:static void clean_jobserver (int status);
+229:static unsigned int inf_jobs = 0;
+231:/* File descriptors for the jobs pipe.  */
+233:static struct stringlist *jobserver_fds = 0;
+238:/* Maximum load average at which multiple jobs will be run.
+240:   zero load (which could be useful to start infinite jobs remotely
+331:  -j [N], --jobs[=N]          Allow N jobs at once; infinite jobs with no arg.\n"),
+335:  -l [N], --load-average[=N], --max-load[=N]\n\
+336:                              Don't start multiple jobs unless load is below N.\n"),
+393:      "jobs" },
+394:    { CHAR_MAX+2, string, &jobserver_fds, 1, 1, 0, 0, 0, "jobserver-fds" },
+399:      0, "load-average" },
+402:      0, "load-average" },
+1146:                           " jobserver"
+1576:     If we're using the jobs pipe we need a signal handler so that
+1578:     jobserver pipe in job.c if we're waiting for a token.
+1703:             _("Parallel jobs (-j) are not supported on this platform."));
+1710:  /* If the jobserver-fds option is seen, make sure that -j is reasonable.  */
+1712:  if (jobserver_fds)
+1717:      for (ui=1; ui < jobserver_fds->idx; ++ui)
++ tcc -c getopt.c
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c getopt1.c
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' commands.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DSCCS_GET="/nullop"' default.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
++ tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DFILE_TIMESTAMP_HI_RES=0' file.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-Dvfork=fork' function.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR '-Dvfork=fork' job.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
++ tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART '-DLOCALEDIR="/fake"' '-DPACKAGE="make"' -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: error: initializer element is not constant
+%s:%d: error: initializer element is not constant
+
+Exit status: 1
