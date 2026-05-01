@@ -3,6 +3,7 @@
 mod attest_cmd;
 mod bootstrap;
 mod bootstrap_source_root;
+mod bootstrap_validate;
 mod build_cmd;
 mod build_failure;
 mod build_log;
@@ -182,8 +183,11 @@ enum Command {
         action: SystemAction,
     },
 
-    /// Generate a seed.ncl from existing Nix store packages
+    /// Generate bootstrap seeds or validate bootstrap runtime evidence
     Bootstrap {
+        #[command(subcommand)]
+        action: Option<BootstrapAction>,
+
         /// Output file path
         #[arg(short, long, default_value = "seed.ncl")]
         output: PathBuf,
@@ -421,6 +425,35 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BootstrapAction {
+    /// Run build-profile preflight, build a bootstrap derivation, and save evidence
+    Validate {
+        /// Bootstrap .ncl derivation to validate
+        target: PathBuf,
+
+        /// Additional import paths for Nickel
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Directory where doctor/build/summary evidence is written
+        #[arg(long)]
+        evidence_dir: Option<PathBuf>,
+
+        /// Reuse the existing state/store directories instead of treating this as a fresh run
+        #[arg(long)]
+        resume: bool,
+
+        /// Maximum number of concurrent builds
+        #[arg(short, long)]
+        jobs: Option<u32>,
+
+        /// Reject degraded hermetic behavior once strict-mode blockers exist.
+        #[arg(long)]
+        strict_hermetic: bool,
     },
 }
 
@@ -1247,20 +1280,49 @@ fn load_stage0_inventory_policy(path: &Path) -> Result<protected_exec::Protected
 fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     match command {
         Command::Bootstrap {
+            action,
             output,
             fetch,
             source_root,
             stagex_lineage,
             packages,
-        } => run_bootstrap_command(
-            ctx,
-            output,
-            *fetch,
-            source_root.as_deref(),
-            stagex_lineage.as_deref(),
-            packages,
-        ),
+        } => {
+            if let Some(action) = action {
+                return run_bootstrap_action(ctx, action);
+            }
+            run_bootstrap_command(
+                ctx,
+                output,
+                *fetch,
+                source_root.as_deref(),
+                stagex_lineage.as_deref(),
+                packages,
+            )
+        },
         _ => unreachable!("bootstrap helper called with non-bootstrap command"),
+    }
+}
+
+fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<(), RunError> {
+    match action {
+        BootstrapAction::Validate {
+            target,
+            import_paths,
+            evidence_dir,
+            resume,
+            jobs,
+            strict_hermetic,
+        } => bootstrap_validate::cmd_bootstrap_validate(
+            ctx,
+            bootstrap_validate::BootstrapValidateOptions {
+                target: target.clone(),
+                import_paths: import_paths.clone(),
+                evidence_dir: evidence_dir.clone(),
+                resume: *resume,
+                jobs: *jobs,
+                strict_hermetic: *strict_hermetic,
+            },
+        ),
     }
 }
 

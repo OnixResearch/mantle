@@ -79,6 +79,18 @@ Current doctor profiles:
 Doctor is read-only: it does not start builds, download substitutes, or mutate
 store state.
 
+For bootstrap runtime-validation work, `crunch bootstrap validate` combines the
+build doctor preflight, a no-substitute build, captured stdout/stderr logs, a
+coarse host-path leakage scan, and OpenSpec-ready JSON/Markdown evidence:
+
+```bash
+crunch --json --store .crunch-drain/make-store \
+  --state-dir .crunch-drain/make-state \
+  bootstrap validate bootstrap/make-tcc.ncl \
+  --evidence-dir openspec/changes/live-part-make-3-82-runtime-validation/evidence \
+  --resume
+```
+
 Use `crunch build --plan` to preview what crunch will do per root without
 building:
 
