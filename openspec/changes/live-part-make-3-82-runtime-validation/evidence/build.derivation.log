@@ -1,0 +1,510 @@
+# crunch build log
+# derivation: make-3.82-tcc
+# drv_path: bwkphpkw52sz9zf3xqlyj8bqnqavn1ym-make-3.82-tcc.drv
+# status: failure
+# timestamp: 1777667440
+
+store error: build: nonzero exit code: exit status: 139
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: assignment from incompatible pointer type
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+In file included from %s:%d:
+In file included from %s:%d:
+In file included from %s:%d:
+%s:%d: warning: %s redefined
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: assignment makes pointer from integer without a cast
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+%s:%d: warning: implicit declaration of function '%s'
+Segmentation fault (core dumped)
