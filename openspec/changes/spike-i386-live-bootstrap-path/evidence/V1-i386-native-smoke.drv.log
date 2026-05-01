@@ -1,0 +1,8 @@
+# crunch build log
+# derivation: spike-i386-native-smoke
+# drv_path: da6q84mip6i4npbq35w08yh41k3dzic5-spike-i386-native-smoke.drv
+# status: success
+# timestamp: 1777678847
+
+-rwxr-xr-x    1 nixbld   nixbld          96 May  1 23:40 i386-exit42
+i386-exit42 rc=42
