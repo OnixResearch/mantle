@@ -1,0 +1,8 @@
+# Task-ID: I2
+# Covers: bootstrap.compiler.tinycc.0.9.27.amd64.static-link
+# Command: timeout 1200 nix shell nixpkgs#bubblewrap -c "/home/brittonr/git/crunch/crunch/target/debug/crunch" build --no-substitute --store "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-no-crti" --state-dir "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-no-crti" bootstrap/diag-tcc-link-matrix.ncl
+# Started: 2026-05-01T11:25:10-04:00
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-no-crti/8m1arms8gj9jhhr9k40jm25s8az3hhg0-diag-tcc-link-matrix
+# Exit status: 0
+# Finished: 2026-05-01T11:25:10-04:00

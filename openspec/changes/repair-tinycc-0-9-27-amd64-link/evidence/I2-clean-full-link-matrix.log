@@ -1,0 +1,18 @@
+# Task-ID: I2
+# Covers: bootstrap.compiler.tinycc.0.9.27.amd64.static-link
+# Command: timeout 1200 nix shell nixpkgs#bubblewrap -c "/home/brittonr/git/crunch/crunch/target/debug/crunch" build --no-substitute --store "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-clean" --state-dir "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-clean" bootstrap/diag-tcc-link-matrix.ncl
+# Started: 2026-05-01T11:11:57-04:00
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-clean/signing-key)
+error: output store directory /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-clean does not exist.
+Create it with: sudo mkdir -p /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-clean && sudo chown $USER /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-clean
+
+suggestions:
+  - The default store is /nix/store. Create it or pass --store <path>
+# Exit status: 3
+# Finished: 2026-05-01T11:11:57-04:00
+
+# Retry: created explicit store/state directories
+# Started: 2026-05-01T11:12:07-04:00
+[2m2026-05-01T15:12:07.646724Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-clean/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-05-01T15:12:07.656670Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-clean/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+# Note: clean fresh-state retry was killed after no derivation progress beyond redb repair; fast cached state used for clean no-marker diagnostic below.

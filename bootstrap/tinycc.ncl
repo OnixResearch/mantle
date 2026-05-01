@@ -142,6 +142,46 @@ ST_FUNC void gen_le64(int64_t c)\
         $BB sed -i '/s1->tcc_lib_path, filename);/s|.*|    strcpy(buf, s1->tcc_lib_path); strcat(buf, "/"); strcat(buf, filename);|' tccelf.c
         $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's/const char filename../const char *filename/' tccelf.c
+
+        # Carry the same Mes/TCC source-normalization seams used by the
+        # predecessor compiler. The 0.9.26 handoff still inherits Mes-built
+        # x86_64 codegen defects around aggregate SValue copies and variable
+        # shift counts; if 0.9.27 is built without these normalizations it can
+        # compile objects but segfault in the executable/DLL output path.
+        $BB sed -i 's/SValue tmp = vtop\[0\];/SValue tmp;\
+            memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/loc = 0;/loc = 0;\
+    ind = cur_text_section->data_offset;/' x86_64-gen.c
+        $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
+        $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
+
+        $BB sed -i 's|snprintf(buf, sizeof(buf), "__start_%s", s->name);|strcpy(buf, "__start_"); strcat(buf, s->name);|' tccelf.c
+        $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
+        $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
+        $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+
+
+        # Match the Mes-stage bootstrap contract: avoid loading crti.o/crtn.o
+        # through the Mes-built TinyCC CRT path. That path enters broken
+        # varargs/path diagnostics and can corrupt the final static link.
+        $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
       }
 
       compile_tcc27() {

@@ -1,0 +1,118 @@
+# Task-ID: V2
+# Covers: bootstrap.compiler.tinycc.0.9.27.amd64.static-link
+# Command: timeout 1200 nix shell nixpkgs#bubblewrap -c "/home/brittonr/git/crunch/crunch/target/debug/crunch" build --no-substitute --store "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-store-no-crti" --state-dir "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-no-crti" bootstrap/diag-tcc-link-smoke.ncl
+# Started: 2026-05-01T11:25:36-04:00
+[2m2026-05-01T15:25:36.825651Z[0m [33m WARN[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m build failed [3mstdout[0m[2m=[0m [3mstderr[0m[2m=[0m+ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27 ]
++ echo /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ return
++ TCC=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ export 'PATH=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/path-not-set'
++ /bin/busybox mkdir -p /crunch/store/ji26b5aq9nqn93phw32402yfkgp2mqhw-diag-tcc-link-smoke/bin
++ /bin/busybox cat
++ echo 'diag: compile hello.c'
+diag: compile hello.c
++ tcc -c hello.c
++ /bin/busybox chmod 644 hello.o
++ echo 'diag: link hello explicitly'
+diag: link hello explicitly
++ tcc -nostdlib -static -o hello /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crt1.o hello.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crti.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crtn.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/tcc/libtcc1.a /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/libc.a
++ echo 'diag: run hello'
+diag: run hello
++ ./hello
+Segmentation fault (core dumped)
+ [3mexit_code[0m[2m=[0mexit status: 139
+[2m2026-05-01T15:25:36.825815Z[0m [31mERROR[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m [3merror[0m[2m=[0mnonzero exit code: exit status: 139
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27 ]
++ echo /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ return
++ TCC=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ export 'PATH=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/path-not-set'
++ /bin/busybox mkdir -p /crunch/store/ji26b5aq9nqn93phw32402yfkgp2mqhw-diag-tcc-link-smoke/bin
++ /bin/busybox cat
++ echo 'diag: compile hello.c'
+diag: compile hello.c
++ tcc -c hello.c
++ /bin/busybox chmod 644 hello.o
++ echo 'diag: link hello explicitly'
+diag: link hello explicitly
++ tcc -nostdlib -static -o hello /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crt1.o hello.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crti.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crtn.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/tcc/libtcc1.a /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/libc.a
++ echo 'diag: run hello'
+diag: run hello
++ ./hello
+Segmentation fault (core dumped)
+
+[2m2026-05-01T15:25:36.825943Z[0m [33m WARN[0m [2mcrunch_build::worker[0m[2m:[0m sandbox build failed [3mdrv[0m[2m=[0m/nix/store/gr46ci91cz76dcq11an1fp70fq0cdhb3-diag-tcc-link-smoke.drv [3merr[0m[2m=[0mstore error: build: nonzero exit code: exit status: 139
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27 ]
++ echo /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ return
++ TCC=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ export 'PATH=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/path-not-set'
++ /bin/busybox mkdir -p /crunch/store/ji26b5aq9nqn93phw32402yfkgp2mqhw-diag-tcc-link-smoke/bin
++ /bin/busybox cat
++ echo 'diag: compile hello.c'
+diag: compile hello.c
++ tcc -c hello.c
++ /bin/busybox chmod 644 hello.o
++ echo 'diag: link hello explicitly'
+diag: link hello explicitly
++ tcc -nostdlib -static -o hello /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crt1.o hello.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crti.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crtn.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/tcc/libtcc1.a /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/libc.a
++ echo 'diag: run hello'
+diag: run hello
++ ./hello
+Segmentation fault (core dumped)
+
+hermeticity: practical (no degraded facts)
+FAILED root: diag-tcc-link-smoke
+  phase: build
+  error_class: builder
+  saved_log_path: /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-link-state-no-crti/logs/gr46ci91cz76dcq11an1fp70fq0cdhb3-diag-tcc-link-smoke.drv.log
+  message: store error: build: nonzero exit code: exit status: 139
++ BB=/bin/busybox
++ find_input tinycc-0.9.27
++ '[' -d /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27 ]
++ echo /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ return
++ TCC=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27
++ find_input stage0-posix
++ '[' -d /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix ]
++ echo /crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ return
++ STAGE0=/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix
++ export 'PATH=/crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/bin:/crunch/store/35ljc87nc2gcn7cxpj078qjmch8qpqzh-stage0-posix/bin:/path-not-set'
++ /bin/busybox mkdir -p /crunch/store/ji26b5aq9nqn93phw32402yfkgp2mqhw-diag-tcc-link-smoke/bin
++ /bin/busybox cat
++ echo 'diag: compile hello.c'
+diag: compile hello.c
++ tcc -c hello.c
++ /bin/busybox chmod 644 hello.o
++ echo 'diag: link hello explicitly'
+diag: link hello explicitly
++ tcc -nostdlib -static -o hello /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crt1.o hello.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crti.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/crtn.o /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/tcc/libtcc1.a /crunch/store/dac360qznh4y3abqd95ic8xwv4g2ldrb-tinycc-0.9.27/lib/mes/libc.a
++ echo 'diag: run hello'
+diag: run hello
++ ./hello
+Segmentation fault (core dumped)
+
+# Exit status: 1
+# Finished: 2026-05-01T11:25:36-04:00
