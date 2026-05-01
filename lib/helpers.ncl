@@ -7,6 +7,7 @@
   system_to_string
     | doc "Convert a System enum tag to its string representation."
     = fun sys => sys |> match {
+      'i386-linux => "i386-linux",
       'x86_64-linux => "x86_64-linux",
       'aarch64-linux => "aarch64-linux",
       'x86_64-darwin => "x86_64-darwin",

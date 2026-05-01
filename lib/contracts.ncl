@@ -28,6 +28,7 @@ let store_path_regex = "^(/[A-Za-z0-9._+-]+)+/[a-z0-9]{32}-.+$" in
   System
     | doc "Target platform enum."
     = [|
+      'i386-linux,
       'x86_64-linux,
       'aarch64-linux,
       'x86_64-darwin,

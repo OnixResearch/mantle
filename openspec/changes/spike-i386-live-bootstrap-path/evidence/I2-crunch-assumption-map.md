@@ -74,6 +74,18 @@ On an x86_64 Linux kernel, native i386 static ELF execution depends on kernel IA
 - qemu-i386/binfmt is available and can be declared as an input;
 - the path is rejected/deferred because executing the proof target would require a larger runtime backend change.
 
+## Follow-up implementation note
+
+A small part of the assumption map has now been resolved for the spike: `lib/contracts.ncl` and `lib/helpers.ncl` accept and stringify the new `'i386-linux` system tag, covered by `tests/stdlib_tests.rs::i386_linux_system_tag_is_accepted`.
+
+Verification command:
+
+```sh
+nix shell nixpkgs#clang -c env CARGO_TARGET_DIR=target cargo test --test stdlib_tests -- --nocapture
+```
+
+Result: passed, `21 passed; 0 failed`.
+
 ## Recommended prototype shape
 
 Create a new sibling proof target rather than altering production amd64 derivations:

@@ -78,6 +78,22 @@ fn enum_tags_deserialize_direct_serde() {
 }
 
 #[test]
+fn i386_linux_system_tag_is_accepted() {
+    #[derive(serde::Deserialize, Debug)]
+    struct Drv {
+        system: String,
+    }
+
+    let drv: Drv = crunch_eval::evaluate_str_and_deserialize(
+        r#"let crunch = import "lib.ncl" in { name = "t", builder = "/bin/sh", system = 'i386-linux } | crunch.Derivation"#,
+        &stdlib_import_path(),
+    )
+    .unwrap();
+
+    assert_eq!(drv.system, "i386-linux");
+}
+
+#[test]
 fn store_path_validator_accepts_nix_store_path() {
     let expr = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash" | crunch.StorePath"#,
