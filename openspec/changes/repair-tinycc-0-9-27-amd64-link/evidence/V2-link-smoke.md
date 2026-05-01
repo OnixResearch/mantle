@@ -6,17 +6,25 @@ Covers: bootstrap.compiler.tinycc.0.9.27.amd64.static-link
 ## Command
 
 ```sh
-timeout 1200 nix shell nixpkgs#bubblewrap -c "$PWD/target/debug/crunch" build --no-substitute \
-  --store "$PWD/.crunch-drain/tcc-link-store-no-crti" \
-  --state-dir "$PWD/.crunch-drain/tcc-link-state-no-crti" \
+nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --no-substitute \
+  --store "$PWD/.crunch-drain/tcc-got-static4-store" \
+  --state-dir "$PWD/.crunch-drain/tcc-got-static4-state" \
   bootstrap/diag-tcc-link-smoke.ncl
 ```
 
 ## Result
 
-Status: FAIL / next blocker
-Exit status: 1
-Transcript: `evidence/V2-clean-link-smoke.log`
-Saved derivation log: `.crunch-drain/tcc-link-state-no-crti/logs/gr46ci91cz76dcq11an1fp70fq0cdhb3-diag-tcc-link-smoke.drv.log`
+Status: PASS
+Crunch-reported exit status: 0
+Wrapper exit status: 1 due interactive shell logout hook (`__ETC_BASHLOGOUT_SOURCED: unbound variable`) after the command had already printed `exit status: 0`.
+Transcript: `evidence/V2-static-got-repair-link-smoke.log`
+Output path: `.crunch-drain/tcc-got-static4-store/p89ps590vql5g4hghmv97k6yvl0ckq0h-diag-tcc-link-smoke`
 
-The repaired TinyCC now compiles and links the explicit static executable, but executing `./hello` segfaults with exit 139. This moves the active blocker from TinyCC executable-output/link-time segfaults to runtime behavior of the produced static executable.
+The repaired TinyCC output now compiles, statically links, chmods, and executes `int main(void) { return 0; }` inside the Crunch diagnostic derivation. A host follow-up also ran the exported binary successfully:
+
+```sh
+.crunch-drain/tcc-got-static4-store/p89ps590vql5g4hghmv97k6yvl0ckq0h-diag-tcc-link-smoke/bin/hello
+# exit 0
+```
+
+Host `readelf -S` confirms the executable still contains `.plt` and `.got`; inspecting the `.got` bytes now shows non-zero populated entries instead of the all-zero GOT observed in the failing runtime evidence.

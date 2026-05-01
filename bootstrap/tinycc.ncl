@@ -62,15 +62,45 @@ let tcc27_src = crunch.fetchTarball {
                         if (s1->text_addr == 0x80100000)\
                             ph->p_paddr = ph->p_paddr - 0x80000000;/' tccelf.c
 
-        # Mirror live-bootstrap simple-patches/check-reloc-null. Some later
-        # objects have no GOT relocation section; treat that as empty.
-        $BB sed -i '/static void fill_local_got_entries(TCCState \*s1)/,/    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {/c\
+        # Mirror live-bootstrap simple-patches/check-reloc-null, and make
+        # static executable GOT materialization explicit. TinyCC's original
+        # local-GOT helper only records RELA addends for R_RELATIVE entries;
+        # Mes-linked static outputs need the final .got bytes populated before
+        # the ELF file is written, including GLOB_DAT/JUMP_SLOT slots used by
+        # startup PLT/GOT paths. Keep non-static dynamic-link behavior scoped
+        # to the original local R_RELATIVE rewrite.
+        $BB sed -i '/static void fill_local_got_entries(TCCState \*s1)/,/^}/c\
 static void fill_local_got_entries(TCCState *s1)\
 {\
     ElfW_Rel *rel;\
-    if (!s1->got->reloc)\
+    if (!s1->got || !s1->got->reloc)\
         return;\
-    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {' tccelf.c
+    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {\
+        int type = ELFW(R_TYPE)(rel->r_info);\
+        int sym_index = ELFW(R_SYM)(rel->r_info);\
+        int materialize = (s1->static_link && s1->output_type == TCC_OUTPUT_EXE && (type == R_GLOB_DAT || type == R_JMP_SLOT));\
+        if (type == R_RELATIVE || materialize) {\
+            ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];\
+            struct sym_attr *attr = get_sym_attr(s1, sym_index, 0);\
+            unsigned offset = rel->r_offset - s1->got->sh_addr;\
+            if (attr && attr->got_offset)\
+                offset = attr->got_offset;\
+            if (offset != rel->r_offset - s1->got->sh_addr && type == R_RELATIVE)\
+                tcc_error_noabort("huh");\
+            rel->r_info = ELFW(R_INFO)(0, type == R_RELATIVE ? R_RELATIVE : type);\
+            if (materialize)\
+                section_reserve(s1->got, offset + PTR_SIZE);\
+# ifdef TCC_TARGET_X86_64\
+            write64le(s1->got->data + offset, sym->st_value);\
+# else\
+            write32le(s1->got->data + offset, sym->st_value);\
+# endif\
+# if SHT_RELX == SHT_RELA\
+            rel->r_addend = sym->st_value;\
+# endif\
+        }\
+    }\
+}' tccelf.c
 
         # Crunch amd64 predecessor tcc-0.9.26 still miscompiles variable
         # doublings through the power-of-two multiply shortcut as `shl $0`.
@@ -153,16 +183,39 @@ ST_FUNC void gen_le64(int64_t c)\
         $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
         $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
         $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+        $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+        $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+        $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
         $BB sed -i 's/loc = 0;/loc = 0;\
     ind = cur_text_section->data_offset;/' x86_64-gen.c
         $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
         $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
+        $BB sed -i '/sprintf(buf,/c\
+    buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
+        $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
+        if (fmt[3] == '\''l'\'') {\
+            strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
+        } else {\
+            strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        }' libtcc.c
 
         $BB sed -i 's|snprintf(buf, sizeof(buf), "__start_%s", s->name);|strcpy(buf, "__start_"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
         $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
 
+        # tcc-mes can emit x86_64 PLT entries even for static executables.
+        # Relocate those PLT slots after final section layout; otherwise a
+        # linked binary can jump through unrelocated offsets at runtime.
+        $BB sed -i '/if (file_type == TCC_OUTPUT_EXE && s1->static_link)/,/        fill_got(s1);/c\
+    if (file_type == TCC_OUTPUT_EXE && s1->static_link) {\
+        if (s1->got)\
+            fill_local_got_entries(s1);\
+        if (s1->plt)\
+            relocate_plt(s1);\
+        fill_got(s1);\
+    }' tccelf.c
 
         # Match the Mes-stage bootstrap contract: avoid loading crti.o/crtn.o
         # through the Mes-built TinyCC CRT path. That path enters broken

@@ -31,6 +31,7 @@ EOF
       $BB chmod 644 hello.o
       echo 'diag: link hello explicitly' >&2
       tcc -nostdlib -static -o hello "$TCC/lib/mes/crt1.o" hello.o "$TCC/lib/mes/crti.o" "$TCC/lib/mes/crtn.o" "$TCC/lib/mes/tcc/libtcc1.a" "$TCC/lib/mes/libc.a"
+      $BB chmod 755 hello
       echo 'diag: run hello' >&2
       ./hello
       $BB cp hello $out/bin/hello

@@ -1,0 +1,12 @@
+# V2 static GOT repair smoke retry 4
+2026-05-01T12:15:01-04:00
+$ nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --no-substitute --store /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-store --state-dir /home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-state bootstrap/diag-tcc-link-smoke.ncl
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-state/signing-key)
+[2m2026-05-01T16:15:02.048073Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-05-01T16:15:02.057626Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+hermeticity: practical (no degraded facts)
+/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-got-static4-store/p89ps590vql5g4hghmv97k6yvl0ckq0h-diag-tcc-link-smoke
+exit status: 0
+2026-05-01T12:37:10-04:00
+logout
+bash: __ETC_BASHLOGOUT_SOURCED: unbound variable
