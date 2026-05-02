@@ -1,0 +1,40 @@
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000443080 in ?? ()
+rax            0x0                 0
+rbx            0x0                 0
+rcx            0x800               2048
+rdx            0x64e833            6613043
+rsi            0x800               2048
+rdi            0x800               2048
+rbp            0x7fffffffa218      0x7fffffffa218
+rsp            0x7fffffffa208      0x7fffffffa208
+r8             0x1                 1
+r9             0x0                 0
+r10            0x64e833            6613043
+r11            0x7fffffffa328      140737488331560
+r12            0x0                 0
+r13            0x0                 0
+r14            0x0                 0
+r15            0x0                 0
+rip            0x443080            0x443080
+eflags         0x10206             [ PF IF RF ]
+cs             0x33                51
+ss             0x2b                43
+ds             0x0                 0
+es             0x0                 0
+fs             0x0                 0
+gs             0x0                 0
+k0             0x0                 0
+k1             0x0                 0
+k2             0x0                 0
+k3             0x0                 0
+k4             0x0                 0
+k5             0x0                 0
+k6             0x0                 0
+k7             0x0                 0
+pl3_ssp        <unavailable>
+fs_base        0x0                 0
+gs_base        0x0                 0
+#0  0x0000000000443080 in ?? ()
+#1  0x0000000000000000 in ?? ()

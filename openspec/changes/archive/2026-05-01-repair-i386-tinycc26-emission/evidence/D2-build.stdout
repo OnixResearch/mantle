@@ -1,0 +1,10 @@
+# Command
+nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --no-substitute --store "$PWD/.crunch-drain/make-diag-stage2-store" --state-dir "$PWD/.crunch-drain/make-diag-stage2-state" bootstrap/diag-i386-tinycc26-emission.ncl
+# Started
+2026-05-01T20:53:00-04:00
+# Output
+/home/brittonr/git/crunch/crunch/.crunch-drain/make-diag-stage2-store/qnmw3lwdman6lqyh34kav6hzqframvri-diag-i386-tinycc26-emission
+# Exit
+0
+# Completed
+2026-05-01T20:53:01-04:00

@@ -1,0 +1,8 @@
+{
+  "repair-i386-tinycc26-emission": [
+    {
+      "severity": "warning",
+      "message": "tasks incomplete: {'done': 3, 'todo': 1, 'in_progress': 0}"
+    }
+  ]
+}

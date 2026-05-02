@@ -1,0 +1,8 @@
+diag-i386-tcc26 summary
+assemble_object rc=139
+compile_c_object rc=139
+link_from_asm rc=139
+link_from_object rc=127
+run_i386-exit42-from-asm rc=127
+run_i386-exit42-from-object rc=127
+version rc=0

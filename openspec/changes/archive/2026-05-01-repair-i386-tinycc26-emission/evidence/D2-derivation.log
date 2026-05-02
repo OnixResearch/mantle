@@ -1,0 +1,34 @@
+# crunch build log
+# derivation: diag-i386-tinycc26-emission
+# drv_path: 3l2vy9zqb7z2rrz2qi1jlk52c6yyxmwg-diag-i386-tinycc26-emission.drv
+# status: success
+# timestamp: 1777683181
+
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+diag-i386-tcc26 summary
+assemble_object rc=139
+compile_c_object rc=139
+link_from_asm rc=139
+link_from_object rc=127
+run_i386-exit42-from-asm rc=127
+run_i386-exit42-from-object rc=127
+version rc=0
+
+diag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+diag-i386-tcc26: STEP version: ./tcc26-i386 -version
+diag-i386-tcc26: RESULT version rc=0
+diag-i386-tcc26: STEP assemble_object: ./tcc26-i386 -c -o exit42.o exit42.s
+diag-i386-tcc26: RESULT assemble_object rc=139
+diag-i386-tcc26: FILE exit42.o missing
+diag-i386-tcc26: STEP compile_c_object: ./tcc26-i386 -c -o trivial.o trivial.c
+diag-i386-tcc26: RESULT compile_c_object rc=139
+diag-i386-tcc26: FILE trivial.o missing
+diag-i386-tcc26: STEP link_from_asm: ./tcc26-i386 -nostdlib -static -Wl,-e,_start -o i386-exit42-from-asm exit42.s
+diag-i386-tcc26: RESULT link_from_asm rc=139
+diag-i386-tcc26: FILE i386-exit42-from-asm missing
+diag-i386-tcc26: RESULT link_from_object rc=127 skipped-missing-object
+diag-i386-tcc26: FILE i386-exit42-from-object missing
+diag-i386-tcc26: RESULT run_i386-exit42-from-asm rc=127 skipped-missing-exe
+diag-i386-tcc26: RESULT run_i386-exit42-from-object rc=127 skipped-missing-exe

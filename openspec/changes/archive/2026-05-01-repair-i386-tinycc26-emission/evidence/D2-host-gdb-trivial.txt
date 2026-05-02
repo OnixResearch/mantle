@@ -1,0 +1,13 @@
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000443080 in ?? ()
+#0  0x0000000000443080 in ?? ()
+#1  0x0000000000000000 in ?? ()
+   0x443070:	mov    DWORD PTR [rbp-0xc],eax
+   0x443073:	mov    eax,DWORD PTR [rbp-0xc]
+   0x443076:	movsxd rax,eax
+   0x443079:	mov    rcx,QWORD PTR [rbp-0x8]
+   0x44307d:	add    rcx,rax
+=> 0x443080:	movsx  eax,BYTE PTR [rcx]
+   0x443083:	cmp    eax,0x0
+   0x443086:	je     0x443097
