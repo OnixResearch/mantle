@@ -1,0 +1,7 @@
+/no-runtime/crt1.o
+file not found: crt1.o
+/tmp/spike-i386-mes-runtime-layout/i386-mes-runtime/lib/mes/tcc/libc.a
+/no-runtime/libc.a
+/no-runtime/tcc/libc.a
+library not found: c
+Segmentation fault (core dumped)

@@ -154,6 +154,21 @@ EOF
         } else {\
             strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
         }' libtcc.c
+      $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
       $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
       $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
       $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
@@ -194,11 +209,24 @@ EOF
       cd "$WORK/tcc-0.9.27"
 
       # First prove the predecessor can at least parse/compile 0.9.27 to an i386 object.
-      if ! run_step tcc27_compile_object tcc26-i386 -c -o tcc27.o -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
+      if ! run_step tcc27_compile_object tcc26-i386 -c -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c -o tcc27.o; then
         cd "$WORK"
         note_blocker tcc27_compile_object
         exit 0
       fi
+      if ! run_step tcc27_object_exists test -f tcc27.o; then
+        cd "$WORK"
+        note_blocker tcc27_object_exists
+        exit 0
+      fi
+
+      # Link/search-path diagnostics for the post-compile blocker. Keep these
+      # non-gating so the evidence bundle captures which path still reaches the
+      # Mes/TCC varargs-broken startup/library diagnostics before the canonical
+      # source link below records the hard blocker.
+      run_step tcc27_link_object_nostdlib_crt1 tcc26-i386 -nostdlib -static -o tcc27-i386.nostdlib-crt1 "$RUNTIME/lib/mes/crt1.o" tcc27.o "$RUNTIME/lib/mes/tcc/libtcc1.a" "$RUNTIME/lib/mes/libc.a" || true
+      run_step tcc27_link_object_B_L tcc26-i386 -static -B "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes/tcc" -o tcc27-i386.object-BL tcc27.o || true
+      run_step tcc27_link_source_B_L tcc26-i386 -static -B "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes/tcc" -o tcc27-i386.source-BL -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c || true
 
       if ! run_step tcc27_link tcc26-i386 -static -o tcc27-i386 -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
         cd "$WORK"

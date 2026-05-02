@@ -60,6 +60,21 @@ let tcc26_src = crunch.fetchTarball {
         } else {\
             strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
         }' libtcc.c
+      $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
       $BB sed -i '/sprintf(buf,/c\
     buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
       $BB sed -i 's/snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);/strcpy(buf, ".rel"); strcat(buf, s->name);/' tccelf.c
@@ -68,6 +83,8 @@ let tcc26_src = crunch.fetchTarball {
       $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
       $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
       $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
+      $BB sed -i 's|tcc_error_noabort("file '\''%s'\'' not found", filename);|fputs("file not found: ", stderr); fputs(filename, stderr); fputs("\\n", stderr);|g' libtcc.c
+      $BB sed -i 's|tcc_error_noabort("library '\''%s'\'' not found", libname);|fputs("library not found: ", stderr); fputs(libname, stderr); fputs("\\n", stderr);|g' libtcc.c
       $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
       $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
       $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
