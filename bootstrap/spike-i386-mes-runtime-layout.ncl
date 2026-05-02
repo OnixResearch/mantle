@@ -110,7 +110,7 @@ EOF
       fi
       : > "$RUNTIME/lib/mes/crti.o"
       : > "$RUNTIME/lib/mes/crtn.o"
-      if ! run_step runtime_libtcc1_object tcc26-i386 -c -D HAVE_CONFIG_H=1 -D TCC_TARGET_I386=1 -D HAVE_FLOAT=1 -I "$RUNTIME/include/mes/include" -I "$RUNTIME/include/mes/include/linux/x86" -o "$WORK/libtcc1.o" "$MES_BUILD/lib/libtcc1.c"; then
+      if ! run_step runtime_libtcc1_object tcc26-i386 -c -D HAVE_CONFIG_H=1 -D TCC_TARGET_I386=1 -D HAVE_FLOAT=0 -D HAVE_FLOAT_STUB=0 -D HAVE_LONG_LONG=0 -I "$RUNTIME/include/mes/include" -I "$RUNTIME/include/mes/include/linux/x86" -o "$WORK/libtcc1.o" "$MES_BUILD/lib/libtcc1.c"; then
         echo 'i386-mes-layout: libtcc1 object is blocked; create placeholder archives to continue header-only tcc27 object probe' >&2
         $BB cp "$RUNTIME/lib/mes/crt1.o" "$WORK/libtcc1.o"
       fi
