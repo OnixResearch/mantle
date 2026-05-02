@@ -8,6 +8,6 @@
 
 ## Validation
 
-- [ ] V1 Run the selected proof or record the blocking prerequisite with command transcript. [covers=bootstrap.i386-live-bootstrap-spike.runtime-proof] Evidence: `evidence/V1-proof-attempt.md`.
-- [ ] V2 Update the Make 3.82 runtime-validation decision: pivot to i386-first, continue amd64 repair, or keep both paths with explicit boundaries. [covers=bootstrap.i386-live-bootstrap-spike.decision] Evidence: `evidence/V2-decision.md`.
-- [ ] V3 Run OpenSpec validation/gates before archive. [covers=bootstrap.i386-live-bootstrap-spike.openspec] Evidence: `evidence/V3-openspec-verify.json`.
+- [x] V1 Run the selected proof or record the blocking prerequisite with command transcript. [covers=bootstrap.i386-live-bootstrap-spike.runtime-proof] Evidence: `evidence/V1-proof-attempt.md`.
+- [x] V2 Update the Make 3.82 runtime-validation decision: pivot to i386-first, continue amd64 repair, or keep both paths with explicit boundaries. [covers=bootstrap.i386-live-bootstrap-spike.decision] Evidence: `evidence/V2-decision.md`.
+- [x] V3 Run OpenSpec validation/gates before archive. [covers=bootstrap.i386-live-bootstrap-spike.openspec] Evidence: `evidence/V3-openspec-verify.json`.

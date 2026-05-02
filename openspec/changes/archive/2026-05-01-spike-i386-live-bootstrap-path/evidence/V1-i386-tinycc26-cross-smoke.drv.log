@@ -1,0 +1,15 @@
+# crunch build log
+# derivation: spike-i386-tinycc26-cross-smoke
+# drv_path: 10r6blbcl4px0a8z0vx9rqicr4p064v3-spike-i386-tinycc26-cross-smoke.drv
+# status: failure
+# timestamp: 1777682364
+
+store error: build: nonzero exit code: exit status: 139
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+tcc version 0.9.26-i386-spike (i386 Linux)
+
+i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+i386-tcc26: assemble/link no-libc i386 exit42 executable
+Segmentation fault (core dumped)
