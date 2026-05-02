@@ -1,0 +1,2 @@
+[2m2026-05-02T15:34:02.863269Z[0m [33m WARN[0m [2mcrunch_store::handle[0m[2m:[0m could not export output to disk (read-only store), output is available in castore [3mpath[0m[2m=[0m/nix/store/mzmagid1gv9870h354y668hkn1394h2l-spike-i386-mes-runtime-layout
+hermeticity: practical (no degraded facts)

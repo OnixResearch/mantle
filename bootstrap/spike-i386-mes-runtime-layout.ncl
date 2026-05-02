@@ -147,6 +147,7 @@ EOF
       $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
       $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
       $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
+
       $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
         if (fmt[3] == '\''l'\'') {\
             strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
@@ -179,6 +180,16 @@ EOF
       run_tcc27_diag tcc27_compile_i386_gen_unit "-c -o i386-gen.o i386-gen.c" || true
       run_tcc27_diag tcc27_compile_libtcc_unit "-c -o libtcc.o -D ONE_SOURCE=0 libtcc.c" || true
       run_tcc27_diag tcc27_compile_tccgen_unit "-c -o tccgen.o tccgen.c" || true
+
+      cd "$WORK"
+      $BB rm -rf tcc-0.9.27-decl-stub
+      $BB cp -r tcc-0.9.27 tcc-0.9.27-decl-stub
+      cd tcc-0.9.27-decl-stub
+      $BB awk 'NR == 6638 { print "    (void)type; (void)sec; (void)c; (void)first; (void)size_only;"; print "#if 0" } NR == 6809 { print "#endif" } { print }' tccgen.c > tccgen.c.new
+      $BB mv tccgen.c.new tccgen.c
+      run_tcc27_diag tcc27_decl_initializer_stub_tccgen "-c -o tccgen.o tccgen.c" || true
+      run_tcc27_diag tcc27_decl_initializer_stub_full "-c -o tcc27.o -D ONE_SOURCE=1 tcc.c" || true
+      cd "$WORK/tcc-0.9.27"
 
       # First prove the predecessor can at least parse/compile 0.9.27 to an i386 object.
       if ! run_step tcc27_compile_object tcc26-i386 -c -o tcc27.o -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
