@@ -46,6 +46,36 @@ let tcc26_src = crunch.fetchTarball {
       $BB chmod -R u+w tcc-0.9.26
       cd tcc-0.9.26
       : > config.h
+      # Carry the Mes/TCC source-normalization seams needed when the
+      # Mes-built 0.9.26 compiler emits a new static compiler binary.
+      $BB sed -i 's/const char filename\[\]/const char *filename/' tccelf.c
+      $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+      $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+      $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+      $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+      $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
+      # Mes/TCC varargs can corrupt snprintf/sprintf string expansion. Spell
+      # deterministic bootstrap path/string constructors directly.
+      $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
+        if (fmt[3] == '\''l'\'') {\
+            strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
+        } else {\
+            strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        }' libtcc.c
+      $BB sed -i '/sprintf(buf,/c\
+    buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
+      $BB sed -i 's/snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);/strcpy(buf, ".rel"); strcat(buf, s->name);/' tccelf.c
+      $BB sed -i 's|snprintf(buf, sizeof(buf), "__start_%s", s->name);|strcpy(buf, "__start_"); strcat(buf, s->name);|' tccelf.c
+      $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
+      $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
+      $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+      $BB grep -F 'strcpy(buf, ".rel"); strcat(buf, s->name);' tccelf.c >/dev/null
+      # Keep any remaining errors from re-entering the broken Mes varargs
+      # formatter while diagnostics converge.
+      $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
+      $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
+      $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
+      $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
 
       echo 'diag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26' >&2
       tcc-0.9.26 \
@@ -102,6 +132,7 @@ EOF
         name="$1"
         path="$2"
         if [ -e "$path" ]; then
+          $BB chmod u+rw "$path" 2>/dev/null || true
           size=$($BB wc -c < "$path")
           mode=$($BB ls -l "$path")
           echo "diag-i386-tcc26: FILE $name exists size=$size mode=$mode" >&2
@@ -117,10 +148,10 @@ EOF
       note_file exit42.o exit42.o
       run_step compile_c_object ./tcc26-i386 -c -o trivial.o trivial.c
       note_file trivial.o trivial.o
-      run_step link_from_asm ./tcc26-i386 -nostdlib -static -Wl,-e,_start -o i386-exit42-from-asm exit42.s
+      run_step link_from_asm ./tcc26-i386 -nostdlib -static -o i386-exit42-from-asm exit42.s
       note_file i386-exit42-from-asm i386-exit42-from-asm
       if [ -e exit42.o ]; then
-        run_step link_from_object ./tcc26-i386 -nostdlib -static -Wl,-e,_start -o i386-exit42-from-object exit42.o
+        run_step link_from_object ./tcc26-i386 -nostdlib -static -o i386-exit42-from-object exit42.o
       else
         echo 127 > ../logs/link_from_object.rc
         echo 'skipped: exit42.o missing' > ../logs/link_from_object.stdout

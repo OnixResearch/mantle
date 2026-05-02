@@ -1,0 +1,50 @@
+[2m2026-05-02T02:18:22.332553Z[0m [33m WARN[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m build failed [3mstdout[0m[2m=[0mtcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+ [3mstderr[0m[2m=[0mdiag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+diag-i386-tcc26: STEP version: ./tcc26-i386 -version
+diag-i386-tcc26: RESULT version rc=0
+diag-i386-tcc26: STEP assemble_object: ./tcc26-i386 -c -o exit42.o exit42.s
+diag-i386-tcc26: RESULT assemble_object rc=0
+/bin/sh: can't open exit42.o: Permission denied
+ [3mexit_code[0m[2m=[0mexit status: 1
+[2m2026-05-02T02:18:22.332686Z[0m [31mERROR[0m [2msnix_build::buildservice::bwrap[0m[2m:[0m [3merror[0m[2m=[0mnonzero exit code: exit status: 1
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+
+diag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+diag-i386-tcc26: STEP version: ./tcc26-i386 -version
+diag-i386-tcc26: RESULT version rc=0
+diag-i386-tcc26: STEP assemble_object: ./tcc26-i386 -c -o exit42.o exit42.s
+diag-i386-tcc26: RESULT assemble_object rc=0
+/bin/sh: can't open exit42.o: Permission denied
+
+[2m2026-05-02T02:18:22.332769Z[0m [33m WARN[0m [2mcrunch_build::worker[0m[2m:[0m sandbox build failed [3mdrv[0m[2m=[0m/nix/store/97pqf8zifyq4wsyy0vqhf7acpfjbijqp-diag-i386-tinycc26-emission.drv [3merr[0m[2m=[0mstore error: build: nonzero exit code: exit status: 1
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+
+diag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+diag-i386-tcc26: STEP version: ./tcc26-i386 -version
+diag-i386-tcc26: RESULT version rc=0
+diag-i386-tcc26: STEP assemble_object: ./tcc26-i386 -c -o exit42.o exit42.s
+diag-i386-tcc26: RESULT assemble_object rc=0
+/bin/sh: can't open exit42.o: Permission denied
+
+hermeticity: practical (no degraded facts)
+FAILED root: diag-i386-tinycc26-emission
+  phase: build
+  error_class: builder
+  saved_log_path: /home/brittonr/git/crunch/crunch/.crunch-drain/make-diag-stage2-state/logs/97pqf8zifyq4wsyy0vqhf7acpfjbijqp-diag-i386-tinycc26-emission.drv.log
+  message: store error: build: nonzero exit code: exit status: 1
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc26-i386
+
+diag-i386-tcc26: build x86_64-hosted/i386-targeting TinyCC 0.9.26
+diag-i386-tcc26: STEP version: ./tcc26-i386 -version
+diag-i386-tcc26: RESULT version rc=0
+diag-i386-tcc26: STEP assemble_object: ./tcc26-i386 -c -o exit42.o exit42.s
+diag-i386-tcc26: RESULT assemble_object rc=0
+/bin/sh: can't open exit42.o: Permission denied
