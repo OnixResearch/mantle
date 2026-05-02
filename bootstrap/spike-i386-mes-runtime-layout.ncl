@@ -137,6 +137,10 @@ EOF
       $BB sed -i '/if (ph->p_offset == 0) {/,/                    }/s/ph->p_paddr = ph->p_vaddr;/ph->p_paddr = ph->p_vaddr;\
                         if (s1->text_addr == 0x80100000)\
                             ph->p_paddr = ph->p_paddr - 0x80000000;/' tccelf.c
+      # live-bootstrap tcc-0.9.27/pass1 check-reloc-null patch.
+      $BB sed -i '/static void fill_local_got_entries(TCCState \*s1)/,/for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {/s/    ElfW_Rel \*rel;/    ElfW_Rel *rel;\
+    if (!s1->got->reloc)\
+        return;/' tccelf.c
       $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
       $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
       $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
@@ -159,14 +163,31 @@ EOF
       $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
       $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
 
+      # Focused predecessor diagnostics. These are non-gating: they preserve a
+      # narrow map of where tcc26-i386 still falls over before the gating pass1
+      # compile below records the first hard blocker.
+      TCC27_FLAGS="-I . -I $RUNTIME/include/mes/include -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\\\"$RUNTIME/lib/mes/tcc\\\" -D CONFIG_TCC_CRTPREFIX=\\\"$RUNTIME/lib/mes\\\" -D CONFIG_TCC_ELFINTERP=\\\"/mes/loader\\\" -D CONFIG_TCC_LIBPATHS=\\\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\\\" -D CONFIG_TCC_SYSINCLUDEPATHS=\\\"$RUNTIME/include/mes/include\\\" -D TCC_LIBGCC=\\\"$RUNTIME/lib/mes/libc.a\\\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\\\"0.9.27-i386-spike\\\""
+      run_tcc27_diag() {
+        diag_name="$1"
+        shift
+        run_step "$diag_name" /bin/sh -c "tcc26-i386 $TCC27_FLAGS $*"
+      }
+      run_tcc27_diag tcc27_preprocess_no_lines "-E -P -D ONE_SOURCE=1 tcc.c" || true
+      run_tcc27_diag tcc27_preprocess_line_markers "-E -D ONE_SOURCE=1 tcc.c" || true
+      run_tcc27_diag tcc27_compile_tccpp_unit "-c -o tccpp.o tccpp.c" || true
+      run_tcc27_diag tcc27_compile_tccelf_unit "-c -o tccelf.o tccelf.c" || true
+      run_tcc27_diag tcc27_compile_i386_gen_unit "-c -o i386-gen.o i386-gen.c" || true
+      run_tcc27_diag tcc27_compile_libtcc_unit "-c -o libtcc.o -D ONE_SOURCE=0 libtcc.c" || true
+      run_tcc27_diag tcc27_compile_tccgen_unit "-c -o tccgen.o tccgen.c" || true
+
       # First prove the predecessor can at least parse/compile 0.9.27 to an i386 object.
-      if ! run_step tcc27_compile_object tcc26-i386 -c -o tcc27.o -I . -I "$RUNTIME/include/mes/include" -D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
+      if ! run_step tcc27_compile_object tcc26-i386 -c -o tcc27.o -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
         cd "$WORK"
         note_blocker tcc27_compile_object
         exit 0
       fi
 
-      if ! run_step tcc27_link tcc26-i386 -static -o tcc27-i386 -I . -I "$RUNTIME/include/mes/include" -D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
+      if ! run_step tcc27_link tcc26-i386 -static -o tcc27-i386 -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c; then
         cd "$WORK"
         note_blocker tcc27_link
         exit 0
