@@ -1,0 +1,5 @@
+COMMAND: crunch build bootstrap/spike-i386-tcc27-make-pass1.ncl after adding include/bootstrap flags
+START: 2026-05-02T04:47:53-04:00
+/home/brittonr/git/crunch/crunch/.crunch-drain/make-diag-stage2-store/qd5mnj5wb548ihhsxr4vc2bk49la3dm6-spike-i386-tcc27-make-pass1
+EXIT: 0
+END: 2026-05-02T04:47:54-04:00
