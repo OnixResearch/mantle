@@ -1,0 +1,4 @@
+tcc: error: file '%s' not found
+tcc: error: file '%s' not found
+tcc: error: library '%s' not found
+Segmentation fault (core dumped)

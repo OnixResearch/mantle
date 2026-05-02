@@ -163,6 +163,8 @@ EOF
       $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
       $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
       $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+      $BB awk 'done == 0 && $0 == "#if defined TCC_IS_NATIVE_387" { print "#if 0 /* CRUNCH: tcc26-i386 crashes compiling native x87 long-double initializer path */"; done = 1; next } { print }' tccgen.c > tccgen.c.new
+      $BB mv tccgen.c.new tccgen.c
 
       # Focused predecessor diagnostics. These are non-gating: they preserve a
       # narrow map of where tcc26-i386 still falls over before the gating pass1
