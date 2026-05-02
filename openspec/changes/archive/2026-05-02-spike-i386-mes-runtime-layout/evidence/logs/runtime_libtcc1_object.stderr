@@ -1,0 +1,2 @@
+%s:%d: error: constant exceeds 32 bit
+Segmentation fault (core dumped)
