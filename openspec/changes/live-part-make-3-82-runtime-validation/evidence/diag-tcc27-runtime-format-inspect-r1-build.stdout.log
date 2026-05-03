@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-tcc27-runtime-format-inspect.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/mznhd5h4zlcaffm87xqk1lf4v36h1pvd-diag-tcc27-runtime-format-inspect.drv",
+      "label": "diag-tcc27-runtime-format-inspect",
+      "cached": false,
+      "log_file": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state/logs/mznhd5h4zlcaffm87xqk1lf4v36h1pvd-diag-tcc27-runtime-format-inspect.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store/zb27qy9zmz493h4650f7p8l6lb35xz28-diag-tcc27-runtime-format-inspect",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/zb27qy9zmz493h4650f7p8l6lb35xz28-diag-tcc27-runtime-format-inspect",
+            "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state/attestations/artifacts/03da7f2f54bd65b981fee16781c980fb542a6d09780e12e8c6c6cb1b714822ba.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
