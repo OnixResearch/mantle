@@ -1,0 +1,13 @@
+# crunch build log
+# derivation: diag-tcc27-static-runtime
+# drv_path: lsza3wwrmi6qcqzkj83c1r257r7vvwc3-diag-tcc27-static-runtime.drv
+# status: failure
+# timestamp: 1777776087
+
+store error: build: nonzero exit code: exit status: 139
+diag: compile helper
+diag: compile main
+diag: link static executable
+diag: execute static executable
+Segmentation fault (core dumped)
+
