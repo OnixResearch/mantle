@@ -2,8 +2,8 @@
   "schema": "crunch-bootstrap-validation-v1",
   "target": "bootstrap/make-tcc.ncl",
   "evidence_dir": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-make-3-82-runtime-validation/evidence",
-  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-rerun-store",
-  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-rerun-state",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-long-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-long-state",
   "store_prefix": "/crunch/store",
   "resume": true,
   "doctor_ok": true,
@@ -19,5 +19,5 @@
     "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-make-3-82-runtime-validation/evidence/validation-summary.md"
   },
   "leakage_findings": [],
-  "generated_at_unix": 1777667440
+  "generated_at_unix": 1777773366
 }

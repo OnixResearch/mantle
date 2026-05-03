@@ -10,6 +10,7 @@ Evidence:
 
 - `evidence/validation-summary.json` reports `status = build-failed`, `failure_class = build`, and `build_exit_code = 1` for the validation runner.
 - `evidence/build.stdout.log` contains the structured Crunch build report for failed root `make-3.82-tcc`.
-- `evidence/build.derivation.log` contains the builder transcript ending in `Segmentation fault (core dumped)`.
+- `evidence/build.derivation.log` and `evidence/build.derivation-2026-05-02.log` contain builder transcripts ending in `Segmentation fault (core dumped)`.
+- `evidence/V2-build-rerun-2026-05-02.md` records the latest reproduced `make-3.82-tcc` exit 139.
 
 Pending repair target: the Make 3.82 TinyCC/Mes builder segfault must be repaired before `make --version` and simple Makefile execution can be claimed.

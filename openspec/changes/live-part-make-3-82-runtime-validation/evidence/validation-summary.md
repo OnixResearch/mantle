@@ -6,8 +6,8 @@
 - Doctor OK: `true`
 - Build attempted: `true`
 - Build exit code: `Some(1)`
-- Store: `/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-rerun-store`
-- State dir: `/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-rerun-state`
+- Store: `/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-long-store`
+- State dir: `/home/brittonr/git/crunch/crunch/.crunch-drain/make-3-82-long-state`
 
 ## Evidence
 
