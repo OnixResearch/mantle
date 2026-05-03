@@ -1,0 +1,32 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/make-tcc.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-tcc-after-stdarg-r1-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/make-tcc-after-stdarg-r1-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 1,
+  "warmups": [
+    {
+      "target": "bootstrap/tinycc.ncl",
+      "stdout": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/warmup-tinycc.stdout.log",
+      "stderr": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/warmup-tinycc.stderr.log",
+      "exit_code": 0,
+      "status": "passed"
+    }
+  ],
+  "status": "build-failed",
+  "failure_class": "build",
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/make-tcc-after-stdarg-r1/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777847589
+}
