@@ -82,6 +82,8 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
       $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
       $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
       $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+      $BB awk '/tcc_error_noabort\("undefined symbol/ { print "                fputs(\"undefined symbol \", stderr); fputs(name, stderr); fputs(\"\\\\n\", stderr); s1->nb_errors++;"; next } { print }' tccelf.c > tccelf.c.new
+      $BB mv tccelf.c.new tccelf.c
       $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
       $BB sed -i 's|tcc_error_noabort("file '\''%s'\'' not found", filename);|fputs("file not found: ", stderr); fputs(filename, stderr); fputs("\\n", stderr);|g' libtcc.c
       $BB sed -i 's|tcc_error_noabort("library '\''%s'\'' not found", libname);|fputs("library not found: ", stderr); fputs(libname, stderr); fputs("\\n", stderr);|g' libtcc.c

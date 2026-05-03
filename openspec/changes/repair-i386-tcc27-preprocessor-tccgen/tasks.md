@@ -6,4 +6,4 @@
 - [x] Repair the remaining `tcc26-i386` segfault while compiling `tccgen.c` / full `ONE_SOURCE=1` input.
 - [x] Verify and commit the i386 tcc27 compile repair; leave link repair as the next blocker.
 - [x] Narrow the post-compile link blocker with explicit object-existence and startup/library-search diagnostics.
-- [ ] Build/import a real i386 Mes `libc.a` and rerun the explicit `-nostdlib` tcc27 object link before returning to Make 3.82.
+- [x] Build/import a real i386 Mes `libc.a` and rerun the explicit `-nostdlib` tcc27 object link before returning to Make 3.82.
