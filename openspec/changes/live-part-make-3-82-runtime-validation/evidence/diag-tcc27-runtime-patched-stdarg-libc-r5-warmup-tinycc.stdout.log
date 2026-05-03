@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/tinycc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 0,
+    "cached_total": 1,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/na9c90fxdhanv0z8w6q545kl24ywin8h-tinycc-0.9.27.drv",
+      "label": "tinycc-0.9.27",
+      "cached": true,
+      "log_file": null,
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store/85wcxzc72icdgkx2a9v9si9zxxvz2m2y-tinycc-0.9.27",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/85wcxzc72icdgkx2a9v9si9zxxvz2m2y-tinycc-0.9.27",
+            "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state/attestations/artifacts/f19a5077bcc4ee0a5b00766f9c14cb48f5706b5e16b24e347e9c4c6b0e810a8d.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
