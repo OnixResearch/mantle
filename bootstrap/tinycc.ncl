@@ -72,17 +72,30 @@ let tcc27_src = crunch.fetchTarball {
         $BB sed -i '/static void fill_local_got_entries(TCCState \*s1)/,/^}/c\
 static void fill_local_got_entries(TCCState *s1)\
 {\
+    Section *reloc;\
     ElfW_Rel *rel;\
     if (!s1->got || !s1->got->reloc)\
         return;\
-    for_each_elem(s1->got->reloc, 0, rel, ElfW_Rel) {\
+    reloc = s1->got->reloc;\
+    for_each_elem(reloc, 0, rel, ElfW_Rel) {\
         int type = ELFW(R_TYPE)(rel->r_info);\
         int sym_index = ELFW(R_SYM)(rel->r_info);\
         int materialize = (s1->static_link && s1->output_type == TCC_OUTPUT_EXE && (type == R_GLOB_DAT || type == R_JMP_SLOT));\
         if (type == R_RELATIVE || materialize) {\
-            ElfW(Sym) *sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];\
-            struct sym_attr *attr = get_sym_attr(s1, sym_index, 0);\
+            ElfW(Sym) *sym = &((ElfW(Sym) *) reloc->link->data)[sym_index];\
+            struct sym_attr *attr = 0;\
             unsigned offset = rel->r_offset - s1->got->sh_addr;\
+            if (reloc->link == symtab_section)\
+                attr = get_sym_attr(s1, sym_index, 0);\
+            else if (materialize) {\
+                const char *name = (char *) reloc->link->link->data + sym->st_name;\
+                int real_index = find_elf_sym(symtab_section, name);\
+                if (real_index) {\
+                    sym_index = real_index;\
+                    sym = &((ElfW(Sym) *) symtab_section->data)[sym_index];\
+                    attr = get_sym_attr(s1, sym_index, 0);\
+                }\
+            }\
             if (attr && attr->got_offset)\
                 offset = attr->got_offset;\
             if (offset != rel->r_offset - s1->got->sh_addr && type == R_RELATIVE)\
@@ -110,7 +123,7 @@ static void fill_local_got_entries(TCCState *s1)\
         $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
         $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
         $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
-        $BB sed -i 's/#define REX_BASE(reg).*/#define REX_BASE(reg) ((reg) >= 8 ? 1 : 0)/' x86_64-gen.c
+        $BB sed -i 's/#define REX_BASE(reg).*/#define REX_BASE(reg) (((reg) \& 8) ? 1 : 0)/' x86_64-gen.c
         $BB sed -i 's/(REX_BASE(r2) << 2) | (ll << 3)/(REX_BASE(r2) ? 4 : 0) | (ll ? 8 : 0)/' x86_64-gen.c
         $BB sed -i 's/(REX_BASE(r) << 8)/(REX_BASE(r) ? 256 : 0)/g' x86_64-gen.c
         $BB sed -i '/ST_FUNC void o(unsigned int c)/,/^}/c\
@@ -159,6 +172,33 @@ ST_FUNC void gen_le64(int64_t c)\
 ' x86_64-gen.c
         $BB sed -i 's/g(func_ret_sub >> 8);/{ unsigned char *p = (unsigned char *)\&func_ret_sub; g(p[1]); }/g' x86_64-gen.c
 
+        # The Mes-built predecessor can leave 64-bit absolute data/GOT
+        # relocations unapplied in static outputs when the inline 64-bit
+        # little-endian helpers use multiword shifts. Keep the public helper
+        # names but spell 64-bit loads/stores as x86_64 byte copies so
+        # R_X86_64_64 data initializers and static PLT/GOT slots are
+        # materialized before the ELF is written.
+        $BB sed -i '/static inline uint64_t read64le(unsigned char \*p)/,/^}/c\
+static inline uint64_t read64le(unsigned char *p) {\
+    uint64_t x;\
+    memcpy(&x, p, sizeof(x));\
+    return x;\
+}\
+' tcc.h
+        $BB sed -i '/static inline void write64le(unsigned char \*p, uint64_t x)/,/^}/c\
+static inline void write64le(unsigned char *p, uint64_t x) {\
+    memcpy(p, &x, sizeof(x));\
+}\
+' tcc.h
+        $BB sed -i '/static inline void add64le(unsigned char \*p, int64_t x)/,/^}/c\
+static inline void add64le(unsigned char *p, int64_t x) {\
+    uint64_t y;\
+    memcpy(&y, p, sizeof(y));\
+    y += x;\
+    memcpy(p, &y, sizeof(y));\
+}\
+' tcc.h
+
         # The predecessor Mes runtime varargs path corrupts snprintf/sprintf
         # string expansion in the first tcc-0.9.27 binary. Spell bootstrap
         # path constructors with direct string operations for this Mes-linked
@@ -204,6 +244,12 @@ ST_FUNC void gen_le64(int64_t c)\
         $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
         $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+
+        # For static executables, remember the GOT slot that backs a PLT entry
+        # so the later fill_got_entry() pass can materialize it. Upstream only
+        # stores plt_offset for R_JMP_SLOT entries because a dynamic loader will
+        # fill the GOT; Crunch's Mes-linked static executables have no loader.
+        $BB sed -i '/attr->plt_offset = create_plt_entry(s1, got_offset, attr);/a\        if (s1->static_link && s1->output_type == TCC_OUTPUT_EXE) attr->got_offset = got_offset;' tccelf.c
 
         # tcc-mes can emit x86_64 PLT entries even for static executables.
         # Relocate those PLT slots after final section layout; otherwise a

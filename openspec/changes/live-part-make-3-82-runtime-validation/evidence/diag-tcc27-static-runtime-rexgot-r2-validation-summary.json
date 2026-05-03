@@ -1,0 +1,32 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/diag-tcc27-static-runtime-inspect.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 0,
+  "warmups": [
+    {
+      "target": "bootstrap/tinycc.ncl",
+      "stdout": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/warmup-tinycc.stdout.log",
+      "stderr": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/warmup-tinycc.stderr.log",
+      "exit_code": 0,
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "failure_class": null,
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/target/bootstrap-validation/diag-tcc27-static-runtime-rexgot-r2/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777836342
+}
