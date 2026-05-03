@@ -1,0 +1,7 @@
+# Host runtime probe for diag-tcc27-static-runtime-inspect warmup-r4
+
+2026-05-03T14:22:00-04:00
+output=/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store/23ghal4ifiqhvs6x4dkg9ql32z489lsn-diag-tcc27-static-runtime-inspect/bin/diag-tcc27-static-runtime
+/home/brittonr/git/crunch/crunch/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store/23ghal4ifiqhvs6x4dkg9ql32z489lsn-diag-tcc27-static-runtime-inspect/bin/diag-tcc27-static-runtime: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, stripped
+/run/current-system/sw/bin/bash: line 32: 3780608 Segmentation fault         (core dumped) "$OUT/bin/diag-tcc27-static-runtime"
+runtime_exit=139

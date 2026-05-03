@@ -57,6 +57,40 @@ Captured transcripts:
 - `evidence/diag-tcc27-static-runtime-inspect.bg.stdout.log`
 - `evidence/diag-tcc27-static-runtime-inspect.bg.stderr.log`
 
+## Warmup runner rerun
+
+After adding `crunch bootstrap validate --warmup`, the same diagnostic reached the intended builder with a reusable TinyCC prerequisite:
+
+```sh
+nix shell nixpkgs#bubblewrap -c ./target/debug/crunch --json \
+  --store "$PWD/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-store" \
+  --state-dir "$PWD/.crunch-drain/diag-tcc27-static-runtime-inspect-warmup-r4-state" \
+  bootstrap validate bootstrap/diag-tcc27-static-runtime-inspect.ncl \
+  --warmup bootstrap/tinycc.ncl \
+  --evidence-dir target/bootstrap-validation/diag-tcc27-static-runtime-inspect-warmup-r4
+```
+
+Captured evidence copied into this change:
+
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-validation-summary.md`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-validation-summary.json`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-build.stdout.log`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-build.stderr.log`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-warmup-tinycc.stdout.log`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-warmup-tinycc.stderr.log`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-doctor.json`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4.derivation.log`
+- `evidence/diag-tcc27-static-runtime-inspect-warmup-r4-runtime-probe.log`
+
+Result:
+
+- Warmup `bootstrap/tinycc.ncl`: passed, built `tinycc-0.9.27`.
+- Diagnostic `bootstrap/diag-tcc27-static-runtime-inspect.ncl`: passed, built output path `23ghal4ifiqhvs6x4dkg9ql32z489lsn-diag-tcc27-static-runtime-inspect`.
+- Derivation log reached all intended seam markers: `compile helper`, `compile main`, and `link static executable`.
+- Output contains `bin/diag-tcc27-static-runtime` as a static x86-64 ELF plus preserved `helper.o`, `main.o`, and source files.
+- A host runtime probe of the generated executable still exits `139` (`Segmentation fault`).
+- The validation runner's coarse host-leakage scan found no host-path needles in captured build output.
+
 ## Interpretation
 
-The diagnostic remains the right smallest seam, but the current build path does not reach it reliably: it can spend 30+ minutes rebuilding/finalizing the Mes prerequisite without creating any derivation log or logical output-store path. V3 remains blocked rather than passed. The next repair target should first make the Mes prerequisite cacheable/reusable or otherwise avoid rebuilding Mes for every TinyCC runtime diagnostic; once the diagnostic reaches the actual link-only builder, its result can distinguish static link creation from runtime startup/CRT execution.
+The warmup runner removed the earlier Mes/TinyCC prerequisite-cacheability blocker and the link-only diagnostic now classifies the seam: TinyCC 0.9.27/Mes can compile the two objects and produce a static executable without link-time failure, but the produced executable still segfaults at runtime. V3 remains blocked rather than passed because GNU Make 3.82 has no working output/smoke yet. The next repair target is the TinyCC/Mes static executable runtime startup/relocation path (the same class already implicated by the smaller runtime diagnostic), not bootstrap-validation runner cacheability.

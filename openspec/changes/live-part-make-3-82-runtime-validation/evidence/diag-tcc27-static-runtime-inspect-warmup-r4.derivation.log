@@ -1,0 +1,10 @@
+# crunch build log
+# derivation: diag-tcc27-static-runtime-inspect
+# drv_path: n3zniw07ss0gni65mhx535pw106v86f0-diag-tcc27-static-runtime-inspect.drv
+# status: success
+# timestamp: 1777832176
+
+diag-inspect: compile helper
+diag-inspect: compile main
+diag-inspect: link static executable
+

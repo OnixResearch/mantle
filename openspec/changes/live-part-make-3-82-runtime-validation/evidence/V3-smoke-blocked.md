@@ -13,4 +13,4 @@ Evidence:
 - `evidence/build.derivation.log` and `evidence/build.derivation-2026-05-02.log` contain builder transcripts ending in `Segmentation fault (core dumped)`.
 - `evidence/V2-build-rerun-2026-05-02.md` records the latest reproduced `make-3.82-tcc` exit 139.
 
-Pending repair target: the Make 3.82 TinyCC/Mes builder segfault must be repaired before `make --version` and simple Makefile execution can be claimed.
+Pending repair target: the TinyCC/Mes link-only diagnostic now reaches the builder and produces a static executable, but that executable still exits 139 under a host runtime probe. Repair the TinyCC/Mes static executable runtime startup/relocation path before returning to GNU Make `make --version` and simple Makefile smokes.
