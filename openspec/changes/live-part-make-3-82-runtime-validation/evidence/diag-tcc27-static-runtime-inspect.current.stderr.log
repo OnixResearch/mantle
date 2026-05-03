@@ -1,0 +1,3 @@
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.crunch-drain/current-tcc-runtime-state/signing-key)
+[2m2026-05-03T15:35:08.533879Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/current-tcc-runtime-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-05-03T15:35:08.549327Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 11, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/current-tcc-runtime-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
