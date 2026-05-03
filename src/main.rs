@@ -443,6 +443,10 @@ enum BootstrapAction {
         #[arg(long)]
         evidence_dir: Option<PathBuf>,
 
+        /// Bootstrap .ncl prerequisites to build before the target, reusing the same store/state
+        #[arg(long = "warmup")]
+        warmups: Vec<PathBuf>,
+
         /// Reuse the existing state/store directories instead of treating this as a fresh run
         #[arg(long)]
         resume: bool,
@@ -1309,6 +1313,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             target,
             import_paths,
             evidence_dir,
+            warmups,
             resume,
             jobs,
             strict_hermetic,
@@ -1318,6 +1323,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
                 target: target.clone(),
                 import_paths: import_paths.clone(),
                 evidence_dir: evidence_dir.clone(),
+                warmups: warmups.clone(),
                 resume: *resume,
                 jobs: *jobs,
                 strict_hermetic: *strict_hermetic,

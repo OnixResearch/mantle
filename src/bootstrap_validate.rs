@@ -30,6 +30,7 @@ pub(crate) struct BootstrapValidateOptions {
     pub(crate) target: PathBuf,
     pub(crate) import_paths: Vec<PathBuf>,
     pub(crate) evidence_dir: Option<PathBuf>,
+    pub(crate) warmups: Vec<PathBuf>,
     pub(crate) resume: bool,
     pub(crate) jobs: Option<u32>,
     pub(crate) strict_hermetic: bool,
@@ -47,6 +48,7 @@ struct BootstrapValidationSummary {
     doctor_ok: bool,
     build_attempted: bool,
     build_exit_code: Option<i32>,
+    warmups: Vec<WarmupSummary>,
     status: ValidationStatus,
     failure_class: Option<&'static str>,
     evidence: ValidationEvidence,
@@ -54,13 +56,23 @@ struct BootstrapValidationSummary {
     generated_at_unix: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ValidationStatus {
     Passed,
     BuildFailed,
     PreflightFailed,
     Running,
+    WarmupFailed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WarmupSummary {
+    target: String,
+    stdout: String,
+    stderr: String,
+    exit_code: Option<i32>,
+    status: ValidationStatus,
 }
 
 #[derive(Debug, Serialize)]
@@ -101,6 +113,7 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
             &evidence_dir,
             false,
             None,
+            Vec::new(),
             ValidationStatus::PreflightFailed,
             Some("preflight"),
             Vec::new(),
@@ -111,16 +124,62 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
     }
 
     let import_paths = build_import_paths(&opts.import_paths)?;
+    let mut warmup_summaries = Vec::with_capacity(opts.warmups.len());
+    for warmup in &opts.warmups {
+        let stem = evidence_stem(warmup);
+        let stdout_path = evidence_dir.join(format!("warmup-{stem}.stdout.log"));
+        let stderr_path = evidence_dir.join(format!("warmup-{stem}.stderr.log"));
+        write_text(&stdout_path, "")?;
+        write_text(&stderr_path, "")?;
+        let status = run_build_child(ctx, warmup, &opts, &import_paths, &stdout_path, &stderr_path)?;
+        let warmup_status = if status.success() {
+            ValidationStatus::Passed
+        } else {
+            ValidationStatus::WarmupFailed
+        };
+        warmup_summaries.push(WarmupSummary {
+            target: warmup.display().to_string(),
+            stdout: stdout_path.display().to_string(),
+            stderr: stderr_path.display().to_string(),
+            exit_code: status.code(),
+            status: warmup_status.clone(),
+        });
+        if !status.success() {
+            let summary = make_summary(
+                ctx,
+                &opts,
+                &evidence_dir,
+                false,
+                None,
+                warmup_summaries,
+                ValidationStatus::WarmupFailed,
+                Some("warmup"),
+                Vec::new(),
+            );
+            write_summaries(&evidence_dir, &summary)?;
+            render_summary(ctx, &summary)?;
+            return Err(RunError::Reported(1));
+        }
+    }
     let stdout_path = evidence_dir.join(BUILD_STDOUT_FILE);
     let stderr_path = evidence_dir.join(BUILD_STDERR_FILE);
     write_text(&stdout_path, "")?;
     write_text(&stderr_path, "")?;
 
-    let checkpoint_summary =
-        make_summary(ctx, &opts, &evidence_dir, true, None, ValidationStatus::Running, Some("running"), Vec::new());
+    let checkpoint_summary = make_summary(
+        ctx,
+        &opts,
+        &evidence_dir,
+        true,
+        None,
+        warmup_summaries.clone(),
+        ValidationStatus::Running,
+        Some("running"),
+        Vec::new(),
+    );
     write_summaries(&evidence_dir, &checkpoint_summary)?;
 
-    let status = run_build_child(ctx, &opts, &import_paths, &stdout_path, &stderr_path)?;
+    let status = run_build_child(ctx, &opts.target, &opts, &import_paths, &stdout_path, &stderr_path)?;
 
     let stdout = fs::read_to_string(&stdout_path).unwrap_or_else(|_| String::new());
     let stderr = fs::read_to_string(&stderr_path).unwrap_or_else(|_| String::new());
@@ -133,8 +192,17 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
     } else {
         (ValidationStatus::BuildFailed, Some("build"))
     };
-    let summary =
-        make_summary(ctx, &opts, &evidence_dir, true, exit_code, validation_status, failure_class, leakage_findings);
+    let summary = make_summary(
+        ctx,
+        &opts,
+        &evidence_dir,
+        true,
+        exit_code,
+        warmup_summaries,
+        validation_status,
+        failure_class,
+        leakage_findings,
+    );
     write_summaries(&evidence_dir, &summary)?;
     render_summary(ctx, &summary)?;
 
@@ -147,6 +215,7 @@ pub(crate) fn cmd_bootstrap_validate(ctx: &RunContext, opts: BootstrapValidateOp
 
 fn run_build_child(
     ctx: &RunContext,
+    target: &Path,
     opts: &BootstrapValidateOptions,
     import_paths: &[std::ffi::OsString],
     stdout_path: &Path,
@@ -164,7 +233,7 @@ fn run_build_child(
         .arg("--state-dir")
         .arg(&ctx.resolved_state_dir)
         .arg("build")
-        .arg(&opts.target)
+        .arg(target)
         .arg("--no-substitute");
     if opts.strict_hermetic {
         command.arg("--strict-hermetic");
@@ -225,6 +294,22 @@ fn resolve_evidence_dir(evidence_dir: Option<&Path>, target: &Path) -> Result<Pa
     absolutize(Path::new("target").join("bootstrap-validation").join(stem).as_path())
 }
 
+fn evidence_stem(target: &Path) -> String {
+    target
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("bootstrap-warmup")
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
 fn absolutize(path: &Path) -> Result<PathBuf, RunError> {
     if path.is_absolute() {
         return Ok(path.to_path_buf());
@@ -247,6 +332,7 @@ fn make_summary(
     evidence_dir: &Path,
     build_attempted: bool,
     build_exit_code: Option<i32>,
+    warmups: Vec<WarmupSummary>,
     status: ValidationStatus,
     failure_class: Option<&'static str>,
     leakage_findings: Vec<LeakageFinding>,
@@ -262,6 +348,7 @@ fn make_summary(
         doctor_ok: !matches!(status, ValidationStatus::PreflightFailed),
         build_attempted,
         build_exit_code,
+        warmups,
         status,
         failure_class,
         evidence: ValidationEvidence {
@@ -292,6 +379,12 @@ fn render_markdown(summary: &BootstrapValidationSummary) -> String {
     out.push_str(&format!("- Doctor OK: `{}`\n", summary.doctor_ok));
     out.push_str(&format!("- Build attempted: `{}`\n", summary.build_attempted));
     out.push_str(&format!("- Build exit code: `{:?}`\n", summary.build_exit_code));
+    if !summary.warmups.is_empty() {
+        out.push_str("- Warmups:\n");
+        for warmup in &summary.warmups {
+            out.push_str(&format!("  - `{}`: `{:?}` exit `{:?}`\n", warmup.target, warmup.status, warmup.exit_code));
+        }
+    }
     out.push_str(&format!("- Store: `{}`\n", summary.store));
     out.push_str(&format!("- State dir: `{}`\n", summary.state_dir));
     out.push_str("\n## Evidence\n\n");
@@ -351,6 +444,11 @@ mod tests {
     fn default_evidence_dir_uses_target_stem() {
         let dir = resolve_evidence_dir(None, Path::new("bootstrap/make-tcc.ncl")).unwrap();
         assert!(dir.ends_with("target/bootstrap-validation/make-tcc"));
+    }
+
+    #[test]
+    fn warmup_evidence_stem_is_log_filename_safe() {
+        assert_eq!(evidence_stem(Path::new("bootstrap/diag tcc27.ncl")), "diag-tcc27");
     }
 
     #[test]
