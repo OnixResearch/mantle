@@ -1,0 +1,4 @@
+Generated signing key: crunch-britton-desktop-1 (/home/brittonr/git/crunch/crunch/.crunch-drain/bg-tcc-runtime-state/signing-key)
+[2m2026-05-03T15:54:30.995521Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 9, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/bg-tcc-runtime-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-05-03T15:54:31.013343Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 10, path: \"/home/brittonr/git/crunch/crunch/.crunch-drain/bg-tcc-runtime-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+bash: [1614119: 2 (255)] tcsetattr: Inappropriate ioctl for device
