@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: bzip2-1.0.8-musl
+# drv_path: vz6yg4d032cykbf274hggrmprb11bxpm-bzip2-1.0.8-musl.drv
+# status: failure
+# timestamp: 1777899769
+
+dependency tcc-0.9.27-musl-v2.drv failed

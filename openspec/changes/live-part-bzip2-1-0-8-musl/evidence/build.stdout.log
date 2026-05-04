@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/bzip2-1.0.8-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/bzip2-musl-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/bzip2-musl-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "bzip2-1.0.8-musl",
+      "drv_key": "/crunch/store/vz6yg4d032cykbf274hggrmprb11bxpm-bzip2-1.0.8-musl.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency tcc-0.9.27-musl-v2.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/bzip2-musl-state/logs/vz6yg4d032cykbf274hggrmprb11bxpm-bzip2-1.0.8-musl.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}

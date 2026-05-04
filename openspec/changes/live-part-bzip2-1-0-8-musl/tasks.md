@@ -7,7 +7,7 @@
 ## Verification
 
 - [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/bzip2-1.0.8-musl.ncl` and record the transcript. Evidence: `evidence/V1-source-pin-audit.log`.
-- [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/bzip2-1.0.8-musl.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
-- [ ] V3 Smoke-test the produced output contract for `bzip2 1.0.8 (musl)`.
-- [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
+- [x] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/bzip2-1.0.8-musl.ncl` with the documented bootstrap build environment and record output path plus elapsed time. Evidence: `evidence/V2-build.md` (blocked before output by `tcc-0.9.27-musl-v2.drv`).
+- [ ] V3 Smoke-test the produced output contract for `bzip2 1.0.8 (musl)`. Blocked until `live-part-tcc-musl-v2-runtime-validation` produces a usable prerequisite compiler; see `evidence/V3-smoke.md`.
+- [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. Evidence: `evidence/V4-host-leakage.md` (failed prerequisite attempt only; rerun after successful build).
 - [ ] V5 Run `openspec validate live-part-bzip2-1-0-8-musl` after evidence is recorded.
