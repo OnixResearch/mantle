@@ -1,0 +1,53 @@
+# crunch build log
+# derivation: patch-2.5.9-tcc
+# drv_path: iwzf16hhy966j56qyif2payncy5r8vim-patch-2.5.9-tcc.drv
+# status: success
+# timestamp: 1777896042
+
+patch 2.5.9
+Copyright (C) 1988 Larry Wall
+Copyright (C) 2003 Free Software Foundation, Inc.
+
+This program comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of this program
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+
+written by Larry Wall and Paul Eggert
+patching file smoke.txt
+new
+patch 2.5.9
+Copyright (C) 1988 Larry Wall
+Copyright (C) 2003 Free Software Foundation, Inc.
+
+This program comes with NO WARRANTY, to the extent permitted by law.
+You may redistribute copies of this program
+under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+
+written by Larry Wall and Paul Eggert
+
+error.c:224: warning: implicit declaration of function 'vfprintf'
+error.c:224: warning: implicit declaration of function 'vfprintf'
+patch.c:126: warning: implicit declaration of function 'setbuf'
+patch.c:126: warning: implicit declaration of function 'setbuf'
+patch.c:403: warning: implicit declaration of function 'utime'
+patch.c:403: warning: implicit declaration of function 'utime'
+patch.c:1327: warning: implicit declaration of function 'mktemp'
+patch.c:1327: warning: implicit declaration of function 'mktemp'
+pch.c:155: warning: implicit declaration of function 'fileno'
+pch.c:155: warning: implicit declaration of function 'fileno'
+pch.c:1953: warning: implicit declaration of function 'popen'
+pch.c:1953: warning: implicit declaration of function 'popen'
+pch.c:1953: warning: assignment makes pointer from integer without a cast
+pch.c:1953: warning: assignment makes pointer from integer without a cast
+pch.c:1992: warning: implicit declaration of function 'pclose'
+pch.c:1992: warning: implicit declaration of function 'pclose'
+util.c:506: warning: implicit declaration of function 'vfprintf'
+util.c:506: warning: implicit declaration of function 'vfprintf'
+util.c:768: warning: assignment from incompatible pointer type
+util.c:768: warning: assignment from incompatible pointer type
+util.c:780: warning: assignment from incompatible pointer type
+util.c:780: warning: assignment from incompatible pointer type
+util.c:818: warning: implicit declaration of function 'system'
+util.c:818: warning: implicit declaration of function 'system'

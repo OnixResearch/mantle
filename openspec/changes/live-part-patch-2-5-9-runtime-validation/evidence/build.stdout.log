@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/patch-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/patch-tcc-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/patch-tcc-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/iwzf16hhy966j56qyif2payncy5r8vim-patch-2.5.9-tcc.drv",
+      "label": "patch-2.5.9-tcc",
+      "cached": false,
+      "log_file": "/home/brittonr/git/crunch/crunch/.crunch-drain/patch-tcc-state/logs/iwzf16hhy966j56qyif2payncy5r8vim-patch-2.5.9-tcc.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/patch-tcc-store/zw9ma0lcl4kv9cacn1ah9avkgkf99nry-patch-2.5.9-tcc",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/zw9ma0lcl4kv9cacn1ah9avkgkf99nry-patch-2.5.9-tcc",
+            "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/patch-tcc-state/attestations/artifacts/f27429badaf588f3a78c1107366bb21cc7d583ebab984e09817d59baa8baa905.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
