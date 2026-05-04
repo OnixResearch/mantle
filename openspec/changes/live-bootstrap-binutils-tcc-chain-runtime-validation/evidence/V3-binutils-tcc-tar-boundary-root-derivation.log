@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: binutils-2.30-tcc
+# drv_path: z1r3l3smkq128da52hnhs60zv2fq2i3f-binutils-2.30-tcc.drv
+# status: failure
+# timestamp: 1777930803
+
+dependency tar-1.12-tcc.drv failed

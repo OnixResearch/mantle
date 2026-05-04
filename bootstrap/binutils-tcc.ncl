@@ -22,9 +22,6 @@ let gawk = import "gawk-3.0.4-musl.ncl" in
 let grep = import "grep-2.4-musl.ncl" in
 let diffutils = import "diffutils-2.7-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
-let autoconf = import "autoconf-2.69.ncl" in
-let automake = import "automake-1.15.1.ncl" in
-let libtool = import "libtool-2.2.4.ncl" in
 let patch = import "patch-tcc.ncl" in
 let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
@@ -65,15 +62,12 @@ let binutils_src = crunch.fetchTarball {
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
       BASH=$(find_input bash-2.05b-tcc)
-      AC=$(find_input autoconf-2.69)
-      AM=$(find_input automake-1.15.1)
-      LT=$(find_input libtool-2.2.4)
       PATCH=$(find_input patch-2.5.9-tcc)
       TAR=$(find_input tar-1.12-tcc)
       BZIP2=$(find_input bzip2-1.0.8-musl)
       SRC=$(find_input binutils-2.30-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$FLEX/bin:$BISON/bin:$PERL/bin:$CU/bin:$GAWK/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$AC/bin:$AM/bin:$LT/bin:$PATCH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
+      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$FLEX/bin:$BISON/bin:$PERL/bin:$CU/bin:$GAWK/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$PATCH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
       export CONFIG_SHELL="$BASH/bin/bash"
       export SHELL="$BASH/bin/bash"
 
@@ -191,7 +185,7 @@ ASM
   inputs = [
     stage0, mes, tcc, musl, make, sed, m4, flex, bison,
     perl, coreutils, gawk, grep, diffutils, bash,
-    autoconf, automake, libtool, patch, tar, bzip2,
+    patch, tar, bzip2,
     binutils_src,
   ],
 } | crunch.Derivation

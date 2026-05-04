@@ -39,6 +39,11 @@ pub struct ConversionCache {
     /// Track in-progress conversions for cycle detection.
     /// Key is an opaque identity derived from CrunchDerivation name + builder + system.
     in_progress: std::collections::HashSet<String>,
+    /// Track completed conversions by the same opaque identity used for cycle detection.
+    ///
+    /// This is intentionally separate from the ATerm-hash cache: recursive conversion
+    /// needs a cheap pre-order memoization key before the ATerm bytes are available.
+    completed_by_identity: HashMap<String, (StorePath<String>, Derivation)>,
     /// Store directory prefix (e.g. "/nix/store" or "/opt/crunch").
     store_dir: String,
     /// Entries added since the last `drain_pending()`. Enables
@@ -64,6 +69,7 @@ impl ConversionCache {
             hdm_by_drv_path: HashMap::new(),
             drv_path_to_aterm: HashMap::new(),
             in_progress: std::collections::HashSet::new(),
+            completed_by_identity: HashMap::new(),
             store_dir: store_dir.to_string(),
             pending: Vec::new(),
         }
@@ -145,6 +151,16 @@ impl ConversionCache {
     /// Unmark a derivation as in-progress.
     pub fn end_conversion(&mut self, identity: &str) {
         self.in_progress.remove(identity);
+    }
+
+    /// Look up a completed conversion by the pre-order identity key.
+    pub fn get_completed_identity(&self, identity: &str) -> Option<(StorePath<String>, Derivation)> {
+        self.completed_by_identity.get(identity).cloned()
+    }
+
+    /// Remember a completed conversion by the pre-order identity key.
+    pub fn insert_completed_identity(&mut self, identity: String, drv_path: StorePath<String>, derivation: Derivation) {
+        self.completed_by_identity.insert(identity, (drv_path, derivation));
     }
 
     /// Iterate all entries for populating a `DerivationRegistry`.

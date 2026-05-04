@@ -60,6 +60,10 @@ fn convert_with_depth(
 
     let identity = derivation_identity(drv);
 
+    if let Some(converted) = known_paths.get_completed_identity(&identity) {
+        return Ok(converted);
+    }
+
     // Cycle detection
     if !known_paths.begin_conversion(&identity) {
         return Err(Error::CircularDependency(drv.name.clone()));
@@ -68,6 +72,9 @@ fn convert_with_depth(
     let result = convert_inner(drv, known_paths, depth);
 
     known_paths.end_conversion(&identity);
+    if let Ok((drv_path, nix_drv)) = &result {
+        known_paths.insert_completed_identity(identity, drv_path.clone(), nix_drv.clone());
+    }
     result
 }
 
@@ -520,13 +527,16 @@ mod tests {
         // top depends on left and right
         assert_eq!(nix_drv.input_derivations.len(), 2);
 
-        // shared's drv path appears once in KnownPaths (dedup via identity)
+        // shared's drv path appears once in KnownPaths and only once in the
+        // pending conversion stream. This protects broad bootstrap roots from
+        // exponential conversion over diamond-shaped dependency graphs.
         let shared_path = {
             let mut kp_check = ConversionCache::default();
             let (p, _) = convert(&minimal_drv("shared", "/bin/sh"), &mut kp_check).unwrap();
             p.to_absolute_path()
         };
         assert!(kp.get_by_drv_path(&shared_path).is_some());
+        assert_eq!(kp.pending_count(), 4);
     }
 
     #[test]

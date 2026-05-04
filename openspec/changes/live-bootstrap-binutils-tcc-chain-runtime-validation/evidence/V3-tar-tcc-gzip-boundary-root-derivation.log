@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: tar-1.12-tcc
+# drv_path: kb24xl8gm5qnqr4rfw1n3q6yadmz9yya-tar-1.12-tcc.drv
+# status: failure
+# timestamp: 1777931081
+
+dependency gzip-1.2.4-tcc.drv failed
