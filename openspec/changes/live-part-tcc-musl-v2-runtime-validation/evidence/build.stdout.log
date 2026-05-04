@@ -17,11 +17,11 @@
   "failed": [
     {
       "root": "tcc-0.9.27-musl-v2",
-      "drv_key": "/crunch/store/301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv",
+      "drv_key": "/crunch/store/mw16jzmvh5d17kc2y4z8z0sc04086f1r-tcc-0.9.27-musl-v2.drv",
       "phase": "build",
       "error_class": "builder",
-      "message": "dependency sed-4.0.9-tcc.drv failed",
-      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-v2-state/logs/301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv.log"
+      "message": "dependency tcc-0.9.27-musl.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-v2-state/logs/mw16jzmvh5d17kc2y4z8z0sc04086f1r-tcc-0.9.27-musl-v2.drv.log"
     }
   ],
   "fod_mismatches": []

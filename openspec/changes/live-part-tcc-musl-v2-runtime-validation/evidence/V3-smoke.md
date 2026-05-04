@@ -3,6 +3,6 @@
 - Task-ID: V3
 - Covers: `bootstrap.part.tcc.musl.v2.runtime-validation.compile-smoke`
 - Status: blocked
-- Reason: no `tcc-0.9.27-musl-v2` output path was produced because prerequisite `sed-4.0.9-tcc.drv` failed first.
+- Reason: no successful output path was produced; build status was `build-failed`.
 
-No installed `tcc`, `tcc-0.9.27-musl-v2`, `libtcc1.a`, or trivial C compile smoke is claimed here.
+No installed `tcc`, `tcc-0.9.27-musl-v2`, `libtcc1.a`, and trivial C compilation smoke is claimed here. Rerun this task only after V2 produces an output path.

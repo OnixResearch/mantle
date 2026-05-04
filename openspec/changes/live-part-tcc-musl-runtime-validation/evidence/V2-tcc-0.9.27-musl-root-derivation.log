@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: tcc-0.9.27-musl
+# drv_path: 5k4dnz4wkxlv3sys10yab6g0wcmi5jzv-tcc-0.9.27-musl.drv
+# status: failure
+# timestamp: 1777904928
+
+dependency tcc-0.9.27-musl-prep.drv failed

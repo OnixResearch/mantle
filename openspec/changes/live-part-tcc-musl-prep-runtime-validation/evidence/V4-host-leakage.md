@@ -1,7 +1,7 @@
 # V4 host-leakage scan: failed build attempt
 
 - Task-ID: V4
-- Covers: `bootstrap.part.tcc.musl.v2.runtime-validation`
+- Covers: `bootstrap.part.tcc.musl.prep.runtime-validation`
 - Scope: validation-runner summary, captured build stdout/stderr, and saved root derivation log for this failed attempt.
 - Runner leakage findings: `[]`
 - Coarse builder-log findings: none reported by the validation runner.

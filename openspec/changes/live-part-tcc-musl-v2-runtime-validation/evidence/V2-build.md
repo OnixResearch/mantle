@@ -6,9 +6,11 @@
 - Status: `build-failed`
 - Exit code: `1`
 - Doctor OK: `True`
-- Output path: none; the target did not build.
+- Output path: none; the target did not produce a runtime-valid output.
 - Failure class: `build`
-- Blocker: prerequisite derivation `sed-4.0.9-tcc.drv` failed before `tcc-0.9.27-musl-v2` builder execution.
+- Root: `tcc-0.9.27-musl-v2`
+- Derivation key: `/crunch/store/mw16jzmvh5d17kc2y4z8z0sc04086f1r-tcc-0.9.27-musl-v2.drv`
+- Blocker: dependency tcc-0.9.27-musl.drv failed
 
 ## Evidence files
 
@@ -17,16 +19,10 @@
 - `build.stderr.log`
 - `validation-summary.json`
 - `validation-summary.md`
-- `V2-tcc-musl-v2-root-derivation.log`
+- `V2-tcc-0.9.27-musl-v2-root-derivation.log`
 
-## Root derivation log excerpt
+## Root derivation message excerpt
 
 ```text
-# crunch build log
-# derivation: tcc-0.9.27-musl-v2
-# drv_path: 301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv
-# status: failure
-# timestamp: 1777901450
-
-dependency sed-4.0.9-tcc.drv failed
+dependency tcc-0.9.27-musl.drv failed
 ```
