@@ -11,9 +11,9 @@
 
 ## Evidence
 
-- Doctor JSON: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-patch-2-5-9-runtime-validation/evidence/doctor.json`
-- Build stdout: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-patch-2-5-9-runtime-validation/evidence/build.stdout.log`
-- Build stderr: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-patch-2-5-9-runtime-validation/evidence/build.stderr.log`
+- Doctor JSON: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-patch-2-5-9-runtime-validation/evidence/doctor.json`
+- Build stdout: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-patch-2-5-9-runtime-validation/evidence/build.stdout.log`
+- Build stderr: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-patch-2-5-9-runtime-validation/evidence/build.stderr.log`
 
 ## Host leakage scan
 
