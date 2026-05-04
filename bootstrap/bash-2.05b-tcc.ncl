@@ -9,12 +9,7 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-tcc.ncl" in
-let bzip2 = import "bzip2-tcc.ncl" in
-let oyacc = import "oyacc-tcc.ncl" in
 
 let bash_src = crunch.fetchTarball {
   url = "https://mirrors.kernel.org/gnu/bash/bash-2.05b.tar.gz",
@@ -39,15 +34,10 @@ let bash_src = crunch.fetchTarball {
       }
 
       TCC=$(find_input tinycc-0.9.27)
-      MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
-      MES_OUT=$(find_input mes)
-      SED=$(find_input sed-4.0.9-tcc)
-      BZIP2=$(find_input bzip2-1.0.8-tcc)
-      OYACC=$(find_input oyacc-6.6-tcc)
       BASH_SRC=$(find_input bash-2.05b-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$STAGE0/bin:$SED/bin:$BZIP2/bin:$OYACC/bin:$MES_OUT/bin:$PATH"
+      export PATH="$TCC/bin:$STAGE0/bin:$PATH"
 
       WORK=/tmp/bash-build
       $BB mkdir -p "$WORK"
@@ -151,12 +141,8 @@ VER
 /* Minimal builtins for bootstrap bash */
 BUILTEXT
 
-      # Run yacc on parser
-      if [ -f parse.y ]; then
-        yacc -d parse.y
-        $BB mv y.tab.c y.tab.c.orig 2>/dev/null || true
-        $BB mv y.tab.h y.tab.h.orig 2>/dev/null || true
-      fi
+      # The direct-source bootstrap below does not compile the generated parser;
+      # avoid pulling oyacc into this stage just to create unused y.tab files.
 
       CFLAGS="-I. -Iinclude -Ilib -Ibuiltins -DHAVE_CONFIG_H -DPROGRAM=\\\"bash\\\" -DDEFAULT_PATH_VALUE=\\\"/bin\\\" -DSTANDARD_UTILS_PATH=\\\"/bin\\\" -DCONF_HOSTTYPE=\\\"x86_64\\\" -DCONF_OSTYPE=\\\"linux-musl\\\" -DCONF_MACHTYPE=\\\"x86_64-unknown-linux-musl\\\" -DCONF_VENDOR=\\\"unknown\\\""
 
@@ -242,5 +228,5 @@ RLSTUB
       test -x "$out/bin/bash"
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, sed, bzip2, oyacc, bash_src],
+  inputs = [stage0, tcc, bash_src],
 } | crunch.Derivation

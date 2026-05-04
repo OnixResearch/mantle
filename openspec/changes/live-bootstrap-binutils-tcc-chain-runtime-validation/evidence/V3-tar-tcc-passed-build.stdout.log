@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/tar-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/sxsp6n24gr3s62wpv7l6zldd2dh3lazy-tar-1.12-tcc.drv",
+      "label": "tar-1.12-tcc",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/sxsp6n24gr3s62wpv7l6zldd2dh3lazy-tar-1.12-tcc.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-store/3psapmkix9hq8xyby6577njnwy2bn3dr-tar-1.12-tcc",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/3psapmkix9hq8xyby6577njnwy2bn3dr-tar-1.12-tcc",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/82c0e3f75ebc6f8b4ac162f2406a1028a029a9d98d0e899841440aea56158bdd.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

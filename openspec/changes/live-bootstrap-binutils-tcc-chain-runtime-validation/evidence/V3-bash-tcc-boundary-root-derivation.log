@@ -1,0 +1,11 @@
+# crunch build log
+# derivation: bash-2.05b-tcc
+# drv_path: r8g3ynyxyrx1nigm3na1g6zj7jip8m3p-bash-2.05b-tcc.drv
+# status: failure
+# timestamp: 1777934679
+
+store error: build: nonzero exit code: exit status: 60
+WARNING: full bash link failed, trying minimal
+tcc: error: no input files
+
+tcc: error: no input files

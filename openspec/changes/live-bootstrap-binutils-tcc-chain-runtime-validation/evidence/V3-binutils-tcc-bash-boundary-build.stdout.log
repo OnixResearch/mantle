@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/binutils-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/binutils-after-bash-slim-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "binutils-2.30-tcc",
+      "drv_key": "/crunch/store/5nmliv3zi1v33anwblzlg8v214s31z7f-binutils-2.30-tcc.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/5nmliv3zi1v33anwblzlg8v214s31z7f-binutils-2.30-tcc.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}

@@ -10,11 +10,7 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
-let make = import "make-tcc.ncl" in
-let sed = import "sed-tcc.ncl" in
-let patch = import "patch-tcc.ncl" in
 
 let gzip_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gzip/gzip-1.2.4.tar.gz",
@@ -39,13 +35,10 @@ let gzip_src = crunch.fetchTarball {
       }
 
       TCC=$(find_input tinycc-0.9.27)
-      MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
-      SED=$(find_input sed-4.0.9-tcc)
-      PATCH=$(find_input patch-2.5.9-tcc)
       GZIP_SRC=$(find_input gzip-1.2.4-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$STAGE0/bin:$SED/bin:$PATCH/bin:$PATH"
+      export PATH="$TCC/bin:$STAGE0/bin:$PATH"
 
       WORK=/tmp/gzip-build
       $BB mkdir -p "$WORK"
@@ -56,21 +49,13 @@ let gzip_src = crunch.fetchTarball {
       $BB chmod -R u+w gzip-1.2.4
       cd gzip-1.2.4
 
-      # Prepend stat override stub (struct stat needs tv_sec workaround)
-      $BB cat > /tmp/stat_override.c << 'STAT_EOF'
-#ifdef __TINYC__
-#define st_atime st_atim.tv_sec
-#define st_mtime st_mtim.tv_sec
-#define st_ctime st_ctim.tv_sec
-#endif
-STAT_EOF
-      $BB cat /tmp/stat_override.c gzip.c > gzip.c.new
-      $BB mv gzip.c.new gzip.c
+      # Mes stat headers already expose the st_atime/st_mtime/st_ctime field
+      # names expected by gzip 1.2.4 on this TinyCC handoff.
 
       # Generate CRC table: compile makecrc, run it to produce crc.c,
       # then append crc.c to util.c.
       # First, strip the generated crc_32_tab from util.c (between markers)
-      sed -i '/^ulg crc_32_tab/,/^};/d' util.c
+      $BB sed -i '/^ulg crc_32_tab/,/^};/d' util.c
 
       # Patch makecrc to write to a file instead of stdout
       # (IO redirection may not be available in all shells)
@@ -115,9 +100,10 @@ MKPATCH
         gzip.o bits.o crypt.o deflate.o getopt.o inflate.o lzw.o \
         trees.o unlzh.o unlzw.o unpack.o unzip.o util.o zip.o \
         -o gzip
+      $BB chmod 755 gzip
 
       # Verify
-      ./gzip --help || true
+      ./gzip --help >/dev/null
 
       # Install
       $BB mkdir -p "$out/bin"
@@ -128,5 +114,5 @@ MKPATCH
       test -x "$out/bin/gzip"
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, sed, patch, gzip_src],
+  inputs = [stage0, tcc, gzip_src],
 } | crunch.Derivation

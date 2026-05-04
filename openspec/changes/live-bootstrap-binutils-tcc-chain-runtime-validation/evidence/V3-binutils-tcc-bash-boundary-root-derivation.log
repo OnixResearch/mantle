@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: binutils-2.30-tcc
+# drv_path: 5nmliv3zi1v33anwblzlg8v214s31z7f-binutils-2.30-tcc.drv
+# status: failure
+# timestamp: 1777934904
+
+dependency bash-2.05b-tcc.drv failed

@@ -7,9 +7,7 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
 let tcc = import "tinycc.ncl" in
-let make = import "make-tcc.ncl" in
 let gzip = import "gzip-tcc.ncl" in
 
 let tar_src = crunch.fetchTarball {
@@ -35,13 +33,11 @@ let tar_src = crunch.fetchTarball {
       }
 
       TCC=$(find_input tinycc-0.9.27)
-      MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
-      MES_OUT=$(find_input mes)
       GZIP=$(find_input gzip-1.2.4-tcc)
       TAR_SRC=$(find_input tar-1.12-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$STAGE0/bin:$GZIP/bin:$MES_OUT/bin:$PATH"
+      export PATH="$TCC/bin:$STAGE0/bin:$GZIP/bin:$PATH"
 
       WORK=/tmp/tar-build
       $BB mkdir -p "$WORK"
@@ -52,8 +48,13 @@ let tar_src = crunch.fetchTarball {
       $BB chmod -R u+w tar-1.12
       cd tar-1.12
 
-      # Create empty config.h
-      : > config.h
+      # Create config.h with string-valued package metadata. Putting these
+      # definitions in the header avoids fragile shell/TinyCC quoting of -D
+      # values such as VERSION="1.12".
+      $BB cat > config.h << 'CONFIG_H'
+#define VERSION "1.12"
+#define PACKAGE "tar"
+CONFIG_H
 
       # Provide getdate_stub.c (avoids yacc/bison dependency)
       $BB cat > lib/getdate_stub.c << 'STUB'
@@ -61,45 +62,45 @@ let tar_src = crunch.fetchTarball {
 time_t get_date(const char *p, const time_t *now) { return -1; }
 STUB
 
-      # Prepend stat override for tcc
-      $BB cat > /tmp/stat_override.c << 'STAT_EOF'
-#ifdef __TINYC__
-#define st_atime st_atim.tv_sec
-#define st_mtime st_mtim.tv_sec
-#define st_ctime st_ctim.tv_sec
-#endif
-STAT_EOF
-      $BB cat /tmp/stat_override.c src/create.c > src/create.c.new
-      $BB mv src/create.c.new src/create.c
+      # Mes stat headers already expose the st_atime/st_mtime/st_ctime field
+      # names expected by tar 1.12 on this TinyCC handoff.
 
-      CFLAGS="-I. -Ilib -DHAVE_FCNTL_H -DHAVE_DIRENT_H -DHAVE_GETCWD -DSIZEOF_UNSIGNED_LONG=4 -DVERSION=\\\"1.12\\\" -DPACKAGE=\\\"tar\\\""
+      CFLAGS="-I. -Ilib -DHAVE_CONFIG_H -DSTDC_HEADERS -DHAVE_STRING_H -DHAVE_STDLIB_H -DHAVE_UNISTD_H -DHAVE_FCNTL_H -DHAVE_DIRENT_H -DHAVE_GETCWD -DSIZEOF_UNSIGNED_LONG=4"
 
-      # Compile library sources
-      for src in argmatch backupfile error fnmatch ftruncate getdate_stub \
-                 getopt getopt1 getversion modechange msleep xgetcwd \
-                 xmalloc xstrdup; do
-        tcc -c $CFLAGS lib/$src.c -o lib/$src.o
-      done
+      # Compile library sources. Compile from inside each source directory so
+      # Mes-linked TinyCC writes objects with simple output names.
+      (cd lib
+        for src in argmatch backupfile error fnmatch ftruncate getdate_stub \
+                   getopt getopt1 getversion modechange msleep xgetcwd \
+                   xmalloc xstrdup; do
+          tcc -c -o $src.o $CFLAGS -I.. -I. $src.c
+        done
+      )
 
-      # Create archive
-      tcc -ar cr libtar.a \
-        lib/argmatch.o lib/backupfile.o lib/error.o lib/fnmatch.o \
-        lib/ftruncate.o lib/getdate_stub.o lib/getopt.o lib/getopt1.o \
-        lib/getversion.o lib/modechange.o lib/msleep.o lib/xgetcwd.o \
-        lib/xmalloc.o lib/xstrdup.o
+      LIB_OBJS="lib/argmatch.o lib/backupfile.o lib/error.o lib/fnmatch.o lib/ftruncate.o lib/getdate_stub.o lib/getopt.o lib/getopt1.o lib/getversion.o lib/modechange.o lib/msleep.o lib/xgetcwd.o lib/xmalloc.o lib/xstrdup.o"
 
       # Compile tar sources
-      for src in arith buffer compare create delete extract incremen list \
-                 mangle misc names open3 rtapelib tar update; do
-        tcc -c $CFLAGS src/$src.c -o src/$src.o
-      done
+      (cd src
+        for src in arith buffer compare create delete extract incremen list \
+                   mangle misc names open3 rtapelib tar update; do
+          tcc -c -o $src.o $CFLAGS -I.. -I../lib $src.c
+        done
+      )
 
-      # Link
+      # Link. Copy objects to the build root because this Mes-linked TinyCC
+      # handoff can fail to open link inputs with directory components even
+      # when the files exist.
+      $BB chmod u+rw src/*.o lib/*.o
+      for o in src/*.o lib/*.o; do $BB cp "$o" .; done
       tcc -static \
-        src/arith.o src/buffer.o src/compare.o src/create.o src/delete.o \
-        src/extract.o src/incremen.o src/list.o src/mangle.o src/misc.o \
-        src/names.o src/open3.o src/rtapelib.o src/tar.o src/update.o \
-        -L. -ltar -o tar
+        arith.o buffer.o compare.o create.o delete.o \
+        extract.o incremen.o list.o mangle.o misc.o \
+        names.o open3.o rtapelib.o tar.o update.o \
+        argmatch.o backupfile.o error.o fnmatch.o \
+        ftruncate.o getdate_stub.o getopt.o getopt1.o \
+        getversion.o modechange.o msleep.o xgetcwd.o \
+        xmalloc.o xstrdup.o -o tar
+      $BB chmod 755 tar
 
       # Verify
       ./tar --version
@@ -112,5 +113,5 @@ STAT_EOF
       test -x "$out/bin/tar"
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, gzip, tar_src],
+  inputs = [stage0, tcc, gzip, tar_src],
 } | crunch.Derivation

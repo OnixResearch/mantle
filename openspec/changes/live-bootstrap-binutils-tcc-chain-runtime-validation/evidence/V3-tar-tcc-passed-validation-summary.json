@@ -1,0 +1,24 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/tar-tcc.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 0,
+  "warmups": [],
+  "status": "passed",
+  "failure_class": null,
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/.crunch-drain/tar-final-evidence/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777934368
+}
