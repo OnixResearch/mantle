@@ -15,6 +15,8 @@ let make = import "make-tcc.ncl" in
 let patch = import "patch-tcc.ncl" in
 
 let bzip2_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/bzip2-1.0.8/sources
+  # first-consumer: bootstrap/bzip2-tcc.ncl
   url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
   hash = "sha256-Uvi4JZPPERK3gym4yoaeTEJwKXF5brBAEN7GgF+iF6g=",
   name = "bzip2-1.0.8-src",
@@ -70,8 +72,12 @@ let bzip2_src = crunch.fetchTarball {
       tcc -c $CFLAGS bzip2recover.c -o bzip2recover.o
       tcc -static bzip2recover.o -o bzip2recover
 
-      # Verify
+      # Verify the built binary before installation. Upstream pass1 runs
+      # `bzip2 --help`; Crunch also installs bzip2recover and bzcat, so the
+      # installed contract is checked again after copying.
       ./bzip2 --help 2>&1 | $BB head -1
+      test -x ./bzip2
+      test -x ./bzip2recover
 
       # Install
       $BB mkdir -p "$out/bin"
@@ -86,6 +92,13 @@ let bzip2_src = crunch.fetchTarball {
 
       test -x "$out/bin/bzip2"
       test -x "$out/bin/bunzip2"
+      test -x "$out/bin/bzcat"
+      test -x "$out/bin/bzip2recover"
+
+      "$out/bin/bzip2" --help 2>&1 | $BB head -1
+      "$out/bin/bunzip2" --help 2>&1 | $BB head -1
+      "$out/bin/bzcat" --help 2>&1 | $BB head -1
+      "$out/bin/bzip2recover" 2>&1 | $BB head -1
     "%,
   ],
   inputs = [stage0, mes, tcc, make, patch, bzip2_src],
