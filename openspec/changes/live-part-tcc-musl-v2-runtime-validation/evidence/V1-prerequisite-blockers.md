@@ -1,9 +1,0 @@
-# V1 prerequisite blocker audit
-
-- Task-ID: V1
-- Covers: `bootstrap.part.tcc.musl.v2.runtime-validation`
-- Status: blocked
-- Finding: the rerun progressed past the previous `sed-4.0.9-tcc` blocker and stopped at prerequisite `tcc-0.9.27-musl.drv`; the v2 builder was not reached.
-- Validation summary: `validation-summary.json`
-
-The captured validation run is evidence for the current prerequisite boundary only; it does not claim a successful runtime output.
