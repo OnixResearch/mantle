@@ -56,12 +56,17 @@ let bash_src = crunch.fetchTarball {
 #define CONF_VENDOR "unknown"
 #define LOCALEDIR "/tmp/locale"
 #define SHELL 1
+#define DPAREN_ARITHMETIC 1
+#define COND_COMMAND 1
+#define ARITH_FOR_COMMAND 1
+#define ALIAS 1
 #define HAVE_ALLOCA 1
 #define HAVE_ALLOCA_H 1
 #define HAVE_UNISTD_H 1
 #define HAVE_STDLIB_H 1
 #define HAVE_STRING_H 1
 #define HAVE_STDARG_H 1
+#define PREFER_STDARG 1
 #define HAVE_LIMITS_H 1
 #define HAVE_LOCALE_H 1
 #define HAVE_TERMIOS_H 1
@@ -71,7 +76,10 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_SYS_FILE_H 1
 #define HAVE_SYS_PARAM_H 1
 #define HAVE_SYS_TIME_H 1
+#define HAVE_TIME_H 1
+#define TIME_WITH_SYS_TIME 1
 #define HAVE_SYS_WAIT_H 1
+#define _POSIX_VERSION 200112L
 #define HAVE_SYS_RESOURCE_H 1
 #define HAVE_SYS_IOCTL_H 1
 #define HAVE_FCNTL_H 1
@@ -82,12 +90,14 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_DUP2 1
 #define HAVE_GETENV 1
 #define HAVE_GETCWD 1
+#define HAVE_GETHOSTNAME 1
 #define HAVE_GETPID 1
 #define HAVE_GETUID 1
 #define HAVE_GETGID 1
 #define HAVE_GETEUID 1
 #define HAVE_GETEGID 1
 #define HAVE_GETGROUPS 1
+#define GETGROUPS_T gid_t
 #define HAVE_KILL 1
 #define HAVE_LSTAT 1
 #define HAVE_MEMMOVE 1
@@ -110,6 +120,8 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_RENAME 1
 #define HAVE_MKFIFO 1
 #define HAVE_VPRINTF 1
+#define HAVE_SNPRINTF 1
+#define HAVE_VSNPRINTF 1
 #define VOID_SIGHANDLER 1
 #define RETSIGTYPE void
 #define SIZEOF_INT 4
@@ -121,12 +133,36 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_STRTOD 1
 #define PPROMPT "\\s-\\v\\$ "
 #define SPROMPT "\\s-\\v\\$ "
+#define PROGRAM "bash"
+#define DEFAULT_PATH_VALUE "/bin"
+#define STANDARD_UTILS_PATH "/bin"
+extern int eval_builtin();
+extern int source_builtin();
+extern int exit_builtin();
+extern int return_builtin();
+extern int exec_builtin();
+extern int read_builtin();
+extern int jobs_builtin();
+extern int command_builtin();
+extern int wait_builtin();
+extern int set_builtin();
 CONFIG
 
       # Generate pathnames.h
       $BB cat > pathnames.h << 'PATHS'
 #define DEFAULT_MAIL_DIRECTORY "/var/mail"
+#define SYS_PROFILE "/etc/profile"
 PATHS
+
+      # Configure normally generates this table. A small static table is enough
+      # for the bootstrap/nojobs shell to compile and report signal names.
+      $BB cat > signames.h << 'SIGS'
+#include <signal.h>
+#ifndef NSIG
+#define NSIG 64
+#endif
+char *signal_names[NSIG + 2] = { "EXIT", "SIGHUP", "SIGINT", "SIGQUIT", "SIGILL", "SIGTRAP", "SIGABRT", "SIGBUS", "SIGFPE", "SIGKILL", "SIGUSR1", "SIGSEGV", "SIGUSR2", "SIGPIPE", "SIGALRM", "SIGTERM" };
+SIGS
 
       # Generate version.h
       $BB cat > version.h << 'VER'
@@ -144,14 +180,80 @@ BUILTEXT
       # The direct-source bootstrap below does not compile the generated parser;
       # avoid pulling oyacc into this stage just to create unused y.tab files.
 
-      CFLAGS="-I. -Iinclude -Ilib -Ibuiltins -DHAVE_CONFIG_H -DPROGRAM=\\\"bash\\\" -DDEFAULT_PATH_VALUE=\\\"/bin\\\" -DSTANDARD_UTILS_PATH=\\\"/bin\\\" -DCONF_HOSTTYPE=\\\"x86_64\\\" -DCONF_OSTYPE=\\\"linux-musl\\\" -DCONF_MACHTYPE=\\\"x86_64-unknown-linux-musl\\\" -DCONF_VENDOR=\\\"unknown\\\""
+      CFLAGS="-I. -Iinclude -Ilib -Ibuiltins -DHAVE_CONFIG_H"
+
+      # Mes/TinyCC bootstrap headers do not ship termios yet; bash only needs
+      # the type while compiling this non-interactive nojobs handoff.
+      $BB cat > termios.h << 'TERM'
+#ifndef CRUNCH_BOOTSTRAP_TERMIOS_H
+#define CRUNCH_BOOTSTRAP_TERMIOS_H
+#define TCSANOW 0
+#define TCSADRAIN 1
+#define ECHO 0000010
+#define ECHOK 0000040
+#define ECHONL 0000100
+#define ICANON 0000002
+#define ISIG 0000001
+#define IEXTEN 0100000
+#define ICRNL 0000400
+#define INLCR 0000100
+#define ISTRIP 0000040
+#define OPOST 0000001
+#define ONLCR 0000004
+#define OCRNL 0000010
+#define ONOCR 0000020
+#define ONLRET 0000040
+#define CS8 0000060
+#define PARENB 0000400
+#define VMIN 6
+#define VTIME 5
+struct termios { int c_iflag; int c_oflag; int c_cflag; int c_lflag; char c_cc[32]; };
+int tcgetattr(int fd, struct termios *t);
+int tcsetattr(int fd, int action, const struct termios *t);
+#endif
+TERM
+
+      $BB cat > syntax.c << 'SYN'
+#include "config.h"
+unsigned char sh_syntaxtab[256];
+int shellmeta(int c) { return 0; }
+int shellbreak(int c) { return 0; }
+int shellquote(int c) { return 0; }
+int shellxquote(int c) { return 0; }
+int shellexp(int c) { return 0; }
+SYN
+      $BB cat > siglist.c << 'SIGL'
+#include "config.h"
+#include <signal.h>
+#ifndef NSIG
+#define NSIG 64
+#endif
+char *sys_siglist[NSIG + 2];
+SIGL
 
       # Compile core shell sources
-      SHELL_SRCS="shell eval general make_cmd print_cmd dispose_cmd execute_cmd variables copy_cmd error expr flags nojobs trap input hashcmd hashlib test pathexp bashhist mailcheck syntax list stringlib locale findcmd redir pcomplete pcomplib braces alias unwind_prot"
+      SHELL_SRCS="shell eval y.tab general make_cmd print_cmd dispose_cmd execute_cmd variables copy_cmd error expr flags nojobs subst hashcmd hashlib mailcheck trap input unwind_prot pathexp sig test version alias array arrayfunc braces bracecomp bashhist bashline list stringlib locale findcmd redir pcomplete pcomplib syntax xmalloc siglist"
 
       for src in $SHELL_SRCS; do
-        tcc -c $CFLAGS "$src.c" -o "$src.o" 2>/dev/null || true
+        tcc -c -o "$src.o" $CFLAGS "$src.c"
       done
+
+      $BB cat > builtins/bootstrap_stubs.c << 'BSTUB'
+#include "config.h"
+#include "shell.h"
+#include "command.h"
+int eval_builtin(WORD_LIST *list) { return 0; }
+int source_builtin(WORD_LIST *list) { return 1; }
+int exit_builtin(WORD_LIST *list) { return 0; }
+int return_builtin(WORD_LIST *list) { return 0; }
+int exec_builtin(WORD_LIST *list) { return 1; }
+int read_builtin(WORD_LIST *list) { return 1; }
+int jobs_builtin(WORD_LIST *list) { return 0; }
+int command_builtin(WORD_LIST *list) { return 1; }
+int wait_builtin(WORD_LIST *list) { return 0; }
+int set_builtin(WORD_LIST *list) { return 0; }
+BSTUB
+      tcc -c -o bootstrap_stubs.o $CFLAGS builtins/bootstrap_stubs.c
 
       # Compile lib/readline stub
       $BB cat > lib/readline/readline_stub.c << 'RLSTUB'
@@ -172,29 +274,34 @@ void add_history(const char *s) {}
 void using_history(void) {}
 void stifle_history(int n) {}
 RLSTUB
-      tcc -c $CFLAGS lib/readline/readline_stub.c -o readline_stub.o 2>/dev/null || true
+      tcc -c -o readline_stub.o $CFLAGS lib/readline/readline_stub.c
 
       # Compile lib/glob
       for src in lib/glob/glob lib/glob/strmatch; do
-        tcc -c $CFLAGS "$src.c" -o "${src##*/}.o" 2>/dev/null || true
+        tcc -c -o "${src##*/}.o" $CFLAGS "$src.c"
       done
 
       # Compile lib/tilde
-      tcc -c $CFLAGS lib/tilde/tilde.c -o tilde.o 2>/dev/null || true
+      tcc -c -o tilde.o $CFLAGS lib/tilde/tilde.c
 
       # Compile lib/sh
-      for src in lib/sh/clktck lib/sh/getcwd lib/sh/oslib lib/sh/setlinebuf \
-                 lib/sh/strerror lib/sh/strindex lib/sh/strtrans lib/sh/vprint \
-                 lib/sh/itos lib/sh/zread lib/sh/zwrite lib/sh/shtty \
-                 lib/sh/shmatch lib/sh/timeval lib/sh/tmpfile lib/sh/stringvec \
-                 lib/sh/stringlist lib/sh/spell lib/sh/shquote lib/sh/snprintf; do
-        tcc -c $CFLAGS "$src.c" -o "${src##*/}.o" 2>/dev/null || true
+      for src in lib/sh/clktck lib/sh/getcwd lib/sh/getenv lib/sh/oslib lib/sh/setlinebuf \
+                 lib/sh/strcasecmp lib/sh/strerror lib/sh/strtod lib/sh/vprint \
+                 lib/sh/itos lib/sh/rename lib/sh/zread lib/sh/zwrite lib/sh/shtty \
+                 lib/sh/inet_aton lib/sh/netopen lib/sh/strpbrk lib/sh/timeval \
+                 lib/sh/clock lib/sh/makepath lib/sh/pathcanon lib/sh/pathphys \
+                 lib/sh/stringlist lib/sh/stringvec lib/sh/tmpfile lib/sh/spell \
+                 lib/sh/strtrans lib/sh/strindex lib/sh/shquote lib/sh/mailstat \
+                 lib/sh/fmtulong lib/sh/fmtullong lib/sh/strtoll lib/sh/strtoull \
+                 lib/sh/strtoimax lib/sh/strtoumax lib/sh/fmtumax lib/sh/netconn \
+                 lib/sh/mktime lib/sh/strftime lib/sh/xstrchr lib/sh/zcatfd; do
+        tcc -c -o "${src##*/}.o" $CFLAGS "$src.c"
       done
 
       # Compile builtins
       for src in builtins/common builtins/evalstring builtins/evalfile \
                  builtins/bashgetopt builtins/getopt; do
-        tcc -c $CFLAGS "$src.c" -o "${src##*/}.o" 2>/dev/null || true
+        tcc -c -o "${src##*/}.o" $CFLAGS "$src.c"
       done
 
       # Collect all compiled objects
@@ -203,17 +310,10 @@ RLSTUB
         [ -f "$f" ] && OBJS="$OBJS $f"
       done
 
+      $BB chmod u+rw *.o || true
+
       # Link
-      tcc -static $OBJS -o bash 2>/dev/null || {
-        echo "WARNING: full bash link failed, trying minimal" >&2
-        # Fallback: try linking just the core objects
-        CORE_OBJS=""
-        for f in shell.o eval.o general.o execute_cmd.o variables.o error.o \
-                 flags.o trap.o input.o test.o; do
-          [ -f "$f" ] && CORE_OBJS="$CORE_OBJS $f"
-        done
-        tcc -static $CORE_OBJS -o bash
-      }
+      tcc -static $OBJS -o bash
 
       # Verify
       ./bash --version 2>&1 | $BB head -1 || ./bash -c 'echo bash-ok' || true

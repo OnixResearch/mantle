@@ -1,0 +1,72 @@
+# crunch build log
+# derivation: bash-2.05b-tcc
+# drv_path: 9kd5jzmgnvrsa5xygcdw84qwqdascjkp-bash-2.05b-tcc.drv
+# status: failure
+# timestamp: 1777938152
+
+store error: build: nonzero exit code: exit status: 1
+shell.c:418: warning: implicit declaration of function 'show_shell_version'
+shell.c:418: warning: implicit declaration of function 'show_shell_version'
+shell.c:476: warning: implicit declaration of function 'fileno'
+shell.c:476: warning: implicit declaration of function 'fileno'
+shell.c:644: warning: implicit declaration of function 'setbuf'
+shell.c:644: warning: implicit declaration of function 'setbuf'
+shell.c:670: warning: implicit declaration of function 'get_tty_state'
+shell.c:670: warning: implicit declaration of function 'get_tty_state'
+shell.c:1523: warning: implicit declaration of function 'endpwent'
+shell.c:1523: warning: implicit declaration of function 'endpwent'
+shell.c:1556: warning: implicit declaration of function 'gethostname'
+shell.c:1556: warning: implicit declaration of function 'gethostname'
+shell.c:1581: warning: implicit declaration of function 'initialize_job_control'
+shell.c:1581: warning: implicit declaration of function 'initialize_job_control'
+shell.c:1652: warning: implicit declaration of function 'shell_version_string'
+shell.c:1652: warning: implicit declaration of function 'shell_version_string'
+/usr/homes/chet/src/bash/src/parse.y:1566: warning: implicit declaration of function 'clearerr'
+/usr/homes/chet/src/bash/src/parse.y:1566: warning: implicit declaration of function 'clearerr'
+/usr/homes/chet/src/bash/src/parse.y:1788: warning: implicit declaration of function 'cleanup_dead_jobs'
+/usr/homes/chet/src/bash/src/parse.y:1788: warning: implicit declaration of function 'cleanup_dead_jobs'
+general.c:355: warning: implicit declaration of function 'ttyname'
+general.c:355: warning: implicit declaration of function 'ttyname'
+general.c:355: warning: implicit declaration of function 'fileno'
+general.c:355: warning: implicit declaration of function 'fileno'
+general.c:765: warning: implicit declaration of function 'getgroups'
+general.c:765: warning: implicit declaration of function 'getgroups'
+print_cmd.c:1177: warning: implicit declaration of function 'vfprintf'
+print_cmd.c:1177: warning: implicit declaration of function 'vfprintf'
+variables.c:406: warning: implicit declaration of function 'shell_version_string'
+variables.c:406: warning: implicit declaration of function 'shell_version_string'
+variables.c:406: warning: assignment makes pointer from integer without a cast
+variables.c:406: warning: assignment makes pointer from integer without a cast
+error.c:139: warning: implicit declaration of function 'vfprintf'
+error.c:139: warning: implicit declaration of function 'vfprintf'
+nojobs.c:365: warning: implicit declaration of function 'fileno'
+nojobs.c:365: warning: implicit declaration of function 'fileno'
+nojobs.c:667: warning: implicit declaration of function 'signal_is_trapped'
+nojobs.c:667: warning: implicit declaration of function 'signal_is_trapped'
+nojobs.c:752: warning: implicit declaration of function 'maybe_call_trap_handler'
+nojobs.c:752: warning: implicit declaration of function 'maybe_call_trap_handler'
+subst.c:3803: warning: implicit declaration of function 'fileno'
+subst.c:3803: warning: implicit declaration of function 'fileno'
+input.c:67: warning: implicit declaration of function 'fileno'
+input.c:67: warning: implicit declaration of function 'fileno'
+sig.c:80: warning: implicit declaration of function 'initialize_job_signals'
+sig.c:80: warning: implicit declaration of function 'initialize_job_signals'
+lib/readline/readline_stub.c:10: warning: implicit declaration of function 'malloc'
+lib/readline/readline_stub.c:10: warning: implicit declaration of function 'malloc'
+lib/readline/readline_stub.c:10: warning: assignment makes pointer from integer without a cast
+lib/readline/readline_stub.c:10: warning: assignment makes pointer from integer without a cast
+lib/readline/readline_stub.c:11: warning: implicit declaration of function 'memcpy'
+lib/readline/readline_stub.c:11: warning: implicit declaration of function 'memcpy'
+lib/tilde/tilde.c:376: warning: implicit declaration of function 'endpwent'
+lib/tilde/tilde.c:376: warning: implicit declaration of function 'endpwent'
+lib/sh/oslib.c:227: warning: implicit declaration of function 'kill'
+lib/sh/oslib.c:227: warning: implicit declaration of function 'kill'
+lib/sh/setlinebuf.c:59: warning: implicit declaration of function 'setlinebuf'
+lib/sh/setlinebuf.c:59: warning: implicit declaration of function 'setlinebuf'
+lib/sh/netopen.c:334: warning: implicit declaration of function 'internal_error'
+lib/sh/netopen.c:334: warning: implicit declaration of function 'internal_error'
+lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
+lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
+lib/sh/strtoimax.c:38: error: declaration expected
+lib/sh/strtoimax.c:38: error: declaration expected
+
