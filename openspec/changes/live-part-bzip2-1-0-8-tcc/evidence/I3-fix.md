@@ -11,7 +11,10 @@ Updated `bootstrap/bzip2-tcc.ncl` to make the source-level contract explicit bef
 - added `first-consumer: bootstrap/bzip2-tcc.ncl` beside the source pin;
 - documented the upstream `bzip2 --help` smoke and Crunch's expanded installed output contract;
 - fail-closed on `bzip2`, `bunzip2`, `bzcat`, and `bzip2recover` installed paths;
-- added installed command help/usage probes for the four output commands.
+- added installed command help/usage probes for the four output commands;
+- avoided the unused `libbz2.a` archive because the Mes-built TinyCC `tcc -ar` path segfaulted during this part, while the part installs only executables;
+- supplied a local `utime.h` shim and disabled metadata-preservation calls not provided by the Mes libc handoff (`utime`, `fchmod`, `fchown`);
+- chmodded linked executables before the in-derivation smoke probes.
 
 ## Verification
 

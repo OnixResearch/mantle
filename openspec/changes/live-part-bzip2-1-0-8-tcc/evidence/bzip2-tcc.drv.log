@@ -1,0 +1,16 @@
+# crunch build log
+# derivation: bzip2-1.0.8-tcc
+# drv_path: rmx1l0gdw9bjs76c3kamh9ar53b2x9dc-bzip2-1.0.8-tcc.drv
+# status: success
+# timestamp: 1777898172
+
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2recover 1.0.8: extracts blocks from damaged .bz2 files.
+
+bzip2.c:369: warning: implicit declaration of function 'fileno'
+bzip2.c:369: warning: implicit declaration of function 'fileno'
+bzip2.c:506: warning: implicit declaration of function 'rewind'
+bzip2.c:506: warning: implicit declaration of function 'rewind'
