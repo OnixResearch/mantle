@@ -7,3 +7,8 @@ Provider/fallback/placeholder/leakage fields are recorded in:
 - `V2-tcc-musl-after-musl-validation-summary.json`
 
 Current failure class: build failure in `tcc-0.9.27-musl.drv` after first musl succeeds.
+
+
+## Mes-host tcc-musl attempt
+
+Evidence: `V2-tcc-musl-mes-host-attempt-*`. Porting prep source normalizations and compiling with TinyCC 0.9.26 advanced past `tcc.c` object compilation to final host-link library search/diagnostic failure; no output path yet.
