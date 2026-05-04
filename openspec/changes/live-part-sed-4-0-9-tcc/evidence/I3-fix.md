@@ -10,7 +10,7 @@
 - Added explicit provenance and first-consumer comments to the sed fixed-output source pin.
 - Added fail-closed `test -f` checks after each required library and sed object compile.
 - Removed the required archive-link path from the output contract and linked the final executable directly from the required object files.
-- Added a positive substitution smoke (`test -> ok`) in addition to `sed --version`, using BusyBox grep explicitly.
+- Added executable chmod before builder-local execution, then a positive substitution smoke (`test -> ok`) in addition to `sed --version`, using BusyBox grep explicitly.
 
 ## Verification command
 

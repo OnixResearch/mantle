@@ -88,6 +88,8 @@ let sed_src = crunch.fetchTarball {
         sed/compile.o sed/execute.o sed/regexp.o sed/fmt.o sed/sed.o \
         $LIB_OBJS -o sed/sed
 
+      $BB chmod 755 sed/sed
+
       # Verify
       ./sed/sed --version
       echo test | ./sed/sed 's/test/ok/' | $BB grep '^ok$'
