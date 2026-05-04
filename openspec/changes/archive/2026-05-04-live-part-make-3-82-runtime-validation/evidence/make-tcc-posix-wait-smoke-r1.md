@@ -26,6 +26,7 @@ export PATH=/nix/store/dk9qhjgg469lv6mriys7v4c59igarmvx-bubblewrap-0.11.1/bin:$P
 - Output path: `/home/brittonr/git/crunch/crunch/.crunch-drain/make-tcc-posix-wait-smoke-r1-store/mh5rl7i5sac8z0frdravpjf0z2x0qffk-make-3.82-tcc`
 - Logical output path: `/crunch/store/mh5rl7i5sac8z0frdravpjf0z2x0qffk-make-3.82-tcc`
 - Host leakage scan: no coarse host-path needles in captured build output.
+- Substitute/fallback status: validation used the explicit local `.crunch-drain/make-tcc-posix-wait-smoke-r1-store` and `.crunch-drain/make-tcc-posix-wait-smoke-r1-state` with warmup `bootstrap/tinycc.ncl`; no provider fallback, placeholder output, or substitute path is reported in the captured validation summary.
 
 ## Diagnostic conclusion
 

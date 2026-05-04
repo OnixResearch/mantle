@@ -102,49 +102,24 @@ The source-built provider MUST expose the same contract fields later bootstrap s
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
-Crunch MUST withhold the full-source bootstrap claim until a source-root manifest validates, the source-built provider satisfies the normalized seed contract, and a self-build proof completes with that provider.
+Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
 ID: bootstrap.fullsource.claim.evidence
 
-The claim evidence MUST include the provider kind, manifest digest, provider output digest, proof bundle digest, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, or archived partial-scaffolding change MUST NOT count as full-source bootstrap evidence. Self-build proof metadata MUST bind those digests to the selected source-built provider so a legacy fetched-provider run cannot satisfy the full-source claim.
+The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manifest digest, provider output digest, proof bundle digest, stage-by-stage build transcripts through `bootstrap/seed-full.ncl`, `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` transcripts, proof metadata bound to the selected source-built provider, explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, archived partial-scaffolding change, unfinished successor task, legacy-provider fallback, host-bwrap fallback, or checkout/source-discovery fallback MUST NOT count as full-source bootstrap evidence.
 
-#### Scenario: Claim remains blocked before proof
+#### Scenario: Placeholder blocks full-source claim
 
-- GIVEN the source-root manifest validates
-- BUT no self-build proof has completed with the source-built provider
-- WHEN docs or release evidence summarize bootstrap maturity
-- THEN they keep the status below full-source bootstrap
-- AND they name the missing proof evidence
-
-#### Scenario: Proof records selected source-built provider
-
-- GIVEN `crunch self-build --no-substitute --source-root <manifest>` completes
-- WHEN proof metadata is written
-- THEN it records provider kind `source-root`, manifest digest, provider output digest, and proof bundle digest
-- AND those fields are included in the proof bundle summary
-
-#### Scenario: Successful proof promotes the claim
-
-- GIVEN a valid source-root manifest
-- AND a source-built provider satisfying the normalized seed contract
-- AND a full self-build proof bundle produced with that provider
+- GIVEN any of `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, or `bootstrap/seed-full.ncl` still emits placeholder text
 - WHEN bootstrap maturity is reported
-- THEN the report may state full-source bootstrap root evidence exists
-- AND it includes the manifest, provider, and proof bundle digests
+- THEN full-source bootstrap evidence remains absent
+- AND the report names the unresolved placeholder stage
 
-#### Scenario: Deferred live-bootstrap archive is not completion evidence
+#### Scenario: Final source proof records docs separation
 
-- GIVEN a live-bootstrap archive contains deferred validation or placeholder derivations
-- WHEN an operator checks whether the full-source bootstrap chain is complete
-- THEN the archive is treated as partial scaffolding only
-- AND full-source bootstrap status remains blocked until real build proof exists
-
-#### Scenario: Deferred successor is not completion evidence
-
-- GIVEN unfinished live-bootstrap work has been moved to an active successor change
-- AND that successor still has unchecked implementation or proof tasks
-- WHEN an operator checks whether the full-source bootstrap chain is complete
-- THEN the deferral is treated as work tracking only
-- AND full-source bootstrap status remains blocked until the successor records fresh proof transcripts
+- GIVEN all stage transcripts and self-build proof complete with the source-built provider
+- WHEN bootstrap maturity docs are updated
+- THEN the docs name remaining trust roots and eliminated binary-provider trust separately
+- AND the proof bundle digest is recorded next to provider kind, manifest digest, and provider output digest
 
 ### Requirement: StageX-class bootstrap lineage root
 
@@ -258,45 +233,28 @@ fallback evidence, but it MUST NOT satisfy this requirement.
 
 ### Requirement: StageX-class self-build proof binds lineage evidence
 
-Crunch MUST require a full self-build proof with the StageX-class lineage provider before reporting StageX-class bootstrap evidence.
+Crunch MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
 ID: bootstrap.stagex.selfbuild.proof
 
-The proof metadata MUST bind the audited seed digest, lineage manifest digest,
-stage graph digest, normalized provider digest, staged source digest, stage1 and
-stage2 crunch binary digests, bootstrap-tool digests, protected execution audit
-digest when used, and final proof bundle digest. The release profile MUST bind
-that proof bundle digest to the canonical reproducibility report digest before
-any StageX-class verified-build claim is emitted. The proof MUST fail closed
-when the lineage provider is missing, legacy-fetched, unvalidated, or when
-forbidden host executables run during the protected stage. A prerequisite-only
-check MUST NOT count as StageX-class proof evidence.
+The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage.
 
-#### Scenario: Successful proof records lineage evidence
+#### Scenario: StageX proof records complete evidence tuple
 
-- GIVEN a validated StageX-class lineage provider
-- AND a full self-build proof completes with that provider
-- WHEN proof metadata is written
-- THEN it records the audited seed digest, lineage manifest digest, stage graph
-  digest, provider digest, stage1 digest, stage2 digest, and proof bundle digest
-- AND it records that the provider kind is StageX-class lineage
+- GIVEN the live-bootstrap source chain materializes a normalized provider
+- AND a full protected self-build proof completes with that provider
+- WHEN StageX-class proof metadata is written
+- THEN it records audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 digest, stage2 digest, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`
+- AND it records provider kind as StageX-class lineage serialized as `stagex-lineage`
 
-#### Scenario: Host executable escape blocks the proof
+#### Scenario: StageX proof rejects legacy fallback
 
-- GIVEN the protected stage observes an undeclared host compiler, build tool,
-  archive tool, shell, Nix command, or legacy provider executable
-- WHEN the proof run evaluates StageX-class evidence
+- GIVEN any stage selected the legacy musl.cc provider
+- WHEN StageX-class evidence is requested
 - THEN the proof fails closed
 - AND no StageX-class claim is emitted
 
-#### Scenario: Prerequisite-only check stays insufficient
-
-- GIVEN `./scripts/prove-self-hosting.sh --check` succeeds
-- WHEN bootstrap maturity is reported
-- THEN StageX-class proof evidence remains absent
-- AND the report names the missing full proof run
-
-The following seed-chain requirements define the live-bootstrap-derived
-replacement path from hex0 to a modern GCC, musl, and binutils toolchain.
+<!-- synced from openspec change: live-part-grep-2-4 -->
+<!-- ADDED Requirements -->
 
 ### Requirement: Hex0 seed as trust root
 
@@ -616,6 +574,7 @@ The TinyCC link repair MUST hand control back to the Make 3.82 runtime-validatio
 <!-- synced from openspec change: live-bootstrap-binutils-tcc-chain -->
 
 <!-- synced from openspec change: spike-i386-live-bootstrap-path -->
+
 ### Requirement: i386 live-bootstrap path spike [r[bootstrap.i386-live-bootstrap-spike]]
 
 Crunch MUST provide decision evidence before pivoting Make 3.82 runtime validation from the current amd64 TinyCC/Mes repair path to an i386-first live-bootstrap path.
@@ -632,8 +591,8 @@ Crunch MUST provide decision evidence before pivoting Make 3.82 runtime validati
 - WHEN the i386 proof target is evaluated
 - THEN Crunch MUST record whether to pivot, continue amd64 repair, or carry both paths with explicit scope boundaries.
 
-
 <!-- synced from openspec change: repair-i386-tinycc26-emission -->
+
 ### Requirement: i386 TinyCC 0.9.26 emission diagnostics [r[bootstrap.i386-tinycc26-emission.diagnostics]]
 
 Crunch MUST isolate the i386 TinyCC 0.9.26 output-generation blocker before using the i386 path as evidence for Make 3.82 runtime validation.
@@ -660,7 +619,7 @@ Crunch MUST record the next repair target after the diagnostic stage identifies 
 - WHEN choosing the next implementation slice
 - THEN Crunch MUST identify whether the next target is assembly parsing, object emission, static linking, ELF materialization, or runtime execution.
 
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Binutils-TCC chain implementation
 
@@ -690,7 +649,7 @@ The chain MUST implement the scoped ladder groups named by the proposal: early t
 - THEN it records URL or repository path, digest, provenance, and first consuming derivation
 
 <!-- synced from openspec change: live-bootstrap-gcc-4-0-stage -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: GCC 4.0.4 transition stage
 
@@ -714,7 +673,7 @@ The stage MUST pin gcc 4.0.4 C/C++ source inputs and every carried patch or gene
 - AND parent full-source bootstrap status remains blocked
 
 <!-- synced from openspec change: live-bootstrap-gcc-4-7-stage -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: GCC 4.7.4 transition stage
 
@@ -737,7 +696,7 @@ The stage MUST pin gcc 4.7.4 and support artifacts with URL/path, digest, proven
 - THEN the compile succeeds using only chain-internal inputs
 
 <!-- synced from openspec change: live-bootstrap-source-chain -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Source-built bootstrap chain implementation
 
@@ -774,7 +733,7 @@ The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `b
 - THEN both transcripts record source-built provider selection
 - AND neither transcript uses the legacy musl.cc provider
 
-## MODIFIED Requirements
+<!-- MODIFIED Requirements -->
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
@@ -820,7 +779,7 @@ The proof metadata MUST bind audited seed digest, lineage manifest digest, stage
 - AND no StageX-class claim is emitted
 
 <!-- synced from openspec change: live-part-grep-2-4 -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part grep 2.4 is independently tracked
 Crunch MUST track the live-bootstrap part `grep 2.4` as an independent bootstrap change bound to `bootstrap/grep-2.4-musl.ncl`.
@@ -844,7 +803,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-make-3-82 -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part make 3.82 is independently tracked
 Crunch MUST track the live-bootstrap part `make 3.82` as an independent bootstrap change bound to `bootstrap/make-tcc.ncl`.
@@ -868,7 +827,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-musl-1-1-24-tcc -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part musl 1.1.24 (tcc) is independently tracked
 Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc.ncl`.
@@ -892,7 +851,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-musl-1-1-24-tcc-musl -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part musl 1.1.24 (tcc-musl) is independently tracked
 Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc-musl.ncl`.
@@ -916,7 +875,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-patch-2-5-9 -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part patch 2.5.9 is independently tracked
 Crunch MUST track the live-bootstrap part `patch 2.5.9` as an independent bootstrap change bound to `bootstrap/patch-tcc.ncl`.
@@ -940,7 +899,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-tcc-musl -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc linked to musl is independently tracked
 Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl.ncl`.
@@ -964,7 +923,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-tcc-musl-prep -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc musl prep is independently tracked
 Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-prep.ncl`.
@@ -988,7 +947,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 <!-- synced from openspec change: live-part-tcc-musl-v2 -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc musl v2 is independently tracked
 Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-v2.ncl`.
@@ -1011,9 +970,8 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - THEN the downstream failure does not invalidate this part's completed evidence
 - AND a separate part change tracks the downstream failure
 
-
 <!-- synced from openspec change: repair-make-tcc-amd64-varargs -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: First GNU make pass is amd64 executable [r[bootstrap.part.make.3.82.amd64.execution]]
 Crunch MUST build `bootstrap/make-tcc.ncl` into a `make 3.82` output that executes basic Makefiles on amd64.
@@ -1043,7 +1001,7 @@ The output MUST include `bin/make`, report `GNU Make 3.82`, execute a simple Mak
 - OR they can find an active runtime-validation successor that owns those remaining proof transcripts
 
 <!-- synced from openspec change: repair-make-tcc-amd64-varargs-runtime-validation -->
-## ADDED Requirements
+<!-- ADDED Requirements -->
 
 ### Requirement: Make 3.82 amd64 runtime validation completes [r[bootstrap.part.make.3.82.amd64.runtime-validation]]
 Crunch MUST preserve runtime proof for the repaired `bootstrap/make-tcc.ncl` output before the first GNU make amd64 repair is treated as complete.
@@ -1109,6 +1067,7 @@ Crunch MUST provide a bounded sibling proof for the i386 live-bootstrap sequence
 - THEN `make --version` and a trivial Makefile execution MUST both pass inside Crunch's sandbox.
 
 <!-- synced from openspec change: spike-i386-mes-runtime-layout -->
+
 ### Requirement: i386 Mes runtime/header layout spike [r[bootstrap.i386-mes-runtime-layout.spike]]
 
 Crunch MUST keep the i386 Mes runtime/header layout investigation as a bounded sibling diagnostic before changing production Make/TinyCC bootstrap routing.
@@ -1130,6 +1089,7 @@ Crunch MUST distinguish Mes header/CRT layout progress from complete runtime lib
 - THEN the evidence MUST record the exact step, return code, and stderr excerpt.
 
 <!-- synced from openspec change: repair-i386-mes-libtcc1-flags -->
+
 ### Requirement: i386 Mes libtcc1 compile flags [r[bootstrap.i386-mes-libtcc1-flags.repair]]
 
 Crunch MUST compile the i386 Mes `libtcc1.c` proof with flags that avoid unsupported broad float and long-long helper emission in the `tcc26-i386` predecessor.
@@ -1151,6 +1111,7 @@ Crunch MUST record the next TinyCC handoff blocker after real i386 `libtcc1.a` c
 - THEN the evidence MUST name the failing step, return code, and stderr excerpt.
 
 <!-- synced from openspec change: repair-i386-tcc27-source-diagnostics -->
+
 ### Requirement: i386 TinyCC 0.9.27 source diagnostics [r[bootstrap.i386-tcc27-source-diagnostics.narrowing]]
 
 Crunch MUST keep the i386 TinyCC 0.9.27 handoff diagnostic narrow enough to distinguish predecessor compiler source-emission failures from Mes runtime-library failures.
@@ -1163,7 +1124,7 @@ Crunch MUST keep the i386 TinyCC 0.9.27 handoff diagnostic narrow enough to dist
 
 ### Requirement: i386 TinyCC 0.9.27 pass1 parity patches [r[bootstrap.i386-tcc27-source-diagnostics.pass1-parity]]
 
-Crunch SHOULD keep the sibling tcc27 pass1 probe aligned with live-bootstrap pass1 source edits and flags when narrowing the handoff blocker.
+Crunch MUST keep the sibling tcc27 pass1 probe aligned with live-bootstrap pass1 source edits and flags when narrowing the handoff blocker.
 
 #### Scenario: Missing pass1 edit and unrelated flags are corrected [r[bootstrap.i386-tcc27-source-diagnostics.pass1-parity.flags]]
 
@@ -1172,6 +1133,7 @@ Crunch SHOULD keep the sibling tcc27 pass1 probe aligned with live-bootstrap pas
 - THEN it SHOULD include the live-bootstrap `check-reloc-null` edit and avoid unrelated Mes feature toggles on the tcc27 source compile/link commands.
 
 <!-- synced from openspec change: repair-i386-tcc27-preprocessor-tccgen -->
+
 ### Requirement: i386 TinyCC 0.9.27 handoff diagnostics [r[i386-tcc27-handoff-diagnostics]]
 
 The system MUST maintain a sibling i386 TinyCC 0.9.27 handoff diagnostic derivation that records source-emission, per-unit compile, full object compile, link, and downstream Make smoke boundaries before production bootstrap routing depends on that path.
@@ -1181,3 +1143,17 @@ The system MUST maintain a sibling i386 TinyCC 0.9.27 handoff diagnostic derivat
 - GIVEN the sibling i386 Mes runtime layout derivation
 - WHEN the diagnostic derivation runs after a source-normalization patch
 - THEN the evidence MUST show whether line-marker preprocessing, `tccgen.c` compilation, full `ONE_SOURCE=1` compilation, and the first subsequent blocker pass or fail with captured rc/stdout/stderr logs.
+
+### Requirement: make 3.82 runtime validation waits for amd64 repair [r[bootstrap.part.make.3.82.runtime-validation]]
+The system MUST keep make 3.82 runtime proof incomplete until the amd64 varargs repair is complete and `bootstrap/make-tcc.ncl` executes a simple Makefile successfully.
+
+#### Scenario: Version output alone is insufficient [r[bootstrap.part.make.3.82.runtime-validation.version-insufficient]]
+- **GIVEN** the produced make binary reports GNU Make 3.82 with `--version`
+- **WHEN** simple Makefile execution still segfaults or fails
+- **THEN** runtime validation remains incomplete
+
+#### Scenario: Runtime proof closes after repair [r[bootstrap.part.make.3.82.runtime-validation.after-repair]]
+- **GIVEN** `repair-make-tcc-amd64-varargs` is complete
+- **WHEN** `bootstrap/make-tcc.ncl` builds and runs a simple Makefile successfully
+- **THEN** the evidence records output path, smoke results, fallback status, and leakage-scan results
+
