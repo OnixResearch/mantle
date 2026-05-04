@@ -20,12 +20,12 @@ Updated `bootstrap/bzip2-tcc.ncl` to make the source-level contract explicit bef
 
 ```sh
 cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/bzip2-tcc.ncl \
-  > openspec/changes/live-part-bzip2-1-0-8-tcc/evidence/V1-source-pin-audit.log 2>&1
+  > openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence/V1-source-pin-audit.log 2>&1
 ```
 
 Exit status: 0
 
-Transcript: `openspec/changes/live-part-bzip2-1-0-8-tcc/evidence/V1-source-pin-audit.log`.
+Transcript: `openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence/V1-source-pin-audit.log`.
 
 Key output:
 

@@ -11,9 +11,9 @@
 
 ## Evidence
 
-- Doctor JSON: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-bzip2-1-0-8-tcc/evidence/doctor.json`
-- Build stdout: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-bzip2-1-0-8-tcc/evidence/build.stdout.log`
-- Build stderr: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-bzip2-1-0-8-tcc/evidence/build.stderr.log`
+- Doctor JSON: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence/doctor.json`
+- Build stdout: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence/build.stdout.log`
+- Build stderr: `/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence/build.stderr.log`
 
 ## Host leakage scan
 

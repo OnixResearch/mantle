@@ -4,14 +4,14 @@
 
 ```sh
 mkdir -p .crunch-drain/bzip2-tcc-store .crunch-drain/bzip2-tcc-state \
-  openspec/changes/live-part-bzip2-1-0-8-tcc/evidence
+  openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence
 nix shell nixpkgs#bubblewrap -c env \
   SNIX_BUILD_SANDBOX_SHELL=/nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox \
   ./target/debug/crunch bootstrap validate \
     --store "$PWD/.crunch-drain/bzip2-tcc-store" \
     --state-dir "$PWD/.crunch-drain/bzip2-tcc-state" \
     --resume \
-    --evidence-dir "$PWD/openspec/changes/live-part-bzip2-1-0-8-tcc/evidence" \
+    --evidence-dir "$PWD/openspec/changes/archive/2026-05-04-live-part-bzip2-1-0-8-tcc/evidence" \
     bootstrap/bzip2-tcc.ncl
 ```
 
