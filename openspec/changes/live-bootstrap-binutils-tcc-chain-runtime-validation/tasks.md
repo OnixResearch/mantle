@@ -2,7 +2,7 @@
 
 ## Validation
 
-- [ ] V1 Re-run build preflight with `nix shell nixpkgs#bubblewrap` and writable local state/store directories. [covers=bootstrap.binutils.tcc.runtime-validation]
+- [x] V1 Re-run build preflight with `nix shell nixpkgs#bubblewrap` and writable local state/store directories. Evidence: `evidence/V1-preflight.md`, `evidence/V1-preflight.log`. [covers=bootstrap.binutils.tcc.runtime-validation]
 - [ ] V2 Complete or split the `bootstrap/bzip2-tcc.ncl` prerequisite build and record the Mes runtime boundary. [covers=bootstrap.binutils.tcc.runtime-validation]
 - [ ] V3 Build every parent epoch derivation in dependency order and record command/provider/exit/output/fallback/placeholder fields. [covers=bootstrap.binutils.tcc.runtime-validation]
 - [ ] V4 Run no-host-leakage audit over successful epoch transcripts. [covers=bootstrap.binutils.tcc.runtime-validation]
