@@ -1,0 +1,15 @@
+# crunch build log
+# derivation: tcc-0.9.27-musl-prep
+# drv_path: psj38qn7b5yswggyv53fv552icz2i116-tcc-0.9.27-musl-prep.drv
+# status: success
+# timestamp: 1777911145
+
+tcc-musl-prep: compile object
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc-musl-prep.o
+tcc-musl-prep: link executable
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc-musl-prep.o
+<- tcc-musl-prep
+tcc version 0.9.27 (x86_64 Linux)

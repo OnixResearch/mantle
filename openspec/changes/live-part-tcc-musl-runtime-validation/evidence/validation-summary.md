@@ -6,14 +6,14 @@
 - Doctor OK: `true`
 - Build attempted: `true`
 - Build exit code: `Some(1)`
-- Store: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-store`
-- State dir: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-state`
+- Store: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-store`
+- State dir: `/home/brittonr/.local/state/crunch`
 
 ## Evidence
 
-- Doctor JSON: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/doctor.json`
-- Build stdout: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/build.stdout.log`
-- Build stderr: `/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/build.stderr.log`
+- Doctor JSON: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/doctor.json`
+- Build stdout: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/build.stdout.log`
+- Build stderr: `/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/build.stderr.log`
 
 ## Host leakage scan
 

@@ -1,10 +1,13 @@
-# V4 host-leakage scan: failed build attempt
+# V4 host leakage scan: tcc musl
 
-- Task-ID: V4
-- Covers: `bootstrap.part.tcc.musl.runtime-validation`
-- Scope: validation-runner summary, captured build stdout/stderr, and saved root derivation log for this failed attempt.
-- Runner leakage findings: `[]`
-- Coarse builder-log findings: none reported by the validation runner.
-- Expected runner metadata paths: `build.stdout.log` records explicit local evidence/store/state paths under `/home/brittonr/git/crunch/.../.crunch-drain/...`; these are validation-runner metadata, not sandbox builder leakage.
+Task-ID: V4
+Covers: r[bootstrap.part.tcc.musl.runtime-validation]
+Status: captured
 
-This scan is limited to the failed attempt. It does not prove the eventual successful builder transcript; rerun after the blocker is repaired.
+`bootstrap validate bootstrap/tcc-musl.ncl` reported no coarse host-path needles in captured build output for the failed prerequisite attempt. Rerun after successful target output to cover the complete build and smoke transcript.
+
+Evidence:
+
+- `evidence/validation-summary.md`
+- `evidence/build.stdout.log`
+- `evidence/V2-tcc-0.9.27-musl-root-derivation.log`

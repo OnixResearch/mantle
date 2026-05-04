@@ -1,28 +1,27 @@
-# V2 build attempt: tcc musl
+# V2 build evidence: tcc musl
 
-- Task-ID: V2
-- Covers: `bootstrap.part.tcc.musl.runtime-validation`
-- Command: `nix shell nixpkgs#bubblewrap -c ./target/debug/crunch --json --store $PWD/.crunch-drain/tcc-musl-store --state-dir $PWD/.crunch-drain/tcc-musl-state bootstrap validate bootstrap/tcc-musl.ncl --evidence-dir openspec/changes/live-part-tcc-musl-runtime-validation/evidence --resume`
-- Status: `build-failed`
-- Exit code: `1`
-- Doctor OK: `True`
-- Output path: none; the target did not produce a runtime-valid output.
-- Failure class: `build`
-- Root: `tcc-0.9.27-musl`
-- Derivation key: `/crunch/store/5k4dnz4wkxlv3sys10yab6g0wcmi5jzv-tcc-0.9.27-musl.drv`
-- Blocker: dependency tcc-0.9.27-musl-prep.drv failed
+Task-ID: V2
+Covers: r[bootstrap.part.tcc.musl.runtime-validation]
+Status: captured
 
-## Evidence files
+## Command
 
-- `doctor.json`
-- `build.stdout.log`
-- `build.stderr.log`
-- `validation-summary.json`
-- `validation-summary.md`
-- `V2-tcc-0.9.27-musl-root-derivation.log`
-
-## Root derivation message excerpt
-
-```text
-dependency tcc-0.9.27-musl-prep.drv failed
+```sh
+nix shell nixpkgs#bubblewrap -c ./target/debug/crunch --json \
+  --store "$PWD/.crunch-drain/tcc-musl-default-store" \
+  bootstrap validate bootstrap/tcc-musl.ncl \
+  --evidence-dir "$PWD/.crunch-drain/tcc-musl-default-evidence" \
+  --resume
 ```
+
+## Result
+
+Validation now fails at the first musl prerequisite, not at `tcc-0.9.27-musl-prep`:
+
+- failed root: `tcc-0.9.27-musl`
+- derivation: `/crunch/store/2azrpcqivj29rfn96avl1bgxsivcic48-tcc-0.9.27-musl.drv`
+- phase: `build`
+- error class: `builder`
+- message: `dependency musl-1.1.24-tcc.drv failed`
+
+This records the new downstream boundary after the prep compiler repair.

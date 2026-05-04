@@ -1,9 +1,9 @@
 {
   "schema": "crunch-bootstrap-validation-v1",
   "target": "bootstrap/tcc-musl.ncl",
-  "evidence_dir": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence",
-  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-store",
-  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-state",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
   "store_prefix": "/crunch/store",
   "resume": true,
   "doctor_ok": true,
@@ -13,12 +13,12 @@
   "status": "build-failed",
   "failure_class": "build",
   "evidence": {
-    "doctor_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/doctor.json",
-    "build_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/build.stdout.log",
-    "build_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/build.stderr.log",
-    "summary_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/validation-summary.json",
-    "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-tcc-musl-runtime-validation/evidence/validation-summary.md"
+    "doctor_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-default-evidence/validation-summary.md"
   },
   "leakage_findings": [],
-  "generated_at_unix": 1777904928
+  "generated_at_unix": 1777911259
 }

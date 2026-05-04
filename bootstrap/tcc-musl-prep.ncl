@@ -9,7 +9,7 @@ let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
 let mes = import "mes.ncl" in
-let tcc = import "tinycc.ncl" in
+let tcc26 = import "tinycc-mes.ncl" in
 let make = import "make-tcc.ncl" in
 let sed = import "sed-tcc.ncl" in
 
@@ -37,14 +37,14 @@ let tcc27_src = crunch.fetchTarball {
         echo "ERROR: input $1 not found" >&2; exit 1
       }
 
-      TCC=$(find_input tinycc-0.9.27)
+      TCC26=$(find_input tinycc-0.9.26)
       MES_OUT=$(find_input mes)
       STAGE0=$(find_input stage0-posix)
       MAKE=$(find_input make-3.82-tcc)
       SED=$(find_input sed-4.0.9-tcc)
       TCC27_SRC=$(find_input tcc-0.9.27-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$STAGE0/bin:$MES_OUT/bin:$PATH"
+      export PATH="$TCC26/bin:$MAKE/bin:$SED/bin:$STAGE0/bin:$MES_OUT/bin:$PATH"
 
       MES_ARCH=x86_64
       WORK=/tmp/tcc-musl-prep
@@ -57,24 +57,275 @@ let tcc27_src = crunch.fetchTarball {
 
       : > config.h
 
+      # The Mes/TinyCC handoff can parse <inttypes.h> without leaving usable
+      # fixed-width typedef names for TinyCC's bundled elf.h/tcc.h on amd64.
+      # Force the handful of exact-width names this bootstrap compiler needs
+      # to primitive token aliases after elf.h's include block so both elf.h
+      # and the later little-endian helpers parse without depending on the
+      # predecessor's fragile Mes inttypes/stdint bridge.
+      $BB sed -i '/#include <inttypes.h>/a\
+#define uint8_t unsigned char\
+#define uint16_t unsigned short\
+#define uint32_t unsigned int\
+#define uint64_t unsigned long long\
+#define int32_t int\
+#define int64_t long long\
+#define CRUNCH_TCC_ELF_FIXED_WIDTH_ALIASES 1\
+' elf.h
+
+      # CRUNCH: reuse TinyCC 0.9.27 source-normalization seams from bootstrap/tinycc.ncl.
+      # The musl-prep compiler is still built by the Mes-linked TinyCC bridge,
+      # so it needs the same amd64 codegen, varargs/path, CRT, GOT/PLT, and
+      # source-construction repairs as the final Mes-linked TinyCC output.
+        # Crunch amd64 predecessor tcc-0.9.26 still miscompiles variable
+        # doublings through the power-of-two multiply shortcut as `shl $0`.
+        # Spell bootstrap allocator growth as addition, matching the earlier
+        # tinycc-mes source-normalization seam.
+        $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+        $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+        $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+        $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+        $BB sed -i 's/#define REX_BASE(reg).*/#define REX_BASE(reg) (((reg) \& 8) ? 1 : 0)/' x86_64-gen.c
+        $BB sed -i 's/(REX_BASE(r2) << 2) | (ll << 3)/(REX_BASE(r2) ? 4 : 0) | (ll ? 8 : 0)/' x86_64-gen.c
+        $BB sed -i 's/(REX_BASE(r) << 8)/(REX_BASE(r) ? 256 : 0)/g' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void o(unsigned int c)/,/^}/c\
+ST_FUNC void o(unsigned int c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    int n = sizeof(c);\
+    int i;\
+    while (n > 0 && p[n - 1] == 0)\
+        n--;\
+    for (i = 0; i < n; i++)\
+        g(p[i]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le16(int v)/,/^}/c\
+ST_FUNC void gen_le16(int v)\
+{\
+    unsigned char *p = (unsigned char *)&v;\
+    g(p[0]);\
+    g(p[1]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le32(int c)/,/^}/c\
+ST_FUNC void gen_le32(int c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    g(p[0]);\
+    g(p[1]);\
+    g(p[2]);\
+    g(p[3]);\
+}\
+' x86_64-gen.c
+        $BB sed -i '/ST_FUNC void gen_le64(int64_t c)/,/^}/c\
+ST_FUNC void gen_le64(int64_t c)\
+{\
+    unsigned char *p = (unsigned char *)&c;\
+    g(p[0]);\
+    g(p[1]);\
+    g(p[2]);\
+    g(p[3]);\
+    g(p[4]);\
+    g(p[5]);\
+    g(p[6]);\
+    g(p[7]);\
+}\
+' x86_64-gen.c
+        $BB sed -i 's/g(func_ret_sub >> 8);/{ unsigned char *p = (unsigned char *)\&func_ret_sub; g(p[1]); }/g' x86_64-gen.c
+
+        # The Mes-built predecessor can leave 64-bit absolute data/GOT
+        # relocations unapplied in static outputs when the inline 64-bit
+        # little-endian helpers use multiword shifts. Keep the public helper
+        # names but spell 64-bit loads/stores as x86_64 byte copies so
+        # R_X86_64_64 data initializers and static PLT/GOT slots are
+        # materialized before the ELF is written.
+        $BB sed -i '/static inline uint64_t read64le(unsigned char \*p)/,/^}/c\
+static inline uint64_t read64le(unsigned char *p) {\
+    uint64_t x;\
+    memcpy(&x, p, sizeof(x));\
+    return x;\
+}\
+' tcc.h
+        $BB sed -i '/static inline void write64le(unsigned char \*p, uint64_t x)/,/^}/c\
+static inline void write64le(unsigned char *p, uint64_t x) {\
+    memcpy(p, &x, sizeof(x));\
+}\
+' tcc.h
+        $BB sed -i '/static inline void add64le(unsigned char \*p, int64_t x)/,/^}/c\
+static inline void add64le(unsigned char *p, int64_t x) {\
+    uint64_t y;\
+    memcpy(&y, p, sizeof(y));\
+    y += x;\
+    memcpy(p, &y, sizeof(y));\
+}\
+' tcc.h
+
+        # The predecessor Mes runtime varargs path corrupts snprintf/sprintf
+        # string expansion in bootstrap path constructors. Spell those
+        # deterministic path constructors with direct string operations for
+        # this Mes-linked handoff compiler, but keep TinyCC's diagnostic
+        # vsnprintf path intact: the installed compiler now carries the
+        # TinyCC-compatible Mes stdarg runtime and must expand warning/error
+        # arguments instead of printing literal `%s:%d` placeholders.
+        $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
+        $BB sed -i 's|snprintf(buf, sizeof(buf), fmt, paths.*|if (fmt[3] == '\''l'\'') { strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a"); } else { strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename); }|' libtcc.c
+        # Mes 0.27.1's vsnprintf still cannot consume TinyCC's x86_64 va_list
+        # reliably when a va_list is forwarded through TinyCC's diagnostic
+        # helper.  Replace only the diagnostic append formatter with a small
+        # direct va_arg formatter for the integer/string conversions TinyCC
+        # uses in warnings/errors; leave deterministic path constructors on
+        # the non-varargs string-copy path above.
+        $BB sed -i '/static void strcat_vprintf(char \*buf, int buf_size, const char \*fmt, va_list ap)/,/^}/c\
+static void crunch_diag_putc(char *buf, int buf_size, int *pos, int c)\
+{\
+    if (*pos < buf_size - 1) { buf[*pos] = c; buf[*pos + 1] = 0; }\
+    ++*pos;\
+}\
+static void crunch_diag_puts(char *buf, int buf_size, int *pos, const char *s)\
+{\
+    if (!s) s = "(null)";\
+    while (*s) crunch_diag_putc(buf, buf_size, pos, *s++);\
+}\
+static void crunch_diag_uint(char *buf, int buf_size, int *pos, unsigned long long v, int base, int neg)\
+{\
+    char tmp[32]; int n = 0;\
+    if (neg) crunch_diag_putc(buf, buf_size, pos, '\''-'\'');\
+    do { int d = v % base; tmp[n++] = d < 10 ? '\''0'\'' + d : '\''a'\'' + d - 10; v /= base; } while (v);\
+    while (n) crunch_diag_putc(buf, buf_size, pos, tmp[--n]);\
+}\
+static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)\
+{\
+    int pos = strlen(buf);\
+    while (*fmt) {\
+        int long_mod = 0;\
+        if (*fmt != '\''%'\'') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }\
+        ++fmt;\
+        if (*fmt == '\''%'\'') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }\
+        while (*fmt == '\''l'\'') { long_mod++; fmt++; }\
+        switch (*fmt++) {\
+        case '\''s'\'': crunch_diag_puts(buf, buf_size, &pos, va_arg(ap, char *)); break;\
+        case '\''c'\'': crunch_diag_putc(buf, buf_size, &pos, va_arg(ap, int)); break;\
+        case '\''d'\'': case '\''i'\'': { long long x = long_mod ? va_arg(ap, long) : va_arg(ap, int); unsigned long long u = x < 0 ? -x : x; crunch_diag_uint(buf, buf_size, &pos, u, 10, x < 0); break; }\
+        case '\''u'\'': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 10, 0); break;\
+        case '\''x'\'': case '\''X'\'': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 16, 0); break;\
+        case '\''p'\'': crunch_diag_puts(buf, buf_size, &pos, "0x"); crunch_diag_uint(buf, buf_size, &pos, (unsigned long)va_arg(ap, void *), 16, 0); break;\
+        default: crunch_diag_putc(buf, buf_size, &pos, '\''%'\''); --fmt; break;\
+        }\
+    }\
+}' libtcc.c
+        $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
+        $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
+        $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
+        $BB sed -i '/s1->tcc_lib_path, filename);/s|.*|    strcpy(buf, s1->tcc_lib_path); strcat(buf, "/"); strcat(buf, filename);|' tccelf.c
+        $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
+        $BB sed -i 's/const char filename../const char *filename/' tccelf.c
+
+        # Carry the same Mes/TCC source-normalization seams used by the
+        # predecessor compiler. The 0.9.26 handoff still inherits Mes-built
+        # x86_64 codegen defects around aggregate SValue copies and variable
+        # shift counts; if 0.9.27 is built without these normalizations it can
+        # compile objects but segfault in the executable/DLL output path.
+        $BB sed -i 's/SValue tmp = vtop\[0\];/SValue tmp;\
+            memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
+        $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+        $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+        $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+        $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+        $BB sed -i 's/loc = 0;/loc = 0;\
+    ind = cur_text_section->data_offset;/' x86_64-gen.c
+        $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
+        $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
+        $BB sed -i '/sprintf(buf,/c\
+    buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
+        $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
+        if (fmt[3] == '\''l'\'') {\
+            strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
+        } else {\
+            strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        }' libtcc.c
+
+        $BB sed -i 's|snprintf(buf, sizeof(buf), "__start_%s", s->name);|strcpy(buf, "__start_"); strcat(buf, s->name);|' tccelf.c
+        $BB sed -i 's|snprintf(buf, sizeof(buf), "__stop_%s", s->name);|strcpy(buf, "__stop_"); strcat(buf, s->name);|' tccelf.c
+        $BB sed -i 's|snprintf(sym_start, sizeof(sym_start), "__%s_start", section_name + 1);|strcpy(sym_start, "__"); strcat(sym_start, section_name + 1); strcat(sym_start, "_start");|' tccelf.c
+        $BB sed -i 's|snprintf(sym_end, sizeof(sym_end), "__%s_end", section_name + 1);|strcpy(sym_end, "__"); strcat(sym_end, section_name + 1); strcat(sym_end, "_end");|' tccelf.c
+
+        # For static executables, remember the GOT slot that backs a PLT entry
+        # so the later fill_got_entry() pass can materialize it. Upstream only
+        # stores plt_offset for R_JMP_SLOT entries because a dynamic loader will
+        # fill the GOT; Crunch's Mes-linked static executables have no loader.
+        $BB sed -i '/attr->plt_offset = create_plt_entry(s1, got_offset, attr);/a\        if (s1->static_link && s1->output_type == TCC_OUTPUT_EXE) attr->got_offset = got_offset;' tccelf.c
+
+        # tcc-mes can emit x86_64 PLT entries even for static executables.
+        # Relocate those PLT slots after final section layout; otherwise a
+        # linked binary can jump through unrelocated offsets at runtime.
+        $BB sed -i '/if (file_type == TCC_OUTPUT_EXE && s1->static_link)/,/        fill_got(s1);/c\
+    if (file_type == TCC_OUTPUT_EXE && s1->static_link) {\
+        if (s1->got)\
+            fill_local_got_entries(s1);\
+        if (s1->plt)\
+            relocate_plt(s1);\
+        fill_got(s1);\
+    }' tccelf.c
+
+        # Match the Mes-stage bootstrap contract: avoid loading crti.o/crtn.o
+        # through the Mes-built TinyCC CRT path. That path enters broken
+        # varargs/path diagnostics and can corrupt the final static link.
+        $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
+
       # Build tcc configured for musl-compatible include paths.
       # At this point we still use mes libc for linking, but point
       # include paths to where musl headers will be installed.
+      echo "tcc-musl-prep: compile object"
       tcc \
-        -v -static \
-        -o tcc-musl-prep \
+        -v -c \
+        -o tcc-musl-prep.o \
+        -I . \
+        -I "$TCC26/include/mes" \
+        -D BOOTSTRAP=1 \
+        -D HAVE_BITFIELD=1 \
+        -D HAVE_FLOAT=1 \
+        -D HAVE_LONG_LONG=1 \
+        -D HAVE_SETJMP=1 \
         -D TCC_TARGET_X86_64=1 \
         -D CONFIG_TCCDIR=\"/tmp/tcc-lib\" \
         -D CONFIG_TCC_CRTPREFIX=\"/tmp/musl-out/lib\" \
         -D CONFIG_TCC_ELFINTERP=\"/lib/ld-musl-x86_64.so.1\" \
-        -D CONFIG_TCC_LIBPATHS=\"$MES_OUT/lib:$MES_OUT/lib/${MES_ARCH}-mes:/tmp/musl-out/lib\" \
+        -D CONFIG_TCC_LIBPATHS=\"$TCC26/lib/mes:$TCC26/lib/mes/tcc:/tmp/musl-out/lib\" \
         -D 'CONFIG_TCC_SYSINCLUDEPATHS="'"/tmp/musl-out/include"'"' \
-        -D TCC_LIBGCC=\"$MES_OUT/lib/${MES_ARCH}-mes/libc.a\" \
+        -D CONFIG_SYSROOT=\"/\" \
+        -D TCC_LIBGCC=\"$TCC26/lib/mes/libc.a\" \
+        -D TCC_LIBTCC1=\"libtcc1.a\" \
+        -D CONFIG_TCCBOOT=1 \
         -D CONFIG_TCC_STATIC=1 \
         -D CONFIG_USE_LIBGCC=1 \
         -D TCC_VERSION=\"0.9.27\" \
         -D ONE_SOURCE=1 \
         tcc.c
+
+      test -s tcc-musl-prep.o
+      echo "tcc-musl-prep: link executable"
+      tcc \
+        -v -static \
+        -o tcc-musl-prep \
+        tcc-musl-prep.o
       $BB chmod 755 tcc-musl-prep
 
       $BB mkdir -p "$out/bin" "$out/lib" "$out/include"
@@ -82,9 +333,14 @@ let tcc27_src = crunch.fetchTarball {
       $BB cp tcc-musl-prep "$out/bin/tcc-musl-prep"
       $BB chmod 755 "$out/bin/tcc" "$out/bin/tcc-musl-prep"
 
-      # Carry mes libc for linking until musl is built
-      $BB cp -r "$MES_OUT/lib/${MES_ARCH}-mes" "$out/lib/${MES_ARCH}-mes"
-      $BB cp -r "$MES_OUT/include/mes-include" "$out/include/mes"
+      # Carry the TinyCC-rebuilt Mes libc runtime for linking until musl is built.
+      # The raw Mes output lacks the TinyCC x86_64 stdarg/va_list bridge used by
+      # the Mes-linked 0.9.26 predecessor compiler and can crash during this self-compile.
+      $BB mkdir -p "$out/lib/${MES_ARCH}-mes/tcc"
+      $BB cp "$TCC26/lib/mes"/*.o "$out/lib/${MES_ARCH}-mes/"
+      $BB cp "$TCC26/lib/mes"/*.a "$out/lib/${MES_ARCH}-mes/"
+      $BB cp "$TCC26/lib/mes/tcc/libtcc1.a" "$out/lib/${MES_ARCH}-mes/tcc/libtcc1.a"
+      $BB cp -r "$TCC26/include/mes" "$out/include/mes"
 
       test -x "$out/bin/tcc"
       test -x "$out/bin/tcc-musl-prep"
@@ -93,5 +349,5 @@ let tcc27_src = crunch.fetchTarball {
       "$out/bin/tcc" -v
     "%,
   ],
-  inputs = [stage0, mes, tcc, make, sed, tcc27_src],
+  inputs = [stage0, mes, tcc26, make, sed, tcc27_src],
 } | crunch.Derivation
