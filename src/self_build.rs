@@ -338,17 +338,41 @@ impl SelfBuildReport {
                 out.push_str(&format!("{PROOF_PREFIX} stagex-seed-class={}\n", meta.seed_class));
                 out.push_str(&format!("{PROOF_PREFIX} stagex-audit-seed-max-bytes={}\n", meta.audit_seed_max_bytes));
                 out.push_str(&format!("{PROOF_PREFIX} stagex-seed-digest={}\n", meta.seed_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-lineage-manifest-digest={}\n", meta.lineage_manifest_digest_blake3));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-lineage-manifest-digest={}\n",
+                    meta.lineage_manifest_digest_blake3
+                ));
                 out.push_str(&format!("{PROOF_PREFIX} stagex-stage-graph-digest={}\n", meta.stage_graph_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-provider-output-digest={}\n", meta.provider_output_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-staged-source-digest={}\n", meta.staged_source_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-stage1-binary-digest={}\n", meta.stage1_binary_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-stage2-binary-digest={}\n", meta.stage2_binary_digest_blake3));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-provider-output-digest={}\n",
+                    meta.provider_output_digest_blake3
+                ));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-staged-source-digest={}\n",
+                    meta.staged_source_digest_blake3
+                ));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-stage1-binary-digest={}\n",
+                    meta.stage1_binary_digest_blake3
+                ));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-stage2-binary-digest={}\n",
+                    meta.stage2_binary_digest_blake3
+                ));
                 for tool in &meta.bootstrap_tool_digests {
-                    out.push_str(&format!("{PROOF_PREFIX} stagex-bootstrap-tool-digest={}:{}\n", tool.name, tool.digest_blake3));
+                    out.push_str(&format!(
+                        "{PROOF_PREFIX} stagex-bootstrap-tool-digest={}:{}\n",
+                        tool.name, tool.digest_blake3
+                    ));
                 }
-                out.push_str(&format!("{PROOF_PREFIX} stagex-protected-exec-audit-digest={}\n", meta.protected_exec_audit_digest_blake3));
-                out.push_str(&format!("{PROOF_PREFIX} stagex-proof-bundle-digest={}\n", meta.proof_bundle_digest_blake3));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-protected-exec-audit-digest={}\n",
+                    meta.protected_exec_audit_digest_blake3
+                ));
+                out.push_str(&format!(
+                    "{PROOF_PREFIX} stagex-proof-bundle-digest={}\n",
+                    meta.proof_bundle_digest_blake3
+                ));
             }
             None => out.push_str(&format!("{PROOF_PREFIX} stagex-metadata=none\n")),
         }
@@ -2525,33 +2549,43 @@ fn verify_self_build_output(output_binary: &Path, no_verify: bool) -> Result<(),
     verify_binary(output_binary)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 const FORBIDDEN_EXEC_BASENAMES: &[&str] = &[
-    "cc", "c++", "gcc", "g++", "clang", "clang++",
-    "make", "gmake", "ar", "ranlib", "ld",
-    "nix", "nix-build", "nix-store", "nix-shell", "nix-env",
+    "cc",
+    "c++",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "make",
+    "gmake",
+    "ar",
+    "ranlib",
+    "ld",
+    "nix",
+    "nix-build",
+    "nix-store",
+    "nix-shell",
+    "nix-env",
 ];
 
-const FORBIDDEN_EXEC_PATH_PATTERNS: &[&str] = &[
-    "musl.cc", "musl-gcc-raw", "legacy-fetched",
-];
+#[cfg_attr(not(test), allow(dead_code))]
+const FORBIDDEN_EXEC_PATH_PATTERNS: &[&str] = &["musl.cc", "musl-gcc-raw", "legacy-fetched"];
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagexEligibilityFailure {
     pub reason: String,
 }
 
-pub fn validate_stagex_proof_eligibility(
-    report: &SelfBuildReport,
-) -> Result<(), Vec<StagexEligibilityFailure>> {
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(), Vec<StagexEligibilityFailure>> {
     let mut failures = Vec::new();
     let max_seccomp_events: u32 = 100_000;
 
     if !report.provider_mode.satisfies_stagex_requirement() {
         failures.push(StagexEligibilityFailure {
-            reason: format!(
-                "provider mode '{}' does not satisfy StageX requirement",
-                report.provider_mode.as_str()
-            ),
+            reason: format!("provider mode '{}' does not satisfy StageX requirement", report.provider_mode.as_str()),
         });
     }
 
@@ -2577,10 +2611,7 @@ pub fn validate_stagex_proof_eligibility(
         if event.policy_decision != "allowed" {
             continue;
         }
-        let basename = std::path::Path::new(&event.executable_path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let basename = std::path::Path::new(&event.executable_path).file_name().and_then(|n| n.to_str()).unwrap_or("");
         if FORBIDDEN_EXEC_BASENAMES.contains(&basename) {
             failures.push(StagexEligibilityFailure {
                 reason: format!(
@@ -4096,8 +4127,14 @@ mod tests {
             stage1_binary_digest_blake3: "f".repeat(64),
             stage2_binary_digest_blake3: "1".repeat(64),
             bootstrap_tool_digests: vec![
-                BootstrapToolDigestEntry { name: "bwrap".to_string(), digest_blake3: "2".repeat(64) },
-                BootstrapToolDigestEntry { name: "busybox".to_string(), digest_blake3: "3".repeat(64) },
+                BootstrapToolDigestEntry {
+                    name: "bwrap".to_string(),
+                    digest_blake3: "2".repeat(64),
+                },
+                BootstrapToolDigestEntry {
+                    name: "busybox".to_string(),
+                    digest_blake3: "3".repeat(64),
+                },
             ],
             protected_exec_audit_digest_blake3: "4".repeat(64),
             proof_bundle_digest_blake3: "5".repeat(64),
@@ -4327,9 +4364,9 @@ mod tests {
     #[test]
     fn host_fallback_events_fail_eligibility() {
         let mut report = stagex_eligible_report();
-        report.fallback_events.push(SelfBuildFallbackEvent::BwrapHostFallback(
-            PathBuf::from("/usr/bin/bwrap"),
-        ));
+        report
+            .fallback_events
+            .push(SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from("/usr/bin/bwrap")));
         let failures = validate_stagex_proof_eligibility(&report).unwrap_err();
         assert!(failures.iter().any(|f| f.reason.contains("host fallback")));
     }

@@ -26,7 +26,10 @@ impl fmt::Display for LineageError {
                 f,
                 "unsupported seed class '{class}': new seed classes require separate OpenSpec and ADR approval"
             ),
-            Self::OversizedSeed { actual_bytes, budget_bytes } => write!(
+            Self::OversizedSeed {
+                actual_bytes,
+                budget_bytes,
+            } => write!(
                 f,
                 "seed byte length {actual_bytes} exceeds audit_seed_max_bytes budget {budget_bytes}: \
                  a larger seed requires separate OpenSpec and ADR approval"

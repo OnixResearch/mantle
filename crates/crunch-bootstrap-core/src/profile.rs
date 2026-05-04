@@ -1,6 +1,7 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -184,9 +185,10 @@ pub fn evaluate_stagex_no_quorum(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::string::ToString;
     use alloc::vec;
+
+    use super::*;
 
     fn sample_proof_block() -> StagexLineageProofBlock {
         StagexLineageProofBlock {
@@ -199,7 +201,10 @@ mod tests {
             staged_source_digest: "e".repeat(64),
             stage1_crunch_digest: "f".repeat(64),
             stage2_crunch_digest: "1".repeat(64),
-            bootstrap_tool_digests: vec![BootstrapToolDigest { name: "bwrap".to_string(), digest: "2".repeat(64) }],
+            bootstrap_tool_digests: vec![BootstrapToolDigest {
+                name: "bwrap".to_string(),
+                digest: "2".repeat(64),
+            }],
             protected_exec_audit_digest: Some("3".repeat(64)),
             proof_bundle_digest: "4".repeat(64),
         }

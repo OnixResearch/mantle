@@ -1294,15 +1294,8 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
             if let Some(action) = action {
                 return run_bootstrap_action(ctx, action);
             }
-            run_bootstrap_command(
-                ctx,
-                output,
-                *fetch,
-                source_root.as_deref(),
-                stagex_lineage.as_deref(),
-                packages,
-            )
-        },
+            run_bootstrap_command(ctx, output, *fetch, source_root.as_deref(), stagex_lineage.as_deref(), packages)
+        }
         _ => unreachable!("bootstrap helper called with non-bootstrap command"),
     }
 }
@@ -1317,18 +1310,15 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             resume,
             jobs,
             strict_hermetic,
-        } => bootstrap_validate::cmd_bootstrap_validate(
-            ctx,
-            bootstrap_validate::BootstrapValidateOptions {
-                target: target.clone(),
-                import_paths: import_paths.clone(),
-                evidence_dir: evidence_dir.clone(),
-                warmups: warmups.clone(),
-                resume: *resume,
-                jobs: *jobs,
-                strict_hermetic: *strict_hermetic,
-            },
-        ),
+        } => bootstrap_validate::cmd_bootstrap_validate(ctx, bootstrap_validate::BootstrapValidateOptions {
+            target: target.clone(),
+            import_paths: import_paths.clone(),
+            evidence_dir: evidence_dir.clone(),
+            warmups: warmups.clone(),
+            resume: *resume,
+            jobs: *jobs,
+            strict_hermetic: *strict_hermetic,
+        }),
     }
 }
 

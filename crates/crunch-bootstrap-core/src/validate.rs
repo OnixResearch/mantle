@@ -4,14 +4,26 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-use crate::BLAKE3_HEX_LENGTH;
 use crate::LineageManifest;
 use crate::error::LineageError;
 use crate::lineage::Blake3Hex;
 
 const FORBIDDEN_ROOT_NAMES: &[&str] = &[
-    "cc", "c++", "gcc", "g++", "clang", "clang++", "make", "gmake", "ar", "ranlib", "nix",
-    "nix-build", "nix-store", "nix-shell", "nix-env",
+    "cc",
+    "c++",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "make",
+    "gmake",
+    "ar",
+    "ranlib",
+    "nix",
+    "nix-build",
+    "nix-store",
+    "nix-shell",
+    "nix-env",
 ];
 
 const FORBIDDEN_ROOT_PATTERNS: &[&str] = &["musl.cc", "musl-gcc-raw", "legacy-fetched"];
@@ -44,10 +56,16 @@ pub fn validate_lineage(manifest: &LineageManifest) -> ValidationResult {
     validate_forbidden_roots(manifest, &mut errors);
     validate_provider_reachability(manifest, &mut errors);
 
-    let environment_assumptions =
-        manifest.environment_assumptions.iter().map(|a| format!("{}: {}", a.category, a.description)).collect();
+    let environment_assumptions = manifest
+        .environment_assumptions
+        .iter()
+        .map(|a| format!("{}: {}", a.category, a.description))
+        .collect();
 
-    ValidationResult { errors, environment_assumptions }
+    ValidationResult {
+        errors,
+        environment_assumptions,
+    }
 }
 
 fn validate_seed(seed: &crate::lineage::AuditedSeed, errors: &mut Vec<LineageError>) {
@@ -162,15 +180,14 @@ fn validate_forbidden_roots(manifest: &LineageManifest, errors: &mut Vec<Lineage
         let name_lower = source.name.to_lowercase();
         for pattern in FORBIDDEN_ROOT_PATTERNS {
             if name_lower.contains(pattern) {
-                errors
-                    .push(LineageError::ForbiddenRoot(format!("forbidden source '{}' (matches '{pattern}')", source.name)));
+                errors.push(LineageError::ForbiddenRoot(format!(
+                    "forbidden source '{}' (matches '{pattern}')",
+                    source.name
+                )));
             }
         }
         if source.provenance.as_ref().is_some_and(|p| p.starts_with("/nix/store")) {
-            errors.push(LineageError::ForbiddenRoot(format!(
-                "Nix store path provenance for source '{}'",
-                source.name
-            )));
+            errors.push(LineageError::ForbiddenRoot(format!("Nix store path provenance for source '{}'", source.name)));
         }
     }
 }
@@ -196,10 +213,12 @@ fn validate_provider_reachability(manifest: &LineageManifest, errors: &mut Vec<L
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::lineage::*;
-    use crate::DEFAULT_AUDIT_SEED_MAX_BYTES;
     use alloc::vec;
+
+    use super::*;
+    use crate::BLAKE3_HEX_LENGTH;
+    use crate::DEFAULT_AUDIT_SEED_MAX_BYTES;
+    use crate::lineage::*;
 
     fn valid_blake3() -> Blake3Hex {
         Blake3Hex::new("a".repeat(BLAKE3_HEX_LENGTH))
@@ -281,7 +300,12 @@ mod tests {
         m.seed.instruction_set.clear();
         let result = validate_lineage(&m);
         assert!(!result.is_valid());
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "instruction_set")));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "instruction_set"))
+        );
     }
 
     #[test]
@@ -305,10 +329,12 @@ mod tests {
         let mut m = minimal_manifest();
         m.seed.host_interface_surface.clear();
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "host_interface_surface")));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "host_interface_surface"))
+        );
     }
 
     #[test]
@@ -316,10 +342,12 @@ mod tests {
         let mut m = minimal_manifest();
         m.seed.human_readable_source.clear();
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "human_readable_source")));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "human_readable_source"))
+        );
     }
 
     #[test]
@@ -327,10 +355,12 @@ mod tests {
         let mut m = minimal_manifest();
         m.seed.reproduction_transcript.clear();
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "reproduction_transcript")));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::MissingSeedField(f) if f == "reproduction_transcript"))
+        );
     }
 
     #[test]
@@ -347,10 +377,10 @@ mod tests {
         m.seed.seed_bytes_len = 5000;
         m.seed.audit_seed_max_bytes = 4096;
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::OversizedSeed { actual_bytes: 5000, budget_bytes: 4096 })));
+        assert!(result.errors.iter().any(|e| matches!(e, LineageError::OversizedSeed {
+            actual_bytes: 5000,
+            budget_bytes: 4096
+        })));
     }
 
     #[test]
@@ -390,8 +420,11 @@ mod tests {
     #[test]
     fn non_blake3_without_reason_rejected() {
         let mut m = minimal_manifest();
-        m.source_artifacts[0].digest =
-            DigestEntry { algorithm: "sha256".to_string(), hex_value: "b".repeat(64), interoperability_reason: None };
+        m.source_artifacts[0].digest = DigestEntry {
+            algorithm: "sha256".to_string(),
+            hex_value: "b".repeat(64),
+            interoperability_reason: None,
+        };
         let result = validate_lineage(&m);
         assert!(result.errors.iter().any(|e| matches!(e, LineageError::NonBlake3WithoutReason(_))));
     }
@@ -426,7 +459,12 @@ mod tests {
             digest: valid_digest(),
         });
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::UndeclaredGeneratedArtifact(id) if id == "orphan")));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::UndeclaredGeneratedArtifact(id) if id == "orphan"))
+        );
     }
 
     #[test]
@@ -464,7 +502,12 @@ mod tests {
         let mut m = minimal_manifest();
         m.source_artifacts[0].provenance = Some("/nix/store/abc-some-tool".to_string());
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("Nix store"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("Nix store")))
+        );
     }
 
     #[test]
@@ -478,7 +521,12 @@ mod tests {
             url: Some("https://musl.cc/x86_64-linux-musl-native.tgz".to_string()),
         });
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("musl.cc"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("musl.cc")))
+        );
     }
 
     #[test]
@@ -527,10 +575,12 @@ mod tests {
             digest: valid_digest(),
         });
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("nix-build"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("nix-build")))
+        );
     }
 
     #[test]
@@ -556,7 +606,12 @@ mod tests {
             producing_artifact_id: "ghost".to_string(),
         }];
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::UnreachableProviderOutput(msg) if msg.contains("ghost"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::UnreachableProviderOutput(msg) if msg.contains("ghost")))
+        );
     }
 
     #[test]
@@ -606,10 +661,12 @@ mod tests {
             url: None,
         });
         let result = validate_lineage(&m);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("legacy-fetched"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("legacy-fetched")))
+        );
     }
 
     #[test]
@@ -624,7 +681,12 @@ mod tests {
             digest: valid_digest(),
         });
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("ranlib"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("ranlib")))
+        );
     }
 
     #[test]
@@ -639,7 +701,12 @@ mod tests {
             digest: valid_digest(),
         });
         let result = validate_lineage(&m);
-        assert!(result.errors.iter().any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("nix-env"))));
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| matches!(e, LineageError::ForbiddenRoot(msg) if msg.contains("nix-env")))
+        );
     }
 
     #[test]
@@ -671,8 +738,7 @@ mod tests {
         m.seed.entry_point.clear();
         m.seed.io_contract.clear();
         let result = validate_lineage(&m);
-        let seed_field_errors =
-            result.errors.iter().filter(|e| matches!(e, LineageError::MissingSeedField(_))).count();
+        let seed_field_errors = result.errors.iter().filter(|e| matches!(e, LineageError::MissingSeedField(_))).count();
         assert!(seed_field_errors >= 3, "expected at least 3 missing field errors, got {seed_field_errors}");
     }
 

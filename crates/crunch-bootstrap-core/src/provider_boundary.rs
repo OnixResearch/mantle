@@ -41,10 +41,7 @@ impl ProviderBoundaryResult {
     }
 }
 
-pub fn validate_provider_boundary(
-    manifest: &LineageManifest,
-    downstream_paths: &[String],
-) -> ProviderBoundaryResult {
+pub fn validate_provider_boundary(manifest: &LineageManifest, downstream_paths: &[String]) -> ProviderBoundaryResult {
     let present_roles: BTreeSet<String> = manifest.provider_outputs.iter().map(|o| o.role.to_string()).collect();
 
     let missing_roles: Vec<ProviderOutputRole> = REQUIRED_PROVIDER_ROLES
@@ -55,7 +52,10 @@ pub fn validate_provider_boundary(
 
     let raw_layout_violations = check_raw_layout_coupling(downstream_paths);
 
-    ProviderBoundaryResult { missing_roles, raw_layout_violations }
+    ProviderBoundaryResult {
+        missing_roles,
+        raw_layout_violations,
+    }
 }
 
 fn check_raw_layout_coupling(paths: &[String]) -> Vec<RawLayoutViolation> {
@@ -83,9 +83,7 @@ fn check_raw_layout_coupling(paths: &[String]) -> Vec<RawLayoutViolation> {
 
 pub fn classify_legacy_provider_evidence(provider_kind: &str) -> LegacyProviderClassification {
     match provider_kind {
-        "fetched" | "legacy-fetch" | "musl.cc-native-reduced-v1" => {
-            LegacyProviderClassification::SeedAssisted
-        }
+        "fetched" | "legacy-fetch" | "musl.cc-native-reduced-v1" => LegacyProviderClassification::SeedAssisted,
         "source-root" => LegacyProviderClassification::SourceRootIntermediate,
         "stagex-lineage" => LegacyProviderClassification::StagexLineage,
         _ => LegacyProviderClassification::Unknown,
@@ -108,10 +106,11 @@ impl LegacyProviderClassification {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::lineage::*;
-    use crate::DEFAULT_AUDIT_SEED_MAX_BYTES;
     use alloc::vec;
+
+    use super::*;
+    use crate::DEFAULT_AUDIT_SEED_MAX_BYTES;
+    use crate::lineage::*;
 
     fn valid_blake3() -> Blake3Hex {
         Blake3Hex::new("a".repeat(64))
@@ -160,7 +159,10 @@ mod tests {
             patches: vec![],
             provider_outputs: roles
                 .into_iter()
-                .map(|role| NormalizedProviderOutput { role, producing_artifact_id: "out".to_string() })
+                .map(|role| NormalizedProviderOutput {
+                    role,
+                    producing_artifact_id: "out".to_string(),
+                })
                 .collect(),
             environment_assumptions: vec![],
             stage_graph: vec![StageTransition {
@@ -262,10 +264,7 @@ mod tests {
 
     #[test]
     fn legacy_fetch_classified_as_seed_assisted() {
-        assert_eq!(
-            classify_legacy_provider_evidence("fetched"),
-            LegacyProviderClassification::SeedAssisted
-        );
+        assert_eq!(classify_legacy_provider_evidence("fetched"), LegacyProviderClassification::SeedAssisted);
         assert_eq!(
             classify_legacy_provider_evidence("musl.cc-native-reduced-v1"),
             LegacyProviderClassification::SeedAssisted
@@ -284,19 +283,13 @@ mod tests {
 
     #[test]
     fn stagex_lineage_satisfies_requirement() {
-        assert_eq!(
-            classify_legacy_provider_evidence("stagex-lineage"),
-            LegacyProviderClassification::StagexLineage
-        );
+        assert_eq!(classify_legacy_provider_evidence("stagex-lineage"), LegacyProviderClassification::StagexLineage);
         assert!(LegacyProviderClassification::StagexLineage.satisfies_stagex_requirement());
     }
 
     #[test]
     fn unknown_provider_does_not_satisfy() {
-        assert_eq!(
-            classify_legacy_provider_evidence("something-else"),
-            LegacyProviderClassification::Unknown
-        );
+        assert_eq!(classify_legacy_provider_evidence("something-else"), LegacyProviderClassification::Unknown);
         assert!(!LegacyProviderClassification::Unknown.satisfies_stagex_requirement());
     }
 }

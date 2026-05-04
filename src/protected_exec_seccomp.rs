@@ -78,10 +78,11 @@ mod linux {
             extraction_rules: &[String],
             executables: &[PromotedExecutable],
         ) -> Result<OutputPromotionRecord, ProtectedExecError> {
-            self.shared_policy
-                .write()
-                .expect("seccomp policy rwlock poisoned")
-                .promote_verified_output(source_entry_id, extraction_rules, executables)
+            self.shared_policy.write().expect("seccomp policy rwlock poisoned").promote_verified_output(
+                source_entry_id,
+                extraction_rules,
+                executables,
+            )
         }
     }
 

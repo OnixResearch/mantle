@@ -31,16 +31,15 @@ pub use profile::StagexNoQuorumResult;
 pub use profile::StagexProfileStatus;
 pub use profile::StagexQuorumStatus;
 pub use profile::evaluate_stagex_no_quorum;
-pub use validate::ValidationDiagnostic;
-pub use validate::ValidationResult;
-pub use validate::validate_lineage;
-
 pub use provider_boundary::LegacyProviderClassification;
 pub use provider_boundary::ProviderBoundaryResult;
 pub use provider_boundary::REQUIRED_PROVIDER_ROLES;
 pub use provider_boundary::RawLayoutViolation;
 pub use provider_boundary::classify_legacy_provider_evidence;
 pub use provider_boundary::validate_provider_boundary;
+pub use validate::ValidationDiagnostic;
+pub use validate::ValidationResult;
+pub use validate::validate_lineage;
 
 pub const DEFAULT_AUDIT_SEED_MAX_BYTES: u32 = 4096;
 pub const BLAKE3_HEX_LENGTH: usize = 64;

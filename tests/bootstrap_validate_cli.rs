@@ -11,9 +11,7 @@ fn crunch() -> Command {
 }
 
 fn write_minimal_derivation(path: &Path) {
-    let lib_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("lib")
-        .join("lib.ncl");
+    let lib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib").join("lib.ncl");
     fs::write(
         path,
         format!(

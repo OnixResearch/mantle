@@ -1921,9 +1921,7 @@ mod tests {
                 digest_hex: "b".repeat(64),
             },
         ];
-        let record = policy
-            .promote_verified_output("src-gnu-make", &["format=tar".to_string()], &promoted)
-            .unwrap();
+        let record = policy.promote_verified_output("src-gnu-make", &["format=tar".to_string()], &promoted).unwrap();
 
         assert_eq!(record.source_entry_id, "src-gnu-make");
         assert_eq!(record.promoted_executables.len(), 2);

@@ -2,6 +2,7 @@ use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -65,11 +66,19 @@ pub struct DigestEntry {
 
 impl DigestEntry {
     pub fn blake3(hex: Blake3Hex) -> Self {
-        Self { algorithm: String::from("blake3"), hex_value: hex.0, interoperability_reason: None }
+        Self {
+            algorithm: String::from("blake3"),
+            hex_value: hex.0,
+            interoperability_reason: None,
+        }
     }
 
     pub fn non_blake3(algorithm: String, hex_value: String, reason: String) -> Self {
-        Self { algorithm, hex_value, interoperability_reason: Some(reason) }
+        Self {
+            algorithm,
+            hex_value,
+            interoperability_reason: Some(reason),
+        }
     }
 
     pub fn is_blake3(&self) -> bool {
@@ -249,18 +258,33 @@ impl LineageManifest {
 
     pub fn all_nodes(&self) -> Vec<LineageNode> {
         let mut nodes = Vec::new();
-        nodes.push(LineageNode { id: String::from("seed"), kind: LineageNodeKind::Seed });
+        nodes.push(LineageNode {
+            id: String::from("seed"),
+            kind: LineageNodeKind::Seed,
+        });
         for a in &self.source_artifacts {
-            nodes.push(LineageNode { id: a.id.clone(), kind: LineageNodeKind::SourceArtifact });
+            nodes.push(LineageNode {
+                id: a.id.clone(),
+                kind: LineageNodeKind::SourceArtifact,
+            });
         }
         for a in &self.generated_artifacts {
-            nodes.push(LineageNode { id: a.id.clone(), kind: LineageNodeKind::GeneratedArtifact });
+            nodes.push(LineageNode {
+                id: a.id.clone(),
+                kind: LineageNodeKind::GeneratedArtifact,
+            });
         }
         for t in &self.transition_tools {
-            nodes.push(LineageNode { id: t.id.clone(), kind: LineageNodeKind::TransitionTool });
+            nodes.push(LineageNode {
+                id: t.id.clone(),
+                kind: LineageNodeKind::TransitionTool,
+            });
         }
         for p in &self.patches {
-            nodes.push(LineageNode { id: p.id.clone(), kind: LineageNodeKind::Patch });
+            nodes.push(LineageNode {
+                id: p.id.clone(),
+                kind: LineageNodeKind::Patch,
+            });
         }
         nodes
     }
@@ -304,9 +328,10 @@ impl LineageManifest {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::string::ToString;
     use alloc::vec;
+
+    use super::*;
 
     fn valid_blake3() -> Blake3Hex {
         Blake3Hex::new("a".repeat(64))

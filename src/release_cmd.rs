@@ -178,12 +178,7 @@ fn cmd_release_verify(
     };
 
     if json {
-        print_release_verify_json(
-            &manifest,
-            reproducibility.as_ref(),
-            reproducibility_status,
-            stagex_result.as_ref(),
-        )?;
+        print_release_verify_json(&manifest, reproducibility.as_ref(), reproducibility_status, stagex_result.as_ref())?;
     } else {
         println!("release evidence verified: {}", bundle_dir.display());
         println!("release id: {}", manifest.release_id);
@@ -272,12 +267,8 @@ fn evaluate_stagex_profile(
     reproducibility: Option<&VerifiedReproducibilityReport>,
 ) -> crunch_bootstrap_core::StagexNoQuorumResult {
     let proof_block = extract_stagex_proof_block(manifest, bundle_dir);
-    let repro_verified = reproducibility
-        .map(|r| r.status == ReproducibilityStatus::Matched)
-        .unwrap_or(false);
-    let repro_digest = reproducibility
-        .map(|r| r.digest_blake3.as_str())
-        .unwrap_or("");
+    let repro_verified = reproducibility.map(|r| r.status == ReproducibilityStatus::Matched).unwrap_or(false);
+    let repro_digest = reproducibility.map(|r| r.digest_blake3.as_str()).unwrap_or("");
     let artifact_set_digest = compute_artifact_set_digest(&manifest.binaries);
     crunch_bootstrap_core::evaluate_stagex_no_quorum(
         true, // bundle already verified by verify_release_evidence_bundle
@@ -321,9 +312,7 @@ fn extract_stagex_proof_block(
     })
 }
 
-fn compute_artifact_set_digest(
-    binaries: &[crate::release_evidence::BundledArtifact],
-) -> String {
+fn compute_artifact_set_digest(binaries: &[crate::release_evidence::BundledArtifact]) -> String {
     let mut hasher = blake3::Hasher::new();
     let mut sorted_digests: Vec<&str> = binaries.iter().map(|b| b.digest_blake3.as_str()).collect();
     sorted_digests.sort();
@@ -721,17 +710,12 @@ mod tests {
             size_bytes: 100,
             digest_blake3: "b".repeat(64),
         };
-        assert_ne!(
-            compute_artifact_set_digest(&[a]),
-            compute_artifact_set_digest(&[b]),
-        );
+        assert_ne!(compute_artifact_set_digest(&[a]), compute_artifact_set_digest(&[b]),);
     }
 
     #[test]
     fn stagex_profile_json_never_says_quorum_satisfied() {
-        let result = crunch_bootstrap_core::StagexNoQuorumResult::unsatisfied(
-            vec!["test".to_string()],
-        );
+        let result = crunch_bootstrap_core::StagexNoQuorumResult::unsatisfied(vec!["test".to_string()]);
         let json = serde_json::to_string(&result).unwrap();
         assert!(!json.contains("quorum-satisfied"));
         assert!(!json.contains("quorum_satisfied"));

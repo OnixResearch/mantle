@@ -162,6 +162,7 @@ impl BootstrapProviderMode {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn satisfies_stagex_requirement(self) -> bool {
         matches!(self, Self::StagexLineage)
     }
@@ -202,8 +203,7 @@ pub(crate) fn select_bootstrap_provider(
     source_root: Option<&Path>,
     stagex_lineage: Option<&Path>,
 ) -> Result<BootstrapProviderMode, ManifestDiagnostic> {
-    let mode_count =
-        u32::from(fetch) + u32::from(source_root.is_some()) + u32::from(stagex_lineage.is_some());
+    let mode_count = u32::from(fetch) + u32::from(source_root.is_some()) + u32::from(stagex_lineage.is_some());
     if mode_count > 1 {
         return Err(ManifestDiagnostic::new(
             "provider-selection",
@@ -485,21 +485,19 @@ fn validate_emitted_roles(
     }
 }
 
-pub(crate) const STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED: &str =
-    "StageX-class lineage provider materialization not yet implemented: \
+pub(crate) const STAGEX_LINEAGE_PROVIDER_NOT_MATERIALIZED: &str = "StageX-class lineage provider materialization not yet implemented: \
      the hex0-seed to normalized-provider stage0 chain requires a separate integration change";
 
 pub(crate) fn validate_stagex_lineage_manifest(
     manifest_bytes: &[u8],
 ) -> Result<crunch_bootstrap_core::LineageManifest, Vec<ManifestDiagnostic>> {
     assert!(!manifest_bytes.is_empty(), "lineage manifest bytes must not be empty");
-    let manifest: crunch_bootstrap_core::LineageManifest =
-        serde_json::from_slice(manifest_bytes).map_err(|err| {
-            vec![ManifestDiagnostic::new(
-                "stagex-lineage-manifest",
-                format!("parsing StageX lineage manifest: {err}"),
-            )]
-        })?;
+    let manifest: crunch_bootstrap_core::LineageManifest = serde_json::from_slice(manifest_bytes).map_err(|err| {
+        vec![ManifestDiagnostic::new(
+            "stagex-lineage-manifest",
+            format!("parsing StageX lineage manifest: {err}"),
+        )]
+    })?;
 
     let result = crunch_bootstrap_core::validate_lineage(&manifest);
     if !result.is_valid() {
