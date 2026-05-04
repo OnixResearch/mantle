@@ -69,4 +69,3 @@ lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
 lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
 lib/sh/strtoimax.c:38: error: declaration expected
 lib/sh/strtoimax.c:38: error: declaration expected
-
