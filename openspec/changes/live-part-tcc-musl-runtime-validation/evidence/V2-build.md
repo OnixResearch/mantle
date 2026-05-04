@@ -25,3 +25,5 @@ Validation now fails at the first musl prerequisite, not at `tcc-0.9.27-musl-pre
 - message: `dependency musl-1.1.24-tcc.drv failed`
 
 This records the new downstream boundary after the prep compiler repair.
+
+Direct `musl-1.1.24-tcc` evidence: see `evidence/V2-musl-1.1.24-tcc-direct-validation.md` and root derivation log `evidence/V2-musl-1.1.24-tcc-direct-root-derivation.log`. The exploratory repair advanced through configure/startup-object barriers but still failed at musl object compilation, so no implementation patch is committed.
