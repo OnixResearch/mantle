@@ -104,6 +104,8 @@ let make_src = crunch.fetchTarball {
         version.o vpath.o hash.o remote-stub.o getloadavg.o \
         fnmatch.o glob.o
 
+      $BB chmod 755 make
+
       # Verify
       ./make --version
 

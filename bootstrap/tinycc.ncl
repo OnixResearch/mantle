@@ -446,6 +446,11 @@ EOF
 EOF
         write_tinycc_stdarg_header "$MES_BUILD/include/stdarg.h"
         write_tinycc_stdarg_header "$INCDIR/stdarg.h"
+        # TinyCC's inline-asm register allocator can choose %rax for the
+        # `_exit(int code)` input unless the syscall clobbers are explicit;
+        # then the preceding `mov $SYS_exit,%rax` makes every exit status 60.
+        $BB sed -i 's/: \/\/ no outputs "=" (r)/: \/\/ no outputs/' "$MES_BUILD/lib/linux/${MES_ARCH}-mes-gcc/_exit.c"
+        $BB sed -i 's/: "rm" (code)/: "r" (code)\n       : "rax", "rdi"/' "$MES_BUILD/lib/linux/${MES_ARCH}-mes-gcc/_exit.c"
         create_unified_mes_libc_source
         cd "$MES_BUILD"
         $BB cat > va_list.c <<'EOF'

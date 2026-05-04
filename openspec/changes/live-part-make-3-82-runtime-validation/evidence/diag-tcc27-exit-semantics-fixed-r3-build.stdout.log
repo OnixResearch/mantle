@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-tcc27-exit-semantics.ncl",
+  "output_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/1j5bn56daczxcy1rbx3gdyqr7bhajias-diag-tcc27-exit-semantics.drv",
+      "label": "diag-tcc27-exit-semantics",
+      "cached": false,
+      "log_file": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state/logs/1j5bn56daczxcy1rbx3gdyqr7bhajias-diag-tcc27-exit-semantics.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-store/z4c8hlryivx75854m1xp3my0iv5jmm93-diag-tcc27-exit-semantics",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/z4c8hlryivx75854m1xp3my0iv5jmm93-diag-tcc27-exit-semantics",
+            "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state/attestations/artifacts/53de732099fc9cf65e60e6813e119d54e06182933215d6daab8987f8849e1ad9.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

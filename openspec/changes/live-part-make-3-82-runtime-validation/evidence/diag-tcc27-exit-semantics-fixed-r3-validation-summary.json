@@ -1,0 +1,32 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/diag-tcc27-exit-semantics.ncl",
+  "evidence_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3",
+  "store": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 0,
+  "warmups": [
+    {
+      "target": "bootstrap/tinycc.ncl",
+      "stdout": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/warmup-tinycc.stdout.log",
+      "stderr": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/warmup-tinycc.stderr.log",
+      "exit_code": 0,
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "failure_class": null,
+  "evidence": {
+    "doctor_json": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/doctor.json",
+    "build_stdout": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/build.stdout.log",
+    "build_stderr": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/build.stderr.log",
+    "summary_json": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/validation-summary.json",
+    "summary_md": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/target/bootstrap-validation/diag-tcc27-exit-semantics-fixed-r3/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777861359
+}

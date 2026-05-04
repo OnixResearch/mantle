@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/tinycc.ncl",
+  "output_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 0,
+    "cached_total": 1,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/ay9bb6gm4mkmxpd12hjhw2w4ia8d1b7w-tinycc-0.9.27.drv",
+      "label": "tinycc-0.9.27",
+      "cached": true,
+      "log_file": null,
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-store/qbjq5gwi38a1x895zl5rcp4gkrncspmy-tinycc-0.9.27",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/qbjq5gwi38a1x895zl5rcp4gkrncspmy-tinycc-0.9.27",
+            "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r2-state/attestations/artifacts/fb906b0692ec01f73bbc82b861e2d38e2516ff61c12c25e162f6a5323f11b110.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

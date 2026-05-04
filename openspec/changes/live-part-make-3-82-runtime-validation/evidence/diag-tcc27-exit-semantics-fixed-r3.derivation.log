@@ -1,0 +1,13 @@
+# crunch build log
+# derivation: diag-tcc27-exit-semantics
+# drv_path: 1j5bn56daczxcy1rbx3gdyqr7bhajias-diag-tcc27-exit-semantics.drv
+# status: success
+# timestamp: 1777861359
+
+return0.rc=0
+return7.rc=7
+exit0.rc=0
+exit7.rc=7
+underscore_exit0.rc=0
+underscore_exit7.rc=7
+

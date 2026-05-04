@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/make-tcc.ncl",
+  "output_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r1-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r1-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/r7s4m98idga5phd79nhmbwhd8w1nrx7k-make-3.82-tcc.drv",
+      "label": "make-3.82-tcc",
+      "cached": false,
+      "log_file": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r1-state/logs/r7s4m98idga5phd79nhmbwhd8w1nrx7k-make-3.82-tcc.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r1-store/24na3y8ni0rq2l7gaf3syrq5nq4nj6ns-make-3.82-tcc",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/24na3y8ni0rq2l7gaf3syrq5nq4nj6ns-make-3.82-tcc",
+            "path": "/tmp/hermes-worktrees/crunch/make-exit60-diagnostic/.crunch-drain/diag-tcc27-exit-semantics-fixed-r1-state/attestations/artifacts/986a3ffa34054b66f895a055da45f817c5cabc38a02e3fb7e49681f8f7a175bf.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
