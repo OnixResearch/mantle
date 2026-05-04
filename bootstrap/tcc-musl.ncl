@@ -226,6 +226,22 @@ static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
         $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's/const char filename../const char *filename/' tccelf.c
 
+
+        # Mes/TinyCC varargs can corrupt tcctools.c archive size fields, which
+        # makes later `tcc -ar` outputs unreadable by TinyCC/archive readers.
+        # Avoid sprintf for the fixed-width ar header size columns.
+        $BB sed -i '/static int ar_usage/i\
+static void crunch_ar_size(char dst[10], unsigned long v)\
+{\
+    char tmp[20]; int i = 0, j = 0;\
+    do { tmp[i++] = 48 + (v % 10); v /= 10; } while (v && i < 20);\
+    while (i && j < 10) dst[j++] = tmp[--i];\
+    while (j < 10) dst[j++] = 32;\
+}\
+' tcctools.c
+        $BB sed -i '/sprintf(stmp, .*-10d.*, fsize);/{N;s|.*\n.*|        crunch_ar_size(arhdro.ar_size, (unsigned long)fsize);|;}' tcctools.c
+        $BB sed -i '/sprintf(stmp, .*-10d.*, (int)(strpos/{N;s|.*\n.*|    crunch_ar_size(arhdr.ar_size, (unsigned long)(strpos + (funccnt+1) * sizeof(int)));|;}' tcctools.c
+
         # Carry the same Mes/TCC source-normalization seams used by the
         # predecessor compiler. The 0.9.26 handoff still inherits Mes-built
         # x86_64 codegen defects around aggregate SValue copies and variable

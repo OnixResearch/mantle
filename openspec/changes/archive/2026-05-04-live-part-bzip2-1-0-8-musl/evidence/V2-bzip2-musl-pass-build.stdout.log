@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/bzip2-1.0.8-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/bzip2-musl15-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/lh4x6mpjs7dkp5wi4h2r056nkmzzx11f-bzip2-1.0.8-musl.drv",
+      "label": "bzip2-1.0.8-musl",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/lh4x6mpjs7dkp5wi4h2r056nkmzzx11f-bzip2-1.0.8-musl.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/bzip2-musl15-store/xwwwxypc42pncdzl4bj46cwjw4lzdhfz-bzip2-1.0.8-musl",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/xwwwxypc42pncdzl4bj46cwjw4lzdhfz-bzip2-1.0.8-musl",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/0e97c74866a0a8cb9c49da906dc8e3cd76b632b77f4d13658558c08d2aa47398.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

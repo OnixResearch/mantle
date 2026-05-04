@@ -1,0 +1,53 @@
+# crunch build log
+# derivation: bzip2-1.0.8-musl
+# drv_path: lh4x6mpjs7dkp5wi4h2r056nkmzzx11f-bzip2-1.0.8-musl.drv
+# status: success
+# timestamp: 1777923402
+
+-> blocksort.c
+<- blocksort.o
+-> huffman.c
+<- huffman.o
+-> crctable.c
+<- crctable.o
+-> randtable.c
+<- randtable.o
+-> compress.c
+<- compress.o
+-> decompress.c
+<- decompress.o
+-> bzlib.c
+<- bzlib.o
+-> bzip2.c
+<- bzip2.o
+-> bzip2 link
+tcc version 0.9.26 (x86_64 Linux)
+-> crunch-start.o
+-> bzip2.o
+-> blocksort.o
+-> huffman.o
+-> crctable.o
+-> randtable.o
+-> compress.o
+-> decompress.o
+-> bzlib.o
+-> /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a
+-> /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+<- bzip2
+<- bzip2
+-> bzip2recover.c
+<- bzip2recover.o
+-> bzip2recover link
+tcc version 0.9.26 (x86_64 Linux)
+-> crunch-start.o
+-> bzip2recover.o
+-> /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a
+-> /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+<- bzip2recover
+<- bzip2recover
+
+Segmentation fault (core dumped)
+Segmentation fault (core dumped)
+Segmentation fault (core dumped)
+Segmentation fault (core dumped)
+Segmentation fault (core dumped)

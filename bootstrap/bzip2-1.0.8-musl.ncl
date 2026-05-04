@@ -5,6 +5,7 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
+let tcc26 = import "tinycc-mes.ncl" in
 let tcc = import "tcc-musl-v2.ncl" in
 let musl = import "musl-1.1.24-tcc-musl.ncl" in
 let make = import "make-tcc.ncl" in
@@ -33,13 +34,14 @@ let bzip2_src = crunch.fetchTarball {
         echo "ERROR: input $1 not found" >&2; exit 1
       }
 
+      TCC26=$(find_input tinycc-0.9.26)
       TCC=$(find_input tcc-0.9.27-musl-v2)
       MUSL=$(find_input musl-1.1.24-tcc-musl)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input bzip2-1.0.8-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$STAGE0/bin:$PATH"
+      export PATH="$TCC26/bin:$TCC/bin:$MAKE/bin:$STAGE0/bin:$PATH"
 
       WORK=/tmp/bzip2-musl-build
       $BB mkdir -p "$WORK"
@@ -51,17 +53,45 @@ let bzip2_src = crunch.fetchTarball {
 
       CFLAGS="-I$MUSL/include -D_FILE_OFFSET_BITS=64"
 
+      $BB cat > crunch-start.c <<'EOF'
+int main(int argc, char **argv, char **envp);
+void _start(void) { char *argv[1]; argv[0] = 0; main(0, argv, argv); for (;;) {} }
+EOF
+      tcc -c $CFLAGS crunch-start.c -o crunch-start.o
+
       for src in blocksort huffman crctable randtable compress decompress bzlib; do
+        echo "-> $src.c"
         tcc -c $CFLAGS $src.c -o $src.o
+        test -s $src.o
+        echo "<- $src.o"
       done
-      tcc -ar cr libbz2.a blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o
 
+      # The Mes-linked tcc-musl-v2 bridge can still hit its fragile library
+      # search/diagnostic path for -L/-l and implicit startup/runtime lookup.
+      # Keep this stage explicit: compile objects, then link with declared musl
+      # crt/libc and installed libtcc1 directly.
+      echo "-> bzip2.c"
       tcc -c $CFLAGS bzip2.c -o bzip2.o
-      tcc -static bzip2.o -L. -lbz2 -o bzip2
+      test -s bzip2.o
+      echo "<- bzip2.o"
+      echo "-> bzip2 link"
+      tcc -v -nostdlib -static -o bzip2 \
+        crunch-start.o bzip2.o \
+        blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o \
+        "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
+      echo "<- bzip2"
 
+      echo "-> bzip2recover.c"
       tcc -c $CFLAGS bzip2recover.c -o bzip2recover.o
-      tcc -static bzip2recover.o -o bzip2recover
+      test -s bzip2recover.o
+      echo "<- bzip2recover.o"
+      echo "-> bzip2recover link"
+      tcc -v -nostdlib -static -o bzip2recover \
+        crunch-start.o bzip2recover.o \
+        "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
+      echo "<- bzip2recover"
 
+      $BB chmod 755 ./bzip2 ./bzip2recover
       test -x ./bzip2
       test -x ./bzip2recover
       ./bzip2 --help 2>&1 | $BB head -1
@@ -85,5 +115,5 @@ let bzip2_src = crunch.fetchTarball {
       "$out/bin/bzip2recover" 2>&1 | $BB head -1
     "%,
   ],
-  inputs = [stage0, tcc, musl, make, bzip2_src],
+  inputs = [stage0, tcc26, tcc, musl, make, bzip2_src],
 } | crunch.Derivation

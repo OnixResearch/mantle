@@ -103,7 +103,7 @@ long strtol(const char*s,char**e,int b){long v=0;int neg=0;if(*s=='-'){neg=1;s++
 long long strtoll(const char*s,char**e,int b){return strtol(s,e,b);} unsigned long strtoul(const char*s,char**e,int b){return (unsigned long)strtol(s,e,b);} unsigned long long strtoull(const char*s,char**e,int b){return (unsigned long long)strtol(s,e,b);}
 double strtod(const char*s,char**e){if(e)*e=(char*)s;return 0;} float strtof(const char*s,char**e){if(e)*e=(char*)s;return 0;} long double strtold(const char*s,char**e){if(e)*e=(char*)s;return 0;}
 void qsort(void*b,size_t n,size_t s,int(*c)(const void*,const void*)){(void)b;(void)n;(void)s;(void)c;} void *bsearch(const void*k,const void*b,size_t n,size_t s,int(*c)(const void*,const void*)){(void)k;(void)b;(void)n;(void)s;(void)c;return 0;}
-void exit(int c){(void)c;for(;;){}} void _Exit(int c){(void)c;for(;;){}} int system(const char*s){(void)s;return -1;} char *realpath(const char*p,char*r){(void)p;(void)r;return 0;}
+void _Exit(int c){(void)c;for(;;){}} int system(const char*s){(void)s;return -1;} char *realpath(const char*p,char*r){(void)p;(void)r;return 0;}
 EOF
       $BB mkdir -p src/stdio
       cat > src/stdio/minstdio.c <<'EOF'
@@ -115,12 +115,14 @@ FILE *stdin=&fake[0], *stdout=&fake[1], *stderr=&fake[2];
 int printf(const char *fmt, ...) { (void)fmt; return 0; }
 int fprintf(FILE *f, const char *fmt, ...) { (void)f; (void)fmt; return 0; }
 int snprintf(char *s, size_t n, const char *fmt, ...) { (void)fmt; if (s && n) s[0]=0; return 0; }
+int sprintf(char *s, const char *fmt, ...) { (void)fmt; if (s) s[0]=0; return 0; }
 int vsnprintf(char *s, size_t n, const char *fmt, va_list ap) { (void)fmt; (void)ap; if (s && n) s[0]=0; return 0; }
 int vfprintf(FILE *f, const char *fmt, va_list ap) { (void)f; (void)fmt; (void)ap; return 0; }
 int putchar(int c) { return c; }
 int puts(const char *s) { (void)s; return 0; }
 int fputs(const char *s, FILE *f) { (void)s; (void)f; return 0; }
 int fputc(int c, FILE *f) { (void)f; return c; }
+int putc(int c, FILE *f) { return fputc(c, f); }
 FILE *fopen(const char *p, const char *m) { (void)p; (void)m; return 0; }
 FILE *fdopen(int fd, const char *m) { (void)fd; (void)m; return 0; }
 int fclose(FILE *f) { (void)f; return 0; }
@@ -129,6 +131,7 @@ size_t fread(void *p, size_t s, size_t n, FILE *f) { (void)p; (void)s; (void)n; 
 size_t fwrite(const void *p, size_t s, size_t n, FILE *f) { (void)p; (void)f; return n; }
 char *fgets(char *s, int n, FILE *f) { (void)s; (void)n; (void)f; return 0; }
 int fgetc(FILE *f) { (void)f; return -1; }
+int getc(FILE *f) { return fgetc(f); }
 int ungetc(int c, FILE *f) { (void)c; (void)f; return -1; }
 int feof(FILE *f) { (void)f; return 1; }
 int ferror(FILE *f) { (void)f; return 0; }
@@ -199,6 +202,27 @@ EOF
       cat > src/fcntl/fcntl.c <<'EOF'
 #include <fcntl.h>
 int fcntl(int fd, int cmd, ...) { (void)fd; (void)cmd; return -1; }
+EOF
+      $BB mkdir -p src/stat src/signal src/time
+      cat > src/stat/minstat.c <<'EOF'
+struct stat { unsigned long st_dev; unsigned long st_ino; unsigned long st_nlink; unsigned int st_mode; unsigned int st_uid; unsigned int st_gid; unsigned long st_rdev; long st_size; long st_blksize; long st_blocks; long st_atime; long st_mtime; long st_ctime; };
+int stat(const char *p, struct stat *st) { (void)p; if (st) st->st_mode = 0; return -1; }
+int lstat(const char *p, struct stat *st) { return stat(p, st); }
+int fstat(int fd, struct stat *st) { (void)fd; return stat(0, st); }
+int fchmod(int fd, unsigned int mode) { (void)fd; (void)mode; return -1; }
+int fchown(int fd, unsigned int uid, unsigned int gid) { (void)fd; (void)uid; (void)gid; return -1; }
+EOF
+      cat > src/stdio/remove.c <<'EOF'
+int unlink(const char *p);
+int remove(const char *p) { return unlink(p); }
+EOF
+      cat > src/time/utime.c <<'EOF'
+struct utimbuf { long actime; long modtime; };
+int utime(const char *p, const struct utimbuf *t) { (void)p; (void)t; return -1; }
+EOF
+      cat > src/signal/signal.c <<'EOF'
+typedef void (*sighandler_t)(int);
+sighandler_t signal(int sig, sighandler_t h) { (void)sig; return h; }
 EOF
       cat > crt/crt1.c <<'EOF'
 void _start(void) { for (;;) {} }
