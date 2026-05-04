@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: bzip2-1.0.8-tcc
+# drv_path: ks548gvzl5yvzhfllzfhdbpik2mpzyac-bzip2-1.0.8-tcc.drv
+# status: failure
+# timestamp: 1777868652
+
+dependency patch-2.5.9-tcc.drv failed
