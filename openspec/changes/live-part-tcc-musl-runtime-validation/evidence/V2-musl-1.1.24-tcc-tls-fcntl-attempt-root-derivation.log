@@ -1,0 +1,314 @@
+# crunch build log
+# derivation: musl-1.1.24-tcc
+# drv_path: xxy352bnp8y0rrbwj296zp60hbvdr44a-musl-1.1.24-tcc.drv
+# status: failure
+# timestamp: 1777916708
+
+store error: build: nonzero exit code: exit status: 2
+checking for C compiler... tcc
+checking whether C compiler works... yes
+checking whether compiler accepts -Werror=unknown-warning-option... yes
+checking whether compiler accepts -Werror=unused-command-line-argument... yes
+checking whether compiler accepts -Werror=ignored-optimization-argument... yes
+checking whether linker accepts -Werror=unknown-warning-option... no
+checking whether linker accepts -Werror=unused-command-line-argument... no
+checking for C compiler family... unknown
+checking for toolchain wrapper to build... none
+checking target system type... x86_64-linux-musl
+checking whether compiler accepts -std=c99... yes
+checking whether compiler accepts -nostdinc... yes
+checking whether compiler accepts -ffreestanding... yes
+checking whether compiler accepts -fexcess-precision=standard... yes
+checking whether compiler accepts -frounding-math... yes
+checking whether compiler needs attribute((may_alias)) suppression... no
+checking whether compiler accepts -Wa,--noexecstack... yes
+checking whether compiler accepts -fno-stack-protector... yes
+checking whether compiler accepts -fno-tree-loop-distribute-patterns... yes
+checking whether we should preprocess assembly to add debugging information... no
+checking for optimization settings... using defaults
+checking whether compiler accepts -Os... yes
+components to be optimized for speed: internal malloc string
+checking whether compiler accepts -pipe... yes
+checking whether compiler accepts -fomit-frame-pointer... yes
+checking whether compiler accepts -fno-unwind-tables... yes
+checking whether compiler accepts -fno-asynchronous-unwind-tables... yes
+checking whether compiler accepts -ffunction-sections... yes
+checking whether compiler accepts -fdata-sections... yes
+checking whether compiler accepts -Werror=implicit-function-declaration... yes
+checking whether compiler accepts -Werror=implicit-int... yes
+checking whether compiler accepts -Werror=pointer-sign... yes
+checking whether compiler accepts -Werror=pointer-arith... yes
+checking preprocessor condition __PIC__... false
+checking whether linker accepts -Wl,--sort-section,alignment... no
+checking whether linker accepts -Wl,--sort-common... no
+checking whether linker accepts -Wl,--gc-sections... no
+checking whether linker accepts -Wl,--hash-style=both... no
+checking whether linker accepts -Wl,--no-undefined... no
+checking whether linker accepts -Wl,--exclude-libs=ALL... no
+checking whether linker accepts -Wl,--dynamic-list=./dynamic.list... no
+checking whether linker accepts -lgcc... no
+checking whether linker accepts -lcompiler_rt... no
+using compiler runtime libraries:
+checking preprocessor condition __ILP32__... false
+checking whether compiler's long double definition matches float.h... yes
+checking preprocessor condition __FAST_MATH__... false
+creating config.mak... done
+mkdir -p lib
+mkdir -p obj/crt
+mkdir -p obj/crt/x86_64
+mkdir -p obj/ldso
+mkdir -p obj/src/conf
+mkdir -p obj/src/crypt
+mkdir -p obj/src/ctype
+mkdir -p obj/src/dirent
+mkdir -p obj/src/env
+mkdir -p obj/src/errno
+mkdir -p obj/src/exit
+mkdir -p obj/src/fcntl
+mkdir -p obj/src/fenv
+mkdir -p obj/src/fenv/x86_64
+mkdir -p obj/src/internal
+mkdir -p obj/src/ipc
+mkdir -p obj/src/ldso
+mkdir -p obj/src/ldso/x86_64
+mkdir -p obj/src/legacy
+mkdir -p obj/src/linux
+mkdir -p obj/src/locale
+mkdir -p obj/src/malloc
+mkdir -p obj/src/math
+mkdir -p obj/src/math/x86_64
+mkdir -p obj/src/misc
+mkdir -p obj/src/mman
+mkdir -p obj/src/mq
+mkdir -p obj/src/multibyte
+mkdir -p obj/src/network
+mkdir -p obj/src/passwd
+mkdir -p obj/src/prng
+mkdir -p obj/src/process
+mkdir -p obj/src/process/x86_64
+mkdir -p obj/src/regex
+mkdir -p obj/src/sched
+mkdir -p obj/src/search
+mkdir -p obj/src/select
+mkdir -p obj/src/setjmp/x86_64
+mkdir -p obj/src/signal
+mkdir -p obj/src/signal/x86_64
+mkdir -p obj/src/stat
+mkdir -p obj/src/stdio
+mkdir -p obj/src/stdlib
+mkdir -p obj/src/string
+mkdir -p obj/src/string/x86_64
+mkdir -p obj/src/temp
+mkdir -p obj/src/termios
+mkdir -p obj/src/thread
+mkdir -p obj/src/time
+mkdir -p obj/src/thread/x86_64
+mkdir -p obj/src/unistd
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -DCRT -c -o obj/crt/crt1.o crt/crt1.c ; chmod u+rw obj/crt/crt1.o
+cp obj/crt/crt1.o lib/crt1.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -DCRT -c -o obj/crt/x86_64/crti.o crt/x86_64/crti.s ; chmod u+rw obj/crt/x86_64/crti.o
+cp obj/crt/x86_64/crti.o lib/crti.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -DCRT -c -o obj/crt/x86_64/crtn.o crt/x86_64/crtn.s ; chmod u+rw obj/crt/x86_64/crtn.o
+cp obj/crt/x86_64/crtn.o lib/crtn.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/conf/confstr.o src/conf/confstr.c ; chmod u+rw obj/src/conf/confstr.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/conf/fpathconf.o src/conf/fpathconf.c ; chmod u+rw obj/src/conf/fpathconf.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/conf/legacy.o src/conf/legacy.c ; chmod u+rw obj/src/conf/legacy.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/conf/pathconf.o src/conf/pathconf.c ; chmod u+rw obj/src/conf/pathconf.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/conf/sysconf.o src/conf/sysconf.c ; chmod u+rw obj/src/conf/sysconf.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt.o src/crypt/crypt.c ; chmod u+rw obj/src/crypt/crypt.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_blowfish.o src/crypt/crypt_blowfish.c ; chmod u+rw obj/src/crypt/crypt_blowfish.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_des.o src/crypt/crypt_des.c ; chmod u+rw obj/src/crypt/crypt_des.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_md5.o src/crypt/crypt_md5.c ; chmod u+rw obj/src/crypt/crypt_md5.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_r.o src/crypt/crypt_r.c ; chmod u+rw obj/src/crypt/crypt_r.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_sha256.o src/crypt/crypt_sha256.c ; chmod u+rw obj/src/crypt/crypt_sha256.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/crypt_sha512.o src/crypt/crypt_sha512.c ; chmod u+rw obj/src/crypt/crypt_sha512.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/crypt/encrypt.o src/crypt/encrypt.c ; chmod u+rw obj/src/crypt/encrypt.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/__ctype_b_loc.o src/ctype/__ctype_b_loc.c ; chmod u+rw obj/src/ctype/__ctype_b_loc.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/__ctype_get_mb_cur_max.o src/ctype/__ctype_get_mb_cur_max.c ; chmod u+rw obj/src/ctype/__ctype_get_mb_cur_max.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/__ctype_tolower_loc.o src/ctype/__ctype_tolower_loc.c ; chmod u+rw obj/src/ctype/__ctype_tolower_loc.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/__ctype_toupper_loc.o src/ctype/__ctype_toupper_loc.c ; chmod u+rw obj/src/ctype/__ctype_toupper_loc.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isalnum.o src/ctype/isalnum.c ; chmod u+rw obj/src/ctype/isalnum.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isalpha.o src/ctype/isalpha.c ; chmod u+rw obj/src/ctype/isalpha.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isascii.o src/ctype/isascii.c ; chmod u+rw obj/src/ctype/isascii.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isblank.o src/ctype/isblank.c ; chmod u+rw obj/src/ctype/isblank.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iscntrl.o src/ctype/iscntrl.c ; chmod u+rw obj/src/ctype/iscntrl.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isdigit.o src/ctype/isdigit.c ; chmod u+rw obj/src/ctype/isdigit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isgraph.o src/ctype/isgraph.c ; chmod u+rw obj/src/ctype/isgraph.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/islower.o src/ctype/islower.c ; chmod u+rw obj/src/ctype/islower.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isprint.o src/ctype/isprint.c ; chmod u+rw obj/src/ctype/isprint.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/ispunct.o src/ctype/ispunct.c ; chmod u+rw obj/src/ctype/ispunct.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isspace.o src/ctype/isspace.c ; chmod u+rw obj/src/ctype/isspace.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isupper.o src/ctype/isupper.c ; chmod u+rw obj/src/ctype/isupper.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswalnum.o src/ctype/iswalnum.c ; chmod u+rw obj/src/ctype/iswalnum.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswalpha.o src/ctype/iswalpha.c ; chmod u+rw obj/src/ctype/iswalpha.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswblank.o src/ctype/iswblank.c ; chmod u+rw obj/src/ctype/iswblank.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswcntrl.o src/ctype/iswcntrl.c ; chmod u+rw obj/src/ctype/iswcntrl.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswctype.o src/ctype/iswctype.c ; chmod u+rw obj/src/ctype/iswctype.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswdigit.o src/ctype/iswdigit.c ; chmod u+rw obj/src/ctype/iswdigit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswgraph.o src/ctype/iswgraph.c ; chmod u+rw obj/src/ctype/iswgraph.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswlower.o src/ctype/iswlower.c ; chmod u+rw obj/src/ctype/iswlower.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswprint.o src/ctype/iswprint.c ; chmod u+rw obj/src/ctype/iswprint.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswpunct.o src/ctype/iswpunct.c ; chmod u+rw obj/src/ctype/iswpunct.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswspace.o src/ctype/iswspace.c ; chmod u+rw obj/src/ctype/iswspace.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswupper.o src/ctype/iswupper.c ; chmod u+rw obj/src/ctype/iswupper.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/iswxdigit.o src/ctype/iswxdigit.c ; chmod u+rw obj/src/ctype/iswxdigit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/isxdigit.o src/ctype/isxdigit.c ; chmod u+rw obj/src/ctype/isxdigit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/toascii.o src/ctype/toascii.c ; chmod u+rw obj/src/ctype/toascii.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/tolower.o src/ctype/tolower.c ; chmod u+rw obj/src/ctype/tolower.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/toupper.o src/ctype/toupper.c ; chmod u+rw obj/src/ctype/toupper.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/towctrans.o src/ctype/towctrans.c ; chmod u+rw obj/src/ctype/towctrans.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/wcswidth.o src/ctype/wcswidth.c ; chmod u+rw obj/src/ctype/wcswidth.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/wctrans.o src/ctype/wctrans.c ; chmod u+rw obj/src/ctype/wctrans.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/ctype/wcwidth.o src/ctype/wcwidth.c ; chmod u+rw obj/src/ctype/wcwidth.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/alphasort.o src/dirent/alphasort.c ; chmod u+rw obj/src/dirent/alphasort.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/closedir.o src/dirent/closedir.c ; chmod u+rw obj/src/dirent/closedir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/dirfd.o src/dirent/dirfd.c ; chmod u+rw obj/src/dirent/dirfd.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/fdopendir.o src/dirent/fdopendir.c ; chmod u+rw obj/src/dirent/fdopendir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/opendir.o src/dirent/opendir.c ; chmod u+rw obj/src/dirent/opendir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/readdir.o src/dirent/readdir.c ; chmod u+rw obj/src/dirent/readdir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/readdir_r.o src/dirent/readdir_r.c ; chmod u+rw obj/src/dirent/readdir_r.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/rewinddir.o src/dirent/rewinddir.c ; chmod u+rw obj/src/dirent/rewinddir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/scandir.o src/dirent/scandir.c ; chmod u+rw obj/src/dirent/scandir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/seekdir.o src/dirent/seekdir.c ; chmod u+rw obj/src/dirent/seekdir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/telldir.o src/dirent/telldir.c ; chmod u+rw obj/src/dirent/telldir.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/dirent/versionsort.o src/dirent/versionsort.c ; chmod u+rw obj/src/dirent/versionsort.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/__environ.o src/env/__environ.c ; chmod u+rw obj/src/env/__environ.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -c -o obj/src/env/__init_tls.o src/env/__init_tls.c ; chmod u+rw obj/src/env/__init_tls.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -c -o obj/src/env/__libc_start_main.o src/env/__libc_start_main.c ; chmod u+rw obj/src/env/__libc_start_main.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/__reset_tls.o src/env/__reset_tls.c ; chmod u+rw obj/src/env/__reset_tls.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -fno-stack-protector -c -o obj/src/env/__stack_chk_fail.o src/env/__stack_chk_fail.c ; chmod u+rw obj/src/env/__stack_chk_fail.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/clearenv.o src/env/clearenv.c ; chmod u+rw obj/src/env/clearenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/getenv.o src/env/getenv.c ; chmod u+rw obj/src/env/getenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/putenv.o src/env/putenv.c ; chmod u+rw obj/src/env/putenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/secure_getenv.o src/env/secure_getenv.c ; chmod u+rw obj/src/env/secure_getenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/setenv.o src/env/setenv.c ; chmod u+rw obj/src/env/setenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/env/unsetenv.o src/env/unsetenv.c ; chmod u+rw obj/src/env/unsetenv.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/errno/__errno_location.o src/errno/__errno_location.c ; chmod u+rw obj/src/errno/__errno_location.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/errno/strerror.o src/errno/strerror.c ; chmod u+rw obj/src/errno/strerror.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/_Exit.o src/exit/_Exit.c ; chmod u+rw obj/src/exit/_Exit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/abort.o src/exit/abort.c ; chmod u+rw obj/src/exit/abort.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/assert.o src/exit/assert.c ; chmod u+rw obj/src/exit/assert.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/at_quick_exit.o src/exit/at_quick_exit.c ; chmod u+rw obj/src/exit/at_quick_exit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/atexit.o src/exit/atexit.c ; chmod u+rw obj/src/exit/atexit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/exit.o src/exit/exit.c ; chmod u+rw obj/src/exit/exit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/exit/quick_exit.o src/exit/quick_exit.c ; chmod u+rw obj/src/exit/quick_exit.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/fcntl/creat.o src/fcntl/creat.c ; chmod u+rw obj/src/fcntl/creat.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/fcntl/fcntl.o src/fcntl/fcntl.c ; chmod u+rw obj/src/fcntl/fcntl.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/fcntl/open.o src/fcntl/open.c ; chmod u+rw obj/src/fcntl/open.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/fcntl/openat.o src/fcntl/openat.c ; chmod u+rw obj/src/fcntl/openat.o
+tcc -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -Wa,--noexecstack -D_XOPEN_SOURCE=700 -I./arch/x86_64 -I./arch/generic -Iobj/src/internal -I./src/include -I./src/internal -Iobj/include -I./include  -Os -pipe -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -static -c -o obj/src/fcntl/posix_fadvise.o src/fcntl/posix_fadvise.c ; chmod u+rw obj/src/fcntl/posix_fadvise.o
+
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 53: tr: not found
+./configure: line 776: rm: not found
+Makefile:93: target `obj/ldso' given more than once in the same rule.
+Makefile:93: target `obj/src/conf' given more than once in the same rule.
+Makefile:93: target `obj/src/crypt' given more than once in the same rule.
+Makefile:93: target `obj/src/conf' given more than once in the same rule.
+Makefile:93: target `obj/src/crypt' given more than once in the same rule.
+Makefile:93: target `obj/src/ctype' given more than once in the same rule.
+Makefile:93: target `obj/src/dirent' given more than once in the same rule.
+Makefile:93: target `obj/src/ctype' given more than once in the same rule.
+Makefile:93: target `obj/src/dirent' given more than once in the same rule.
+Makefile:93: target `obj/src/env' given more than once in the same rule.
+Makefile:93: target `obj/src/env' given more than once in the same rule.
+Makefile:93: target `obj/src/exit' given more than once in the same rule.
+Makefile:93: target `obj/src/fcntl' given more than once in the same rule.
+Makefile:93: target `obj/src/fenv' given more than once in the same rule.
+Makefile:93: target `obj/src/fcntl' given more than once in the same rule.
+Makefile:93: target `obj/src/fenv' given more than once in the same rule.
+Makefile:93: target `obj/src/internal' given more than once in the same rule.
+Makefile:93: target `obj/src/ipc' given more than once in the same rule.
+Makefile:93: target `obj/src/internal' given more than once in the same rule.
+Makefile:93: target `obj/src/ipc' given more than once in the same rule.
+Makefile:93: target `obj/src/ipc' given more than once in the same rule.
+Makefile:93: target `obj/src/ldso' given more than once in the same rule.
+Makefile:93: target `obj/src/ldso' given more than once in the same rule.
+Makefile:93: target `obj/src/legacy' given more than once in the same rule.
+Makefile:93: target `obj/src/ldso' given more than once in the same rule.
+Makefile:93: target `obj/src/ldso/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/legacy' given more than once in the same rule.
+Makefile:93: target `obj/src/linux' given more than once in the same rule.
+Makefile:93: target `obj/src/locale' given more than once in the same rule.
+Makefile:93: target `obj/src/linux' given more than once in the same rule.
+Makefile:93: target `obj/src/locale' given more than once in the same rule.
+Makefile:93: target `obj/src/linux' given more than once in the same rule.
+Makefile:93: target `obj/src/locale' given more than once in the same rule.
+Makefile:93: target `obj/src/malloc' given more than once in the same rule.
+Makefile:93: target `obj/src/math' given more than once in the same rule.
+Makefile:93: target `obj/src/malloc' given more than once in the same rule.
+Makefile:93: target `obj/src/math' given more than once in the same rule.
+Makefile:93: target `obj/src/malloc' given more than once in the same rule.
+Makefile:93: target `obj/src/math' given more than once in the same rule.
+Makefile:93: target `obj/src/math/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/misc' given more than once in the same rule.
+Makefile:93: target `obj/src/math/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/misc' given more than once in the same rule.
+Makefile:93: target `obj/src/math/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/misc' given more than once in the same rule.
+Makefile:93: target `obj/src/mman' given more than once in the same rule.
+Makefile:93: target `obj/src/mq' given more than once in the same rule.
+Makefile:93: target `obj/src/mman' given more than once in the same rule.
+Makefile:93: target `obj/src/mq' given more than once in the same rule.
+Makefile:93: target `obj/src/mman' given more than once in the same rule.
+Makefile:93: target `obj/src/mq' given more than once in the same rule.
+Makefile:93: target `obj/src/multibyte' given more than once in the same rule.
+Makefile:93: target `obj/src/network' given more than once in the same rule.
+Makefile:93: target `obj/src/multibyte' given more than once in the same rule.
+Makefile:93: target `obj/src/network' given more than once in the same rule.
+Makefile:93: target `obj/src/multibyte' given more than once in the same rule.
+Makefile:93: target `obj/src/network' given more than once in the same rule.
+Makefile:93: target `obj/src/passwd' given more than once in the same rule.
+Makefile:93: target `obj/src/prng' given more than once in the same rule.
+Makefile:93: target `obj/src/passwd' given more than once in the same rule.
+Makefile:93: target `obj/src/prng' given more than once in the same rule.
+Makefile:93: target `obj/src/passwd' given more than once in the same rule.
+Makefile:93: target `obj/src/prng' given more than once in the same rule.
+Makefile:93: target `obj/src/process' given more than once in the same rule.
+Makefile:93: target `obj/src/regex' given more than once in the same rule.
+Makefile:93: target `obj/src/process' given more than once in the same rule.
+Makefile:93: target `obj/src/regex' given more than once in the same rule.
+Makefile:93: target `obj/src/sched' given more than once in the same rule.
+Makefile:93: target `obj/src/search' given more than once in the same rule.
+Makefile:93: target `obj/src/sched' given more than once in the same rule.
+Makefile:93: target `obj/src/search' given more than once in the same rule.
+Makefile:93: target `obj/src/sched' given more than once in the same rule.
+Makefile:93: target `obj/src/search' given more than once in the same rule.
+Makefile:93: target `obj/src/select' given more than once in the same rule.
+Makefile:93: target `obj/src/setjmp/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/signal' given more than once in the same rule.
+Makefile:93: target `obj/src/stat' given more than once in the same rule.
+Makefile:93: target `obj/src/signal' given more than once in the same rule.
+Makefile:93: target `obj/src/stat' given more than once in the same rule.
+Makefile:93: target `obj/src/signal' given more than once in the same rule.
+Makefile:93: target `obj/src/stat' given more than once in the same rule.
+Makefile:93: target `obj/src/stdio' given more than once in the same rule.
+Makefile:93: target `obj/src/stdlib' given more than once in the same rule.
+Makefile:93: target `obj/src/stdio' given more than once in the same rule.
+Makefile:93: target `obj/src/stdlib' given more than once in the same rule.
+Makefile:93: target `obj/src/stdio' given more than once in the same rule.
+Makefile:93: target `obj/src/stdlib' given more than once in the same rule.
+Makefile:93: target `obj/src/string' given more than once in the same rule.
+Makefile:93: target `obj/src/string' given more than once in the same rule.
+Makefile:93: target `obj/src/temp' given more than once in the same rule.
+Makefile:93: target `obj/src/string' given more than once in the same rule.
+Makefile:93: target `obj/src/temp' given more than once in the same rule.
+Makefile:93: target `obj/src/termios' given more than once in the same rule.
+Makefile:93: target `obj/src/thread' given more than once in the same rule.
+Makefile:93: target `obj/src/termios' given more than once in the same rule.
+Makefile:93: target `obj/src/thread' given more than once in the same rule.
+Makefile:93: target `obj/src/termios' given more than once in the same rule.
+Makefile:93: target `obj/src/thread' given more than once in the same rule.
+Makefile:93: target `obj/src/time' given more than once in the same rule.
+Makefile:93: target `obj/src/thread/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/time' given more than once in the same rule.
+Makefile:93: target `obj/src/thread/x86_64' given more than once in the same rule.
+Makefile:93: target `obj/src/time' given more than once in the same rule.
+Segmentation fault (core dumped)
+chmod: obj/src/fcntl/posix_fadvise.o: No such file or directory
+make: *** [obj/src/fcntl/posix_fadvise.o] Error 1
