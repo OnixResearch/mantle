@@ -12,3 +12,7 @@ Current failure class: build failure in `tcc-0.9.27-musl.drv` after first musl s
 ## Mes-host tcc-musl attempt
 
 Evidence: `V2-tcc-musl-mes-host-attempt-*`. Porting prep source normalizations and compiling with TinyCC 0.9.26 advanced past `tcc.c` object compilation to final host-link library search/diagnostic failure; no output path yet.
+
+## tcc-musl link repair pass
+
+A focused validation of `bootstrap/tcc-musl.ncl` passed after switching the handoff to the TinyCC 0.9.26 Mes host compiler, porting the proven TinyCC source-normalization seams, linking the bridge compiler with Mes runtime objects/archive, and narrowing the first-stage smoke to an installed-compiler object compile. Evidence prefix: `V2-tcc-musl-link-repair-*`.

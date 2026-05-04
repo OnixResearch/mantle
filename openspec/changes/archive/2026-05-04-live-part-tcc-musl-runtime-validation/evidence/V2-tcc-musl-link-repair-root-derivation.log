@@ -1,0 +1,29 @@
+# crunch build log
+# derivation: tcc-0.9.27-musl
+# drv_path: bnbl88smxkhwzgjl98qwi696s1j24s2y-tcc-0.9.27-musl.drv
+# status: success
+# timestamp: 1777921115
+
+tcc-musl: compile object with tinycc-0.9.26 host
+tcc version 0.9.26 (x86_64 Linux)
+-> tcc.c
+<- tcc-musl.o
+tcc-musl: link compiler executable with Mes runtime
+tcc version 0.9.26 (x86_64 Linux)
+-> mes-crt1.o
+-> mes-crti.o
+-> tcc-musl.o
+-> mes-libc.a
+-> mes-libtcc1.a
+-> mes-crtn.o
+<- tcc-musl
+tcc-musl: install outputs
+tcc-musl: install libtcc1
+tcc-musl: verify output contract
+tcc-musl: smoke compile
+tcc version 0.9.27 (x86_64 Linux)
+-> -> %s
+
+<- <- %s
+
+tcc-musl: smoke rc=0
