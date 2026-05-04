@@ -1,0 +1,87 @@
+# crunch build log
+# derivation: sed-4.0.9-tcc
+# drv_path: hrnnq4p2h40ilc9pjfiimjjlim0568w4-sed-4.0.9-tcc.drv
+# status: success
+# timestamp: 1777903284
+
+GNU sed version 4.0.9
+Copyright (C) 2003 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE,
+to the extent permitted by law.
+ok
+
+lib/getline.c:58: warning: implicit declaration of function 'malloc'
+lib/getline.c:58: warning: implicit declaration of function 'malloc'
+lib/getline.c:60: warning: implicit declaration of function 'realloc'
+lib/getline.c:60: warning: implicit declaration of function 'realloc'
+lib/getopt.c:576: warning: implicit declaration of function 'strcmp'
+lib/getopt.c:576: warning: implicit declaration of function 'strcmp'
+lib/utils.c:158: warning: implicit declaration of function 'clearerr'
+lib/utils.c:158: warning: implicit declaration of function 'clearerr'
+lib/utils.c:247: warning: implicit declaration of function 'getenv'
+lib/utils.c:247: warning: implicit declaration of function 'getenv'
+lib/utils.c:247: warning: assignment makes pointer from integer without a cast
+lib/utils.c:247: warning: assignment makes pointer from integer without a cast
+lib/utils.c:250: warning: assignment makes pointer from integer without a cast
+lib/utils.c:250: warning: assignment makes pointer from integer without a cast
+lib/utils.c:270: warning: implicit declaration of function 'calloc'
+lib/utils.c:270: warning: implicit declaration of function 'calloc'
+lib/utils.c:270: warning: assignment makes pointer from integer without a cast
+lib/utils.c:270: warning: assignment makes pointer from integer without a cast
+lib/utils.c:299: warning: implicit declaration of function 'realloc'
+lib/utils.c:299: warning: implicit declaration of function 'realloc'
+lib/utils.c:299: warning: assignment makes pointer from integer without a cast
+lib/utils.c:299: warning: assignment makes pointer from integer without a cast
+lib/utils.c:330: warning: implicit declaration of function 'free'
+lib/utils.c:330: warning: implicit declaration of function 'free'
+lib/utils.c:383: warning: assignment makes pointer from integer without a cast
+lib/utils.c:383: warning: assignment makes pointer from integer without a cast
+lib/obstack.c:293: warning: implicit declaration of function 'bcopy'
+lib/obstack.c:293: warning: implicit declaration of function 'bcopy'
+lib/obstack.c:377: warning: implicit declaration of function 'abort'
+lib/obstack.c:377: warning: implicit declaration of function 'abort'
+sed/compile.c:393: warning: assignment from incompatible pointer type
+sed/compile.c:393: warning: assignment from incompatible pointer type
+sed/compile.c:654: warning: assignment from incompatible pointer type
+sed/compile.c:654: warning: assignment from incompatible pointer type
+sed/compile.c:691: warning: assignment from incompatible pointer type
+sed/compile.c:691: warning: assignment from incompatible pointer type
+sed/compile.c:1048: warning: implicit declaration of function 'free'
+sed/compile.c:1048: warning: implicit declaration of function 'free'
+sed/compile.c:1197: warning: assignment from incompatible pointer type
+sed/compile.c:1197: warning: assignment from incompatible pointer type
+sed/compile.c:1593: warning: implicit declaration of function 'rewind'
+sed/compile.c:1593: warning: implicit declaration of function 'rewind'
+sed/execute.c:350: warning: implicit declaration of function 'getline'
+sed/execute.c:350: warning: implicit declaration of function 'getline'
+sed/execute.c:466: warning: implicit declaration of function 'index'
+sed/execute.c:466: warning: implicit declaration of function 'index'
+sed/execute.c:466: warning: assignment makes pointer from integer without a cast
+sed/execute.c:466: warning: assignment makes pointer from integer without a cast
+sed/execute.c:474: warning: assignment makes pointer from integer without a cast
+sed/execute.c:474: warning: assignment makes pointer from integer without a cast
+sed/execute.c:499: warning: implicit declaration of function 'clearerr'
+sed/execute.c:499: warning: implicit declaration of function 'clearerr'
+sed/execute.c:519: warning: implicit declaration of function 'rindex'
+sed/execute.c:519: warning: implicit declaration of function 'rindex'
+sed/execute.c:519: warning: assignment makes pointer from integer without a cast
+sed/execute.c:519: warning: assignment makes pointer from integer without a cast
+sed/execute.c:526: warning: implicit declaration of function 'mkstemp'
+sed/execute.c:526: warning: implicit declaration of function 'mkstemp'
+sed/execute.c:527: warning: implicit declaration of function 'free'
+sed/execute.c:527: warning: implicit declaration of function 'free'
+sed/execute.c:563: warning: implicit declaration of function 'fileno'
+sed/execute.c:563: warning: implicit declaration of function 'fileno'
+sed/execute.c:572: warning: implicit declaration of function 'close'
+sed/execute.c:572: warning: implicit declaration of function 'close'
+sed/regexp.c:84: warning: implicit declaration of function 'malloc'
+sed/regexp.c:84: warning: implicit declaration of function 'malloc'
+sed/regexp.c:84: warning: assignment makes pointer from integer without a cast
+sed/regexp.c:84: warning: assignment makes pointer from integer without a cast
+sed/fmt.c:381: warning: implicit declaration of function 'strchr'
+sed/fmt.c:381: warning: implicit declaration of function 'strchr'
+sed/sed.c:192: warning: implicit declaration of function 'atoi'
+sed/sed.c:192: warning: implicit declaration of function 'atoi'
+sed/sed.c:217: warning: implicit declaration of function 'index'
+sed/sed.c:217: warning: implicit declaration of function 'index'

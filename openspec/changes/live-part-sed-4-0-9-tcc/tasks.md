@@ -7,7 +7,7 @@
 ## Verification
 
 - [x] V1 Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/sed-tcc.ncl` and record the transcript. Evidence: `evidence/I3-source-pin-recheck.log`.
-- [ ] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/sed-tcc.ncl` with the documented bootstrap build environment and record output path plus elapsed time.
-- [ ] V3 Smoke-test the produced output contract for `sed 4.0.9 (tcc)`.
-- [ ] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage.
-- [ ] V5 Run `openspec validate live-part-sed-4-0-9-tcc` after evidence is recorded.
+- [x] V2 Run `/tmp/crunch-build/debug/crunch build bootstrap/sed-tcc.ncl` with the documented bootstrap build environment and record output path plus elapsed time. Evidence: `evidence/V2-build.md`.
+- [x] V3 Smoke-test the produced output contract for `sed 4.0.9 (tcc)`. Evidence: `evidence/V3-smoke.md`.
+- [x] V4 Scan the derivation and log for undeclared host-tool, path, or environment leakage. Evidence: `evidence/V4-host-leakage.md`.
+- [x] V5 Run `openspec validate live-part-sed-4-0-9-tcc` after evidence is recorded. Evidence: `evidence/V5-openspec-validate.log` (warnings only: active delta heading IDs).
