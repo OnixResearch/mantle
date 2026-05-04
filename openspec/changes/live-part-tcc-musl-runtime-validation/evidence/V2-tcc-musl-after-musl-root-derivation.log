@@ -1,0 +1,14 @@
+# crunch build log
+# derivation: tcc-0.9.27-musl
+# drv_path: pvszcazbz976y6vr3bxglamsxn5ynh2p-tcc-0.9.27-musl.drv
+# status: failure
+# timestamp: 1777919387
+
+store error: build: nonzero exit code: exit status: 139
+tcc version 0.9.27 (x86_64 Linux)
+-> -> %s
+
+
+tcc: error: file 'file '%s' not found' not found
+tcc: error: file 'file '%s' not found' not found
+Segmentation fault (core dumped)

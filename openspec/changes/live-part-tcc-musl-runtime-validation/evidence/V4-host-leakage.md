@@ -1,13 +1,7 @@
-# V4 host leakage scan: tcc musl
+# V4 host leakage scan
 
-Task-ID: V4
-Covers: r[bootstrap.part.tcc.musl.runtime-validation]
-Status: captured
-
-`bootstrap validate bootstrap/tcc-musl.ncl` reported no coarse host-path needles in captured build output for the failed prerequisite attempt. Rerun after successful target output to cover the complete build and smoke transcript.
+The successful focused validation of `bootstrap/musl-1.1.24-tcc.ncl` reported no leakage findings. The downstream `bootstrap/tcc-musl.ncl` failure also reported no leakage findings before failing inside `tcc-0.9.27-musl.drv`.
 
 Evidence:
-
-- `evidence/validation-summary.md`
-- `evidence/build.stdout.log`
-- `evidence/V2-tcc-0.9.27-musl-root-derivation.log`
+- `V2-musl-1.1.24-tcc-passed-validation-summary.json`
+- `V2-tcc-musl-after-musl-validation-summary.json`
