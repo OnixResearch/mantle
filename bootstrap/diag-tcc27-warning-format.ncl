@@ -51,12 +51,17 @@ EOF
         $BB cp warn.o "$out/objects/"
       fi
 
-      # This diagnostic intentionally captures the current bug: TinyCC/Mes
-      # should name warn.c, line, and missing symbol, but currently emits
-      # literal printf placeholders.  Fail closed if the reduced input stops
-      # reproducing the corruption so follow-up repair evidence is explicit.
-      needle=$($BB printf '\045s:\045d: warning')
-      $BB grep -q "$needle" warn.stderr
+      # This diagnostic is the regression guard for the TinyCC/Mes warning
+      # formatting repair: TinyCC should name the source location and symbol,
+      # not print literal printf placeholders.
+      placeholder=$($BB printf '\045s:\045d: warning')
+      if $BB grep -q "$placeholder" warn.stderr; then
+        echo "ERROR: literal warning placeholders remain" >&2
+        $BB cat warn.stderr >&2
+        exit 1
+      fi
+      $BB grep -q "warn.c:3: warning: implicit declaration of function 'missing_warning_symbol'" warn.stderr
+      $BB grep -q "warn.c:3: warning: assignment makes pointer from integer without a cast" warn.stderr
       test "$rc" = 0
     "%,
   ],

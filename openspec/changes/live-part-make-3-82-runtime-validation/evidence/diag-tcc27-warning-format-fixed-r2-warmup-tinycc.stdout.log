@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/tinycc.ncl",
+  "output_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/993cly456qa382wwr47r2n33jgs2zcr9-tinycc-0.9.27.drv",
+      "label": "tinycc-0.9.27",
+      "cached": false,
+      "log_file": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state/logs/993cly456qa382wwr47r2n33jgs2zcr9-tinycc-0.9.27.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27",
+            "path": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state/attestations/artifacts/54c7873e875024fa422aea806ab07aaa1b329e70525f626c0ce3f4bce09a31cf.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

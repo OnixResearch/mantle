@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-tcc27-warning-format.ncl",
+  "output_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/ggaq8id23ld9rykmzh94yx8i8p1zw6wc-diag-tcc27-warning-format.drv",
+      "label": "diag-tcc27-warning-format",
+      "cached": false,
+      "log_file": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state/logs/ggaq8id23ld9rykmzh94yx8i8p1zw6wc-diag-tcc27-warning-format.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store/nkspxmwykqkj58r36pww8mknb26m96mv-diag-tcc27-warning-format",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/nkspxmwykqkj58r36pww8mknb26m96mv-diag-tcc27-warning-format",
+            "path": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state/attestations/artifacts/5acc9d772a0d32d1c536d7d390fd0271e19393f3cf830eb001283d0dea744f4d.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

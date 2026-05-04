@@ -1,0 +1,519 @@
+# crunch build log
+# derivation: make-3.82-tcc
+# drv_path: an2lvk5jx78sxpkvixi5xps9zzcypkpa-make-3.82-tcc.drv
+# status: failure
+# timestamp: 1777855981
+
+store error: build: nonzero exit code: exit status: 60
+GNU Make 3.82
+Built for unknown
+Copyright (C) 2010  Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+getopt.c:560: warning: implicit declaration of function 'strcmp'
+getopt.c:560: warning: implicit declaration of function 'strcmp'
+getopt.c:636: warning: implicit declaration of function 'strncmp'
+getopt.c:636: warning: implicit declaration of function 'strncmp'
+In file included from ar.c:20:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from ar.c:20:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+ar.c:37: warning: implicit declaration of function 'strchr'
+ar.c:37: warning: implicit declaration of function 'strchr'
+ar.c:37: warning: assignment makes pointer from integer without a cast
+ar.c:37: warning: assignment makes pointer from integer without a cast
+ar.c:64: warning: assignment makes pointer from integer without a cast
+ar.c:64: warning: assignment makes pointer from integer without a cast
+ar.c:270: warning: assignment from incompatible pointer type
+ar.c:270: warning: assignment from incompatible pointer type
+ar.c:277: warning: implicit declaration of function 'qsort'
+ar.c:277: warning: implicit declaration of function 'qsort'
+In file included from arscan.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from arscan.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+arscan.c:347: warning: implicit declaration of function 'read'
+arscan.c:347: warning: implicit declaration of function 'read'
+arscan.c:348: warning: implicit declaration of function 'memcmp'
+arscan.c:348: warning: implicit declaration of function 'memcmp'
+arscan.c:350: warning: implicit declaration of function 'close'
+arscan.c:350: warning: implicit declaration of function 'close'
+arscan.c:581: warning: implicit declaration of function 'memcpy'
+arscan.c:581: warning: implicit declaration of function 'memcpy'
+arscan.c:595: warning: implicit declaration of function 'strcmp'
+arscan.c:595: warning: implicit declaration of function 'strcmp'
+arscan.c:612: warning: implicit declaration of function 'atoi'
+arscan.c:612: warning: implicit declaration of function 'atoi'
+arscan.c:738: warning: implicit declaration of function 'strrchr'
+arscan.c:738: warning: implicit declaration of function 'strrchr'
+arscan.c:738: warning: assignment makes pointer from integer without a cast
+arscan.c:738: warning: assignment makes pointer from integer without a cast
+arscan.c:751: warning: implicit declaration of function 'strncmp'
+arscan.c:751: warning: implicit declaration of function 'strncmp'
+In file included from commands.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from commands.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+commands.c:62: warning: implicit declaration of function 'strcmp'
+commands.c:62: warning: implicit declaration of function 'strcmp'
+commands.c:83: warning: implicit declaration of function 'strchr'
+commands.c:83: warning: implicit declaration of function 'strchr'
+commands.c:83: warning: assignment makes pointer from integer without a cast
+commands.c:83: warning: assignment makes pointer from integer without a cast
+commands.c:85: warning: implicit declaration of function 'memcpy'
+commands.c:85: warning: implicit declaration of function 'memcpy'
+commands.c:113: warning: assignment makes pointer from integer without a cast
+commands.c:113: warning: assignment makes pointer from integer without a cast
+commands.c:126: warning: implicit declaration of function 'strncmp'
+commands.c:126: warning: implicit declaration of function 'strncmp'
+commands.c:214: warning: assignment makes pointer from integer without a cast
+commands.c:214: warning: assignment makes pointer from integer without a cast
+commands.c:283: warning: assignment makes pointer from integer without a cast
+commands.c:283: warning: assignment makes pointer from integer without a cast
+commands.c:368: warning: assignment makes pointer from integer without a cast
+commands.c:368: warning: assignment makes pointer from integer without a cast
+commands.c:432: warning: implicit declaration of function 'strstr'
+commands.c:432: warning: implicit declaration of function 'strstr'
+commands.c:641: warning: implicit declaration of function 'unlink'
+commands.c:641: warning: implicit declaration of function 'unlink'
+commands.c:689: warning: assignment makes pointer from integer without a cast
+commands.c:689: warning: assignment makes pointer from integer without a cast
+In file included from default.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from default.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from dir.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from dir.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+dir.c:360: warning: implicit declaration of function 'strcmp'
+dir.c:360: warning: implicit declaration of function 'strcmp'
+dir.c:768: warning: implicit declaration of function 'strrchr'
+dir.c:768: warning: implicit declaration of function 'strrchr'
+dir.c:768: warning: assignment makes pointer from integer without a cast
+dir.c:768: warning: assignment makes pointer from integer without a cast
+dir.c:801: warning: implicit declaration of function 'memcpy'
+dir.c:801: warning: implicit declaration of function 'memcpy'
+dir.c:828: warning: assignment makes pointer from integer without a cast
+dir.c:828: warning: assignment makes pointer from integer without a cast
+dir.c:911: warning: assignment makes pointer from integer without a cast
+dir.c:911: warning: assignment makes pointer from integer without a cast
+In file included from expand.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from expand.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+expand.c:72: warning: implicit declaration of function 'memcpy'
+expand.c:72: warning: implicit declaration of function 'memcpy'
+expand.c:232: warning: implicit declaration of function 'strchr'
+expand.c:232: warning: implicit declaration of function 'strchr'
+expand.c:232: warning: assignment makes pointer from integer without a cast
+expand.c:232: warning: assignment makes pointer from integer without a cast
+expand.c:273: warning: assignment makes pointer from integer without a cast
+expand.c:273: warning: assignment makes pointer from integer without a cast
+expand.c:297: warning: assignment makes pointer from integer without a cast
+expand.c:297: warning: assignment makes pointer from integer without a cast
+In file included from file.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from file.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+file.c:59: warning: implicit declaration of function 'strcmp'
+file.c:59: warning: implicit declaration of function 'strcmp'
+file.c:385: warning: implicit declaration of function 'unlink'
+file.c:385: warning: implicit declaration of function 'unlink'
+file.c:480: warning: implicit declaration of function 'memcpy'
+file.c:480: warning: implicit declaration of function 'memcpy'
+file.c:491: warning: implicit declaration of function 'memmove'
+file.c:491: warning: implicit declaration of function 'memmove'
+In file included from function.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from function.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+function.c:64: warning: implicit declaration of function 'strncmp'
+function.c:64: warning: implicit declaration of function 'strncmp'
+function.c:100: warning: implicit declaration of function 'strstr'
+function.c:100: warning: implicit declaration of function 'strstr'
+function.c:100: warning: assignment makes pointer from integer without a cast
+function.c:100: warning: assignment makes pointer from integer without a cast
+function.c:297: warning: implicit declaration of function 'memcpy'
+function.c:297: warning: implicit declaration of function 'memcpy'
+function.c:300: warning: implicit declaration of function 'strcmp'
+function.c:300: warning: implicit declaration of function 'strcmp'
+function.c:759: warning: implicit declaration of function 'atoi'
+function.c:759: warning: implicit declaration of function 'atoi'
+function.c:936: warning: assignment from incompatible pointer type
+function.c:936: warning: assignment from incompatible pointer type
+function.c:959: warning: assignment from incompatible pointer type
+function.c:959: warning: assignment from incompatible pointer type
+function.c:1092: warning: implicit declaration of function 'strcpy'
+function.c:1092: warning: implicit declaration of function 'strcpy'
+function.c:1165: warning: implicit declaration of function 'qsort'
+function.c:1165: warning: implicit declaration of function 'qsort'
+function.c:1649: warning: implicit declaration of function 'pipe'
+function.c:1649: warning: implicit declaration of function 'pipe'
+function.c:1664: warning: implicit declaration of function 'fork'
+function.c:1664: warning: implicit declaration of function 'fork'
+function.c:1691: warning: implicit declaration of function 'close'
+function.c:1691: warning: implicit declaration of function 'close'
+function.c:1708: warning: implicit declaration of function 'read'
+function.c:1708: warning: implicit declaration of function 'read'
+function.c:1930: warning: implicit declaration of function 'strchr'
+function.c:1930: warning: implicit declaration of function 'strchr'
+function.c:1930: warning: assignment makes pointer from integer without a cast
+function.c:1930: warning: assignment makes pointer from integer without a cast
+function.c:1934: warning: implicit declaration of function 'strncpy'
+function.c:1934: warning: implicit declaration of function 'strncpy'
+function.c:1987: warning: assignment makes pointer from integer without a cast
+function.c:1987: warning: assignment makes pointer from integer without a cast
+function.c:2218: warning: assignment from incompatible pointer type
+function.c:2218: warning: assignment from incompatible pointer type
+In file included from implicit.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from implicit.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+implicit.c:208: warning: implicit declaration of function 'strchr'
+implicit.c:208: warning: implicit declaration of function 'strchr'
+implicit.c:208: warning: assignment makes pointer from integer without a cast
+implicit.c:208: warning: assignment makes pointer from integer without a cast
+implicit.c:281: warning: implicit declaration of function 'strrchr'
+implicit.c:281: warning: implicit declaration of function 'strrchr'
+implicit.c:281: warning: assignment makes pointer from integer without a cast
+implicit.c:281: warning: assignment makes pointer from integer without a cast
+implicit.c:376: warning: implicit declaration of function 'strncmp'
+implicit.c:376: warning: implicit declaration of function 'strncmp'
+implicit.c:389: warning: implicit declaration of function 'strcmp'
+implicit.c:389: warning: implicit declaration of function 'strcmp'
+implicit.c:420: warning: implicit declaration of function 'qsort'
+implicit.c:420: warning: implicit declaration of function 'qsort'
+implicit.c:485: warning: implicit declaration of function 'memcpy'
+implicit.c:485: warning: implicit declaration of function 'memcpy'
+implicit.c:494: warning: implicit declaration of function 'strncpy'
+implicit.c:494: warning: implicit declaration of function 'strncpy'
+implicit.c:535: warning: assignment makes pointer from integer without a cast
+implicit.c:535: warning: assignment makes pointer from integer without a cast
+implicit.c:550: warning: implicit declaration of function 'strcpy'
+implicit.c:550: warning: implicit declaration of function 'strcpy'
+implicit.c:683: warning: implicit declaration of function 'memset'
+implicit.c:683: warning: implicit declaration of function 'memset'
+implicit.c:746: warning: assignment from incompatible pointer type
+implicit.c:746: warning: assignment from incompatible pointer type
+In file included from job.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from job.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+job.c:484: warning: implicit declaration of function 'close'
+job.c:484: warning: implicit declaration of function 'close'
+job.c:1211: warning: implicit declaration of function 'pipe'
+job.c:1211: warning: implicit declaration of function 'pipe'
+job.c:1325: warning: implicit declaration of function 'fork'
+job.c:1325: warning: implicit declaration of function 'fork'
+job.c:2161: warning: implicit declaration of function 'execvp'
+job.c:2161: warning: implicit declaration of function 'execvp'
+job.c:2201: warning: assignment from incompatible pointer type
+job.c:2201: warning: assignment from incompatible pointer type
+In file included from main.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from main.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+main.c:882: warning: implicit declaration of function 'strcpy'
+main.c:882: warning: implicit declaration of function 'strcpy'
+main.c:1065: warning: implicit declaration of function 'strrchr'
+main.c:1065: warning: implicit declaration of function 'strrchr'
+main.c:1065: warning: assignment makes pointer from integer without a cast
+main.c:1065: warning: assignment makes pointer from integer without a cast
+main.c:1200: warning: implicit declaration of function 'strcmp'
+main.c:1200: warning: implicit declaration of function 'strcmp'
+main.c:1214: warning: implicit declaration of function 'atoi'
+main.c:1214: warning: implicit declaration of function 'atoi'
+main.c:1336: warning: implicit declaration of function 'strchr'
+main.c:1336: warning: implicit declaration of function 'strchr'
+main.c:1514: warning: implicit declaration of function 'getenv'
+main.c:1514: warning: implicit declaration of function 'getenv'
+main.c:1514: warning: assignment makes pointer from integer without a cast
+main.c:1514: warning: assignment makes pointer from integer without a cast
+main.c:1532: warning: implicit declaration of function 'strcat'
+main.c:1532: warning: implicit declaration of function 'strcat'
+main.c:2052: warning: implicit declaration of function 'strncmp'
+main.c:2052: warning: implicit declaration of function 'strncmp'
+main.c:2068: warning: implicit declaration of function 'memcpy'
+main.c:2068: warning: implicit declaration of function 'memcpy'
+main.c:2096: warning: implicit declaration of function 'putenv'
+main.c:2096: warning: implicit declaration of function 'putenv'
+main.c:2153: warning: implicit declaration of function 'close'
+main.c:2153: warning: implicit declaration of function 'close'
+main.c:2214: warning: implicit declaration of function 'unlink'
+main.c:2214: warning: implicit declaration of function 'unlink'
+main.c:2692: warning: assignment from incompatible pointer type
+main.c:2692: warning: assignment from incompatible pointer type
+main.c:2813: warning: assignment from incompatible pointer type
+main.c:2813: warning: assignment from incompatible pointer type
+main.c:2826: warning: assignment from incompatible pointer type
+main.c:2826: warning: assignment from incompatible pointer type
+main.c:2829: warning: assignment from incompatible pointer type
+main.c:2829: warning: assignment from incompatible pointer type
+main.c:2834: warning: assignment from incompatible pointer type
+main.c:2834: warning: assignment from incompatible pointer type
+main.c:2873: warning: assignment from incompatible pointer type
+main.c:2873: warning: assignment from incompatible pointer type
+main.c:2890: warning: implicit declaration of function 'memset'
+main.c:2890: warning: implicit declaration of function 'memset'
+main.c:3086: warning: implicit declaration of function 'ctime'
+main.c:3086: warning: implicit declaration of function 'ctime'
+main.c:3137: warning: implicit declaration of function 'read'
+main.c:3137: warning: implicit declaration of function 'read'
+In file included from misc.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from misc.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+misc.c:67: warning: implicit declaration of function 'strcmp'
+misc.c:67: warning: implicit declaration of function 'strcmp'
+misc.c:81: warning: implicit declaration of function 'strchr'
+misc.c:81: warning: implicit declaration of function 'strchr'
+misc.c:81: warning: assignment makes pointer from integer without a cast
+misc.c:81: warning: assignment makes pointer from integer without a cast
+misc.c:199: warning: implicit declaration of function 'memcpy'
+misc.c:199: warning: implicit declaration of function 'memcpy'
+misc.c:246: warning: implicit declaration of function 'vfprintf'
+misc.c:246: warning: implicit declaration of function 'vfprintf'
+misc.c:385: warning: implicit declaration of function 'calloc'
+misc.c:385: warning: implicit declaration of function 'calloc'
+misc.c:385: warning: assignment makes pointer from integer without a cast
+misc.c:385: warning: assignment makes pointer from integer without a cast
+misc.c:424: warning: implicit declaration of function 'strcpy'
+misc.c:424: warning: implicit declaration of function 'strcpy'
+misc.c:424: warning: assignment makes pointer from integer without a cast
+misc.c:424: warning: assignment makes pointer from integer without a cast
+misc.c:442: warning: implicit declaration of function 'strncpy'
+misc.c:442: warning: implicit declaration of function 'strncpy'
+In file included from read.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from read.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+read.c:297: warning: implicit declaration of function 'memset'
+read.c:297: warning: implicit declaration of function 'memset'
+read.c:507: warning: implicit declaration of function 'strncmp'
+read.c:507: warning: implicit declaration of function 'strncmp'
+read.c:686: warning: implicit declaration of function 'strcpy'
+read.c:686: warning: implicit declaration of function 'strcpy'
+read.c:1112: warning: implicit declaration of function 'strchr'
+read.c:1112: warning: implicit declaration of function 'strchr'
+read.c:1112: warning: assignment makes pointer from integer without a cast
+read.c:1112: warning: assignment makes pointer from integer without a cast
+read.c:1120: warning: assignment makes pointer from integer without a cast
+read.c:1120: warning: assignment makes pointer from integer without a cast
+read.c:1200: warning: implicit declaration of function 'memcpy'
+read.c:1200: warning: implicit declaration of function 'memcpy'
+read.c:1250: warning: implicit declaration of function 'strcmp'
+read.c:1250: warning: implicit declaration of function 'strcmp'
+read.c:2334: warning: assignment makes pointer from integer without a cast
+read.c:2334: warning: assignment makes pointer from integer without a cast
+read.c:2791: warning: implicit declaration of function 'getpwnam'
+read.c:2791: warning: implicit declaration of function 'getpwnam'
+read.c:2791: warning: assignment makes pointer from integer without a cast
+read.c:2791: warning: assignment makes pointer from integer without a cast
+read.c:2809: warning: assignment makes pointer from integer without a cast
+read.c:2809: warning: assignment makes pointer from integer without a cast
+read.c:2812: warning: assignment makes pointer from integer without a cast
+read.c:2812: warning: assignment makes pointer from integer without a cast
+read.c:3026: warning: assignment makes pointer from integer without a cast
+read.c:3026: warning: assignment makes pointer from integer without a cast
+In file included from remake.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from remake.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+remake.c:779: warning: implicit declaration of function 'strcmp'
+remake.c:779: warning: implicit declaration of function 'strcmp'
+remake.c:1136: warning: implicit declaration of function 'read'
+remake.c:1136: warning: implicit declaration of function 'read'
+remake.c:1146: warning: implicit declaration of function 'close'
+remake.c:1146: warning: implicit declaration of function 'close'
+remake.c:1247: warning: implicit declaration of function 'memcpy'
+remake.c:1247: warning: implicit declaration of function 'memcpy'
+In file included from rule.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from rule.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+rule.c:107: warning: implicit declaration of function 'strrchr'
+rule.c:107: warning: implicit declaration of function 'strrchr'
+rule.c:107: warning: assignment makes pointer from integer without a cast
+rule.c:107: warning: assignment makes pointer from integer without a cast
+rule.c:108: warning: implicit declaration of function 'strchr'
+rule.c:108: warning: implicit declaration of function 'strchr'
+rule.c:108: warning: assignment makes pointer from integer without a cast
+rule.c:108: warning: assignment makes pointer from integer without a cast
+rule.c:126: warning: implicit declaration of function 'memcpy'
+rule.c:126: warning: implicit declaration of function 'memcpy'
+rule.c:255: warning: implicit declaration of function 'strcmp'
+rule.c:255: warning: implicit declaration of function 'strcmp'
+In file included from signame.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from signame.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from strcache.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from strcache.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+strcache.c:91: warning: implicit declaration of function 'memcpy'
+strcache.c:91: warning: implicit declaration of function 'memcpy'
+strcache.c:118: warning: implicit declaration of function 'strcmp'
+strcache.c:118: warning: implicit declaration of function 'strcmp'
+In file included from variable.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from variable.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+variable.c:120: warning: implicit declaration of function 'strncmp'
+variable.c:120: warning: implicit declaration of function 'strncmp'
+variable.c:129: warning: implicit declaration of function 'strcmp'
+variable.c:129: warning: implicit declaration of function 'strcmp'
+variable.c:396: warning: implicit declaration of function 'memcpy'
+variable.c:396: warning: implicit declaration of function 'memcpy'
+variable.c:1576: warning: implicit declaration of function 'strchr'
+variable.c:1576: warning: implicit declaration of function 'strchr'
+In file included from vpath.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from vpath.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+vpath.c:186: warning: implicit declaration of function 'strcmp'
+vpath.c:186: warning: implicit declaration of function 'strcmp'
+vpath.c:315: warning: implicit declaration of function 'strncmp'
+vpath.c:315: warning: implicit declaration of function 'strncmp'
+vpath.c:356: warning: implicit declaration of function 'strrchr'
+vpath.c:356: warning: implicit declaration of function 'strrchr'
+vpath.c:356: warning: assignment makes pointer from integer without a cast
+vpath.c:356: warning: assignment makes pointer from integer without a cast
+vpath.c:385: warning: implicit declaration of function 'memcpy'
+vpath.c:385: warning: implicit declaration of function 'memcpy'
+In file included from hash.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from hash.c:17:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+hash.c:46: warning: implicit declaration of function 'calloc'
+hash.c:46: warning: implicit declaration of function 'calloc'
+hash.c:309: warning: implicit declaration of function 'qsort'
+hash.c:309: warning: implicit declaration of function 'qsort'
+In file included from remote-stub.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+In file included from remote-stub.c:19:
+In file included from make.h:250:
+In file included from /crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/inttypes.h:31:
+/crunch/store/j5pbffnmyry9j9wsmm8695z78q2li56v-tinycc-0.9.27/include/mes/stdint.h:85: warning: CHAR_MAX redefined
+getloadavg.c:590: warning: implicit declaration of function 'read'
+getloadavg.c:590: warning: implicit declaration of function 'read'
+getloadavg.c:591: warning: implicit declaration of function 'close'
+getloadavg.c:591: warning: implicit declaration of function 'close'
+glob/fnmatch.c:139: warning: implicit declaration of function 'strchr'
+glob/fnmatch.c:139: warning: implicit declaration of function 'strchr'
+glob/fnmatch.c:139: warning: assignment makes pointer from integer without a cast
+glob/fnmatch.c:139: warning: assignment makes pointer from integer without a cast
+glob/fnmatch.c:141: warning: assignment makes pointer from integer without a cast
+glob/fnmatch.c:141: warning: assignment makes pointer from integer without a cast
+glob/fnmatch.c:377: warning: implicit declaration of function 'strcmp'
+glob/fnmatch.c:377: warning: implicit declaration of function 'strcmp'
+glob/glob.c:382: warning: implicit declaration of function 'strchr'
+glob/glob.c:382: warning: implicit declaration of function 'strchr'
+glob/glob.c:382: warning: assignment makes pointer from integer without a cast
+glob/glob.c:382: warning: assignment makes pointer from integer without a cast
+glob/glob.c:508: warning: implicit declaration of function 'rindex'
+glob/glob.c:508: warning: implicit declaration of function 'rindex'
+glob/glob.c:508: warning: assignment makes pointer from integer without a cast
+glob/glob.c:508: warning: assignment makes pointer from integer without a cast
+glob/glob.c:681: warning: implicit declaration of function 'getpwnam'
+glob/glob.c:681: warning: implicit declaration of function 'getpwnam'
+glob/glob.c:681: warning: assignment makes pointer from integer without a cast
+glob/glob.c:681: warning: assignment makes pointer from integer without a cast
+glob/glob.c:718: warning: assignment makes pointer from integer without a cast
+glob/glob.c:718: warning: assignment makes pointer from integer without a cast
+glob/glob.c:765: warning: assignment makes pointer from integer without a cast
+glob/glob.c:765: warning: assignment makes pointer from integer without a cast
+glob/glob.c:827: warning: implicit declaration of function 'strdup'
+glob/glob.c:827: warning: implicit declaration of function 'strdup'
+glob/glob.c:827: warning: assignment makes pointer from integer without a cast
+glob/glob.c:827: warning: assignment makes pointer from integer without a cast
+glob/glob.c:1041: warning: implicit declaration of function 'strcpy'
+glob/glob.c:1041: warning: implicit declaration of function 'strcpy'
+glob/glob.c:1094: warning: implicit declaration of function 'strcmp'
+glob/glob.c:1094: warning: implicit declaration of function 'strcmp'
+

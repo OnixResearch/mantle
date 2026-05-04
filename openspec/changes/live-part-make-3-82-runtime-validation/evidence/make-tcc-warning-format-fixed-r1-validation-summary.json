@@ -1,0 +1,32 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/make-tcc.ncl",
+  "evidence_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1",
+  "store": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 1,
+  "warmups": [
+    {
+      "target": "bootstrap/tinycc.ncl",
+      "stdout": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/warmup-tinycc.stdout.log",
+      "stderr": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/warmup-tinycc.stderr.log",
+      "exit_code": 0,
+      "status": "passed"
+    }
+  ],
+  "status": "build-failed",
+  "failure_class": "build",
+  "evidence": {
+    "doctor_json": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/doctor.json",
+    "build_stdout": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/build.stdout.log",
+    "build_stderr": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/build.stderr.log",
+    "summary_json": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/validation-summary.json",
+    "summary_md": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/make-tcc-warning-format-fixed-r1/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777855981
+}

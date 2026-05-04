@@ -1,0 +1,32 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/diag-tcc27-warning-format.ncl",
+  "evidence_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2",
+  "store": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-store",
+  "state_dir": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/.crunch-drain/diag-tcc27-warning-format-fixed-r2-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 0,
+  "warmups": [
+    {
+      "target": "bootstrap/tinycc.ncl",
+      "stdout": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/warmup-tinycc.stdout.log",
+      "stderr": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/warmup-tinycc.stderr.log",
+      "exit_code": 0,
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "failure_class": null,
+  "evidence": {
+    "doctor_json": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/doctor.json",
+    "build_stdout": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/build.stdout.log",
+    "build_stderr": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/build.stderr.log",
+    "summary_json": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/validation-summary.json",
+    "summary_md": "/tmp/hermes-worktrees/crunch/tcc-warning-format-fix/target/bootstrap-validation/diag-tcc27-warning-format-fixed-r2/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1777855955
+}

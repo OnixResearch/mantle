@@ -206,12 +206,58 @@ static inline void add64le(unsigned char *p, int64_t x) {\
 ' tcc.h
 
         # The predecessor Mes runtime varargs path corrupts snprintf/sprintf
-        # string expansion in the first tcc-0.9.27 binary. Spell bootstrap
-        # path constructors with direct string operations for this Mes-linked
-        # handoff compiler.
+        # string expansion in bootstrap path constructors. Spell those
+        # deterministic path constructors with direct string operations for
+        # this Mes-linked handoff compiler, but keep TinyCC's diagnostic
+        # vsnprintf path intact: the installed compiler now carries the
+        # TinyCC-compatible Mes stdarg runtime and must expand warning/error
+        # arguments instead of printing literal `%s:%d` placeholders.
         $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
         $BB sed -i 's|snprintf(buf, sizeof(buf), fmt, paths.*|if (fmt[3] == '\''l'\'') { strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a"); } else { strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename); }|' libtcc.c
-        $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
+        # Mes 0.27.1's vsnprintf still cannot consume TinyCC's x86_64 va_list
+        # reliably when a va_list is forwarded through TinyCC's diagnostic
+        # helper.  Replace only the diagnostic append formatter with a small
+        # direct va_arg formatter for the integer/string conversions TinyCC
+        # uses in warnings/errors; leave deterministic path constructors on
+        # the non-varargs string-copy path above.
+        $BB sed -i '/static void strcat_vprintf(char \*buf, int buf_size, const char \*fmt, va_list ap)/,/^}/c\
+static void crunch_diag_putc(char *buf, int buf_size, int *pos, int c)\
+{\
+    if (*pos < buf_size - 1) { buf[*pos] = c; buf[*pos + 1] = 0; }\
+    ++*pos;\
+}\
+static void crunch_diag_puts(char *buf, int buf_size, int *pos, const char *s)\
+{\
+    if (!s) s = "(null)";\
+    while (*s) crunch_diag_putc(buf, buf_size, pos, *s++);\
+}\
+static void crunch_diag_uint(char *buf, int buf_size, int *pos, unsigned long long v, int base, int neg)\
+{\
+    char tmp[32]; int n = 0;\
+    if (neg) crunch_diag_putc(buf, buf_size, pos, '\''-'\'');\
+    do { int d = v % base; tmp[n++] = d < 10 ? '\''0'\'' + d : '\''a'\'' + d - 10; v /= base; } while (v);\
+    while (n) crunch_diag_putc(buf, buf_size, pos, tmp[--n]);\
+}\
+static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)\
+{\
+    int pos = strlen(buf);\
+    while (*fmt) {\
+        int long_mod = 0;\
+        if (*fmt != '\''%'\'') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }\
+        ++fmt;\
+        if (*fmt == '\''%'\'') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }\
+        while (*fmt == '\''l'\'') { long_mod++; fmt++; }\
+        switch (*fmt++) {\
+        case '\''s'\'': crunch_diag_puts(buf, buf_size, &pos, va_arg(ap, char *)); break;\
+        case '\''c'\'': crunch_diag_putc(buf, buf_size, &pos, va_arg(ap, int)); break;\
+        case '\''d'\'': case '\''i'\'': { long long x = long_mod ? va_arg(ap, long) : va_arg(ap, int); unsigned long long u = x < 0 ? -x : x; crunch_diag_uint(buf, buf_size, &pos, u, 10, x < 0); break; }\
+        case '\''u'\'': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 10, 0); break;\
+        case '\''x'\'': case '\''X'\'': crunch_diag_uint(buf, buf_size, &pos, long_mod ? va_arg(ap, unsigned long) : va_arg(ap, unsigned int), 16, 0); break;\
+        case '\''p'\'': crunch_diag_puts(buf, buf_size, &pos, "0x"); crunch_diag_uint(buf, buf_size, &pos, (unsigned long)va_arg(ap, void *), 16, 0); break;\
+        default: crunch_diag_putc(buf, buf_size, &pos, '\''%'\''); --fmt; break;\
+        }\
+    }\
+}' libtcc.c
         $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
         $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
         $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
