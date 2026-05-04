@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/tcc-musl-v2.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-v2-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-v2-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "tcc-0.9.27-musl-v2",
+      "drv_key": "/crunch/store/301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency sed-4.0.9-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/tcc-musl-v2-state/logs/301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}

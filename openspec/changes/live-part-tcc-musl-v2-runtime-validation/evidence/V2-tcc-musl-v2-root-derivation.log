@@ -1,0 +1,7 @@
+# crunch build log
+# derivation: tcc-0.9.27-musl-v2
+# drv_path: 301hmgjshvqc71y8h5jx1i91iqx6wsqb-tcc-0.9.27-musl-v2.drv
+# status: failure
+# timestamp: 1777901450
+
+dependency sed-4.0.9-tcc.drv failed
