@@ -66,34 +66,38 @@ let make_src = crunch.fetchTarball {
         -e 's/&default_load_average/0/g' \
         -e 's/"basic", 0, "debug"/0, 0, "debug"/' \
         main.c
-      # Compile each source file with tcc
-      tcc -c getopt.c
-      tcc -c getopt1.c
-      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 commands.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DSCCS_GET=\"/nullop\" default.c
-      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 file.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -Dvfork=fork function.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR -Dvfork=fork job.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DNO_FLOAT -DLOCALEDIR=\"/fake\" -DPACKAGE=\"make\" -DHAVE_MKTEMP -DHAVE_GETCWD main.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STRERROR -DHAVE_VPRINTF -DHAVE_ANSI_COMPILER -DHAVE_STDARG_H misc.c
-      tcc -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DINCLUDEDIR=\"/include\" read.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 -DHAVE_FCNTL_H -DLIBDIR=\"/lib\" remake.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART rule.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART signame.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART strcache.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART variable.c
-      tcc -c -I. -DVERSION=\"3.82\" version.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART vpath.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART hash.c
-      tcc -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART remote-stub.c
-      tcc -c -DHAVE_FCNTL_H getloadavg.c
-      tcc -c -Iglob -DSTDC_HEADERS -o fnmatch.o glob/fnmatch.c
-      tcc -c -Iglob -DHAVE_STRDUP -DHAVE_DIRENT_H -o glob.o glob/glob.c
+      # Compile each source file with tcc.  Use configure-equivalent header
+      # defines so pointer-returning libc functions are declared on x86_64;
+      # otherwise old-style implicit-int declarations truncate pointers and
+      # the produced make crashes during recipe dispatch.
+      CFLAGS="-DSTDC_HEADERS -DHAVE_STDLIB_H -DHAVE_STRING_H -DHAVE_UNISTD_H -DHAVE_FCNTL_H -DHAVE_SYS_WAIT_H -DHAVE_WAITPID -DPOSIX"
+      tcc $CFLAGS -c getopt.c
+      tcc $CFLAGS -c getopt1.c
+      tcc $CFLAGS -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STDINT_H ar.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_FCNTL_H arscan.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 commands.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DSCCS_GET=\"/nullop\" default.c
+      tcc $CFLAGS -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DIRENT_H dir.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART expand.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 file.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -Dvfork=fork function.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART implicit.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_DUP2 -DHAVE_STRCHR -Dvfork=fork job.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DNO_FLOAT -DLOCALEDIR=\"/fake\" -DPACKAGE=\"make\" -DHAVE_MKTEMP -DHAVE_GETCWD main.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DHAVE_STRERROR -DHAVE_VPRINTF -DHAVE_ANSI_COMPILER -DHAVE_STDARG_H misc.c
+      tcc $CFLAGS -c -I. -Iglob -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DINCLUDEDIR=\"/include\" read.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART -DFILE_TIMESTAMP_HI_RES=0 -DHAVE_FCNTL_H -DLIBDIR=\"/lib\" remake.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART rule.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART signame.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART strcache.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART variable.c
+      tcc $CFLAGS -c -I. -DVERSION=\"3.82\" version.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART vpath.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART hash.c
+      tcc $CFLAGS -c -I. -DHAVE_INTTYPES_H -DHAVE_SA_RESTART remote-stub.c
+      tcc $CFLAGS -c -DHAVE_FCNTL_H getloadavg.c
+      tcc $CFLAGS -c -Iglob -o fnmatch.o glob/fnmatch.c
+      tcc $CFLAGS -c -Iglob -DHAVE_STRDUP -DHAVE_DIRENT_H -o glob.o glob/glob.c
       $BB chmod 644 *.o
 
       # Link
@@ -108,6 +112,10 @@ let make_src = crunch.fetchTarball {
 
       # Verify
       ./make --version
+      $BB mkdir -p smoke
+      $BB printf 'all:\n\t/bin/busybox echo smoke-ok > smoke/out\n' > smoke/Makefile
+      ./make -f smoke/Makefile all
+      $BB grep 'smoke-ok' smoke/out
 
       # Install
       $BB mkdir -p "$out/bin"
