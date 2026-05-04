@@ -1,0 +1,24 @@
+{
+  "build_attempted": true,
+  "build_exit_code": 1,
+  "doctor_ok": true,
+  "evidence": {
+    "build_stderr": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence/build.stderr.log",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence/build.stdout.log",
+    "doctor_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence/doctor.json",
+    "summary_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence/validation-summary.md"
+  },
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-evidence",
+  "failure_class": "build",
+  "generated_at_unix": 1777915644,
+  "leakage_findings": [],
+  "resume": true,
+  "schema": "crunch-bootstrap-validation-v1",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "status": "build-failed",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-store",
+  "store_prefix": "/crunch/store",
+  "target": "bootstrap/musl-1.1.24-tcc.ncl",
+  "warmups": []
+}
