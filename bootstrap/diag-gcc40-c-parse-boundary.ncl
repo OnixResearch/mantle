@@ -768,7 +768,7 @@ DIRECTIVES_EOF
             LIBGCC2_INCLUDES="-I$MUSL/include" \
             STMP_FIXINC= \
             MAKEINFO=true \
-            tree-check.h \
+            tree-check.h config.h \
             2>&1
 
           (
@@ -848,6 +848,42 @@ EOF
             make_autohost_prefix autohost_prefix_800 800
 
             make_include_probe cparse_inc_config 'config.h'
+            cat > /tmp/cparse_manual_config_system.c <<'EOF'
+#include "auto-host.h"
+#ifdef IN_GCC
+# include "ansidecl.h"
+#endif
+#include "system.h"
+int manual_config_system_probe;
+EOF
+            try_cparse_variant cparse_manual_config_system /tmp/cparse_manual_config_system.c
+            cat > /tmp/cparse_autohost_system.c <<'EOF'
+#include "auto-host.h"
+#include "system.h"
+int autohost_system_probe;
+EOF
+            try_cparse_variant cparse_autohost_system /tmp/cparse_autohost_system.c
+            cat > /tmp/cparse_ansidecl_system.c <<'EOF'
+#include "ansidecl.h"
+#include "system.h"
+int ansidecl_system_probe;
+EOF
+            try_cparse_variant cparse_ansidecl_system /tmp/cparse_ansidecl_system.c
+            make_include_probe cparse_inc_system_only 'system.h'
+            make_header_prefix() {
+              label="$1"
+              header="$2"
+              cutoff="$3"
+              $BB awk -v cutoff="$cutoff" 'NR <= cutoff { print } END { print "int header_prefix_probe;" }' \
+                "$WORK/gcc-4.0.4/gcc/$header" > "/tmp/$label.c"
+              try_cparse_variant "$label" "/tmp/$label.c"
+            }
+            make_header_prefix system_prefix_20 system.h 20
+            make_header_prefix system_prefix_50 system.h 50
+            make_header_prefix system_prefix_100 system.h 100
+            make_header_prefix system_prefix_200 system.h 200
+            make_header_prefix system_prefix_400 system.h 400
+            make_header_prefix system_prefix_800 system.h 800
             make_include_probe cparse_inc_system 'config.h system.h'
             make_include_probe cparse_inc_coretypes 'config.h system.h coretypes.h'
             make_include_probe cparse_inc_tm 'config.h system.h coretypes.h tm.h'
@@ -868,6 +904,15 @@ EOF
             # failure masks it as exit 2.
             try_cparse_variant cparse_full "$WORK/gcc-4.0.4/gcc/c-parse.c"
           )
+
+          cp gcc/config.h gcc/config.h.generated
+          cat > gcc/config.h <<'EOF'
+#include "auto-host.h"
+#ifdef IN_GCC
+# include "ansidecl.h"
+#endif
+EOF
+          echo "diag: normalized generated config.h to manual include form"
 
           echo "diag: reproduce focused c-parse boundary"
           make -j1 -C gcc \
