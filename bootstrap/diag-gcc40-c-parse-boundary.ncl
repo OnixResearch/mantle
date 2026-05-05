@@ -854,6 +854,15 @@ EOF
             make_autohost_define_prefix_probe autohost_defines_60_system 60
             make_autohost_define_prefix_probe autohost_defines_70_system 70
             make_autohost_define_prefix_probe autohost_defines_80_system 80
+            make_autohost_define_prefix_probe autohost_defines_81_system 81
+            make_autohost_define_prefix_probe autohost_defines_82_system 82
+            make_autohost_define_prefix_probe autohost_defines_83_system 83
+            make_autohost_define_prefix_probe autohost_defines_84_system 84
+            make_autohost_define_prefix_probe autohost_defines_85_system 85
+            make_autohost_define_prefix_probe autohost_defines_86_system 86
+            make_autohost_define_prefix_probe autohost_defines_87_system 87
+            make_autohost_define_prefix_probe autohost_defines_88_system 88
+            make_autohost_define_prefix_probe autohost_defines_89_system 89
             make_autohost_define_prefix_probe autohost_defines_90_system 90
             make_autohost_define_prefix_probe autohost_defines_95_system 95
             make_autohost_define_prefix_probe autohost_defines_100_system 100
