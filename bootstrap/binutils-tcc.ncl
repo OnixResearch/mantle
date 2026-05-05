@@ -56,21 +56,59 @@ let binutils_src = crunch.fetchTarball {
       SRC=$(find_input binutils-2.30-src)
 
       export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
-      export CONFIG_SHELL="$BASH/bin/bash"
-      export SHELL="$BASH/bin/bash"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
+      export CC=tcc
+
+      export CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE"
+      export LDFLAGS="-static"
+      export AR="tcc -ar"
+      export RANLIB=true
+      export MAKEINFO=true
+      export CC_FOR_BUILD=tcc
+      export CFLAGS_FOR_BUILD="-I$MUSL/include -static -D_GNU_SOURCE"
 
       WORK=/tmp/binutils-build
       $BB mkdir -p "$WORK"
       cd "$WORK"
 
+      TOOLBIN="$WORK/tools"
+      $BB mkdir -p "$TOOLBIN"
+      for tool in expr rm ls pwd mkdir rmdir chmod cp mv cat sed grep awk sort uniq tr basename dirname printf test touch ln true; do
+        $BB cat > "$TOOLBIN/$tool" <<EOF
+#!/bin/sh
+exec /bin/busybox $tool "\$@"
+EOF
+        $BB chmod 755 "$TOOLBIN/$tool"
+      done
+      $BB cat > "$TOOLBIN/cpp-tcc" <<EOF
+#!/bin/sh
+last=""
+for arg in "\$@"; do last="\$arg"; done
+if [ -f "\$last" ] && /bin/busybox grep -q 'Syntax error' "\$last"; then
+  /bin/busybox cat "\$last"
+  exit 0
+fi
+exec tcc -E -I$MUSL/include "\$@"
+EOF
+      $BB chmod 755 "$TOOLBIN/cpp-tcc"
+      export PATH="$TOOLBIN:$PATH"
+      export CPP="$TOOLBIN/cpp-tcc"
+
       $BB cp -r "$SRC" binutils-2.30
       $BB chmod -R u+w binutils-2.30
       cd binutils-2.30
 
+      for mf in bfd/Makefile.in binutils/Makefile.in gas/Makefile.in; do
+        if [ -f "$mf" ]; then
+          $BB sed -i 's/^SUBDIRS = doc po/SUBDIRS =/' "$mf"
+        fi
+      done
+
       # Configure binutils with tcc
-      $BASH/bin/bash ./configure \
+      /bin/sh ./configure \
         --prefix="$out" \
-        --build=x86_64-unknown-linux-musl \
+        --build=x86_64-unknown-linux-gnu \
         --host=x86_64-unknown-linux-musl \
         --target=x86_64-unknown-linux-musl \
         --disable-nls \
@@ -82,55 +120,74 @@ let binutils_src = crunch.fetchTarball {
         --disable-sim \
         --with-sysroot="$MUSL" \
         CC=tcc \
+        CPP="$TOOLBIN/cpp-tcc" \
         CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE" \
         LDFLAGS="-static" \
         AR="tcc -ar" \
         RANLIB="true" \
+        MAKEINFO="true" \
+        CC_FOR_BUILD=tcc \
+        CFLAGS_FOR_BUILD="-I$MUSL/include -static -D_GNU_SOURCE" \
         YACC="bison -y" \
-        LEX="flex" \
-        2>/dev/null || true
+        LEX="flex" || true
+
+      if [ -f libiberty/Makefile ]; then
+        $BB sed -i 's/regex\.o//g' libiberty/Makefile
+      fi
 
       # Build
-      make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true 2>/dev/null || {
+      make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true || {
         # Fallback: build just the essential tools manually
         echo "Full configure/make failed, trying manual build..." >&2
+        for log in libiberty/config.log bfd/config.log gas/config.log; do
+          if [ -f "$log" ]; then
+            echo "===== $log tail =====" >&2
+            $BB tail -220 "$log" >&2 || true
+          fi
+        done
 
         # At minimum, build gas (assembler) and binutils (ar, nm, etc.)
         cd "$WORK/binutils-2.30"
 
         # Build libiberty
         cd libiberty
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true 2>/dev/null || true
+        echo "manual build: libiberty" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true || true
         cd ..
 
         # Build bfd
         cd bfd
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true 2>/dev/null || true
+        echo "manual build: bfd" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true || true
         cd ..
 
         # Build opcodes
         cd opcodes
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true 2>/dev/null || true
+        echo "manual build: opcodes" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true || true
         cd ..
 
         # Build gas
         cd gas
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true 2>/dev/null || true
+        echo "manual build: gas" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true || true
         cd ..
 
         # Build binutils
         cd binutils
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true 2>/dev/null || true
+        echo "manual build: binutils" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true || true
         cd ..
 
         # Build ld
         cd ld
-        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true 2>/dev/null || true
+        echo "manual build: ld" >&2
+        make -j1 CC=tcc AR="tcc -ar" RANLIB=true MAKEINFO=true || true
         cd ..
       }
 
       # Install
-      make -j1 install prefix="$out" MAKEINFO=true 2>/dev/null || {
+      make -j1 install prefix="$out" MAKEINFO=true || {
         $BB mkdir -p "$out/bin" "$out/lib"
 
         # Install what we can find
