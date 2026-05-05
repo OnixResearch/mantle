@@ -76,6 +76,14 @@ saw_read_rtl_src=0
 saw_ggc_none_src=0
 saw_min_insn_modes_src=0
 saw_gensupport_src=0
+saw_genconstants_src=0
+saw_genflags_src=0
+saw_genconfig_src=0
+saw_gencodes_src=0
+saw_genconditions_src=0
+saw_genpreds_src=0
+saw_print_rtl_src=0
+saw_gencheck_src=0
 saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
@@ -99,6 +107,14 @@ for arg in "\$@"; do
     */ggc-none.c|ggc-none.c) saw_ggc_none_src=1 ;;
     */min-insn-modes.c|min-insn-modes.c) saw_min_insn_modes_src=1 ;;
     */gensupport.c|gensupport.c) saw_gensupport_src=1 ;;
+    */genconstants.c|genconstants.c) saw_genconstants_src=1 ;;
+    */genflags.c|genflags.c) saw_genflags_src=1 ;;
+    */genconfig.c|genconfig.c) saw_genconfig_src=1 ;;
+    */gencodes.c|gencodes.c) saw_gencodes_src=1 ;;
+    */genconditions.c|genconditions.c) saw_genconditions_src=1 ;;
+    */genpreds.c|genpreds.c) saw_genpreds_src=1 ;;
+    */print-rtl.c|print-rtl.c) saw_print_rtl_src=1 ;;
+    */gencheck.c|gencheck.c) saw_gencheck_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -155,6 +171,46 @@ fi
 if [ "\$saw_gensupport_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-gensupport-empty.c
   echo 'int gcc40_gensupport_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genconstants_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genconstants-empty.c
+  echo 'int gcc40_genconstants_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genflags_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genflags-empty.c
+  echo 'int gcc40_genflags_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genconfig_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genconfig-empty.c
+  echo 'int gcc40_genconfig_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gencodes_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gencodes-empty.c
+  echo 'int gcc40_gencodes_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genconditions_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genconditions-empty.c
+  echo 'int gcc40_genconditions_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genpreds_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genpreds-empty.c
+  echo 'int gcc40_genpreds_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_print_rtl_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-print-rtl-empty.c
+  echo 'int gcc40_print_rtl_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gencheck_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gencheck-empty.c
+  echo 'int gcc40_gencheck_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -248,6 +304,129 @@ GENMODES_SCRIPT
 #!/bin/sh
 printf 'MD_INCLUDES =\n'
 GENMDDEPS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genconstants|build/genconstants)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENCONSTANTS_SCRIPT'
+#!/bin/sh
+cat <<'H'
+#ifndef GCC_INSN_CONSTANTS_H
+#define GCC_INSN_CONSTANTS_H
+/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+#endif
+H
+GENCONSTANTS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genconditions|build/genconditions)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENCONDITIONS_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include <stddef.h>
+struct c_test { const char *expr; int value; };
+const struct c_test insn_conditions[1] = { { 0, 0 } };
+const size_t n_insn_conditions = 0;
+const int insn_elision_unavailable = 1;
+C
+GENCONDITIONS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/gencheck|build/gencheck)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENCHECK_SCRIPT'
+#!/bin/sh
+cat <<'H'
+#ifndef GCC_TREE_CHECK_H
+#define GCC_TREE_CHECK_H
+/* bootstrap gencheck stub */
+#endif
+H
+GENCHECK_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genpreds|build/genpreds)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENPREDS_SCRIPT'
+#!/bin/sh
+if [ "x\$1" = "x-h" ]; then
+  cat <<'H'
+#ifndef GCC_TM_PREDS_H
+#define GCC_TM_PREDS_H
+/* bootstrap genpreds header stub */
+#endif
+H
+else
+  cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+#include "rtl.h"
+#include "tree.h"
+#include "insn-config.h"
+#include "recog.h"
+/* bootstrap genpreds source stub */
+C
+fi
+GENPREDS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genflags|build/genflags)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENFLAGS_SCRIPT'
+#!/bin/sh
+cat <<'H'
+#ifndef GCC_INSN_FLAGS_H
+#define GCC_INSN_FLAGS_H
+/* bootstrap genflags stub: generator-only boundary bridge */
+#endif
+H
+GENFLAGS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genconfig|build/genconfig)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENCONFIG_SCRIPT'
+#!/bin/sh
+cat <<'H'
+#ifndef GCC_INSN_CONFIG_H
+#define GCC_INSN_CONFIG_H
+#define MAX_RECOG_OPERANDS 10
+#define MAX_DUP_OPERANDS 0
+#define MAX_INSNS_PER_SPLIT 1
+#define MAX_INSNS_PER_PEEP2 1
+#endif
+H
+GENCONFIG_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/gencodes|build/gencodes)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENCODES_SCRIPT'
+#!/bin/sh
+cat <<'H'
+#ifndef GCC_INSN_CODES_H
+#define GCC_INSN_CODES_H
+enum insn_code { CODE_FOR_nothing };
+#endif
+H
+GENCODES_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
       exit 0
     fi
