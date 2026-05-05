@@ -186,12 +186,13 @@ EOF
           -e 's#\./regex\.\$[(]objext[)] ##g' \
           -e 's#\./regex\.\$[(]objext[)]##g' \
           -e 's/-W -Wall -Wwrite-strings -Wc++-compat -Wstrict-prototypes -Wshadow=local//g' \
+          -e 's/^LIBOBJS *=.*/LIBOBJS =/' \
+          -e 's/^LTLIBOBJS *=.*/LTLIBOBJS =/' \
           libiberty/Makefile
-        for name in regex cplus-dem cp-demangle md5 sha1; do
-          $BB cat > "libiberty/$name-placeholder.c" <<EOF
+        for name in regex cplus-dem cp-demangle md5 sha1 fibheap getopt getopt1 pex-common pex-one pex-unix pexecute vprintf-support; do
+          $BB cat > "libiberty/$name.c" <<EOF
 void placeholder(void) {}
 EOF
-          tcc -c "libiberty/$name-placeholder.c" -o "libiberty/$name.o"
         done
       fi
 
