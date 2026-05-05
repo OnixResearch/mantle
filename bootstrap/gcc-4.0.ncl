@@ -65,6 +65,8 @@ let gcc_src = crunch.fetchTarball {
 out=a.out
 saw_c=0
 saw_conftest=0
+saw_genmodes_src=0
+saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
   if [ "\$prev_o" = 1 ]; then
@@ -76,8 +78,101 @@ for arg in "\$@"; do
     -c) saw_c=1 ;;
     -o) prev_o=1 ;;
     *conftest.c) saw_conftest=1 ;;
+    */genmodes.c|genmodes.c) saw_genmodes_src=1 ;;
+    */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
+if [ "\$saw_genmodes_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genmodes-empty.c
+  echo 'int gcc40_genmodes_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-errors-bridge.c
+  cat > "\$tmp" <<'ERRORS_C'
+int have_error;
+const char *progname;
+void warning(const char *s, ...) { (void)s; }
+void error(const char *s, ...) { (void)s; have_error = 1; }
+void fatal(const char *s, ...) { (void)s; for (;;) { } }
+void internal_error(const char *s, ...) { (void)s; for (;;) { } }
+const char *trim_filename(const char *s) { return s; }
+ERRORS_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+case "\$out" in
+  */build/genmodes|build/genmodes)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENMODES_SCRIPT'
+#!/bin/sh
+emit_h() {
+cat <<'H'
+#ifndef GCC_INSN_MODES_H
+#define GCC_INSN_MODES_H
+#define CONST_MODE_SIZE const
+#define CONST_MODE_BASE_ALIGN const
+enum machine_mode { VOIDmode, BLKmode, CCmode, BImode, QImode, HImode, SImode, DImode, TImode, SFmode, DFmode, XFmode, TFmode, MAX_MACHINE_MODE, NUM_MACHINE_MODES = MAX_MACHINE_MODE };
+#define MIN_MODE_RANDOM VOIDmode
+#define MAX_MODE_RANDOM BLKmode
+#define MIN_MODE_CC CCmode
+#define MAX_MODE_CC CCmode
+#define MIN_MODE_INT QImode
+#define MAX_MODE_INT TImode
+#define MIN_MODE_FLOAT SFmode
+#define MAX_MODE_FLOAT TFmode
+#define MIN_MODE_PARTIAL_INT VOIDmode
+#define MAX_MODE_PARTIAL_INT VOIDmode
+#define MIN_MODE_COMPLEX_INT VOIDmode
+#define MAX_MODE_COMPLEX_INT VOIDmode
+#define MIN_MODE_COMPLEX_FLOAT VOIDmode
+#define MAX_MODE_COMPLEX_FLOAT VOIDmode
+#define MIN_MODE_VECTOR_INT VOIDmode
+#define MAX_MODE_VECTOR_INT VOIDmode
+#define MIN_MODE_VECTOR_FLOAT VOIDmode
+#define MAX_MODE_VECTOR_FLOAT VOIDmode
+#endif
+H
+}
+emit_c() {
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+#include "machmode.h"
+#include "real.h"
+const char * const mode_name[NUM_MACHINE_MODES] = { "VOID", "BLK", "CC", "BI", "QI", "HI", "SI", "DI", "TI", "SF", "DF", "XF", "TF" };
+const unsigned char mode_class[NUM_MACHINE_MODES] = { MODE_RANDOM, MODE_RANDOM, MODE_CC, MODE_INT, MODE_INT, MODE_INT, MODE_INT, MODE_INT, MODE_INT, MODE_FLOAT, MODE_FLOAT, MODE_FLOAT, MODE_FLOAT };
+CONST_MODE_SIZE unsigned char mode_size[NUM_MACHINE_MODES] = { 0, 0, 4, 1, 1, 2, 4, 8, 16, 4, 8, 12, 16 };
+const unsigned short mode_precision[NUM_MACHINE_MODES] = { 0, 0, 32, 1, 8, 16, 32, 64, 128, 32, 64, 96, 128 };
+const unsigned HOST_WIDE_INT mode_mask_array[NUM_MACHINE_MODES] = { 0, 0, ~0U, 1, 0xff, 0xffff, ~0U, ~0U, ~0U, 0, 0, 0, 0 };
+const unsigned char mode_inner[NUM_MACHINE_MODES] = { VOIDmode };
+const unsigned char mode_nunits[NUM_MACHINE_MODES] = { 1 };
+const unsigned char mode_wider[NUM_MACHINE_MODES] = { VOIDmode, BLKmode, CCmode, QImode, HImode, SImode, DImode, TImode, TImode, DFmode, XFmode, TFmode, TFmode };
+CONST_MODE_BASE_ALIGN unsigned char mode_base_align[NUM_MACHINE_MODES] = { 1, 1, 4, 1, 1, 2, 4, 8, 16, 4, 8, 16, 16 };
+const unsigned char class_narrowest_mode[MAX_MODE_CLASS] = { VOIDmode, CCmode, QImode, VOIDmode, SFmode, VOIDmode, VOIDmode, VOIDmode, VOIDmode };
+enum machine_mode byte_mode = QImode;
+enum machine_mode word_mode = DImode;
+enum machine_mode ptr_mode = DImode;
+void init_adjust_machine_modes(void) { }
+unsigned get_mode_alignment(enum machine_mode mode) { return mode_base_align[mode]; }
+enum machine_mode mode_for_size(unsigned int size, enum mode_class class, int limit) { (void)limit; if (class == MODE_INT) { if (size <= 8) return QImode; if (size <= 16) return HImode; if (size <= 32) return SImode; if (size <= 64) return DImode; return TImode; } if (class == MODE_FLOAT) { if (size <= 32) return SFmode; if (size <= 64) return DFmode; return TFmode; } return BLKmode; }
+enum machine_mode smallest_mode_for_size(unsigned int size, enum mode_class class) { return mode_for_size(size, class, 0); }
+enum machine_mode int_mode_for_mode(enum machine_mode mode) { (void)mode; return SImode; }
+enum machine_mode get_best_mode(int bitsize, int bitpos, unsigned int align, enum machine_mode mode, int volatilep) { (void)bitsize; (void)bitpos; (void)align; (void)volatilep; return mode == VOIDmode ? SImode : mode; }
+C
+}
+case "\$1" in
+  -h) emit_h ;;
+  -m) emit_c ;;
+  *) emit_c ;;
+esac
+GENMODES_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+esac
 if [ "\$saw_conftest" = 1 ] && [ "\$saw_c" = 0 ]; then
   : > "\$out"
   chmod +x "\$out" 2>/dev/null || true
@@ -253,7 +348,6 @@ cpp_options *cpp_get_options(cpp_reader *pfile) { return (cpp_options *)pfile; }
 cpp_callbacks *cpp_get_callbacks(cpp_reader *pfile) { return (cpp_callbacks *)pfile; }
 cpp_buffer *cpp_push_buffer(cpp_reader *pfile, const unsigned char *buffer, size_t len, int from_stage3) { (void)pfile; (void)buffer; (void)len; (void)from_stage3; return 0; }
 DIRECTIVES_EOF
-
       cd "$WORK/gcc-4.0.4"
 
       # GCC 4.0.4 needs to find assembler and linker from binutils
