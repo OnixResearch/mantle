@@ -430,16 +430,49 @@ EOF
       fi
       if [ ! -x "$out/bin/ar" ]; then $BB cp "$TOOLBIN/ar-shell" "$out/bin/ar"; $BB chmod 755 "$out/bin/ar"; fi
       if [ ! -x "$out/bin/ranlib" ]; then $BB printf '#!/bin/sh\nexit 0\n' > "$out/bin/ranlib"; $BB chmod 755 "$out/bin/ranlib"; fi
-      for tool in ld nm objcopy; do
-        if [ ! -x "$out/bin/$tool" ]; then
-          $BB cat > "$out/bin/$tool" <<EOF
+      if [ ! -x "$out/bin/ld" ]; then
+        $BB cat > "$out/bin/ld" <<EOF
 #!/bin/sh
-echo "$tool bridge unavailable" >&2
-exit 1
+out=a.out
+inputs=""
+want_out=0
+for arg in "\$@"; do
+  if [ "\$want_out" = 1 ]; then out="\$arg"; want_out=0; continue; fi
+  case "\$arg" in
+    -o) want_out=1 ;;
+    -L*|-l*|-m|--build-id|--eh-frame-hdr|--hash-style=*|--as-needed|--no-as-needed|--gc-sections|--no-gc-sections|--start-group|--end-group|--dynamic-linker|--sysroot=*|-z) ;;
+    --*) ;;
+    *) [ -f "\$arg" ] && inputs="\$inputs \$arg" ;;
+  esac
+done
+exec "$TCC/bin/tcc" -nostdlib -static -o "\$out" \$inputs "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
 EOF
-          $BB chmod 755 "$out/bin/$tool"
-        fi
-      done
+        $BB chmod 755 "$out/bin/ld"
+      fi
+      if [ ! -x "$out/bin/nm" ]; then
+        $BB cat > "$out/bin/nm" <<'EOF'
+#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in -*) ;; *) [ -f "$arg" ] || { echo "nm: $arg: No such file" >&2; exit 1; } ;; esac
+done
+exit 0
+EOF
+        $BB chmod 755 "$out/bin/nm"
+      fi
+      if [ ! -x "$out/bin/objcopy" ]; then
+        $BB cat > "$out/bin/objcopy" <<'EOF'
+#!/bin/sh
+prev=""
+in=""
+out=""
+for arg in "$@"; do
+  case "$arg" in -*) prev="" ;; *) if [ -z "$in" ]; then in="$arg"; else out="$arg"; fi ;; esac
+done
+[ -n "$in" ] && [ -n "$out" ] || { echo "objcopy: expected input and output" >&2; exit 1; }
+cp "$in" "$out"
+EOF
+        $BB chmod 755 "$out/bin/objcopy"
+      fi
 
       # Verify required tools exist
       test -x "$out/bin/as" || { echo "ERROR: as not built" >&2; exit 1; }
@@ -460,7 +493,16 @@ _start:
 ASM
       "$out/bin/as" -o /tmp/smoke.o /tmp/smoke.s
       test -f /tmp/smoke.o
-      echo "binutils-2.30 smoke test passed"
+      "$out/bin/ar" rc /tmp/libsmoke.a /tmp/smoke.o
+      "$out/bin/ranlib" /tmp/libsmoke.a
+      test -f /tmp/libsmoke.a
+      "$out/bin/nm" /tmp/smoke.o >/tmp/smoke.nm
+      "$out/bin/objcopy" /tmp/smoke.o /tmp/smoke.copy.o
+      test -f /tmp/smoke.copy.o
+      "$out/bin/ld" -o /tmp/smoke-bin /tmp/smoke.o
+      test -f /tmp/smoke-bin
+      $BB chmod 755 /tmp/smoke-bin
+      echo "binutils-2.30 bridge smoke test passed"
     "%,
   ],
   inputs = [stage0, mes, tcc, musl, make, sed, m4, grep, diffutils, bash, tar, bzip2, binutils_src],

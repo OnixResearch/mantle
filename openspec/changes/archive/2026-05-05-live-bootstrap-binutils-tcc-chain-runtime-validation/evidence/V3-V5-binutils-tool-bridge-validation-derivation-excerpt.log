@@ -1,0 +1,29 @@
+1920:libtool: link: ar-shell cru .libs/libbfd.a  archive.o archures.o bfd.o bfdio.o bfdwin.o cache.o coff-bfd.o compress.o corefile.o format.o hash.o init.o libbfd.o linker.o merge.o opncls.o reloc.o section.o simple.o stab-syms.o stabs.o syms.o targets.o binary.o ihex.o srec.o tekhex.o verilog.o elf64-x86-64.o elfxx-x86.o elf-ifunc.o elf-nacl.o elf64.o elf.o elflink.o elf-attrs.o elf-strtab.o elf-properties.o elf-eh-frame.o dwarf1.o dwarf2.o elf32-i386.o elf-vxworks.o elf32.o i386linux.o aout32.o pei-i386.o peigen.o cofflink.o coffgen.o pei-x86_64.o pex64igen.o elf64-gen.o elf32-gen.o cpu-i386.o cpu-iamcu.o cpu-l1om.o cpu-k1om.o archive64.o
+1921:libtool: link: true .libs/libbfd.a
+1924:if [ -f $libtooldir/libbfd.a ]; then \
+1925:  cp $libtooldir/libbfd.a libbfd.tmp; \
+1927:  /bin/sh ./../move-if-change libbfd.tmp libbfd.a; \
+1959:libtool: link: ar-shell cru .libs/libopcodes.a  dis-buf.o disassemble.o dis-init.o i386-dis.o i386-opc.o
+1960:libtool: link: true .libs/libopcodes.a
+1963:if [ -f $libtooldir/libopcodes.a ]; then \
+1964:  cp $libtooldir/libopcodes.a libopcodes.tmp; \
+1966:  /bin/sh ./../move-if-change libopcodes.tmp libopcodes.a; \
+2079:/bin/sh ./libtool --tag=CC   --mode=link tcc -Wwrite-strings -I./../zlib -I/crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING  -static -nostdlib -o as-new crunch-start.o app.o as.o atof-generic.o compress-debug.o cond.o depend.o dwarf2dbg.o dw2gencfi.o ecoff.o ehopt.o expr.o flonum-copy.o flonum-konst.o flonum-mult.o frags.o hash.o input-file.o input-scrub.o listing.o literal.o macro.o messages.o output-file.o read.o remap.o sb.o stabs.o subsegs.o symbols.o write.o tc-i386.o obj-elf.o atof-ieee.o  ../opcodes/.libs/libopcodes.a ../bfd/.libs/libbfd.a ../libiberty/libiberty.a /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+2080:libtool: link: tcc -Wwrite-strings -I./../zlib -I/crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/include -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING -nostdlib -o as-new crunch-start.o app.o as.o atof-generic.o compress-debug.o cond.o depend.o dwarf2dbg.o dw2gencfi.o ecoff.o ehopt.o expr.o flonum-copy.o flonum-konst.o flonum-mult.o frags.o hash.o input-file.o input-scrub.o listing.o literal.o macro.o messages.o output-file.o read.o remap.o sb.o stabs.o subsegs.o symbols.o write.o tc-i386.o obj-elf.o atof-ieee.o  ../opcodes/.libs/libopcodes.a ../bfd/.libs/libbfd.a ../libiberty/libiberty.a /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+2202:/bin/sh ./libtool --tag=CC   --mode=link tcc -Wwrite-strings -I./../zlib -I/crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING  -static -nostdlib -o as-new crunch-start.o app.o as.o atof-generic.o compress-debug.o cond.o depend.o dwarf2dbg.o dw2gencfi.o ecoff.o ehopt.o expr.o flonum-copy.o flonum-konst.o flonum-mult.o frags.o hash.o input-file.o input-scrub.o listing.o literal.o macro.o messages.o output-file.o read.o remap.o sb.o stabs.o subsegs.o symbols.o write.o tc-i386.o obj-elf.o atof-ieee.o  ../opcodes/.libs/libopcodes.a ../bfd/.libs/libbfd.a ../libiberty/libiberty.a /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+2203:libtool: link: tcc -Wwrite-strings -I./../zlib -I/crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/include -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING -nostdlib -o as-new crunch-start.o app.o as.o atof-generic.o compress-debug.o cond.o depend.o dwarf2dbg.o dw2gencfi.o ecoff.o ehopt.o expr.o flonum-copy.o flonum-konst.o flonum-mult.o frags.o hash.o input-file.o input-scrub.o listing.o literal.o macro.o messages.o output-file.o read.o remap.o sb.o stabs.o subsegs.o symbols.o write.o tc-i386.o obj-elf.o atof-ieee.o  ../opcodes/.libs/libopcodes.a ../bfd/.libs/libbfd.a ../libiberty/libiberty.a /crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a /crunch/store/l9srrg1y7ipfmz62n3pf6n7f7i8r23sd-musl-1.1.24-tcc-musl/lib/libc.a
+2223:binutils-2.30 bridge smoke test passed
+2327:build: gas
+2330:tcc: error: file 'file '%s' not found' not found
+2331:tcc: error: file 'file '%s' not found' not found
+2335:WARNING: build failed in gas; continuing with bootstrap bridges where available
+2336:build: binutils
+2337:tcc: error: file 'file '%s' not found' not found
+2338:tcc: error: file 'file '%s' not found' not found
+2340:WARNING: build failed in binutils; continuing with bootstrap bridges where available
+2341:build: ld
+2348:WARNING: build failed in ld; continuing with bootstrap bridges where available
+2362:tcc: error: file 'file '%s' not found' not found
+2363:tcc: error: file 'file '%s' not found' not found
+2367:tcc: error: file 'file '%s' not found' not found
+2368:tcc: error: file 'file '%s' not found' not found

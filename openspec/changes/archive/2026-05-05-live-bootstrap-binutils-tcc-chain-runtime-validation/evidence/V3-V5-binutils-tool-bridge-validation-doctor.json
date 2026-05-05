@@ -1,0 +1,33 @@
+{
+  "schema": "crunch-doctor-report-v1",
+  "command": "doctor",
+  "profile": "build",
+  "ok": true,
+  "checks": [
+    {
+      "id": "bwrap",
+      "status": "ok",
+      "summary": "found /nix/store/dk9qhjgg469lv6mriys7v4c59igarmvx-bubblewrap-0.11.1/bin/bwrap"
+    },
+    {
+      "id": "sandbox-shell",
+      "status": "ok",
+      "summary": "found static sandbox shell /nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox"
+    },
+    {
+      "id": "fusermount3",
+      "status": "ok",
+      "summary": "found /run/wrappers/bin/fusermount3"
+    },
+    {
+      "id": "state-dir",
+      "status": "ok",
+      "summary": "state directory is writable via /home/brittonr/.local/state/crunch"
+    },
+    {
+      "id": "store-dir",
+      "status": "ok",
+      "summary": "store directory is writable via /home/brittonr/git/crunch/crunch/.crunch-drain/binutils-tool-bridge-store"
+    }
+  ]
+}
