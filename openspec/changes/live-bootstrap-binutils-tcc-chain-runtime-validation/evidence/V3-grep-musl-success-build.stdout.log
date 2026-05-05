@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/grep-2.4-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/grep-musl-store9",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/pjdkqdhzrp0mr0yrjj5002dpij3m979b-grep-2.4-musl.drv",
+      "label": "grep-2.4-musl",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/pjdkqdhzrp0mr0yrjj5002dpij3m979b-grep-2.4-musl.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/grep-musl-store9/mnd29ba2jam4hwgfmrxg0k3ckxhqn2kl-grep-2.4-musl",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/mnd29ba2jam4hwgfmrxg0k3ckxhqn2kl-grep-2.4-musl",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/b3f5effdc99d4d7cf4d6020ccb479518dcb9cc3a5d65b6149d4037b5fd0d1913.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

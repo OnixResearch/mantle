@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/bash-2.05b-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/bash-closure4-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/nmaviw6vg6jwf6wnhidf4p19zf2rvgf4-bash-2.05b-tcc.drv",
+      "label": "bash-2.05b-tcc",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/nmaviw6vg6jwf6wnhidf4p19zf2rvgf4-bash-2.05b-tcc.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/bash-closure4-store/0nliyvby583ajms08cp4gazslpymfvns-bash-2.05b-tcc",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/0nliyvby583ajms08cp4gazslpymfvns-bash-2.05b-tcc",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/1de7f8f219fb89b1bb7962917d328d7aa257fe80895b30ad8f9de099cd8d52d2.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

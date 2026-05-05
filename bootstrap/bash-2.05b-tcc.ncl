@@ -68,6 +68,7 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_STDARG_H 1
 #define PREFER_STDARG 1
 #define HAVE_LIMITS_H 1
+#define HAVE_INTTYPES_H 1
 #define HAVE_LOCALE_H 1
 #define HAVE_TERMIOS_H 1
 #define HAVE_DIRENT_H 1
@@ -78,6 +79,7 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_SYS_TIME_H 1
 #define HAVE_TIME_H 1
 #define TIME_WITH_SYS_TIME 1
+#define HAVE_TZNAME 1
 #define HAVE_SYS_WAIT_H 1
 #define _POSIX_VERSION 200112L
 #define HAVE_SYS_RESOURCE_H 1
@@ -102,6 +104,8 @@ let bash_src = crunch.fetchTarball {
 #define HAVE_LSTAT 1
 #define HAVE_MEMMOVE 1
 #define HAVE_MEMSET 1
+#define HAVE_BCOPY 1
+#define HAVE_BZERO 1
 #define HAVE_PIPE 1
 #define HAVE_PUTENV 1
 #define HAVE_SETENV 1
@@ -128,9 +132,17 @@ let bash_src = crunch.fetchTarball {
 #define SIZEOF_LONG 8
 #define SIZEOF_CHAR_P 8
 #define SIZEOF_DOUBLE 8
+#define HAVE_LONG_LONG 1
+#define HAVE_UNSIGNED_LONG_LONG 1
 #define HAVE_STRTOL 1
 #define HAVE_STRTOUL 1
 #define HAVE_STRTOD 1
+#define HAVE_STRTOLL 1
+#define HAVE_STRTOULL 1
+#define HAVE_DECL_STRTOL 1
+#define HAVE_DECL_STRTOUL 1
+#define HAVE_DECL_STRTOLL 1
+#define HAVE_DECL_STRTOULL 1
 #define PPROMPT "\\s-\\v\\$ "
 #define SPROMPT "\\s-\\v\\$ "
 #define PROGRAM "bash"
@@ -242,6 +254,25 @@ SIGL
 #include "config.h"
 #include "shell.h"
 #include "command.h"
+#include "builtins.h"
+#include <termios.h>
+#include <string.h>
+#include <stdlib.h>
+struct builtin static_shell_builtins[] = { { "eval", eval_builtin, BUILTIN_ENABLED|STATIC_BUILTIN, 0, "eval", 0 }, { 0, 0, 0, 0, 0, 0 } };
+struct builtin *shell_builtins = static_shell_builtins;
+struct builtin *current_builtin = 0;
+int num_shell_builtins = 1;
+int breaking = 0;
+int continuing = 0;
+int loop_level = 0;
+int source_uses_path = 1;
+int source_searches_cwd = 1;
+int wait_intr_buf = 0;
+long timezone = 0;
+int daylight = 0;
+long altzone = 0;
+char *tzname[2] = { "UTC", "UTC" };
+extern char *signal_names[];
 int eval_builtin(WORD_LIST *list) { return 0; }
 int source_builtin(WORD_LIST *list) { return 1; }
 int exit_builtin(WORD_LIST *list) { return 0; }
@@ -252,6 +283,24 @@ int jobs_builtin(WORD_LIST *list) { return 0; }
 int command_builtin(WORD_LIST *list) { return 1; }
 int wait_builtin(WORD_LIST *list) { return 0; }
 int set_builtin(WORD_LIST *list) { return 0; }
+void reset_shell_options(void) {}
+void reset_shopt_options(void) {}
+void initialize_shell_options(int no_shellopts) {}
+void set_shellopts(void) {}
+int minus_o_option_value(char *name) { return 0; }
+void getopts_reset(int newind) {}
+int list_minus_o_opts(int pflag, int reusable, char *value) { return 0; }
+int set_minus_o_option(int on_or_off, char *option_name) { return 0; }
+int shopt_listopt(char *name, int reusable) { return 0; }
+int shopt_setopt(char *name, int mode) { return 0; }
+void set_login_shell(char *arg) {}
+int getgroups(int size, gid_t *list) { return 0; }
+void endpwent(void) {}
+int gethostname(char *name, int len) { if (len > 0) { strcpy(name, "crunch"); } return 0; }
+int tcgetattr(int fd, struct termios *t) { memset(t, 0, sizeof(*t)); return 0; }
+int tcsetattr(int fd, int action, const struct termios *t) { return 0; }
+void tzset(void) {}
+char *strsignal(int sig) { return (sig >= 0 && sig < 16) ? signal_names[sig] : "signal"; }
 BSTUB
       tcc -c -o bootstrap_stubs.o $CFLAGS builtins/bootstrap_stubs.c
 
@@ -277,7 +326,7 @@ RLSTUB
       tcc -c -o readline_stub.o $CFLAGS lib/readline/readline_stub.c
 
       # Compile lib/glob
-      for src in lib/glob/glob lib/glob/strmatch; do
+      for src in lib/glob/glob lib/glob/strmatch lib/glob/smatch; do
         tcc -c -o "${src##*/}.o" $CFLAGS "$src.c"
       done
 
@@ -288,13 +337,13 @@ RLSTUB
       for src in lib/sh/clktck lib/sh/getcwd lib/sh/getenv lib/sh/oslib lib/sh/setlinebuf \
                  lib/sh/strcasecmp lib/sh/strerror lib/sh/strtod lib/sh/vprint \
                  lib/sh/itos lib/sh/rename lib/sh/zread lib/sh/zwrite lib/sh/shtty \
-                 lib/sh/inet_aton lib/sh/netopen lib/sh/strpbrk lib/sh/timeval \
+                 lib/sh/inet_aton lib/sh/netopen lib/sh/timeval \
                  lib/sh/clock lib/sh/makepath lib/sh/pathcanon lib/sh/pathphys \
                  lib/sh/stringlist lib/sh/stringvec lib/sh/tmpfile lib/sh/spell \
                  lib/sh/strtrans lib/sh/strindex lib/sh/shquote lib/sh/mailstat \
                  lib/sh/fmtulong lib/sh/fmtullong lib/sh/strtoll lib/sh/strtoull \
                  lib/sh/strtoimax lib/sh/strtoumax lib/sh/fmtumax lib/sh/netconn \
-                 lib/sh/mktime lib/sh/strftime lib/sh/xstrchr lib/sh/zcatfd; do
+                 lib/sh/xstrchr lib/sh/zcatfd; do
         tcc -c -o "${src##*/}.o" $CFLAGS "$src.c"
       done
 
@@ -314,6 +363,7 @@ RLSTUB
 
       # Link
       tcc -static $OBJS -o bash
+      $BB chmod 755 bash
 
       # Verify
       ./bash --version 2>&1 | $BB head -1 || ./bash -c 'echo bash-ok' || true

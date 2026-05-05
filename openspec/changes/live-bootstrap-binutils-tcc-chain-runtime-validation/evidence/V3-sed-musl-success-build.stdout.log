@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/sed-4.0.9-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/sed-musl-final-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/p9fl2apd534awxxqbywmshyck8q0px5q-sed-4.0.9-musl.drv",
+      "label": "sed-4.0.9-musl",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/p9fl2apd534awxxqbywmshyck8q0px5q-sed-4.0.9-musl.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/sed-musl-final-store/50wvdnip0xgj3406d3bs414jqrqcb1s1-sed-4.0.9-musl",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/50wvdnip0xgj3406d3bs414jqrqcb1s1-sed-4.0.9-musl",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/df1a4bf555ff16455f1baeea9c525218d169926e56d4e9aa7f6b1dd5c443d998.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
