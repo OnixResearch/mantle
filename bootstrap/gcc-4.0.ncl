@@ -142,6 +142,41 @@ int xregexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t 
 size_t xregerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size) { const char *msg = "regex disabled"; size_t i = 0; (void)errcode; (void)preg; if (errbuf && errbuf_size) { for (; msg[i] && i + 1 < errbuf_size; i++) errbuf[i] = msg[i]; errbuf[i] = 0; } while (msg[i]) i++; return i + 1; }
 void xregfree(regex_t *preg) { (void)preg; }
 REGEX_EOF
+      $BB cat > gcc-4.0.4/libiberty/cplus-dem.c <<'CPLUS_DEM_EOF'
+#include "demangle.h"
+
+enum demangling_styles current_demangling_style = no_demangling;
+const struct demangler_engine libiberty_demanglers[] = {
+  { NO_DEMANGLING_STYLE_STRING, no_demangling, "Demangling disabled for bootstrap" },
+  { 0, unknown_demangling, 0 }
+};
+
+char *cplus_demangle(const char *mangled, int options) { (void)mangled; (void)options; return 0; }
+int cplus_demangle_opname(const char *opname, char *result, int options) { (void)opname; (void)result; (void)options; return 0; }
+const char *cplus_mangle_opname(const char *opname, int options) { (void)options; return opname; }
+void set_cplus_marker_for_demangling(int ch) { (void)ch; }
+enum demangling_styles cplus_demangle_set_style(enum demangling_styles style) { enum demangling_styles old = current_demangling_style; current_demangling_style = style; return old; }
+enum demangling_styles cplus_demangle_name_to_style(const char *name) { (void)name; return no_demangling; }
+char *cplus_demangle_v3(const char *mangled, int options) { (void)mangled; (void)options; return 0; }
+char *java_demangle_v3(const char *mangled) { (void)mangled; return 0; }
+enum gnu_v3_ctor_kinds is_gnu_v3_mangled_ctor(const char *name) { (void)name; return 0; }
+enum gnu_v3_dtor_kinds is_gnu_v3_mangled_dtor(const char *name) { (void)name; return 0; }
+CPLUS_DEM_EOF
+      $BB cat > gcc-4.0.4/libiberty/cp-demangle.c <<'CP_DEMANGLE_EOF'
+/* Bootstrap shim: C++ demangling is disabled by cplus-dem.c. */
+int libiberty_cp_demangle_bootstrap_stub;
+CP_DEMANGLE_EOF
+      $BB cat > gcc-4.0.4/libiberty/md5.c <<'MD5_EOF'
+#include "md5.h"
+#include <string.h>
+void md5_init_ctx(struct md5_ctx *ctx) { if (ctx) memset(ctx, 0, sizeof(*ctx)); }
+void md5_process_block(const void *buffer, size_t len, struct md5_ctx *ctx) { (void)buffer; (void)len; (void)ctx; }
+void md5_process_bytes(const void *buffer, size_t len, struct md5_ctx *ctx) { (void)buffer; (void)len; (void)ctx; }
+void *md5_finish_ctx(struct md5_ctx *ctx, void *resbuf) { (void)ctx; memset(resbuf, 0, 16); return resbuf; }
+void *md5_read_ctx(const struct md5_ctx *ctx, void *resbuf) { (void)ctx; memset(resbuf, 0, 16); return resbuf; }
+int md5_stream(FILE *stream, void *resblock) { (void)stream; memset(resblock, 0, 16); return 0; }
+void *md5_buffer(const char *buffer, size_t len, void *resblock) { (void)buffer; (void)len; memset(resblock, 0, 16); return resblock; }
+MD5_EOF
 
       cd "$WORK/gcc-4.0.4"
 
@@ -217,6 +252,16 @@ REGEX_EOF
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
       for dir in libiberty libcpp gcc; do
         echo "building $dir"
+        if [ "$dir" = libiberty ]; then
+          ( cd libiberty
+            for obj in regex cplus-dem cp-demangle md5; do
+              gcc40-cc -c -DHAVE_CONFIG_H -I$MUSL/include -D_GNU_SOURCE -DHAVE_ALLOCA_H -I. -I$WORK/gcc-4.0.4/include "$WORK/gcc-4.0.4/libiberty/$obj.c" -o "$obj.o"
+            done
+            "$BINUTILS/bin/ar" rc libiberty.a regex.o cplus-dem.o cp-demangle.o md5.o
+            "$BINUTILS/bin/ranlib" libiberty.a
+          )
+          continue
+        fi
         make -j1 -C "$dir" \
           CC=gcc40-cc \
           AR="$BINUTILS/bin/ar" \
