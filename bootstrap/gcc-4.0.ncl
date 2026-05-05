@@ -66,6 +66,7 @@ out=a.out
 saw_c=0
 saw_conftest=0
 saw_genmodes_src=0
+saw_genmddeps_src=0
 saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
@@ -79,12 +80,18 @@ for arg in "\$@"; do
     -o) prev_o=1 ;;
     *conftest.c) saw_conftest=1 ;;
     */genmodes.c|genmodes.c) saw_genmodes_src=1 ;;
+    */genmddeps.c|genmddeps.c) saw_genmddeps_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
 if [ "\$saw_genmodes_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-genmodes-empty.c
   echo 'int gcc40_genmodes_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_genmddeps_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-genmddeps-empty.c
+  echo 'int gcc40_genmddeps_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -168,6 +175,16 @@ case "\$1" in
   *) emit_c ;;
 esac
 GENMODES_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genmddeps|build/genmddeps)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENMDDEPS_SCRIPT'
+#!/bin/sh
+printf 'MD_INCLUDES =\n'
+GENMDDEPS_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
       exit 0
     fi
