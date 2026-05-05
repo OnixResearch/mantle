@@ -143,6 +143,22 @@ char *reconcat(char *optr, const char *first, ...) {
 }
 EOF
 
+      $BB cat > libiberty/xasprintf.c <<'EOF'
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <stdlib.h>
+#include <string.h>
+
+char *xasprintf(const char *fmt, ...) {
+  unsigned long n = fmt ? (unsigned long)strlen(fmt) : 0;
+  char *out = (char *)malloc(n + 1);
+  if (!out) abort();
+  if (fmt) strcpy(out, fmt); else *out = 0;
+  return out;
+}
+EOF
+
       config_common() {
         LD=true \
         AR="tcc -ar" \
