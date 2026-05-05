@@ -1,0 +1,280 @@
+make: *** [c-parse.o] Segmentation fault (core dumped)
+ [3mstderr[0m[2m=[0mdiag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_ansidecl
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: compile cparse_inc_autohost
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: compile cparse_manual_config
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: compile cparse_manual_config_nospace
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: compile autohost_prefix_20
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_20 rc=139
+diag-cparse: compile autohost_prefix_50
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_50 rc=139
+diag-cparse: compile autohost_prefix_100
+diag-cparse: autohost_prefix_100 rc=0
+diag-cparse: compile autohost_prefix_200
+diag-cparse: autohost_prefix_200 rc=0
+diag-cparse: compile autohost_prefix_400
+diag-cparse: autohost_prefix_400 rc=0
+diag-cparse: compile autohost_prefix_800
+diag-cparse: autohost_prefix_800 rc=0
+diag-cparse: compile cparse_inc_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_config rc=139
+diag-cparse: compile cparse_inc_system
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_system rc=139
+diag-cparse: compile cparse_inc_coretypes
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_coretypes rc=139
+diag-cparse: compile cparse_inc_tm
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tm rc=139
+diag-cparse: compile cparse_inc_tree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tree rc=139
+diag-cparse: compile cparse_inc_langhooks
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_langhooks rc=139
+diag-cparse: compile cparse_inc_cpplib
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_cpplib rc=139
+diag-cparse: compile cparse_inc_ctree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_ctree rc=139
+diag-cparse: compile cparse_header_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_header_only rc=139
+diag-cparse: compile cparse_after_yytranslate
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yytranslate rc=139
+diag-cparse: compile cparse_after_yyr1
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr1 rc=139
+diag-cparse: compile cparse_after_yyr2
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr2 rc=139
+diag-cparse: compile cparse_before_yytable
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yytable rc=139
+diag-cparse: compile cparse_before_yyparse
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yyparse rc=139
+diag-cparse: compile cparse_full
+Segmentation fault (core dumped)
+diag-cparse: cparse_full rc=139
+make: *** [c-parse.o] Segmentation fault (core dumped)
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_ansidecl
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: compile cparse_inc_autohost
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: compile cparse_manual_config
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: compile cparse_manual_config_nospace
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: compile autohost_prefix_20
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_20 rc=139
+diag-cparse: compile autohost_prefix_50
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_50 rc=139
+diag-cparse: compile autohost_prefix_100
+diag-cparse: autohost_prefix_100 rc=0
+diag-cparse: compile autohost_prefix_200
+diag-cparse: autohost_prefix_200 rc=0
+diag-cparse: compile autohost_prefix_400
+diag-cparse: autohost_prefix_400 rc=0
+diag-cparse: compile autohost_prefix_800
+diag-cparse: autohost_prefix_800 rc=0
+diag-cparse: compile cparse_inc_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_config rc=139
+diag-cparse: compile cparse_inc_system
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_system rc=139
+diag-cparse: compile cparse_inc_coretypes
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_coretypes rc=139
+diag-cparse: compile cparse_inc_tm
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tm rc=139
+diag-cparse: compile cparse_inc_tree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tree rc=139
+diag-cparse: compile cparse_inc_langhooks
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_langhooks rc=139
+diag-cparse: compile cparse_inc_cpplib
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_cpplib rc=139
+diag-cparse: compile cparse_inc_ctree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_ctree rc=139
+diag-cparse: compile cparse_header_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_header_only rc=139
+diag-cparse: compile cparse_after_yytranslate
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yytranslate rc=139
+diag-cparse: compile cparse_after_yyr1
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr1 rc=139
+diag-cparse: compile cparse_after_yyr2
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr2 rc=139
+diag-cparse: compile cparse_before_yytable
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yytable rc=139
+diag-cparse: compile cparse_before_yyparse
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yyparse rc=139
+diag-cparse: compile cparse_full
+Segmentation fault (core dumped)
+diag-cparse: cparse_full rc=139
+make: *** [c-parse.o] Segmentation fault (core dumped)
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_ansidecl
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: compile cparse_inc_autohost
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: compile cparse_manual_config
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: compile cparse_manual_config_nospace
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: compile autohost_prefix_20
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_20 rc=139
+diag-cparse: compile autohost_prefix_50
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_50 rc=139
+diag-cparse: compile autohost_prefix_100
+diag-cparse: autohost_prefix_100 rc=0
+diag-cparse: compile autohost_prefix_200
+diag-cparse: autohost_prefix_200 rc=0
+diag-cparse: compile autohost_prefix_400
+diag-cparse: autohost_prefix_400 rc=0
+diag-cparse: compile autohost_prefix_800
+diag-cparse: autohost_prefix_800 rc=0
+diag-cparse: compile cparse_inc_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_config rc=139
+diag-cparse: compile cparse_inc_system
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_system rc=139
+diag-cparse: compile cparse_inc_coretypes
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_coretypes rc=139
+diag-cparse: compile cparse_inc_tm
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tm rc=139
+diag-cparse: compile cparse_inc_tree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tree rc=139
+diag-cparse: compile cparse_inc_langhooks
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_langhooks rc=139
+diag-cparse: compile cparse_inc_cpplib
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_cpplib rc=139
+diag-cparse: compile cparse_inc_ctree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_ctree rc=139
+diag-cparse: compile cparse_header_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_header_only rc=139
+diag-cparse: compile cparse_after_yytranslate
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yytranslate rc=139
+diag-cparse: compile cparse_after_yyr1
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr1 rc=139
+diag-cparse: compile cparse_after_yyr2
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr2 rc=139
+diag-cparse: compile cparse_before_yytable
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yytable rc=139
+diag-cparse: compile cparse_before_yyparse
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yyparse rc=139
+diag-cparse: compile cparse_full
+Segmentation fault (core dumped)
+diag-cparse: cparse_full rc=139
+make: *** [c-parse.o] Segmentation fault (core dumped)
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_ansidecl
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: compile cparse_inc_autohost
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: compile cparse_manual_config
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: compile cparse_manual_config_nospace
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: compile autohost_prefix_20
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_20 rc=139
+diag-cparse: compile autohost_prefix_50
+Segmentation fault (core dumped)
+diag-cparse: autohost_prefix_50 rc=139
+diag-cparse: compile autohost_prefix_100
+diag-cparse: autohost_prefix_100 rc=0
+diag-cparse: compile autohost_prefix_200
+diag-cparse: autohost_prefix_200 rc=0
+diag-cparse: compile autohost_prefix_400
+diag-cparse: autohost_prefix_400 rc=0
+diag-cparse: compile autohost_prefix_800
+diag-cparse: autohost_prefix_800 rc=0
+diag-cparse: compile cparse_inc_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_config rc=139
+diag-cparse: compile cparse_inc_system
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_system rc=139
+diag-cparse: compile cparse_inc_coretypes
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_coretypes rc=139
+diag-cparse: compile cparse_inc_tm
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tm rc=139
+diag-cparse: compile cparse_inc_tree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_tree rc=139
+diag-cparse: compile cparse_inc_langhooks
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_langhooks rc=139
+diag-cparse: compile cparse_inc_cpplib
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_cpplib rc=139
+diag-cparse: compile cparse_inc_ctree
+Segmentation fault (core dumped)
+diag-cparse: cparse_inc_ctree rc=139
+diag-cparse: compile cparse_header_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_header_only rc=139
+diag-cparse: compile cparse_after_yytranslate
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yytranslate rc=139
+diag-cparse: compile cparse_after_yyr1
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr1 rc=139
+diag-cparse: compile cparse_after_yyr2
+Segmentation fault (core dumped)
+diag-cparse: cparse_after_yyr2 rc=139
+diag-cparse: compile cparse_before_yytable
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yytable rc=139
+diag-cparse: compile cparse_before_yyparse
+Segmentation fault (core dumped)
+diag-cparse: cparse_before_yyparse rc=139
+diag-cparse: compile cparse_full
+Segmentation fault (core dumped)
+diag-cparse: cparse_full rc=139

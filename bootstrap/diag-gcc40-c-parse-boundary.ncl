@@ -760,6 +760,115 @@ DIRECTIVES_EOF
           continue
         fi
         if [ "$dir" = gcc ]; then
+          echo "diag: prepare generated headers for c-parse reduction"
+          make -j1 -C gcc \
+            CC=gcc40-cc \
+            AR="$BINUTILS/bin/ar" \
+            RANLIB="$BINUTILS/bin/ranlib" \
+            LIBGCC2_INCLUDES="-I$MUSL/include" \
+            STMP_FIXINC= \
+            MAKEINFO=true \
+            tree-check.h \
+            2>&1
+
+          (
+            cd gcc
+            try_cparse_variant() {
+              label="$1"
+              src="$2"
+              shift 2
+              echo "diag-cparse: compile $label" >&2
+              set +e
+              gcc40-cc -c "$@" -g -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$src" -o "/tmp/$label.o"
+              rc=$?
+              set -e
+              echo "diag-cparse: $label rc=$rc" >&2
+            }
+
+            # First separate the Bison skeleton front matter and table data
+            # from the full generated yyparse action body.  This keeps the
+            # same configured headers and include path but replaces yyparse
+            # with a tiny stub after the generated prototypes.
+            make_cparse_prefix() {
+              label="$1"
+              cutoff="$2"
+              $BB awk -v cutoff="$cutoff" 'NR < cutoff { print } END { print "int yyparse(void) { return 0; }" }' \
+                "$WORK/gcc-4.0.4/gcc/c-parse.c" > "/tmp/$label.c"
+              try_cparse_variant "$label" "/tmp/$label.c"
+            }
+
+            make_include_probe() {
+              label="$1"
+              includes="$2"
+              probe="/tmp/$label.c"
+              : > "$probe"
+              for header in $includes; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo 'int cparse_include_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            echo 'int cparse_empty_probe;' > /tmp/cparse_empty.c
+            try_cparse_variant cparse_empty /tmp/cparse_empty.c
+
+            make_include_probe cparse_inc_ansidecl 'ansidecl.h'
+            make_include_probe cparse_inc_autohost 'auto-host.h'
+            cat > /tmp/cparse_manual_config.c <<'EOF'
+#include "auto-host.h"
+#ifdef IN_GCC
+# include "ansidecl.h"
+#endif
+int manual_config_probe;
+EOF
+            try_cparse_variant cparse_manual_config /tmp/cparse_manual_config.c
+            cat > /tmp/cparse_manual_config_nospace.c <<'EOF'
+#include "auto-host.h"
+#ifdef IN_GCC
+#include "ansidecl.h"
+#endif
+int manual_config_nospace_probe;
+EOF
+            try_cparse_variant cparse_manual_config_nospace /tmp/cparse_manual_config_nospace.c
+            make_autohost_prefix() {
+              label="$1"
+              cutoff="$2"
+              $BB awk -v cutoff="$cutoff" 'NR <= cutoff { print } END { print "int autohost_prefix_probe;" }' \
+                auto-host.h > "/tmp/$label.c"
+              try_cparse_variant "$label" "/tmp/$label.c"
+            }
+            make_autohost_prefix autohost_prefix_20 20
+            make_autohost_prefix autohost_prefix_50 50
+            make_autohost_prefix autohost_prefix_100 100
+            make_autohost_prefix autohost_prefix_200 200
+            make_autohost_prefix autohost_prefix_400 400
+            make_autohost_prefix autohost_prefix_800 800
+
+            make_include_probe cparse_inc_config 'config.h'
+            make_include_probe cparse_inc_system 'config.h system.h'
+            make_include_probe cparse_inc_coretypes 'config.h system.h coretypes.h'
+            make_include_probe cparse_inc_tm 'config.h system.h coretypes.h tm.h'
+            make_include_probe cparse_inc_tree 'config.h system.h coretypes.h tm.h tree.h'
+            make_include_probe cparse_inc_langhooks 'config.h system.h coretypes.h tm.h tree.h langhooks.h'
+            make_include_probe cparse_inc_cpplib 'config.h system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h'
+            make_include_probe cparse_inc_ctree 'config.h system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+
+            make_cparse_prefix cparse_header_only 390
+            make_cparse_prefix cparse_after_yytranslate 544
+            make_cparse_prefix cparse_after_yyr1 1017
+            make_cparse_prefix cparse_after_yyr2 1082
+            make_cparse_prefix cparse_before_yytable 1338
+            make_cparse_prefix cparse_before_yyparse 2455
+
+            # Then try a full direct compile outside make so the diagnostic
+            # records TinyCC's raw subprocess exit code before the make-level
+            # failure masks it as exit 2.
+            try_cparse_variant cparse_full "$WORK/gcc-4.0.4/gcc/c-parse.c"
+          )
+
           echo "diag: reproduce focused c-parse boundary"
           make -j1 -C gcc \
             CC=gcc40-cc \
