@@ -68,6 +68,9 @@ saw_conftest=0
 saw_genmodes_src=0
 saw_genmddeps_src=0
 saw_gengenrtl_src=0
+saw_gengtype_src=0
+saw_gengtype_lex_src=0
+saw_gengtype_yacc_src=0
 saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
@@ -83,6 +86,9 @@ for arg in "\$@"; do
     */genmodes.c|genmodes.c) saw_genmodes_src=1 ;;
     */genmddeps.c|genmddeps.c) saw_genmddeps_src=1 ;;
     */gengenrtl.c|gengenrtl.c) saw_gengenrtl_src=1 ;;
+    */gengtype.c|gengtype.c) saw_gengtype_src=1 ;;
+    */gengtype-lex.c|gengtype-lex.c) saw_gengtype_lex_src=1 ;;
+    */gengtype-yacc.c|gengtype-yacc.c) saw_gengtype_yacc_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -99,6 +105,21 @@ fi
 if [ "\$saw_gengenrtl_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-gengenrtl-empty.c
   echo 'int gcc40_gengenrtl_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gengtype_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gengtype-empty.c
+  echo 'int gcc40_gengtype_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gengtype_lex_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gengtype-lex-empty.c
+  echo 'int gcc40_gengtype_lex_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gengtype_yacc_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gengtype-yacc-empty.c
+  echo 'int gcc40_gengtype_yacc_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -192,6 +213,27 @@ GENMODES_SCRIPT
 #!/bin/sh
 printf 'MD_INCLUDES =\n'
 GENMDDEPS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/gengtype|build/gengtype)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENGTYPE_SCRIPT'
+#!/bin/sh
+files="gt-cgraph.h gt-coverage.h gtype-desc.h gt-except.h gt-function.h gt-integrate.h gt-tree.h gt-varasm.h gt-emit-rtl.h gt-explow.h gt-stor-layout.h gt-regclass.h gt-lists.h gt-alias.h gt-cselib.h gt-gcse.h gt-expr.h gt-sdbout.h gt-optabs.h gt-bitmap.h gt-dojump.h gt-dwarf2out.h gt-reg-stack.h gt-dwarf2asm.h gt-dbxout.h gt-c-common.h gt-c-decl.h gt-c-parse.h gt-c-pragma.h gtype-c.h gt-cfglayout.h gt-tree-mudflap.h gt-tree-complex.h gt-tree-eh.h gt-tree-ssanames.h gt-tree-iterator.h gt-gimplify.h gt-tree-phinodes.h gt-tree-cfg.h gt-tree-nested.h gt-tree-ssa-operands.h gt-tree-ssa-propagate.h gt-stringpool.h"
+for f in \$files; do
+  printf '/* bootstrap gengtype stub: %s */\n' "\$f" > "\$f"
+done
+cat > gtype-desc.c <<'GTYPE_DESC_C'
+/* bootstrap gengtype stub */
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+GTYPE_DESC_C
+exit 0
+GENGTYPE_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
       exit 0
     fi
