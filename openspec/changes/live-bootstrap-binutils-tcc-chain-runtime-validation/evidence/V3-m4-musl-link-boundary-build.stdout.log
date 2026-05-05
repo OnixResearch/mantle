@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/m4-1.4.7-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/m4-link7-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "m4-1.4.7-musl",
+      "drv_key": "/crunch/store/lcz92p0wd17bmlj9qmpvngls3sn0fjcy-m4-1.4.7-musl.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: build: nonzero exit code: exit status: 1\ncompile src/m4\ncompile src/builtin\ncompile src/debug\ncompile src/eval\ncompile src/format\ncompile src/freeze\ncompile src/input\ncompile src/macro\ncompile src/output\ncompile src/path\ncompile src/symtab\ncompile lib/cloexec\ncompile lib/close-stream\ncompile lib/dup-safer\ncompile lib/error\ncompile lib/exitfail\ncompile lib/fd-safer\ncompile lib/fopen-safer\ncompile lib/getopt\ncompile lib/getopt1\ncompile lib/mkstemp-safer\ncompile lib/regex\ncompile lib/obstack\ncompile lib/tmpfile-safer\ncompile lib/verror\ncompile lib/xalloc-die\ncompile lib/xasprintf\ncompile lib/xmalloc\nlink m4\nobjects: src-builtin.o src-debug.o src-eval.o src-format.o src-freeze.o src-input.o src-m4.o src-macro.o src-output.o src-path.o src-symtab.o lib-cloexec.o lib-close-stream.o lib-dup-safer.o lib-error.o lib-exitfail.o lib-fd-safer.o lib-fopen-safer.o lib-getopt.o lib-getopt1.o lib-mkstemp-safer.o lib-obstack.o lib-regex.o lib-tmpfile-safer.o lib-verror.o lib-xalloc-die.o lib-xasprintf.o lib-xmalloc.o\n\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\ntcc: error: undefined symbol 'undefined symbol '%s''\n",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/lcz92p0wd17bmlj9qmpvngls3sn0fjcy-m4-1.4.7-musl.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}

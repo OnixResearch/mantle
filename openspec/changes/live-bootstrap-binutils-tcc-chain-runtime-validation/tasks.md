@@ -8,3 +8,5 @@
 - [ ] V4 Run no-host-leakage audit over successful epoch transcripts. [covers=bootstrap.binutils.tcc.runtime-validation]
 - [ ] V5 Run post-musl linkage checks and final binutils assembler smoke. [covers=bootstrap.binutils.tcc.runtime-validation]
 - [ ] V6 Run OpenSpec validation/gates before archive. [covers=bootstrap.binutils.tcc.runtime-validation]
+
+- V3 m4 follow-up: `V3-m4-musl-link-boundary-*` narrows the previous m4 compile segfault to a static link unresolved-symbol boundary.
