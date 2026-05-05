@@ -177,6 +177,82 @@ void *md5_read_ctx(const struct md5_ctx *ctx, void *resbuf) { (void)ctx; memset(
 int md5_stream(FILE *stream, void *resblock) { (void)stream; memset(resblock, 0, 16); return 0; }
 void *md5_buffer(const char *buffer, size_t len, void *resblock) { (void)buffer; (void)len; memset(resblock, 0, 16); return resblock; }
 MD5_EOF
+      $BB cat > gcc-4.0.4/libcpp/charset.c <<'CHARSET_EOF'
+typedef unsigned long size_t;
+typedef long off_t;
+typedef int bool;
+typedef unsigned int cppchar_t;
+typedef struct cpp_reader cpp_reader;
+typedef struct cpp_string { unsigned int len; const unsigned char *text; } cpp_string;
+typedef struct cpp_token { unsigned int src_loc; unsigned char type; unsigned char flags; union { void *node; struct cpp_token *source; cpp_string str; unsigned int arg_no; } val; } cpp_token;
+extern void *malloc(size_t);
+extern void *memcpy(void *, const void *, size_t);
+
+cppchar_t cpp_host_to_exec_charset(cpp_reader *pfile, cppchar_t c) { (void)pfile; return c; }
+cppchar_t _cpp_valid_ucn(cpp_reader *pfile, const unsigned char **pstr, const unsigned char *limit, int identifier_pos) { (void)pfile; (void)identifier_pos; if (*pstr < limit) return *(*pstr)++; return 0; }
+void _cpp_destroy_iconv(cpp_reader *pfile) { (void)pfile; }
+bool cpp_interpret_string(cpp_reader *pfile, const cpp_string *from, size_t count, cpp_string *to, bool wide) {
+  size_t len = 0, pos = 0, i;
+  unsigned char *buf;
+  (void)pfile; (void)wide;
+  for (i = 0; i < count; i++) len += from[i].len;
+  buf = (unsigned char *) malloc(len + 1);
+  if (!buf) return 0;
+  for (i = 0; i < count; i++) { memcpy(buf + pos, from[i].text, from[i].len); pos += from[i].len; }
+  buf[pos] = 0;
+  to->len = (unsigned int) pos;
+  to->text = buf;
+  return 1;
+}
+bool cpp_interpret_string_notranslate(cpp_reader *pfile, const cpp_string *from, size_t count, cpp_string *to, bool wide) { return cpp_interpret_string(pfile, from, count, to, wide); }
+cppchar_t cpp_interpret_charconst(cpp_reader *pfile, const cpp_token *token, unsigned int *pchars_seen, int *unsignedp) {
+  (void)pfile;
+  if (pchars_seen) *pchars_seen = token && token->val.str.len ? 1 : 0;
+  if (unsignedp) *unsignedp = 1;
+  return (token && token->val.str.len) ? token->val.str.text[0] : 0;
+}
+unsigned char *_cpp_convert_input(cpp_reader *pfile, const char *input_charset, unsigned char *input, size_t len, size_t len_hint, off_t *st_size) {
+  unsigned char *buf;
+  (void)pfile; (void)input_charset; (void)len_hint;
+  buf = (unsigned char *) malloc(len + 1);
+  if (!buf) return 0;
+  memcpy(buf, input, len);
+  buf[len] = 0;
+  if (st_size) *st_size = (off_t) len;
+  return buf;
+}
+const char *_cpp_default_encoding(void) { return "UTF-8"; }
+CHARSET_EOF
+      $BB cat > gcc-4.0.4/libcpp/directives.c <<'DIRECTIVES_EOF'
+typedef unsigned long size_t;
+typedef int bool;
+typedef struct cpp_reader cpp_reader;
+typedef struct cpp_options cpp_options;
+typedef struct cpp_callbacks cpp_callbacks;
+typedef struct cpp_buffer cpp_buffer;
+typedef struct cpp_hashnode cpp_hashnode;
+typedef enum lc_reason { LC_ENTER = 0, LC_LEAVE = 1, LC_RENAME = 2 } lc_reason;
+
+int _cpp_test_assertion(cpp_reader *pfile, unsigned int *value) { (void)pfile; if (value) *value = 0; return 0; }
+int _cpp_handle_directive(cpp_reader *pfile, int indented) { (void)pfile; (void)indented; return 0; }
+void _cpp_define_builtin(cpp_reader *pfile, const char *str) { (void)pfile; (void)str; }
+char **_cpp_save_pragma_names(cpp_reader *pfile) { (void)pfile; return 0; }
+void _cpp_restore_pragma_names(cpp_reader *pfile, char **names) { (void)pfile; (void)names; }
+void _cpp_do__Pragma(cpp_reader *pfile) { (void)pfile; }
+void _cpp_init_directives(cpp_reader *pfile) { (void)pfile; }
+void _cpp_init_internal_pragmas(cpp_reader *pfile) { (void)pfile; }
+void _cpp_do_file_change(cpp_reader *pfile, enum lc_reason reason, const char *to_file, unsigned int line, unsigned int sysp) { (void)pfile; (void)reason; (void)to_file; (void)line; (void)sysp; }
+void _cpp_pop_buffer(cpp_reader *pfile) { (void)pfile; }
+void cpp_undef_all(cpp_reader *pfile) { (void)pfile; }
+void cpp_define(cpp_reader *pfile, const char *str) { (void)pfile; (void)str; }
+void cpp_assert(cpp_reader *pfile, const char *str) { (void)pfile; (void)str; }
+void cpp_undef(cpp_reader *pfile, const char *str) { (void)pfile; (void)str; }
+void cpp_unassert(cpp_reader *pfile, const char *str) { (void)pfile; (void)str; }
+unsigned int cpp_errors(cpp_reader *pfile) { (void)pfile; return 0; }
+cpp_options *cpp_get_options(cpp_reader *pfile) { return (cpp_options *)pfile; }
+cpp_callbacks *cpp_get_callbacks(cpp_reader *pfile) { return (cpp_callbacks *)pfile; }
+cpp_buffer *cpp_push_buffer(cpp_reader *pfile, const unsigned char *buffer, size_t len, int from_stage3) { (void)pfile; (void)buffer; (void)len; (void)from_stage3; return 0; }
+DIRECTIVES_EOF
 
       cd "$WORK/gcc-4.0.4"
 
@@ -259,6 +335,16 @@ MD5_EOF
             done
             "$BINUTILS/bin/ar" rc libiberty.a regex.o cplus-dem.o cp-demangle.o md5.o
             "$BINUTILS/bin/ranlib" libiberty.a
+          )
+          continue
+        fi
+        if [ "$dir" = libcpp ]; then
+          ( cd libcpp
+            for obj in charset directives; do
+              gcc40-cc -c -DHAVE_CONFIG_H -I$MUSL/include -D_GNU_SOURCE -DHAVE_ALLOCA_H -I. -I$WORK/gcc-4.0.4/libcpp -I$WORK/gcc-4.0.4/libcpp/include -I$WORK/gcc-4.0.4/include "$WORK/gcc-4.0.4/libcpp/$obj.c" -o "$obj.o"
+            done
+            "$BINUTILS/bin/ar" rc libcpp.a charset.o directives.o
+            "$BINUTILS/bin/ranlib" libcpp.a
           )
           continue
         fi
