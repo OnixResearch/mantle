@@ -1,0 +1,297 @@
+590: checking assembler for --gdwarf2 option... yes
+591: checking assembler for --gstabs option... yes
+592: checking linker read-only and read-write section mixing... unknown
+593: checking linker PT_GNU_EH_FRAME support... no
+594: checking linker position independent executable support... no
+595: checking linker --as-needed support... no
+596: Using ggc-page for garbage collection.
+597: checking whether to enable maintainer-specific portions of Makefiles... no
+598: Links are now set up to build a native compiler for x86_64-unknown-linux-gnu.
+599: configure: creating ./config.status
+600: config.status: creating Makefile
+601: config.status: creating gccbug
+602: config.status: creating mklibgcc
+603: config.status: creating libada-mk
+604: config.status: creating auto-host.h
+605: config.status: executing default commands
+606: make: Entering directory `/tmp/gcc-build/build/gcc'
+607: make: `/tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c' is up to date.
+608: make: Leaving directory `/tmp/gcc-build/build/gcc'
+609: building libiberty
+610: building libcpp
+611: building gcc
+612: diag: prepare generated headers for c-parse reduction
+613: make: Entering directory `/tmp/gcc-build/build/gcc'
+614: ltf=""; for f in $ltf; do \
+615:     echo "#include \"$f\""; \
+616: done | sed 's|/tmp/gcc-build/gcc-4.0.4/gcc/||' > tmp-gencheck.h
+617: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gencheck.h gencheck.h
+618: echo timestamp > s-gencheck
+619: TARGET_CPU_DEFAULT="" \
+620: HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+621: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh bconfig.h
+622: TARGET_CPU_DEFAULT="" \
+623: HEADERS="config/i386/biarch64.h config/i386/i386.h config/i386/unix.h config/i386/att.h config/dbxelf.h config/elfos.h config/svr4.h config/linux.h config/i386/x86-64.h config/i386/linux64.h defaults.h" DEFINES="" \
+624: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh tm.h
+625: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gencheck.o /tmp/gcc-build/gcc-4.0.4/gcc/gencheck.c
+626: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gencheck \
+627:  build/gencheck.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+628: build/gencheck > tmp-check.h
+629: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-check.h tree-check.h
+630: echo timestamp > s-check
+631: TARGET_CPU_DEFAULT="" \
+632: HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+633: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh config.h
+634: make: Leaving directory `/tmp/gcc-build/build/gcc'
+635: diag: normalized generated config.h to manual include form
+636: diag: reproduce focused c-parse boundary
+637: make: Entering directory `/tmp/gcc-build/build/gcc'
+638: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmodes.o /tmp/gcc-build/gcc-4.0.4/gcc/genmodes.c
+639: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/errors.o /tmp/gcc-build/gcc-4.0.4/gcc/errors.c
+640: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmodes \
+641:  build/genmodes.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+642: build/genmodes -h > tmp-modes.h
+643: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.h insn-modes.h
+644: build/genmodes -m > tmp-min-modes.c
+645: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-min-modes.c min-insn-modes.c
+646: build/genmodes > tmp-modes.c
+647: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.c insn-modes.c
+648: echo timestamp > s-modes
+649: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmddeps.o /tmp/gcc-build/gcc-4.0.4/gcc/genmddeps.c
+650: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengenrtl.o /tmp/gcc-build/gcc-4.0.4/gcc/gengenrtl.c
+651: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengenrtl \
+652:  build/gengenrtl.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+653: build/gengenrtl -h > tmp-genrtl.h
+654: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.h genrtl.h
+655: build/gengenrtl > tmp-genrtl.c
+656: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.c genrtl.c
+657: echo timestamp > s-genrtl
+658: echo "/* This file is machine generated.  Do not edit.  */" > tmp-gtyp.h
+659: echo "static const char *const srcdir = "  >> tmp-gtyp.h
+660: echo "\"/tmp/gcc-build/gcc-4.0.4/gcc\"" >> tmp-gtyp.h
+661: echo ";" >> tmp-gtyp.h
+662: echo "static const char *const lang_files[] = {" >> tmp-gtyp.h
+663: ll="/tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in  /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c "; \
+664: for f in $ll; do \
+665: echo "\"$f\", "; done >> tmp-gtyp.h
+666: echo "NULL};" >> tmp-gtyp.h
+667: echo "static const char *const langs_for_lang_files[] = {" >> tmp-gtyp.h
+668: ff="c  c  c  c  c  c  c  c "; \
+669: for f in $ff; do \
+670: echo "\"$f\", " ; done  >> tmp-gtyp.h
+671: echo "NULL};" >> tmp-gtyp.h
+672: echo "static const char *const all_files[] = {" >> tmp-gtyp.h
+673: gf="/tmp/gcc-build/gcc-4.0.4/gcc/input.h /tmp/gcc-build/gcc-4.0.4/gcc/coretypes.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/line-map.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpplib.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpp-id-data.h auto-host.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/ansidecl.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/biarch64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/unix.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/att.h /tmp/gcc-build/gcc-4.0.4/gcc/config/dbxelf.h /tmp/gcc-build/gcc-4.0.4/gcc/config/elfos.h /tmp/gcc-build/gcc-4.0.4/gcc/config/svr4.h /tmp/gcc-build/gcc-4.0.4/gcc/config/linux.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/x86-64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/linux64.h /tmp/gcc-build/gcc-4.0.4/gcc/defaults.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/hashtab.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/splay-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.h /tmp/gcc-build/gcc-4.0.4/gcc/coverage.c /tmp/gcc-build/gcc-4.0.4/gcc/function.h /tmp/gcc-build/gcc-4.0.4/gcc/rtl.h /tmp/gcc-build/gcc-4.0.4/gcc/optabs.h /tmp/gcc-build/gcc-4.0.4/gcc/tree.h /tmp/gcc-build/gcc-4.0.4/gcc/libfuncs.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/symtab.h /tmp/gcc-build/gcc-4.0.4/gcc/real.h /tmp/gcc-build/gcc-4.0.4/gcc/varray.h /tmp/gcc-build/gcc-4.0.4/gcc/insn-addr.h /tmp/gcc-build/gcc-4.0.4/gcc/hwint.h /tmp/gcc-build/gcc-4.0.4/gcc/cselib.h /tmp/gcc-build/gcc-4.0.4/gcc/basic-block.h  /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.h /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/reload.h /tmp/gcc-build/gcc-4.0.4/gcc/alias.c /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.c /tmp/gcc-build/gcc-4.0.4/gcc/cselib.c /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.c /tmp/gcc-build/gcc-4.0.4/gcc/dbxout.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2out.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2asm.c /tmp/gcc-build/gcc-4.0.4/gcc/dojump.c /tmp/gcc-build/gcc-4.0.4/gcc/emit-rtl.c /tmp/gcc-build/gcc-4.0.4/gcc/except.c /tmp/gcc-build/gcc-4.0.4/gcc/explow.c /tmp/gcc-build/gcc-4.0.4/gcc/expr.c /tmp/gcc-build/gcc-4.0.4/gcc/function.c /tmp/gcc-build/gcc-4.0.4/gcc/gcse.c /tmp/gcc-build/gcc-4.0.4/gcc/integrate.c /tmp/gcc-build/gcc-4.0.4/gcc/lists.c /tmp/gcc-build/gcc-4.0.4/gcc/optabs.c /tmp/gcc-build/gcc-4.0.4/gcc/profile.c /tmp/gcc-build/gcc-4.0.4/gcc/regclass.c /tmp/gcc-build/gcc-4.0.4/gcc/reg-stack.c /tmp/gcc-build/gcc-4.0.4/gcc/cfglayout.c /tmp/gcc-build/gcc-4.0.4/gcc/sdbout.c /tmp/gcc-build/gcc-4.0.4/gcc/stor-layout.c /tmp/gcc-build/gcc-4.0.4/gcc/stringpool.c /tmp/gcc-build/gcc-4.0.4/gcc/tree.c /tmp/gcc-build/gcc-4.0.4/gcc/varasm.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-mudflap.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-flow.h /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssanames.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-eh.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-phinodes.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-cfg.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-dfa.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-propagate.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-iterator.c /tmp/gcc-build/gcc-4.0.4/gcc/gimplify.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-chrec.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-complex.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/rtl-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-nested.c /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.c /tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c"; \
+674: for f in $gf; do \
+675: echo "\"$f\", "; done >> tmp-gtyp.h
+676: echo " NULL};" >> tmp-gtyp.h
+677: echo "static const char *const lang_dir_names[] = { \"c\", " >> tmp-gtyp.h
+678: gf=""; \
+679: for l in $gf; do \
+680: echo "\"$l\", "; done >> tmp-gtyp.h
+681: echo "NULL};" >> tmp-gtyp.h
+682: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gtyp.h gtyp-gen.h
+683: echo timestamp > s-gtyp-gen
+684: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype.c
+685: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-lex.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-lex.c
+686: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-yacc.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c
+687: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengtype \
+688:  build/gengtype.o build/gengtype-lex.o build/gengtype-yacc.o \
+689:  build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+690: build/gengtype
+691: echo timestamp > s-gtype
+692: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/rtl.c
+693: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/read-rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/read-rtl.c
+694: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/ggc-none.o /tmp/gcc-build/gcc-4.0.4/gcc/ggc-none.c
+695: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/min-insn-modes.o min-insn-modes.c
+696: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gensupport.o /tmp/gcc-build/gcc-4.0.4/gcc/gensupport.c
+697: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/dummy-conditions.o /tmp/gcc-build/gcc-4.0.4/gcc/dummy-conditions.c
+698: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmddeps \
+699:  build/genmddeps.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+700:  build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+701: build/genmddeps /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-mddeps
+702: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-mddeps mddeps.mk
+703: echo timestamp > s-mddeps
+704: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genconstants.o /tmp/gcc-build/gcc-4.0.4/gcc/genconstants.c
+705: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genconstants \
+706:  build/genconstants.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+707:  build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+708: build/genconstants /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-constants.h
+709: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-constants.h insn-constants.h
+710: echo timestamp > s-constants
+711: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genflags.o /tmp/gcc-build/gcc-4.0.4/gcc/genflags.c
+712: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genconditions.o /tmp/gcc-build/gcc-4.0.4/gcc/genconditions.c
+713: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genconditions \
+714:  build/genconditions.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+715:  build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+716: build/genconditions /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-conditions.c
+717: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-conditions.c insn-conditions.c
+718: echo timestamp > s-conditions
+719: TARGET_CPU_DEFAULT="" \
+720: HEADERS="config/i386/i386-protos.h tm-preds.h" DEFINES="" \
+721: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh tm_p.h
+722: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genpreds.o /tmp/gcc-build/gcc-4.0.4/gcc/genpreds.c
+723: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/print-rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/print-rtl.c
+724: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genpreds \
+725:  build/genpreds.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/dummy-conditions.o build/print-rtl.o \
+726:  build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+727: build/genpreds -h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.h
+728: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.h tm-preds.h
+729: build/genpreds /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.c
+730: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.c insn-preds.c
+731: echo timestamp > s-preds
+732: awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-gather.awk /tmp/gcc-build/gcc-4.0.4/gcc/c.opt /tmp/gcc-build/gcc-4.0.4/gcc/common.opt > tmp-optionlist
+733: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-optionlist optionlist
+734: echo timestamp > s-options
+735: awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-functions.awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opth-gen.awk \
+736:        < optionlist > options.h
+737: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/insn-conditions.o insn-conditions.c
+738: gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genflags \
+739: 	build/genflags.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/insn-conditions.o build/print-rtl.o \
+740: 	build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+741: build/genflags /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-flags.h
+742: /bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-flags.h insn-flags.h
+743: echo timestamp > s-flags
+744: gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -I. -I. -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/. -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.c -o c-parse.o
+745: make: *** [c-parse.o] Segmentation fault (core dumped)
+746: make: Leaving directory `/tmp/gcc-build/build/gcc'
+747:
+748: diag-cparse: compile cparse_empty
+749: diag-cparse: cparse_empty rc=0
+750: diag-cparse: compile cparse_inc_ansidecl
+751: diag-cparse: cparse_inc_ansidecl rc=0
+752: diag-cparse: compile cparse_inc_autohost
+753: diag-cparse: cparse_inc_autohost rc=0
+754: diag-cparse: compile cparse_manual_config
+755: diag-cparse: cparse_manual_config rc=0
+756: diag-cparse: compile cparse_manual_config_nospace
+757: diag-cparse: cparse_manual_config_nospace rc=0
+758: diag-cparse: compile cparse_inc_config
+759: diag-cparse: cparse_inc_config rc=0
+760: diag-cparse: compile autohost_defines_10_system
+761: diag-cparse: autohost_defines_10_system rc=0
+762: diag-cparse: compile autohost_defines_25_system
+763: diag-cparse: autohost_defines_25_system rc=0
+764: diag-cparse: compile autohost_defines_50_system
+765: diag-cparse: autohost_defines_50_system rc=0
+766: diag-cparse: compile autohost_defines_60_system
+767: diag-cparse: autohost_defines_60_system rc=0
+768: diag-cparse: compile autohost_defines_70_system
+769: diag-cparse: autohost_defines_70_system rc=0
+770: diag-cparse: compile autohost_defines_80_system
+771: diag-cparse: autohost_defines_80_system rc=0
+772: diag-cparse: compile autohost_defines_90_system
+773: Segmentation fault (core dumped)
+774: diag-cparse: autohost_defines_90_system rc=139
+775: diag-cparse: compile autohost_defines_95_system
+776: Segmentation fault (core dumped)
+777: diag-cparse: autohost_defines_95_system rc=139
+778: diag-cparse: compile autohost_defines_100_system
+779: Segmentation fault (core dumped)
+780: diag-cparse: autohost_defines_100_system rc=139
+781: diag-cparse: compile autohost_defines_200_system
+782: Segmentation fault (core dumped)
+783: diag-cparse: autohost_defines_200_system rc=139
+784: diag-cparse: compile autohost_defines_400_system
+785: Segmentation fault (core dumped)
+786: diag-cparse: autohost_defines_400_system rc=139
+787: diag-cparse: compile cparse_manual_config_system
+788: Segmentation fault (core dumped)
+789: diag-cparse: cparse_manual_config_system rc=139
+790: diag-cparse: compile cparse_autohost_system
+791: Segmentation fault (core dumped)
+792: diag-cparse: cparse_autohost_system rc=139
+793: diag-cparse: compile cparse_ansidecl_system
+794: diag-cparse: cparse_ansidecl_system rc=0
+795: diag-cparse: compile cparse_inc_system_only
+796: diag-cparse: cparse_inc_system_only rc=0
+797: diag-cparse: compile chunk_safe_ctype
+798: diag-cparse: chunk_safe_ctype rc=0
+799: diag-cparse: compile chunk_sys_types
+800: diag-cparse: chunk_sys_types rc=0
+801: diag-cparse: compile chunk_errno
+802: diag-cparse: chunk_errno rc=0
+803: diag-cparse: compile ansimacro_gcc_version_sys_types
+804: diag-cparse: ansimacro_gcc_version_sys_types rc=0
+805: diag-cparse: compile ansimacro_ansi_defs_sys_types
+806: diag-cparse: ansimacro_ansi_defs_sys_types rc=0
+807: diag-cparse: compile ansimacro_undef_keywords_sys_types
+808: Segmentation fault (core dumped)
+809: diag-cparse: ansimacro_undef_keywords_sys_types rc=139
+810: diag-cparse: compile ansimacro_undef_const_sys_types
+811: diag-cparse: ansimacro_undef_const_sys_types rc=0
+812: diag-cparse: compile ansimacro_undef_volatile_sys_types
+813: diag-cparse: ansimacro_undef_volatile_sys_types rc=0
+814: diag-cparse: compile ansimacro_undef_signed_sys_types
+815: diag-cparse: ansimacro_undef_signed_sys_types rc=0
+816: diag-cparse: compile ansimacro_undef_inline_sys_types
+817: diag-cparse: ansimacro_undef_inline_sys_types rc=0
+818: diag-cparse: compile ansimacro_inline_empty_sys_types
+819: Segmentation fault (core dumped)
+820: diag-cparse: ansimacro_inline_empty_sys_types rc=139
+821: diag-cparse: compile ansimacro_inline_builtin_sys_types
+822: diag-cparse: ansimacro_inline_builtin_sys_types rc=0
+823: diag-cparse: compile ansimacro_attribute_blank_sys_types
+824: diag-cparse: ansimacro_attribute_blank_sys_types rc=0
+825: diag-cparse: compile ansimacro_extension_blank_sys_types
+826: diag-cparse: ansimacro_extension_blank_sys_types rc=0
+827: diag-cparse: compile ansidecl_chunk_sys_types_only
+828: diag-cparse: ansidecl_chunk_sys_types_only rc=0
+829: diag-cparse: compile ansidecl_chunk_stdarg
+830: diag-cparse: ansidecl_chunk_stdarg rc=0
+831: diag-cparse: compile ansidecl_chunk_stdarg_sys_types
+832: diag-cparse: ansidecl_chunk_stdarg_sys_types rc=0
+833: diag-cparse: compile ansidecl_chunk_va_copy
+834: diag-cparse: ansidecl_chunk_va_copy rc=0
+835: diag-cparse: compile ansidecl_chunk_va_copy_sys_types
+836: diag-cparse: ansidecl_chunk_va_copy_sys_types rc=0
+837: diag-cparse: compile ansidecl_chunk_stddef
+838: diag-cparse: ansidecl_chunk_stddef rc=0
+839: diag-cparse: compile ansidecl_chunk_stddef_sys_types
+840: diag-cparse: ansidecl_chunk_stddef_sys_types rc=0
+841: diag-cparse: compile ansidecl_chunk_stdio
+842: diag-cparse: ansidecl_chunk_stdio rc=0
+843: diag-cparse: compile ansidecl_chunk_stdio_sys_types
+844: diag-cparse: ansidecl_chunk_stdio_sys_types rc=0
+845: diag-cparse: compile ansidecl_chunk_stdio_macros
+846: diag-cparse: ansidecl_chunk_stdio_macros rc=0
+847: diag-cparse: compile ansidecl_chunk_stdio_macros_sys_types
+848: diag-cparse: ansidecl_chunk_stdio_macros_sys_types rc=0
+849: diag-cparse: compile ansidecl_chunk_safe_ctype
+850: diag-cparse: ansidecl_chunk_safe_ctype rc=0
+851: diag-cparse: compile ansidecl_chunk_safe_ctype_sys_types
+852: diag-cparse: ansidecl_chunk_safe_ctype_sys_types rc=0
+853: diag-cparse: compile ansidecl_chunk_sys_types
+854: diag-cparse: ansidecl_chunk_sys_types rc=0
+855: diag-cparse: compile ansidecl_chunk_errno
+856: diag-cparse: ansidecl_chunk_errno rc=0
+857: diag-cparse: compile ansidecl_chunk_string
+858: diag-cparse: ansidecl_chunk_string rc=0
+859: diag-cparse: compile cparse_inc_system
+861: diag-cparse: cparse_inc_system rc=139
+862: diag-cparse: compile cparse_inc_coretypes
+864: diag-cparse: cparse_inc_coretypes rc=139
+865: diag-cparse: compile cparse_inc_tm
+867: diag-cparse: cparse_inc_tm rc=139
+868: diag-cparse: compile cparse_inc_tree
+870: diag-cparse: cparse_inc_tree rc=139
+871: diag-cparse: compile cparse_inc_langhooks
+873: diag-cparse: cparse_inc_langhooks rc=139
+874: diag-cparse: compile cparse_inc_cpplib
+876: diag-cparse: cparse_inc_cpplib rc=139
+877: diag-cparse: compile cparse_inc_ctree
+879: diag-cparse: cparse_inc_ctree rc=139
+880: diag-cparse: compile cparse_header_only
+882: diag-cparse: cparse_header_only rc=139
+883: diag-cparse: compile cparse_after_yytranslate
+885: diag-cparse: cparse_after_yytranslate rc=139
+886: diag-cparse: compile cparse_after_yyr1
+888: diag-cparse: cparse_after_yyr1 rc=139
+889: diag-cparse: compile cparse_after_yyr2
+891: diag-cparse: cparse_after_yyr2 rc=139
+892: diag-cparse: compile cparse_before_yytable
+894: diag-cparse: cparse_before_yytable rc=139
+895: diag-cparse: compile cparse_before_yyparse
+897: diag-cparse: cparse_before_yyparse rc=139
+898: diag-cparse: compile cparse_full
+900: diag-cparse: cparse_full rc=139
