@@ -9,27 +9,15 @@
 let crunch = import "lib.ncl" in
 
 let stage0 = import "stage0-posix.ncl" in
-let mes = import "mes.ncl" in
 let tcc = import "tcc-musl-v2.ncl" in
 let musl = import "musl-1.1.24-tcc-musl.ncl" in
 let make = import "make-tcc.ncl" in
 let binutils = import "binutils-tcc.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 let m4 = import "m4-1.4.7-musl.ncl" in
-let flex = import "flex-2.6.4-musl.ncl" in
-let bison = import "bison-3.4.1-musl.ncl" in
-let perl = import "perl-5.6.2-musl.ncl" in
-let coreutils = import "coreutils-6.10-musl.ncl" in
-let gawk = import "gawk-3.0.4-musl.ncl" in
 let grep = import "grep-2.4-musl.ncl" in
 let diffutils = import "diffutils-2.7-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
-let autoconf = import "autoconf-2.69.ncl" in
-let automake = import "automake-1.15.1.ncl" in
-let libtool = import "libtool-2.2.4.ncl" in
-let patch = import "patch-tcc.ncl" in
-let tar = import "tar-tcc.ncl" in
-let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let gcc_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.0.4/gcc-4.0.4.tar.bz2",
@@ -60,25 +48,43 @@ let gcc_src = crunch.fetchTarball {
       STAGE0=$(find_input stage0-posix)
       SED=$(find_input sed-4.0.9-musl)
       M4=$(find_input m4-1.4.7-musl)
-      FLEX=$(find_input flex-2.6.4-musl)
-      BISON=$(find_input bison-3.4.1-musl)
-      PERL=$(find_input perl-5.6.2-musl)
-      CU=$(find_input coreutils-6.10-musl)
-      GAWK=$(find_input gawk-3.0.4-musl)
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
       BASH=$(find_input bash-2.05b-tcc)
-      AC=$(find_input autoconf-2.69)
-      AM=$(find_input automake-1.15.1)
-      LT=$(find_input libtool-2.2.4)
-      PATCH=$(find_input patch-2.5.9-tcc)
-      TAR=$(find_input tar-1.12-tcc)
-      BZIP2=$(find_input bzip2-1.0.8-musl)
       SRC=$(find_input gcc-4.0.4-src)
 
-      export PATH="$BINUTILS/bin:$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$FLEX/bin:$BISON/bin:$PERL/bin:$CU/bin:$GAWK/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$AC/bin:$AM/bin:$LT/bin:$PATCH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
-      export CONFIG_SHELL="$BASH/bin/bash"
-      export SHELL="$BASH/bin/bash"
+      export PATH="$BINUTILS/bin:$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$STAGE0/bin:$PATH"
+      TOOLBIN=/tmp/gcc-tools
+      $BB mkdir -p "$TOOLBIN"
+      for applet in rm rmdir mkdir cp mv ln chmod touch cat sed grep egrep fgrep awk expr basename dirname tr sort uniq cmp diff test printf echo pwd uname sleep false true head tail wc cut; do
+        $BB ln -sf "$BB" "$TOOLBIN/$applet"
+      done
+      export PATH="$TOOLBIN:$PATH"
+      $BB cat > "$TOOLBIN/gcc40-cc" <<EOF
+#!/bin/sh
+exec "$TCC/bin/tcc" -B"$BINUTILS/bin/" -I"$MUSL/include" -L"$MUSL/lib" -static "\$@"
+EOF
+      $BB chmod 755 "$TOOLBIN/gcc40-cc"
+      $BB cat > "$TOOLBIN/gcc40-cpp" <<EOF
+#!/bin/sh
+for arg in "\$@"; do
+  if [ -f "\$arg" ]; then
+    if grep '^#ifdef __STDC__' "\$arg" >/dev/null 2>&1; then
+      sed '/Syntax error/d' "\$arg"
+      exit 0
+    fi
+    if grep 'Syntax error' "\$arg" >/dev/null 2>&1; then
+      exit 1
+    fi
+    cat "\$arg"
+    exit 0
+  fi
+done
+exit 0
+EOF
+      $BB chmod 755 "$TOOLBIN/gcc40-cpp"
+      export CONFIG_SHELL=/bin/sh
+      export SHELL=/bin/sh
 
       WORK=/tmp/gcc-build
       $BB mkdir -p "$WORK/build"
@@ -96,83 +102,58 @@ let gcc_src = crunch.fetchTarball {
       export OBJCOPY="$BINUTILS/bin/objcopy"
       export STRIP="$BINUTILS/bin/strip"
 
-      # Build in separate directory (GCC requires out-of-tree build)
+      # GCC 4.0.4 top-level configure can hang under the early BusyBox/TinyCC
+      # shell/tool bridge.  Follow the live-bootstrap pass1 shape instead:
+      # patch the source, configure only the needed subdirectories, then build
+      # those subdirectories explicitly.
+      TARGET=x86_64-unknown-linux-gnu
+      LANGS=c
+      cd "$WORK/gcc-4.0.4"
+      $BB sed -i 's/ix86_attribute_table\[\]/ix86_attribute_table[10]/' gcc/config/i386/i386.c
+      $BB sed -i 's/struct siginfo/siginfo_t/' gcc/config/i386/linux-unwind.h
+      $BB sed -i 's/C_alloca/alloca/g' libiberty/alloca.c include/libiberty.h
+
       cd "$WORK/build"
+      for dir in libiberty libcpp gcc; do
+        $BB mkdir -p "$dir"
+        cd "$dir"
+        echo "configuring $dir"
+        CC=gcc40-cc \
+          CPP=gcc40-cpp \
+          CFLAGS="-I$MUSL/include -D_GNU_SOURCE -DHAVE_ALLOCA_H" \
+          LDFLAGS="-static -L$MUSL/lib" \
+          /bin/sh "$WORK/gcc-4.0.4/$dir/configure" \
+          --prefix="$out" \
+          --libdir="$out/lib" \
+          --build="$TARGET" \
+          --host="$TARGET" \
+          --target="$TARGET" \
+          --disable-shared \
+          --disable-nls \
+          --program-transform-name= \
+          2>&1 || {
+            echo "configure $dir failed" >&2
+            exit 1
+          }
+        cd ..
+      done
 
-      # Try C and C++ first; fall back to C only
-      LANGS="c,c++"
-      "$BASH/bin/bash" "$WORK/gcc-4.0.4/configure" \
-        --prefix="$out" \
-        --build=x86_64-unknown-linux-musl \
-        --host=x86_64-unknown-linux-musl \
-        --target=x86_64-unknown-linux-musl \
-        --enable-languages="$LANGS" \
-        --disable-bootstrap \
-        --disable-shared \
-        --disable-nls \
-        --disable-multilib \
-        --disable-decimal-float \
-        --disable-libmudflap \
-        --disable-libssp \
-        --disable-libgomp \
-        --disable-threads \
-        --with-sysroot="$MUSL" \
-        --with-native-system-header-dir=/include \
-        --with-build-sysroot="$MUSL" \
-        --without-headers \
-        CC=tcc \
-        CXX="false" \
-        CFLAGS="-I$MUSL/include -D_GNU_SOURCE -DHAVE_ALLOCA_H" \
-        CFLAGS_FOR_TARGET="-I$MUSL/include -D_GNU_SOURCE" \
-        LDFLAGS="-static -L$MUSL/lib" \
-        MAKEINFO=true \
-        2>&1 || {
-          echo "C+C++ configure failed, trying C-only..." >&2
-          cd "$WORK"
-          $BB rm -rf build
-          $BB mkdir -p build
-          cd build
-          LANGS="c"
-          "$BASH/bin/bash" "$WORK/gcc-4.0.4/configure" \
-            --prefix="$out" \
-            --build=x86_64-unknown-linux-musl \
-            --host=x86_64-unknown-linux-musl \
-            --target=x86_64-unknown-linux-musl \
-            --enable-languages="$LANGS" \
-            --disable-bootstrap \
-            --disable-shared \
-            --disable-nls \
-            --disable-multilib \
-            --disable-decimal-float \
-            --disable-libmudflap \
-            --disable-libssp \
-            --disable-libgomp \
-            --disable-threads \
-            --with-sysroot="$MUSL" \
-            --with-native-system-header-dir=/include \
-            --with-build-sysroot="$MUSL" \
-            --without-headers \
-            CC=tcc \
-            CFLAGS="-I$MUSL/include -D_GNU_SOURCE -DHAVE_ALLOCA_H" \
-            CFLAGS_FOR_TARGET="-I$MUSL/include -D_GNU_SOURCE" \
-            LDFLAGS="-static -L$MUSL/lib" \
-            MAKEINFO=true \
-            2>&1
-        }
+      $BB ln -s . "build-$TARGET" 2>/dev/null || true
+      $BB mkdir -p gcc/include
+      $BB ln -sf ../../../gcc-4.0.4/gcc/gsyslimits.h gcc/include/syslimits.h
 
-      # Build GCC
-      make -j1 all-gcc CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || {
-        echo "make all-gcc failed, trying individual targets..." >&2
-        # Build libiberty first (dependency of gcc)
-        make -j1 -C libiberty CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" 2>&1 || true
-        # Build gcc
-        make -j1 -C gcc CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
-      }
-
-      # Build target libraries (libgcc at minimum)
-      make -j1 all-target-libgcc CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || {
-        echo "target libgcc failed, continuing without..." >&2
-      }
+      make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
+      for dir in libiberty libcpp gcc; do
+        echo "building $dir"
+        make -j1 -C "$dir" \
+          CC=gcc40-cc \
+          AR="$BINUTILS/bin/ar" \
+          RANLIB="$BINUTILS/bin/ranlib" \
+          LIBGCC2_INCLUDES="-I$MUSL/include" \
+          STMP_FIXINC= \
+          MAKEINFO=true \
+          2>&1
+      done
 
       # Install
       $BB mkdir -p "$out/bin" "$out/lib" "$out/include" "$out/libexec"
@@ -236,9 +217,7 @@ EOF
     "%,
   ],
   inputs = [
-    stage0, mes, tcc, musl, make, binutils, sed, m4, flex, bison,
-    perl, coreutils, gawk, grep, diffutils, bash,
-    autoconf, automake, libtool, patch, tar, bzip2,
+    stage0, tcc, musl, make, binutils, sed, m4, grep, diffutils, bash,
     gcc_src,
   ],
 } | crunch.Derivation

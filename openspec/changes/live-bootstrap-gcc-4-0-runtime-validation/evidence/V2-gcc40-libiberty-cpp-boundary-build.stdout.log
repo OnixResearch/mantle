@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/gcc-4.0.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "gcc-4.0.4",
+      "drv_key": "/crunch/store/bw6lzrhna4lxqy6mfmmbq07yvlvg9lf7-gcc-4.0.4.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: build: nonzero exit code: exit status: 1\nconfiguring libiberty\nchecking whether to enable maintainer-specific portions of Makefiles... no\nchecking for makeinfo... no\nchecking for perl... no\nchecking build system type... x86_64-unknown-linux-gnu\nchecking host system type... x86_64-unknown-linux-gnu\nchecking for x86_64-unknown-linux-gnu-ar... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ar\nchecking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ranlib\nchecking for x86_64-unknown-linux-gnu-gcc... gcc40-cc\nchecking for suffix of object files... \nchecking whether we are using the GNU C compiler... no\nchecking whether gcc40-cc accepts -g... no\nchecking for gcc40-cc option to accept ANSI C... none needed\nchecking how to run the C preprocessor... gcc40-cpp\nconfigure: error: C preprocessor \"gcc40-cpp\" fails sanity check\nSee `config.log' for more details.\n\nconfigure libiberty failed\n",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/bw6lzrhna4lxqy6mfmmbq07yvlvg9lf7-gcc-4.0.4.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}

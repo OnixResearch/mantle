@@ -1,0 +1,30 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/gcc-4.0.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 1,
+  "warmups": [],
+  "status": "build-failed",
+  "failure_class": "build",
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-progress-evidence/validation-summary.md"
+  },
+  "leakage_findings": [
+    {
+      "source": "stdout",
+      "needle": "/bin/",
+      "count": 2
+    }
+  ],
+  "generated_at_unix": 1777995915
+}
