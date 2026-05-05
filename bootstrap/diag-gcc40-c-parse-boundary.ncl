@@ -833,20 +833,6 @@ EOF
 int manual_config_nospace_probe;
 EOF
             try_cparse_variant cparse_manual_config_nospace /tmp/cparse_manual_config_nospace.c
-            make_autohost_prefix() {
-              label="$1"
-              cutoff="$2"
-              $BB awk -v cutoff="$cutoff" 'NR <= cutoff { print } END { print "int autohost_prefix_probe;" }' \
-                auto-host.h > "/tmp/$label.c"
-              try_cparse_variant "$label" "/tmp/$label.c"
-            }
-            make_autohost_prefix autohost_prefix_20 20
-            make_autohost_prefix autohost_prefix_50 50
-            make_autohost_prefix autohost_prefix_100 100
-            make_autohost_prefix autohost_prefix_200 200
-            make_autohost_prefix autohost_prefix_400 400
-            make_autohost_prefix autohost_prefix_800 800
-
             make_include_probe cparse_inc_config 'config.h'
             cat > /tmp/cparse_manual_config_system.c <<'EOF'
 #include "auto-host.h"
@@ -870,20 +856,87 @@ int ansidecl_system_probe;
 EOF
             try_cparse_variant cparse_ansidecl_system /tmp/cparse_ansidecl_system.c
             make_include_probe cparse_inc_system_only 'system.h'
-            make_header_prefix() {
+            make_cparse_chunk_probe() {
               label="$1"
-              header="$2"
-              cutoff="$3"
-              $BB awk -v cutoff="$cutoff" 'NR <= cutoff { print } END { print "int header_prefix_probe;" }' \
-                "$WORK/gcc-4.0.4/gcc/$header" > "/tmp/$label.c"
-              try_cparse_variant "$label" "/tmp/$label.c"
+              body="$2"
+              probe="/tmp/$label.c"
+              printf '%s\n' "$body" > "$probe"
+              echo 'int cparse_system_chunk_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
             }
-            make_header_prefix system_prefix_20 system.h 20
-            make_header_prefix system_prefix_50 system.h 50
-            make_header_prefix system_prefix_100 system.h 100
-            make_header_prefix system_prefix_200 system.h 200
-            make_header_prefix system_prefix_400 system.h 400
-            make_header_prefix system_prefix_800 system.h 800
+            make_cparse_chunk_probe chunk_safe_ctype '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>'
+            make_cparse_chunk_probe chunk_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>
+#include <sys/types.h>'
+            make_cparse_chunk_probe chunk_errno '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>
+#include <sys/types.h>
+#include <errno.h>'
+
+            make_ansidecl_system_chunk_probe() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "ansidecl.h"' > "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int ansidecl_system_chunk_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdarg '#include <stdarg.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_va_copy '#include <stdarg.h>
+#ifndef va_copy
+# ifdef __va_copy
+#  define va_copy(d,s) __va_copy((d),(s))
+# else
+#  define va_copy(d,s) ((d) = (s))
+# endif
+#endif'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stddef '#include <stdarg.h>
+#include <stddef.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_macros '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
+#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
+#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_safe_ctype '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
+#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
+#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
+#undef fread_unlocked
+#undef fwrite_unlocked
+#include <safe-ctype.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>
+#include <sys/types.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_errno '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>
+#include <sys/types.h>
+#include <errno.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_string '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <safe-ctype.h>
+#include <sys/types.h>
+#include <errno.h>
+#define __NO_STRING_INLINES
+#include <string.h>'
             make_include_probe cparse_inc_system 'config.h system.h'
             make_include_probe cparse_inc_coretypes 'config.h system.h coretypes.h'
             make_include_probe cparse_inc_tm 'config.h system.h coretypes.h tm.h'
