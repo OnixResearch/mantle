@@ -1,0 +1,690 @@
+# crunch build log
+# derivation: gcc-4.0.4
+# drv_path: jjca745x4bj4hz29pdnm3sbl22arfi1d-gcc-4.0.4.drv
+# status: failure
+# timestamp: 1778009643
+
+store error: build: nonzero exit code: exit status: 2
+configuring libiberty
+checking whether to enable maintainer-specific portions of Makefiles... no
+checking for makeinfo... no
+checking for perl... no
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking for x86_64-unknown-linux-gnu-ar... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ar
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ranlib
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking how to run the C preprocessor... gcc40-cpp
+checking whether gcc40-cc and cc understand -c and -o together... yes
+checking for an ANSI C-conforming const... no
+checking for inline... no
+checking whether byte ordering is bigendian... (cached) no
+checking for a BSD-compatible install... /tmp/gcc-build/gcc-4.0.4/libiberty/../install-sh -c
+checking for sys/file.h... yes
+checking for sys/param.h... yes
+checking for limits.h... yes
+checking for stdlib.h... yes
+checking for malloc.h... yes
+checking for string.h... yes
+checking for unistd.h... yes
+checking for strings.h... yes
+checking for sys/time.h... yes
+checking for time.h... yes
+checking for sys/resource.h... yes
+checking for sys/stat.h... yes
+checking for sys/mman.h... yes
+checking for fcntl.h... yes
+checking for alloca.h... yes
+checking for sys/pstat.h... yes
+checking for sys/sysmp.h... yes
+checking for sys/sysinfo.h... yes
+checking for machine/hal_sysinfo.h... yes
+checking for sys/table.h... yes
+checking for sys/sysctl.h... yes
+checking for sys/systemcfg.h... yes
+checking for stdint.h... yes
+checking for stdio_ext.h... yes
+checking for sys/wait.h that is POSIX.1 compatible... no
+checking whether time.h and sys/time.h may both be included... no
+checking whether errno must be declared... yes
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... yes
+checking for sys/stat.h... (cached) yes
+checking for stdlib.h... (cached) yes
+checking for string.h... (cached) yes
+checking for memory.h... yes
+checking for strings.h... (cached) yes
+checking for inttypes.h... yes
+checking for stdint.h... (cached) yes
+checking for unistd.h... (cached) yes
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for uintptr_t... (cached) yes
+checking for a 64-bit type... (cached) uint64_t
+checking for pid_t... (cached) yes
+checking for library containing strerror... (cached) none required
+checking for asprintf... (cached) yes
+checking for atexit... (cached) yes
+checking for basename... (cached) yes
+checking for bcmp... (cached) yes
+checking for bcopy... (cached) yes
+checking for bsearch... (cached) yes
+checking for bzero... (cached) yes
+checking for calloc... (cached) yes
+checking for clock... (cached) yes
+checking for ffs... (cached) yes
+checking for getcwd... (cached) yes
+checking for getpagesize... (cached) yes
+checking for index... (cached) yes
+checking for insque... (cached) yes
+checking for memchr... (cached) yes
+checking for memcmp... (cached) yes
+checking for memcpy... (cached) yes
+checking for memmove... (cached) yes
+checking for mempcpy... (cached) yes
+checking for memset... (cached) yes
+checking for mkstemps... (cached) yes
+checking for putenv... (cached) yes
+checking for random... (cached) yes
+checking for rename... (cached) yes
+checking for rindex... (cached) yes
+checking for setenv... (cached) yes
+checking for snprintf... (cached) yes
+checking for sigsetmask... (cached) yes
+checking for stpcpy... (cached) yes
+checking for stpncpy... (cached) yes
+checking for strcasecmp... (cached) yes
+checking for strchr... (cached) yes
+checking for strdup... (cached) yes
+checking for strncasecmp... (cached) yes
+checking for strrchr... (cached) yes
+checking for strstr... (cached) yes
+checking for strtod... (cached) yes
+checking for strtol... (cached) yes
+checking for strtoul... (cached) yes
+checking for tmpnam... (cached) yes
+checking for vasprintf... (cached) yes
+checking for vfprintf... (cached) yes
+checking for vprintf... (cached) yes
+checking for vsnprintf... (cached) yes
+checking for vsprintf... (cached) yes
+checking for waitpid... (cached) yes
+checking whether alloca needs Cray hooks... (cached) no
+checking stack direction for C alloca... (cached) -1
+checking for unistd.h... (cached) yes
+checking for vfork.h... yes
+checking for fork... (cached) yes
+checking for vfork... (cached) yes
+checking for working fork... yes
+checking for working vfork... (cached) yes
+checking for _doprnt... (cached) yes
+checking for sys_errlist... (cached) yes
+checking for sys_nerr... (cached) yes
+checking for sys_siglist... (cached) yes
+checking for external symbol _system_configuration... no
+checking for getrusage... (cached) yes
+checking for on_exit... (cached) yes
+checking for psignal... (cached) yes
+checking for strerror... (cached) yes
+checking for strsignal... (cached) yes
+checking for sysconf... (cached) yes
+checking for times... (cached) yes
+checking for sbrk... (cached) yes
+checking for gettimeofday... (cached) yes
+checking for realpath... (cached) yes
+checking for canonicalize_file_name... (cached) no
+checking for pstat_getstatic... (cached) no
+checking for pstat_getdynamic... (cached) no
+checking for sysmp... (cached) no
+checking for getsysinfo... (cached) no
+checking for table... (cached) no
+checking for sysctl... (cached) no
+checking for __fsetlocking... (cached) yes
+checking whether canonicalize_file_name must be declared... yes
+checking for stdlib.h... (cached) yes
+checking for unistd.h... (cached) yes
+checking for getpagesize... (cached) yes
+checking for working mmap... yes
+checking for working strncmp... yes
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating testsuite/Makefile
+config.status: creating config.h
+config.status: executing default commands
+configuring libcpp
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking target system type... x86_64-unknown-linux-gnu
+checking whether make sets $(MAKE)... yes
+checking for a BSD-compatible install... /tmp/gcc-build/gcc-4.0.4/libcpp/../install-sh -c
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ranlib
+checking for aclocal... no
+checking for autoconf... no
+checking for autoheader... no
+checking whether gcc40-cc supports -W... no
+checking whether gcc40-cc supports -Wall... no
+checking whether gcc40-cc supports -Wwrite-strings... no
+checking whether gcc40-cc supports -Wstrict-prototypes... no
+checking whether gcc40-cc supports -Wmissing-prototypes... no
+checking whether gcc40-cc supports -Wold-style-definition... no
+checking whether time.h and sys/time.h may both be included... no
+checking whether string.h and strings.h may both be included... no
+checking how to run the C preprocessor... gcc40-cpp
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... no
+checking for sys/stat.h... no
+checking for stdlib.h... no
+checking for string.h... no
+checking for memory.h... no
+checking for strings.h... no
+checking for inttypes.h... no
+checking for stdint.h... no
+checking for unistd.h... no
+checking iconv.h usability... no
+checking iconv.h presence... yes
+configure: WARNING: iconv.h: present but cannot be compiled
+configure: WARNING: iconv.h:     check for missing prerequisite headers?
+configure: WARNING: iconv.h: see the Autoconf documentation
+configure: WARNING: iconv.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: iconv.h: proceeding with the preprocessor's result
+configure: WARNING: iconv.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for iconv.h... yes
+checking locale.h usability... no
+checking locale.h presence... yes
+configure: WARNING: locale.h: present but cannot be compiled
+configure: WARNING: locale.h:     check for missing prerequisite headers?
+configure: WARNING: locale.h: see the Autoconf documentation
+configure: WARNING: locale.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: locale.h: proceeding with the preprocessor's result
+configure: WARNING: locale.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for locale.h... yes
+checking fcntl.h usability... no
+checking fcntl.h presence... yes
+configure: WARNING: fcntl.h: present but cannot be compiled
+configure: WARNING: fcntl.h:     check for missing prerequisite headers?
+configure: WARNING: fcntl.h: see the Autoconf documentation
+configure: WARNING: fcntl.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: fcntl.h: proceeding with the preprocessor's result
+configure: WARNING: fcntl.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for fcntl.h... yes
+checking limits.h usability... no
+checking limits.h presence... yes
+configure: WARNING: limits.h: present but cannot be compiled
+configure: WARNING: limits.h:     check for missing prerequisite headers?
+configure: WARNING: limits.h: see the Autoconf documentation
+configure: WARNING: limits.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: limits.h: proceeding with the preprocessor's result
+configure: WARNING: limits.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for limits.h... yes
+checking stddef.h usability... no
+checking stddef.h presence... yes
+configure: WARNING: stddef.h: present but cannot be compiled
+configure: WARNING: stddef.h:     check for missing prerequisite headers?
+configure: WARNING: stddef.h: see the Autoconf documentation
+configure: WARNING: stddef.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: stddef.h: proceeding with the preprocessor's result
+configure: WARNING: stddef.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for stddef.h... yes
+checking for stdlib.h... (cached) no
+checking for strings.h... (cached) no
+checking for string.h... (cached) no
+checking sys/file.h usability... no
+checking sys/file.h presence... yes
+configure: WARNING: sys/file.h: present but cannot be compiled
+configure: WARNING: sys/file.h:     check for missing prerequisite headers?
+configure: WARNING: sys/file.h: see the Autoconf documentation
+configure: WARNING: sys/file.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: sys/file.h: proceeding with the preprocessor's result
+configure: WARNING: sys/file.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for sys/file.h... yes
+checking for unistd.h... (cached) no
+checking for an ANSI C-conforming const... no
+checking for inline... no
+checking for obstacks... no
+checking for off_t... no
+checking for size_t... no
+checking whether struct tm is in sys/time.h or time.h... sys/time.h
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for long... no
+checking size of long... 0
+checking for clearerr_unlocked... no
+checking for feof_unlocked... no
+checking for ferror_unlocked... no
+checking for fflush_unlocked... no
+checking for fgetc_unlocked... no
+checking for fgets_unlocked... no
+checking for fileno_unlocked... no
+checking for fprintf_unlocked... no
+checking for fputc_unlocked... no
+checking for fputs_unlocked... no
+checking for fread_unlocked... no
+checking for fwrite_unlocked... no
+checking for getchar_unlocked... no
+checking for getc_unlocked... no
+checking for putchar_unlocked... no
+checking for putc_unlocked... no
+checking whether abort is declared... no
+checking whether basename is declared... no
+checking whether errno is declared... no
+checking whether getopt is declared... no
+checking whether clearerr_unlocked is declared... no
+checking whether feof_unlocked is declared... no
+checking whether ferror_unlocked is declared... no
+checking whether fflush_unlocked is declared... no
+checking whether fgetc_unlocked is declared... no
+checking whether fgets_unlocked is declared... no
+checking whether fileno_unlocked is declared... no
+checking whether fprintf_unlocked is declared... no
+checking whether fputc_unlocked is declared... no
+checking whether fputs_unlocked is declared... no
+checking whether fread_unlocked is declared... no
+checking whether fwrite_unlocked is declared... no
+checking whether getchar_unlocked is declared... no
+checking whether getc_unlocked is declared... no
+checking whether putchar_unlocked is declared... no
+checking whether putc_unlocked is declared... no
+checking for working alloca.h... no
+checking for alloca... no
+checking whether `alloca.c' needs Cray hooks... (cached) no
+checking stack direction for C alloca... (cached) -1
+checking for ANSI C header files... (cached) no
+checking for nl_langinfo and CODESET... no
+checking whether NLS is requested... no
+checking for uchar...
+checking for non-GNU ld... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ld
+checking if the linker (/crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ld) is GNU ld... no
+checking for shared library run path origin... done
+checking for iconv... no, consider installing GNU libiconv
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating config.h
+configuring gcc
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking target system type... x86_64-unknown-linux-gnu
+checking LIBRARY_PATH variable... ok
+checking GCC_EXEC_PREFIX variable... ok
+checking whether to place generated files in the source directory... no
+checking whether a default linker was specified... no
+checking whether a default assembler was specified... no
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking whether gcc40-cc and cc understand -c and -o together... yes
+checking how to run the C preprocessor... gcc40-cpp
+checking for inline... no
+checking for long long int... no
+checking for __int64... no
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... no
+checking for sys/stat.h... no
+checking for stdlib.h... no
+checking for string.h... no
+checking for memory.h... no
+checking for strings.h... no
+checking for inttypes.h... no
+checking for stdint.h... no
+checking for unistd.h... no
+checking for void *... no
+checking size of void *... 0
+checking for short... no
+checking size of short... 0
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for long... no
+checking size of long... 0
+checking whether gcc40-cc accepts -Wno-long-long... no
+checking whether gcc40-cc accepts -Wno-variadic-macros... no
+checking whether gcc40-cc accepts -Wold-style-definition... no
+checking valgrind.h usability... no
+checking valgrind.h presence... yes
+configure: WARNING: valgrind.h: present but cannot be compiled
+configure: WARNING: valgrind.h:     check for missing prerequisite headers?
+configure: WARNING: valgrind.h: see the Autoconf documentation
+configure: WARNING: valgrind.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: valgrind.h: proceeding with the preprocessor's result
+configure: WARNING: valgrind.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ------------------------------------------ ##
+configure: WARNING:     ## Report this to the AC_PACKAGE_NAME lists.  ##
+configure: WARNING:     ## ------------------------------------------ ##
+checking for valgrind.h... yes
+checking whether make sets $(MAKE)... yes
+checking for gawk... no
+checking for mawk... no
+checking for nawk... no
+checking for awk... awk
+checking whether ln -s works... yes
+checking whether ln works... yes
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ranlib
+checking for a BSD compatible install... /tmp/gcc-build/gcc-4.0.4/gcc/../install-sh -c
+checking for cmp's capabilities... fastcompare
+checking for mktemp... no
+checking for makeinfo... no
+configure: WARNING:
+*** Makeinfo is missing or too old.
+*** Info documentation will not be built.
+checking for recent Pod::Man... no
+checking for flex... no
+checking for bison... no
+checking for nm... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/nm
+checking for ar... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ar
+checking for GNU C library... no
+checking for ANSI C header files... (cached) no
+checking whether time.h and sys/time.h may both be included... no
+checking whether string.h and strings.h may both be included... no
+checking for sys/wait.h that is POSIX.1 compatible... no
+checking for limits.h... yes
+checking for stddef.h... yes
+checking for string.h... (cached) no
+checking for strings.h... (cached) no
+checking for stdlib.h... (cached) no
+checking for time.h... yes
+checking for iconv.h... yes
+checking for fcntl.h... yes
+checking for unistd.h... (cached) no
+checking for sys/file.h... yes
+checking for sys/time.h... yes
+checking for sys/mman.h... yes
+checking for sys/resource.h... yes
+checking for sys/param.h... yes
+checking for sys/times.h... yes
+checking for sys/stat.h... (cached) no
+checking for direct.h... yes
+checking for malloc.h... yes
+checking for langinfo.h... yes
+checking for ldfcn.h... yes
+checking for locale.h... yes
+checking for wchar.h... yes
+checking for thread.h... yes
+checking for pthread.h... yes
+checking for CHAR_BIT... yes
+checking whether byte ordering is bigendian... (cached) no
+checking for collect2 libraries... none required
+checking for library containing exc_resume... no
+checking for library containing ldexp... no
+checking for inttypes.h... no
+checking for times... (cached) yes
+checking for clock... (cached) yes
+checking for dup2... no
+checking for kill... no
+checking for getrlimit... no
+checking for setrlimit... no
+checking for atoll... no
+checking for atoq... no
+checking for sysconf... (cached) yes
+checking for strsignal... (cached) yes
+checking for getrusage... (cached) yes
+checking for nl_langinfo... no
+checking for scandir... no
+checking for alphasort... no
+checking for gettimeofday... (cached) yes
+checking for mbstowcs... no
+checking for wcswidth... no
+checking for mmap... no
+checking for mincore... no
+checking for setlocale... no
+checking for clearerr_unlocked... no
+checking for feof_unlocked... no
+checking for ferror_unlocked... no
+checking for fflush_unlocked... no
+checking for fgetc_unlocked... no
+checking for fgets_unlocked... no
+checking for fileno_unlocked... no
+checking for fprintf_unlocked... no
+checking for fputc_unlocked... no
+checking for fputs_unlocked... no
+checking for fread_unlocked... no
+checking for fwrite_unlocked... no
+checking for getchar_unlocked... no
+checking for getc_unlocked... no
+checking for putchar_unlocked... no
+checking for putc_unlocked... no
+checking for ssize_t... no
+checking for uid_t in sys/types.h... no
+checking type of array argument to getgroups... gid_t
+checking whether the printf functions support %p... yes
+checking for sys/mman.h... (cached) yes
+checking for mmap... (cached) no
+checking for pid_t... (cached) yes
+checking for unistd.h... (cached) no
+checking for vfork.h... yes
+checking for fork... (cached) yes
+checking for vfork... (cached) yes
+checking for working fork... yes
+checking for working vfork... (cached) yes
+checking for non-GNU ld... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ld
+checking if the linker (/crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ld) is GNU ld... no
+checking for shared library run path origin... done
+checking for iconv... no, consider installing GNU libiconv
+checking for LC_MESSAGES... no
+checking for nl_langinfo and CODESET... no
+checking whether getenv is declared... no
+checking whether atol is declared... no
+checking whether sbrk is declared... no
+checking whether abort is declared... no
+checking whether atof is declared... no
+checking whether getcwd is declared... no
+checking whether getwd is declared... no
+checking whether strsignal is declared... no
+checking whether strstr is declared... no
+checking whether errno is declared... no
+checking whether snprintf is declared... no
+checking whether vasprintf is declared... no
+checking whether malloc is declared... no
+checking whether realloc is declared... no
+checking whether calloc is declared... no
+checking whether free is declared... no
+checking whether basename is declared... no
+checking whether getopt is declared... no
+checking whether clock is declared... no
+checking whether getpagesize is declared... no
+checking whether clearerr_unlocked is declared... no
+checking whether feof_unlocked is declared... no
+checking whether ferror_unlocked is declared... no
+checking whether fflush_unlocked is declared... no
+checking whether fgetc_unlocked is declared... no
+checking whether fgets_unlocked is declared... no
+checking whether fileno_unlocked is declared... no
+checking whether fprintf_unlocked is declared... no
+checking whether fputc_unlocked is declared... no
+checking whether fputs_unlocked is declared... no
+checking whether fread_unlocked is declared... no
+checking whether fwrite_unlocked is declared... no
+checking whether getchar_unlocked is declared... no
+checking whether getc_unlocked is declared... no
+checking whether putchar_unlocked is declared... no
+checking whether putc_unlocked is declared... no
+checking whether getrlimit is declared... no
+checking whether setrlimit is declared... no
+checking whether getrusage is declared... no
+checking whether ldgetname is declared... no
+checking whether times is declared... no
+checking for struct tms... no
+checking for clock_t... no
+checking for .preinit_array/.init_array/.fini_array support... yes
+checking if mkdir takes one argument... yes
+Using `/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.c' for machine-specific logic.
+Using `/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md' as machine description file.
+Using the following target machine macro files:
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/biarch64.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/unix.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/att.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/dbxelf.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/elfos.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/svr4.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/linux.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/x86-64.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/linux64.h
+Using host-linux.o for host machine hooks.
+checking whether NLS is requested... no
+checking what assembler to use... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/as
+checking what linker to use... /crunch/store/rzzs05bbvjbn8d7ng6vd9hjw8n6azq6r-binutils-2.30-tcc/bin/ld
+checking what nm to use... nm
+checking what objdump to use... objdump
+checking assembler for .balign and .p2align... yes
+checking assembler for .p2align with maximum skip... no
+checking assembler for working .subsection -1... no
+checking assembler for .weak... yes
+checking assembler for .nsubspa comdat... no
+checking assembler for .hidden... yes
+checking linker for .hidden support... no
+checking assembler for .sleb128 and .uleb128... no
+checking assembler for eh_frame optimization... no
+checking assembler for section merging support... no
+checking assembler for section merging support... (cached) no
+checking assembler for COMDAT group support... no
+checking assembler for COMDAT group support... no
+checking assembler for thread-local storage support... no
+checking linker -Bstatic/-Bdynamic option... no
+checking assembler for filds and fists mnemonics... no
+checking assembler for cmov syntax... no
+checking assembler for GOTOFF in data... no
+checking assembler for dwarf2 debug_line support... no
+checking assembler for buggy dwarf2 .file directive... no
+checking assembler for --gdwarf2 option... yes
+checking assembler for --gstabs option... yes
+checking linker read-only and read-write section mixing... unknown
+checking linker PT_GNU_EH_FRAME support... no
+checking linker position independent executable support... no
+checking linker --as-needed support... no
+Using ggc-page for garbage collection.
+checking whether to enable maintainer-specific portions of Makefiles... no
+Links are now set up to build a native compiler for x86_64-unknown-linux-gnu.
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating gccbug
+config.status: creating mklibgcc
+config.status: creating libada-mk
+config.status: creating auto-host.h
+config.status: executing default commands
+make: Entering directory `/tmp/gcc-build/build/gcc'
+make: `/tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c' is up to date.
+make: Leaving directory `/tmp/gcc-build/build/gcc'
+building libiberty
+building libcpp
+building gcc
+make: Entering directory `/tmp/gcc-build/build/gcc'
+TARGET_CPU_DEFAULT="" \
+HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh config.h
+TARGET_CPU_DEFAULT="" \
+HEADERS="config/i386/biarch64.h config/i386/i386.h config/i386/unix.h config/i386/att.h config/dbxelf.h config/elfos.h config/svr4.h config/linux.h config/i386/x86-64.h config/i386/linux64.h defaults.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh tm.h
+TARGET_CPU_DEFAULT="" \
+HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh bconfig.h
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmodes.o /tmp/gcc-build/gcc-4.0.4/gcc/genmodes.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/errors.o /tmp/gcc-build/gcc-4.0.4/gcc/errors.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmodes \
+ build/genmodes.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genmodes -h > tmp-modes.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.h insn-modes.h
+build/genmodes -m > tmp-min-modes.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-min-modes.c min-insn-modes.c
+build/genmodes > tmp-modes.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.c insn-modes.c
+echo timestamp > s-modes
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmddeps.o /tmp/gcc-build/gcc-4.0.4/gcc/genmddeps.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengenrtl.o /tmp/gcc-build/gcc-4.0.4/gcc/gengenrtl.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengenrtl \
+ build/gengenrtl.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gengenrtl -h > tmp-genrtl.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.h genrtl.h
+build/gengenrtl > tmp-genrtl.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.c genrtl.c
+echo timestamp > s-genrtl
+echo "/* This file is machine generated.  Do not edit.  */" > tmp-gtyp.h
+echo "static const char *const srcdir = "  >> tmp-gtyp.h
+echo "\"/tmp/gcc-build/gcc-4.0.4/gcc\"" >> tmp-gtyp.h
+echo ";" >> tmp-gtyp.h
+echo "static const char *const lang_files[] = {" >> tmp-gtyp.h
+ll="/tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in  /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c "; \
+for f in $ll; do \
+echo "\"$f\", "; done >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+echo "static const char *const langs_for_lang_files[] = {" >> tmp-gtyp.h
+ff="c  c  c  c  c  c  c  c "; \
+for f in $ff; do \
+echo "\"$f\", " ; done  >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+echo "static const char *const all_files[] = {" >> tmp-gtyp.h
+gf="/tmp/gcc-build/gcc-4.0.4/gcc/input.h /tmp/gcc-build/gcc-4.0.4/gcc/coretypes.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/line-map.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpplib.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpp-id-data.h auto-host.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/ansidecl.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/biarch64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/unix.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/att.h /tmp/gcc-build/gcc-4.0.4/gcc/config/dbxelf.h /tmp/gcc-build/gcc-4.0.4/gcc/config/elfos.h /tmp/gcc-build/gcc-4.0.4/gcc/config/svr4.h /tmp/gcc-build/gcc-4.0.4/gcc/config/linux.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/x86-64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/linux64.h /tmp/gcc-build/gcc-4.0.4/gcc/defaults.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/hashtab.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/splay-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.h /tmp/gcc-build/gcc-4.0.4/gcc/coverage.c /tmp/gcc-build/gcc-4.0.4/gcc/function.h /tmp/gcc-build/gcc-4.0.4/gcc/rtl.h /tmp/gcc-build/gcc-4.0.4/gcc/optabs.h /tmp/gcc-build/gcc-4.0.4/gcc/tree.h /tmp/gcc-build/gcc-4.0.4/gcc/libfuncs.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/symtab.h /tmp/gcc-build/gcc-4.0.4/gcc/real.h /tmp/gcc-build/gcc-4.0.4/gcc/varray.h /tmp/gcc-build/gcc-4.0.4/gcc/insn-addr.h /tmp/gcc-build/gcc-4.0.4/gcc/hwint.h /tmp/gcc-build/gcc-4.0.4/gcc/cselib.h /tmp/gcc-build/gcc-4.0.4/gcc/basic-block.h  /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.h /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/reload.h /tmp/gcc-build/gcc-4.0.4/gcc/alias.c /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.c /tmp/gcc-build/gcc-4.0.4/gcc/cselib.c /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.c /tmp/gcc-build/gcc-4.0.4/gcc/dbxout.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2out.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2asm.c /tmp/gcc-build/gcc-4.0.4/gcc/dojump.c /tmp/gcc-build/gcc-4.0.4/gcc/emit-rtl.c /tmp/gcc-build/gcc-4.0.4/gcc/except.c /tmp/gcc-build/gcc-4.0.4/gcc/explow.c /tmp/gcc-build/gcc-4.0.4/gcc/expr.c /tmp/gcc-build/gcc-4.0.4/gcc/function.c /tmp/gcc-build/gcc-4.0.4/gcc/gcse.c /tmp/gcc-build/gcc-4.0.4/gcc/integrate.c /tmp/gcc-build/gcc-4.0.4/gcc/lists.c /tmp/gcc-build/gcc-4.0.4/gcc/optabs.c /tmp/gcc-build/gcc-4.0.4/gcc/profile.c /tmp/gcc-build/gcc-4.0.4/gcc/regclass.c /tmp/gcc-build/gcc-4.0.4/gcc/reg-stack.c /tmp/gcc-build/gcc-4.0.4/gcc/cfglayout.c /tmp/gcc-build/gcc-4.0.4/gcc/sdbout.c /tmp/gcc-build/gcc-4.0.4/gcc/stor-layout.c /tmp/gcc-build/gcc-4.0.4/gcc/stringpool.c /tmp/gcc-build/gcc-4.0.4/gcc/tree.c /tmp/gcc-build/gcc-4.0.4/gcc/varasm.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-mudflap.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-flow.h /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssanames.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-eh.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-phinodes.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-cfg.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-dfa.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-propagate.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-iterator.c /tmp/gcc-build/gcc-4.0.4/gcc/gimplify.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-chrec.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-complex.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/rtl-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-nested.c /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.c /tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c"; \
+for f in $gf; do \
+echo "\"$f\", "; done >> tmp-gtyp.h
+echo " NULL};" >> tmp-gtyp.h
+echo "static const char *const lang_dir_names[] = { \"c\", " >> tmp-gtyp.h
+gf=""; \
+for l in $gf; do \
+echo "\"$l\", "; done >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gtyp.h gtyp-gen.h
+echo timestamp > s-gtyp-gen
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-lex.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-lex.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-yacc.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengtype \
+ build/gengtype.o build/gengtype-lex.o build/gengtype-yacc.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gengtype
+echo timestamp > s-gtype
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/rtl.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/read-rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/read-rtl.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/ggc-none.o /tmp/gcc-build/gcc-4.0.4/gcc/ggc-none.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/min-insn-modes.o min-insn-modes.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gensupport.o /tmp/gcc-build/gcc-4.0.4/gcc/gensupport.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/dummy-conditions.o /tmp/gcc-build/gcc-4.0.4/gcc/dummy-conditions.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmddeps \
+ build/genmddeps.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genmddeps /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-mddeps
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-mddeps mddeps.mk
+echo timestamp > s-mddeps
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genconstants.o /tmp/gcc-build/gcc-4.0.4/gcc/genconstants.c
+make: *** [build/genconstants.o] Segmentation fault (core dumped)
+make: Leaving directory `/tmp/gcc-build/build/gcc'

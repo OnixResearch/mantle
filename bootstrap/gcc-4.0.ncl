@@ -74,6 +74,8 @@ saw_gengtype_yacc_src=0
 saw_rtl_src=0
 saw_read_rtl_src=0
 saw_ggc_none_src=0
+saw_min_insn_modes_src=0
+saw_gensupport_src=0
 saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
@@ -95,6 +97,8 @@ for arg in "\$@"; do
     */rtl.c|rtl.c) saw_rtl_src=1 ;;
     */read-rtl.c|read-rtl.c) saw_read_rtl_src=1 ;;
     */ggc-none.c|ggc-none.c) saw_ggc_none_src=1 ;;
+    */min-insn-modes.c|min-insn-modes.c) saw_min_insn_modes_src=1 ;;
+    */gensupport.c|gensupport.c) saw_gensupport_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -141,6 +145,16 @@ fi
 if [ "\$saw_ggc_none_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-ggc-none-empty.c
   echo 'int gcc40_ggc_none_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_min_insn_modes_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-min-insn-modes-empty.c
+  echo 'int gcc40_min_insn_modes_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gensupport_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gensupport-empty.c
+  echo 'int gcc40_gensupport_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
