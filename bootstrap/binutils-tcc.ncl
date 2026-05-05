@@ -62,7 +62,7 @@ let binutils_src = crunch.fetchTarball {
 
       export CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE"
       export LDFLAGS="-static"
-      export AR="tcc -ar"
+      export AR="ar-shell"
       export RANLIB=true
       export MAKEINFO=true
       export CC_FOR_BUILD=tcc
@@ -92,6 +92,47 @@ fi
 exec tcc -E -I$MUSL/include "\$@"
 EOF
       $BB chmod 755 "$TOOLBIN/cpp-tcc"
+      $BB cat > "$TOOLBIN/ar-shell" <<'EOF'
+#!/bin/sh
+BB=/bin/busybox
+flags="$1"
+shift
+archive="$1"
+shift
+case "$flags" in *c*) rm -f "$archive";; esac
+if [ ! -f "$archive" ]; then $BB printf '!<arch>\n' > "$archive"; fi
+longs=""
+off=0
+for obj in "$@"; do
+  [ -f "$obj" ] || continue
+  base=${obj##*/}
+  case "$base" in
+    ????????????????*) longs="$longs$base/\n"; off=$(($off + ${#base} + 2));;
+  esac
+done
+if [ "$off" -gt 0 ]; then
+  $BB printf '%-16.16s%-12s%-6s%-6s%-8s%-10s`\n' "//" 0 0 0 100644 "$off" >> "$archive"
+  $BB printf '%b' "$longs" >> "$archive"
+  if [ "$(($off % 2))" -ne 0 ]; then $BB printf '\n' >> "$archive"; fi
+fi
+off=0
+for obj in "$@"; do
+  [ -f "$obj" ] || continue
+  $BB chmod u+r "$obj" 2>/dev/null || true
+  base=${obj##*/}
+  case "$base" in
+    ????????????????*) name="/$off"; off=$(($off + ${#base} + 2));;
+    *) name="$base/";;
+  esac
+  size=$($BB wc -c < "$obj" | $BB tr -d ' ')
+  $BB printf '%-16.16s%-12s%-6s%-6s%-8s%-10s`\n' "$name" 0 0 0 100644 "$size" >> "$archive"
+  $BB cat "$obj" >> "$archive"
+  odd=$(($size % 2))
+  if [ "$odd" -ne 0 ]; then $BB printf '\n' >> "$archive"; fi
+done
+exit 0
+EOF
+      $BB chmod 755 "$TOOLBIN/ar-shell"
       export PATH="$TOOLBIN:$PATH"
       export CPP="$TOOLBIN/cpp-tcc"
 
@@ -208,12 +249,41 @@ NR==1195 { skip=0 }
 ' bfd/bfd.c > bfd/bfd.c.new
       $BB mv bfd/bfd.c.new bfd/bfd.c
 
+      $BB cat > gas/messages.c <<'EOF'
+#include "as.h"
+#include <signal.h>
+
+static int warning_count;
+static int error_count;
+
+int had_warnings (void) { return warning_count; }
+int had_errors (void) { return error_count; }
+
+static void simple_where (void) {
+  const char *file; unsigned int line;
+  file = as_where (&line);
+  if (file) { fputs (file, stderr); if (line) { fputc (':', stderr); } fputc (':', stderr); fputc (' ', stderr); }
+}
+
+void as_tsktsk (const char *format, ...) { simple_where (); if (format) fputs (format, stderr); fputc ('\n', stderr); }
+void as_warn (const char *format, ...) { if (!flag_no_warnings) { ++warning_count; simple_where (); fputs ("Warning: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); } }
+void as_warn_where (const char *file, unsigned int line, const char *format, ...) { if (!flag_no_warnings) { ++warning_count; if (file) { fputs (file, stderr); fputc (':', stderr); } (void) line; fputs ("Warning: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); } }
+void as_bad (const char *format, ...) { ++error_count; simple_where (); fputs ("Error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); }
+void as_bad_where (const char *file, unsigned int line, const char *format, ...) { ++error_count; if (file) { fputs (file, stderr); fputc (':', stderr); } (void) line; fputs ("Error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); }
+void as_fatal (const char *format, ...) { simple_where (); fputs ("Fatal error: ", stderr); if (format) fputs (format, stderr); fputc ('\n', stderr); if (out_file_name) unlink_if_ordinary (out_file_name); xexit (EXIT_FAILURE); }
+void as_abort (const char *file, int line, const char *fn) { (void) file; (void) line; fputs ("Internal error", stderr); if (fn) { fputs (": ", stderr); fputs (fn, stderr); } fputc ('\n', stderr); xexit (EXIT_FAILURE); }
+void signal_init (void) { }
+void sprint_value (char *buf, valueT val) { sprintf_vma (buf, (bfd_vma) val); }
+void as_warn_value_out_of_range (const char *prefix, offsetT value, offsetT min, offsetT max, const char *file, unsigned line) { (void)value; (void)min; (void)max; as_warn_where (file, line, prefix ? prefix : "value out of range"); }
+void as_bad_value_out_of_range (const char *prefix, offsetT value, offsetT min, offsetT max, const char *file, unsigned line) { (void)value; (void)min; (void)max; as_bad_where (file, line, prefix ? prefix : "value out of range"); }
+EOF
+
       config_common() {
         LD=true \
-        AR="tcc -ar" \
+        AR="ar-shell" \
         CC=tcc \
         CPP="$TOOLBIN/cpp-tcc" \
-        CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1" \
+        CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING" \
         LDFLAGS="-static" \
         RANLIB=true \
         MAKEINFO=true \
@@ -232,7 +302,7 @@ NR==1195 { skip=0 }
           --libdir="$out/lib" \
           --with-sysroot= \
           --srcdir=. \
-          --enable-compressed-debug-sections=all \
+          --enable-compressed-debug-sections=none \
           lt_cv_sys_max_cmd_len=32768
       }
 
@@ -265,16 +335,33 @@ EOF
       test -f bfd/bfd-in2.h || { echo "ERROR: missing generated bfd/bfd-in2.h" >&2; exit 1; }
       test -f bfd/libbfd.h || { echo "ERROR: missing generated bfd/libbfd.h" >&2; exit 1; }
 
-      for dir in libiberty bfd opcodes binutils gas ld; do
+      for mf in bfd/Makefile opcodes/Makefile gas/Makefile binutils/Makefile ld/Makefile; do
+        if [ -f "$mf" ]; then
+          $BB sed -i \
+            -e 's#-I\./\.\./zlib##g' \
+            -e 's#-L\./\.\./zlib -lz##g' \
+            -e 's#-lz##g' \
+            "$mf"
+        fi
+      done
+
+      for dir in libiberty bfd opcodes gas binutils ld; do
         echo "build: $dir" >&2
+        if [ "$dir" = gas ]; then
+          $BB sed -i \
+            -e 's#\.\./opcodes/libopcodes\.la#../opcodes/*.o#g' \
+            -e 's#\.\./bfd/libbfd\.la#../bfd/*.o#g' \
+            -e 's#\.\./libiberty/libiberty\.a#../libiberty/*.o#g' \
+            gas/Makefile
+        fi
         make -j1 -C "$dir" \
           tooldir="$out" \
           CC=tcc \
           CPP="$TOOLBIN/cpp-tcc" \
-          CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1" \
+          CFLAGS="-I$MUSL/include -static -D_GNU_SOURCE -DBUILDFIXED=1 -DDYNAMIC_CRC_TABLE=1 -DNO_LISTING" \
           CPPFLAGS="-DPLUGIN_LITTLE_ENDIAN" \
           LDFLAGS="-static" \
-          AR="tcc -ar" \
+          AR="ar-shell" \
           RANLIB=true \
           MAKEINFO=true || {
             echo "ERROR: build failed in $dir" >&2
@@ -286,11 +373,16 @@ EOF
             done
             exit 1
           }
+        if [ "$dir" = bfd ]; then
+          for la in bfd/libbfd.la bfd/.libs/libbfd.la; do
+            [ -f "$la" ] && $BB sed -i -e 's# -L[^ ]*/zlib -lz##g' -e 's# -L[^ ]*/zlib##g' -e 's# -L\./\.\./zlib -lz##g' -e 's# -L\./\.\./zlib##g' -e 's# -lz##g' "$la"
+          done
+        fi
       done
 
       # Install
       $BB mkdir -p "$out/bin" "$out/lib"
-      for dir in libiberty bfd opcodes binutils gas ld; do
+      for dir in libiberty bfd opcodes gas binutils ld; do
         echo "install: $dir" >&2
         make -j1 -C "$dir" \
           tooldir="$out" \
