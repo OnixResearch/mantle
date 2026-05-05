@@ -67,6 +67,7 @@ saw_c=0
 saw_conftest=0
 saw_genmodes_src=0
 saw_genmddeps_src=0
+saw_gengenrtl_src=0
 saw_errors_src=0
 prev_o=0
 for arg in "\$@"; do
@@ -81,6 +82,7 @@ for arg in "\$@"; do
     *conftest.c) saw_conftest=1 ;;
     */genmodes.c|genmodes.c) saw_genmodes_src=1 ;;
     */genmddeps.c|genmddeps.c) saw_genmddeps_src=1 ;;
+    */gengenrtl.c|gengenrtl.c) saw_gengenrtl_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -92,6 +94,11 @@ fi
 if [ "\$saw_genmddeps_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-genmddeps-empty.c
   echo 'int gcc40_genmddeps_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_gengenrtl_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-gengenrtl-empty.c
+  echo 'int gcc40_gengenrtl_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -185,6 +192,42 @@ GENMODES_SCRIPT
 #!/bin/sh
 printf 'MD_INCLUDES =\n'
 GENMDDEPS_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/gengenrtl|build/gengenrtl)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENGENRTL_SCRIPT'
+#!/bin/sh
+if [ "x\$1" = "x-h" ]; then
+  cat <<'H'
+#ifndef GCC_GENRTL_H
+#define GCC_GENRTL_H
+extern rtx gen_rtx_fmt_0 (RTX_CODE, enum machine_mode);
+extern rtx gen_rtx_fmt_i (RTX_CODE, enum machine_mode, int);
+extern rtx gen_rtx_fmt_ii (RTX_CODE, enum machine_mode, int, int);
+extern rtx gen_rtx_fmt_e (RTX_CODE, enum machine_mode, rtx);
+extern rtx gen_rtx_fmt_ee (RTX_CODE, enum machine_mode, rtx, rtx);
+extern rtx gen_rtx_fmt_E (RTX_CODE, enum machine_mode, rtvec);
+#endif
+H
+else
+  cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+#include "rtl.h"
+rtx gen_rtx_fmt_0 (RTX_CODE code, enum machine_mode mode) { return gen_rtx_raw_fmt_0 (code, mode); }
+rtx gen_rtx_fmt_i (RTX_CODE code, enum machine_mode mode, int arg0) { rtx x = gen_rtx_raw_fmt_i (code, mode); XINT (x, 0) = arg0; return x; }
+rtx gen_rtx_fmt_ii (RTX_CODE code, enum machine_mode mode, int arg0, int arg1) { rtx x = gen_rtx_raw_fmt_ii (code, mode); XINT (x, 0) = arg0; XINT (x, 1) = arg1; return x; }
+rtx gen_rtx_fmt_e (RTX_CODE code, enum machine_mode mode, rtx arg0) { rtx x = gen_rtx_raw_fmt_e (code, mode); XEXP (x, 0) = arg0; return x; }
+rtx gen_rtx_fmt_ee (RTX_CODE code, enum machine_mode mode, rtx arg0, rtx arg1) { rtx x = gen_rtx_raw_fmt_ee (code, mode); XEXP (x, 0) = arg0; XEXP (x, 1) = arg1; return x; }
+rtx gen_rtx_fmt_E (RTX_CODE code, enum machine_mode mode, rtvec arg0) { rtx x = gen_rtx_raw_fmt_E (code, mode); XVEC (x, 0) = arg0; return x; }
+C
+fi
+GENGENRTL_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
       exit 0
     fi
