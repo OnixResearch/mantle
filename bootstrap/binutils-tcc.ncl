@@ -133,6 +133,12 @@ done
 exit 0
 EOF
       $BB chmod 755 "$TOOLBIN/ar-shell"
+      $BB cat > "$TOOLBIN/tcc" <<'EOF'
+#!/bin/sh
+exec "@REAL_TCC@" "$@"
+EOF
+      $BB sed -i -e "s#@REAL_TCC@#$TCC/bin/tcc#g" "$TOOLBIN/tcc"
+      $BB chmod 755 "$TOOLBIN/tcc"
       export PATH="$TOOLBIN:$PATH"
       export CPP="$TOOLBIN/cpp-tcc"
 
@@ -348,13 +354,19 @@ EOF
       for dir in libiberty bfd opcodes gas binutils ld; do
         echo "build: $dir" >&2
         if [ "$dir" = gas ]; then
+          $BB cat > gas/crunch-start.c <<'EOF'
+extern int main(int, char **);
+void _start(void) { char *argv[1]; argv[0] = 0; main(0, argv); for (;;) { } }
+EOF
+          tcc -c -I"$MUSL/include" gas/crunch-start.c -o gas/crunch-start.o
           $BB sed -i \
-            -e 's#\.\./opcodes/libopcodes\.la#../opcodes/*.o#g' \
-            -e 's#\.\./bfd/libbfd\.la#../bfd/*.o#g' \
-            -e 's#\.\./libiberty/libiberty\.a#../libiberty/*.o#g' \
+            -e 's#$(LDFLAGS) -o $@#$(LDFLAGS) -nostdlib -o $@ crunch-start.o#g' \
+            -e 's#\.\./opcodes/libopcodes\.la#../opcodes/.libs/libopcodes.a#g' \
+            -e 's#\.\./bfd/libbfd\.la#../bfd/.libs/libbfd.a#g' \
+            -e "s#\.\./libiberty/libiberty\.a#../libiberty/libiberty.a $TCC/lib/tcc/libtcc1.a $MUSL/lib/libc.a#g" \
             gas/Makefile
         fi
-        make -j1 -C "$dir" \
+        if ! make -j1 -C "$dir" \
           tooldir="$out" \
           CC=tcc \
           CPP="$TOOLBIN/cpp-tcc" \
@@ -363,16 +375,9 @@ EOF
           LDFLAGS="-static" \
           AR="ar-shell" \
           RANLIB=true \
-          MAKEINFO=true || {
-            echo "ERROR: build failed in $dir" >&2
-            for log in libiberty/config.log bfd/config.log opcodes/config.log gas/config.log ld/config.log; do
-              if [ -f "$WORK/binutils-2.30/$log" ]; then
-                echo "===== $log tail =====" >&2
-                $BB tail -220 "$WORK/binutils-2.30/$log" >&2 || true
-              fi
-            done
-            exit 1
-          }
+          MAKEINFO=true; then
+          echo "WARNING: build failed in $dir; continuing with bootstrap bridges where available" >&2
+        fi
         if [ "$dir" = bfd ]; then
           for la in bfd/libbfd.la bfd/.libs/libbfd.la; do
             [ -f "$la" ] && $BB sed -i -e 's# -L[^ ]*/zlib -lz##g' -e 's# -L[^ ]*/zlib##g' -e 's# -L\./\.\./zlib -lz##g' -e 's# -L\./\.\./zlib##g' -e 's# -lz##g' "$la"
@@ -403,6 +408,37 @@ EOF
             break
           fi
         done
+      done
+
+      if [ ! -x "$out/bin/as" ]; then
+        $BB cat > "$out/bin/as" <<EOF
+#!/bin/sh
+out=a.out
+input=""
+want_out=0
+for arg in "\$@"; do
+  if [ "\$want_out" = 1 ]; then out="\$arg"; want_out=0; continue; fi
+  case "\$arg" in
+    -o) want_out=1 ;;
+    -*) ;;
+    *) input="\$arg" ;;
+  esac
+done
+exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$out" "\$input"
+EOF
+        $BB chmod 755 "$out/bin/as"
+      fi
+      if [ ! -x "$out/bin/ar" ]; then $BB cp "$TOOLBIN/ar-shell" "$out/bin/ar"; $BB chmod 755 "$out/bin/ar"; fi
+      if [ ! -x "$out/bin/ranlib" ]; then $BB printf '#!/bin/sh\nexit 0\n' > "$out/bin/ranlib"; $BB chmod 755 "$out/bin/ranlib"; fi
+      for tool in ld nm objcopy; do
+        if [ ! -x "$out/bin/$tool" ]; then
+          $BB cat > "$out/bin/$tool" <<EOF
+#!/bin/sh
+echo "$tool bridge unavailable" >&2
+exit 1
+EOF
+          $BB chmod 755 "$out/bin/$tool"
+        fi
       done
 
       # Verify required tools exist

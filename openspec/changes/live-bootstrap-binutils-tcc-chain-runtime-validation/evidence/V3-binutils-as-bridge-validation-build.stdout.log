@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/binutils-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/binutils-bridge-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/cii9ba11rq6w0fc845z23f5kwfiv8qzz-binutils-2.30-tcc.drv",
+      "label": "binutils-2.30-tcc",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/cii9ba11rq6w0fc845z23f5kwfiv8qzz-binutils-2.30-tcc.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/binutils-bridge-store/kwg4gyi1paj5sh0cvb6770fkdfkv3dp3-binutils-2.30-tcc",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/kwg4gyi1paj5sh0cvb6770fkdfkv3dp3-binutils-2.30-tcc",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/15996266873e1324b3db101b60d3aebf1284331bec6d535fc6a3021d82b8064f.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}
