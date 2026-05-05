@@ -706,6 +706,11 @@ DIRECTIVES_EOF
       $BB sed -i 's/ix86_attribute_table\[\]/ix86_attribute_table[10]/' gcc/config/i386/i386.c
       $BB sed -i 's/struct siginfo/siginfo_t/' gcc/config/i386/linux-unwind.h
       $BB sed -i 's/C_alloca/alloca/g' libiberty/alloca.c include/libiberty.h
+      # TinyCC reports an old GCC-compatible version and GCC 4.0's ansidecl.h
+      # otherwise rewrites inline to an empty macro.  Musl's <sys/types.h>
+      # under the c-parse flags deterministically segfaults TinyCC after that
+      # rewrite; keep a real inline spelling for this bootstrap handoff.
+      $BB sed -i 's/#  define inline  \/\* nothing \*\//#  define inline __inline__/' include/ansidecl.h
 
       cd "$WORK/build"
       for dir in libiberty libcpp gcc; do
@@ -834,6 +839,21 @@ int manual_config_nospace_probe;
 EOF
             try_cparse_variant cparse_manual_config_nospace /tmp/cparse_manual_config_nospace.c
             make_include_probe cparse_inc_config 'config.h'
+            make_autohost_define_prefix_probe() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" '/^#define / { print; seen++; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_prefix_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_autohost_define_prefix_probe autohost_defines_10_system 10
+            make_autohost_define_prefix_probe autohost_defines_25_system 25
+            make_autohost_define_prefix_probe autohost_defines_50_system 50
+            make_autohost_define_prefix_probe autohost_defines_100_system 100
+            make_autohost_define_prefix_probe autohost_defines_200_system 200
+            make_autohost_define_prefix_probe autohost_defines_400_system 400
             cat > /tmp/cparse_manual_config_system.c <<'EOF'
 #include "auto-host.h"
 #ifdef IN_GCC
@@ -879,6 +899,67 @@ EOF
 #include <safe-ctype.h>
 #include <sys/types.h>
 #include <errno.h>'
+            make_cparse_chunk_probe ansimacro_gcc_version_sys_types '#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#endif
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_ansi_defs_sys_types '#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#endif
+#define ANSI_PROTOTYPES 1
+#define PTR void *
+#define PTRCONST void *const
+#define LONG_DOUBLE long double
+#ifndef PARAMS
+#define PARAMS(ARGS) ARGS
+#endif
+#define VPARAMS(ARGS) ARGS
+#define VA_START(VA_LIST, VAR) va_start(VA_LIST, VAR)
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_undef_keywords_sys_types '#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#endif
+#undef const
+#undef volatile
+#undef signed
+#undef inline
+#if __STDC_VERSION__ > 199901L
+#else
+# if GCC_VERSION >= 2007
+#  define inline __inline__
+# else
+#  define inline
+# endif
+#endif
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_undef_const_sys_types '#undef const
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_undef_volatile_sys_types '#undef volatile
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_undef_signed_sys_types '#undef signed
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_undef_inline_sys_types '#undef inline
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_inline_empty_sys_types '#undef inline
+#define inline
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_inline_builtin_sys_types '#undef inline
+#define inline __inline__
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_attribute_blank_sys_types '#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#endif
+#if (GCC_VERSION < 2007)
+# define __attribute__(x)
+#endif
+#include <sys/types.h>'
+            make_cparse_chunk_probe ansimacro_extension_blank_sys_types '#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
+#endif
+#if GCC_VERSION < 2008
+#define __extension__
+#endif
+#include <sys/types.h>'
 
             make_ansidecl_system_chunk_probe() {
               label="$1"
@@ -889,7 +970,10 @@ EOF
               echo 'int ansidecl_system_chunk_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_ansidecl_system_chunk_probe ansidecl_chunk_sys_types_only '#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_stdarg '#include <stdarg.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdarg_sys_types '#include <stdarg.h>
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_va_copy '#include <stdarg.h>
 #ifndef va_copy
 # ifdef __va_copy
@@ -898,17 +982,40 @@ EOF
 #  define va_copy(d,s) ((d) = (s))
 # endif
 #endif'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_va_copy_sys_types '#include <stdarg.h>
+#ifndef va_copy
+# ifdef __va_copy
+#  define va_copy(d,s) __va_copy((d),(s))
+# else
+#  define va_copy(d,s) ((d) = (s))
+# endif
+#endif
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_stddef '#include <stdarg.h>
 #include <stddef.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stddef_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_stdio '#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_macros '#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
 #define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
 #define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_macros_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
+#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
+#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_safe_ctype '#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -918,6 +1025,16 @@ EOF
 #undef fread_unlocked
 #undef fwrite_unlocked
 #include <safe-ctype.h>'
+            make_ansidecl_system_chunk_probe ansidecl_chunk_safe_ctype_sys_types '#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
+#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
+#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
+#undef fread_unlocked
+#undef fwrite_unlocked
+#include <safe-ctype.h>
+#include <sys/types.h>'
             make_ansidecl_system_chunk_probe ansidecl_chunk_sys_types '#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>

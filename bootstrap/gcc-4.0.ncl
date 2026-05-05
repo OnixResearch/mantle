@@ -705,6 +705,11 @@ DIRECTIVES_EOF
       $BB sed -i 's/ix86_attribute_table\[\]/ix86_attribute_table[10]/' gcc/config/i386/i386.c
       $BB sed -i 's/struct siginfo/siginfo_t/' gcc/config/i386/linux-unwind.h
       $BB sed -i 's/C_alloca/alloca/g' libiberty/alloca.c include/libiberty.h
+      # TinyCC reports an old GCC-compatible version and GCC 4.0's ansidecl.h
+      # otherwise rewrites inline to an empty macro.  Musl's <sys/types.h>
+      # under the c-parse flags deterministically segfaults TinyCC after that
+      # rewrite; keep a real inline spelling for this bootstrap handoff.
+      $BB sed -i 's/#  define inline  \/\* nothing \*\//#  define inline __inline__/' include/ansidecl.h
 
       cd "$WORK/build"
       for dir in libiberty libcpp gcc; do
