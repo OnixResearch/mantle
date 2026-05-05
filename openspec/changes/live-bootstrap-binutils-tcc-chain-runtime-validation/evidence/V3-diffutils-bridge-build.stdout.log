@@ -1,0 +1,36 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diffutils-2.7-musl.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/diffutils-bridge-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 1,
+    "built_total": 1,
+    "cached_total": 0,
+    "failed_total": 0
+  },
+  "outcomes": [
+    {
+      "drv_key": "/crunch/store/0qw3xggixdrxjnc7w8azdza28iifq1im-diffutils-2.7-musl.drv",
+      "label": "diffutils-2.7-musl",
+      "cached": false,
+      "log_file": "/home/brittonr/.local/state/crunch/logs/0qw3xggixdrxjnc7w8azdza28iifq1im-diffutils-2.7-musl.drv.log",
+      "outputs": [
+        {
+          "name": "out",
+          "path": "/home/brittonr/git/crunch/crunch/.crunch-drain/diffutils-bridge-store/32wcc42dkdxkaj8kgdpbmaq3hdlvqfdz-diffutils-2.7-musl",
+          "artifact_attestation": {
+            "logical_path": "/crunch/store/32wcc42dkdxkaj8kgdpbmaq3hdlvqfdz-diffutils-2.7-musl",
+            "path": "/home/brittonr/.local/state/crunch/attestations/artifacts/033f41b6bf3403b342fefea9e8f110832d9251083ddab7ae37ef24b5f4f118b8.json"
+          }
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "fod_mismatches": []
+}

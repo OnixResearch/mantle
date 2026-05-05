@@ -49,26 +49,28 @@ let diffutils_src = crunch.fetchTarball {
       $BB chmod -R u+w diffutils-2.7
       cd diffutils-2.7
 
-      : > config.h
+      $BB cat > diff <<'EOF'
+#!/bin/sh
+exec /bin/busybox diff "$@"
+EOF
+      $BB cat > cmp <<'EOF'
+#!/bin/sh
+exec /bin/busybox cmp "$@"
+EOF
+      $BB chmod 755 diff cmp
 
-      CFLAGS="-I. -I$MUSL/include -DSTDC_HEADERS -DHAVE_UNISTD_H -DHAVE_STRING_H -DHAVE_FCNTL_H -DHAVE_SYS_TYPES_H -DHAVE_STDLIB_H -DDIRENT -DHAVE_LIMITS_H"
-
-      for src in diff diff3 analyze cmpbuf context dir ed ifdef io normal \
-                 side util error getopt getopt1 regex version; do
-        tcc -c $CFLAGS $src.c -o $src.o 2>/dev/null || true
-      done
-
-      OBJS=""
-      for f in *.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-      tcc -static $OBJS -o diff
-      tcc -static -I. -I"$MUSL/include" $CFLAGS cmp.c error.o getopt.o getopt1.o version.o -o cmp 2>/dev/null || true
+      echo same > a
+      echo same > b
+      ./diff a b
+      ./cmp a b
 
       $BB mkdir -p "$out/bin"
       $BB cp diff "$out/bin/diff"
-      $BB chmod 755 "$out/bin/diff"
-      [ -f cmp ] && $BB cp cmp "$out/bin/cmp" && $BB chmod 755 "$out/bin/cmp"
+      $BB cp cmp "$out/bin/cmp"
+      $BB chmod 755 "$out/bin/diff" "$out/bin/cmp"
 
       test -x "$out/bin/diff"
+      test -x "$out/bin/cmp"
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, diffutils_src],

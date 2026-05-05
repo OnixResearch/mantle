@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/binutils-tcc.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/binutils-slim-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "binutils-2.30-tcc",
+      "drv_key": "/crunch/store/rqpnwxvrqy8jnvsp246v547yvzcassbz-binutils-2.30-tcc.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "store error: build: nonzero exit code: exit status: 1\nFull configure/make failed, trying manual build...\nERROR: as not built\n",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/rqpnwxvrqy8jnvsp246v547yvzcassbz-binutils-2.30-tcc.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
