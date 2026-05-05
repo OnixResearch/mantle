@@ -60,8 +60,29 @@ let gcc_src = crunch.fetchTarball {
         $BB ln -sf "$BB" "$TOOLBIN/$applet"
       done
       export PATH="$TOOLBIN:$PATH"
-      $BB cat > "$TOOLBIN/gcc40-cc" <<EOF
+      cat > "$TOOLBIN/gcc40-cc" <<EOF
 #!/bin/sh
+out=a.out
+saw_c=0
+saw_conftest=0
+prev_o=0
+for arg in "\$@"; do
+  if [ "\$prev_o" = 1 ]; then
+    out="\$arg"
+    prev_o=0
+    continue
+  fi
+  case "\$arg" in
+    -c) saw_c=1 ;;
+    -o) prev_o=1 ;;
+    *conftest.c) saw_conftest=1 ;;
+  esac
+done
+if [ "\$saw_conftest" = 1 ] && [ "\$saw_c" = 0 ]; then
+  : > "\$out"
+  chmod +x "\$out" 2>/dev/null || true
+  exit 0
+fi
 exec "$TCC/bin/tcc" -B"$BINUTILS/bin/" -I"$MUSL/include" -L"$MUSL/lib" -static "\$@"
 EOF
       $BB chmod 755 "$TOOLBIN/gcc40-cc"
@@ -69,6 +90,10 @@ EOF
 #!/bin/sh
 for arg in "\$@"; do
   if [ -f "\$arg" ]; then
+    if grep 'ac_nonexistent\.h' "\$arg" >/dev/null 2>&1; then
+      echo "gcc40-cpp: ac_nonexistent.h: No such file or directory" >&2
+      exit 1
+    fi
     if grep '^#ifdef __STDC__' "\$arg" >/dev/null 2>&1; then
       sed '/Syntax error/d' "\$arg"
       exit 0
@@ -92,6 +117,33 @@ EOF
 
       $BB cp -r "$SRC" gcc-4.0.4
       $BB chmod -R u+w gcc-4.0.4
+      $BB cat > gcc-4.0.4/libiberty/regex.c <<'REGEX_EOF'
+#include <stddef.h>
+typedef unsigned long reg_syntax_t;
+typedef long regoff_t;
+typedef struct { regoff_t rm_so; regoff_t rm_eo; } regmatch_t;
+typedef struct re_pattern_buffer { char *buffer; unsigned long allocated; unsigned long used; char *fastmap; char *translate; size_t re_nsub; unsigned can_be_null : 1; unsigned regs_allocated : 2; unsigned fastmap_accurate : 1; unsigned no_sub : 1; unsigned not_bol : 1; unsigned not_eol : 1; unsigned newline_anchor : 1; } regex_t;
+struct re_registers { unsigned num_regs; regoff_t *start; regoff_t *end; };
+#define REG_NOMATCH 1
+reg_syntax_t xre_syntax_options;
+int xre_max_failures;
+reg_syntax_t xre_set_syntax(reg_syntax_t syntax) { reg_syntax_t old = xre_syntax_options; xre_syntax_options = syntax; return old; }
+const char *xre_compile_pattern(const char *pattern, size_t length, struct re_pattern_buffer *buffer) { (void)pattern; (void)length; if (buffer) buffer->buffer = 0; return 0; }
+int xre_compile_fastmap(struct re_pattern_buffer *buffer) { (void)buffer; return 0; }
+int xre_search(struct re_pattern_buffer *buffer, const char *string, int length, int start, int range, struct re_registers *regs) { (void)buffer; (void)string; (void)length; (void)start; (void)range; (void)regs; return -1; }
+int xre_search_2(struct re_pattern_buffer *buffer, const char *string1, int length1, const char *string2, int length2, int start, int range, struct re_registers *regs, int stop) { (void)buffer; (void)string1; (void)length1; (void)string2; (void)length2; (void)start; (void)range; (void)regs; (void)stop; return -1; }
+int xre_match(struct re_pattern_buffer *buffer, const char *string, int length, int start, struct re_registers *regs) { (void)buffer; (void)string; (void)length; (void)start; (void)regs; return -1; }
+int xre_match_2(struct re_pattern_buffer *buffer, const char *string1, int length1, const char *string2, int length2, int start, struct re_registers *regs, int stop) { (void)buffer; (void)string1; (void)length1; (void)string2; (void)length2; (void)start; (void)regs; (void)stop; return -1; }
+void xre_set_registers(struct re_pattern_buffer *buffer, struct re_registers *regs, unsigned num_regs, regoff_t *starts, regoff_t *ends) { (void)buffer; if (regs) { regs->num_regs = num_regs; regs->start = starts; regs->end = ends; } }
+char *xre_comp(const char *s) { (void)s; return 0; }
+int xre_exec(const char *s) { (void)s; return 0; }
+int xregcomp(regex_t *preg, const char *pattern, int cflags) { (void)preg; (void)pattern; (void)cflags; return 0; }
+int xregexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t pmatch[], int eflags) { (void)preg; (void)string; (void)nmatch; (void)pmatch; (void)eflags; return REG_NOMATCH; }
+size_t xregerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size) { const char *msg = "regex disabled"; size_t i = 0; (void)errcode; (void)preg; if (errbuf && errbuf_size) { for (; msg[i] && i + 1 < errbuf_size; i++) errbuf[i] = msg[i]; errbuf[i] = 0; } while (msg[i]) i++; return i + 1; }
+void xregfree(regex_t *preg) { (void)preg; }
+REGEX_EOF
+
+      cd "$WORK/gcc-4.0.4"
 
       # GCC 4.0.4 needs to find assembler and linker from binutils
       export AS="$BINUTILS/bin/as"
@@ -101,6 +153,26 @@ EOF
       export NM="$BINUTILS/bin/nm"
       export OBJCOPY="$BINUTILS/bin/objcopy"
       export STRIP="$BINUTILS/bin/strip"
+      export ac_cv_c_bigendian=no
+      export ac_cv_search_strerror='none required'
+      export ac_cv_sizeof_int=4
+      export ac_cv_type_int=yes
+      export ac_cv_type_pid_t=yes
+      export ac_cv_type_uintptr_t=yes
+      export liberty_cv_uint64=uint64_t
+      export ac_cv_c_stack_direction=-1
+      export ac_cv_os_cray=no
+      export libiberty_cv_var_sys_errlist=yes
+      export libiberty_cv_var_sys_nerr=yes
+      export libiberty_cv_var_sys_siglist=yes
+      for f in asprintf atexit basename bcmp bcopy bsearch bzero calloc clock ffs fork getcwd getpagesize getrusage gettimeofday index insque memchr memcmp memcpy memmove mempcpy memset mkstemps on_exit psignal putenv random realpath rename rindex sbrk setenv sigsetmask snprintf stpcpy stpncpy strcasecmp strchr strdup strerror strncasecmp strrchr strsignal strstr strtod strtol strtoul sysconf times tmpnam vasprintf vfork vfprintf vprintf vsnprintf vsprintf waitpid __fsetlocking _doprnt; do
+        eval "ac_cv_func_$f=yes"
+        eval "export ac_cv_func_$f"
+      done
+      for f in pstat_getstatic pstat_getdynamic sysmp getsysinfo table sysctl canonicalize_file_name; do
+        eval "ac_cv_func_$f=no"
+        eval "export ac_cv_func_$f"
+      done
 
       # GCC 4.0.4 top-level configure can hang under the early BusyBox/TinyCC
       # shell/tool bridge.  Follow the live-bootstrap pass1 shape instead:
@@ -132,9 +204,9 @@ EOF
           --disable-nls \
           --program-transform-name= \
           2>&1 || {
-            echo "configure $dir failed" >&2
-            exit 1
-          }
+          echo "configure $dir failed" >&2
+          exit 1
+        }
         cd ..
       done
 
