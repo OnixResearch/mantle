@@ -159,6 +159,55 @@ char *xasprintf(const char *fmt, ...) {
 }
 EOF
 
+      $BB awk '
+NR==555 {
+  print "const char *";
+  print "bfd_errmsg (bfd_error_type error_tag)";
+  print "{";
+  print "  if (error_tag > bfd_error_invalid_error_code)";
+  print "    error_tag = bfd_error_invalid_error_code;";
+  print "  return _(bfd_errmsgs [error_tag]);";
+  print "}";
+  print "";
+  print "void";
+  print "bfd_perror (const char *message)";
+  print "{";
+  print "  fflush (stdout);";
+  print "  if (message != 0 && *message != 0) { fputs (message, stderr); fputc (58, stderr); fputc (32, stderr); }";
+  print "  fputs (bfd_errmsg (bfd_get_error ()), stderr);";
+  print "  fputc (10, stderr);";
+  print "  fflush (stderr);";
+  print "}";
+  print "";
+  print "static const char *_bfd_error_program_name;";
+  print "static void";
+  print "_bfd_default_error_handler (const char *fmt, va_list ap)";
+  print "{";
+  print "  (void) ap;";
+  print "  fflush (stdout);";
+  print "  if (_bfd_error_program_name != 0) { fputs (_bfd_error_program_name, stderr); fputc (58, stderr); fputc (32, stderr); }";
+  print "  if (fmt != 0) fputs (fmt, stderr);";
+  print "  fputc (10, stderr);";
+  print "  fflush (stderr);";
+  print "}";
+  print "static bfd_error_handler_type _bfd_error_internal = _bfd_default_error_handler;";
+  print "void";
+  print "_bfd_error_handler (const char *fmt, ...)";
+  print "{";
+  print "  fflush (stdout);";
+  print "  if (_bfd_error_program_name != 0) { fputs (_bfd_error_program_name, stderr); fputc (58, stderr); fputc (32, stderr); }";
+  print "  if (fmt != 0) fputs (fmt, stderr);";
+  print "  fputc (10, stderr);";
+  print "  fflush (stderr);";
+  print "}";
+  skip=1;
+  next;
+}
+NR==1195 { skip=0 }
+!skip { print }
+' bfd/bfd.c > bfd/bfd.c.new
+      $BB mv bfd/bfd.c.new bfd/bfd.c
+
       config_common() {
         LD=true \
         AR="tcc -ar" \
@@ -173,6 +222,7 @@ EOF
           --enable-deterministic-archives \
           --enable-64-bit-bfd \
           --disable-shared \
+          --disable-plugins \
           --disable-werror \
           --build=x86_64-unknown-linux-gnu \
           --host=x86_64-unknown-linux-musl \
