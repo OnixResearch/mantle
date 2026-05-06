@@ -1,0 +1,31 @@
+Diagnostic matrix excerpt from /home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-autohost-after-inline
+Full drv log: .crunch-drain/gcc40-autohost-after-inline/state/logs/j479fh08sxslma0frdk1nqiajy8plwz3-diag-gcc40-c-parse-boundary.drv.log
+
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_config
+diag-cparse: cparse_inc_config rc=0
+diag-autohost-define: 090 #define PACKAGE_VERSION ""
+diag-autohost-define: 091 #define PREFIX_INCLUDE_DIR "/crunch/store/n15hj2l2nav31n4fyia49f9bbv47agzw-diag-gcc40-c-parse-boundary/include"
+diag-autohost-define: 092 #define SIZEOF_INT 4
+diag-autohost-define: 093 #define SIZEOF_LONG 0
+diag-autohost-define: 094 #define SIZEOF_SHORT 0
+diag-autohost-define: 095 #define SIZEOF_VOID_P 0
+diag-autohost-define: 096 #define gid_t int
+diag-autohost-define: 097 #define inline
+diag-autohost-define: 098 #define rlim_t long
+diag-autohost-define: 099 #define ssize_t int
+diag-cparse: compile autohost_defines_97_undef_need64_gid_inline_system
+diag-cparse: autohost_defines_97_undef_need64_gid_inline_system rc=0
+diag-cparse: compile autohost_defines_98_undef_need64_gid_inline_system
+diag-cparse: autohost_defines_98_undef_need64_gid_inline_system rc=139
+diag-cparse: compile autohost_define_98_only_system
+diag-cparse: autohost_define_98_only_system rc=0
+diag-cparse: compile autohost_defines_98_undef_need64_gid_inline_rlim_system
+diag-cparse: autohost_defines_98_undef_need64_gid_inline_rlim_system rc=0
+diag-cparse: compile autohost_defines_99_undef_need64_gid_inline_system
+diag-cparse: autohost_defines_99_undef_need64_gid_inline_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_system
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_system rc=139
+diag-cparse: compile cparse_full
+diag-cparse: cparse_full rc=139
