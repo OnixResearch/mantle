@@ -791,6 +791,36 @@ EOF
 #endif
 EOF
           fi
+          if [ ! -f gcc/insn-modes.h ]; then
+            if [ -x gcc/build/genmodes ]; then
+              gcc/build/genmodes -h > gcc/insn-modes.h
+            else
+              cat > gcc/insn-modes.h <<'EOF'
+#ifndef GCC_INSN_MODES_H
+#define GCC_INSN_MODES_H
+#define CONST_MODE_SIZE const
+#define CONST_MODE_BASE_ALIGN const
+enum machine_mode {
+  VOIDmode,
+  BLKmode,
+  CCmode,
+  BImode,
+  QImode,
+  HImode,
+  SImode,
+  DImode,
+  TImode,
+  SFmode,
+  DFmode,
+  XFmode,
+  TFmode,
+  MAX_MACHINE_MODE,
+  NUM_MACHINE_MODES = MAX_MACHINE_MODE
+};
+#endif
+EOF
+            fi
+          fi
 
           (
             cd gcc
@@ -943,6 +973,55 @@ EOF
               $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/machmode.h" >> "$probe"
               echo '#endif /* diag balance HAVE_MACHINE_MODES */' >> "$probe"
               echo 'int machmode_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            print_insn_modes_head_window() {
+              for f in insn-modes.h build/insn-modes.h; do
+                if [ -f "$f" ]; then $BB awk -v name="$f" 'NR <= 120 { printf("diag-insn-modes-head: %s:%03d %s\n", name, NR, $0) > "/dev/stderr" }' "$f"; fi
+              done
+              $BB find . -name 'insn-modes.h' | while read f; do
+                echo "diag-insn-modes-path: $f" >&2
+                $BB awk -v name="$f" 'NR <= 120 { printf("diag-insn-modes-head: %s:%03d %s\n", name, NR, $0) > "/dev/stderr" }' "$f"
+              done
+            }
+            make_insn_modes_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int insn_modes_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_insn_modes_header_prefix_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' insn-modes.h >> "$probe"
+              echo 'int insn_modes_header_prefix_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_insn_modes_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' insn-modes.h >> "$probe"
+              echo '  diag_LASTmode' >> "$probe"
+              echo '};' >> "$probe"
+              echo '#define MAX_MACHINE_MODE diag_LASTmode' >> "$probe"
+              echo '#define NUM_MACHINE_MODES ((int) MAX_MACHINE_MODE)' >> "$probe"
+              echo 'int insn_modes_header_balanced_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
             make_tree_manual_config_undef6() {
@@ -1231,6 +1310,32 @@ EOF
             make_machmode_manual_config_undef6 cparse_undef6_machmode_guard_only '#ifndef HAVE_MACHINE_MODES
 #define HAVE_MACHINE_MODES
 #endif'
+            print_insn_modes_head_window
+            make_insn_modes_manual_config_undef6 cparse_undef6_insn_modes_minimal_enum 'enum machine_mode {
+  VOIDmode,
+  BLKmode,
+  CCmode,
+  BImode,
+  QImode,
+  HImode,
+  SImode,
+  DImode,
+  TImode,
+  SFmode,
+  DFmode,
+  XFmode,
+  TFmode,
+  MAX_MACHINE_MODE,
+  NUM_MACHINE_MODES = MAX_MACHINE_MODE
+};'
+            make_insn_modes_manual_config_undef6 cparse_undef6_insn_modes_include_only '#include "insn-modes.h"'
+            make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_1 1
+            make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_5 5
+            make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_10 10
+            make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_20 20
+            make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_40 40
+            make_insn_modes_header_balanced_config_undef6 cparse_undef6_insn_modes_balanced_20 20
+            make_insn_modes_header_balanced_config_undef6 cparse_undef6_insn_modes_balanced_40 40
             make_machmode_manual_config_undef6 cparse_undef6_machmode_insn_modes_only '#include "insn-modes.h"'
             make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_20 20
             make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_40 40
