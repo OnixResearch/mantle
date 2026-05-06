@@ -1085,6 +1085,9 @@ EOF
               echo 'int tree_builtins_def_prefix_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            print_mode_bounds_window() {
+              $BB awk '/MIN_MODE_COMPLEX_FLOAT|MAX_MODE_COMPLEX_FLOAT|COMPLEX_FLOAT|SFmode|TFmode/ { printf("diag-mode-bound: %03d %s\n", NR, $0) > "/dev/stderr" }' insn-modes.h
+            }
 
             echo 'int cparse_empty_probe;' > /tmp/cparse_empty.c
             try_cparse_variant cparse_empty /tmp/cparse_empty.c
@@ -1441,6 +1444,55 @@ enum built_in_function {
             make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_240 240
             make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_480 480
             make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_800 800
+            print_mode_bounds_window
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_literal_zero 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + 0 - 0,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_literal_sub 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + 2 - 1,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_max_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_min_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_mode_delta_one 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_mode_delta_two 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  BUILT_IN_COMPLEX_DIV_MIN,
+  BUILT_IN_COMPLEX_DIV_MAX = BUILT_IN_COMPLEX_DIV_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_include_plus_literal_sub '#define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,
+enum built_in_function {
+#include "builtins.def"
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + 2 - 1,
+  END_BUILTINS
+};
+#undef DEF_BUILTIN'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_include_plus_mode_delta_one '#define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,
+enum built_in_function {
+#include "builtins.def"
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};
+#undef DEF_BUILTIN'
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             print_tm_head_window
             print_insn_head_window
