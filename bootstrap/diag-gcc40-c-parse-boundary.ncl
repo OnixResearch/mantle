@@ -1049,6 +1049,42 @@ EOF
               echo 'int tree_header_balanced_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            print_builtins_head_window() {
+              $BB awk 'NR <= 120 { printf("diag-builtins-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/builtins.def"
+            }
+            make_tree_post180_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk 'NR <= 180 { print }' "$WORK/gcc-4.0.4/gcc/tree.h" >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo '#endif /* diag balance GCC_TREE_H */' >> "$probe"
+              echo 'int tree_post180_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_tree_builtins_def_prefix_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk 'NR <= 180 { print }' "$WORK/gcc-4.0.4/gcc/tree.h" >> "$probe"
+              echo '#define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,' >> "$probe"
+              echo 'enum built_in_function {' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/builtins.def" >> "$probe"
+              echo 'END_BUILTINS' >> "$probe"
+              echo '};' >> "$probe"
+              echo '#undef DEF_BUILTIN' >> "$probe"
+              echo '#endif /* diag balance GCC_TREE_H */' >> "$probe"
+              echo 'int tree_builtins_def_prefix_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
 
             echo 'int cparse_empty_probe;' > /tmp/cparse_empty.c
             try_cparse_variant cparse_empty /tmp/cparse_empty.c
@@ -1372,6 +1408,39 @@ enum tree_code {
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_207 207
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_212 212
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220
+            print_builtins_head_window
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_empty 'enum built_in_function {
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_arith_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  BUILT_IN_COMPLEX_DIV_MIN,
+  BUILT_IN_COMPLEX_DIV_MAX = BUILT_IN_COMPLEX_DIV_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_include_full '#define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,
+enum built_in_function {
+#include "builtins.def"
+  END_BUILTINS
+};
+#undef DEF_BUILTIN'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_include_plus_complex '#define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,
+enum built_in_function {
+#include "builtins.def"
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  BUILT_IN_COMPLEX_DIV_MIN,
+  BUILT_IN_COMPLEX_DIV_MAX = BUILT_IN_COMPLEX_DIV_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};
+#undef DEF_BUILTIN'
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_20 20
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_60 60
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_120 120
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_240 240
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_480 480
+            make_tree_builtins_def_prefix_config_undef6 cparse_undef6_builtins_def_lines_800 800
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             print_tm_head_window
             print_insn_head_window
