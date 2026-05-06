@@ -917,6 +917,34 @@ EOF
             print_tree_head_window() {
               $BB awk 'NR <= 80 { printf("diag-tree-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/tree.h"
             }
+            print_machmode_head_window() {
+              $BB awk 'NR <= 140 { printf("diag-machmode-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/machmode.h"
+            }
+            make_machmode_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int machmode_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_machmode_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/machmode.h" >> "$probe"
+              echo '#endif /* diag balance HAVE_MACHINE_MODES */' >> "$probe"
+              echo 'int machmode_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
             make_tree_manual_config_undef6() {
               label="$1"
               body="$2"
@@ -1199,6 +1227,17 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_system 'system.h'
             make_include_probe_config_undef6 cparse_undef6_inc_coretypes 'system.h coretypes.h'
             make_include_probe_config_undef6 cparse_undef6_inc_tm 'system.h coretypes.h tm.h'
+            print_machmode_head_window
+            make_machmode_manual_config_undef6 cparse_undef6_machmode_guard_only '#ifndef HAVE_MACHINE_MODES
+#define HAVE_MACHINE_MODES
+#endif'
+            make_machmode_manual_config_undef6 cparse_undef6_machmode_insn_modes_only '#include "insn-modes.h"'
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_20 20
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_40 40
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_60 60
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_80 80
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_100 100
+            make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_120 120
             print_tree_head_window
             make_tree_manual_config_undef6 cparse_undef6_tree_guard_only '#ifndef GCC_TREE_H
 #define GCC_TREE_H
