@@ -914,6 +914,34 @@ EOF
               echo 'int tm_manual_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            print_tree_head_window() {
+              $BB awk 'NR <= 80 { printf("diag-tree-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/tree.h"
+            }
+            make_tree_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int tree_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_tree_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/tree.h" >> "$probe"
+              echo '#endif /* diag balance GCC_TREE_H */' >> "$probe"
+              echo 'int tree_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
 
             echo 'int cparse_empty_probe;' > /tmp/cparse_empty.c
             try_cparse_variant cparse_empty /tmp/cparse_empty.c
@@ -1171,7 +1199,28 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_system 'system.h'
             make_include_probe_config_undef6 cparse_undef6_inc_coretypes 'system.h coretypes.h'
             make_include_probe_config_undef6 cparse_undef6_inc_tm 'system.h coretypes.h tm.h'
-            print_tm_include_window
+            print_tree_head_window
+            make_tree_manual_config_undef6 cparse_undef6_tree_guard_only '#ifndef GCC_TREE_H
+#define GCC_TREE_H
+#endif'
+            make_tree_manual_config_undef6 cparse_undef6_tree_machmode_only '#include "machmode.h"'
+            make_tree_manual_config_undef6 cparse_undef6_tree_input_only '#include "input.h"'
+            make_tree_manual_config_undef6 cparse_undef6_tree_statistics_only '#include "statistics.h"'
+            make_tree_manual_config_undef6 cparse_undef6_tree_vec_only '#include "vec.h"'
+            make_tree_manual_config_undef6 cparse_undef6_tree_def_enum '#define DEFTREECODE(SYM, STRING, TYPE, NARGS) SYM,
+enum tree_code {
+#include "tree.def"
+  LAST_AND_UNUSED_TREE_CODE
+};
+#undef DEFTREECODE'
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_23 23
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_25 25
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_26 26
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_27 27
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_28 28
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_36 36
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_80 80
+            make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             print_tm_head_window
             print_insn_head_window
             cat > /tmp/cparse_undef6_insn_constants_only.c <<'EOF'
