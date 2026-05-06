@@ -839,6 +839,9 @@ int manual_config_nospace_probe;
 EOF
             try_cparse_variant cparse_manual_config_nospace /tmp/cparse_manual_config_nospace.c
             make_include_probe cparse_inc_config 'config.h'
+            print_autohost_define_window() {
+              $BB awk '/^#define / { seen++; if (seen >= 80 && seen <= 86) printf("diag-autohost-define: %03d %s\n", seen, $0) > "/dev/stderr" }' auto-host.h
+            }
             make_autohost_define_prefix_probe() {
               label="$1"
               count="$2"
@@ -848,6 +851,48 @@ EOF
               echo 'int autohost_define_prefix_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_autohost_define_skip_probe() {
+              label="$1"
+              count="$2"
+              skip="$3"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" -v skip="$skip" '/^#define / { seen++; if (seen != skip) print; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_skip_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_autohost_define_range_probe() {
+              label="$1"
+              start="$2"
+              end="$3"
+              probe="/tmp/$label.c"
+              $BB awk -v start="$start" -v end="$end" '/^#define / { seen++; if (seen >= start && seen <= end) print; if (seen >= end) exit }' auto-host.h > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_range_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_autohost_define_undef_probe() {
+              label="$1"
+              count="$2"
+              macro="$3"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" '/^#define / { print; seen++; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo "#undef $macro" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_undef_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_autohost_full_undef_probe() {
+              label="$1"
+              macro="$2"
+              probe="/tmp/$label.c"
+              echo '#include "auto-host.h"' > "$probe"
+              echo "#undef $macro" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_full_undef_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            print_autohost_define_window
             make_autohost_define_prefix_probe autohost_defines_10_system 10
             make_autohost_define_prefix_probe autohost_defines_25_system 25
             make_autohost_define_prefix_probe autohost_defines_50_system 50
@@ -858,6 +903,12 @@ EOF
             make_autohost_define_prefix_probe autohost_defines_82_system 82
             make_autohost_define_prefix_probe autohost_defines_83_system 83
             make_autohost_define_prefix_probe autohost_defines_84_system 84
+            make_autohost_define_skip_probe autohost_defines_84_skip84_system 84 84
+            make_autohost_define_skip_probe autohost_defines_85_skip84_system 85 84
+            make_autohost_define_range_probe autohost_define_84_only_system 84 84
+            make_autohost_define_undef_probe autohost_defines_84_undef_need64_system 84 NEED_64BIT_HOST_WIDE_INT
+            make_autohost_full_undef_probe autohost_full_undef_need64_system NEED_64BIT_HOST_WIDE_INT
+            make_autohost_define_range_probe autohost_defines_80_84_system 80 84
             make_autohost_define_prefix_probe autohost_defines_85_system 85
             make_autohost_define_prefix_probe autohost_defines_86_system 86
             make_autohost_define_prefix_probe autohost_defines_87_system 87
