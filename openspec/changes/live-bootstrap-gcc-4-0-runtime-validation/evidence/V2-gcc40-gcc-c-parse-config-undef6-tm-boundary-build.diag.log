@@ -1,0 +1,59 @@
+Diagnostic matrix excerpt from /home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-undef6-includes
+Full drv log: .crunch-drain/gcc40-cparse-undef6-includes/state/logs/jmskzx78yg5zkqfqmhw0zd8j3mszxdns-diag-gcc40-c-parse-boundary.drv.log
+
+diag-cparse: compile autohost_full_undef_need64_system
+diag-cparse: autohost_full_undef_need64_system rc=139
+diag-cparse: compile autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile cparse_config_undef6_system
+diag-cparse: cparse_config_undef6_system rc=0
+diag-cparse: compile cparse_undef6_inc_system
+diag-cparse: cparse_undef6_inc_system rc=0
+diag-cparse: compile cparse_undef6_inc_coretypes
+diag-cparse: cparse_undef6_inc_coretypes rc=0
+diag-cparse: compile cparse_undef6_inc_tm
+diag-cparse: cparse_undef6_inc_tm rc=139
+diag-cparse: compile cparse_undef6_inc_tree
+diag-cparse: cparse_undef6_inc_tree rc=139
+diag-cparse: compile cparse_full_config_undef6
+diag-cparse: cparse_full_config_undef6 rc=139
+diag-cparse: compile cparse_undef6_header_only
+diag-cparse: cparse_undef6_header_only rc=139
+diag-cparse: cparse_full rc=139
+
+
+Active build log tail (.crunch-drain/gcc40-active-config-undef6/state/logs/37g16cp4ifvcvxmpq6jxw3jpp1mkylzg-gcc-4.0.4.drv.log):
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genpreds \
+ build/genpreds.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/dummy-conditions.o build/print-rtl.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genpreds -h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.h tm-preds.h
+build/genpreds /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.c insn-preds.c
+echo timestamp > s-preds
+awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-gather.awk /tmp/gcc-build/gcc-4.0.4/gcc/c.opt /tmp/gcc-build/gcc-4.0.4/gcc/common.opt > tmp-optionlist
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-optionlist optionlist
+echo timestamp > s-options
+awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-functions.awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opth-gen.awk \
+       < optionlist > options.h
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/insn-conditions.o insn-conditions.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genflags \
+	build/genflags.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/insn-conditions.o build/print-rtl.o \
+	build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genflags /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-flags.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-flags.h insn-flags.h
+echo timestamp > s-flags
+ltf=""; for f in $ltf; do \
+    echo "#include \"$f\""; \
+done | sed 's|/tmp/gcc-build/gcc-4.0.4/gcc/||' > tmp-gencheck.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gencheck.h gencheck.h
+echo timestamp > s-gencheck
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gencheck.o /tmp/gcc-build/gcc-4.0.4/gcc/gencheck.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gencheck \
+ build/gencheck.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gencheck > tmp-check.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-check.h tree-check.h
+echo timestamp > s-check
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -I. -I. -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/. -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.c -o c-parse.o
+make: *** [c-parse.o] Segmentation fault (core dumped)
+make: Leaving directory `/tmp/gcc-build/build/gcc'

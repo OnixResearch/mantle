@@ -793,6 +793,15 @@ DIRECTIVES_EOF
               echo "diag-cparse: $label rc=$rc" >&2
             }
 
+            make_cparse_prefix_config_undef6() {
+              label="$1"
+              cutoff="$2"
+              $BB awk -v cutoff="$cutoff" 'NR < cutoff { print } END { print "int yyparse(void) { return 0; }" }' \
+                "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+                | $BB sed 's/#include "config.h"/#include "config-undef6.h"/' > "/tmp/$label.c"
+              try_cparse_variant "$label" "/tmp/$label.c"
+            }
+
             # First separate the Bison skeleton front matter and table data
             # from the full generated yyparse action body.  This keeps the
             # same configured headers and include path but replaces yyparse
@@ -814,6 +823,18 @@ DIRECTIVES_EOF
                 echo "#include \"$header\"" >> "$probe"
               done
               echo 'int cparse_include_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            make_include_probe_config_undef6() {
+              label="$1"
+              includes="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in $includes; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo 'int cparse_include_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
 
@@ -967,6 +988,26 @@ EOF
               echo 'int autohost_define_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_autohost_full_undef6_probe() {
+              label="$1"
+              macro1="$2"
+              macro2="$3"
+              macro3="$4"
+              macro4="$5"
+              macro5="$6"
+              macro6="$7"
+              probe="/tmp/$label.c"
+              echo '#include "auto-host.h"' > "$probe"
+              echo "#undef $macro1" >> "$probe"
+              echo "#undef $macro2" >> "$probe"
+              echo "#undef $macro3" >> "$probe"
+              echo "#undef $macro4" >> "$probe"
+              echo "#undef $macro5" >> "$probe"
+              echo "#undef $macro6" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_full_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
             make_autohost_full_undef_probe() {
               label="$1"
               macro="$2"
@@ -1009,6 +1050,11 @@ EOF
             make_autohost_define_undef5_probe autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system 99 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t
             make_autohost_define_undef5_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t
             make_autohost_define_undef6_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            make_autohost_define_undef6_probe autohost_defines_101_undef_need64_gid_inline_rlim_ssize_uid_system 101 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            make_autohost_define_range_probe autohost_define_101_only_system 101 101
+            make_autohost_define_undef6_probe autohost_defines_105_undef_need64_gid_inline_rlim_ssize_uid_system 105 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            make_autohost_define_undef6_probe autohost_defines_110_undef_need64_gid_inline_rlim_ssize_uid_system 110 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            make_autohost_define_undef6_probe autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system 120 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
             make_autohost_define_undef4_probe autohost_defines_100_undef_need64_gid_inline_rlim_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t
             make_autohost_define_range_probe autohost_define_100_only_system 100 100
             make_autohost_define_undef3_probe autohost_defines_99_undef_need64_gid_inline_system 99 NEED_64BIT_HOST_WIDE_INT gid_t inline
@@ -1029,6 +1075,37 @@ EOF
             make_autohost_define_skip_probe autohost_defines_140_skip84_system 140 84
             make_autohost_define_skip_probe autohost_defines_200_skip84_system 200 84
             make_autohost_full_undef_probe autohost_full_undef_need64_system NEED_64BIT_HOST_WIDE_INT
+            make_autohost_full_undef6_probe autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            $BB cp config.h config-undef6.h
+            cat >> config-undef6.h <<'EOF'
+#undef NEED_64BIT_HOST_WIDE_INT
+#undef gid_t
+#undef inline
+#undef rlim_t
+#undef ssize_t
+#undef uid_t
+EOF
+            cat > /tmp/cparse_config_undef6_system.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+int config_undef6_system_probe;
+EOF
+            try_cparse_variant cparse_config_undef6_system /tmp/cparse_config_undef6_system.c
+            make_include_probe_config_undef6 cparse_undef6_inc_system 'system.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_coretypes 'system.h coretypes.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_tm 'system.h coretypes.h tm.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_langhooks 'system.h coretypes.h tm.h tree.h langhooks.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_cpplib 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_ctree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6.c
+            try_cparse_variant cparse_full_config_undef6 /tmp/cparse_full_config_undef6.c
+            make_cparse_prefix_config_undef6 cparse_undef6_header_only 390
+            make_cparse_prefix_config_undef6 cparse_undef6_after_yytranslate 544
+            make_cparse_prefix_config_undef6 cparse_undef6_after_yyr1 1017
+            make_cparse_prefix_config_undef6 cparse_undef6_after_yyr2 1082
+            make_cparse_prefix_config_undef6 cparse_undef6_before_yytable 1338
+            make_cparse_prefix_config_undef6 cparse_undef6_before_yyparse 2455
             make_autohost_define_range_probe autohost_defines_80_84_system 80 84
             make_autohost_define_prefix_probe autohost_defines_85_system 85
             make_autohost_define_prefix_probe autohost_defines_86_system 86

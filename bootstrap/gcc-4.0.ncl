@@ -737,6 +737,18 @@ DIRECTIVES_EOF
       done
 
       $BB ln -s . "build-$TARGET" 2>/dev/null || true
+      if [ -f gcc/config.h ]; then
+        cat >> gcc/config.h <<'EOF'
+/* CRUNCH: TinyCC/Mes c-parse header handoff; generated auto-host typedef
+   rewrites before system.h trigger deterministic TinyCC segfaults. */
+#undef NEED_64BIT_HOST_WIDE_INT
+#undef gid_t
+#undef inline
+#undef rlim_t
+#undef ssize_t
+#undef uid_t
+EOF
+      fi
       $BB mkdir -p gcc/include
       $BB ln -sf ../../../gcc-4.0.4/gcc/gsyslimits.h gcc/include/syslimits.h
 
