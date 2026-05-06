@@ -1,0 +1,18 @@
+Diagnostic matrix excerpt from /home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-autohost-after-ssize
+Full drv log: .crunch-drain/gcc40-autohost-after-ssize/state/logs/9fbhnrhphzm0pap46av1nlafg8ms42c4-diag-gcc40-c-parse-boundary.drv.log
+
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_config
+diag-cparse: cparse_inc_config rc=0
+diag-autohost-define: 100 #define uid_t int
+diag-cparse: compile autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system
+diag-cparse: autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system rc=0
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_define_100_only_system
+diag-cparse: autohost_define_100_only_system rc=139
+diag-cparse: compile cparse_full
+diag-cparse: cparse_full rc=139

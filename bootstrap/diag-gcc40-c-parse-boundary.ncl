@@ -927,6 +927,46 @@ EOF
               echo 'int autohost_define_undef4_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_autohost_define_undef5_probe() {
+              label="$1"
+              count="$2"
+              macro1="$3"
+              macro2="$4"
+              macro3="$5"
+              macro4="$6"
+              macro5="$7"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" '/^#define / { print; seen++; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo "#undef $macro1" >> "$probe"
+              echo "#undef $macro2" >> "$probe"
+              echo "#undef $macro3" >> "$probe"
+              echo "#undef $macro4" >> "$probe"
+              echo "#undef $macro5" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_undef5_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_autohost_define_undef6_probe() {
+              label="$1"
+              count="$2"
+              macro1="$3"
+              macro2="$4"
+              macro3="$5"
+              macro4="$6"
+              macro5="$7"
+              macro6="$8"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" '/^#define / { print; seen++; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo "#undef $macro1" >> "$probe"
+              echo "#undef $macro2" >> "$probe"
+              echo "#undef $macro3" >> "$probe"
+              echo "#undef $macro4" >> "$probe"
+              echo "#undef $macro5" >> "$probe"
+              echo "#undef $macro6" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
             make_autohost_full_undef_probe() {
               label="$1"
               macro="$2"
@@ -964,6 +1004,13 @@ EOF
             make_autohost_define_undef3_probe autohost_defines_98_undef_need64_gid_inline_system 98 NEED_64BIT_HOST_WIDE_INT gid_t inline
             make_autohost_define_range_probe autohost_define_98_only_system 98 98
             make_autohost_define_undef4_probe autohost_defines_98_undef_need64_gid_inline_rlim_system 98 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t
+            make_autohost_define_undef4_probe autohost_defines_99_undef_need64_gid_inline_rlim_system 99 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t
+            make_autohost_define_range_probe autohost_define_99_only_system 99 99
+            make_autohost_define_undef5_probe autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system 99 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t
+            make_autohost_define_undef5_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t
+            make_autohost_define_undef6_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
+            make_autohost_define_undef4_probe autohost_defines_100_undef_need64_gid_inline_rlim_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t
+            make_autohost_define_range_probe autohost_define_100_only_system 100 100
             make_autohost_define_undef3_probe autohost_defines_99_undef_need64_gid_inline_system 99 NEED_64BIT_HOST_WIDE_INT gid_t inline
             make_autohost_define_undef3_probe autohost_defines_100_undef_need64_gid_inline_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline
             make_autohost_define_undef2_probe autohost_defines_98_undef_need64_gid_system 98 NEED_64BIT_HOST_WIDE_INT gid_t
