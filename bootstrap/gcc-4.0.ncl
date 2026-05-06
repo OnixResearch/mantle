@@ -751,6 +751,25 @@ EOF
       fi
       $BB mkdir -p gcc/include
       $BB ln -sf ../../../gcc-4.0.4/gcc/gsyslimits.h gcc/include/syslimits.h
+      # CRUNCH: the TinyCC/Mes handoff segfaults in missing-header diagnostics;
+      # seed the generator headers with the same safe stubs emitted by the
+      # genconstants/genflags bridge before tm.h can include them.
+      if [ ! -f gcc/insn-constants.h ]; then
+        cat > gcc/insn-constants.h <<'EOF'
+#ifndef GCC_INSN_CONSTANTS_H
+#define GCC_INSN_CONSTANTS_H
+/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+#endif
+EOF
+      fi
+      if [ ! -f gcc/insn-flags.h ]; then
+        cat > gcc/insn-flags.h <<'EOF'
+#ifndef GCC_INSN_FLAGS_H
+#define GCC_INSN_FLAGS_H
+/* bootstrap genflags stub: generator-only boundary bridge */
+#endif
+EOF
+      fi
 
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
       for dir in libiberty libcpp gcc; do

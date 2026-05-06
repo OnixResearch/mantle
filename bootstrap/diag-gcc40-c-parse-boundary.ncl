@@ -775,6 +775,22 @@ DIRECTIVES_EOF
             MAKEINFO=true \
             tree-check.h config.h \
             2>&1
+          if [ ! -f gcc/insn-constants.h ]; then
+            cat > gcc/insn-constants.h <<'EOF'
+#ifndef GCC_INSN_CONSTANTS_H
+#define GCC_INSN_CONSTANTS_H
+/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+#endif
+EOF
+          fi
+          if [ ! -f gcc/insn-flags.h ]; then
+            cat > gcc/insn-flags.h <<'EOF'
+#ifndef GCC_INSN_FLAGS_H
+#define GCC_INSN_FLAGS_H
+/* bootstrap genflags stub: generator-only boundary bridge */
+#endif
+EOF
+          fi
 
           (
             cd gcc
@@ -835,6 +851,67 @@ DIRECTIVES_EOF
                 echo "#include \"$header\"" >> "$probe"
               done
               echo 'int cparse_include_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            print_tm_include_window() {
+              $BB awk '/^#include / { seen++; printf("diag-tm-include: %03d %s\n", seen, $0) > "/dev/stderr" }' tm.h
+            }
+            print_tm_head_window() {
+              $BB awk 'NR <= 60 { printf("diag-tm-head: %03d %s\n", NR, $0) > "/dev/stderr" }' tm.h
+            }
+            print_insn_head_window() {
+              for f in insn-constants.h insn-flags.h build/insn-constants.h build/insn-flags.h; do
+                if [ -f "$f" ]; then $BB awk -v name="$f" 'NR <= 40 { printf("diag-insn-head: %s:%03d %s\n", name, NR, $0) > "/dev/stderr" }' "$f"; fi
+              done
+              $BB find . -name 'insn-constants.h' -o -name 'insn-flags.h' | while read f; do
+                echo "diag-insn-path: $f" >&2
+                $BB awk -v name="$f" 'NR <= 40 { printf("diag-insn-head: %s:%03d %s\n", name, NR, $0) > "/dev/stderr" }' "$f"
+              done
+            }
+            make_tm_include_prefix_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              $BB awk -v limit="$count" '/^#include / { print; seen++; if (seen >= limit) exit }' tm.h >> "$probe"
+              echo 'int tm_include_prefix_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_tm_header_prefix_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' tm.h >> "$probe"
+              echo 'int tm_header_prefix_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_tm_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' tm.h >> "$probe"
+              echo '#endif /* diag balance GCC_TM_H */' >> "$probe"
+              echo 'int tm_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+            make_tm_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int tm_manual_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
 
@@ -1094,6 +1171,191 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_system 'system.h'
             make_include_probe_config_undef6 cparse_undef6_inc_coretypes 'system.h coretypes.h'
             make_include_probe_config_undef6 cparse_undef6_inc_tm 'system.h coretypes.h tm.h'
+            print_tm_include_window
+            print_tm_head_window
+            print_insn_head_window
+            cat > /tmp/cparse_undef6_insn_constants_only.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#include "insn-constants.h"
+int insn_constants_only_probe;
+EOF
+            try_cparse_variant cparse_undef6_insn_constants_only /tmp/cparse_undef6_insn_constants_only.c
+            cat > /tmp/cparse_undef6_insn_flags_only.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#include "insn-flags.h"
+int insn_flags_only_probe;
+EOF
+            try_cparse_variant cparse_undef6_insn_flags_only /tmp/cparse_undef6_insn_flags_only.c
+            cat > /tmp/cparse_undef6_insn_manual_constants.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#ifndef GCC_INSN_CONSTANTS_H
+#define GCC_INSN_CONSTANTS_H
+/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+#endif
+int insn_manual_constants_probe;
+EOF
+            try_cparse_variant cparse_undef6_insn_manual_constants /tmp/cparse_undef6_insn_manual_constants.c
+            cat > /tmp/cparse_undef6_insn_manual_flags.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#ifndef GCC_INSN_FLAGS_H
+#define GCC_INSN_FLAGS_H
+/* bootstrap genflags stub: generator-only boundary bridge */
+#endif
+int insn_manual_flags_probe;
+EOF
+            try_cparse_variant cparse_undef6_insn_manual_flags /tmp/cparse_undef6_insn_manual_flags.c
+            cat > /tmp/cparse_undef6_tm_generator_file.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#define GENERATOR_FILE 1
+#include "tm.h"
+int tm_generator_file_probe;
+EOF
+            try_cparse_variant cparse_undef6_tm_generator_file /tmp/cparse_undef6_tm_generator_file.c
+            cat > /tmp/cparse_undef6_tm_used_for_target.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#define USED_FOR_TARGET 1
+#include "tm.h"
+int tm_used_for_target_probe;
+EOF
+            try_cparse_variant cparse_undef6_tm_used_for_target /tmp/cparse_undef6_tm_used_for_target.c
+            cat > /tmp/cparse_undef6_tm_undef_ingcc.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#undef IN_GCC
+#include "tm.h"
+int tm_undef_ingcc_probe;
+EOF
+            try_cparse_variant cparse_undef6_tm_undef_ingcc /tmp/cparse_undef6_tm_undef_ingcc.c
+            cat > /tmp/cparse_undef6_tm_ansidecl_guard.c <<'EOF'
+#include "config-undef6.h"
+#include "system.h"
+#include "coretypes.h"
+#ifdef IN_GCC
+# include "ansidecl.h"
+#endif
+int tm_ansidecl_guard_probe;
+EOF
+            try_cparse_variant cparse_undef6_tm_ansidecl_guard /tmp/cparse_undef6_tm_ansidecl_guard.c
+            make_tm_include_prefix_config_undef6 cparse_undef6_tm_include_1 1
+            make_tm_include_prefix_config_undef6 cparse_undef6_tm_include_2 2
+            make_tm_include_prefix_config_undef6 cparse_undef6_tm_include_3 3
+            make_tm_include_prefix_config_undef6 cparse_undef6_tm_include_4 4
+            make_tm_include_prefix_config_undef6 cparse_undef6_tm_include_5 5
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_1 1
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_2 2
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_3 3
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_4 4
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_5 5
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_10 10
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_20 20
+            make_tm_header_prefix_config_undef6 cparse_undef6_tm_lines_40 40
+            make_tm_manual_config_undef6 cparse_undef6_tm_ifndef_balanced '#ifndef GCC_TM_H
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_ifndef_define_balanced '#ifndef GCC_TM_H
+#define GCC_TM_H
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_ifdef_ingcc_balanced '#ifdef IN_GCC
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_guard_ifdef_balanced '#ifndef GCC_TM_H
+#define GCC_TM_H
+#ifdef IN_GCC
+#endif
+#endif'
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_1 1
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_2 2
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_3 3
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_4 4
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_5 5
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_10 10
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_15 15
+            make_tm_header_balanced_config_undef6 cparse_undef6_tm_balanced_lines_20 20
+            make_tm_manual_config_undef6 cparse_undef6_tm_first_block '#ifndef GCC_TM_H
+#define GCC_TM_H
+#ifdef IN_GCC
+# include "config/i386/biarch64.h"
+# include "config/i386/i386.h"
+# include "config/i386/unix.h"
+# include "config/i386/att.h"
+# include "config/dbxelf.h"
+# include "config/elfos.h"
+# include "config/svr4.h"
+# include "config/linux.h"
+# include "config/i386/x86-64.h"
+# include "config/i386/linux64.h"
+# include "defaults.h"
+#endif
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_first_block_insn_constants '#ifndef GCC_TM_H
+#define GCC_TM_H
+#ifdef IN_GCC
+# include "config/i386/biarch64.h"
+# include "config/i386/i386.h"
+# include "config/i386/unix.h"
+# include "config/i386/att.h"
+# include "config/dbxelf.h"
+# include "config/elfos.h"
+# include "config/svr4.h"
+# include "config/linux.h"
+# include "config/i386/x86-64.h"
+# include "config/i386/linux64.h"
+# include "defaults.h"
+#endif
+#if defined IN_GCC && !defined GENERATOR_FILE && !defined USED_FOR_TARGET
+# include "insn-constants.h"
+#endif
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_first_block_insn_flags '#ifndef GCC_TM_H
+#define GCC_TM_H
+#ifdef IN_GCC
+# include "config/i386/biarch64.h"
+# include "config/i386/i386.h"
+# include "config/i386/unix.h"
+# include "config/i386/att.h"
+# include "config/dbxelf.h"
+# include "config/elfos.h"
+# include "config/svr4.h"
+# include "config/linux.h"
+# include "config/i386/x86-64.h"
+# include "config/i386/linux64.h"
+# include "defaults.h"
+#endif
+#if defined IN_GCC && !defined GENERATOR_FILE && !defined USED_FOR_TARGET
+# include "insn-flags.h"
+#endif
+#endif'
+            make_tm_manual_config_undef6 cparse_undef6_tm_first_block_insn_both '#ifndef GCC_TM_H
+#define GCC_TM_H
+#ifdef IN_GCC
+# include "config/i386/biarch64.h"
+# include "config/i386/i386.h"
+# include "config/i386/unix.h"
+# include "config/i386/att.h"
+# include "config/dbxelf.h"
+# include "config/elfos.h"
+# include "config/svr4.h"
+# include "config/linux.h"
+# include "config/i386/x86-64.h"
+# include "config/i386/linux64.h"
+# include "defaults.h"
+#endif
+#if defined IN_GCC && !defined GENERATOR_FILE && !defined USED_FOR_TARGET
+# include "insn-constants.h"
+# include "insn-flags.h"
+#endif
+#endif'
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             make_include_probe_config_undef6 cparse_undef6_inc_langhooks 'system.h coretypes.h tm.h tree.h langhooks.h'
             make_include_probe_config_undef6 cparse_undef6_inc_cpplib 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h'

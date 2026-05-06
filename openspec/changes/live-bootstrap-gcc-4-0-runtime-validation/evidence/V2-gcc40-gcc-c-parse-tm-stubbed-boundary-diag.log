@@ -1,0 +1,118 @@
+diag-cparse: compile cparse_undef6_inc_tm
+diag-cparse: cparse_undef6_inc_tm rc=0
+diag-tm-head: 001 #ifndef GCC_TM_H
+diag-tm-head: 002 #define GCC_TM_H
+diag-tm-head: 003 #ifdef IN_GCC
+diag-tm-head: 004 # include "config/i386/biarch64.h"
+diag-tm-head: 005 # include "config/i386/i386.h"
+diag-tm-head: 006 # include "config/i386/unix.h"
+diag-tm-head: 007 # include "config/i386/att.h"
+diag-tm-head: 008 # include "config/dbxelf.h"
+diag-tm-head: 009 # include "config/elfos.h"
+diag-tm-head: 010 # include "config/svr4.h"
+diag-tm-head: 011 # include "config/linux.h"
+diag-tm-head: 012 # include "config/i386/x86-64.h"
+diag-tm-head: 013 # include "config/i386/linux64.h"
+diag-tm-head: 014 # include "defaults.h"
+diag-tm-head: 015 #endif
+diag-tm-head: 016 #if defined IN_GCC && !defined GENERATOR_FILE && !defined USED_FOR_TARGET
+diag-tm-head: 017 # include "insn-constants.h"
+diag-tm-head: 018 # include "insn-flags.h"
+diag-tm-head: 019 #endif
+diag-tm-head: 020 #endif /* GCC_TM_H */
+diag-insn-head: insn-constants.h:001 #ifndef GCC_INSN_CONSTANTS_H
+diag-insn-head: insn-constants.h:002 #define GCC_INSN_CONSTANTS_H
+diag-insn-head: insn-constants.h:003 /* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+diag-insn-head: insn-constants.h:004 #endif
+diag-insn-head: insn-flags.h:001 #ifndef GCC_INSN_FLAGS_H
+diag-insn-head: insn-flags.h:002 #define GCC_INSN_FLAGS_H
+diag-insn-head: insn-flags.h:003 /* bootstrap genflags stub: generator-only boundary bridge */
+diag-insn-head: insn-flags.h:004 #endif
+diag-insn-path: ./insn-flags.h
+diag-insn-head: ./insn-flags.h:001 #ifndef GCC_INSN_FLAGS_H
+diag-insn-head: ./insn-flags.h:002 #define GCC_INSN_FLAGS_H
+diag-insn-head: ./insn-flags.h:003 /* bootstrap genflags stub: generator-only boundary bridge */
+diag-insn-head: ./insn-flags.h:004 #endif
+diag-insn-path: ./insn-constants.h
+diag-insn-head: ./insn-constants.h:001 #ifndef GCC_INSN_CONSTANTS_H
+diag-insn-head: ./insn-constants.h:002 #define GCC_INSN_CONSTANTS_H
+diag-insn-head: ./insn-constants.h:003 /* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+diag-insn-head: ./insn-constants.h:004 #endif
+diag-cparse: compile cparse_undef6_insn_constants_only
+diag-cparse: cparse_undef6_insn_constants_only rc=0
+diag-cparse: compile cparse_undef6_insn_flags_only
+diag-cparse: cparse_undef6_insn_flags_only rc=0
+diag-cparse: compile cparse_undef6_insn_manual_constants
+diag-cparse: cparse_undef6_insn_manual_constants rc=0
+diag-cparse: compile cparse_undef6_insn_manual_flags
+diag-cparse: cparse_undef6_insn_manual_flags rc=0
+diag-cparse: compile cparse_undef6_tm_generator_file
+diag-cparse: cparse_undef6_tm_generator_file rc=0
+diag-cparse: compile cparse_undef6_tm_used_for_target
+diag-cparse: cparse_undef6_tm_used_for_target rc=0
+diag-cparse: compile cparse_undef6_tm_undef_ingcc
+diag-cparse: cparse_undef6_tm_undef_ingcc rc=0
+diag-cparse: compile cparse_undef6_tm_ansidecl_guard
+diag-cparse: cparse_undef6_tm_ansidecl_guard rc=0
+diag-cparse: compile cparse_undef6_tm_include_1
+diag-cparse: cparse_undef6_tm_include_1 rc=0
+diag-cparse: compile cparse_undef6_tm_include_2
+diag-cparse: cparse_undef6_tm_include_2 rc=0
+diag-cparse: compile cparse_undef6_tm_include_3
+diag-cparse: cparse_undef6_tm_include_3 rc=0
+diag-cparse: compile cparse_undef6_tm_include_4
+diag-cparse: cparse_undef6_tm_include_4 rc=0
+diag-cparse: compile cparse_undef6_tm_include_5
+diag-cparse: cparse_undef6_tm_include_5 rc=0
+diag-cparse: compile cparse_undef6_tm_lines_1
+diag-cparse: cparse_undef6_tm_lines_1 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_2
+diag-cparse: cparse_undef6_tm_lines_2 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_3
+diag-cparse: cparse_undef6_tm_lines_3 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_4
+diag-cparse: cparse_undef6_tm_lines_4 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_5
+diag-cparse: cparse_undef6_tm_lines_5 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_10
+diag-cparse: cparse_undef6_tm_lines_10 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_20
+diag-cparse: cparse_undef6_tm_lines_20 rc=0
+diag-cparse: compile cparse_undef6_tm_lines_40
+diag-cparse: cparse_undef6_tm_lines_40 rc=0
+diag-cparse: compile cparse_undef6_tm_ifndef_balanced
+diag-cparse: cparse_undef6_tm_ifndef_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_ifndef_define_balanced
+diag-cparse: cparse_undef6_tm_ifndef_define_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_ifdef_ingcc_balanced
+diag-cparse: cparse_undef6_tm_ifdef_ingcc_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_guard_ifdef_balanced
+diag-cparse: cparse_undef6_tm_guard_ifdef_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_1
+diag-cparse: cparse_undef6_tm_balanced_lines_1 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_2
+diag-cparse: cparse_undef6_tm_balanced_lines_2 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_3
+diag-cparse: cparse_undef6_tm_balanced_lines_3 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_4
+diag-cparse: cparse_undef6_tm_balanced_lines_4 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_5
+diag-cparse: cparse_undef6_tm_balanced_lines_5 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_10
+diag-cparse: cparse_undef6_tm_balanced_lines_10 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_15
+diag-cparse: cparse_undef6_tm_balanced_lines_15 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_20
+diag-cparse: cparse_undef6_tm_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_tm_first_block
+diag-cparse: cparse_undef6_tm_first_block rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_constants
+diag-cparse: cparse_undef6_tm_first_block_insn_constants rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_flags
+diag-cparse: cparse_undef6_tm_first_block_insn_flags rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_both
+diag-cparse: cparse_undef6_tm_first_block_insn_both rc=0
+diag-cparse: compile cparse_undef6_inc_tree
+diag-cparse: cparse_undef6_inc_tree rc=139
+diag-cparse: compile cparse_undef6_header_only
+diag-cparse: cparse_undef6_header_only rc=139
