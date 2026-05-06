@@ -821,6 +821,18 @@ enum machine_mode {
 EOF
             fi
           fi
+          # CRUNCH: GCC's generated insn-modes.h may omit mode-class bounds on
+          # this TinyCC/Mes handoff. tree.h consumes the complex float bounds as
+          # enum operands, and unresolved operands crash this compiler, so make
+          # the post-generation aliases explicit before any c-parse probe.
+          if ! $BB grep -q '^#define MIN_MODE_COMPLEX_FLOAT' gcc/insn-modes.h; then
+            cat >> gcc/insn-modes.h <<'EOF'
+#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
+EOF
+          fi
+          echo "diag-insn-modes-aliases:" >&2
+          $BB grep 'MODE_COMPLEX_FLOAT' gcc/insn-modes.h >&2 || true
 
           (
             cd gcc

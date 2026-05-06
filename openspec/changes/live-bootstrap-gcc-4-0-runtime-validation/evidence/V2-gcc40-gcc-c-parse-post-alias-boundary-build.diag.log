@@ -1,0 +1,143 @@
+Diagnostic excerpt from h0cgi6lzqdw9jb5hdily5hygpm6p8cbh-diag-gcc40-c-parse-boundary.drv.log
+
+750|diag-insn-modes-aliases:
+751|#define MIN_MODE_COMPLEX_FLOAT SFmode
+752|#define MAX_MODE_COMPLEX_FLOAT TFmode
+993|diag-machmode-head: 057    || GET_MODE_CLASS (MODE) == MODE_COMPLEX_FLOAT \
+999|diag-machmode-head: 063    || GET_MODE_CLASS (MODE) == MODE_COMPLEX_FLOAT)
+1101|diag-insn-modes-head: insn-modes.h:023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+1102|diag-insn-modes-head: insn-modes.h:024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+1126|diag-insn-modes-head: ./insn-modes.h:023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+1127|diag-insn-modes-head: ./insn-modes.h:024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+1362|diag-tree-head: 195       + MAX_MODE_COMPLEX_FLOAT
+1363|diag-tree-head: 196       - MIN_MODE_COMPLEX_FLOAT,
+1368|diag-tree-head: 201       + MAX_MODE_COMPLEX_FLOAT
+1369|diag-tree-head: 202       - MIN_MODE_COMPLEX_FLOAT,
+1553|diag-cparse: compile cparse_undef6_tree_builtin_complex_arith_only
+1554|diag-cparse: cparse_undef6_tree_builtin_complex_arith_only rc=0
+1576|diag-mode-bound: 023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+1577|diag-mode-bound: 024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+1578|diag-cparse: compile cparse_undef6_tree_builtin_complex_literal_zero
+1579|diag-cparse: cparse_undef6_tree_builtin_complex_literal_zero rc=0
+1580|diag-cparse: compile cparse_undef6_tree_builtin_complex_literal_sub
+1581|diag-cparse: cparse_undef6_tree_builtin_complex_literal_sub rc=0
+1582|diag-cparse: compile cparse_undef6_tree_builtin_complex_max_only
+1583|diag-cparse: cparse_undef6_tree_builtin_complex_max_only rc=0
+1584|diag-cparse: compile cparse_undef6_tree_builtin_complex_min_only
+1585|diag-cparse: cparse_undef6_tree_builtin_complex_min_only rc=0
+1586|diag-cparse: compile cparse_undef6_tree_builtin_complex_mode_delta_one
+1587|diag-cparse: cparse_undef6_tree_builtin_complex_mode_delta_one rc=0
+1588|diag-cparse: compile cparse_undef6_tree_builtin_complex_mode_delta_two
+1589|diag-cparse: cparse_undef6_tree_builtin_complex_mode_delta_two rc=0
+1619|diag-cparse: compile cparse_undef6_inc_tree
+1620|diag-cparse: cparse_undef6_inc_tree rc=0
+1744|diag-cparse: compile cparse_undef6_inc_tree
+1745|diag-cparse: cparse_undef6_inc_tree rc=0
+1753|diag-cparse: compile cparse_full_config_undef6
+1755|diag-cparse: cparse_full_config_undef6 rc=139
+1815|diag-cparse: compile cparse_inc_system_only
+1816|diag-cparse: cparse_inc_system_only rc=0
+1817|diag-cparse: compile chunk_safe_ctype
+1818|diag-cparse: chunk_safe_ctype rc=0
+1819|diag-cparse: compile chunk_sys_types
+1820|diag-cparse: chunk_sys_types rc=0
+1821|diag-cparse: compile chunk_errno
+1822|diag-cparse: chunk_errno rc=0
+1823|diag-cparse: compile ansimacro_gcc_version_sys_types
+1824|diag-cparse: ansimacro_gcc_version_sys_types rc=0
+1825|diag-cparse: compile ansimacro_ansi_defs_sys_types
+1826|diag-cparse: ansimacro_ansi_defs_sys_types rc=0
+1827|diag-cparse: compile ansimacro_undef_keywords_sys_types
+1828|Segmentation fault (core dumped)
+1829|diag-cparse: ansimacro_undef_keywords_sys_types rc=139
+1830|diag-cparse: compile ansimacro_undef_const_sys_types
+1831|diag-cparse: ansimacro_undef_const_sys_types rc=0
+1832|diag-cparse: compile ansimacro_undef_volatile_sys_types
+1833|diag-cparse: ansimacro_undef_volatile_sys_types rc=0
+1834|diag-cparse: compile ansimacro_undef_signed_sys_types
+1835|diag-cparse: ansimacro_undef_signed_sys_types rc=0
+1836|diag-cparse: compile ansimacro_undef_inline_sys_types
+1837|diag-cparse: ansimacro_undef_inline_sys_types rc=0
+1838|diag-cparse: compile ansimacro_inline_empty_sys_types
+1839|Segmentation fault (core dumped)
+1840|diag-cparse: ansimacro_inline_empty_sys_types rc=139
+1841|diag-cparse: compile ansimacro_inline_builtin_sys_types
+1842|diag-cparse: ansimacro_inline_builtin_sys_types rc=0
+1843|diag-cparse: compile ansimacro_attribute_blank_sys_types
+1844|diag-cparse: ansimacro_attribute_blank_sys_types rc=0
+1845|diag-cparse: compile ansimacro_extension_blank_sys_types
+1846|diag-cparse: ansimacro_extension_blank_sys_types rc=0
+1847|diag-cparse: compile ansidecl_chunk_sys_types_only
+1848|diag-cparse: ansidecl_chunk_sys_types_only rc=0
+1849|diag-cparse: compile ansidecl_chunk_stdarg
+1850|diag-cparse: ansidecl_chunk_stdarg rc=0
+1851|diag-cparse: compile ansidecl_chunk_stdarg_sys_types
+1852|diag-cparse: ansidecl_chunk_stdarg_sys_types rc=0
+1853|diag-cparse: compile ansidecl_chunk_va_copy
+1854|diag-cparse: ansidecl_chunk_va_copy rc=0
+1855|diag-cparse: compile ansidecl_chunk_va_copy_sys_types
+1856|diag-cparse: ansidecl_chunk_va_copy_sys_types rc=0
+1857|diag-cparse: compile ansidecl_chunk_stddef
+1858|diag-cparse: ansidecl_chunk_stddef rc=0
+1859|diag-cparse: compile ansidecl_chunk_stddef_sys_types
+1860|diag-cparse: ansidecl_chunk_stddef_sys_types rc=0
+1861|diag-cparse: compile ansidecl_chunk_stdio
+1862|diag-cparse: ansidecl_chunk_stdio rc=0
+1863|diag-cparse: compile ansidecl_chunk_stdio_sys_types
+1864|diag-cparse: ansidecl_chunk_stdio_sys_types rc=0
+1865|diag-cparse: compile ansidecl_chunk_stdio_macros
+1866|diag-cparse: ansidecl_chunk_stdio_macros rc=0
+1867|diag-cparse: compile ansidecl_chunk_stdio_macros_sys_types
+1868|diag-cparse: ansidecl_chunk_stdio_macros_sys_types rc=0
+1869|diag-cparse: compile ansidecl_chunk_safe_ctype
+1870|diag-cparse: ansidecl_chunk_safe_ctype rc=0
+1871|diag-cparse: compile ansidecl_chunk_safe_ctype_sys_types
+1872|diag-cparse: ansidecl_chunk_safe_ctype_sys_types rc=0
+1873|diag-cparse: compile ansidecl_chunk_sys_types
+1874|diag-cparse: ansidecl_chunk_sys_types rc=0
+1875|diag-cparse: compile ansidecl_chunk_errno
+1876|diag-cparse: ansidecl_chunk_errno rc=0
+1877|diag-cparse: compile ansidecl_chunk_string
+1878|diag-cparse: ansidecl_chunk_string rc=0
+1879|diag-cparse: compile cparse_inc_system
+1880|Segmentation fault (core dumped)
+1881|diag-cparse: cparse_inc_system rc=139
+1882|diag-cparse: compile cparse_inc_coretypes
+1883|Segmentation fault (core dumped)
+1884|diag-cparse: cparse_inc_coretypes rc=139
+1885|diag-cparse: compile cparse_inc_tm
+1886|Segmentation fault (core dumped)
+1887|diag-cparse: cparse_inc_tm rc=139
+1888|diag-cparse: compile cparse_inc_tree
+1889|Segmentation fault (core dumped)
+1890|diag-cparse: cparse_inc_tree rc=139
+1891|diag-cparse: compile cparse_inc_langhooks
+1892|Segmentation fault (core dumped)
+1893|diag-cparse: cparse_inc_langhooks rc=139
+1894|diag-cparse: compile cparse_inc_cpplib
+1895|Segmentation fault (core dumped)
+1896|diag-cparse: cparse_inc_cpplib rc=139
+1897|diag-cparse: compile cparse_inc_ctree
+1898|Segmentation fault (core dumped)
+1899|diag-cparse: cparse_inc_ctree rc=139
+1900|diag-cparse: compile cparse_header_only
+1901|Segmentation fault (core dumped)
+1902|diag-cparse: cparse_header_only rc=139
+1903|diag-cparse: compile cparse_after_yytranslate
+1904|Segmentation fault (core dumped)
+1905|diag-cparse: cparse_after_yytranslate rc=139
+1906|diag-cparse: compile cparse_after_yyr1
+1907|Segmentation fault (core dumped)
+1908|diag-cparse: cparse_after_yyr1 rc=139
+1909|diag-cparse: compile cparse_after_yyr2
+1910|Segmentation fault (core dumped)
+1911|diag-cparse: cparse_after_yyr2 rc=139
+1912|diag-cparse: compile cparse_before_yytable
+1913|Segmentation fault (core dumped)
+1914|diag-cparse: cparse_before_yytable rc=139
+1915|diag-cparse: compile cparse_before_yyparse
+1916|Segmentation fault (core dumped)
+1917|diag-cparse: cparse_before_yyparse rc=139
+1918|diag-cparse: compile cparse_full
+1919|Segmentation fault (core dumped)
+1920|diag-cparse: cparse_full rc=139

@@ -772,6 +772,12 @@ EOF
       fi
 
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
+      if [ -f gcc/insn-modes.h ] && ! $BB grep -q '^#define MIN_MODE_COMPLEX_FLOAT' gcc/insn-modes.h; then
+        cat >> gcc/insn-modes.h <<'EOF'
+#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
+EOF
+      fi
       for dir in libiberty libcpp gcc; do
         echo "building $dir"
         if [ "$dir" = libiberty ]; then
