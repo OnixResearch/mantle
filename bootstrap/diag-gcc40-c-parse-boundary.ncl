@@ -1066,6 +1066,20 @@ EOF
               echo 'int tree_post180_manual_undef6_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_tree_post180_no_machmode_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo '#include "coretypes.h"' >> "$probe"
+              echo '#include "tm.h"' >> "$probe"
+              $BB awk 'NR <= 180 && $0 !~ /#include "machmode.h"/ { print }' "$WORK/gcc-4.0.4/gcc/tree.h" >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo '#endif /* diag balance GCC_TREE_H */' >> "$probe"
+              echo 'int tree_post180_no_machmode_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
             make_tree_builtins_def_prefix_config_undef6() {
               label="$1"
               count="$2"
@@ -1493,6 +1507,95 @@ enum built_in_function {
   END_BUILTINS
 };
 #undef DEF_BUILTIN'
+            make_tree_post180_no_machmode_manual_config_undef6 cparse_undef6_tree_builtin_local_machine_mode_literal_sub 'enum machine_mode {
+  VOIDmode = 0,
+  SFmode = 15,
+  TFmode = 18,
+  MAX_MACHINE_MODE
+};
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + 2 - 1,
+  END_BUILTINS
+};'
+            make_tree_post180_no_machmode_manual_config_undef6 cparse_undef6_tree_builtin_local_machine_mode_direct_sftf 'enum machine_mode {
+  VOIDmode = 0,
+  SFmode = 15,
+  TFmode = 18,
+  MAX_MACHINE_MODE
+};
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + TFmode - SFmode,
+  END_BUILTINS
+};'
+            make_tree_post180_no_machmode_manual_config_undef6 cparse_undef6_tree_builtin_local_machine_mode_macro_delta 'enum machine_mode {
+  VOIDmode = 0,
+  SFmode = 15,
+  TFmode = 18,
+  MAX_MACHINE_MODE
+};
+#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_no_machmode_manual_config_undef6 cparse_undef6_tree_builtin_local_machine_mode_enum_alias_delta 'enum machine_mode {
+  VOIDmode = 0,
+  SFmode = 15,
+  TFmode = 18,
+  MIN_MODE_COMPLEX_FLOAT = SFmode,
+  MAX_MODE_COMPLEX_FLOAT = TFmode,
+  MAX_MACHINE_MODE
+};
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_generated_direct_sftf 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + TFmode - SFmode,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_generated_direct_tf_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + TFmode,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_generated_direct_sf_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN - SFmode,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_generated_macro_alias_delta '#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_generated_enum_alias_delta 'enum diag_mode_alias {
+  MIN_MODE_COMPLEX_FLOAT = SFmode,
+  MAX_MODE_COMPLEX_FLOAT = TFmode
+};
+enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + MAX_MODE_COMPLEX_FLOAT - MIN_MODE_COMPLEX_FLOAT,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_undefined_symbol_only 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + DIAG_UNDEFINED_ENUM_ID,
+  END_BUILTINS
+};'
+            make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_undefined_symbol_delta 'enum built_in_function {
+  BUILT_IN_COMPLEX_MUL_MIN,
+  BUILT_IN_COMPLEX_MUL_MAX = BUILT_IN_COMPLEX_MUL_MIN + DIAG_UNDEFINED_ENUM_MAX - DIAG_UNDEFINED_ENUM_MIN,
+  END_BUILTINS
+};'
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             print_tm_head_window
             print_insn_head_window
