@@ -945,7 +945,7 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
             print_tree_head_window() {
-              $BB awk 'NR <= 80 { printf("diag-tree-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/tree.h"
+              $BB awk 'NR <= 220 { printf("diag-tree-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/tree.h"
             }
             print_machmode_head_window() {
               $BB awk 'NR <= 140 { printf("diag-machmode-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/machmode.h"
@@ -1364,6 +1364,14 @@ enum tree_code {
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_28 28
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_36 36
             make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_80 80
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_120 120
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_160 160
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_166 166
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_177 177
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_180 180
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_207 207
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_212 212
+            make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             print_tm_head_window
             print_insn_head_window
