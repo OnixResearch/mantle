@@ -251,8 +251,8 @@ enum machine_mode { VOIDmode, BLKmode, CCmode, BImode, QImode, HImode, SImode, D
 #define MAX_MODE_PARTIAL_INT VOIDmode
 #define MIN_MODE_COMPLEX_INT VOIDmode
 #define MAX_MODE_COMPLEX_INT VOIDmode
-#define MIN_MODE_COMPLEX_FLOAT VOIDmode
-#define MAX_MODE_COMPLEX_FLOAT VOIDmode
+#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
 #define MIN_MODE_VECTOR_INT VOIDmode
 #define MAX_MODE_VECTOR_INT VOIDmode
 #define MIN_MODE_VECTOR_FLOAT VOIDmode
