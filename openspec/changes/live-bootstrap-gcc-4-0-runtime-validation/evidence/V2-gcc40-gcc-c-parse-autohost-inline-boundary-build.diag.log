@@ -1,0 +1,52 @@
+Diagnostic matrix excerpt from /home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-autohost-after-gid
+Full drv log: .crunch-drain/gcc40-autohost-after-gid/state/logs/xp51rsch22r68v3zmk750401x1irr7l7-diag-gcc40-c-parse-boundary.drv.log
+
+diag-cparse: cparse_empty rc=0
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: cparse_inc_config rc=0
+diag-autohost-define: 090 #define PACKAGE_VERSION ""
+diag-autohost-define: 091 #define PREFIX_INCLUDE_DIR "/crunch/store/xmknbwvdgggbrkx714vf2mw512rmxy75-diag-gcc40-c-parse-boundary/include"
+diag-autohost-define: 092 #define SIZEOF_INT 4
+diag-autohost-define: 093 #define SIZEOF_LONG 0
+diag-autohost-define: 094 #define SIZEOF_SHORT 0
+diag-autohost-define: 095 #define SIZEOF_VOID_P 0
+diag-autohost-define: 096 #define gid_t int
+diag-autohost-define: 097 #define inline
+diag-autohost-define: 098 #define rlim_t long
+diag-autohost-define: 099 #define ssize_t int
+diag-cparse: autohost_defines_90_undef_need64_system rc=0
+diag-cparse: autohost_defines_95_undef_need64_system rc=0
+diag-cparse: autohost_defines_96_undef_need64_system rc=139
+diag-cparse: autohost_defines_96_undef_need64_gid_system rc=0
+diag-cparse: autohost_defines_97_undef_need64_gid_system rc=139
+diag-cparse: autohost_define_97_only_system rc=139
+diag-cparse: autohost_defines_97_undef_need64_gid_inline_system rc=0
+diag-cparse: autohost_defines_98_undef_need64_gid_system rc=139
+diag-cparse: autohost_defines_99_undef_need64_gid_system rc=139
+diag-cparse: autohost_defines_97_undef_need64_system rc=139
+diag-cparse: autohost_defines_98_undef_need64_system rc=139
+diag-cparse: autohost_defines_99_undef_need64_system rc=139
+diag-cparse: autohost_defines_90_skip84_system rc=0
+diag-cparse: autohost_defines_90_system rc=139
+diag-cparse: autohost_defines_95_system rc=139
+diag-cparse: cparse_manual_config_system rc=139
+diag-cparse: cparse_autohost_system rc=139
+diag-cparse: cparse_ansidecl_system rc=0
+diag-cparse: cparse_inc_system_only rc=0
+diag-cparse: cparse_inc_system rc=139
+diag-cparse: cparse_inc_coretypes rc=139
+diag-cparse: cparse_inc_tm rc=139
+diag-cparse: cparse_inc_tree rc=139
+diag-cparse: cparse_inc_langhooks rc=139
+diag-cparse: cparse_inc_cpplib rc=139
+diag-cparse: cparse_inc_ctree rc=139
+diag-cparse: cparse_header_only rc=139
+diag-cparse: cparse_after_yytranslate rc=139
+diag-cparse: cparse_after_yyr1 rc=139
+diag-cparse: cparse_after_yyr2 rc=139
+diag-cparse: cparse_before_yytable rc=139
+diag-cparse: cparse_before_yyparse rc=139
+diag-cparse: cparse_full rc=139

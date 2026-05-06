@@ -895,6 +895,21 @@ EOF
               echo 'int autohost_define_undef2_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
             }
+            make_autohost_define_undef3_probe() {
+              label="$1"
+              count="$2"
+              macro1="$3"
+              macro2="$4"
+              macro3="$5"
+              probe="/tmp/$label.c"
+              $BB awk -v limit="$count" '/^#define / { print; seen++; if (seen >= limit) exit }' auto-host.h > "$probe"
+              echo "#undef $macro1" >> "$probe"
+              echo "#undef $macro2" >> "$probe"
+              echo "#undef $macro3" >> "$probe"
+              echo '#include "system.h"' >> "$probe"
+              echo 'int autohost_define_undef3_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
             make_autohost_full_undef_probe() {
               label="$1"
               macro="$2"
@@ -926,6 +941,12 @@ EOF
             make_autohost_define_undef_probe autohost_defines_96_undef_need64_system 96 NEED_64BIT_HOST_WIDE_INT
             make_autohost_define_range_probe autohost_define_96_only_system 96 96
             make_autohost_define_undef2_probe autohost_defines_96_undef_need64_gid_system 96 NEED_64BIT_HOST_WIDE_INT gid_t
+            make_autohost_define_undef2_probe autohost_defines_97_undef_need64_gid_system 97 NEED_64BIT_HOST_WIDE_INT gid_t
+            make_autohost_define_range_probe autohost_define_97_only_system 97 97
+            make_autohost_define_undef3_probe autohost_defines_97_undef_need64_gid_inline_system 97 NEED_64BIT_HOST_WIDE_INT gid_t inline
+            make_autohost_define_undef2_probe autohost_defines_98_undef_need64_gid_system 98 NEED_64BIT_HOST_WIDE_INT gid_t
+            make_autohost_define_undef2_probe autohost_defines_99_undef_need64_gid_system 99 NEED_64BIT_HOST_WIDE_INT gid_t
+            make_autohost_define_undef2_probe autohost_defines_100_undef_need64_gid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t
             make_autohost_define_undef_probe autohost_defines_97_undef_need64_system 97 NEED_64BIT_HOST_WIDE_INT
             make_autohost_define_undef_probe autohost_defines_98_undef_need64_system 98 NEED_64BIT_HOST_WIDE_INT
             make_autohost_define_undef_probe autohost_defines_99_undef_need64_system 99 NEED_64BIT_HOST_WIDE_INT
