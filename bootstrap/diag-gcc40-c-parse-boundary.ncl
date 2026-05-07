@@ -1090,6 +1090,14 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
+            make_cparse_plain_exact() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              printf '%s\n' "$body" > "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
             make_cparse_plain_body() {
               label="$1"
               body="$2"
@@ -2124,29 +2132,27 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_toplev 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h'
             make_include_probe_config_undef6 cparse_undef6_inc_ggc 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h'
             make_include_probe_config_undef6 cparse_undef6_inc_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            make_cparse_plain_exact cparse_plain_func_decl_semicolon_exact_no_config 'void cparse_plain_decl_exact_probe (void);'
+            make_cparse_plain_exact cparse_plain_func_prefix_declarator_no_config 'void cparse_plain_prefix_probe (void)'
+            make_cparse_plain_exact cparse_plain_oldstyle_prefix_no_config 'void cparse_plain_oldstyle_prefix_probe ()'
+            make_cparse_plain_exact cparse_plain_param_int_prefix_no_config 'void cparse_plain_param_int_prefix_probe (int x)'
+            make_cparse_plain_exact cparse_plain_var_prefix_no_config 'int cparse_plain_var_prefix_probe'
+            make_cparse_plain_exact cparse_plain_pointer_prefix_no_config 'int *cparse_plain_pointer_prefix_probe'
             make_cparse_plain_body cparse_plain_decl_no_config 'void cparse_plain_probe (void);'
             make_cparse_plain_body cparse_plain_global_no_config 'int cparse_plain_global_probe;'
             make_cparse_plain_body cparse_plain_func_no_config 'void cparse_plain_function_probe (void) { }'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_decl_semicolon_config_only '' 'void cparse_decl_semicolon_probe (void);'
             make_cparse_exact_after_includes_config_undef6 cparse_func_exact_config_only '' 'void cparse_exact_function_probe (void) { }'
             make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_declarator_config_only '' 'void cparse_prefix_probe (void)'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_oldstyle_config_only '' 'void cparse_oldstyle_prefix_probe ()'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_param_int_config_only '' 'void cparse_param_int_prefix_probe (int x)'
+            make_cparse_exact_after_includes_config_undef6 cparse_var_prefix_config_only '' 'int cparse_var_prefix_probe'
+            make_cparse_exact_after_includes_config_undef6 cparse_pointer_prefix_config_only '' 'int *cparse_pointer_prefix_probe'
             make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_open_brace_config_only '' 'void cparse_open_brace_probe (void) {'
             make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_local_decl_config_only '' 'void cparse_local_decl_prefix_probe (void) { int local_probe;'
             make_cparse_body_after_includes_config_undef6 cparse_decl_after_config_only '' 'void cparse_function_probe (void);'
             make_cparse_body_after_includes_config_undef6 cparse_global_after_config_only '' 'int cparse_global_probe;'
-            make_cparse_body_after_includes_config_undef6 cparse_oldstyle_func_after_config_only '' 'void cparse_oldstyle_probe () { }'
-            make_cparse_body_after_includes_config_undef6 cparse_int_func_after_config_only '' 'int cparse_int_function_probe (void) { return 0; }'
-            make_cparse_body_after_includes_config_undef6 cparse_func_empty_stmt_after_config_only '' 'void cparse_empty_stmt_probe (void) { ; }'
-            make_cparse_body_after_includes_config_undef6 cparse_func_local_decl_after_config_only '' 'void cparse_local_decl_probe (void) { int local_probe; }'
-            make_cparse_body_after_includes_config_undef6 cparse_static_func_after_config_only '' 'static void cparse_static_function_probe (void) { }'
-            make_cparse_body_after_includes_config_undef6 cparse_extern_func_after_config_only '' 'extern void cparse_extern_function_probe (void) { }'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only ''
-            make_cparse_body_after_includes_config_undef6 cparse_decl_after_system 'system.h' 'void cparse_function_probe (void);'
-            make_cparse_body_after_includes_config_undef6 cparse_global_after_system 'system.h' 'int cparse_global_probe;'
-            make_cparse_body_after_includes_config_undef6 cparse_oldstyle_func_after_system 'system.h' 'void cparse_oldstyle_probe () { }'
-            make_cparse_body_after_includes_config_undef6 cparse_int_func_after_system 'system.h' 'int cparse_int_function_probe (void) { return 0; }'
-            make_cparse_body_after_includes_config_undef6 cparse_func_before_system 'system.h' '#define cparse_before_system_marker 1
-void cparse_before_system_probe (void) { }'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_system 'system.h'
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_bison_defines 36 47
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_enum 50 127
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_defines 128 197
