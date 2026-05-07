@@ -1,0 +1,119 @@
+{
+  "schema": "gcc40-cparse-probe-results-v1",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-runtime-v4-20260507-state/logs/yvd7vl3f9x58lzcn3c4qxkwqlwxh503l-diag-gcc40-c-parse-boundary.drv.log",
+  "results": [
+    {
+      "label": "cparse_plain_func_decl_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_prefix_declarator_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_oldstyle_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_param_int_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_pointer_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_pointer_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_bad_init_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_param_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_comma_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_decl_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_global_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_decl_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_func_prefix_declarator_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_prefix_oldstyle_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_prefix_param_int_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_var_prefix_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_pointer_prefix_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_var_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_pointer_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_bad_init_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_param_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_comma_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_decl_after_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_global_after_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_func_after_config_only",
+      "rc": 139
+    }
+  ]
+}
