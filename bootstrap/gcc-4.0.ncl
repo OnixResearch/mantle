@@ -771,6 +771,18 @@ EOF
 EOF
       fi
 
+      # CRUNCH: c-common.h reaches ggc.h before the fragile gengtype bridge has
+      # produced its generated include forest. Missing generated headers route
+      # through TinyCC/Mes diagnostics and segfault; seed the same inert files
+      # that the build/gengtype wrapper emits so the C parser can move to the
+      # next semantic boundary deterministically.
+      gcc40_gengtype_stub_files="gt-cgraph.h gt-coverage.h gtype-desc.h gt-except.h gt-function.h gt-integrate.h gt-tree.h gt-varasm.h gt-emit-rtl.h gt-explow.h gt-stor-layout.h gt-regclass.h gt-lists.h gt-alias.h gt-cselib.h gt-gcse.h gt-expr.h gt-sdbout.h gt-optabs.h gt-bitmap.h gt-dojump.h gt-dwarf2out.h gt-reg-stack.h gt-dwarf2asm.h gt-dbxout.h gt-c-common.h gt-c-decl.h gt-c-parse.h gt-c-pragma.h gtype-c.h gt-cfglayout.h gt-tree-mudflap.h gt-tree-complex.h gt-tree-eh.h gt-tree-ssanames.h gt-tree-iterator.h gt-gimplify.h gt-tree-phinodes.h gt-tree-cfg.h gt-tree-nested.h gt-tree-ssa-operands.h gt-tree-ssa-propagate.h gt-stringpool.h"
+      for f in $gcc40_gengtype_stub_files; do
+        if [ ! -f "gcc/$f" ]; then
+          printf '/* bootstrap gengtype stub: %s */\n' "$f" > "gcc/$f"
+        fi
+      done
+
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
       if [ -f gcc/insn-modes.h ] && ! $BB grep -q '^#define MIN_MODE_COMPLEX_FLOAT' gcc/insn-modes.h; then
         cat >> gcc/insn-modes.h <<'EOF'

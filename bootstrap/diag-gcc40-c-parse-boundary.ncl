@@ -741,6 +741,13 @@ DIRECTIVES_EOF
       $BB mkdir -p gcc/include
       $BB ln -sf ../../../gcc-4.0.4/gcc/gsyslimits.h gcc/include/syslimits.h
 
+      gcc40_gengtype_stub_files="gt-cgraph.h gt-coverage.h gtype-desc.h gt-except.h gt-function.h gt-integrate.h gt-tree.h gt-varasm.h gt-emit-rtl.h gt-explow.h gt-stor-layout.h gt-regclass.h gt-lists.h gt-alias.h gt-cselib.h gt-gcse.h gt-expr.h gt-sdbout.h gt-optabs.h gt-bitmap.h gt-dojump.h gt-dwarf2out.h gt-reg-stack.h gt-dwarf2asm.h gt-dbxout.h gt-c-common.h gt-c-decl.h gt-c-parse.h gt-c-pragma.h gtype-c.h gt-cfglayout.h gt-tree-mudflap.h gt-tree-complex.h gt-tree-eh.h gt-tree-ssanames.h gt-tree-iterator.h gt-gimplify.h gt-tree-phinodes.h gt-tree-cfg.h gt-tree-nested.h gt-tree-ssa-operands.h gt-tree-ssa-propagate.h gt-stringpool.h"
+      for f in $gcc40_gengtype_stub_files; do
+        if [ ! -f "gcc/$f" ]; then
+          printf '/* bootstrap gengtype stub: %s */\n' "$f" > "gcc/$f"
+        fi
+      done
+
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
       for dir in libiberty libcpp gcc; do
         echo "building $dir"
@@ -999,6 +1006,40 @@ EOF
 
             print_ggc_head_window() {
               $BB awk 'NR <= 100 { printf("diag-ggc-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/ggc.h"
+            }
+
+            make_gtype_desc_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo '#ifndef GCC_C_TREE_H' >> "$probe"
+              echo '#define GCC_C_TREE_H' >> "$probe"
+              echo '#ifndef GCC_C_COMMON_H' >> "$probe"
+              echo '#define GCC_C_COMMON_H' >> "$probe"
+              echo '#include "splay-tree.h"' >> "$probe"
+              echo '#include "cpplib.h"' >> "$probe"
+              echo '#ifndef GCC_GGC_H' >> "$probe"
+              echo '#define GCC_GGC_H' >> "$probe"
+              echo '#include "statistics.h"' >> "$probe"
+              echo 'extern const char empty_string[];' >> "$probe"
+              echo 'extern const char digit_vector[];' >> "$probe"
+              echo '#define digit_string(d) (digit_vector + ((d) * 2))' >> "$probe"
+              echo 'typedef void (*gt_pointer_operator) (void *, void *);' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' "gtype-desc.h" >> "$probe"
+              echo '#endif /* diag balance generated guard */' >> "$probe"
+              echo '#endif /* diag balance GCC_GGC_H */' >> "$probe"
+              echo '#endif /* diag balance GCC_C_COMMON_H */' >> "$probe"
+              echo '#endif /* diag balance GCC_C_TREE_H */' >> "$probe"
+              echo 'int gtype_desc_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            print_gtype_desc_head_window() {
+              $BB awk 'NR <= 120 { printf("diag-gtype-desc-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "gtype-desc.h"
             }
 
             print_tm_include_window() {
@@ -1919,6 +1960,10 @@ EOF
             print_ggc_head_window
             for n in 20 24 25 30 40 60 80 100; do
               make_ggc_header_balanced_config_undef6 "cparse_undef6_ggc_balanced_lines_$n" "$n"
+            done
+            print_gtype_desc_head_window
+            for n in 20 40 60 80 100 120; do
+              make_gtype_desc_header_balanced_config_undef6 "cparse_undef6_gtype_desc_balanced_lines_$n" "$n"
             done
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_24 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 24
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_25 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 25
