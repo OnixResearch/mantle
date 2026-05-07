@@ -775,6 +775,19 @@ DIRECTIVES_EOF
             MAKEINFO=true \
             tree-check.h config.h \
             2>&1
+          if [ -f gcc/config.h ]; then
+            cat >> gcc/config.h <<'EOF'
+/* CRUNCH: keep diagnostic config.h aligned with bootstrap/gcc-4.0.ncl;
+   these generated auto-host typedef/inline rewrites crash TinyCC before the
+   later c-parse reduction can expose the next real parser boundary. */
+#undef NEED_64BIT_HOST_WIDE_INT
+#undef gid_t
+#undef inline
+#undef rlim_t
+#undef ssize_t
+#undef uid_t
+EOF
+          fi
           if [ ! -f gcc/insn-constants.h ]; then
             cat > gcc/insn-constants.h <<'EOF'
 #ifndef GCC_INSN_CONSTANTS_H
@@ -1799,6 +1812,15 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_ctree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
             $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6.c
             try_cparse_variant cparse_full_config_undef6 /tmp/cparse_full_config_undef6.c
+            make_cparse_prefix_config_undef6 cparse_undef6_top_40 40
+            make_cparse_prefix_config_undef6 cparse_undef6_top_80 80
+            make_cparse_prefix_config_undef6 cparse_undef6_top_120 120
+            make_cparse_prefix_config_undef6 cparse_undef6_top_160 160
+            make_cparse_prefix_config_undef6 cparse_undef6_top_200 200
+            make_cparse_prefix_config_undef6 cparse_undef6_top_240 240
+            make_cparse_prefix_config_undef6 cparse_undef6_top_280 280
+            make_cparse_prefix_config_undef6 cparse_undef6_top_320 320
+            make_cparse_prefix_config_undef6 cparse_undef6_top_360 360
             make_cparse_prefix_config_undef6 cparse_undef6_header_only 390
             make_cparse_prefix_config_undef6 cparse_undef6_after_yytranslate 544
             make_cparse_prefix_config_undef6 cparse_undef6_after_yyr1 1017
