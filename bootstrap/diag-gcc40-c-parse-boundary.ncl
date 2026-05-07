@@ -2219,6 +2219,32 @@ static void init_reswords (void);
 void c_parse_init (void) { init_reswords (); }'
             $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6.c
             try_cparse_variant cparse_full_config_undef6 /tmp/cparse_full_config_undef6.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk '
+                  NR == 380 {
+                    print "void c_parse_init (void);";
+                    next;
+                  }
+                  NR >= 381 && NR <= 384 { next }
+                  { print }
+                ' > /tmp/cparse_full_config_undef6_no_init_func.c
+            try_cparse_variant cparse_full_config_undef6_no_init_func /tmp/cparse_full_config_undef6_no_init_func.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk '
+                  NR == 380 {
+                    print "void c_parse_init (void);";
+                    next;
+                  }
+                  NR >= 381 && NR <= 384 { next }
+                  { print }
+                  END {
+                    print "void c_parse_init (void)";
+                    print "{";
+                    print "  init_reswords ();";
+                    print "}";
+                  }
+                ' > /tmp/cparse_full_config_undef6_delayed_init_func.c
+            try_cparse_variant cparse_full_config_undef6_delayed_init_func /tmp/cparse_full_config_undef6_delayed_init_func.c
             $BB sed \
               -e 's/#include "config.h"/#include "config-undef6.h"/' \
               -e 's/YYSTYPE \*newvs;/void *newvs;/' \
