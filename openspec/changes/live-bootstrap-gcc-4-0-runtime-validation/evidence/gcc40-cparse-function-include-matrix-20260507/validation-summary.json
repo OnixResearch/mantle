@@ -1,0 +1,64 @@
+{
+  "schema": "crunch-gcc40-cparse-function-include-matrix-v1",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "status": "captured-runtime-boundary",
+  "build_exit_code": 1,
+  "failure_class": "builder-diagnostic-nonzero-expected",
+  "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-runtime-v4-20260507-state/logs/04vz24dn6p583icmxbjfgabhk57j2ai1-diag-gcc40-c-parse-boundary.drv.log",
+  "result": "trivial function definition after config-undef6.h + system.h already rc139; extending through c-common.h remains rc139",
+  "matrix": [
+    {
+      "label": "cparse_func_after_system",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_coretypes",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_tm",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_tree",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_langhooks",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_input",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_cpplib",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_c_pragma",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_c_tree",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_flags",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_after_c_common",
+      "rc": 139
+    }
+  ],
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/build.stderr.log",
+    "matrix_log": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/function-include-matrix.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-matrix-20260507/validation-summary.md"
+  },
+  "generated_at_unix": 1778174329
+}
