@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-function-include-bisect-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-function-include-bisect-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "plan_exit_code": 0,
+  "build_attempted": true,
+  "build_exit_code": null,
+  "status": "inconclusive-timeout-before-target",
+  "failure_class": "dependency-bootstrap-timeout",
+  "timeout_seconds_approx": 1140,
+  "stopped_process": "bootstrap validate was killed after remaining in the mes dependency build with empty target stdout/stderr and no diag-gcc40 target log yet",
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/doctor.json",
+    "plan_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/plan.stdout.log",
+    "plan_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/plan.stderr.log",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-function-include-bisect-20260507/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1778169508
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "crunch-build-plan-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-function-include-bisect-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-function-include-bisect-state",
+  "store_dir": "/crunch/store",
+  "entries": [
+    {
+      "drv_key": "/crunch/store/04vz24dn6p583icmxbjfgabhk57j2ai1-diag-gcc40-c-parse-boundary.drv",
+      "label": "diag-gcc40-c-parse-boundary",
+      "action": "build",
+      "detail": "out=build"
+    }
+  ]
+}
