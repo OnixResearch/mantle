@@ -1,0 +1,36 @@
+{
+  "component_compiles": [
+    {
+      "rc": 0,
+      "source": "tccpp.c"
+    },
+    {
+      "rc": 139,
+      "source": "tccgen.c"
+    },
+    {
+      "rc": 0,
+      "source": "tccelf.c"
+    },
+    {
+      "rc": 0,
+      "source": "x86_64-gen.c"
+    },
+    {
+      "rc": 139,
+      "source": "libtcc.c"
+    }
+  ],
+  "control_boundary": "Existing c-parse probe matrix remains unchanged: valid semicolon declarations rc=0; malformed/EOF declaration paths rc=139.",
+  "diagnostic_exit": "expected nonzero builder failure after diagnostic probes",
+  "finding": "Instrumented TinyCC one-source preprocessing succeeds, and isolated component compilation narrows the instrumented-build blocker to tccgen.c and libtcc.c compile-time segfaults; tccpp.c, tccelf.c, and x86_64-gen.c compile.",
+  "instrumented_decl0_compiler_build_rc": 139,
+  "preprocess": {
+    "kind": "preprocess",
+    "lines": 19823,
+    "rc": 0,
+    "source": "tcc.c"
+  },
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}

@@ -1,0 +1,120 @@
+{
+  "component_compiles": [
+    {
+      "rc": 0,
+      "source": "tccpp.c"
+    },
+    {
+      "rc": 139,
+      "source": "tccgen.c"
+    },
+    {
+      "rc": 0,
+      "source": "tccelf.c"
+    },
+    {
+      "rc": 0,
+      "source": "x86_64-gen.c"
+    },
+    {
+      "rc": 139,
+      "source": "libtcc.c"
+    }
+  ],
+  "control_boundary": "Existing c-parse probe matrix remains unchanged: valid semicolon declarations rc=0; malformed/EOF declaration paths rc=139.",
+  "cparse_controls": [
+    {
+      "label": "cparse_plain_func_decl_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_prefix_declarator_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_oldstyle_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_param_int_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_pointer_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_pointer_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_bad_init_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_param_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_comma_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_decl_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_global_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_func_decl_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_var_prefix_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_var_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_bad_init_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_param_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_comma_semicolon_config_only",
+      "rc": 139
+    }
+  ],
+  "diagnostic_exit": "expected nonzero builder failure after diagnostic probes",
+  "evidence_dir": "evidence/gcc40-cparse-decl0-partition-trace-20260507",
+  "finding": "Instrumented TinyCC one-source preprocessing succeeds, and isolated component compilation narrows the instrumented-build blocker to tccgen.c and libtcc.c compile-time segfaults; tccpp.c, tccelf.c, and x86_64-gen.c compile.",
+  "instrumented_decl0_compiler_build_rc": 139,
+  "log_source": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-partition-trace-20260507-state/logs/fxsjfps1vgmcqji8d684981dl8sb8p13-diag-gcc40-c-parse-boundary.drv.log",
+  "preprocess": {
+    "kind": "preprocess",
+    "lines": 19823,
+    "rc": 0,
+    "source": "tcc.c"
+  },
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}

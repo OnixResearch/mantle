@@ -1,0 +1,3073 @@
+# crunch build log
+# derivation: diag-gcc40-c-parse-boundary
+# drv_path: fxsjfps1vgmcqji8d684981dl8sb8p13-diag-gcc40-c-parse-boundary.drv
+# status: failure
+# timestamp: 1778198088
+
+store error: build: nonzero exit code: exit status: 2
+configuring libiberty
+checking whether to enable maintainer-specific portions of Makefiles... no
+checking for makeinfo... no
+checking for perl... no
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking for x86_64-unknown-linux-gnu-ar... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ar
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ranlib
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking how to run the C preprocessor... gcc40-cpp
+checking whether gcc40-cc and cc understand -c and -o together... yes
+checking for an ANSI C-conforming const... no
+checking for inline... no
+checking whether byte ordering is bigendian... (cached) no
+checking for a BSD-compatible install... /tmp/gcc-build/gcc-4.0.4/libiberty/../install-sh -c
+checking for sys/file.h... yes
+checking for sys/param.h... yes
+checking for limits.h... yes
+checking for stdlib.h... yes
+checking for malloc.h... yes
+checking for string.h... yes
+checking for unistd.h... yes
+checking for strings.h... yes
+checking for sys/time.h... yes
+checking for time.h... yes
+checking for sys/resource.h... yes
+checking for sys/stat.h... yes
+checking for sys/mman.h... yes
+checking for fcntl.h... yes
+checking for alloca.h... yes
+checking for sys/pstat.h... yes
+checking for sys/sysmp.h... yes
+checking for sys/sysinfo.h... yes
+checking for machine/hal_sysinfo.h... yes
+checking for sys/table.h... yes
+checking for sys/sysctl.h... yes
+checking for sys/systemcfg.h... yes
+checking for stdint.h... yes
+checking for stdio_ext.h... yes
+checking for sys/wait.h that is POSIX.1 compatible... no
+checking whether time.h and sys/time.h may both be included... no
+checking whether errno must be declared... yes
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... yes
+checking for sys/stat.h... (cached) yes
+checking for stdlib.h... (cached) yes
+checking for string.h... (cached) yes
+checking for memory.h... yes
+checking for strings.h... (cached) yes
+checking for inttypes.h... yes
+checking for stdint.h... (cached) yes
+checking for unistd.h... (cached) yes
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for uintptr_t... (cached) yes
+checking for a 64-bit type... (cached) uint64_t
+checking for pid_t... (cached) yes
+checking for library containing strerror... (cached) none required
+checking for asprintf... (cached) yes
+checking for atexit... (cached) yes
+checking for basename... (cached) yes
+checking for bcmp... (cached) yes
+checking for bcopy... (cached) yes
+checking for bsearch... (cached) yes
+checking for bzero... (cached) yes
+checking for calloc... (cached) yes
+checking for clock... (cached) yes
+checking for ffs... (cached) yes
+checking for getcwd... (cached) yes
+checking for getpagesize... (cached) yes
+checking for index... (cached) yes
+checking for insque... (cached) yes
+checking for memchr... (cached) yes
+checking for memcmp... (cached) yes
+checking for memcpy... (cached) yes
+checking for memmove... (cached) yes
+checking for mempcpy... (cached) yes
+checking for memset... (cached) yes
+checking for mkstemps... (cached) yes
+checking for putenv... (cached) yes
+checking for random... (cached) yes
+checking for rename... (cached) yes
+checking for rindex... (cached) yes
+checking for setenv... (cached) yes
+checking for snprintf... (cached) yes
+checking for sigsetmask... (cached) yes
+checking for stpcpy... (cached) yes
+checking for stpncpy... (cached) yes
+checking for strcasecmp... (cached) yes
+checking for strchr... (cached) yes
+checking for strdup... (cached) yes
+checking for strncasecmp... (cached) yes
+checking for strrchr... (cached) yes
+checking for strstr... (cached) yes
+checking for strtod... (cached) yes
+checking for strtol... (cached) yes
+checking for strtoul... (cached) yes
+checking for tmpnam... (cached) yes
+checking for vasprintf... (cached) yes
+checking for vfprintf... (cached) yes
+checking for vprintf... (cached) yes
+checking for vsnprintf... (cached) yes
+checking for vsprintf... (cached) yes
+checking for waitpid... (cached) yes
+checking whether alloca needs Cray hooks... (cached) no
+checking stack direction for C alloca... (cached) -1
+checking for unistd.h... (cached) yes
+checking for vfork.h... yes
+checking for fork... (cached) yes
+checking for vfork... (cached) yes
+checking for working fork... yes
+checking for working vfork... (cached) yes
+checking for _doprnt... (cached) yes
+checking for sys_errlist... (cached) yes
+checking for sys_nerr... (cached) yes
+checking for sys_siglist... (cached) yes
+checking for external symbol _system_configuration... no
+checking for getrusage... (cached) yes
+checking for on_exit... (cached) yes
+checking for psignal... (cached) yes
+checking for strerror... (cached) yes
+checking for strsignal... (cached) yes
+checking for sysconf... (cached) yes
+checking for times... (cached) yes
+checking for sbrk... (cached) yes
+checking for gettimeofday... (cached) yes
+checking for realpath... (cached) yes
+checking for canonicalize_file_name... (cached) no
+checking for pstat_getstatic... (cached) no
+checking for pstat_getdynamic... (cached) no
+checking for sysmp... (cached) no
+checking for getsysinfo... (cached) no
+checking for table... (cached) no
+checking for sysctl... (cached) no
+checking for __fsetlocking... (cached) yes
+checking whether canonicalize_file_name must be declared... yes
+checking for stdlib.h... (cached) yes
+checking for unistd.h... (cached) yes
+checking for getpagesize... (cached) yes
+checking for working mmap... yes
+checking for working strncmp... yes
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating testsuite/Makefile
+config.status: creating config.h
+config.status: executing default commands
+configuring libcpp
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking target system type... x86_64-unknown-linux-gnu
+checking whether make sets $(MAKE)... yes
+checking for a BSD-compatible install... /tmp/gcc-build/gcc-4.0.4/libcpp/../install-sh -c
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ranlib
+checking for aclocal... no
+checking for autoconf... no
+checking for autoheader... no
+checking whether gcc40-cc supports -W... no
+checking whether gcc40-cc supports -Wall... no
+checking whether gcc40-cc supports -Wwrite-strings... no
+checking whether gcc40-cc supports -Wstrict-prototypes... no
+checking whether gcc40-cc supports -Wmissing-prototypes... no
+checking whether gcc40-cc supports -Wold-style-definition... no
+checking whether time.h and sys/time.h may both be included... no
+checking whether string.h and strings.h may both be included... no
+checking how to run the C preprocessor... gcc40-cpp
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... no
+checking for sys/stat.h... no
+checking for stdlib.h... no
+checking for string.h... no
+checking for memory.h... no
+checking for strings.h... no
+checking for inttypes.h... no
+checking for stdint.h... no
+checking for unistd.h... no
+checking iconv.h usability... no
+checking iconv.h presence... yes
+configure: WARNING: iconv.h: present but cannot be compiled
+configure: WARNING: iconv.h:     check for missing prerequisite headers?
+configure: WARNING: iconv.h: see the Autoconf documentation
+configure: WARNING: iconv.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: iconv.h: proceeding with the preprocessor's result
+configure: WARNING: iconv.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for iconv.h... yes
+checking locale.h usability... no
+checking locale.h presence... yes
+configure: WARNING: locale.h: present but cannot be compiled
+configure: WARNING: locale.h:     check for missing prerequisite headers?
+configure: WARNING: locale.h: see the Autoconf documentation
+configure: WARNING: locale.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: locale.h: proceeding with the preprocessor's result
+configure: WARNING: locale.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for locale.h... yes
+checking fcntl.h usability... no
+checking fcntl.h presence... yes
+configure: WARNING: fcntl.h: present but cannot be compiled
+configure: WARNING: fcntl.h:     check for missing prerequisite headers?
+configure: WARNING: fcntl.h: see the Autoconf documentation
+configure: WARNING: fcntl.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: fcntl.h: proceeding with the preprocessor's result
+configure: WARNING: fcntl.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for fcntl.h... yes
+checking limits.h usability... no
+checking limits.h presence... yes
+configure: WARNING: limits.h: present but cannot be compiled
+configure: WARNING: limits.h:     check for missing prerequisite headers?
+configure: WARNING: limits.h: see the Autoconf documentation
+configure: WARNING: limits.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: limits.h: proceeding with the preprocessor's result
+configure: WARNING: limits.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for limits.h... yes
+checking stddef.h usability... no
+checking stddef.h presence... yes
+configure: WARNING: stddef.h: present but cannot be compiled
+configure: WARNING: stddef.h:     check for missing prerequisite headers?
+configure: WARNING: stddef.h: see the Autoconf documentation
+configure: WARNING: stddef.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: stddef.h: proceeding with the preprocessor's result
+configure: WARNING: stddef.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for stddef.h... yes
+checking for stdlib.h... (cached) no
+checking for strings.h... (cached) no
+checking for string.h... (cached) no
+checking sys/file.h usability... no
+checking sys/file.h presence... yes
+configure: WARNING: sys/file.h: present but cannot be compiled
+configure: WARNING: sys/file.h:     check for missing prerequisite headers?
+configure: WARNING: sys/file.h: see the Autoconf documentation
+configure: WARNING: sys/file.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: sys/file.h: proceeding with the preprocessor's result
+configure: WARNING: sys/file.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ----------------------------------- ##
+configure: WARNING:     ## Report this to gcc-bugs@gcc.gnu.org ##
+configure: WARNING:     ## ----------------------------------- ##
+checking for sys/file.h... yes
+checking for unistd.h... (cached) no
+checking for an ANSI C-conforming const... no
+checking for inline... no
+checking for obstacks... no
+checking for off_t... no
+checking for size_t... no
+checking whether struct tm is in sys/time.h or time.h... sys/time.h
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for long... no
+checking size of long... 0
+checking for clearerr_unlocked... no
+checking for feof_unlocked... no
+checking for ferror_unlocked... no
+checking for fflush_unlocked... no
+checking for fgetc_unlocked... no
+checking for fgets_unlocked... no
+checking for fileno_unlocked... no
+checking for fprintf_unlocked... no
+checking for fputc_unlocked... no
+checking for fputs_unlocked... no
+checking for fread_unlocked... no
+checking for fwrite_unlocked... no
+checking for getchar_unlocked... no
+checking for getc_unlocked... no
+checking for putchar_unlocked... no
+checking for putc_unlocked... no
+checking whether abort is declared... no
+checking whether basename is declared... no
+checking whether errno is declared... no
+checking whether getopt is declared... no
+checking whether clearerr_unlocked is declared... no
+checking whether feof_unlocked is declared... no
+checking whether ferror_unlocked is declared... no
+checking whether fflush_unlocked is declared... no
+checking whether fgetc_unlocked is declared... no
+checking whether fgets_unlocked is declared... no
+checking whether fileno_unlocked is declared... no
+checking whether fprintf_unlocked is declared... no
+checking whether fputc_unlocked is declared... no
+checking whether fputs_unlocked is declared... no
+checking whether fread_unlocked is declared... no
+checking whether fwrite_unlocked is declared... no
+checking whether getchar_unlocked is declared... no
+checking whether getc_unlocked is declared... no
+checking whether putchar_unlocked is declared... no
+checking whether putc_unlocked is declared... no
+checking for working alloca.h... no
+checking for alloca... no
+checking whether `alloca.c' needs Cray hooks... (cached) no
+checking stack direction for C alloca... (cached) -1
+checking for ANSI C header files... (cached) no
+checking for nl_langinfo and CODESET... no
+checking whether NLS is requested... no
+checking for uchar...
+checking for non-GNU ld... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ld
+checking if the linker (/crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ld) is GNU ld... no
+checking for shared library run path origin... done
+checking for iconv... no, consider installing GNU libiconv
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating config.h
+configuring gcc
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... x86_64-unknown-linux-gnu
+checking target system type... x86_64-unknown-linux-gnu
+checking LIBRARY_PATH variable... ok
+checking GCC_EXEC_PREFIX variable... ok
+checking whether to place generated files in the source directory... no
+checking whether a default linker was specified... no
+checking whether a default assembler was specified... no
+checking for x86_64-unknown-linux-gnu-gcc... gcc40-cc
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking whether we are cross compiling... no
+checking for suffix of executables...
+checking for suffix of object files...
+checking whether we are using the GNU C compiler... no
+checking whether gcc40-cc accepts -g... no
+checking for gcc40-cc option to accept ANSI C... none needed
+checking whether gcc40-cc and cc understand -c and -o together... yes
+checking how to run the C preprocessor... gcc40-cpp
+checking for inline... no
+checking for long long int... no
+checking for __int64... no
+checking for egrep... grep -E
+checking for ANSI C header files... no
+checking for sys/types.h... no
+checking for sys/stat.h... no
+checking for stdlib.h... no
+checking for string.h... no
+checking for memory.h... no
+checking for strings.h... no
+checking for inttypes.h... no
+checking for stdint.h... no
+checking for unistd.h... no
+checking for void *... no
+checking size of void *... 0
+checking for short... no
+checking size of short... 0
+checking for int... (cached) yes
+checking size of int... (cached) 4
+checking for long... no
+checking size of long... 0
+checking whether gcc40-cc accepts -Wno-long-long... no
+checking whether gcc40-cc accepts -Wno-variadic-macros... no
+checking whether gcc40-cc accepts -Wold-style-definition... no
+checking valgrind.h usability... no
+checking valgrind.h presence... yes
+configure: WARNING: valgrind.h: present but cannot be compiled
+configure: WARNING: valgrind.h:     check for missing prerequisite headers?
+configure: WARNING: valgrind.h: see the Autoconf documentation
+configure: WARNING: valgrind.h:     section "Present But Cannot Be Compiled"
+configure: WARNING: valgrind.h: proceeding with the preprocessor's result
+configure: WARNING: valgrind.h: in the future, the compiler will take precedence
+configure: WARNING:     ## ------------------------------------------ ##
+configure: WARNING:     ## Report this to the AC_PACKAGE_NAME lists.  ##
+configure: WARNING:     ## ------------------------------------------ ##
+checking for valgrind.h... yes
+checking whether make sets $(MAKE)... yes
+checking for gawk... no
+checking for mawk... no
+checking for nawk... no
+checking for awk... awk
+checking whether ln -s works... yes
+checking whether ln works... yes
+checking for x86_64-unknown-linux-gnu-ranlib... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ranlib
+checking for a BSD compatible install... /tmp/gcc-build/gcc-4.0.4/gcc/../install-sh -c
+checking for cmp's capabilities... fastcompare
+checking for mktemp... no
+checking for makeinfo... no
+configure: WARNING:
+*** Makeinfo is missing or too old.
+*** Info documentation will not be built.
+checking for recent Pod::Man... no
+checking for flex... no
+checking for bison... no
+checking for nm... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/nm
+checking for ar... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ar
+checking for GNU C library... no
+checking for ANSI C header files... (cached) no
+checking whether time.h and sys/time.h may both be included... no
+checking whether string.h and strings.h may both be included... no
+checking for sys/wait.h that is POSIX.1 compatible... no
+checking for limits.h... yes
+checking for stddef.h... yes
+checking for string.h... (cached) no
+checking for strings.h... (cached) no
+checking for stdlib.h... (cached) no
+checking for time.h... yes
+checking for iconv.h... yes
+checking for fcntl.h... yes
+checking for unistd.h... (cached) no
+checking for sys/file.h... yes
+checking for sys/time.h... yes
+checking for sys/mman.h... yes
+checking for sys/resource.h... yes
+checking for sys/param.h... yes
+checking for sys/times.h... yes
+checking for sys/stat.h... (cached) no
+checking for direct.h... yes
+checking for malloc.h... yes
+checking for langinfo.h... yes
+checking for ldfcn.h... yes
+checking for locale.h... yes
+checking for wchar.h... yes
+checking for thread.h... yes
+checking for pthread.h... yes
+checking for CHAR_BIT... yes
+checking whether byte ordering is bigendian... (cached) no
+checking for collect2 libraries... none required
+checking for library containing exc_resume... no
+checking for library containing ldexp... no
+checking for inttypes.h... no
+checking for times... (cached) yes
+checking for clock... (cached) yes
+checking for dup2... no
+checking for kill... no
+checking for getrlimit... no
+checking for setrlimit... no
+checking for atoll... no
+checking for atoq... no
+checking for sysconf... (cached) yes
+checking for strsignal... (cached) yes
+checking for getrusage... (cached) yes
+checking for nl_langinfo... no
+checking for scandir... no
+checking for alphasort... no
+checking for gettimeofday... (cached) yes
+checking for mbstowcs... no
+checking for wcswidth... no
+checking for mmap... no
+checking for mincore... no
+checking for setlocale... no
+checking for clearerr_unlocked... no
+checking for feof_unlocked... no
+checking for ferror_unlocked... no
+checking for fflush_unlocked... no
+checking for fgetc_unlocked... no
+checking for fgets_unlocked... no
+checking for fileno_unlocked... no
+checking for fprintf_unlocked... no
+checking for fputc_unlocked... no
+checking for fputs_unlocked... no
+checking for fread_unlocked... no
+checking for fwrite_unlocked... no
+checking for getchar_unlocked... no
+checking for getc_unlocked... no
+checking for putchar_unlocked... no
+checking for putc_unlocked... no
+checking for ssize_t... no
+checking for uid_t in sys/types.h... no
+checking type of array argument to getgroups... gid_t
+checking whether the printf functions support %p... yes
+checking for sys/mman.h... (cached) yes
+checking for mmap... (cached) no
+checking for pid_t... (cached) yes
+checking for unistd.h... (cached) no
+checking for vfork.h... yes
+checking for fork... (cached) yes
+checking for vfork... (cached) yes
+checking for working fork... yes
+checking for working vfork... (cached) yes
+checking for non-GNU ld... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ld
+checking if the linker (/crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ld) is GNU ld... no
+checking for shared library run path origin... done
+checking for iconv... no, consider installing GNU libiconv
+checking for LC_MESSAGES... no
+checking for nl_langinfo and CODESET... no
+checking whether getenv is declared... no
+checking whether atol is declared... no
+checking whether sbrk is declared... no
+checking whether abort is declared... no
+checking whether atof is declared... no
+checking whether getcwd is declared... no
+checking whether getwd is declared... no
+checking whether strsignal is declared... no
+checking whether strstr is declared... no
+checking whether errno is declared... no
+checking whether snprintf is declared... no
+checking whether vasprintf is declared... no
+checking whether malloc is declared... no
+checking whether realloc is declared... no
+checking whether calloc is declared... no
+checking whether free is declared... no
+checking whether basename is declared... no
+checking whether getopt is declared... no
+checking whether clock is declared... no
+checking whether getpagesize is declared... no
+checking whether clearerr_unlocked is declared... no
+checking whether feof_unlocked is declared... no
+checking whether ferror_unlocked is declared... no
+checking whether fflush_unlocked is declared... no
+checking whether fgetc_unlocked is declared... no
+checking whether fgets_unlocked is declared... no
+checking whether fileno_unlocked is declared... no
+checking whether fprintf_unlocked is declared... no
+checking whether fputc_unlocked is declared... no
+checking whether fputs_unlocked is declared... no
+checking whether fread_unlocked is declared... no
+checking whether fwrite_unlocked is declared... no
+checking whether getchar_unlocked is declared... no
+checking whether getc_unlocked is declared... no
+checking whether putchar_unlocked is declared... no
+checking whether putc_unlocked is declared... no
+checking whether getrlimit is declared... no
+checking whether setrlimit is declared... no
+checking whether getrusage is declared... no
+checking whether ldgetname is declared... no
+checking whether times is declared... no
+checking for struct tms... no
+checking for clock_t... no
+checking for .preinit_array/.init_array/.fini_array support... yes
+checking if mkdir takes one argument... yes
+Using `/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.c' for machine-specific logic.
+Using `/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md' as machine description file.
+Using the following target machine macro files:
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/biarch64.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/unix.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/att.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/dbxelf.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/elfos.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/svr4.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/linux.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/x86-64.h
+	/tmp/gcc-build/gcc-4.0.4/gcc/config/i386/linux64.h
+Using host-linux.o for host machine hooks.
+checking whether NLS is requested... no
+checking what assembler to use... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/as
+checking what linker to use... /crunch/store/p7cplmpwpm3mn21ksxn4rb3gm0rjsrm4-binutils-2.30-tcc/bin/ld
+checking what nm to use... nm
+checking what objdump to use... objdump
+checking assembler for .balign and .p2align... yes
+checking assembler for .p2align with maximum skip... no
+checking assembler for working .subsection -1... no
+checking assembler for .weak... yes
+checking assembler for .nsubspa comdat... no
+checking assembler for .hidden... yes
+checking linker for .hidden support... no
+checking assembler for .sleb128 and .uleb128... no
+checking assembler for eh_frame optimization... no
+checking assembler for section merging support... no
+checking assembler for section merging support... (cached) no
+checking assembler for COMDAT group support... no
+checking assembler for COMDAT group support... no
+checking assembler for thread-local storage support... no
+checking linker -Bstatic/-Bdynamic option... no
+checking assembler for filds and fists mnemonics... no
+checking assembler for cmov syntax... no
+checking assembler for GOTOFF in data... no
+checking assembler for dwarf2 debug_line support... no
+checking assembler for buggy dwarf2 .file directive... no
+checking assembler for --gdwarf2 option... yes
+checking assembler for --gstabs option... yes
+checking linker read-only and read-write section mixing... unknown
+checking linker PT_GNU_EH_FRAME support... no
+checking linker position independent executable support... no
+checking linker --as-needed support... no
+Using ggc-page for garbage collection.
+checking whether to enable maintainer-specific portions of Makefiles... no
+Links are now set up to build a native compiler for x86_64-unknown-linux-gnu.
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating gccbug
+config.status: creating mklibgcc
+config.status: creating libada-mk
+config.status: creating auto-host.h
+config.status: executing default commands
+make: Entering directory `/tmp/gcc-build/build/gcc'
+make: `/tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c' is up to date.
+make: Leaving directory `/tmp/gcc-build/build/gcc'
+building libiberty
+building libcpp
+building gcc
+diag: prepare generated headers for c-parse reduction
+make: Entering directory `/tmp/gcc-build/build/gcc'
+ltf=""; for f in $ltf; do \
+    echo "#include \"$f\""; \
+done | sed 's|/tmp/gcc-build/gcc-4.0.4/gcc/||' > tmp-gencheck.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gencheck.h gencheck.h
+echo timestamp > s-gencheck
+TARGET_CPU_DEFAULT="" \
+HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh bconfig.h
+TARGET_CPU_DEFAULT="" \
+HEADERS="config/i386/biarch64.h config/i386/i386.h config/i386/unix.h config/i386/att.h config/dbxelf.h config/elfos.h config/svr4.h config/linux.h config/i386/x86-64.h config/i386/linux64.h defaults.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh tm.h
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gencheck.o /tmp/gcc-build/gcc-4.0.4/gcc/gencheck.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gencheck \
+ build/gencheck.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gencheck > tmp-check.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-check.h tree-check.h
+echo timestamp > s-check
+awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-gather.awk /tmp/gcc-build/gcc-4.0.4/gcc/c.opt /tmp/gcc-build/gcc-4.0.4/gcc/common.opt > tmp-optionlist
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-optionlist optionlist
+echo timestamp > s-options
+awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opt-functions.awk -f /tmp/gcc-build/gcc-4.0.4/gcc/opth-gen.awk \
+       < optionlist > options.h
+TARGET_CPU_DEFAULT="" \
+HEADERS="auto-host.h ansidecl.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh config.h
+make: Leaving directory `/tmp/gcc-build/build/gcc'
+diag: normalized generated config.h to manual include form
+diag: reproduce focused c-parse boundary
+make: Entering directory `/tmp/gcc-build/build/gcc'
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmodes.o /tmp/gcc-build/gcc-4.0.4/gcc/genmodes.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/errors.o /tmp/gcc-build/gcc-4.0.4/gcc/errors.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmodes \
+ build/genmodes.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genmodes -h > tmp-modes.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.h insn-modes.h
+build/genmodes -m > tmp-min-modes.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-min-modes.c min-insn-modes.c
+build/genmodes > tmp-modes.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-modes.c insn-modes.c
+echo timestamp > s-modes
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genmddeps.o /tmp/gcc-build/gcc-4.0.4/gcc/genmddeps.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengenrtl.o /tmp/gcc-build/gcc-4.0.4/gcc/gengenrtl.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengenrtl \
+ build/gengenrtl.o build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gengenrtl -h > tmp-genrtl.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.h genrtl.h
+build/gengenrtl > tmp-genrtl.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-genrtl.c genrtl.c
+echo timestamp > s-genrtl
+echo "/* This file is machine generated.  Do not edit.  */" > tmp-gtyp.h
+echo "static const char *const srcdir = "  >> tmp-gtyp.h
+echo "\"/tmp/gcc-build/gcc-4.0.4/gcc\"" >> tmp-gtyp.h
+echo ";" >> tmp-gtyp.h
+echo "static const char *const lang_files[] = {" >> tmp-gtyp.h
+ll="/tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in  /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h  /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c  /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c "; \
+for f in $ll; do \
+echo "\"$f\", "; done >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+echo "static const char *const langs_for_lang_files[] = {" >> tmp-gtyp.h
+ff="c  c  c  c  c  c  c  c "; \
+for f in $ff; do \
+echo "\"$f\", " ; done  >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+echo "static const char *const all_files[] = {" >> tmp-gtyp.h
+gf="/tmp/gcc-build/gcc-4.0.4/gcc/input.h /tmp/gcc-build/gcc-4.0.4/gcc/coretypes.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/line-map.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpplib.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/cpp-id-data.h auto-host.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/ansidecl.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/biarch64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/unix.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/att.h /tmp/gcc-build/gcc-4.0.4/gcc/config/dbxelf.h /tmp/gcc-build/gcc-4.0.4/gcc/config/elfos.h /tmp/gcc-build/gcc-4.0.4/gcc/config/svr4.h /tmp/gcc-build/gcc-4.0.4/gcc/config/linux.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/x86-64.h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/linux64.h /tmp/gcc-build/gcc-4.0.4/gcc/defaults.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/hashtab.h /tmp/gcc-build/gcc-4.0.4/gcc/../include/splay-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.h /tmp/gcc-build/gcc-4.0.4/gcc/coverage.c /tmp/gcc-build/gcc-4.0.4/gcc/function.h /tmp/gcc-build/gcc-4.0.4/gcc/rtl.h /tmp/gcc-build/gcc-4.0.4/gcc/optabs.h /tmp/gcc-build/gcc-4.0.4/gcc/tree.h /tmp/gcc-build/gcc-4.0.4/gcc/libfuncs.h /tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include/symtab.h /tmp/gcc-build/gcc-4.0.4/gcc/real.h /tmp/gcc-build/gcc-4.0.4/gcc/varray.h /tmp/gcc-build/gcc-4.0.4/gcc/insn-addr.h /tmp/gcc-build/gcc-4.0.4/gcc/hwint.h /tmp/gcc-build/gcc-4.0.4/gcc/cselib.h /tmp/gcc-build/gcc-4.0.4/gcc/basic-block.h  /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.h /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/reload.h /tmp/gcc-build/gcc-4.0.4/gcc/alias.c /tmp/gcc-build/gcc-4.0.4/gcc/bitmap.c /tmp/gcc-build/gcc-4.0.4/gcc/cselib.c /tmp/gcc-build/gcc-4.0.4/gcc/cgraph.c /tmp/gcc-build/gcc-4.0.4/gcc/dbxout.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2out.c /tmp/gcc-build/gcc-4.0.4/gcc/dwarf2asm.c /tmp/gcc-build/gcc-4.0.4/gcc/dojump.c /tmp/gcc-build/gcc-4.0.4/gcc/emit-rtl.c /tmp/gcc-build/gcc-4.0.4/gcc/except.c /tmp/gcc-build/gcc-4.0.4/gcc/explow.c /tmp/gcc-build/gcc-4.0.4/gcc/expr.c /tmp/gcc-build/gcc-4.0.4/gcc/function.c /tmp/gcc-build/gcc-4.0.4/gcc/gcse.c /tmp/gcc-build/gcc-4.0.4/gcc/integrate.c /tmp/gcc-build/gcc-4.0.4/gcc/lists.c /tmp/gcc-build/gcc-4.0.4/gcc/optabs.c /tmp/gcc-build/gcc-4.0.4/gcc/profile.c /tmp/gcc-build/gcc-4.0.4/gcc/regclass.c /tmp/gcc-build/gcc-4.0.4/gcc/reg-stack.c /tmp/gcc-build/gcc-4.0.4/gcc/cfglayout.c /tmp/gcc-build/gcc-4.0.4/gcc/sdbout.c /tmp/gcc-build/gcc-4.0.4/gcc/stor-layout.c /tmp/gcc-build/gcc-4.0.4/gcc/stringpool.c /tmp/gcc-build/gcc-4.0.4/gcc/tree.c /tmp/gcc-build/gcc-4.0.4/gcc/varasm.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-mudflap.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-flow.h /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssanames.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-eh.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-phinodes.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-cfg.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-dfa.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-propagate.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-iterator.c /tmp/gcc-build/gcc-4.0.4/gcc/gimplify.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-chrec.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-complex.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.h /tmp/gcc-build/gcc-4.0.4/gcc/tree-ssa-operands.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/rtl-profile.c /tmp/gcc-build/gcc-4.0.4/gcc/tree-nested.c /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.c /tmp/gcc-build/gcc-4.0.4/gcc/c-lang.c /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.in /tmp/gcc-build/gcc-4.0.4/gcc/c-tree.h /tmp/gcc-build/gcc-4.0.4/gcc/c-decl.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.c /tmp/gcc-build/gcc-4.0.4/gcc/c-common.h /tmp/gcc-build/gcc-4.0.4/gcc/c-pragma.c /tmp/gcc-build/gcc-4.0.4/gcc/c-objc-common.c"; \
+for f in $gf; do \
+echo "\"$f\", "; done >> tmp-gtyp.h
+echo " NULL};" >> tmp-gtyp.h
+echo "static const char *const lang_dir_names[] = { \"c\", " >> tmp-gtyp.h
+gf=""; \
+for l in $gf; do \
+echo "\"$l\", "; done >> tmp-gtyp.h
+echo "NULL};" >> tmp-gtyp.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-gtyp.h gtyp-gen.h
+echo timestamp > s-gtyp-gen
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-lex.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-lex.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gengtype-yacc.o /tmp/gcc-build/gcc-4.0.4/gcc/gengtype-yacc.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/gengtype \
+ build/gengtype.o build/gengtype-lex.o build/gengtype-yacc.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/gengtype
+echo timestamp > s-gtype
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/rtl.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/read-rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/read-rtl.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/ggc-none.o /tmp/gcc-build/gcc-4.0.4/gcc/ggc-none.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/min-insn-modes.o min-insn-modes.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/gensupport.o /tmp/gcc-build/gcc-4.0.4/gcc/gensupport.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/dummy-conditions.o /tmp/gcc-build/gcc-4.0.4/gcc/dummy-conditions.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genmddeps \
+ build/genmddeps.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genmddeps /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-mddeps
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-mddeps mddeps.mk
+echo timestamp > s-mddeps
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genconstants.o /tmp/gcc-build/gcc-4.0.4/gcc/genconstants.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genconstants \
+ build/genconstants.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genconstants /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-constants.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-constants.h insn-constants.h
+insn-constants.h is unchanged
+echo timestamp > s-constants
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genflags.o /tmp/gcc-build/gcc-4.0.4/gcc/genflags.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genconditions.o /tmp/gcc-build/gcc-4.0.4/gcc/genconditions.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genconditions \
+ build/genconditions.o build/gensupport.o build/dummy-conditions.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genconditions /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-conditions.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-conditions.c insn-conditions.c
+echo timestamp > s-conditions
+TARGET_CPU_DEFAULT="" \
+HEADERS="config/i386/i386-protos.h tm-preds.h" DEFINES="" \
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/mkconfig.sh tm_p.h
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/genpreds.o /tmp/gcc-build/gcc-4.0.4/gcc/genpreds.c
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/print-rtl.o /tmp/gcc-build/gcc-4.0.4/gcc/print-rtl.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genpreds \
+ build/genpreds.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/dummy-conditions.o build/print-rtl.o \
+ build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genpreds -h /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.h tm-preds.h
+build/genpreds /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-preds.c
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-preds.c insn-preds.c
+echo timestamp > s-preds
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE -I. -Ibuild -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/build -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     -o build/insn-conditions.o insn-conditions.c
+gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H -DGENERATOR_FILE  -o build/genflags \
+	build/genflags.o build/rtl.o build/read-rtl.o build/ggc-none.o build/min-insn-modes.o build/gensupport.o build/insn-conditions.o build/print-rtl.o \
+	build/errors.o ../build-x86_64-unknown-linux-gnu/libiberty/libiberty.a
+build/genflags /tmp/gcc-build/gcc-4.0.4/gcc/config/i386/i386.md > tmp-flags.h
+/bin/sh /tmp/gcc-build/gcc-4.0.4/gcc/../move-if-change tmp-flags.h insn-flags.h
+insn-flags.h is unchanged
+echo timestamp > s-flags
+gcc40-cc -c   -g -DIN_GCC     -DHAVE_CONFIG_H -I. -I. -I/tmp/gcc-build/gcc-4.0.4/gcc -I/tmp/gcc-build/gcc-4.0.4/gcc/. -I/tmp/gcc-build/gcc-4.0.4/gcc/../include -I/tmp/gcc-build/gcc-4.0.4/gcc/../libcpp/include     /tmp/gcc-build/gcc-4.0.4/gcc/c-parse.c -o c-parse.o
+make: *** [c-parse.o] Segmentation fault (core dumped)
+make: Leaving directory `/tmp/gcc-build/build/gcc'
+
+diag-insn-modes-aliases:
+#define MIN_MODE_COMPLEX_FLOAT SFmode
+#define MAX_MODE_COMPLEX_FLOAT TFmode
+diag-cparse: compile cparse_empty
+diag-cparse: cparse_empty rc=0
+diag-cparse: compile cparse_inc_ansidecl
+diag-cparse: cparse_inc_ansidecl rc=0
+diag-cparse: compile cparse_inc_autohost
+diag-cparse: cparse_inc_autohost rc=0
+diag-cparse: compile cparse_manual_config
+diag-cparse: cparse_manual_config rc=0
+diag-cparse: compile cparse_manual_config_nospace
+diag-cparse: cparse_manual_config_nospace rc=0
+diag-cparse: compile cparse_inc_config
+diag-cparse: cparse_inc_config rc=0
+diag-autohost-define: 080 #define HAVE_WCHAR_H 1
+diag-autohost-define: 081 #define HAVE_WORKING_FORK 1
+diag-autohost-define: 082 #define HAVE_WORKING_VFORK 1
+diag-autohost-define: 083 #define MKDIR_TAKES_ONE_ARG 1
+diag-autohost-define: 084 #define NEED_64BIT_HOST_WIDE_INT 1
+diag-autohost-define: 085 #define PACKAGE "gcc"
+diag-autohost-define: 086 #define PACKAGE_BUGREPORT ""
+diag-autohost-define: 087 #define PACKAGE_NAME ""
+diag-autohost-define: 088 #define PACKAGE_STRING ""
+diag-autohost-define: 089 #define PACKAGE_TARNAME ""
+diag-autohost-define: 090 #define PACKAGE_VERSION ""
+diag-autohost-define: 091 #define PREFIX_INCLUDE_DIR "/crunch/store/qbf70wjs9akxyk9v0dwcw0zwwhfr04hc-diag-gcc40-c-parse-boundary/include"
+diag-autohost-define: 092 #define SIZEOF_INT 4
+diag-autohost-define: 093 #define SIZEOF_LONG 0
+diag-autohost-define: 094 #define SIZEOF_SHORT 0
+diag-autohost-define: 095 #define SIZEOF_VOID_P 0
+diag-autohost-define: 096 #define gid_t int
+diag-autohost-define: 097 #define inline
+diag-autohost-define: 098 #define rlim_t long
+diag-autohost-define: 099 #define ssize_t int
+diag-autohost-define: 100 #define uid_t int
+diag-cparse: compile autohost_defines_10_system
+diag-cparse: autohost_defines_10_system rc=0
+diag-cparse: compile autohost_defines_25_system
+diag-cparse: autohost_defines_25_system rc=0
+diag-cparse: compile autohost_defines_50_system
+diag-cparse: autohost_defines_50_system rc=0
+diag-cparse: compile autohost_defines_60_system
+diag-cparse: autohost_defines_60_system rc=0
+diag-cparse: compile autohost_defines_70_system
+diag-cparse: autohost_defines_70_system rc=0
+diag-cparse: compile autohost_defines_80_system
+diag-cparse: autohost_defines_80_system rc=0
+diag-cparse: compile autohost_defines_81_system
+diag-cparse: autohost_defines_81_system rc=0
+diag-cparse: compile autohost_defines_82_system
+diag-cparse: autohost_defines_82_system rc=0
+diag-cparse: compile autohost_defines_83_system
+diag-cparse: autohost_defines_83_system rc=0
+diag-cparse: compile autohost_defines_84_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_84_system rc=139
+diag-cparse: compile autohost_defines_84_skip84_system
+diag-cparse: autohost_defines_84_skip84_system rc=0
+diag-cparse: compile autohost_defines_85_skip84_system
+diag-cparse: autohost_defines_85_skip84_system rc=0
+diag-cparse: compile autohost_define_84_only_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_define_84_only_system rc=139
+diag-cparse: compile autohost_defines_84_undef_need64_system
+diag-cparse: autohost_defines_84_undef_need64_system rc=0
+diag-cparse: compile autohost_defines_85_undef_need64_system
+diag-cparse: autohost_defines_85_undef_need64_system rc=0
+diag-cparse: compile autohost_defines_90_undef_need64_system
+diag-cparse: autohost_defines_90_undef_need64_system rc=0
+diag-cparse: compile autohost_defines_95_undef_need64_system
+diag-cparse: autohost_defines_95_undef_need64_system rc=0
+diag-cparse: compile autohost_defines_96_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_96_undef_need64_system rc=139
+diag-cparse: compile autohost_define_96_only_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_define_96_only_system rc=139
+diag-cparse: compile autohost_defines_96_undef_need64_gid_system
+diag-cparse: autohost_defines_96_undef_need64_gid_system rc=0
+diag-cparse: compile autohost_defines_97_undef_need64_gid_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_97_undef_need64_gid_system rc=139
+diag-cparse: compile autohost_define_97_only_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_define_97_only_system rc=139
+diag-cparse: compile autohost_defines_97_undef_need64_gid_inline_system
+diag-cparse: autohost_defines_97_undef_need64_gid_inline_system rc=0
+diag-cparse: compile autohost_defines_98_undef_need64_gid_inline_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_98_undef_need64_gid_inline_system rc=139
+diag-cparse: compile autohost_define_98_only_system
+diag-cparse: autohost_define_98_only_system rc=0
+diag-cparse: compile autohost_defines_98_undef_need64_gid_inline_rlim_system
+diag-cparse: autohost_defines_98_undef_need64_gid_inline_rlim_system rc=0
+diag-cparse: compile autohost_defines_99_undef_need64_gid_inline_rlim_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_99_undef_need64_gid_inline_rlim_system rc=139
+diag-cparse: compile autohost_define_99_only_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_define_99_only_system rc=139
+diag-cparse: compile autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system
+diag-cparse: autohost_defines_99_undef_need64_gid_inline_rlim_ssize_system rc=0
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_rlim_ssize_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_defines_101_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_101_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_define_101_only_system
+diag-cparse: autohost_define_101_only_system rc=0
+diag-cparse: compile autohost_defines_105_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_105_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_defines_110_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_110_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_rlim_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_rlim_system rc=139
+diag-cparse: compile autohost_define_100_only_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_define_100_only_system rc=139
+diag-cparse: compile autohost_defines_99_undef_need64_gid_inline_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_99_undef_need64_gid_inline_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_gid_inline_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_gid_inline_system rc=139
+diag-cparse: compile autohost_defines_98_undef_need64_gid_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_98_undef_need64_gid_system rc=139
+diag-cparse: compile autohost_defines_99_undef_need64_gid_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_99_undef_need64_gid_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_gid_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_gid_system rc=139
+diag-cparse: compile autohost_defines_97_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_97_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_98_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_98_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_99_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_99_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_100_undef_need64_inline_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_undef_need64_inline_system rc=139
+diag-cparse: compile autohost_defines_120_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_120_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_140_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_140_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_200_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_200_undef_need64_system rc=139
+diag-cparse: compile autohost_defines_90_skip84_system
+diag-cparse: autohost_defines_90_skip84_system rc=0
+diag-cparse: compile autohost_defines_100_skip84_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_100_skip84_system rc=139
+diag-cparse: compile autohost_defines_140_skip84_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_140_skip84_system rc=139
+diag-cparse: compile autohost_defines_200_skip84_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_defines_200_skip84_system rc=139
+diag-cparse: compile autohost_full_undef_need64_system
+Segmentation fault (core dumped)
+diag-cparse: autohost_full_undef_need64_system rc=139
+diag-cparse: compile autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system
+diag-cparse: autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system rc=0
+diag-cparse: compile cparse_config_undef6_system
+diag-cparse: cparse_config_undef6_system rc=0
+diag-cparse: compile cparse_undef6_inc_system
+diag-cparse: cparse_undef6_inc_system rc=0
+diag-cparse: compile cparse_undef6_inc_coretypes
+diag-cparse: cparse_undef6_inc_coretypes rc=0
+diag-cparse: compile cparse_undef6_inc_tm
+diag-cparse: cparse_undef6_inc_tm rc=0
+diag-machmode-head: 001 /* Machine mode definitions for GCC; included by rtl.h and tree.h.
+diag-machmode-head: 002    Copyright (C) 1991, 1993, 1994, 1996, 1998, 1999, 2000, 2001, 2003
+diag-machmode-head: 003    Free Software Foundation, Inc.
+diag-machmode-head: 004
+diag-machmode-head: 005 This file is part of GCC.
+diag-machmode-head: 006
+diag-machmode-head: 007 GCC is free software; you can redistribute it and/or modify it under
+diag-machmode-head: 008 the terms of the GNU General Public License as published by the Free
+diag-machmode-head: 009 Software Foundation; either version 2, or (at your option) any later
+diag-machmode-head: 010 version.
+diag-machmode-head: 011
+diag-machmode-head: 012 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-machmode-head: 013 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-machmode-head: 014 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-machmode-head: 015 for more details.
+diag-machmode-head: 016
+diag-machmode-head: 017 You should have received a copy of the GNU General Public License
+diag-machmode-head: 018 along with GCC; see the file COPYING.  If not, write to the Free
+diag-machmode-head: 019 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-machmode-head: 020 02111-1307, USA.  */
+diag-machmode-head: 021
+diag-machmode-head: 022 #ifndef HAVE_MACHINE_MODES
+diag-machmode-head: 023 #define HAVE_MACHINE_MODES
+diag-machmode-head: 024
+diag-machmode-head: 025 /* Make an enum class that gives all the machine modes.  */
+diag-machmode-head: 026 #include "insn-modes.h"
+diag-machmode-head: 027
+diag-machmode-head: 028 /* Get the name of mode MODE as a string.  */
+diag-machmode-head: 029
+diag-machmode-head: 030 extern const char * const mode_name[NUM_MACHINE_MODES];
+diag-machmode-head: 031 #define GET_MODE_NAME(MODE)  mode_name[MODE]
+diag-machmode-head: 032
+diag-machmode-head: 033 /* Mode classes.  */
+diag-machmode-head: 034
+diag-machmode-head: 035 #include "mode-classes.def"
+diag-machmode-head: 036 #define DEF_MODE_CLASS(M) M
+diag-machmode-head: 037 enum mode_class { MODE_CLASSES, MAX_MODE_CLASS };
+diag-machmode-head: 038 #undef DEF_MODE_CLASS
+diag-machmode-head: 039 #undef MODE_CLASSES
+diag-machmode-head: 040
+diag-machmode-head: 041 /* Get the general kind of object that mode MODE represents
+diag-machmode-head: 042    (integer, floating, complex, etc.)  */
+diag-machmode-head: 043
+diag-machmode-head: 044 extern const unsigned char mode_class[NUM_MACHINE_MODES];
+diag-machmode-head: 045 #define GET_MODE_CLASS(MODE)  mode_class[MODE]
+diag-machmode-head: 046
+diag-machmode-head: 047 /* Nonzero if MODE is an integral mode.  */
+diag-machmode-head: 048 #define INTEGRAL_MODE_P(MODE)			\
+diag-machmode-head: 049   (GET_MODE_CLASS (MODE) == MODE_INT		\
+diag-machmode-head: 050    || GET_MODE_CLASS (MODE) == MODE_PARTIAL_INT \
+diag-machmode-head: 051    || GET_MODE_CLASS (MODE) == MODE_COMPLEX_INT \
+diag-machmode-head: 052    || GET_MODE_CLASS (MODE) == MODE_VECTOR_INT)
+diag-machmode-head: 053
+diag-machmode-head: 054 /* Nonzero if MODE is a floating-point mode.  */
+diag-machmode-head: 055 #define FLOAT_MODE_P(MODE)		\
+diag-machmode-head: 056   (GET_MODE_CLASS (MODE) == MODE_FLOAT	\
+diag-machmode-head: 057    || GET_MODE_CLASS (MODE) == MODE_COMPLEX_FLOAT \
+diag-machmode-head: 058    || GET_MODE_CLASS (MODE) == MODE_VECTOR_FLOAT)
+diag-machmode-head: 059
+diag-machmode-head: 060 /* Nonzero if MODE is a complex mode.  */
+diag-machmode-head: 061 #define COMPLEX_MODE_P(MODE)			\
+diag-machmode-head: 062   (GET_MODE_CLASS (MODE) == MODE_COMPLEX_INT	\
+diag-machmode-head: 063    || GET_MODE_CLASS (MODE) == MODE_COMPLEX_FLOAT)
+diag-machmode-head: 064
+diag-machmode-head: 065 /* Nonzero if MODE is a vector mode.  */
+diag-machmode-head: 066 #define VECTOR_MODE_P(MODE)			\
+diag-machmode-head: 067   (GET_MODE_CLASS (MODE) == MODE_VECTOR_INT	\
+diag-machmode-head: 068    || GET_MODE_CLASS (MODE) == MODE_VECTOR_FLOAT)
+diag-machmode-head: 069
+diag-machmode-head: 070 /* Nonzero if MODE is a scalar integral mode.  */
+diag-machmode-head: 071 #define SCALAR_INT_MODE_P(MODE)			\
+diag-machmode-head: 072   (GET_MODE_CLASS (MODE) == MODE_INT		\
+diag-machmode-head: 073    || GET_MODE_CLASS (MODE) == MODE_PARTIAL_INT)
+diag-machmode-head: 074
+diag-machmode-head: 075 /* Nonzero if MODE is a scalar floating point mode.  */
+diag-machmode-head: 076 #define SCALAR_FLOAT_MODE_P(MODE)		\
+diag-machmode-head: 077   (GET_MODE_CLASS (MODE) == MODE_FLOAT)
+diag-machmode-head: 078
+diag-machmode-head: 079 /* Get the size in bytes and bits of an object of mode MODE.  */
+diag-machmode-head: 080
+diag-machmode-head: 081 extern CONST_MODE_SIZE unsigned char mode_size[NUM_MACHINE_MODES];
+diag-machmode-head: 082 #define GET_MODE_SIZE(MODE)    ((unsigned short) mode_size[MODE])
+diag-machmode-head: 083 #define GET_MODE_BITSIZE(MODE) ((unsigned short) (GET_MODE_SIZE (MODE) * BITS_PER_UNIT))
+diag-machmode-head: 084
+diag-machmode-head: 085 /* Get the number of value bits of an object of mode MODE.  */
+diag-machmode-head: 086 extern const unsigned short mode_precision[NUM_MACHINE_MODES];
+diag-machmode-head: 087 #define GET_MODE_PRECISION(MODE)  mode_precision[MODE]
+diag-machmode-head: 088
+diag-machmode-head: 089 /* Get a bitmask containing 1 for all bits in a word
+diag-machmode-head: 090    that fit within mode MODE.  */
+diag-machmode-head: 091
+diag-machmode-head: 092 extern const unsigned HOST_WIDE_INT mode_mask_array[NUM_MACHINE_MODES];
+diag-machmode-head: 093
+diag-machmode-head: 094 #define GET_MODE_MASK(MODE) mode_mask_array[MODE]
+diag-machmode-head: 095
+diag-machmode-head: 096 /* Return the mode of the inner elements in a vector.  */
+diag-machmode-head: 097
+diag-machmode-head: 098 extern const unsigned char mode_inner[NUM_MACHINE_MODES];
+diag-machmode-head: 099 #define GET_MODE_INNER(MODE) mode_inner[MODE]
+diag-machmode-head: 100
+diag-machmode-head: 101 /* Get the size in bytes of the basic parts of an object of mode MODE.  */
+diag-machmode-head: 102
+diag-machmode-head: 103 #define GET_MODE_UNIT_SIZE(MODE)		\
+diag-machmode-head: 104   (GET_MODE_INNER (MODE) == VOIDmode		\
+diag-machmode-head: 105    ? GET_MODE_SIZE (MODE)			\
+diag-machmode-head: 106    : GET_MODE_SIZE (GET_MODE_INNER (MODE)))
+diag-machmode-head: 107
+diag-machmode-head: 108 /* Get the number of units in the object.  */
+diag-machmode-head: 109
+diag-machmode-head: 110 extern const unsigned char mode_nunits[NUM_MACHINE_MODES];
+diag-machmode-head: 111 #define GET_MODE_NUNITS(MODE)  mode_nunits[MODE]
+diag-machmode-head: 112
+diag-machmode-head: 113 /* Get the next wider natural mode (eg, QI -> HI -> SI -> DI -> TI).  */
+diag-machmode-head: 114
+diag-machmode-head: 115 extern const unsigned char mode_wider[NUM_MACHINE_MODES];
+diag-machmode-head: 116 #define GET_MODE_WIDER_MODE(MODE) mode_wider[MODE]
+diag-machmode-head: 117
+diag-machmode-head: 118 /* Return the mode for data of a given size SIZE and mode class CLASS.
+diag-machmode-head: 119    If LIMIT is nonzero, then don't use modes bigger than MAX_FIXED_MODE_SIZE.
+diag-machmode-head: 120    The value is BLKmode if no other mode is found.  */
+diag-machmode-head: 121
+diag-machmode-head: 122 extern enum machine_mode mode_for_size (unsigned int, enum mode_class, int);
+diag-machmode-head: 123
+diag-machmode-head: 124 /* Similar, but find the smallest mode for a given width.  */
+diag-machmode-head: 125
+diag-machmode-head: 126 extern enum machine_mode smallest_mode_for_size (unsigned int,
+diag-machmode-head: 127 						 enum mode_class);
+diag-machmode-head: 128
+diag-machmode-head: 129
+diag-machmode-head: 130 /* Return an integer mode of the exact same size as the input mode,
+diag-machmode-head: 131    or BLKmode on failure.  */
+diag-machmode-head: 132
+diag-machmode-head: 133 extern enum machine_mode int_mode_for_mode (enum machine_mode);
+diag-machmode-head: 134
+diag-machmode-head: 135 /* Find the best mode to use to access a bit field.  */
+diag-machmode-head: 136
+diag-machmode-head: 137 extern enum machine_mode get_best_mode (int, int, unsigned int,
+diag-machmode-head: 138 					enum machine_mode, int);
+diag-machmode-head: 139
+diag-machmode-head: 140 /* Determine alignment, 1<=result<=BIGGEST_ALIGNMENT.  */
+diag-cparse: compile cparse_undef6_machmode_guard_only
+diag-cparse: cparse_undef6_machmode_guard_only rc=0
+diag-insn-modes-head: insn-modes.h:001 #ifndef GCC_INSN_MODES_H
+diag-insn-modes-head: insn-modes.h:002 #define GCC_INSN_MODES_H
+diag-insn-modes-head: insn-modes.h:003 #define CONST_MODE_SIZE const
+diag-insn-modes-head: insn-modes.h:004 #define CONST_MODE_BASE_ALIGN const
+diag-insn-modes-head: insn-modes.h:005 enum machine_mode {
+diag-insn-modes-head: insn-modes.h:006   VOIDmode,
+diag-insn-modes-head: insn-modes.h:007   BLKmode,
+diag-insn-modes-head: insn-modes.h:008   CCmode,
+diag-insn-modes-head: insn-modes.h:009   BImode,
+diag-insn-modes-head: insn-modes.h:010   QImode,
+diag-insn-modes-head: insn-modes.h:011   HImode,
+diag-insn-modes-head: insn-modes.h:012   SImode,
+diag-insn-modes-head: insn-modes.h:013   DImode,
+diag-insn-modes-head: insn-modes.h:014   TImode,
+diag-insn-modes-head: insn-modes.h:015   SFmode,
+diag-insn-modes-head: insn-modes.h:016   DFmode,
+diag-insn-modes-head: insn-modes.h:017   XFmode,
+diag-insn-modes-head: insn-modes.h:018   TFmode,
+diag-insn-modes-head: insn-modes.h:019   MAX_MACHINE_MODE,
+diag-insn-modes-head: insn-modes.h:020   NUM_MACHINE_MODES = MAX_MACHINE_MODE
+diag-insn-modes-head: insn-modes.h:021 };
+diag-insn-modes-head: insn-modes.h:022 #endif
+diag-insn-modes-head: insn-modes.h:023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+diag-insn-modes-head: insn-modes.h:024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+diag-insn-modes-path: ./insn-modes.h
+diag-insn-modes-head: ./insn-modes.h:001 #ifndef GCC_INSN_MODES_H
+diag-insn-modes-head: ./insn-modes.h:002 #define GCC_INSN_MODES_H
+diag-insn-modes-head: ./insn-modes.h:003 #define CONST_MODE_SIZE const
+diag-insn-modes-head: ./insn-modes.h:004 #define CONST_MODE_BASE_ALIGN const
+diag-insn-modes-head: ./insn-modes.h:005 enum machine_mode {
+diag-insn-modes-head: ./insn-modes.h:006   VOIDmode,
+diag-insn-modes-head: ./insn-modes.h:007   BLKmode,
+diag-insn-modes-head: ./insn-modes.h:008   CCmode,
+diag-insn-modes-head: ./insn-modes.h:009   BImode,
+diag-insn-modes-head: ./insn-modes.h:010   QImode,
+diag-insn-modes-head: ./insn-modes.h:011   HImode,
+diag-insn-modes-head: ./insn-modes.h:012   SImode,
+diag-insn-modes-head: ./insn-modes.h:013   DImode,
+diag-insn-modes-head: ./insn-modes.h:014   TImode,
+diag-insn-modes-head: ./insn-modes.h:015   SFmode,
+diag-insn-modes-head: ./insn-modes.h:016   DFmode,
+diag-insn-modes-head: ./insn-modes.h:017   XFmode,
+diag-insn-modes-head: ./insn-modes.h:018   TFmode,
+diag-insn-modes-head: ./insn-modes.h:019   MAX_MACHINE_MODE,
+diag-insn-modes-head: ./insn-modes.h:020   NUM_MACHINE_MODES = MAX_MACHINE_MODE
+diag-insn-modes-head: ./insn-modes.h:021 };
+diag-insn-modes-head: ./insn-modes.h:022 #endif
+diag-insn-modes-head: ./insn-modes.h:023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+diag-insn-modes-head: ./insn-modes.h:024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+diag-cparse: compile cparse_undef6_insn_modes_minimal_enum
+diag-cparse: cparse_undef6_insn_modes_minimal_enum rc=0
+diag-cparse: compile cparse_undef6_insn_modes_include_only
+diag-cparse: cparse_undef6_insn_modes_include_only rc=0
+diag-cparse: compile cparse_undef6_insn_modes_lines_1
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_lines_1 rc=139
+diag-cparse: compile cparse_undef6_insn_modes_lines_5
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_lines_5 rc=139
+diag-cparse: compile cparse_undef6_insn_modes_lines_10
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_lines_10 rc=139
+diag-cparse: compile cparse_undef6_insn_modes_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_lines_20 rc=139
+diag-cparse: compile cparse_undef6_insn_modes_lines_40
+diag-cparse: cparse_undef6_insn_modes_lines_40 rc=0
+diag-cparse: compile cparse_undef6_insn_modes_balanced_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_balanced_20 rc=139
+diag-cparse: compile cparse_undef6_insn_modes_balanced_40
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_insn_modes_balanced_40 rc=139
+diag-cparse: compile cparse_undef6_machmode_insn_modes_only
+diag-cparse: cparse_undef6_machmode_insn_modes_only rc=0
+diag-cparse: compile cparse_undef6_machmode_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_machmode_lines_20 rc=139
+diag-cparse: compile cparse_undef6_machmode_lines_40
+diag-cparse: cparse_undef6_machmode_lines_40 rc=0
+diag-cparse: compile cparse_undef6_machmode_lines_60
+diag-cparse: cparse_undef6_machmode_lines_60 rc=0
+diag-cparse: compile cparse_undef6_machmode_lines_80
+diag-cparse: cparse_undef6_machmode_lines_80 rc=0
+diag-cparse: compile cparse_undef6_machmode_lines_100
+diag-cparse: cparse_undef6_machmode_lines_100 rc=0
+diag-cparse: compile cparse_undef6_machmode_lines_120
+diag-cparse: cparse_undef6_machmode_lines_120 rc=0
+diag-tree-head: 001 /* Front-end tree definitions for GNU compiler.
+diag-tree-head: 002    Copyright (C) 1989, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+diag-tree-head: 003    2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+diag-tree-head: 004
+diag-tree-head: 005 This file is part of GCC.
+diag-tree-head: 006
+diag-tree-head: 007 GCC is free software; you can redistribute it and/or modify it under
+diag-tree-head: 008 the terms of the GNU General Public License as published by the Free
+diag-tree-head: 009 Software Foundation; either version 2, or (at your option) any later
+diag-tree-head: 010 version.
+diag-tree-head: 011
+diag-tree-head: 012 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-tree-head: 013 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-tree-head: 014 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-tree-head: 015 for more details.
+diag-tree-head: 016
+diag-tree-head: 017 You should have received a copy of the GNU General Public License
+diag-tree-head: 018 along with GCC; see the file COPYING.  If not, write to the Free
+diag-tree-head: 019 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-tree-head: 020 02111-1307, USA.  */
+diag-tree-head: 021
+diag-tree-head: 022 #ifndef GCC_TREE_H
+diag-tree-head: 023 #define GCC_TREE_H
+diag-tree-head: 024
+diag-tree-head: 025 #include "machmode.h"
+diag-tree-head: 026 #include "input.h"
+diag-tree-head: 027 #include "statistics.h"
+diag-tree-head: 028 #include "vec.h"
+diag-tree-head: 029
+diag-tree-head: 030 /* Codes of tree nodes */
+diag-tree-head: 031
+diag-tree-head: 032 #define DEFTREECODE(SYM, STRING, TYPE, NARGS)   SYM,
+diag-tree-head: 033
+diag-tree-head: 034 enum tree_code {
+diag-tree-head: 035 #include "tree.def"
+diag-tree-head: 036
+diag-tree-head: 037   LAST_AND_UNUSED_TREE_CODE	/* A convenient way to get a value for
+diag-tree-head: 038 				   NUM_TREE_CODES.  */
+diag-tree-head: 039 };
+diag-tree-head: 040
+diag-tree-head: 041 #undef DEFTREECODE
+diag-tree-head: 042
+diag-tree-head: 043 /* Number of language-independent tree codes.  */
+diag-tree-head: 044 #define NUM_TREE_CODES ((int) LAST_AND_UNUSED_TREE_CODE)
+diag-tree-head: 045
+diag-tree-head: 046 /* Tree code classes.  */
+diag-tree-head: 047
+diag-tree-head: 048 /* Each tree_code has an associated code class represented by a
+diag-tree-head: 049    TREE_CODE_CLASS.  */
+diag-tree-head: 050
+diag-tree-head: 051 enum tree_code_class {
+diag-tree-head: 052   tcc_exceptional, /* An exceptional code (fits no category).  */
+diag-tree-head: 053   tcc_constant,    /* A constant.  */
+diag-tree-head: 054   /* Order of tcc_type and tcc_declaration is important.  */
+diag-tree-head: 055   tcc_type,        /* A type object code.  */
+diag-tree-head: 056   tcc_declaration, /* A declaration (also serving as variable refs).  */
+diag-tree-head: 057   tcc_reference,   /* A reference to storage.  */
+diag-tree-head: 058   tcc_comparison,  /* A comparison expression.  */
+diag-tree-head: 059   tcc_unary,       /* A unary arithmetic expression.  */
+diag-tree-head: 060   tcc_binary,      /* A binary arithmetic expression.  */
+diag-tree-head: 061   tcc_statement,   /* A statement expression, which have side effects
+diag-tree-head: 062 		      but usually no interesting value.  */
+diag-tree-head: 063   tcc_expression   /* Any other expression.  */
+diag-tree-head: 064 };
+diag-tree-head: 065
+diag-tree-head: 066 /* Each tree code class has an associated string representation.
+diag-tree-head: 067    These must correspond to the tree_code_class entries.  */
+diag-tree-head: 068
+diag-tree-head: 069 extern const char *const tree_code_class_strings[];
+diag-tree-head: 070
+diag-tree-head: 071 /* Returns the string representing CLASS.  */
+diag-tree-head: 072
+diag-tree-head: 073 #define TREE_CODE_CLASS_STRING(CLASS)\
+diag-tree-head: 074         tree_code_class_strings[(int) (CLASS)]
+diag-tree-head: 075
+diag-tree-head: 076 #define MAX_TREE_CODES 256
+diag-tree-head: 077 extern const enum tree_code_class tree_code_type[];
+diag-tree-head: 078 #define TREE_CODE_CLASS(CODE)	tree_code_type[(int) (CODE)]
+diag-tree-head: 079
+diag-tree-head: 080 /* Nonzero if CODE represents an exceptional code.  */
+diag-tree-head: 081
+diag-tree-head: 082 #define EXCEPTIONAL_CLASS_P(CODE)\
+diag-tree-head: 083 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_exceptional)
+diag-tree-head: 084
+diag-tree-head: 085 /* Nonzero if CODE represents a constant.  */
+diag-tree-head: 086
+diag-tree-head: 087 #define CONSTANT_CLASS_P(CODE)\
+diag-tree-head: 088 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_constant)
+diag-tree-head: 089
+diag-tree-head: 090 /* Nonzero if CODE represents a type.  */
+diag-tree-head: 091
+diag-tree-head: 092 #define TYPE_P(CODE)\
+diag-tree-head: 093 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_type)
+diag-tree-head: 094
+diag-tree-head: 095 /* Nonzero if CODE represents a declaration.  */
+diag-tree-head: 096
+diag-tree-head: 097 #define DECL_P(CODE)\
+diag-tree-head: 098         (TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_declaration)
+diag-tree-head: 099
+diag-tree-head: 100 /* Nonzero if CODE represents a INDIRECT_REF.  Keep these checks in
+diag-tree-head: 101    ascending code order.  */
+diag-tree-head: 102 #define INDIRECT_REF_P(CODE)\
+diag-tree-head: 103   (TREE_CODE (CODE) == INDIRECT_REF \
+diag-tree-head: 104    || TREE_CODE (CODE) == ALIGN_INDIRECT_REF \
+diag-tree-head: 105    || TREE_CODE (CODE) == MISALIGNED_INDIRECT_REF)
+diag-tree-head: 106
+diag-tree-head: 107 /* Nonzero if CODE represents a reference.  */
+diag-tree-head: 108
+diag-tree-head: 109 #define REFERENCE_CLASS_P(CODE)\
+diag-tree-head: 110 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_reference)
+diag-tree-head: 111
+diag-tree-head: 112 /* Nonzero if CODE represents a comparison.  */
+diag-tree-head: 113
+diag-tree-head: 114 #define COMPARISON_CLASS_P(CODE)\
+diag-tree-head: 115 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_comparison)
+diag-tree-head: 116
+diag-tree-head: 117 /* Nonzero if CODE represents a unary arithmetic expression.  */
+diag-tree-head: 118
+diag-tree-head: 119 #define UNARY_CLASS_P(CODE)\
+diag-tree-head: 120 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_unary)
+diag-tree-head: 121
+diag-tree-head: 122 /* Nonzero if CODE represents a binary arithmetic expression.  */
+diag-tree-head: 123
+diag-tree-head: 124 #define BINARY_CLASS_P(CODE)\
+diag-tree-head: 125 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_binary)
+diag-tree-head: 126
+diag-tree-head: 127 /* Nonzero if CODE represents a statement expression.  */
+diag-tree-head: 128
+diag-tree-head: 129 #define STATEMENT_CLASS_P(CODE)\
+diag-tree-head: 130 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_statement)
+diag-tree-head: 131
+diag-tree-head: 132 /* Nonzero if CODE represents any other expression.  */
+diag-tree-head: 133
+diag-tree-head: 134 #define EXPRESSION_CLASS_P(CODE)\
+diag-tree-head: 135 	(TREE_CODE_CLASS (TREE_CODE (CODE)) == tcc_expression)
+diag-tree-head: 136
+diag-tree-head: 137 /* Returns nonzero iff CLASS is not the tree code of a type.  */
+diag-tree-head: 138
+diag-tree-head: 139 #define IS_NON_TYPE_CODE_CLASS(CLASS) ((CLASS) != tcc_type)
+diag-tree-head: 140
+diag-tree-head: 141 /* Returns nonzero iff CODE represents a type or declaration.  */
+diag-tree-head: 142
+diag-tree-head: 143 #define IS_TYPE_OR_DECL_P(CODE)\
+diag-tree-head: 144 	(TYPE_P (CODE) || DECL_P (CODE))
+diag-tree-head: 145
+diag-tree-head: 146 /* Returns nonzero iff CLASS is the tree-code class of an
+diag-tree-head: 147    expression.  */
+diag-tree-head: 148
+diag-tree-head: 149 #define IS_EXPR_CODE_CLASS(CLASS)\
+diag-tree-head: 150 	((CLASS) >= tcc_reference && (CLASS) <= tcc_expression)
+diag-tree-head: 151
+diag-tree-head: 152 /* Returns nonzero iff NODE is an expression of some kind.  */
+diag-tree-head: 153
+diag-tree-head: 154 #define EXPR_P(NODE) IS_EXPR_CODE_CLASS (TREE_CODE_CLASS (TREE_CODE (NODE)))
+diag-tree-head: 155
+diag-tree-head: 156 /* Number of argument-words in each kind of tree-node.  */
+diag-tree-head: 157
+diag-tree-head: 158 extern const unsigned char tree_code_length[];
+diag-tree-head: 159 #define TREE_CODE_LENGTH(CODE)	tree_code_length[(int) (CODE)]
+diag-tree-head: 160
+diag-tree-head: 161 /* Names of tree components.  */
+diag-tree-head: 162
+diag-tree-head: 163 extern const char *const tree_code_name[];
+diag-tree-head: 164
+diag-tree-head: 165 /* A garbage collected vector of trees.  */
+diag-tree-head: 166 DEF_VEC_GC_P(tree);
+diag-tree-head: 167
+diag-tree-head: 168
+
+diag-tree-head: 169 /* Classify which part of the compiler has defined a given builtin function.
+diag-tree-head: 170    Note that we assume below that this is no more than two bits.  */
+diag-tree-head: 171 enum built_in_class
+diag-tree-head: 172 {
+diag-tree-head: 173   NOT_BUILT_IN = 0,
+diag-tree-head: 174   BUILT_IN_FRONTEND,
+diag-tree-head: 175   BUILT_IN_MD,
+diag-tree-head: 176   BUILT_IN_NORMAL
+diag-tree-head: 177 };
+diag-tree-head: 178
+diag-tree-head: 179 /* Names for the above.  */
+diag-tree-head: 180 extern const char *const built_in_class_names[4];
+diag-tree-head: 181
+diag-tree-head: 182 /* Codes that identify the various built in functions
+diag-tree-head: 183    so that expand_call can identify them quickly.  */
+diag-tree-head: 184
+diag-tree-head: 185 #define DEF_BUILTIN(ENUM, N, C, T, LT, B, F, NA, AT, IM, COND) ENUM,
+diag-tree-head: 186 enum built_in_function
+diag-tree-head: 187 {
+diag-tree-head: 188 #include "builtins.def"
+diag-tree-head: 189
+diag-tree-head: 190   /* Complex division routines in libgcc.  These are done via builtins
+diag-tree-head: 191      because emit_library_call_value can't handle complex values.  */
+diag-tree-head: 192   BUILT_IN_COMPLEX_MUL_MIN,
+diag-tree-head: 193   BUILT_IN_COMPLEX_MUL_MAX
+diag-tree-head: 194     = BUILT_IN_COMPLEX_MUL_MIN
+diag-tree-head: 195       + MAX_MODE_COMPLEX_FLOAT
+diag-tree-head: 196       - MIN_MODE_COMPLEX_FLOAT,
+diag-tree-head: 197
+diag-tree-head: 198   BUILT_IN_COMPLEX_DIV_MIN,
+diag-tree-head: 199   BUILT_IN_COMPLEX_DIV_MAX
+diag-tree-head: 200     = BUILT_IN_COMPLEX_DIV_MIN
+diag-tree-head: 201       + MAX_MODE_COMPLEX_FLOAT
+diag-tree-head: 202       - MIN_MODE_COMPLEX_FLOAT,
+diag-tree-head: 203
+diag-tree-head: 204   /* Upper bound on non-language-specific builtins.  */
+diag-tree-head: 205   END_BUILTINS
+diag-tree-head: 206 };
+diag-tree-head: 207 #undef DEF_BUILTIN
+diag-tree-head: 208
+diag-tree-head: 209 /* Names for the above.  */
+diag-tree-head: 210 extern const char * built_in_names[(int) END_BUILTINS];
+diag-tree-head: 211
+diag-tree-head: 212 /* Helper macros for math builtins.  */
+diag-tree-head: 213
+diag-tree-head: 214 #define BUILTIN_EXP10_P(FN) \
+diag-tree-head: 215  ((FN) == BUILT_IN_EXP10 || (FN) == BUILT_IN_EXP10F || (FN) == BUILT_IN_EXP10L \
+diag-tree-head: 216   || (FN) == BUILT_IN_POW10 || (FN) == BUILT_IN_POW10F || (FN) == BUILT_IN_POW10L)
+diag-tree-head: 217
+diag-tree-head: 218 #define BUILTIN_EXPONENT_P(FN) (BUILTIN_EXP10_P (FN) \
+diag-tree-head: 219   || (FN) == BUILT_IN_EXP || (FN) == BUILT_IN_EXPF || (FN) == BUILT_IN_EXPL \
+diag-tree-head: 220   || (FN) == BUILT_IN_EXP2 || (FN) == BUILT_IN_EXP2F || (FN) == BUILT_IN_EXP2L)
+diag-cparse: compile cparse_undef6_tree_guard_only
+diag-cparse: cparse_undef6_tree_guard_only rc=0
+diag-cparse: compile cparse_undef6_tree_machmode_only
+diag-cparse: cparse_undef6_tree_machmode_only rc=0
+diag-cparse: compile cparse_undef6_tree_input_only
+diag-cparse: cparse_undef6_tree_input_only rc=0
+diag-cparse: compile cparse_undef6_tree_statistics_only
+diag-cparse: cparse_undef6_tree_statistics_only rc=0
+diag-cparse: compile cparse_undef6_tree_vec_only
+diag-cparse: cparse_undef6_tree_vec_only rc=0
+diag-cparse: compile cparse_undef6_tree_def_enum
+diag-cparse: cparse_undef6_tree_def_enum rc=0
+diag-cparse: compile cparse_undef6_tree_lines_23
+diag-cparse: cparse_undef6_tree_lines_23 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_25
+diag-cparse: cparse_undef6_tree_lines_25 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_26
+diag-cparse: cparse_undef6_tree_lines_26 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_27
+diag-cparse: cparse_undef6_tree_lines_27 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_28
+diag-cparse: cparse_undef6_tree_lines_28 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_36
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tree_lines_36 rc=139
+diag-cparse: compile cparse_undef6_tree_lines_80
+diag-cparse: cparse_undef6_tree_lines_80 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_120
+diag-cparse: cparse_undef6_tree_lines_120 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_160
+diag-cparse: cparse_undef6_tree_lines_160 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_166
+diag-cparse: cparse_undef6_tree_lines_166 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_177
+diag-cparse: cparse_undef6_tree_lines_177 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_180
+diag-cparse: cparse_undef6_tree_lines_180 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_207
+diag-cparse: cparse_undef6_tree_lines_207 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_212
+diag-cparse: cparse_undef6_tree_lines_212 rc=0
+diag-cparse: compile cparse_undef6_tree_lines_220
+diag-cparse: cparse_undef6_tree_lines_220 rc=0
+diag-builtins-head: 001 /* This file contains the definitions and documentation for the
+diag-builtins-head: 002    builtins used in the GNU compiler.
+diag-builtins-head: 003    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005
+diag-builtins-head: 004    Free Software Foundation, Inc.
+diag-builtins-head: 005
+diag-builtins-head: 006 This file is part of GCC.
+diag-builtins-head: 007
+diag-builtins-head: 008 GCC is free software; you can redistribute it and/or modify it under
+diag-builtins-head: 009 the terms of the GNU General Public License as published by the Free
+diag-builtins-head: 010 Software Foundation; either version 2, or (at your option) any later
+diag-builtins-head: 011 version.
+diag-builtins-head: 012
+diag-builtins-head: 013 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-builtins-head: 014 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-builtins-head: 015 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-builtins-head: 016 for more details.
+diag-builtins-head: 017
+diag-builtins-head: 018 You should have received a copy of the GNU General Public License
+diag-builtins-head: 019 along with GCC; see the file COPYING.  If not, write to the Free
+diag-builtins-head: 020 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-builtins-head: 021 02111-1307, USA.  */
+diag-builtins-head: 022
+diag-builtins-head: 023 /* Before including this file, you should define a macro:
+diag-builtins-head: 024
+diag-builtins-head: 025      DEF_BUILTIN (ENUM, NAME, CLASS, TYPE, LIBTYPE, BOTH_P,
+diag-builtins-head: 026                   FALLBACK_P, NONANSI_P, ATTRS, IMPLICIT)
+diag-builtins-head: 027
+diag-builtins-head: 028    This macro will be called once for each builtin function.  The
+diag-builtins-head: 029    ENUM will be of type `enum built_in_function', and will indicate
+diag-builtins-head: 030    which builtin function is being processed.  The NAME of the builtin
+diag-builtins-head: 031    function (which will always start with `__builtin_') is a string
+diag-builtins-head: 032    literal.  The CLASS is of type `enum built_in_class' and indicates
+diag-builtins-head: 033    what kind of builtin is being processed.
+diag-builtins-head: 034
+diag-builtins-head: 035    Some builtins are actually two separate functions.  For example,
+diag-builtins-head: 036    for `strcmp' there are two builtin functions; `__builtin_strcmp'
+diag-builtins-head: 037    and `strcmp' itself.  Both behave identically.  Other builtins
+diag-builtins-head: 038    define only the `__builtin' variant.  If BOTH_P is TRUE, then this
+diag-builtins-head: 039    builtin has both variants; otherwise, it is has only the first
+diag-builtins-head: 040    variant.
+diag-builtins-head: 041
+diag-builtins-head: 042    TYPE indicates the type of the function.  The symbols correspond to
+diag-builtins-head: 043    enumerals from builtin-types.def.  If BOTH_P is true, then LIBTYPE
+diag-builtins-head: 044    is the type of the non-`__builtin_' variant.  Otherwise, LIBTYPE
+diag-builtins-head: 045    should be ignored.
+diag-builtins-head: 046
+diag-builtins-head: 047    If FALLBACK_P is true then, if for some reason, the compiler cannot
+diag-builtins-head: 048    expand the builtin function directly, it will call the
+diag-builtins-head: 049    corresponding library function (which does not have the
+diag-builtins-head: 050    `__builtin_' prefix.
+diag-builtins-head: 051
+diag-builtins-head: 052    If NONANSI_P is true, then the non-`__builtin_' variant is not an
+diag-builtins-head: 053    ANSI/ISO library function, and so we should pretend it does not
+diag-builtins-head: 054    exist when compiling in ANSI conformant mode.
+diag-builtins-head: 055
+diag-builtins-head: 056    ATTRs is an attribute list as defined in builtin-attrs.def that
+diag-builtins-head: 057    describes the attributes of this builtin function.
+diag-builtins-head: 058
+diag-builtins-head: 059    IMPLICIT specifies condition when the builtin can be produced by
+diag-builtins-head: 060    compiler.  For instance C90 reserves floorf function, but does not
+diag-builtins-head: 061    define it's meaning.  When user uses floorf we may assume that the
+diag-builtins-head: 062    floorf has the meaning we expect, but we can't produce floorf by
+diag-builtins-head: 063    simplifying floor((double)float) since the runtime need not implement
+diag-builtins-head: 064    it.  */
+diag-builtins-head: 065
+diag-builtins-head: 066 /* A GCC builtin (like __builtin_saveregs) is provided by the
+diag-builtins-head: 067    compiler, but does not correspond to a function in the standard
+diag-builtins-head: 068    library.  */
+diag-builtins-head: 069 #undef DEF_GCC_BUILTIN
+diag-builtins-head: 070 #define DEF_GCC_BUILTIN(ENUM, NAME, TYPE, ATTRS)		\
+diag-builtins-head: 071   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
+diag-builtins-head: 072                false, false, false, ATTRS, true, true)
+diag-builtins-head: 073
+diag-builtins-head: 074 /* A library builtin (like __builtin_strchr) is a builtin equivalent
+diag-builtins-head: 075    of an ANSI/ISO standard library function.  In addition to the
+diag-builtins-head: 076    `__builtin' version, we will create an ordinary version (e.g,
+diag-builtins-head: 077    `strchr') as well.  If we cannot compute the answer using the
+diag-builtins-head: 078    builtin function, we will fall back to the standard library
+diag-builtins-head: 079    version.  */
+diag-builtins-head: 080 #undef DEF_LIB_BUILTIN
+diag-builtins-head: 081 #define DEF_LIB_BUILTIN(ENUM, NAME, TYPE, ATTRS)	\
+diag-builtins-head: 082   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, TYPE,	\
+diag-builtins-head: 083 	       true, true, false, ATTRS, true, true)
+diag-builtins-head: 084
+diag-builtins-head: 085 /* Like DEF_LIB_BUILTIN, except that the function is not one that is
+diag-builtins-head: 086    specified by ANSI/ISO C.  So, when we're being fully conformant we
+diag-builtins-head: 087    ignore the version of these builtins that does not begin with
+diag-builtins-head: 088    __builtin.  */
+diag-builtins-head: 089 #undef DEF_EXT_LIB_BUILTIN
+diag-builtins-head: 090 #define DEF_EXT_LIB_BUILTIN(ENUM, NAME, TYPE, ATTRS)	\
+diag-builtins-head: 091   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, TYPE,	\
+diag-builtins-head: 092    	       true, true, true, ATTRS, false, true)
+diag-builtins-head: 093
+diag-builtins-head: 094 /* Like DEF_LIB_BUILTIN, except that the function is only a part of
+diag-builtins-head: 095    the standard in C94 or above.  */
+diag-builtins-head: 096 #undef DEF_C94_BUILTIN
+diag-builtins-head: 097 #define DEF_C94_BUILTIN(ENUM, NAME, TYPE, ATTRS)	\
+diag-builtins-head: 098   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, TYPE,	\
+diag-builtins-head: 099    	       true, true, !flag_isoc94, ATTRS, TARGET_C99_FUNCTIONS, true)
+diag-builtins-head: 100
+diag-builtins-head: 101 /* Like DEF_LIB_BUILTIN, except that the function is only a part of
+diag-builtins-head: 102    the standard in C99 or above.  */
+diag-builtins-head: 103 #undef DEF_C99_BUILTIN
+diag-builtins-head: 104 #define DEF_C99_BUILTIN(ENUM, NAME, TYPE, ATTRS)	\
+diag-builtins-head: 105   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, TYPE,	\
+diag-builtins-head: 106    	       true, true, !flag_isoc99, ATTRS, TARGET_C99_FUNCTIONS, true)
+diag-builtins-head: 107
+diag-builtins-head: 108 /* Builtin that is specified by C99 and C90 reserve the name for future use.
+diag-builtins-head: 109    We can still recognize the builtin in C90 mode but we can't produce it
+diag-builtins-head: 110    implicitly.  */
+diag-builtins-head: 111 #undef DEF_C99_C90RES_BUILTIN
+diag-builtins-head: 112 #define DEF_C99_C90RES_BUILTIN(ENUM, NAME, TYPE, ATTRS)	\
+diag-builtins-head: 113   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, TYPE,	\
+diag-builtins-head: 114    	       true, true, !flag_isoc99, ATTRS, TARGET_C99_FUNCTIONS, true)
+diag-builtins-head: 115
+diag-builtins-head: 116 /* Allocate the enum and the name for a builtin, but do not actually
+diag-builtins-head: 117    define it here at all.  */
+diag-builtins-head: 118 #undef DEF_BUILTIN_STUB
+diag-builtins-head: 119 #define DEF_BUILTIN_STUB(ENUM, NAME) \
+diag-builtins-head: 120   DEF_BUILTIN (ENUM, NAME, BUILT_IN_NORMAL, 0, 0, false, false, \
+diag-cparse: compile cparse_undef6_tree_builtin_empty
+diag-cparse: cparse_undef6_tree_builtin_empty rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_arith_only
+diag-cparse: cparse_undef6_tree_builtin_complex_arith_only rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_include_full
+diag-cparse: cparse_undef6_tree_builtin_include_full rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_include_plus_complex
+diag-cparse: cparse_undef6_tree_builtin_include_plus_complex rc=0
+diag-cparse: compile cparse_undef6_builtins_def_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_builtins_def_lines_20 rc=139
+diag-cparse: compile cparse_undef6_builtins_def_lines_60
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_builtins_def_lines_60 rc=139
+diag-cparse: compile cparse_undef6_builtins_def_lines_120
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_builtins_def_lines_120 rc=139
+diag-cparse: compile cparse_undef6_builtins_def_lines_240
+diag-cparse: cparse_undef6_builtins_def_lines_240 rc=0
+diag-cparse: compile cparse_undef6_builtins_def_lines_480
+diag-cparse: cparse_undef6_builtins_def_lines_480 rc=0
+diag-cparse: compile cparse_undef6_builtins_def_lines_800
+diag-cparse: cparse_undef6_builtins_def_lines_800 rc=0
+diag-mode-bound: 015   SFmode,
+diag-mode-bound: 018   TFmode,
+diag-mode-bound: 023 #define MIN_MODE_COMPLEX_FLOAT SFmode
+diag-mode-bound: 024 #define MAX_MODE_COMPLEX_FLOAT TFmode
+diag-cparse: compile cparse_undef6_tree_builtin_complex_literal_zero
+diag-cparse: cparse_undef6_tree_builtin_complex_literal_zero rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_literal_sub
+diag-cparse: cparse_undef6_tree_builtin_complex_literal_sub rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_max_only
+diag-cparse: cparse_undef6_tree_builtin_complex_max_only rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_min_only
+diag-cparse: cparse_undef6_tree_builtin_complex_min_only rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_mode_delta_one
+diag-cparse: cparse_undef6_tree_builtin_complex_mode_delta_one rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_complex_mode_delta_two
+diag-cparse: cparse_undef6_tree_builtin_complex_mode_delta_two rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_include_plus_literal_sub
+diag-cparse: cparse_undef6_tree_builtin_include_plus_literal_sub rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_include_plus_mode_delta_one
+diag-cparse: cparse_undef6_tree_builtin_include_plus_mode_delta_one rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_local_machine_mode_literal_sub
+diag-cparse: cparse_undef6_tree_builtin_local_machine_mode_literal_sub rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_local_machine_mode_direct_sftf
+diag-cparse: cparse_undef6_tree_builtin_local_machine_mode_direct_sftf rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_local_machine_mode_macro_delta
+diag-cparse: cparse_undef6_tree_builtin_local_machine_mode_macro_delta rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_local_machine_mode_enum_alias_delta
+diag-cparse: cparse_undef6_tree_builtin_local_machine_mode_enum_alias_delta rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_generated_direct_sftf
+diag-cparse: cparse_undef6_tree_builtin_generated_direct_sftf rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_generated_direct_tf_only
+diag-cparse: cparse_undef6_tree_builtin_generated_direct_tf_only rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_generated_direct_sf_only
+diag-cparse: cparse_undef6_tree_builtin_generated_direct_sf_only rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_generated_macro_alias_delta
+diag-cparse: cparse_undef6_tree_builtin_generated_macro_alias_delta rc=0
+diag-cparse: compile cparse_undef6_tree_builtin_generated_enum_alias_delta
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tree_builtin_generated_enum_alias_delta rc=139
+diag-cparse: compile cparse_undef6_tree_builtin_undefined_symbol_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tree_builtin_undefined_symbol_only rc=139
+diag-cparse: compile cparse_undef6_tree_builtin_undefined_symbol_delta
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tree_builtin_undefined_symbol_delta rc=139
+diag-cparse: compile cparse_undef6_inc_tree
+diag-cparse: cparse_undef6_inc_tree rc=0
+diag-tm-head: 001 #ifndef GCC_TM_H
+diag-tm-head: 002 #define GCC_TM_H
+diag-tm-head: 003 #ifdef IN_GCC
+diag-tm-head: 004 # include "config/i386/biarch64.h"
+diag-tm-head: 005 # include "config/i386/i386.h"
+diag-tm-head: 006 # include "config/i386/unix.h"
+diag-tm-head: 007 # include "config/i386/att.h"
+diag-tm-head: 008 # include "config/dbxelf.h"
+diag-tm-head: 009 # include "config/elfos.h"
+diag-tm-head: 010 # include "config/svr4.h"
+diag-tm-head: 011 # include "config/linux.h"
+diag-tm-head: 012 # include "config/i386/x86-64.h"
+diag-tm-head: 013 # include "config/i386/linux64.h"
+diag-tm-head: 014 # include "defaults.h"
+diag-tm-head: 015 #endif
+diag-tm-head: 016 #if defined IN_GCC && !defined GENERATOR_FILE && !defined USED_FOR_TARGET
+diag-tm-head: 017 # include "insn-constants.h"
+diag-tm-head: 018 # include "insn-flags.h"
+diag-tm-head: 019 #endif
+diag-tm-head: 020 #endif /* GCC_TM_H */
+diag-insn-head: insn-constants.h:001 #ifndef GCC_INSN_CONSTANTS_H
+diag-insn-head: insn-constants.h:002 #define GCC_INSN_CONSTANTS_H
+diag-insn-head: insn-constants.h:003 /* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+diag-insn-head: insn-constants.h:004 #endif
+diag-insn-head: insn-flags.h:001 #ifndef GCC_INSN_FLAGS_H
+diag-insn-head: insn-flags.h:002 #define GCC_INSN_FLAGS_H
+diag-insn-head: insn-flags.h:003 /* bootstrap genflags stub: generator-only boundary bridge */
+diag-insn-head: insn-flags.h:004 #endif
+diag-insn-path: ./insn-flags.h
+diag-insn-head: ./insn-flags.h:001 #ifndef GCC_INSN_FLAGS_H
+diag-insn-head: ./insn-flags.h:002 #define GCC_INSN_FLAGS_H
+diag-insn-head: ./insn-flags.h:003 /* bootstrap genflags stub: generator-only boundary bridge */
+diag-insn-head: ./insn-flags.h:004 #endif
+diag-insn-path: ./insn-constants.h
+diag-insn-head: ./insn-constants.h:001 #ifndef GCC_INSN_CONSTANTS_H
+diag-insn-head: ./insn-constants.h:002 #define GCC_INSN_CONSTANTS_H
+diag-insn-head: ./insn-constants.h:003 /* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+diag-insn-head: ./insn-constants.h:004 #endif
+diag-cparse: compile cparse_undef6_insn_constants_only
+diag-cparse: cparse_undef6_insn_constants_only rc=0
+diag-cparse: compile cparse_undef6_insn_flags_only
+diag-cparse: cparse_undef6_insn_flags_only rc=0
+diag-cparse: compile cparse_undef6_insn_manual_constants
+diag-cparse: cparse_undef6_insn_manual_constants rc=0
+diag-cparse: compile cparse_undef6_insn_manual_flags
+diag-cparse: cparse_undef6_insn_manual_flags rc=0
+diag-cparse: compile cparse_undef6_tm_generator_file
+diag-cparse: cparse_undef6_tm_generator_file rc=0
+diag-cparse: compile cparse_undef6_tm_used_for_target
+diag-cparse: cparse_undef6_tm_used_for_target rc=0
+diag-cparse: compile cparse_undef6_tm_undef_ingcc
+diag-cparse: cparse_undef6_tm_undef_ingcc rc=0
+diag-cparse: compile cparse_undef6_tm_ansidecl_guard
+diag-cparse: cparse_undef6_tm_ansidecl_guard rc=0
+diag-cparse: compile cparse_undef6_tm_include_1
+diag-cparse: cparse_undef6_tm_include_1 rc=0
+diag-cparse: compile cparse_undef6_tm_include_2
+diag-cparse: cparse_undef6_tm_include_2 rc=0
+diag-cparse: compile cparse_undef6_tm_include_3
+diag-cparse: cparse_undef6_tm_include_3 rc=0
+diag-cparse: compile cparse_undef6_tm_include_4
+diag-cparse: cparse_undef6_tm_include_4 rc=0
+diag-cparse: compile cparse_undef6_tm_include_5
+diag-cparse: cparse_undef6_tm_include_5 rc=0
+diag-cparse: compile cparse_undef6_tm_lines_1
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_1 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_2
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_2 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_3
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_3 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_4
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_4 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_5
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_5 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_10
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_lines_10 rc=139
+diag-cparse: compile cparse_undef6_tm_lines_20
+diag-cparse: cparse_undef6_tm_lines_20 rc=0
+diag-cparse: compile cparse_undef6_tm_lines_40
+diag-cparse: cparse_undef6_tm_lines_40 rc=0
+diag-cparse: compile cparse_undef6_tm_ifndef_balanced
+diag-cparse: cparse_undef6_tm_ifndef_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_ifndef_define_balanced
+diag-cparse: cparse_undef6_tm_ifndef_define_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_ifdef_ingcc_balanced
+diag-cparse: cparse_undef6_tm_ifdef_ingcc_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_guard_ifdef_balanced
+diag-cparse: cparse_undef6_tm_guard_ifdef_balanced rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_1
+diag-cparse: cparse_undef6_tm_balanced_lines_1 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_2
+diag-cparse: cparse_undef6_tm_balanced_lines_2 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_3
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_balanced_lines_3 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_4
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_balanced_lines_4 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_5
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_balanced_lines_5 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_10
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_balanced_lines_10 rc=139
+diag-cparse: compile cparse_undef6_tm_balanced_lines_15
+diag-cparse: cparse_undef6_tm_balanced_lines_15 rc=0
+diag-cparse: compile cparse_undef6_tm_balanced_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_tm_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_tm_first_block
+diag-cparse: cparse_undef6_tm_first_block rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_constants
+diag-cparse: cparse_undef6_tm_first_block_insn_constants rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_flags
+diag-cparse: cparse_undef6_tm_first_block_insn_flags rc=0
+diag-cparse: compile cparse_undef6_tm_first_block_insn_both
+diag-cparse: cparse_undef6_tm_first_block_insn_both rc=0
+diag-cparse: compile cparse_undef6_inc_tree
+diag-cparse: cparse_undef6_inc_tree rc=0
+diag-cparse: compile cparse_undef6_inc_langhooks
+diag-cparse: cparse_undef6_inc_langhooks rc=0
+diag-cparse: compile cparse_undef6_inc_cpplib
+diag-cparse: cparse_undef6_inc_cpplib rc=0
+diag-cparse: compile cparse_undef6_inc_c_pragma
+diag-cparse: cparse_undef6_inc_c_pragma rc=0
+diag-c-tree-head: 001 /* Definitions for C parsing and type checking.
+diag-c-tree-head: 002    Copyright (C) 1987, 1993, 1994, 1995, 1997, 1998,
+diag-c-tree-head: 003    1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+diag-c-tree-head: 004
+diag-c-tree-head: 005 This file is part of GCC.
+diag-c-tree-head: 006
+diag-c-tree-head: 007 GCC is free software; you can redistribute it and/or modify it under
+diag-c-tree-head: 008 the terms of the GNU General Public License as published by the Free
+diag-c-tree-head: 009 Software Foundation; either version 2, or (at your option) any later
+diag-c-tree-head: 010 version.
+diag-c-tree-head: 011
+diag-c-tree-head: 012 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-c-tree-head: 013 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-c-tree-head: 014 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-c-tree-head: 015 for more details.
+diag-c-tree-head: 016
+diag-c-tree-head: 017 You should have received a copy of the GNU General Public License
+diag-c-tree-head: 018 along with GCC; see the file COPYING.  If not, write to the Free
+diag-c-tree-head: 019 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-c-tree-head: 020 02111-1307, USA.  */
+diag-c-tree-head: 021
+diag-c-tree-head: 022 #ifndef GCC_C_TREE_H
+diag-c-tree-head: 023 #define GCC_C_TREE_H
+diag-c-tree-head: 024
+diag-c-tree-head: 025 #include "c-common.h"
+diag-c-tree-head: 026 #include "diagnostic.h"
+diag-c-tree-head: 027
+diag-c-tree-head: 028 /* struct lang_identifier is private to c-decl.c, but langhooks.c needs to
+diag-c-tree-head: 029    know how big it is.  This is sanity-checked in c-decl.c.  */
+diag-c-tree-head: 030 #define C_SIZEOF_STRUCT_LANG_IDENTIFIER \
+diag-c-tree-head: 031   (sizeof (struct c_common_identifier) + 3 * sizeof (void *))
+diag-c-tree-head: 032
+diag-c-tree-head: 033 /* For gc purposes, return the most likely link for the longest chain.  */
+diag-c-tree-head: 034 #define C_LANG_TREE_NODE_CHAIN_NEXT(T)				\
+diag-c-tree-head: 035   ((union lang_tree_node *)					\
+diag-c-tree-head: 036    (TREE_CODE (T) == INTEGER_TYPE ? TYPE_NEXT_VARIANT (T)	\
+diag-c-tree-head: 037     : TREE_CODE (T) == COMPOUND_EXPR ? TREE_OPERAND (T, 1)	\
+diag-c-tree-head: 038     : TREE_CHAIN (T)))
+diag-c-tree-head: 039
+diag-c-tree-head: 040 /* Language-specific declaration information.  */
+diag-cparse: compile cparse_undef6_c_tree_lines_20
+diag-cparse: cparse_undef6_c_tree_lines_20 rc=0
+diag-cparse: compile cparse_undef6_c_tree_guard_ifndef_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_guard_ifndef_only rc=139
+diag-cparse: compile cparse_undef6_c_tree_guard_define_only
+diag-cparse: cparse_undef6_c_tree_guard_define_only rc=0
+diag-cparse: compile cparse_undef6_c_tree_guard_empty_balanced
+diag-cparse: cparse_undef6_c_tree_guard_empty_balanced rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_24
+diag-cparse: cparse_undef6_c_tree_balanced_lines_24 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_25
+diag-cparse: cparse_undef6_c_tree_balanced_lines_25 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_26
+diag-cparse: cparse_undef6_c_tree_balanced_lines_26 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_27
+diag-cparse: cparse_undef6_c_tree_balanced_lines_27 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_31
+diag-cparse: cparse_undef6_c_tree_balanced_lines_31 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_38
+diag-cparse: cparse_undef6_c_tree_balanced_lines_38 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_40
+diag-cparse: cparse_undef6_c_tree_balanced_lines_40 rc=0
+diag-cparse: compile cparse_undef6_c_tree_balanced_lines_80
+diag-cparse: cparse_undef6_c_tree_balanced_lines_80 rc=0
+diag-c-common-head: 001 /* Definitions for c-common.c.
+diag-c-common-head: 002    Copyright (C) 1987, 1993, 1994, 1995, 1997, 1998,
+diag-c-common-head: 003    1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+diag-c-common-head: 004
+diag-c-common-head: 005 This file is part of GCC.
+diag-c-common-head: 006
+diag-c-common-head: 007 GCC is free software; you can redistribute it and/or modify it under
+diag-c-common-head: 008 the terms of the GNU General Public License as published by the Free
+diag-c-common-head: 009 Software Foundation; either version 2, or (at your option) any later
+diag-c-common-head: 010 version.
+diag-c-common-head: 011
+diag-c-common-head: 012 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-c-common-head: 013 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-c-common-head: 014 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-c-common-head: 015 for more details.
+diag-c-common-head: 016
+diag-c-common-head: 017 You should have received a copy of the GNU General Public License
+diag-c-common-head: 018 along with GCC; see the file COPYING.  If not, write to the Free
+diag-c-common-head: 019 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-c-common-head: 020 02111-1307, USA.  */
+diag-c-common-head: 021
+diag-c-common-head: 022 #ifndef GCC_C_COMMON_H
+diag-c-common-head: 023 #define GCC_C_COMMON_H
+diag-c-common-head: 024
+diag-c-common-head: 025 #include "splay-tree.h"
+diag-c-common-head: 026 #include "cpplib.h"
+diag-c-common-head: 027 #include "ggc.h"
+diag-c-common-head: 028
+diag-c-common-head: 029 /* Usage of TREE_LANG_FLAG_?:
+diag-c-common-head: 030    0: TREE_NEGATED_INT (in INTEGER_CST).
+diag-c-common-head: 031       IDENTIFIER_MARKED (used by search routines).
+diag-c-common-head: 032       DECL_PRETTY_FUNCTION_P (in VAR_DECL)
+diag-c-common-head: 033       STMT_EXPR_NO_SCOPE (in STMT_EXPR)
+diag-c-common-head: 034    1: C_DECLARED_LABEL_FLAG (in LABEL_DECL)
+diag-c-common-head: 035       STMT_IS_FULL_EXPR_P (in _STMT)
+diag-c-common-head: 036       STATEMENT_LIST_STMT_EXPR (in STATEMENT_LIST)
+diag-c-common-head: 037    2: unused
+diag-c-common-head: 038    3: STATEMENT_LIST_HAS_LABEL (in STATEMENT_LIST)
+diag-c-common-head: 039    4: unused
+diag-c-common-head: 040 */
+diag-c-common-head: 041
+diag-c-common-head: 042 /* Reserved identifiers.  This is the union of all the keywords for C,
+diag-c-common-head: 043    C++, and Objective-C.  All the type modifiers have to be in one
+diag-c-common-head: 044    block at the beginning, because they are used as mask bits.  There
+diag-c-common-head: 045    are 27 type modifiers; if we add many more we will have to redesign
+diag-c-common-head: 046    the mask mechanism.  */
+diag-c-common-head: 047
+diag-c-common-head: 048 enum rid
+diag-c-common-head: 049 {
+diag-c-common-head: 050   /* Modifiers: */
+diag-c-common-head: 051   /* C, in empirical order of frequency.  */
+diag-c-common-head: 052   RID_STATIC = 0,
+diag-c-common-head: 053   RID_UNSIGNED, RID_LONG,    RID_CONST, RID_EXTERN,
+diag-c-common-head: 054   RID_REGISTER, RID_TYPEDEF, RID_SHORT, RID_INLINE,
+diag-c-common-head: 055   RID_VOLATILE, RID_SIGNED,  RID_AUTO,  RID_RESTRICT,
+diag-c-common-head: 056
+diag-c-common-head: 057   /* C extensions */
+diag-c-common-head: 058   RID_COMPLEX, RID_THREAD,
+diag-c-common-head: 059
+diag-c-common-head: 060   /* C++ */
+diag-c-common-head: 061   RID_FRIEND, RID_VIRTUAL, RID_EXPLICIT, RID_EXPORT, RID_MUTABLE,
+diag-c-common-head: 062
+diag-c-common-head: 063   /* ObjC */
+diag-c-common-head: 064   RID_IN, RID_OUT, RID_INOUT, RID_BYCOPY, RID_BYREF, RID_ONEWAY,
+diag-c-common-head: 065
+diag-c-common-head: 066   /* C */
+diag-c-common-head: 067   RID_INT,     RID_CHAR,   RID_FLOAT,    RID_DOUBLE, RID_VOID,
+diag-c-common-head: 068   RID_ENUM,    RID_STRUCT, RID_UNION,    RID_IF,     RID_ELSE,
+diag-c-common-head: 069   RID_WHILE,   RID_DO,     RID_FOR,      RID_SWITCH, RID_CASE,
+diag-c-common-head: 070   RID_DEFAULT, RID_BREAK,  RID_CONTINUE, RID_RETURN, RID_GOTO,
+diag-c-common-head: 071   RID_SIZEOF,
+diag-c-common-head: 072
+diag-c-common-head: 073   /* C extensions */
+diag-c-common-head: 074   RID_ASM,       RID_TYPEOF,   RID_ALIGNOF,  RID_ATTRIBUTE,  RID_VA_ARG,
+diag-c-common-head: 075   RID_EXTENSION, RID_IMAGPART, RID_REALPART, RID_LABEL,      RID_CHOOSE_EXPR,
+diag-c-common-head: 076   RID_TYPES_COMPATIBLE_P,
+diag-c-common-head: 077
+diag-c-common-head: 078   /* Too many ways of getting the name of a function as a string */
+diag-c-common-head: 079   RID_FUNCTION_NAME, RID_PRETTY_FUNCTION_NAME, RID_C99_FUNCTION_NAME,
+diag-c-common-head: 080
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_common_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_24
+diag-cparse: cparse_undef6_c_common_balanced_lines_24 rc=0
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_25
+diag-cparse: cparse_undef6_c_common_balanced_lines_25 rc=0
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_26
+diag-cparse: cparse_undef6_c_common_balanced_lines_26 rc=0
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_27
+diag-cparse: cparse_undef6_c_common_balanced_lines_27 rc=0
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_30
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_common_balanced_lines_30 rc=139
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_40
+diag-cparse: cparse_undef6_c_common_balanced_lines_40 rc=0
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_60
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_common_balanced_lines_60 rc=139
+diag-cparse: compile cparse_undef6_c_common_balanced_lines_80
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_common_balanced_lines_80 rc=139
+diag-ggc-head: 001 /* Garbage collection for the GNU compiler.
+diag-ggc-head: 002    Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004
+diag-ggc-head: 003    Free Software Foundation, Inc.
+diag-ggc-head: 004
+diag-ggc-head: 005 This file is part of GCC.
+diag-ggc-head: 006
+diag-ggc-head: 007 GCC is free software; you can redistribute it and/or modify it under
+diag-ggc-head: 008 the terms of the GNU General Public License as published by the Free
+diag-ggc-head: 009 Software Foundation; either version 2, or (at your option) any later
+diag-ggc-head: 010 version.
+diag-ggc-head: 011
+diag-ggc-head: 012 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-ggc-head: 013 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-ggc-head: 014 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-ggc-head: 015 for more details.
+diag-ggc-head: 016
+diag-ggc-head: 017 You should have received a copy of the GNU General Public License
+diag-ggc-head: 018 along with GCC; see the file COPYING.  If not, write to the Free
+diag-ggc-head: 019 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-ggc-head: 020 02111-1307, USA.  */
+diag-ggc-head: 021
+diag-ggc-head: 022 #ifndef GCC_GGC_H
+diag-ggc-head: 023 #define GCC_GGC_H
+diag-ggc-head: 024 #include "statistics.h"
+diag-ggc-head: 025
+diag-ggc-head: 026 /* Symbols are marked with `ggc' for `gcc gc' so as not to interfere with
+diag-ggc-head: 027    an external gc library that might be linked in.  */
+diag-ggc-head: 028
+diag-ggc-head: 029 /* Constants for general use.  */
+diag-ggc-head: 030 extern const char empty_string[];	/* empty string */
+diag-ggc-head: 031 extern const char digit_vector[];	/* "0" .. "9" */
+diag-ggc-head: 032 #define digit_string(d) (digit_vector + ((d) * 2))
+diag-ggc-head: 033
+diag-ggc-head: 034 /* Internal functions and data structures used by the GTY
+diag-ggc-head: 035    machinery.  */
+diag-ggc-head: 036
+diag-ggc-head: 037 /* The first parameter is a pointer to a pointer, the second a cookie.  */
+diag-ggc-head: 038 typedef void (*gt_pointer_operator) (void *, void *);
+diag-ggc-head: 039
+diag-ggc-head: 040 #include "gtype-desc.h"
+diag-ggc-head: 041
+diag-ggc-head: 042 /* One of these applies its third parameter (with cookie in the fourth
+diag-ggc-head: 043    parameter) to each pointer in the object pointed to by the first
+diag-ggc-head: 044    parameter, using the second parameter.  */
+diag-ggc-head: 045 typedef void (*gt_note_pointers) (void *, void *, gt_pointer_operator,
+diag-ggc-head: 046 				  void *);
+diag-ggc-head: 047
+diag-ggc-head: 048 /* One of these is called before objects are re-ordered in memory.
+diag-ggc-head: 049    The first parameter is the original object, the second is the
+diag-ggc-head: 050    subobject that has had its pointers reordered, the third parameter
+diag-ggc-head: 051    can compute the new values of a pointer when given the cookie in
+diag-ggc-head: 052    the fourth parameter.  */
+diag-ggc-head: 053 typedef void (*gt_handle_reorder) (void *, void *, gt_pointer_operator,
+diag-ggc-head: 054 				   void *);
+diag-ggc-head: 055
+diag-ggc-head: 056 /* Used by the gt_pch_n_* routines.  Register an object in the hash table.  */
+diag-ggc-head: 057 extern int gt_pch_note_object (void *, void *, gt_note_pointers);
+diag-ggc-head: 058
+diag-ggc-head: 059 /* Used by the gt_pch_n_* routines.  Register that an object has a reorder
+diag-ggc-head: 060    function.  */
+diag-ggc-head: 061 extern void gt_pch_note_reorder (void *, void *, gt_handle_reorder);
+diag-ggc-head: 062
+diag-ggc-head: 063 /* Mark the object in the first parameter and anything it points to.  */
+diag-ggc-head: 064 typedef void (*gt_pointer_walker) (void *);
+diag-ggc-head: 065
+diag-ggc-head: 066 /* Structures for the easy way to mark roots.
+diag-ggc-head: 067    In an array, terminated by having base == NULL.  */
+diag-ggc-head: 068 struct ggc_root_tab {
+diag-ggc-head: 069   void *base;
+diag-ggc-head: 070   size_t nelt;
+diag-ggc-head: 071   size_t stride;
+diag-ggc-head: 072   gt_pointer_walker cb;
+diag-ggc-head: 073   gt_pointer_walker pchw;
+diag-ggc-head: 074 };
+diag-ggc-head: 075 #define LAST_GGC_ROOT_TAB { NULL, 0, 0, NULL, NULL }
+diag-ggc-head: 076 /* Pointers to arrays of ggc_root_tab, terminated by NULL.  */
+diag-ggc-head: 077 extern const struct ggc_root_tab * const gt_ggc_rtab[];
+diag-ggc-head: 078 extern const struct ggc_root_tab * const gt_ggc_deletable_rtab[];
+diag-ggc-head: 079 extern const struct ggc_root_tab * const gt_pch_cache_rtab[];
+diag-ggc-head: 080 extern const struct ggc_root_tab * const gt_pch_scalar_rtab[];
+diag-ggc-head: 081
+diag-ggc-head: 082 /* Structure for hash table cache marking.  */
+diag-ggc-head: 083 struct htab;
+diag-ggc-head: 084 struct ggc_cache_tab {
+diag-ggc-head: 085   struct htab * *base;
+diag-ggc-head: 086   size_t nelt;
+diag-ggc-head: 087   size_t stride;
+diag-ggc-head: 088   gt_pointer_walker cb;
+diag-ggc-head: 089   gt_pointer_walker pchw;
+diag-ggc-head: 090   int (*marked_p) (const void *);
+diag-ggc-head: 091 };
+diag-ggc-head: 092 #define LAST_GGC_CACHE_TAB { NULL, 0, 0, NULL, NULL, NULL }
+diag-ggc-head: 093 /* Pointers to arrays of ggc_cache_tab, terminated by NULL.  */
+diag-ggc-head: 094 extern const struct ggc_cache_tab * const gt_ggc_cache_rtab[];
+diag-ggc-head: 095
+diag-ggc-head: 096 /* If EXPR is not NULL and previously unmarked, mark it and evaluate
+diag-ggc-head: 097    to true.  Otherwise evaluate to false.  */
+diag-ggc-head: 098 #define ggc_test_and_set_mark(EXPR) \
+diag-ggc-head: 099   ((EXPR) != NULL && ((void *) (EXPR)) != (void *) 1 && ! ggc_set_mark (EXPR))
+diag-ggc-head: 100
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_ggc_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_24
+diag-cparse: cparse_undef6_ggc_balanced_lines_24 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_25
+diag-cparse: cparse_undef6_ggc_balanced_lines_25 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_30
+diag-cparse: cparse_undef6_ggc_balanced_lines_30 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_40
+diag-cparse: cparse_undef6_ggc_balanced_lines_40 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_60
+diag-cparse: cparse_undef6_ggc_balanced_lines_60 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_80
+diag-cparse: cparse_undef6_ggc_balanced_lines_80 rc=0
+diag-cparse: compile cparse_undef6_ggc_balanced_lines_100
+diag-cparse: cparse_undef6_ggc_balanced_lines_100 rc=0
+diag-gtype-desc-head: 001 /* bootstrap gengtype stub: gtype-desc.h */
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_40
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_40 rc=139
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_60
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_60 rc=139
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_80
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_80 rc=139
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_100
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_100 rc=139
+diag-cparse: compile cparse_undef6_gtype_desc_balanced_lines_120
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_gtype_desc_balanced_lines_120 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_24
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_24 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_25
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_25 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_26
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_26 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_27
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_27 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_31
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_31 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_38
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_38 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_40
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_40 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_80
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_80 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_120
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_120 rc=139
+diag-cparse: compile cparse_undef6_c_tree_lines_200
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_c_tree_lines_200 rc=139
+diag-cparse: compile cparse_undef6_inc_c_tree
+diag-cparse: cparse_undef6_inc_c_tree rc=0
+diag-options-head: 001 /* This file is auto-generated by opts.sh.  */
+diag-options-head: 002
+diag-options-head: 003 #ifndef OPTIONS_H
+diag-options-head: 004 #define OPTIONS_H
+diag-options-head: 005
+diag-options-head: 006 /* Set by -Wabi.
+diag-options-head: 007    Warn about things that will change when compiling with an ABI-compliant compiler  */
+diag-options-head: 008 extern int warn_abi;
+diag-options-head: 009
+diag-options-head: 010 /* Set by -Waggregate-return.
+diag-options-head: 011    Warn about returning structures, unions or arrays  */
+diag-options-head: 012 extern int warn_aggregate_return;
+diag-options-head: 013
+diag-options-head: 014 /* Set by -Wbad-function-cast.
+diag-options-head: 015    Warn about casting functions to incompatible types  */
+diag-options-head: 016 extern int warn_bad_function_cast;
+diag-options-head: 017
+diag-options-head: 018 /* Set by -Wcast-align.
+diag-options-head: 019    Warn about pointer casts which increase alignment  */
+diag-options-head: 020 extern int warn_cast_align;
+diag-options-head: 021
+diag-options-head: 022 /* Set by -Wcast-qual.
+diag-options-head: 023    Warn about casts which discard qualifiers  */
+diag-options-head: 024 extern int warn_cast_qual;
+diag-options-head: 025
+diag-options-head: 026 /* Set by -Wchar-subscripts.
+diag-options-head: 027    Warn about subscripts whose type is \"char\"  */
+diag-options-head: 028 extern int warn_char_subscripts;
+diag-options-head: 029
+diag-options-head: 030 /* Set by -Wconversion.
+diag-options-head: 031    Warn about possibly confusing type conversions  */
+diag-options-head: 032 extern int warn_conversion;
+diag-options-head: 033
+diag-options-head: 034 /* Set by -Wctor-dtor-privacy.
+diag-options-head: 035    Warn when all constructors and destructors are private  */
+diag-options-head: 036 extern int warn_ctor_dtor_privacy;
+diag-options-head: 037
+diag-options-head: 038 /* Set by -Wdeclaration-after-statement.
+diag-options-head: 039    Warn when a declaration is found after a statement  */
+diag-options-head: 040 extern int warn_declaration_after_statement;
+diag-options-head: 041
+diag-options-head: 042 /* Set by -Wdeprecated.
+diag-options-head: 043    Warn about deprecated compiler features  */
+diag-options-head: 044 extern int warn_deprecated;
+diag-options-head: 045
+diag-options-head: 046 /* Set by -Wdeprecated-declarations.
+diag-options-head: 047    Warn about uses of __attribute__((deprecated)) declarations  */
+diag-options-head: 048 extern int warn_deprecated_decl;
+diag-options-head: 049
+diag-options-head: 050 /* Set by -Wdisabled-optimization.
+diag-options-head: 051    Warn when an optimization pass is disabled  */
+diag-options-head: 052 extern int warn_disabled_optimization;
+diag-options-head: 053
+diag-options-head: 054 /* Set by -Wdiv-by-zero.
+diag-options-head: 055    Warn about compile-time integer division by zero  */
+diag-options-head: 056 extern int warn_div_by_zero;
+diag-options-head: 057
+diag-options-head: 058 /* Set by -Weffc++.
+diag-options-head: 059    Warn about violations of Effective C++ style rules  */
+diag-options-head: 060 extern int warn_ecpp;
+diag-options-head: 061
+diag-options-head: 062 /* Set by -Werror.
+diag-options-head: 063    Treat all warnings as errors  */
+diag-options-head: 064 extern int warnings_are_errors;
+diag-options-head: 065
+diag-options-head: 066 /* Set by -Wfatal-errors.
+diag-options-head: 067    Exit on the first error occurred  */
+diag-options-head: 068 extern int flag_fatal_errors;
+diag-options-head: 069
+diag-options-head: 070 /* Set by -Wfloat-equal.
+diag-options-head: 071    Warn if testing floating point numbers for equality  */
+diag-options-head: 072 extern int warn_float_equal;
+diag-options-head: 073
+diag-options-head: 074 /* Set by -Wformat-extra-args.
+diag-options-head: 075    Warn if passing too many arguments to a function for its format string  */
+diag-options-head: 076 extern int warn_format_extra_args;
+diag-options-head: 077
+diag-options-head: 078 /* Set by -Wformat-nonliteral.
+diag-options-head: 079    Warn about format strings that are not literals  */
+diag-options-head: 080 extern int warn_format_nonliteral;
+diag-options-head: 081
+diag-options-head: 082 /* Set by -Wformat-security.
+diag-options-head: 083    Warn about possible security problems with format functions  */
+diag-options-head: 084 extern int warn_format_security;
+diag-options-head: 085
+diag-options-head: 086 /* Set by -Wformat-y2k.
+diag-options-head: 087    Warn about strftime formats yielding 2-digit years  */
+diag-options-head: 088 extern int warn_format_y2k;
+diag-options-head: 089
+diag-options-head: 090 /* Set by -Wformat-zero-length.
+diag-options-head: 091    Warn about zero-length formats  */
+diag-options-head: 092 extern int warn_format_zero_length;
+diag-options-head: 093
+diag-options-head: 094 /* Set by -Wimplicit-function-declaration.
+diag-options-head: 095    Warn about implicit function declarations  */
+diag-options-head: 096 extern int mesg_implicit_function_declaration;
+diag-options-head: 097
+diag-options-head: 098 /* Set by -Wimplicit-int.
+diag-options-head: 099    Warn when a declaration does not specify a type  */
+diag-options-head: 100 extern int warn_implicit_int;
+diag-options-head: 101
+diag-options-head: 102 /* Set by -Winit-self.
+diag-options-head: 103    Warn about variables which are initialized to themselves.  */
+diag-options-head: 104 extern int warn_init_self;
+diag-options-head: 105
+diag-options-head: 106 /* Set by -Winline.
+diag-options-head: 107    Warn when an inlined function cannot be inlined  */
+diag-options-head: 108 extern int warn_inline;
+diag-options-head: 109
+diag-options-head: 110 /* Set by -Winvalid-offsetof.
+diag-options-head: 111    Warn about invalid uses of the \"offsetof\" macro  */
+diag-options-head: 112 extern int warn_invalid_offsetof;
+diag-options-head: 113
+diag-options-head: 114 /* Set by -Wlong-long.
+diag-options-head: 115    Do not warn about using \"long long\" when -pedantic  */
+diag-options-head: 116 extern int warn_long_long;
+diag-options-head: 117
+diag-options-head: 118 /* Set by -Wmissing-braces.
+diag-options-head: 119    Warn about possibly missing braces around initializers  */
+diag-options-head: 120 extern int warn_missing_braces;
+diag-options-head: 121
+diag-options-head: 122 /* Set by -Wmissing-declarations.
+diag-options-head: 123    Warn about global functions without previous declarations  */
+diag-options-head: 124 extern int warn_missing_declarations;
+diag-options-head: 125
+diag-options-head: 126 /* Set by -Wmissing-field-initializers.
+diag-options-head: 127    Warn about missing fields in struct initializers  */
+diag-options-head: 128 extern int warn_missing_field_initializers;
+diag-options-head: 129
+diag-options-head: 130 /* Set by -Wmissing-format-attribute.
+diag-options-head: 131    Warn about functions which might be candidates for format attributes  */
+diag-options-head: 132 extern int warn_missing_format_attribute;
+diag-options-head: 133
+diag-options-head: 134 /* Set by -Wmissing-noreturn.
+diag-options-head: 135    Warn about functions which might be candidates for __attribute__((noreturn))  */
+diag-options-head: 136 extern int warn_missing_noreturn;
+diag-options-head: 137
+diag-options-head: 138 /* Set by -Wmissing-prototypes.
+diag-options-head: 139    Warn about global functions without prototypes  */
+diag-options-head: 140 extern int warn_missing_prototypes;
+diag-options-head: 141
+diag-options-head: 142 /* Set by -Wnested-externs.
+diag-options-head: 143    Warn about \"extern\" declarations not at file scope  */
+diag-options-head: 144 extern int warn_nested_externs;
+diag-options-head: 145
+diag-options-head: 146 /* Set by -Wnon-template-friend.
+diag-options-head: 147    Warn when non-templatized friend functions are declared within a template  */
+diag-options-head: 148 extern int warn_nontemplate_friend;
+diag-options-head: 149
+diag-options-head: 150 /* Set by -Wnon-virtual-dtor.
+diag-options-head: 151    Warn about non-virtual destructors  */
+diag-options-head: 152 extern int warn_nonvdtor;
+diag-options-head: 153
+diag-options-head: 154 /* Set by -Wnonnull.
+diag-options-head: 155    Warn about NULL being passed to argument slots marked as requiring non-NULL  */
+diag-options-head: 156 extern int warn_nonnull;
+diag-options-head: 157
+diag-options-head: 158 /* Set by -Wold-style-cast.
+diag-options-head: 159    Warn if a C-style cast is used in a program  */
+diag-options-head: 160 extern int warn_old_style_cast;
+diag-options-head: 161
+diag-options-head: 162 /* Set by -Wold-style-definition.
+diag-options-head: 163    Warn if an old-style parameter definition is used  */
+diag-options-head: 164 extern int warn_old_style_definition;
+diag-options-head: 165
+diag-options-head: 166 /* Set by -Woverloaded-virtual.
+diag-options-head: 167    Warn about overloaded virtual function names  */
+diag-options-head: 168 extern int warn_overloaded_virtual;
+diag-options-head: 169
+diag-options-head: 170 /* Set by -Wpacked.
+diag-options-head: 171    Warn when the packed attribute has no effect on struct layout  */
+diag-options-head: 172 extern int warn_packed;
+diag-options-head: 173
+diag-options-head: 174 /* Set by -Wpadded.
+diag-options-head: 175    Warn when padding is required to align structure members  */
+diag-options-head: 176 extern int warn_padded;
+diag-options-head: 177
+diag-options-head: 178 /* Set by -Wparentheses.
+diag-options-head: 179    Warn about possibly missing parentheses  */
+diag-options-head: 180 extern int warn_parentheses;
+diag-cparse: compile cparse_undef6_options_balanced_lines_10
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_10 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_20
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_20 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_40
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_40 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_80
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_80 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_120
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_120 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_160
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_160 rc=139
+diag-cparse: compile cparse_undef6_options_balanced_lines_180
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_options_balanced_lines_180 rc=139
+diag-flags-head: 001 /* Compilation switch flag definitions for GCC.
+diag-flags-head: 002    Copyright (C) 1987, 1988, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2002,
+diag-flags-head: 003    2003, 2004, 2005
+diag-flags-head: 004    Free Software Foundation, Inc.
+diag-flags-head: 005
+diag-flags-head: 006 This file is part of GCC.
+diag-flags-head: 007
+diag-flags-head: 008 GCC is free software; you can redistribute it and/or modify it under
+diag-flags-head: 009 the terms of the GNU General Public License as published by the Free
+diag-flags-head: 010 Software Foundation; either version 2, or (at your option) any later
+diag-flags-head: 011 version.
+diag-flags-head: 012
+diag-flags-head: 013 GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+diag-flags-head: 014 WARRANTY; without even the implied warranty of MERCHANTABILITY or
+diag-flags-head: 015 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+diag-flags-head: 016 for more details.
+diag-flags-head: 017
+diag-flags-head: 018 You should have received a copy of the GNU General Public License
+diag-flags-head: 019 along with GCC; see the file COPYING.  If not, write to the Free
+diag-flags-head: 020 Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+diag-flags-head: 021 02111-1307, USA.  */
+diag-flags-head: 022
+diag-flags-head: 023 #ifndef GCC_FLAGS_H
+diag-flags-head: 024 #define GCC_FLAGS_H
+diag-flags-head: 025
+diag-flags-head: 026 #include "options.h"
+diag-flags-head: 027
+diag-flags-head: 028 enum debug_info_type
+diag-flags-head: 029 {
+diag-flags-head: 030   NO_DEBUG,	    /* Write no debug info.  */
+diag-flags-head: 031   DBX_DEBUG,	    /* Write BSD .stabs for DBX (using dbxout.c).  */
+diag-flags-head: 032   SDB_DEBUG,	    /* Write COFF for (old) SDB (using sdbout.c).  */
+diag-flags-head: 033   DWARF2_DEBUG,	    /* Write Dwarf v2 debug info (using dwarf2out.c).  */
+diag-flags-head: 034   XCOFF_DEBUG,	    /* Write IBM/Xcoff debug info (using dbxout.c).  */
+diag-flags-head: 035   VMS_DEBUG,        /* Write VMS debug info (using vmsdbgout.c).  */
+diag-flags-head: 036   VMS_AND_DWARF2_DEBUG /* Write VMS debug info (using vmsdbgout.c).
+diag-flags-head: 037                           and DWARF v2 debug info (using dwarf2out.c).  */
+diag-flags-head: 038 };
+diag-flags-head: 039
+diag-flags-head: 040 /* Specify which kind of debugging info to generate.  */
+diag-flags-head: 041 extern enum debug_info_type write_symbols;
+diag-flags-head: 042
+diag-flags-head: 043 /* Names of debug_info_type, for error messages.  */
+diag-flags-head: 044 extern const char *const debug_type_names[];
+diag-flags-head: 045
+diag-flags-head: 046 enum debug_info_level
+diag-flags-head: 047 {
+diag-flags-head: 048   DINFO_LEVEL_NONE,	/* Write no debugging info.  */
+diag-flags-head: 049   DINFO_LEVEL_TERSE,	/* Write minimal info to support tracebacks only.  */
+diag-flags-head: 050   DINFO_LEVEL_NORMAL,	/* Write info for all declarations (and line table).  */
+diag-flags-head: 051   DINFO_LEVEL_VERBOSE	/* Write normal info plus #define/#undef info.  */
+diag-flags-head: 052 };
+diag-flags-head: 053
+diag-flags-head: 054 /* Specify how much debugging info to generate.  */
+diag-flags-head: 055 extern enum debug_info_level debug_info_level;
+diag-flags-head: 056
+diag-flags-head: 057 /* Nonzero means use GNU-only extensions in the generated symbolic
+diag-flags-head: 058    debugging information.  */
+diag-flags-head: 059 extern bool use_gnu_debug_info_extensions;
+diag-flags-head: 060
+diag-flags-head: 061 /* Enumerate visibility settings.  */
+diag-flags-head: 062 #ifndef SYMBOL_VISIBILITY_DEFINED
+diag-flags-head: 063 #define SYMBOL_VISIBILITY_DEFINED
+diag-flags-head: 064 enum symbol_visibility
+diag-flags-head: 065 {
+diag-flags-head: 066   VISIBILITY_DEFAULT,
+diag-flags-head: 067   VISIBILITY_INTERNAL,
+diag-flags-head: 068   VISIBILITY_HIDDEN,
+diag-flags-head: 069   VISIBILITY_PROTECTED
+diag-flags-head: 070 };
+diag-flags-head: 071 #endif
+diag-flags-head: 072
+diag-flags-head: 073 /* The default visibility for all symbols (unless overridden).  */
+diag-flags-head: 074 extern enum symbol_visibility default_visibility;
+diag-flags-head: 075
+diag-flags-head: 076 struct visibility_flags
+diag-flags-head: 077 {
+diag-flags-head: 078   unsigned inpragma : 1;	/* True when in #pragma GCC visibility.  */
+diag-flags-head: 079   unsigned inlines_hidden : 1;	/* True when -finlineshidden in effect.  */
+diag-flags-head: 080 };
+diag-flags-head: 081
+diag-flags-head: 082 /* Global visibility options.  */
+diag-flags-head: 083 extern struct visibility_flags visibility_options;
+diag-flags-head: 084
+diag-flags-head: 085 /* Nonzero means do optimizations.  -opt.  */
+diag-flags-head: 086
+diag-flags-head: 087 extern int optimize;
+diag-flags-head: 088
+diag-flags-head: 089 /* Nonzero means optimize for size.  -Os.  */
+diag-flags-head: 090
+diag-flags-head: 091 extern int optimize_size;
+diag-flags-head: 092
+diag-flags-head: 093 /* Do print extra warnings (such as for uninitialized variables).
+diag-flags-head: 094    -W/-Wextra.  */
+diag-flags-head: 095
+diag-flags-head: 096 extern bool extra_warnings;
+diag-flags-head: 097
+diag-flags-head: 098 /* Nonzero to warn about unused variables, functions et.al.  Use
+diag-flags-head: 099    set_Wunused() to update the -Wunused-* flags that correspond to the
+diag-flags-head: 100    -Wunused option.  */
+diag-flags-head: 101
+diag-flags-head: 102 extern void set_Wunused (int setting);
+diag-flags-head: 103
+diag-flags-head: 104 /* Nonzero means warn about function definitions that default the return type
+diag-flags-head: 105    or that use a null return and have a return-type other than void.  */
+diag-flags-head: 106
+diag-flags-head: 107 extern int warn_return_type;
+diag-flags-head: 108
+diag-flags-head: 109 /* Nonzero means warn about any objects definitions whose size is larger
+diag-flags-head: 110    than N bytes.  Also want about function definitions whose returned
+diag-flags-head: 111    values are larger than N bytes. The value N is in `larger_than_size'.  */
+diag-flags-head: 112
+diag-flags-head: 113 extern bool warn_larger_than;
+diag-flags-head: 114 extern HOST_WIDE_INT larger_than_size;
+diag-flags-head: 115
+diag-flags-head: 116 /* Nonzero means warn about constructs which might not be strict
+diag-flags-head: 117    aliasing safe.  */
+diag-flags-head: 118
+diag-flags-head: 119 extern int warn_strict_aliasing;
+diag-flags-head: 120
+diag-cparse: compile cparse_undef6_flags_balanced_lines_20
+diag-cparse: cparse_undef6_flags_balanced_lines_20 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_24
+diag-cparse: cparse_undef6_flags_balanced_lines_24 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_25
+diag-cparse: cparse_undef6_flags_balanced_lines_25 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_26
+diag-cparse: cparse_undef6_flags_balanced_lines_26 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_30
+Segmentation fault (core dumped)
+diag-cparse: cparse_undef6_flags_balanced_lines_30 rc=139
+diag-cparse: compile cparse_undef6_flags_balanced_lines_40
+diag-cparse: cparse_undef6_flags_balanced_lines_40 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_60
+diag-cparse: cparse_undef6_flags_balanced_lines_60 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_80
+diag-cparse: cparse_undef6_flags_balanced_lines_80 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_100
+diag-cparse: cparse_undef6_flags_balanced_lines_100 rc=0
+diag-cparse: compile cparse_undef6_flags_balanced_lines_120
+diag-cparse: cparse_undef6_flags_balanced_lines_120 rc=0
+diag-cparse: compile cparse_undef6_inc_flags
+diag-cparse: cparse_undef6_inc_flags rc=0
+diag-cparse: compile cparse_undef6_inc_varray
+diag-cparse: cparse_undef6_inc_varray rc=0
+diag-cparse: compile cparse_undef6_inc_output
+diag-cparse: cparse_undef6_inc_output rc=0
+diag-cparse: compile cparse_undef6_inc_toplev
+diag-cparse: cparse_undef6_inc_toplev rc=0
+diag-cparse: compile cparse_undef6_inc_ggc
+diag-cparse: cparse_undef6_inc_ggc rc=0
+diag-cparse: compile cparse_undef6_inc_c_common
+diag-cparse: cparse_undef6_inc_c_common rc=0
+diag-cparse: compile cparse_plain_func_decl_semicolon_exact_no_config
+diag-cparse: cparse_plain_func_decl_semicolon_exact_no_config rc=0
+diag-cparse: compile cparse_plain_func_prefix_declarator_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_func_prefix_declarator_no_config rc=139
+diag-cparse: compile cparse_plain_oldstyle_prefix_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_oldstyle_prefix_no_config rc=139
+diag-cparse: compile cparse_plain_param_int_prefix_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_param_int_prefix_no_config rc=139
+diag-cparse: compile cparse_plain_var_prefix_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_var_prefix_no_config rc=139
+diag-cparse: compile cparse_plain_pointer_prefix_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_pointer_prefix_no_config rc=139
+diag-cparse: compile cparse_plain_var_semicolon_exact_no_config
+diag-cparse: cparse_plain_var_semicolon_exact_no_config rc=0
+diag-cparse: compile cparse_plain_pointer_semicolon_exact_no_config
+diag-cparse: cparse_plain_pointer_semicolon_exact_no_config rc=0
+diag-cparse: compile cparse_plain_bad_init_semicolon_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_bad_init_semicolon_no_config rc=139
+diag-cparse: compile cparse_plain_bad_param_semicolon_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_bad_param_semicolon_no_config rc=139
+diag-cparse: compile cparse_plain_bad_comma_semicolon_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_bad_comma_semicolon_no_config rc=139
+diag-tcc-source: tccgen=/crunch/store/4jp67gx0k6h76np8wazalwlg5wyg5g3q-tcc-0.9.27-src/tccgen.c
+diag-tcc-source: anchor:0080:static int parse_btype(CType *type, AttributeDef *ad);
+diag-tcc-source: anchor:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: anchor:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: anchor:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: anchor:0087:static void decl(int l);
+diag-tcc-source: anchor:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: anchor:4001:static int parse_btype(CType *type, AttributeDef *ad)
+diag-tcc-source: anchor:4255:static int post_type(CType *type, AttributeDef *ad, int storage, int td)
+diag-tcc-source: anchor:4401:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
+diag-tcc-source: anchor:6241:static void skip_or_save_block(TokenString **str)
+diag-tcc-source: anchor:6635:static void decl_initializer(CType *type, Section *sec, unsigned long c,
+diag-tcc-source: anchor:6818:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
+diag-tcc-source: anchor:7054:static void gen_function(Sym *sym)
+diag-tcc-source: anchor:7144:static int decl0(int l, int is_for_loop_init, Sym *func_sym)
+diag-tcc-source: anchor:7381:static void decl(int l)
+diag-tcc-source: parse-btype-window:0080:static int parse_btype(CType *type, AttributeDef *ad);
+diag-tcc-source: parse-btype-window:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: parse-btype-window:0082:static void parse_expr_type(CType *type);
+diag-tcc-source: parse-btype-window:0083:static void init_putv(CType *type, Section *sec, unsigned long c);
+diag-tcc-source: parse-btype-window:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: parse-btype-window:0085:static void block(int *bsym, int *csym, int is_expr);
+diag-tcc-source: parse-btype-window:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: parse-btype-window:0087:static void decl(int l);
+diag-tcc-source: parse-btype-window:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: parse-btype-window:0089:static void expr_eq(void);
+diag-tcc-source: parse-btype-window:0090:static void vla_runtime_type_size(CType *type, int *a);
+diag-tcc-source: parse-btype-window:0091:static void vla_sp_restore(void);
+diag-tcc-source: parse-btype-window:0092:static void vla_sp_restore_root(void);
+diag-tcc-source: parse-btype-window:0093:static int is_compatible_unqualified_types(CType *type1, CType *type2);
+diag-tcc-source: parse-btype-window:0094:static inline int64_t expr_const64(void);
+diag-tcc-source: parse-btype-window:0095:static void vpush64(int ty, unsigned long long v);
+diag-tcc-source: parse-btype-window:0096:static void vpush(CType *type);
+diag-tcc-source: parse-btype-window:0097:static int gvtst(int inv, int t);
+diag-tcc-source: parse-btype-window:0098:static void gen_inline_functions(TCCState *s);
+diag-tcc-source: parse-btype-window:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: parse-btype-window:0100:static void gv_dup(void);
+diag-tcc-source: parse-btype-window:0101:
+diag-tcc-source: parse-btype-window:0102:ST_INLN int is_float(int t)
+diag-tcc-source: parse-btype-window:0103:{
+diag-tcc-source: parse-btype-window:0104:    int bt;
+diag-tcc-source: parse-btype-window:0105:    bt = t & VT_BTYPE;
+diag-tcc-source: parse-btype-window:0106:    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
+diag-tcc-source: parse-btype-window:0107:}
+diag-tcc-source: parse-btype-window:0108:
+diag-tcc-source: parse-btype-window:0109:/* we use our own 'finite' function to avoid potential problems with
+diag-tcc-source: parse-btype-window:0110:   non standard math libs */
+diag-tcc-source: parse-btype-window:0111:/* XXX: endianness dependent */
+diag-tcc-source: parse-btype-window:0112:ST_FUNC int ieee_finite(double d)
+diag-tcc-source: parse-btype-window:0113:{
+diag-tcc-source: parse-btype-window:0114:    int p[4];
+diag-tcc-source: parse-btype-window:0115:    memcpy(p, &d, sizeof(double));
+diag-tcc-source: parse-btype-window:0116:    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+diag-tcc-source: parse-btype-window:0117:}
+diag-tcc-source: parse-btype-window:0118:
+diag-tcc-source: parse-btype-window:0119:/* compiling intel long double natively */
+diag-tcc-source: parse-btype-window:0120:#if (defined __i386__ || defined __x86_64__) \
+diag-tcc-source: parse-btype-window:0121:    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+diag-tcc-source: parse-btype-window:0122:# define TCC_IS_NATIVE_387
+diag-tcc-source: parse-btype-window:0123:#endif
+diag-tcc-source: parse-btype-window:0124:
+diag-tcc-source: parse-btype-window:0125:ST_FUNC void test_lvalue(void)
+diag-tcc-source: parse-btype-window:0126:{
+diag-tcc-source: parse-btype-window:0127:    if (!(vtop->r & VT_LVAL))
+diag-tcc-source: parse-btype-window:0128:        expect("lvalue");
+diag-tcc-source: parse-btype-window:0129:}
+diag-tcc-source: parse-btype-window:0130:
+diag-tcc-source: parse-btype-window:0131:ST_FUNC void check_vstack(void)
+diag-tcc-source: parse-btype-window:0132:{
+diag-tcc-source: parse-btype-window:0133:    if (pvtop != vtop)
+diag-tcc-source: parse-btype-window:0134:        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+diag-tcc-source: parse-btype-window:0135:}
+diag-tcc-source: parse-btype-window:0136:
+diag-tcc-source: parse-btype-window:0137:/* ------------------------------------------------------------------------- */
+diag-tcc-source: parse-btype-window:0138:/* vstack debugging aid */
+diag-tcc-source: parse-btype-window:0139:
+diag-tcc-source: parse-btype-window:0140:#if 0
+diag-tcc-source: parse-btype-window:0141:void pv (const char *lbl, int a, int b)
+diag-tcc-source: parse-btype-window:0142:{
+diag-tcc-source: parse-btype-window:0143:    int i;
+diag-tcc-source: parse-btype-window:0144:    for (i = a; i < a + b; ++i) {
+diag-tcc-source: parse-btype-window:0145:        SValue *p = &vtop[-i];
+diag-tcc-source: parse-btype-window:0146:        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+diag-tcc-source: parse-btype-window:0147:            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+diag-tcc-source: parse-btype-window:0148:    }
+diag-tcc-source: parse-btype-window:0149:}
+diag-tcc-source: parse-btype-window:0150:#endif
+diag-tcc-source: parse-btype-window:0151:
+diag-tcc-source: parse-btype-window:0152:/* ------------------------------------------------------------------------- */
+diag-tcc-source: parse-btype-window:0153:/* start of translation unit info */
+diag-tcc-source: parse-btype-window:0154:ST_FUNC void tcc_debug_start(TCCState *s1)
+diag-tcc-source: parse-btype-window:0155:{
+diag-tcc-source: parse-btype-window:0156:    if (s1->do_debug) {
+diag-tcc-source: parse-btype-window:0157:        char buf[512];
+diag-tcc-source: parse-btype-window:0158:
+diag-tcc-source: parse-btype-window:0159:        /* file info: full path + filename */
+diag-tcc-source: parse-btype-window:4001:static int parse_btype(CType *type, AttributeDef *ad)
+diag-tcc-source: parse-btype-window:4002:{
+diag-tcc-source: parse-btype-window:4003:    int t, u, bt, st, type_found, typespec_found, g;
+diag-tcc-source: parse-btype-window:4004:    Sym *s;
+diag-tcc-source: parse-btype-window:4005:    CType type1;
+diag-tcc-source: parse-btype-window:4006:
+diag-tcc-source: parse-btype-window:4007:    memset(ad, 0, sizeof(AttributeDef));
+diag-tcc-source: parse-btype-window:4008:    type_found = 0;
+diag-tcc-source: parse-btype-window:4009:    typespec_found = 0;
+diag-tcc-source: parse-btype-window:4010:    t = VT_INT;
+diag-tcc-source: parse-btype-window:4011:    bt = st = -1;
+diag-tcc-source: parse-btype-window:4012:    type->ref = NULL;
+diag-tcc-source: parse-btype-window:4013:
+diag-tcc-source: parse-btype-window:4014:    while(1) {
+diag-tcc-source: parse-btype-window:4015:        switch(tok) {
+diag-tcc-source: parse-btype-window:4016:        case TOK_EXTENSION:
+diag-tcc-source: parse-btype-window:4017:            /* currently, we really ignore extension */
+diag-tcc-source: parse-btype-window:4018:            next();
+diag-tcc-source: parse-btype-window:4019:            continue;
+diag-tcc-source: parse-btype-window:4020:
+diag-tcc-source: parse-btype-window:4021:            /* basic types */
+diag-tcc-source: parse-btype-window:4022:        case TOK_CHAR:
+diag-tcc-source: parse-btype-window:4023:            u = VT_BYTE;
+diag-tcc-source: parse-btype-window:4024:        basic_type:
+diag-tcc-source: parse-btype-window:4025:            next();
+diag-tcc-source: parse-btype-window:4026:        basic_type1:
+diag-tcc-source: parse-btype-window:4027:            if (u == VT_SHORT || u == VT_LONG) {
+diag-tcc-source: parse-btype-window:4028:                if (st != -1 || (bt != -1 && bt != VT_INT))
+diag-tcc-source: parse-btype-window:4029:                    tmbt: tcc_error("too many basic types");
+diag-tcc-source: parse-btype-window:4030:                st = u;
+diag-tcc-source: parse-btype-window:4031:            } else {
+diag-tcc-source: parse-btype-window:4032:                if (bt != -1 || (st != -1 && u != VT_INT))
+diag-tcc-source: parse-btype-window:4033:                    goto tmbt;
+diag-tcc-source: parse-btype-window:4034:                bt = u;
+diag-tcc-source: parse-btype-window:4035:            }
+diag-tcc-source: parse-btype-window:4036:            if (u != VT_INT)
+diag-tcc-source: parse-btype-window:4037:                t = (t & ~(VT_BTYPE|VT_LONG)) | u;
+diag-tcc-source: parse-btype-window:4038:            typespec_found = 1;
+diag-tcc-source: parse-btype-window:4039:            break;
+diag-tcc-source: parse-btype-window:4040:        case TOK_VOID:
+diag-tcc-source: parse-btype-window:4041:            u = VT_VOID;
+diag-tcc-source: parse-btype-window:4042:            goto basic_type;
+diag-tcc-source: parse-btype-window:4043:        case TOK_SHORT:
+diag-tcc-source: parse-btype-window:4044:            u = VT_SHORT;
+diag-tcc-source: parse-btype-window:4045:            goto basic_type;
+diag-tcc-source: parse-btype-window:4046:        case TOK_INT:
+diag-tcc-source: parse-btype-window:4047:            u = VT_INT;
+diag-tcc-source: parse-btype-window:4048:            goto basic_type;
+diag-tcc-source: parse-btype-window:4049:        case TOK_LONG:
+diag-tcc-source: parse-btype-window:4050:            if ((t & VT_BTYPE) == VT_DOUBLE) {
+diag-tcc-source: parse-btype-window:4051:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4052:            } else if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+diag-tcc-source: parse-btype-window:4053:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LLONG;
+diag-tcc-source: parse-btype-window:4054:            } else {
+diag-tcc-source: parse-btype-window:4055:                u = VT_LONG;
+diag-tcc-source: parse-btype-window:4056:                goto basic_type;
+diag-tcc-source: parse-btype-window:4057:            }
+diag-tcc-source: parse-btype-window:4058:            next();
+diag-tcc-source: parse-btype-window:4059:            break;
+diag-tcc-source: parse-btype-window:4060:#ifdef TCC_TARGET_ARM64
+diag-tcc-source: parse-btype-window:4061:        case TOK_UINT128:
+diag-tcc-source: parse-btype-window:4062:            /* GCC's __uint128_t appears in some Linux header files. Make it a
+diag-tcc-source: parse-btype-window:4063:               synonym for long double to get the size and alignment right. */
+diag-tcc-source: parse-btype-window:4064:            u = VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4065:            goto basic_type;
+diag-tcc-source: parse-btype-window:4066:#endif
+diag-tcc-source: parse-btype-window:4067:        case TOK_BOOL:
+diag-tcc-source: parse-btype-window:4068:            u = VT_BOOL;
+diag-tcc-source: parse-btype-window:4069:            goto basic_type;
+diag-tcc-source: parse-btype-window:4070:        case TOK_FLOAT:
+diag-tcc-source: parse-btype-window:4071:            u = VT_FLOAT;
+diag-tcc-source: parse-btype-window:4072:            goto basic_type;
+diag-tcc-source: parse-btype-window:4073:        case TOK_DOUBLE:
+diag-tcc-source: parse-btype-window:4074:            if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+diag-tcc-source: parse-btype-window:4075:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4076:            } else {
+diag-tcc-source: parse-btype-window:4077:                u = VT_DOUBLE;
+diag-tcc-source: parse-btype-window:4078:                goto basic_type;
+diag-tcc-source: parse-btype-window:4079:            }
+diag-tcc-source: parse-btype-window:4080:            next();
+diag-tcc-source: type-decl-window:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: type-decl-window:0082:static void parse_expr_type(CType *type);
+diag-tcc-source: type-decl-window:0083:static void init_putv(CType *type, Section *sec, unsigned long c);
+diag-tcc-source: type-decl-window:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: type-decl-window:0085:static void block(int *bsym, int *csym, int is_expr);
+diag-tcc-source: type-decl-window:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: type-decl-window:0087:static void decl(int l);
+diag-tcc-source: type-decl-window:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: type-decl-window:0089:static void expr_eq(void);
+diag-tcc-source: type-decl-window:0090:static void vla_runtime_type_size(CType *type, int *a);
+diag-tcc-source: type-decl-window:0091:static void vla_sp_restore(void);
+diag-tcc-source: type-decl-window:0092:static void vla_sp_restore_root(void);
+diag-tcc-source: type-decl-window:0093:static int is_compatible_unqualified_types(CType *type1, CType *type2);
+diag-tcc-source: type-decl-window:0094:static inline int64_t expr_const64(void);
+diag-tcc-source: type-decl-window:0095:static void vpush64(int ty, unsigned long long v);
+diag-tcc-source: type-decl-window:0096:static void vpush(CType *type);
+diag-tcc-source: type-decl-window:0097:static int gvtst(int inv, int t);
+diag-tcc-source: type-decl-window:0098:static void gen_inline_functions(TCCState *s);
+diag-tcc-source: type-decl-window:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: type-decl-window:0100:static void gv_dup(void);
+diag-tcc-source: type-decl-window:0101:
+diag-tcc-source: type-decl-window:0102:ST_INLN int is_float(int t)
+diag-tcc-source: type-decl-window:0103:{
+diag-tcc-source: type-decl-window:0104:    int bt;
+diag-tcc-source: type-decl-window:0105:    bt = t & VT_BTYPE;
+diag-tcc-source: type-decl-window:0106:    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
+diag-tcc-source: type-decl-window:0107:}
+diag-tcc-source: type-decl-window:0108:
+diag-tcc-source: type-decl-window:0109:/* we use our own 'finite' function to avoid potential problems with
+diag-tcc-source: type-decl-window:0110:   non standard math libs */
+diag-tcc-source: type-decl-window:0111:/* XXX: endianness dependent */
+diag-tcc-source: type-decl-window:0112:ST_FUNC int ieee_finite(double d)
+diag-tcc-source: type-decl-window:0113:{
+diag-tcc-source: type-decl-window:0114:    int p[4];
+diag-tcc-source: type-decl-window:0115:    memcpy(p, &d, sizeof(double));
+diag-tcc-source: type-decl-window:0116:    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+diag-tcc-source: type-decl-window:0117:}
+diag-tcc-source: type-decl-window:0118:
+diag-tcc-source: type-decl-window:0119:/* compiling intel long double natively */
+diag-tcc-source: type-decl-window:0120:#if (defined __i386__ || defined __x86_64__) \
+diag-tcc-source: type-decl-window:0121:    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+diag-tcc-source: type-decl-window:0122:# define TCC_IS_NATIVE_387
+diag-tcc-source: type-decl-window:0123:#endif
+diag-tcc-source: type-decl-window:0124:
+diag-tcc-source: type-decl-window:0125:ST_FUNC void test_lvalue(void)
+diag-tcc-source: type-decl-window:0126:{
+diag-tcc-source: type-decl-window:0127:    if (!(vtop->r & VT_LVAL))
+diag-tcc-source: type-decl-window:0128:        expect("lvalue");
+diag-tcc-source: type-decl-window:0129:}
+diag-tcc-source: type-decl-window:0130:
+diag-tcc-source: type-decl-window:0131:ST_FUNC void check_vstack(void)
+diag-tcc-source: type-decl-window:0132:{
+diag-tcc-source: type-decl-window:0133:    if (pvtop != vtop)
+diag-tcc-source: type-decl-window:0134:        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+diag-tcc-source: type-decl-window:0135:}
+diag-tcc-source: type-decl-window:0136:
+diag-tcc-source: type-decl-window:0137:/* ------------------------------------------------------------------------- */
+diag-tcc-source: type-decl-window:0138:/* vstack debugging aid */
+diag-tcc-source: type-decl-window:0139:
+diag-tcc-source: type-decl-window:0140:#if 0
+diag-tcc-source: type-decl-window:0141:void pv (const char *lbl, int a, int b)
+diag-tcc-source: type-decl-window:0142:{
+diag-tcc-source: type-decl-window:0143:    int i;
+diag-tcc-source: type-decl-window:0144:    for (i = a; i < a + b; ++i) {
+diag-tcc-source: type-decl-window:0145:        SValue *p = &vtop[-i];
+diag-tcc-source: type-decl-window:0146:        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+diag-tcc-source: type-decl-window:0147:            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+diag-tcc-source: type-decl-window:0148:    }
+diag-tcc-source: type-decl-window:0149:}
+diag-tcc-source: type-decl-window:0150:#endif
+diag-tcc-source: type-decl-window:0151:
+diag-tcc-source: type-decl-window:0152:/* ------------------------------------------------------------------------- */
+diag-tcc-source: type-decl-window:0153:/* start of translation unit info */
+diag-tcc-source: type-decl-window:0154:ST_FUNC void tcc_debug_start(TCCState *s1)
+diag-tcc-source: type-decl-window:0155:{
+diag-tcc-source: type-decl-window:0156:    if (s1->do_debug) {
+diag-tcc-source: type-decl-window:0157:        char buf[512];
+diag-tcc-source: type-decl-window:0158:
+diag-tcc-source: type-decl-window:0159:        /* file info: full path + filename */
+diag-tcc-source: type-decl-window:0160:        section_sym = put_elf_sym(symtab_section, 0, 0,
+diag-tcc-source: type-decl-window:4401:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
+diag-tcc-source: type-decl-window:4402:{
+diag-tcc-source: type-decl-window:4403:    CType *post, *ret;
+diag-tcc-source: type-decl-window:4404:    int qualifiers, storage;
+diag-tcc-source: type-decl-window:4405:
+diag-tcc-source: type-decl-window:4406:    /* recursive type, remove storage bits first, apply them later again */
+diag-tcc-source: type-decl-window:4407:    storage = type->t & VT_STORAGE;
+diag-tcc-source: type-decl-window:4408:    type->t &= ~VT_STORAGE;
+diag-tcc-source: type-decl-window:4409:    post = ret = type;
+diag-tcc-source: type-decl-window:4410:
+diag-tcc-source: type-decl-window:4411:    while (tok == '*') {
+diag-tcc-source: type-decl-window:4412:        qualifiers = 0;
+diag-tcc-source: type-decl-window:4413:    redo:
+diag-tcc-source: type-decl-window:4414:        next();
+diag-tcc-source: type-decl-window:4415:        switch(tok) {
+diag-tcc-source: type-decl-window:4416:        case TOK_CONST1:
+diag-tcc-source: type-decl-window:4417:        case TOK_CONST2:
+diag-tcc-source: type-decl-window:4418:        case TOK_CONST3:
+diag-tcc-source: type-decl-window:4419:            qualifiers |= VT_CONSTANT;
+diag-tcc-source: type-decl-window:4420:            goto redo;
+diag-tcc-source: type-decl-window:4421:        case TOK_VOLATILE1:
+diag-tcc-source: type-decl-window:4422:        case TOK_VOLATILE2:
+diag-tcc-source: type-decl-window:4423:        case TOK_VOLATILE3:
+diag-tcc-source: type-decl-window:4424:            qualifiers |= VT_VOLATILE;
+diag-tcc-source: type-decl-window:4425:            goto redo;
+diag-tcc-source: type-decl-window:4426:        case TOK_RESTRICT1:
+diag-tcc-source: type-decl-window:4427:        case TOK_RESTRICT2:
+diag-tcc-source: type-decl-window:4428:        case TOK_RESTRICT3:
+diag-tcc-source: type-decl-window:4429:            goto redo;
+diag-tcc-source: type-decl-window:4430:	/* XXX: clarify attribute handling */
+diag-tcc-source: type-decl-window:4431:	case TOK_ATTRIBUTE1:
+diag-tcc-source: type-decl-window:4432:	case TOK_ATTRIBUTE2:
+diag-tcc-source: type-decl-window:4433:	    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4434:	    break;
+diag-tcc-source: type-decl-window:4435:        }
+diag-tcc-source: type-decl-window:4436:        mk_pointer(type);
+diag-tcc-source: type-decl-window:4437:        type->t |= qualifiers;
+diag-tcc-source: type-decl-window:4438:	if (ret == type)
+diag-tcc-source: type-decl-window:4439:	    /* innermost pointed to type is the one for the first derivation */
+diag-tcc-source: type-decl-window:4440:	    ret = pointed_type(type);
+diag-tcc-source: type-decl-window:4441:    }
+diag-tcc-source: type-decl-window:4442:
+diag-tcc-source: type-decl-window:4443:    if (tok == '(') {
+diag-tcc-source: type-decl-window:4444:	/* This is possibly a parameter type list for abstract declarators
+diag-tcc-source: type-decl-window:4445:	   ('int ()'), use post_type for testing this.  */
+diag-tcc-source: type-decl-window:4446:	if (!post_type(type, ad, 0, td)) {
+diag-tcc-source: type-decl-window:4447:	    /* It's not, so it's a nested declarator, and the post operations
+diag-tcc-source: type-decl-window:4448:	       apply to the innermost pointed to type (if any).  */
+diag-tcc-source: type-decl-window:4449:	    /* XXX: this is not correct to modify 'ad' at this point, but
+diag-tcc-source: type-decl-window:4450:	       the syntax is not clear */
+diag-tcc-source: type-decl-window:4451:	    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4452:	    post = type_decl(type, ad, v, td);
+diag-tcc-source: type-decl-window:4453:	    skip(')');
+diag-tcc-source: type-decl-window:4454:	}
+diag-tcc-source: type-decl-window:4455:    } else if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
+diag-tcc-source: type-decl-window:4456:	/* type identifier */
+diag-tcc-source: type-decl-window:4457:	*v = tok;
+diag-tcc-source: type-decl-window:4458:	next();
+diag-tcc-source: type-decl-window:4459:    } else {
+diag-tcc-source: type-decl-window:4460:	if (!(td & TYPE_ABSTRACT))
+diag-tcc-source: type-decl-window:4461:	  expect("identifier");
+diag-tcc-source: type-decl-window:4462:	*v = 0;
+diag-tcc-source: type-decl-window:4463:    }
+diag-tcc-source: type-decl-window:4464:    post_type(post, ad, storage, 0);
+diag-tcc-source: type-decl-window:4465:    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4466:    type->t |= storage;
+diag-tcc-source: type-decl-window:4467:    return ret;
+diag-tcc-source: type-decl-window:4468:}
+diag-tcc-source: type-decl-window:4469:
+diag-tcc-source: type-decl-window:4470:/* compute the lvalue VT_LVAL_xxx needed to match type t. */
+diag-tcc-source: type-decl-window:4471:ST_FUNC int lvalue_type(int t)
+diag-tcc-source: type-decl-window:4472:{
+diag-tcc-source: type-decl-window:4473:    int bt, r;
+diag-tcc-source: type-decl-window:4474:    r = VT_LVAL;
+diag-tcc-source: type-decl-window:4475:    bt = t & VT_BTYPE;
+diag-tcc-source: type-decl-window:4476:    if (bt == VT_BYTE || bt == VT_BOOL)
+diag-tcc-source: type-decl-window:4477:        r |= VT_LVAL_BYTE;
+diag-tcc-source: type-decl-window:4478:    else if (bt == VT_SHORT)
+diag-tcc-source: type-decl-window:4479:        r |= VT_LVAL_SHORT;
+diag-tcc-source: type-decl-window:4480:    else
+diag-tcc-source: decl0-window:7144:static int decl0(int l, int is_for_loop_init, Sym *func_sym)
+diag-tcc-source: decl0-window:7145:{
+diag-tcc-source: decl0-window:7146:    int v, has_init, r;
+diag-tcc-source: decl0-window:7147:    CType type, btype;
+diag-tcc-source: decl0-window:7148:    Sym *sym;
+diag-tcc-source: decl0-window:7149:    AttributeDef ad;
+diag-tcc-source: decl0-window:7150:
+diag-tcc-source: decl0-window:7151:    while (1) {
+diag-tcc-source: decl0-window:7152:        if (!parse_btype(&btype, &ad)) {
+diag-tcc-source: decl0-window:7153:            if (is_for_loop_init)
+diag-tcc-source: decl0-window:7154:                return 0;
+diag-tcc-source: decl0-window:7155:            /* skip redundant ';' if not in old parameter decl scope */
+diag-tcc-source: decl0-window:7156:            if (tok == ';' && l != VT_CMP) {
+diag-tcc-source: decl0-window:7157:                next();
+diag-tcc-source: decl0-window:7158:                continue;
+diag-tcc-source: decl0-window:7159:            }
+diag-tcc-source: decl0-window:7160:            if (l != VT_CONST)
+diag-tcc-source: decl0-window:7161:                break;
+diag-tcc-source: decl0-window:7162:            if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+diag-tcc-source: decl0-window:7163:                /* global asm block */
+diag-tcc-source: decl0-window:7164:                asm_global_instr();
+diag-tcc-source: decl0-window:7165:                continue;
+diag-tcc-source: decl0-window:7166:            }
+diag-tcc-source: decl0-window:7167:            if (tok >= TOK_UIDENT) {
+diag-tcc-source: decl0-window:7168:               /* special test for old K&R protos without explicit int
+diag-tcc-source: decl0-window:7169:                  type. Only accepted when defining global data */
+diag-tcc-source: decl0-window:7170:                btype.t = VT_INT;
+diag-tcc-source: decl0-window:7171:            } else {
+diag-tcc-source: decl0-window:7172:                if (tok != TOK_EOF)
+diag-tcc-source: decl0-window:7173:                    expect("declaration");
+diag-tcc-source: decl0-window:7174:                break;
+diag-tcc-source: decl0-window:7175:            }
+diag-tcc-source: decl0-window:7176:        }
+diag-tcc-source: decl0-window:7177:        if (tok == ';') {
+diag-tcc-source: decl0-window:7178:	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
+diag-tcc-source: decl0-window:7179:		int v = btype.ref->v;
+diag-tcc-source: decl0-window:7180:		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
+diag-tcc-source: decl0-window:7181:        	    tcc_warning("unnamed struct/union that defines no instances");
+diag-tcc-source: decl0-window:7182:                next();
+diag-tcc-source: decl0-window:7183:                continue;
+diag-tcc-source: decl0-window:7184:	    }
+diag-tcc-source: decl0-window:7185:            if (IS_ENUM(btype.t)) {
+diag-tcc-source: decl0-window:7186:                next();
+diag-tcc-source: decl0-window:7187:                continue;
+diag-tcc-source: decl0-window:7188:            }
+diag-tcc-source: decl0-window:7189:        }
+diag-tcc-source: decl0-window:7190:        while (1) { /* iterate thru each declaration */
+diag-tcc-source: decl0-window:7191:            type = btype;
+diag-tcc-source: decl0-window:7192:	    /* If the base type itself was an array type of unspecified
+diag-tcc-source: decl0-window:7193:	       size (like in 'typedef int arr[]; arr x = {1};') then
+diag-tcc-source: decl0-window:7194:	       we will overwrite the unknown size by the real one for
+diag-tcc-source: decl0-window:7195:	       this decl.  We need to unshare the ref symbol holding
+diag-tcc-source: decl0-window:7196:	       that size.  */
+diag-tcc-source: decl0-window:7197:	    if ((type.t & VT_ARRAY) && type.ref->c < 0) {
+diag-tcc-source: decl0-window:7198:		type.ref = sym_push(SYM_FIELD, &type.ref->type, 0, type.ref->c);
+diag-tcc-source: decl0-window:7199:	    }
+diag-tcc-source: decl0-window:7200:            type_decl(&type, &ad, &v, TYPE_DIRECT);
+diag-tcc-source: decl0-window:7201:#if 0
+diag-tcc-source: decl0-window:7202:            {
+diag-tcc-source: decl0-window:7203:                char buf[500];
+diag-tcc-source: decl0-window:7204:                type_to_str(buf, sizeof(buf), &type, get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7205:                printf("type = '%s'\n", buf);
+diag-tcc-source: decl0-window:7206:            }
+diag-tcc-source: decl0-window:7207:#endif
+diag-tcc-source: decl0-window:7208:            if ((type.t & VT_BTYPE) == VT_FUNC) {
+diag-tcc-source: decl0-window:7209:                if ((type.t & VT_STATIC) && (l == VT_LOCAL)) {
+diag-tcc-source: decl0-window:7210:                    tcc_error("function without file scope cannot be static");
+diag-tcc-source: decl0-window:7211:                }
+diag-tcc-source: decl0-window:7212:                /* if old style function prototype, we accept a
+diag-tcc-source: decl0-window:7213:                   declaration list */
+diag-tcc-source: decl0-window:7214:                sym = type.ref;
+diag-tcc-source: decl0-window:7215:                if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
+diag-tcc-source: decl0-window:7216:                    decl0(VT_CMP, 0, sym);
+diag-tcc-source: decl0-window:7217:            }
+diag-tcc-source: decl0-window:7218:
+diag-tcc-source: decl0-window:7219:            if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
+diag-tcc-source: decl0-window:7220:                ad.asm_label = asm_label_instr();
+diag-tcc-source: decl0-window:7221:                /* parse one last attribute list, after asm label */
+diag-tcc-source: decl0-window:7222:                parse_attribute(&ad);
+diag-tcc-source: decl0-window:7223:                if (tok == '{')
+diag-tcc-source: decl0-window:7224:                    expect(";");
+diag-tcc-source: decl0-window:7225:            }
+diag-tcc-source: decl0-window:7226:
+diag-tcc-source: decl0-window:7227:#ifdef TCC_TARGET_PE
+diag-tcc-source: decl0-window:7228:            if (ad.a.dllimport || ad.a.dllexport) {
+diag-tcc-source: decl0-window:7229:                if (type.t & (VT_STATIC|VT_TYPEDEF))
+diag-tcc-source: decl0-window:7230:                    tcc_error("cannot have dll linkage with static or typedef");
+diag-tcc-source: decl0-window:7231:                if (ad.a.dllimport) {
+diag-tcc-source: decl0-window:7232:                    if ((type.t & VT_BTYPE) == VT_FUNC)
+diag-tcc-source: decl0-window:7233:                        ad.a.dllimport = 0;
+diag-tcc-source: decl0-window:7234:                    else
+diag-tcc-source: decl0-window:7235:                        type.t |= VT_EXTERN;
+diag-tcc-source: decl0-window:7236:                }
+diag-tcc-source: decl0-window:7237:            }
+diag-tcc-source: decl0-window:7238:#endif
+diag-tcc-source: decl0-window:7239:            if (tok == '{') {
+diag-tcc-source: decl0-window:7240:                if (l != VT_CONST)
+diag-tcc-source: decl0-window:7241:                    tcc_error("cannot use local functions");
+diag-tcc-source: decl0-window:7242:                if ((type.t & VT_BTYPE) != VT_FUNC)
+diag-tcc-source: decl0-window:7243:                    expect("function definition");
+diag-tcc-source: decl0-window:7244:
+diag-tcc-source: decl0-window:7245:                /* reject abstract declarators in function definition
+diag-tcc-source: decl0-window:7246:		   make old style params without decl have int type */
+diag-tcc-source: decl0-window:7247:                sym = type.ref;
+diag-tcc-source: decl0-window:7248:                while ((sym = sym->next) != NULL) {
+diag-tcc-source: decl0-window:7249:                    if (!(sym->v & ~SYM_FIELD))
+diag-tcc-source: decl0-window:7250:                        expect("identifier");
+diag-tcc-source: decl0-window:7251:		    if (sym->type.t == VT_VOID)
+diag-tcc-source: decl0-window:7252:		        sym->type = int_type;
+diag-tcc-source: decl0-window:7253:		}
+diag-tcc-source: decl0-window:7254:
+diag-tcc-source: decl0-window:7255:                /* XXX: cannot do better now: convert extern line to static inline */
+diag-tcc-source: decl0-window:7256:                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
+diag-tcc-source: decl0-window:7257:                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+diag-tcc-source: decl0-window:7258:
+diag-tcc-source: decl0-window:7259:                /* put function symbol */
+diag-tcc-source: decl0-window:7260:                sym = external_global_sym(v, &type, 0);
+diag-tcc-source: decl0-window:7261:                type.t &= ~VT_EXTERN;
+diag-tcc-source: decl0-window:7262:                patch_storage(sym, &ad, &type);
+diag-tcc-source: decl0-window:7263:
+diag-tcc-source: decl0-window:7264:                /* static inline functions are just recorded as a kind
+diag-tcc-source: decl0-window:7265:                   of macro. Their code will be emitted at the end of
+diag-tcc-source: decl0-window:7266:                   the compilation unit only if they are used */
+diag-tcc-source: decl0-window:7267:                if ((type.t & (VT_INLINE | VT_STATIC)) ==
+diag-tcc-source: decl0-window:7268:                    (VT_INLINE | VT_STATIC)) {
+diag-tcc-source: decl0-window:7269:                    struct InlineFunc *fn;
+diag-tcc-source: decl0-window:7270:                    const char *filename;
+diag-tcc-source: decl0-window:7271:
+diag-tcc-source: decl0-window:7272:                    filename = file ? file->filename : "";
+diag-tcc-source: decl0-window:7273:                    fn = tcc_malloc(sizeof *fn + strlen(filename));
+diag-tcc-source: decl0-window:7274:                    strcpy(fn->filename, filename);
+diag-tcc-source: decl0-window:7275:                    fn->sym = sym;
+diag-tcc-source: decl0-window:7276:		    skip_or_save_block(&fn->func_str);
+diag-tcc-source: decl0-window:7277:                    dynarray_add(&tcc_state->inline_fns,
+diag-tcc-source: decl0-window:7278:				 &tcc_state->nb_inline_fns, fn);
+diag-tcc-source: decl0-window:7279:                } else {
+diag-tcc-source: decl0-window:7280:                    /* compute text section */
+diag-tcc-source: decl0-window:7281:                    cur_text_section = ad.section;
+diag-tcc-source: decl0-window:7282:                    if (!cur_text_section)
+diag-tcc-source: decl0-window:7283:                        cur_text_section = text_section;
+diag-tcc-source: decl0-window:7284:                    gen_function(sym);
+diag-tcc-source: decl0-window:7285:                }
+diag-tcc-source: decl0-window:7286:                break;
+diag-tcc-source: decl0-window:7287:            } else {
+diag-tcc-source: decl0-window:7288:		if (l == VT_CMP) {
+diag-tcc-source: decl0-window:7289:		    /* find parameter in function parameter list */
+diag-tcc-source: decl0-window:7290:		    for (sym = func_sym->next; sym; sym = sym->next)
+diag-tcc-source: decl0-window:7291:			if ((sym->v & ~SYM_FIELD) == v)
+diag-tcc-source: decl0-window:7292:			    goto found;
+diag-tcc-source: decl0-window:7293:		    tcc_error("declaration for parameter '%s' but no such parameter",
+diag-tcc-source: decl0-window:7294:			      get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7295:found:
+diag-tcc-source: decl0-window:7296:		    if (type.t & VT_STORAGE) /* 'register' is okay */
+diag-tcc-source: decl0-window:7297:		        tcc_error("storage class specified for '%s'",
+diag-tcc-source: decl0-window:7298:				  get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7299:		    if (sym->type.t != VT_VOID)
+diag-tcc-source: decl0-window:7300:		        tcc_error("redefinition of parameter '%s'",
+diag-tcc-source: decl0-window:7301:				  get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7302:		    convert_parameter_type(&type);
+diag-tcc-source: decl0-window:7303:		    sym->type = type;
+diag-tcc-decl0-part: preprocess one-source
+diag-tcc-decl0-part: preprocess rc=0 lines=19823
+diag-tcc-decl0-part: compile tccpp.c
+diag-tcc-decl0-part: compile tccpp.c rc=0
+diag-tcc-decl0-part: compile tccgen.c
+diag-tcc-decl0-part: compile tccgen.c rc=139
+diag-tcc-decl0-part: tccgen.c stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-part: compile tccelf.c
+diag-tcc-decl0-part: compile tccelf.c rc=0
+diag-tcc-decl0-part: compile x86_64-gen.c
+diag-tcc-decl0-part: compile x86_64-gen.c rc=0
+diag-tcc-decl0-part: compile libtcc.c
+diag-tcc-decl0-part: compile libtcc.c rc=139
+diag-tcc-decl0-part: libtcc.c stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: build instrumented compiler
+diag-tcc-decl0: build rc=139
+diag-tcc-decl0: build-stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: instrumented compiler unavailable
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-begin
+diag-cparse-trace: cparse_trace_valid_var_semicolon src:001:int cparse_trace_valid_var_probe;
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-end
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_eof_var_prefix source-begin
+diag-cparse-trace: cparse_trace_eof_var_prefix src:001:int cparse_trace_eof_var_probe
+diag-cparse-trace: cparse_trace_eof_var_prefix source-end
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly_rc=60
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_init_semicolon src:001:int cparse_trace_bad_init_probe = ;
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_comma_semicolon src:001:int cparse_trace_bad_comma_probe, ;
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocessed_compile_rc=skipped
+diag-cparse: compile cparse_plain_decl_no_config
+diag-cparse: cparse_plain_decl_no_config rc=0
+diag-cparse: compile cparse_plain_global_no_config
+diag-cparse: cparse_plain_global_no_config rc=0
+diag-cparse: compile cparse_plain_func_no_config
+Segmentation fault (core dumped)
+diag-cparse: cparse_plain_func_no_config rc=139
+diag-cparse: compile cparse_func_decl_semicolon_config_only
+diag-cparse: cparse_func_decl_semicolon_config_only rc=0
+diag-cparse: compile cparse_func_exact_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_exact_config_only rc=139
+diag-cparse: compile cparse_func_prefix_declarator_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_prefix_declarator_config_only rc=139
+diag-cparse: compile cparse_func_prefix_oldstyle_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_prefix_oldstyle_config_only rc=139
+diag-cparse: compile cparse_func_prefix_param_int_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_prefix_param_int_config_only rc=139
+diag-cparse: compile cparse_var_prefix_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_var_prefix_config_only rc=139
+diag-cparse: compile cparse_pointer_prefix_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_pointer_prefix_config_only rc=139
+diag-cparse: compile cparse_var_semicolon_config_only
+diag-cparse: cparse_var_semicolon_config_only rc=0
+diag-cparse: compile cparse_pointer_semicolon_config_only
+diag-cparse: cparse_pointer_semicolon_config_only rc=0
+diag-cparse: compile cparse_bad_init_semicolon_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_bad_init_semicolon_config_only rc=139
+diag-cparse: compile cparse_bad_param_semicolon_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_bad_param_semicolon_config_only rc=139
+diag-cparse: compile cparse_bad_comma_semicolon_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_bad_comma_semicolon_config_only rc=139
+diag-cparse: compile cparse_func_prefix_open_brace_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_prefix_open_brace_config_only rc=139
+diag-cparse: compile cparse_func_prefix_local_decl_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_prefix_local_decl_config_only rc=139
+diag-cparse: compile cparse_decl_after_config_only
+diag-cparse: cparse_decl_after_config_only rc=0
+diag-cparse: compile cparse_global_after_config_only
+diag-cparse: cparse_global_after_config_only rc=0
+diag-cparse: compile cparse_func_after_config_only
+Segmentation fault (core dumped)
+diag-cparse: cparse_func_after_config_only rc=139

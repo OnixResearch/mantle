@@ -1273,6 +1273,23 @@ EOF
                 }
               ' tccgen.c > tccgen.c.tmp
               $BB mv tccgen.c.tmp tccgen.c
+              tcc_diag_flags='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D ONE_SOURCE=1'
+              echo "diag-tcc-decl0-part: preprocess one-source" >&2
+              set +e
+              "$TCC/bin/tcc" -E -P -I . -I "$MUSL/include" $tcc_diag_flags tcc.c > /tmp/tcc-decl0-one-source.i 2> /tmp/tcc-decl0-preprocess.stderr
+              part_rc=$?
+              set -e
+              echo "diag-tcc-decl0-part: preprocess rc=$part_rc lines=$($BB wc -l < /tmp/tcc-decl0-one-source.i 2>/dev/null || echo 0)" >&2
+              $BB sed 's/^/diag-tcc-decl0-part: preprocess-stderr: /' /tmp/tcc-decl0-preprocess.stderr >&2 || true
+              for part_src in tccpp.c tccgen.c tccelf.c x86_64-gen.c libtcc.c; do
+                echo "diag-tcc-decl0-part: compile $part_src" >&2
+                set +e
+                "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $tcc_diag_flags "$part_src" -o "/tmp/tcc-decl0-${part_src}.o" 2> "/tmp/tcc-decl0-${part_src}.stderr"
+                part_rc=$?
+                set -e
+                echo "diag-tcc-decl0-part: compile $part_src rc=$part_rc" >&2
+                $BB sed 's/^/diag-tcc-decl0-part: '$part_src' stderr: /' "/tmp/tcc-decl0-${part_src}.stderr" >&2 || true
+              done
               echo "diag-tcc-decl0: build instrumented compiler" >&2
               set +e
               "$TCC/bin/tcc" -v -static -o "$diag_tcc" \
