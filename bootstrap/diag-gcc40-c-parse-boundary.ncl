@@ -780,7 +780,7 @@ DIRECTIVES_EOF
             LIBGCC2_INCLUDES="-I$MUSL/include" \
             STMP_FIXINC= \
             MAKEINFO=true \
-            tree-check.h config.h \
+            tree-check.h options.h config.h \
             2>&1
           if [ -f gcc/config.h ]; then
             cat >> gcc/config.h <<'EOF'
@@ -1040,6 +1040,41 @@ EOF
 
             print_gtype_desc_head_window() {
               $BB awk 'NR <= 120 { printf("diag-gtype-desc-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "gtype-desc.h"
+            }
+
+            make_flags_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/flags.h" >> "$probe"
+              echo '#endif /* diag balance GCC_FLAGS_H */' >> "$probe"
+              echo 'int flags_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            print_flags_head_window() {
+              $BB awk 'NR <= 120 { printf("diag-flags-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/flags.h"
+            }
+
+            make_options_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              $BB awk -v limit="$count" 'NR <= limit { print }' options.h >> "$probe"
+              echo 'int options_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            print_options_head_window() {
+              $BB awk 'NR <= 180 { printf("diag-options-head: %03d %s\n", NR, $0) > "/dev/stderr" }' options.h
             }
 
             print_tm_include_window() {
@@ -1976,6 +2011,14 @@ EOF
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_120 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 120
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_200 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 200
             make_include_probe_config_undef6 cparse_undef6_inc_c_tree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h'
+            print_options_head_window
+            for n in 10 20 40 80 120 160 180; do
+              make_options_header_balanced_config_undef6 "cparse_undef6_options_balanced_lines_$n" "$n"
+            done
+            print_flags_head_window
+            for n in 20 24 25 26 30 40 60 80 100 120; do
+              make_flags_header_balanced_config_undef6 "cparse_undef6_flags_balanced_lines_$n" "$n"
+            done
             make_include_probe_config_undef6 cparse_undef6_inc_flags 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h'
             make_include_probe_config_undef6 cparse_undef6_inc_varray 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h'
             make_include_probe_config_undef6 cparse_undef6_inc_output 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h'
@@ -1990,9 +2033,17 @@ EOF
             make_cparse_prefix_config_undef6 cparse_undef6_top_160 160
             make_cparse_prefix_config_undef6 cparse_undef6_top_200 200
             make_cparse_prefix_config_undef6 cparse_undef6_top_240 240
+            make_cparse_prefix_config_undef6 cparse_undef6_top_260 260
             make_cparse_prefix_config_undef6 cparse_undef6_top_280 280
+            make_cparse_prefix_config_undef6 cparse_undef6_top_300 300
             make_cparse_prefix_config_undef6 cparse_undef6_top_320 320
+            make_cparse_prefix_config_undef6 cparse_undef6_top_340 340
             make_cparse_prefix_config_undef6 cparse_undef6_top_360 360
+            make_cparse_prefix_config_undef6 cparse_undef6_top_365 365
+            make_cparse_prefix_config_undef6 cparse_undef6_top_370 370
+            make_cparse_prefix_config_undef6 cparse_undef6_top_375 375
+            make_cparse_prefix_config_undef6 cparse_undef6_top_380 380
+            make_cparse_prefix_config_undef6 cparse_undef6_top_385 385
             make_cparse_prefix_config_undef6 cparse_undef6_header_only 390
             make_cparse_prefix_config_undef6 cparse_undef6_after_yytranslate 544
             make_cparse_prefix_config_undef6 cparse_undef6_after_yyr1 1017
