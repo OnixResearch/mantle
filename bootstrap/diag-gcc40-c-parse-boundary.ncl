@@ -1090,17 +1090,24 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
-            make_cparse_function_after_includes_config_undef6() {
+            make_cparse_body_after_includes_config_undef6() {
               label="$1"
               includes="$2"
+              body="$3"
               probe="/tmp/$label.c"
               echo '#include "config-undef6.h"' > "$probe"
               for header in $includes; do
                 echo "#include \"$header\"" >> "$probe"
               done
-              echo 'void cparse_function_probe (void) { }' >> "$probe"
-              echo 'int cparse_function_after_includes_probe;' >> "$probe"
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int cparse_body_after_includes_probe;' >> "$probe"
               try_cparse_variant "$label" "$probe"
+            }
+
+            make_cparse_function_after_includes_config_undef6() {
+              label="$1"
+              includes="$2"
+              make_cparse_body_after_includes_config_undef6 "$label" "$includes" 'void cparse_function_probe (void) { }'
             }
 
             make_cparse_preamble_before_includes_config_undef6() {
@@ -2095,6 +2102,15 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_toplev 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h'
             make_include_probe_config_undef6 cparse_undef6_inc_ggc 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h'
             make_include_probe_config_undef6 cparse_undef6_inc_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            make_cparse_body_after_includes_config_undef6 cparse_decl_after_config_only '' 'void cparse_function_probe (void);'
+            make_cparse_body_after_includes_config_undef6 cparse_global_after_config_only '' 'int cparse_global_probe;'
+            make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only ''
+            make_cparse_body_after_includes_config_undef6 cparse_decl_after_system 'system.h' 'void cparse_function_probe (void);'
+            make_cparse_body_after_includes_config_undef6 cparse_global_after_system 'system.h' 'int cparse_global_probe;'
+            make_cparse_body_after_includes_config_undef6 cparse_oldstyle_func_after_system 'system.h' 'void cparse_oldstyle_probe () { }'
+            make_cparse_body_after_includes_config_undef6 cparse_int_func_after_system 'system.h' 'int cparse_int_function_probe (void) { return 0; }'
+            make_cparse_body_after_includes_config_undef6 cparse_func_before_system 'system.h' '#define cparse_before_system_marker 1
+void cparse_before_system_probe (void) { }'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_system 'system.h'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_coretypes 'system.h coretypes.h'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_tm 'system.h coretypes.h tm.h'
