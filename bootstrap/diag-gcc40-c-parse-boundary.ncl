@@ -954,6 +954,27 @@ EOF
               $BB awk 'NR <= 40 { printf("diag-c-tree-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/c-tree.h"
             }
 
+            make_c_common_header_balanced_config_undef6() {
+              label="$1"
+              count="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo '#ifndef GCC_C_TREE_H' >> "$probe"
+              echo '#define GCC_C_TREE_H' >> "$probe"
+              $BB awk -v limit="$count" 'NR <= limit { print }' "$WORK/gcc-4.0.4/gcc/c-common.h" >> "$probe"
+              echo '#endif /* diag balance c-common guard */' >> "$probe"
+              echo '#endif /* diag balance GCC_C_TREE_H */' >> "$probe"
+              echo 'int c_common_header_balanced_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            print_c_common_head_window() {
+              $BB awk 'NR <= 80 { printf("diag-c-common-head: %03d %s\n", NR, $0) > "/dev/stderr" }' "$WORK/gcc-4.0.4/gcc/c-common.h"
+            }
+
             print_tm_include_window() {
               $BB awk '/^#include / { seen++; printf("diag-tm-include: %03d %s\n", seen, $0) > "/dev/stderr" }' tm.h
             }
@@ -1864,6 +1885,10 @@ EOF
 #endif'
             for n in 24 25 26 27 31 38 40 80; do
               make_c_tree_header_balanced_config_undef6 "cparse_undef6_c_tree_balanced_lines_$n" "$n"
+            done
+            print_c_common_head_window
+            for n in 20 24 25 26 27 30 40 60 80; do
+              make_c_common_header_balanced_config_undef6 "cparse_undef6_c_common_balanced_lines_$n" "$n"
             done
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_24 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 24
             make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_25 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 25
