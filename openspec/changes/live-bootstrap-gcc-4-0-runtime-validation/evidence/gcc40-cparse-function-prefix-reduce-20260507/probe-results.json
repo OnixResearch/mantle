@@ -1,0 +1,27 @@
+{
+  "build_exit_code": 1,
+  "evidence_dir": "evidence/gcc40-cparse-function-prefix-reduce-20260507",
+  "interpretation": {
+    "config_undef6_not_required_for_minimal_function_crash": true,
+    "declarator_without_semicolon_crashes": true,
+    "next_reduction": "The smallest observed reproducer is now a declaration-looking function declarator without a terminating semicolon; reduce the parser path between function declarator vs declaration terminator, and compare malformed nonfunction declarators before instrumenting finalization.",
+    "open_brace_prefix_crashes": true,
+    "plain_declarations_and_globals_pass": true
+  },
+  "note": "This slice removed already-proven long function-after-include probes from the active diagnostic to keep the generated builder below the argument-size ceiling.",
+  "results": {
+    "cparse_decl_after_config_only": 0,
+    "cparse_func_after_config_only": 139,
+    "cparse_func_exact_config_only": 139,
+    "cparse_func_prefix_declarator_config_only": 139,
+    "cparse_func_prefix_local_decl_config_only": 139,
+    "cparse_func_prefix_open_brace_config_only": 139,
+    "cparse_global_after_config_only": 0,
+    "cparse_plain_decl_no_config": 0,
+    "cparse_plain_func_no_config": 139,
+    "cparse_plain_global_no_config": 0
+  },
+  "schema": "crunch-gcc40-cparse-function-prefix-reduce-v1",
+  "status": "captured-build-failed-diagnostic",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl"
+}

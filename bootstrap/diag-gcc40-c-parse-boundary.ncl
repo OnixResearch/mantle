@@ -1090,6 +1090,28 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
+            make_cparse_plain_body() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              printf '%s\n' "$body" > "$probe"
+              echo 'int cparse_plain_body_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            make_cparse_exact_after_includes_config_undef6() {
+              label="$1"
+              includes="$2"
+              body="$3"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in $includes; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              printf '%s\n' "$body" >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
             make_cparse_body_after_includes_config_undef6() {
               label="$1"
               includes="$2"
@@ -2102,6 +2124,13 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_toplev 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h'
             make_include_probe_config_undef6 cparse_undef6_inc_ggc 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h'
             make_include_probe_config_undef6 cparse_undef6_inc_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            make_cparse_plain_body cparse_plain_decl_no_config 'void cparse_plain_probe (void);'
+            make_cparse_plain_body cparse_plain_global_no_config 'int cparse_plain_global_probe;'
+            make_cparse_plain_body cparse_plain_func_no_config 'void cparse_plain_function_probe (void) { }'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_exact_config_only '' 'void cparse_exact_function_probe (void) { }'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_declarator_config_only '' 'void cparse_prefix_probe (void)'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_open_brace_config_only '' 'void cparse_open_brace_probe (void) {'
+            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_local_decl_config_only '' 'void cparse_local_decl_prefix_probe (void) { int local_probe;'
             make_cparse_body_after_includes_config_undef6 cparse_decl_after_config_only '' 'void cparse_function_probe (void);'
             make_cparse_body_after_includes_config_undef6 cparse_global_after_config_only '' 'int cparse_global_probe;'
             make_cparse_body_after_includes_config_undef6 cparse_oldstyle_func_after_config_only '' 'void cparse_oldstyle_probe () { }'
@@ -2118,16 +2147,6 @@ EOF
             make_cparse_body_after_includes_config_undef6 cparse_func_before_system 'system.h' '#define cparse_before_system_marker 1
 void cparse_before_system_probe (void) { }'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_system 'system.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_coretypes 'system.h coretypes.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_tm 'system.h coretypes.h tm.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_tree 'system.h coretypes.h tm.h tree.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_langhooks 'system.h coretypes.h tm.h tree.h langhooks.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_input 'system.h coretypes.h tm.h tree.h langhooks.h input.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_cpplib 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_c_pragma 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_c_tree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_flags 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_bison_defines 36 47
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_enum 50 127
             make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_defines 128 197
