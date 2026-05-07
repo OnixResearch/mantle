@@ -1,0 +1,23 @@
+diag-cparse: cparse_plain_func_decl_semicolon_exact_no_config rc=0
+diag-cparse: cparse_plain_func_prefix_declarator_no_config rc=139
+diag-cparse: cparse_plain_oldstyle_prefix_no_config rc=139
+diag-cparse: cparse_plain_param_int_prefix_no_config rc=139
+diag-cparse: cparse_plain_var_prefix_no_config rc=139
+diag-cparse: cparse_plain_pointer_prefix_no_config rc=139
+diag-cparse: cparse_plain_var_semicolon_exact_no_config rc=0
+diag-cparse: cparse_plain_pointer_semicolon_exact_no_config rc=0
+diag-cparse: cparse_plain_bad_init_semicolon_no_config rc=139
+diag-cparse: cparse_plain_bad_param_semicolon_no_config rc=139
+diag-cparse: cparse_plain_bad_comma_semicolon_no_config rc=139
+diag-tcc-decl0: build instrumented compiler
+diag-tcc-decl0: build rc=139
+diag-tcc-decl0: build-stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: instrumented compiler unavailable
+diag-cparse: cparse_plain_decl_no_config rc=0
+diag-cparse: cparse_plain_global_no_config rc=0
+diag-cparse: cparse_plain_func_no_config rc=139
+diag-cparse: cparse_var_prefix_config_only rc=139
+diag-cparse: cparse_var_semicolon_config_only rc=0
+diag-cparse: cparse_bad_init_semicolon_config_only rc=139
+diag-cparse: cparse_bad_param_semicolon_config_only rc=139
+diag-cparse: cparse_bad_comma_semicolon_config_only rc=139

@@ -1,0 +1,89 @@
+{
+  "control_boundary": "Existing direct c-parse matrix remains authoritative: semicolon declarations rc=0; EOF/malformed declaration paths rc=139.",
+  "diagnostic_exit": "expected nonzero builder failure after diagnostic probes",
+  "evidence_dir": "evidence/gcc40-cparse-decl0-runtime-trace-20260507",
+  "finding": "Direct tccgen.c decl0 runtime instrumentation was wired into the diagnostic, but the Mes/TinyCC host segfaults (rc=139) while compiling the instrumented TinyCC; runtime decl0 markers therefore do not execute in this slice.",
+  "instrumented_decl0_compiler_build_rc": 139,
+  "instrumented_decl0_runtime_available": false,
+  "log_source": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-runtime-trace-20260507-state/logs/ca870p3mb4fhdi8xgdkjibngfqa4i7m6-diag-gcc40-c-parse-boundary.drv.log",
+  "probes": [
+    {
+      "label": "cparse_plain_func_decl_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_prefix_declarator_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_oldstyle_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_param_int_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_pointer_prefix_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_var_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_pointer_semicolon_exact_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_bad_init_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_param_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_bad_comma_semicolon_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_plain_decl_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_global_no_config",
+      "rc": 0
+    },
+    {
+      "label": "cparse_plain_func_no_config",
+      "rc": 139
+    },
+    {
+      "label": "cparse_var_prefix_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_var_semicolon_config_only",
+      "rc": 0
+    },
+    {
+      "label": "cparse_bad_init_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_param_semicolon_config_only",
+      "rc": 139
+    },
+    {
+      "label": "cparse_bad_comma_semicolon_config_only",
+      "rc": 139
+    }
+  ],
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}

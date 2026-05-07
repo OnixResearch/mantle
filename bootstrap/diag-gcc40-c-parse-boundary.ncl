@@ -878,6 +878,23 @@ EOF
               echo "diag-cparse: $label rc=$rc" >&2
             }
 
+            try_cparse_variant_with_compiler() {
+              compiler="$1"
+              label="$2"
+              src="$3"
+              shift 3
+              echo "diag-cparse-decl0: compile $label compiler=$compiler" >&2
+              set +e
+              "$compiler" -c "$@" -g -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$src" -o "/tmp/$label.o" 2> "/tmp/$label.decl0.stderr"
+              rc=$?
+              set -e
+              echo "diag-cparse-decl0: $label rc=$rc" >&2
+              $BB sed 's/^/diag-cparse-decl0: '$label' stderr: /' "/tmp/$label.decl0.stderr" >&2 || true
+            }
+
             make_cparse_prefix_config_undef6() {
               label="$1"
               cutoff="$2"
@@ -1170,7 +1187,7 @@ EOF
                 return
               fi
               $BB awk '
-                /^static int parse_btype\(/ || /^static int post_type\(/ || /^static CType \*type_decl\(/ || /^static int decl0\(/ || /^static void decl\(/ || /^static void decl_initializer/ || /^static void gen_function/ || /^static void skip_or_save_block/ {
+                /^static int parse_btype\(/ || /^static int post_type\(/ || /^static CType \*type_decl\(/ || /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ || /^static void decl\(/ || /^static void decl_initializer/ || /^static void gen_function/ || /^static void skip_or_save_block/ {
                   hit=$0
                   gsub(/^[ \t]*/, "", hit)
                   printf("diag-tcc-source: anchor:%04d:%s\n", NR, hit) > "/dev/stderr"
@@ -1193,13 +1210,103 @@ EOF
                 in_type_decl && n >= 80 { in_type_decl=0 }
               ' "$tccgen"
               $BB awk '
-                /^static int decl0\(/ { in_decl0=1; n=0 }
+                /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1; n=0 }
                 in_decl0 && n < 160 {
                   printf("diag-tcc-source: decl0-window:%04d:%s\n", NR, $0) > "/dev/stderr"
                   n++
                 }
                 in_decl0 && n >= 160 { in_decl0=0 }
               ' "$tccgen"
+            }
+
+            build_decl0_instrumented_tcc() {
+              diag_tcc_build=/tmp/tcc-decl0-instrumented-src
+              diag_tcc=/tmp/tcc-decl0-instrumented
+              $BB rm -rf "$diag_tcc_build" "$diag_tcc"
+              $BB cp -r "$TCC_SRC" "$diag_tcc_build"
+              $BB chmod -R u+w "$diag_tcc_build"
+              cd "$diag_tcc_build"
+              : > config.h
+              $BB sed -i '/#include <inttypes.h>/a\
+#define uint8_t unsigned char\
+#define uint16_t unsigned short\
+#define uint32_t unsigned int\
+#define uint64_t unsigned long long\
+#define int32_t int\
+#define int64_t long long\
+#define CRUNCH_TCC_ELF_FIXED_WIDTH_ALIASES 1\
+' elf.h
+              $BB sed -i 's/size = size \* 2;/size = size + size;/g' tccpp.c tccelf.c
+              $BB sed -i 's/nb_alloc = nb \* 2;/nb_alloc = nb + nb;/' libtcc.c
+              $BB sed -i 's/next->size \* 2/next->size + next->size/' tccpp.c
+              $BB sed -i 's/rebuild_hash(s, 2 \* nbuckets);/rebuild_hash(s, nbuckets + nbuckets);/' tccelf.c
+              $BB sed -i 's/SValue tmp = vtop\[0\];/SValue tmp; memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+              $BB sed -i 's/tmp = vtop\[0\];/memcpy(\&tmp, \&vtop[0], sizeof(SValue));/' x86_64-gen.c
+              $BB sed -i 's/vtop\[0\] = vtop\[-i\];/memcpy(\&vtop[0], \&vtop[-i], sizeof(SValue));/' x86_64-gen.c
+              $BB sed -i 's/vtop\[-i\] = tmp;/memcpy(\&vtop[-i], \&tmp, sizeof(SValue));/' x86_64-gen.c
+              $BB sed -i 's/#define REX_BASE(reg).*/#define REX_BASE(reg) (((reg) \& 8) ? 1 : 0)/' x86_64-gen.c
+              $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
+              $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
+              $BB sed -i '/sprintf(buf,/c\
+    buf[0] = 34; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
+              $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
+              $BB awk '
+                /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
+                {
+                  print
+                  if (in_decl0 && $0 ~ /^[[:space:]]*while \(1\) \{/) {
+                    print "        fputs(\"diag-tcc-decl0-runtime: enter\\n\", stderr);"
+                  }
+                  if (in_decl0 && $0 ~ /type_decl\(&type, &ad, &v, TYPE_DIRECT\);/) {
+                    print "            fputs(\"diag-tcc-decl0-runtime: after-type-decl\\n\", stderr);"
+                  }
+                  if (in_decl0 && $0 ~ /^[[:space:]]*if .*tok == .*\{/) {
+                    print "            fputs(\"diag-tcc-decl0-runtime: branch-function-body\\n\", stderr);"
+                  }
+                  if (in_decl0 && $0 ~ /has_init = .*tok ==/) {
+                    print "                    fputs(\"diag-tcc-decl0-runtime: decl-tail\\n\", stderr);"
+                  }
+                  if (in_decl0 && $0 ~ /skip.*;/) {
+                    print "                    fputs(\"diag-tcc-decl0-runtime: skip-semicolon\\n\", stderr);"
+                  }
+                  if (in_decl0 && $0 ~ /^}/) { in_decl0=0 }
+                }
+              ' tccgen.c > tccgen.c.tmp
+              $BB mv tccgen.c.tmp tccgen.c
+              echo "diag-tcc-decl0: build instrumented compiler" >&2
+              set +e
+              "$TCC/bin/tcc" -v -static -o "$diag_tcc" \
+                -I . -I "$MUSL/include" \
+                -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 \
+                -D TCC_TARGET_X86_64=1 \
+                -D CONFIG_TCCDIR=\"$TCC/lib/tcc\" \
+                -D CONFIG_TCC_CRTPREFIX=\"$MUSL/lib\" \
+                -D CONFIG_TCC_ELFINTERP=\"/lib/ld-musl-x86_64.so.1\" \
+                -D CONFIG_TCC_LIBPATHS=\"$MUSL/lib:$TCC/lib/tcc\" \
+                -D CONFIG_TCC_SYSINCLUDEPATHS=\"$MUSL/include\" \
+                -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"libtcc1.a\" \
+                -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
+                tcc.c 2> /tmp/tcc-decl0-build.stderr
+              build_rc=$?
+              set -e
+              echo "diag-tcc-decl0: build rc=$build_rc" >&2
+              $BB sed 's/^/diag-tcc-decl0: build-stderr: /' /tmp/tcc-decl0-build.stderr >&2 || true
+              if [ "$build_rc" = 0 ]; then
+                $BB chmod 755 "$diag_tcc"
+                echo "$diag_tcc"
+              else
+                echo ""
+              fi
+              cd "$WORK/gcc-4.0.4/gcc"
+            }
+
+            make_cparse_plain_exact_with_compiler() {
+              compiler="$1"
+              label="$2"
+              body="$3"
+              probe="/tmp/$label.c"
+              printf '%s\\n' "$body" > "$probe"
+              try_cparse_variant_with_compiler "$compiler" "$label" "$probe"
             }
 
             make_cparse_exact_after_includes_config_undef6() {
@@ -2239,6 +2346,15 @@ EOF
             make_cparse_plain_exact cparse_plain_bad_param_semicolon_no_config 'void cparse_plain_bad_param_probe (void;'
             make_cparse_plain_exact cparse_plain_bad_comma_semicolon_no_config 'int cparse_plain_bad_comma_probe, ;'
             print_tcc_decl_parser_source_trace
+            decl0_tcc=$(build_decl0_instrumented_tcc)
+            if [ -n "$decl0_tcc" ] && [ -x "$decl0_tcc" ]; then
+              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'
+              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_eof_var_prefix 'int cparse_decl0_trace_eof_var_probe'
+              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_bad_init_semicolon 'int cparse_decl0_trace_bad_init_probe = ;'
+              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_bad_comma_semicolon 'int cparse_decl0_trace_bad_comma_probe, ;'
+            else
+              echo "diag-tcc-decl0: instrumented compiler unavailable" >&2
+            fi
             trace_cparse_plain_exact_phases cparse_trace_valid_var_semicolon 'int cparse_trace_valid_var_probe;'
             trace_cparse_plain_exact_phases cparse_trace_eof_var_prefix 'int cparse_trace_eof_var_probe'
             trace_cparse_plain_exact_phases cparse_trace_bad_init_semicolon 'int cparse_trace_bad_init_probe = ;'

@@ -1,0 +1,9 @@
+{
+  "control_boundary": "Existing direct c-parse matrix remains authoritative: semicolon declarations rc=0; EOF/malformed declaration paths rc=139.",
+  "diagnostic_exit": "expected nonzero builder failure after diagnostic probes",
+  "finding": "Direct tccgen.c decl0 runtime instrumentation was wired into the diagnostic, but the Mes/TinyCC host segfaults (rc=139) while compiling the instrumented TinyCC; runtime decl0 markers therefore do not execute in this slice.",
+  "instrumented_decl0_compiler_build_rc": 139,
+  "instrumented_decl0_runtime_available": false,
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}
