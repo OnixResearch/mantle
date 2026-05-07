@@ -1,0 +1,694 @@
+diag-tcc-source: tccgen=/crunch/store/4jp67gx0k6h76np8wazalwlg5wyg5g3q-tcc-0.9.27-src/tccgen.c
+diag-tcc-source: anchor:0080:static int parse_btype(CType *type, AttributeDef *ad);
+diag-tcc-source: anchor:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: anchor:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: anchor:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: anchor:0087:static void decl(int l);
+diag-tcc-source: anchor:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: anchor:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: anchor:4001:static int parse_btype(CType *type, AttributeDef *ad)
+diag-tcc-source: anchor:4255:static int post_type(CType *type, AttributeDef *ad, int storage, int td)
+diag-tcc-source: anchor:4401:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
+diag-tcc-source: anchor:6241:static void skip_or_save_block(TokenString **str)
+diag-tcc-source: anchor:6635:static void decl_initializer(CType *type, Section *sec, unsigned long c,
+diag-tcc-source: anchor:6818:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
+diag-tcc-source: anchor:7054:static void gen_function(Sym *sym)
+diag-tcc-source: anchor:7144:static int decl0(int l, int is_for_loop_init, Sym *func_sym)
+diag-tcc-source: anchor:7381:static void decl(int l)
+diag-tcc-source: parse-btype-window:0080:static int parse_btype(CType *type, AttributeDef *ad);
+diag-tcc-source: parse-btype-window:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: parse-btype-window:0082:static void parse_expr_type(CType *type);
+diag-tcc-source: parse-btype-window:0083:static void init_putv(CType *type, Section *sec, unsigned long c);
+diag-tcc-source: parse-btype-window:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: parse-btype-window:0085:static void block(int *bsym, int *csym, int is_expr);
+diag-tcc-source: parse-btype-window:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: parse-btype-window:0087:static void decl(int l);
+diag-tcc-source: parse-btype-window:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: parse-btype-window:0089:static void expr_eq(void);
+diag-tcc-source: parse-btype-window:0090:static void vla_runtime_type_size(CType *type, int *a);
+diag-tcc-source: parse-btype-window:0091:static void vla_sp_restore(void);
+diag-tcc-source: parse-btype-window:0092:static void vla_sp_restore_root(void);
+diag-tcc-source: parse-btype-window:0093:static int is_compatible_unqualified_types(CType *type1, CType *type2);
+diag-tcc-source: parse-btype-window:0094:static inline int64_t expr_const64(void);
+diag-tcc-source: parse-btype-window:0095:static void vpush64(int ty, unsigned long long v);
+diag-tcc-source: parse-btype-window:0096:static void vpush(CType *type);
+diag-tcc-source: parse-btype-window:0097:static int gvtst(int inv, int t);
+diag-tcc-source: parse-btype-window:0098:static void gen_inline_functions(TCCState *s);
+diag-tcc-source: parse-btype-window:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: parse-btype-window:0100:static void gv_dup(void);
+diag-tcc-source: parse-btype-window:0101:
+diag-tcc-source: parse-btype-window:0102:ST_INLN int is_float(int t)
+diag-tcc-source: parse-btype-window:0103:{
+diag-tcc-source: parse-btype-window:0104:    int bt;
+diag-tcc-source: parse-btype-window:0105:    bt = t & VT_BTYPE;
+diag-tcc-source: parse-btype-window:0106:    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
+diag-tcc-source: parse-btype-window:0107:}
+diag-tcc-source: parse-btype-window:0108:
+diag-tcc-source: parse-btype-window:0109:/* we use our own 'finite' function to avoid potential problems with
+diag-tcc-source: parse-btype-window:0110:   non standard math libs */
+diag-tcc-source: parse-btype-window:0111:/* XXX: endianness dependent */
+diag-tcc-source: parse-btype-window:0112:ST_FUNC int ieee_finite(double d)
+diag-tcc-source: parse-btype-window:0113:{
+diag-tcc-source: parse-btype-window:0114:    int p[4];
+diag-tcc-source: parse-btype-window:0115:    memcpy(p, &d, sizeof(double));
+diag-tcc-source: parse-btype-window:0116:    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+diag-tcc-source: parse-btype-window:0117:}
+diag-tcc-source: parse-btype-window:0118:
+diag-tcc-source: parse-btype-window:0119:/* compiling intel long double natively */
+diag-tcc-source: parse-btype-window:0120:#if (defined __i386__ || defined __x86_64__) \
+diag-tcc-source: parse-btype-window:0121:    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+diag-tcc-source: parse-btype-window:0122:# define TCC_IS_NATIVE_387
+diag-tcc-source: parse-btype-window:0123:#endif
+diag-tcc-source: parse-btype-window:0124:
+diag-tcc-source: parse-btype-window:0125:ST_FUNC void test_lvalue(void)
+diag-tcc-source: parse-btype-window:0126:{
+diag-tcc-source: parse-btype-window:0127:    if (!(vtop->r & VT_LVAL))
+diag-tcc-source: parse-btype-window:0128:        expect("lvalue");
+diag-tcc-source: parse-btype-window:0129:}
+diag-tcc-source: parse-btype-window:0130:
+diag-tcc-source: parse-btype-window:0131:ST_FUNC void check_vstack(void)
+diag-tcc-source: parse-btype-window:0132:{
+diag-tcc-source: parse-btype-window:0133:    if (pvtop != vtop)
+diag-tcc-source: parse-btype-window:0134:        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+diag-tcc-source: parse-btype-window:0135:}
+diag-tcc-source: parse-btype-window:0136:
+diag-tcc-source: parse-btype-window:0137:/* ------------------------------------------------------------------------- */
+diag-tcc-source: parse-btype-window:0138:/* vstack debugging aid */
+diag-tcc-source: parse-btype-window:0139:
+diag-tcc-source: parse-btype-window:0140:#if 0
+diag-tcc-source: parse-btype-window:0141:void pv (const char *lbl, int a, int b)
+diag-tcc-source: parse-btype-window:0142:{
+diag-tcc-source: parse-btype-window:0143:    int i;
+diag-tcc-source: parse-btype-window:0144:    for (i = a; i < a + b; ++i) {
+diag-tcc-source: parse-btype-window:0145:        SValue *p = &vtop[-i];
+diag-tcc-source: parse-btype-window:0146:        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+diag-tcc-source: parse-btype-window:0147:            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+diag-tcc-source: parse-btype-window:0148:    }
+diag-tcc-source: parse-btype-window:0149:}
+diag-tcc-source: parse-btype-window:0150:#endif
+diag-tcc-source: parse-btype-window:0151:
+diag-tcc-source: parse-btype-window:0152:/* ------------------------------------------------------------------------- */
+diag-tcc-source: parse-btype-window:0153:/* start of translation unit info */
+diag-tcc-source: parse-btype-window:0154:ST_FUNC void tcc_debug_start(TCCState *s1)
+diag-tcc-source: parse-btype-window:0155:{
+diag-tcc-source: parse-btype-window:0156:    if (s1->do_debug) {
+diag-tcc-source: parse-btype-window:0157:        char buf[512];
+diag-tcc-source: parse-btype-window:0158:
+diag-tcc-source: parse-btype-window:0159:        /* file info: full path + filename */
+diag-tcc-source: parse-btype-window:4001:static int parse_btype(CType *type, AttributeDef *ad)
+diag-tcc-source: parse-btype-window:4002:{
+diag-tcc-source: parse-btype-window:4003:    int t, u, bt, st, type_found, typespec_found, g;
+diag-tcc-source: parse-btype-window:4004:    Sym *s;
+diag-tcc-source: parse-btype-window:4005:    CType type1;
+diag-tcc-source: parse-btype-window:4006:
+diag-tcc-source: parse-btype-window:4007:    memset(ad, 0, sizeof(AttributeDef));
+diag-tcc-source: parse-btype-window:4008:    type_found = 0;
+diag-tcc-source: parse-btype-window:4009:    typespec_found = 0;
+diag-tcc-source: parse-btype-window:4010:    t = VT_INT;
+diag-tcc-source: parse-btype-window:4011:    bt = st = -1;
+diag-tcc-source: parse-btype-window:4012:    type->ref = NULL;
+diag-tcc-source: parse-btype-window:4013:
+diag-tcc-source: parse-btype-window:4014:    while(1) {
+diag-tcc-source: parse-btype-window:4015:        switch(tok) {
+diag-tcc-source: parse-btype-window:4016:        case TOK_EXTENSION:
+diag-tcc-source: parse-btype-window:4017:            /* currently, we really ignore extension */
+diag-tcc-source: parse-btype-window:4018:            next();
+diag-tcc-source: parse-btype-window:4019:            continue;
+diag-tcc-source: parse-btype-window:4020:
+diag-tcc-source: parse-btype-window:4021:            /* basic types */
+diag-tcc-source: parse-btype-window:4022:        case TOK_CHAR:
+diag-tcc-source: parse-btype-window:4023:            u = VT_BYTE;
+diag-tcc-source: parse-btype-window:4024:        basic_type:
+diag-tcc-source: parse-btype-window:4025:            next();
+diag-tcc-source: parse-btype-window:4026:        basic_type1:
+diag-tcc-source: parse-btype-window:4027:            if (u == VT_SHORT || u == VT_LONG) {
+diag-tcc-source: parse-btype-window:4028:                if (st != -1 || (bt != -1 && bt != VT_INT))
+diag-tcc-source: parse-btype-window:4029:                    tmbt: tcc_error("too many basic types");
+diag-tcc-source: parse-btype-window:4030:                st = u;
+diag-tcc-source: parse-btype-window:4031:            } else {
+diag-tcc-source: parse-btype-window:4032:                if (bt != -1 || (st != -1 && u != VT_INT))
+diag-tcc-source: parse-btype-window:4033:                    goto tmbt;
+diag-tcc-source: parse-btype-window:4034:                bt = u;
+diag-tcc-source: parse-btype-window:4035:            }
+diag-tcc-source: parse-btype-window:4036:            if (u != VT_INT)
+diag-tcc-source: parse-btype-window:4037:                t = (t & ~(VT_BTYPE|VT_LONG)) | u;
+diag-tcc-source: parse-btype-window:4038:            typespec_found = 1;
+diag-tcc-source: parse-btype-window:4039:            break;
+diag-tcc-source: parse-btype-window:4040:        case TOK_VOID:
+diag-tcc-source: parse-btype-window:4041:            u = VT_VOID;
+diag-tcc-source: parse-btype-window:4042:            goto basic_type;
+diag-tcc-source: parse-btype-window:4043:        case TOK_SHORT:
+diag-tcc-source: parse-btype-window:4044:            u = VT_SHORT;
+diag-tcc-source: parse-btype-window:4045:            goto basic_type;
+diag-tcc-source: parse-btype-window:4046:        case TOK_INT:
+diag-tcc-source: parse-btype-window:4047:            u = VT_INT;
+diag-tcc-source: parse-btype-window:4048:            goto basic_type;
+diag-tcc-source: parse-btype-window:4049:        case TOK_LONG:
+diag-tcc-source: parse-btype-window:4050:            if ((t & VT_BTYPE) == VT_DOUBLE) {
+diag-tcc-source: parse-btype-window:4051:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4052:            } else if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+diag-tcc-source: parse-btype-window:4053:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LLONG;
+diag-tcc-source: parse-btype-window:4054:            } else {
+diag-tcc-source: parse-btype-window:4055:                u = VT_LONG;
+diag-tcc-source: parse-btype-window:4056:                goto basic_type;
+diag-tcc-source: parse-btype-window:4057:            }
+diag-tcc-source: parse-btype-window:4058:            next();
+diag-tcc-source: parse-btype-window:4059:            break;
+diag-tcc-source: parse-btype-window:4060:#ifdef TCC_TARGET_ARM64
+diag-tcc-source: parse-btype-window:4061:        case TOK_UINT128:
+diag-tcc-source: parse-btype-window:4062:            /* GCC's __uint128_t appears in some Linux header files. Make it a
+diag-tcc-source: parse-btype-window:4063:               synonym for long double to get the size and alignment right. */
+diag-tcc-source: parse-btype-window:4064:            u = VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4065:            goto basic_type;
+diag-tcc-source: parse-btype-window:4066:#endif
+diag-tcc-source: parse-btype-window:4067:        case TOK_BOOL:
+diag-tcc-source: parse-btype-window:4068:            u = VT_BOOL;
+diag-tcc-source: parse-btype-window:4069:            goto basic_type;
+diag-tcc-source: parse-btype-window:4070:        case TOK_FLOAT:
+diag-tcc-source: parse-btype-window:4071:            u = VT_FLOAT;
+diag-tcc-source: parse-btype-window:4072:            goto basic_type;
+diag-tcc-source: parse-btype-window:4073:        case TOK_DOUBLE:
+diag-tcc-source: parse-btype-window:4074:            if ((t & (VT_BTYPE|VT_LONG)) == VT_LONG) {
+diag-tcc-source: parse-btype-window:4075:                t = (t & ~(VT_BTYPE|VT_LONG)) | VT_LDOUBLE;
+diag-tcc-source: parse-btype-window:4076:            } else {
+diag-tcc-source: parse-btype-window:4077:                u = VT_DOUBLE;
+diag-tcc-source: parse-btype-window:4078:                goto basic_type;
+diag-tcc-source: parse-btype-window:4079:            }
+diag-tcc-source: parse-btype-window:4080:            next();
+diag-tcc-source: type-decl-window:0081:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
+diag-tcc-source: type-decl-window:0082:static void parse_expr_type(CType *type);
+diag-tcc-source: type-decl-window:0083:static void init_putv(CType *type, Section *sec, unsigned long c);
+diag-tcc-source: type-decl-window:0084:static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);
+diag-tcc-source: type-decl-window:0085:static void block(int *bsym, int *csym, int is_expr);
+diag-tcc-source: type-decl-window:0086:static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);
+diag-tcc-source: type-decl-window:0087:static void decl(int l);
+diag-tcc-source: type-decl-window:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: type-decl-window:0089:static void expr_eq(void);
+diag-tcc-source: type-decl-window:0090:static void vla_runtime_type_size(CType *type, int *a);
+diag-tcc-source: type-decl-window:0091:static void vla_sp_restore(void);
+diag-tcc-source: type-decl-window:0092:static void vla_sp_restore_root(void);
+diag-tcc-source: type-decl-window:0093:static int is_compatible_unqualified_types(CType *type1, CType *type2);
+diag-tcc-source: type-decl-window:0094:static inline int64_t expr_const64(void);
+diag-tcc-source: type-decl-window:0095:static void vpush64(int ty, unsigned long long v);
+diag-tcc-source: type-decl-window:0096:static void vpush(CType *type);
+diag-tcc-source: type-decl-window:0097:static int gvtst(int inv, int t);
+diag-tcc-source: type-decl-window:0098:static void gen_inline_functions(TCCState *s);
+diag-tcc-source: type-decl-window:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: type-decl-window:0100:static void gv_dup(void);
+diag-tcc-source: type-decl-window:0101:
+diag-tcc-source: type-decl-window:0102:ST_INLN int is_float(int t)
+diag-tcc-source: type-decl-window:0103:{
+diag-tcc-source: type-decl-window:0104:    int bt;
+diag-tcc-source: type-decl-window:0105:    bt = t & VT_BTYPE;
+diag-tcc-source: type-decl-window:0106:    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
+diag-tcc-source: type-decl-window:0107:}
+diag-tcc-source: type-decl-window:0108:
+diag-tcc-source: type-decl-window:0109:/* we use our own 'finite' function to avoid potential problems with
+diag-tcc-source: type-decl-window:0110:   non standard math libs */
+diag-tcc-source: type-decl-window:0111:/* XXX: endianness dependent */
+diag-tcc-source: type-decl-window:0112:ST_FUNC int ieee_finite(double d)
+diag-tcc-source: type-decl-window:0113:{
+diag-tcc-source: type-decl-window:0114:    int p[4];
+diag-tcc-source: type-decl-window:0115:    memcpy(p, &d, sizeof(double));
+diag-tcc-source: type-decl-window:0116:    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+diag-tcc-source: type-decl-window:0117:}
+diag-tcc-source: type-decl-window:0118:
+diag-tcc-source: type-decl-window:0119:/* compiling intel long double natively */
+diag-tcc-source: type-decl-window:0120:#if (defined __i386__ || defined __x86_64__) \
+diag-tcc-source: type-decl-window:0121:    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+diag-tcc-source: type-decl-window:0122:# define TCC_IS_NATIVE_387
+diag-tcc-source: type-decl-window:0123:#endif
+diag-tcc-source: type-decl-window:0124:
+diag-tcc-source: type-decl-window:0125:ST_FUNC void test_lvalue(void)
+diag-tcc-source: type-decl-window:0126:{
+diag-tcc-source: type-decl-window:0127:    if (!(vtop->r & VT_LVAL))
+diag-tcc-source: type-decl-window:0128:        expect("lvalue");
+diag-tcc-source: type-decl-window:0129:}
+diag-tcc-source: type-decl-window:0130:
+diag-tcc-source: type-decl-window:0131:ST_FUNC void check_vstack(void)
+diag-tcc-source: type-decl-window:0132:{
+diag-tcc-source: type-decl-window:0133:    if (pvtop != vtop)
+diag-tcc-source: type-decl-window:0134:        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+diag-tcc-source: type-decl-window:0135:}
+diag-tcc-source: type-decl-window:0136:
+diag-tcc-source: type-decl-window:0137:/* ------------------------------------------------------------------------- */
+diag-tcc-source: type-decl-window:0138:/* vstack debugging aid */
+diag-tcc-source: type-decl-window:0139:
+diag-tcc-source: type-decl-window:0140:#if 0
+diag-tcc-source: type-decl-window:0141:void pv (const char *lbl, int a, int b)
+diag-tcc-source: type-decl-window:0142:{
+diag-tcc-source: type-decl-window:0143:    int i;
+diag-tcc-source: type-decl-window:0144:    for (i = a; i < a + b; ++i) {
+diag-tcc-source: type-decl-window:0145:        SValue *p = &vtop[-i];
+diag-tcc-source: type-decl-window:0146:        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+diag-tcc-source: type-decl-window:0147:            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+diag-tcc-source: type-decl-window:0148:    }
+diag-tcc-source: type-decl-window:0149:}
+diag-tcc-source: type-decl-window:0150:#endif
+diag-tcc-source: type-decl-window:0151:
+diag-tcc-source: type-decl-window:0152:/* ------------------------------------------------------------------------- */
+diag-tcc-source: type-decl-window:0153:/* start of translation unit info */
+diag-tcc-source: type-decl-window:0154:ST_FUNC void tcc_debug_start(TCCState *s1)
+diag-tcc-source: type-decl-window:0155:{
+diag-tcc-source: type-decl-window:0156:    if (s1->do_debug) {
+diag-tcc-source: type-decl-window:0157:        char buf[512];
+diag-tcc-source: type-decl-window:0158:
+diag-tcc-source: type-decl-window:0159:        /* file info: full path + filename */
+diag-tcc-source: type-decl-window:0160:        section_sym = put_elf_sym(symtab_section, 0, 0,
+diag-tcc-source: type-decl-window:4401:static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
+diag-tcc-source: type-decl-window:4402:{
+diag-tcc-source: type-decl-window:4403:    CType *post, *ret;
+diag-tcc-source: type-decl-window:4404:    int qualifiers, storage;
+diag-tcc-source: type-decl-window:4405:
+diag-tcc-source: type-decl-window:4406:    /* recursive type, remove storage bits first, apply them later again */
+diag-tcc-source: type-decl-window:4407:    storage = type->t & VT_STORAGE;
+diag-tcc-source: type-decl-window:4408:    type->t &= ~VT_STORAGE;
+diag-tcc-source: type-decl-window:4409:    post = ret = type;
+diag-tcc-source: type-decl-window:4410:
+diag-tcc-source: type-decl-window:4411:    while (tok == '*') {
+diag-tcc-source: type-decl-window:4412:        qualifiers = 0;
+diag-tcc-source: type-decl-window:4413:    redo:
+diag-tcc-source: type-decl-window:4414:        next();
+diag-tcc-source: type-decl-window:4415:        switch(tok) {
+diag-tcc-source: type-decl-window:4416:        case TOK_CONST1:
+diag-tcc-source: type-decl-window:4417:        case TOK_CONST2:
+diag-tcc-source: type-decl-window:4418:        case TOK_CONST3:
+diag-tcc-source: type-decl-window:4419:            qualifiers |= VT_CONSTANT;
+diag-tcc-source: type-decl-window:4420:            goto redo;
+diag-tcc-source: type-decl-window:4421:        case TOK_VOLATILE1:
+diag-tcc-source: type-decl-window:4422:        case TOK_VOLATILE2:
+diag-tcc-source: type-decl-window:4423:        case TOK_VOLATILE3:
+diag-tcc-source: type-decl-window:4424:            qualifiers |= VT_VOLATILE;
+diag-tcc-source: type-decl-window:4425:            goto redo;
+diag-tcc-source: type-decl-window:4426:        case TOK_RESTRICT1:
+diag-tcc-source: type-decl-window:4427:        case TOK_RESTRICT2:
+diag-tcc-source: type-decl-window:4428:        case TOK_RESTRICT3:
+diag-tcc-source: type-decl-window:4429:            goto redo;
+diag-tcc-source: type-decl-window:4430:	/* XXX: clarify attribute handling */
+diag-tcc-source: type-decl-window:4431:	case TOK_ATTRIBUTE1:
+diag-tcc-source: type-decl-window:4432:	case TOK_ATTRIBUTE2:
+diag-tcc-source: type-decl-window:4433:	    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4434:	    break;
+diag-tcc-source: type-decl-window:4435:        }
+diag-tcc-source: type-decl-window:4436:        mk_pointer(type);
+diag-tcc-source: type-decl-window:4437:        type->t |= qualifiers;
+diag-tcc-source: type-decl-window:4438:	if (ret == type)
+diag-tcc-source: type-decl-window:4439:	    /* innermost pointed to type is the one for the first derivation */
+diag-tcc-source: type-decl-window:4440:	    ret = pointed_type(type);
+diag-tcc-source: type-decl-window:4441:    }
+diag-tcc-source: type-decl-window:4442:
+diag-tcc-source: type-decl-window:4443:    if (tok == '(') {
+diag-tcc-source: type-decl-window:4444:	/* This is possibly a parameter type list for abstract declarators
+diag-tcc-source: type-decl-window:4445:	   ('int ()'), use post_type for testing this.  */
+diag-tcc-source: type-decl-window:4446:	if (!post_type(type, ad, 0, td)) {
+diag-tcc-source: type-decl-window:4447:	    /* It's not, so it's a nested declarator, and the post operations
+diag-tcc-source: type-decl-window:4448:	       apply to the innermost pointed to type (if any).  */
+diag-tcc-source: type-decl-window:4449:	    /* XXX: this is not correct to modify 'ad' at this point, but
+diag-tcc-source: type-decl-window:4450:	       the syntax is not clear */
+diag-tcc-source: type-decl-window:4451:	    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4452:	    post = type_decl(type, ad, v, td);
+diag-tcc-source: type-decl-window:4453:	    skip(')');
+diag-tcc-source: type-decl-window:4454:	}
+diag-tcc-source: type-decl-window:4455:    } else if (tok >= TOK_IDENT && (td & TYPE_DIRECT)) {
+diag-tcc-source: type-decl-window:4456:	/* type identifier */
+diag-tcc-source: type-decl-window:4457:	*v = tok;
+diag-tcc-source: type-decl-window:4458:	next();
+diag-tcc-source: type-decl-window:4459:    } else {
+diag-tcc-source: type-decl-window:4460:	if (!(td & TYPE_ABSTRACT))
+diag-tcc-source: type-decl-window:4461:	  expect("identifier");
+diag-tcc-source: type-decl-window:4462:	*v = 0;
+diag-tcc-source: type-decl-window:4463:    }
+diag-tcc-source: type-decl-window:4464:    post_type(post, ad, storage, 0);
+diag-tcc-source: type-decl-window:4465:    parse_attribute(ad);
+diag-tcc-source: type-decl-window:4466:    type->t |= storage;
+diag-tcc-source: type-decl-window:4467:    return ret;
+diag-tcc-source: type-decl-window:4468:}
+diag-tcc-source: type-decl-window:4469:
+diag-tcc-source: type-decl-window:4470:/* compute the lvalue VT_LVAL_xxx needed to match type t. */
+diag-tcc-source: type-decl-window:4471:ST_FUNC int lvalue_type(int t)
+diag-tcc-source: type-decl-window:4472:{
+diag-tcc-source: type-decl-window:4473:    int bt, r;
+diag-tcc-source: type-decl-window:4474:    r = VT_LVAL;
+diag-tcc-source: type-decl-window:4475:    bt = t & VT_BTYPE;
+diag-tcc-source: type-decl-window:4476:    if (bt == VT_BYTE || bt == VT_BOOL)
+diag-tcc-source: type-decl-window:4477:        r |= VT_LVAL_BYTE;
+diag-tcc-source: type-decl-window:4478:    else if (bt == VT_SHORT)
+diag-tcc-source: type-decl-window:4479:        r |= VT_LVAL_SHORT;
+diag-tcc-source: type-decl-window:4480:    else
+diag-tcc-source: decl0-window:0088:static int decl0(int l, int is_for_loop_init, Sym *);
+diag-tcc-source: decl0-window:0089:static void expr_eq(void);
+diag-tcc-source: decl0-window:0090:static void vla_runtime_type_size(CType *type, int *a);
+diag-tcc-source: decl0-window:0091:static void vla_sp_restore(void);
+diag-tcc-source: decl0-window:0092:static void vla_sp_restore_root(void);
+diag-tcc-source: decl0-window:0093:static int is_compatible_unqualified_types(CType *type1, CType *type2);
+diag-tcc-source: decl0-window:0094:static inline int64_t expr_const64(void);
+diag-tcc-source: decl0-window:0095:static void vpush64(int ty, unsigned long long v);
+diag-tcc-source: decl0-window:0096:static void vpush(CType *type);
+diag-tcc-source: decl0-window:0097:static int gvtst(int inv, int t);
+diag-tcc-source: decl0-window:0098:static void gen_inline_functions(TCCState *s);
+diag-tcc-source: decl0-window:0099:static void skip_or_save_block(TokenString **str);
+diag-tcc-source: decl0-window:0100:static void gv_dup(void);
+diag-tcc-source: decl0-window:0101:
+diag-tcc-source: decl0-window:0102:ST_INLN int is_float(int t)
+diag-tcc-source: decl0-window:0103:{
+diag-tcc-source: decl0-window:0104:    int bt;
+diag-tcc-source: decl0-window:0105:    bt = t & VT_BTYPE;
+diag-tcc-source: decl0-window:0106:    return bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT;
+diag-tcc-source: decl0-window:0107:}
+diag-tcc-source: decl0-window:0108:
+diag-tcc-source: decl0-window:0109:/* we use our own 'finite' function to avoid potential problems with
+diag-tcc-source: decl0-window:0110:   non standard math libs */
+diag-tcc-source: decl0-window:0111:/* XXX: endianness dependent */
+diag-tcc-source: decl0-window:0112:ST_FUNC int ieee_finite(double d)
+diag-tcc-source: decl0-window:0113:{
+diag-tcc-source: decl0-window:0114:    int p[4];
+diag-tcc-source: decl0-window:0115:    memcpy(p, &d, sizeof(double));
+diag-tcc-source: decl0-window:0116:    return ((unsigned)((p[1] | 0x800fffff) + 1)) >> 31;
+diag-tcc-source: decl0-window:0117:}
+diag-tcc-source: decl0-window:0118:
+diag-tcc-source: decl0-window:0119:/* compiling intel long double natively */
+diag-tcc-source: decl0-window:0120:#if (defined __i386__ || defined __x86_64__) \
+diag-tcc-source: decl0-window:0121:    && (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64)
+diag-tcc-source: decl0-window:0122:# define TCC_IS_NATIVE_387
+diag-tcc-source: decl0-window:0123:#endif
+diag-tcc-source: decl0-window:0124:
+diag-tcc-source: decl0-window:0125:ST_FUNC void test_lvalue(void)
+diag-tcc-source: decl0-window:0126:{
+diag-tcc-source: decl0-window:0127:    if (!(vtop->r & VT_LVAL))
+diag-tcc-source: decl0-window:0128:        expect("lvalue");
+diag-tcc-source: decl0-window:0129:}
+diag-tcc-source: decl0-window:0130:
+diag-tcc-source: decl0-window:0131:ST_FUNC void check_vstack(void)
+diag-tcc-source: decl0-window:0132:{
+diag-tcc-source: decl0-window:0133:    if (pvtop != vtop)
+diag-tcc-source: decl0-window:0134:        tcc_error("internal compiler error: vstack leak (%d)", vtop - pvtop);
+diag-tcc-source: decl0-window:0135:}
+diag-tcc-source: decl0-window:0136:
+diag-tcc-source: decl0-window:0137:/* ------------------------------------------------------------------------- */
+diag-tcc-source: decl0-window:0138:/* vstack debugging aid */
+diag-tcc-source: decl0-window:0139:
+diag-tcc-source: decl0-window:0140:#if 0
+diag-tcc-source: decl0-window:0141:void pv (const char *lbl, int a, int b)
+diag-tcc-source: decl0-window:0142:{
+diag-tcc-source: decl0-window:0143:    int i;
+diag-tcc-source: decl0-window:0144:    for (i = a; i < a + b; ++i) {
+diag-tcc-source: decl0-window:0145:        SValue *p = &vtop[-i];
+diag-tcc-source: decl0-window:0146:        printf("%s vtop[-%d] : type.t:%04x  r:%04x  r2:%04x  c.i:%d\n",
+diag-tcc-source: decl0-window:0147:            lbl, i, p->type.t, p->r, p->r2, (int)p->c.i);
+diag-tcc-source: decl0-window:0148:    }
+diag-tcc-source: decl0-window:0149:}
+diag-tcc-source: decl0-window:0150:#endif
+diag-tcc-source: decl0-window:0151:
+diag-tcc-source: decl0-window:0152:/* ------------------------------------------------------------------------- */
+diag-tcc-source: decl0-window:0153:/* start of translation unit info */
+diag-tcc-source: decl0-window:0154:ST_FUNC void tcc_debug_start(TCCState *s1)
+diag-tcc-source: decl0-window:0155:{
+diag-tcc-source: decl0-window:0156:    if (s1->do_debug) {
+diag-tcc-source: decl0-window:0157:        char buf[512];
+diag-tcc-source: decl0-window:0158:
+diag-tcc-source: decl0-window:0159:        /* file info: full path + filename */
+diag-tcc-source: decl0-window:0160:        section_sym = put_elf_sym(symtab_section, 0, 0,
+diag-tcc-source: decl0-window:0161:                                  ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+diag-tcc-source: decl0-window:0162:                                  text_section->sh_num, NULL);
+diag-tcc-source: decl0-window:0163:        getcwd(buf, sizeof(buf));
+diag-tcc-source: decl0-window:0164:#ifdef _WIN32
+diag-tcc-source: decl0-window:0165:        normalize_slashes(buf);
+diag-tcc-source: decl0-window:0166:#endif
+diag-tcc-source: decl0-window:0167:        pstrcat(buf, sizeof(buf), "/");
+diag-tcc-source: decl0-window:0168:        put_stabs_r(buf, N_SO, 0, 0,
+diag-tcc-source: decl0-window:0169:                    text_section->data_offset, text_section, section_sym);
+diag-tcc-source: decl0-window:0170:        put_stabs_r(file->filename, N_SO, 0, 0,
+diag-tcc-source: decl0-window:0171:                    text_section->data_offset, text_section, section_sym);
+diag-tcc-source: decl0-window:0172:        last_ind = 0;
+diag-tcc-source: decl0-window:0173:        last_line_num = 0;
+diag-tcc-source: decl0-window:0174:    }
+diag-tcc-source: decl0-window:0175:
+diag-tcc-source: decl0-window:0176:    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
+diag-tcc-source: decl0-window:0177:       symbols can be safely used */
+diag-tcc-source: decl0-window:0178:    put_elf_sym(symtab_section, 0, 0,
+diag-tcc-source: decl0-window:0179:                ELFW(ST_INFO)(STB_LOCAL, STT_FILE), 0,
+diag-tcc-source: decl0-window:0180:                SHN_ABS, file->filename);
+diag-tcc-source: decl0-window:0181:}
+diag-tcc-source: decl0-window:0182:
+diag-tcc-source: decl0-window:0183:/* put end of translation unit info */
+diag-tcc-source: decl0-window:0184:ST_FUNC void tcc_debug_end(TCCState *s1)
+diag-tcc-source: decl0-window:0185:{
+diag-tcc-source: decl0-window:0186:    if (!s1->do_debug)
+diag-tcc-source: decl0-window:0187:        return;
+diag-tcc-source: decl0-window:0188:    put_stabs_r(NULL, N_SO, 0, 0,
+diag-tcc-source: decl0-window:0189:        text_section->data_offset, text_section, section_sym);
+diag-tcc-source: decl0-window:0190:
+diag-tcc-source: decl0-window:0191:}
+diag-tcc-source: decl0-window:0192:
+diag-tcc-source: decl0-window:0193:/* generate line number info */
+diag-tcc-source: decl0-window:0194:ST_FUNC void tcc_debug_line(TCCState *s1)
+diag-tcc-source: decl0-window:0195:{
+diag-tcc-source: decl0-window:0196:    if (!s1->do_debug)
+diag-tcc-source: decl0-window:0197:        return;
+diag-tcc-source: decl0-window:0198:    if ((last_line_num != file->line_num || last_ind != ind)) {
+diag-tcc-source: decl0-window:0199:        put_stabn(N_SLINE, 0, file->line_num, ind - func_ind);
+diag-tcc-source: decl0-window:0200:        last_ind = ind;
+diag-tcc-source: decl0-window:0201:        last_line_num = file->line_num;
+diag-tcc-source: decl0-window:0202:    }
+diag-tcc-source: decl0-window:0203:}
+diag-tcc-source: decl0-window:0204:
+diag-tcc-source: decl0-window:0205:/* put function symbol */
+diag-tcc-source: decl0-window:0206:ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
+diag-tcc-source: decl0-window:0207:{
+diag-tcc-source: decl0-window:0208:    char buf[512];
+diag-tcc-source: decl0-window:0209:
+diag-tcc-source: decl0-window:0210:    if (!s1->do_debug)
+diag-tcc-source: decl0-window:0211:        return;
+diag-tcc-source: decl0-window:0212:
+diag-tcc-source: decl0-window:0213:    /* stabs info */
+diag-tcc-source: decl0-window:0214:    /* XXX: we put here a dummy type */
+diag-tcc-source: decl0-window:0215:    snprintf(buf, sizeof(buf), "%s:%c1",
+diag-tcc-source: decl0-window:0216:             funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
+diag-tcc-source: decl0-window:0217:    put_stabs_r(buf, N_FUN, 0, file->line_num, 0,
+diag-tcc-source: decl0-window:0218:                cur_text_section, sym->c);
+diag-tcc-source: decl0-window:0219:    /* //gr gdb wants a line at the function */
+diag-tcc-source: decl0-window:0220:    put_stabn(N_SLINE, 0, file->line_num, 0);
+diag-tcc-source: decl0-window:0221:
+diag-tcc-source: decl0-window:0222:    last_ind = 0;
+diag-tcc-source: decl0-window:0223:    last_line_num = 0;
+diag-tcc-source: decl0-window:0224:}
+diag-tcc-source: decl0-window:0225:
+diag-tcc-source: decl0-window:0226:/* put function size */
+diag-tcc-source: decl0-window:0227:ST_FUNC void tcc_debug_funcend(TCCState *s1, int size)
+diag-tcc-source: decl0-window:0228:{
+diag-tcc-source: decl0-window:0229:    if (!s1->do_debug)
+diag-tcc-source: decl0-window:0230:        return;
+diag-tcc-source: decl0-window:0231:    put_stabn(N_FUN, 0, 0, size);
+diag-tcc-source: decl0-window:0232:}
+diag-tcc-source: decl0-window:0233:
+diag-tcc-source: decl0-window:0234:/* ------------------------------------------------------------------------- */
+diag-tcc-source: decl0-window:0235:ST_FUNC int tccgen_compile(TCCState *s1)
+diag-tcc-source: decl0-window:0236:{
+diag-tcc-source: decl0-window:0237:    cur_text_section = NULL;
+diag-tcc-source: decl0-window:0238:    funcname = "";
+diag-tcc-source: decl0-window:0239:    anon_sym = SYM_FIRST_ANOM;
+diag-tcc-source: decl0-window:0240:    section_sym = 0;
+diag-tcc-source: decl0-window:0241:    const_wanted = 0;
+diag-tcc-source: decl0-window:0242:    nocode_wanted = 0x80000000;
+diag-tcc-source: decl0-window:0243:
+diag-tcc-source: decl0-window:0244:    /* define some often used types */
+diag-tcc-source: decl0-window:0245:    int_type.t = VT_INT;
+diag-tcc-source: decl0-window:0246:    char_pointer_type.t = VT_BYTE;
+diag-tcc-source: decl0-window:0247:    mk_pointer(&char_pointer_type);
+diag-tcc-source: decl0-window:7144:static int decl0(int l, int is_for_loop_init, Sym *func_sym)
+diag-tcc-source: decl0-window:7145:{
+diag-tcc-source: decl0-window:7146:    int v, has_init, r;
+diag-tcc-source: decl0-window:7147:    CType type, btype;
+diag-tcc-source: decl0-window:7148:    Sym *sym;
+diag-tcc-source: decl0-window:7149:    AttributeDef ad;
+diag-tcc-source: decl0-window:7150:
+diag-tcc-source: decl0-window:7151:    while (1) {
+diag-tcc-source: decl0-window:7152:        if (!parse_btype(&btype, &ad)) {
+diag-tcc-source: decl0-window:7153:            if (is_for_loop_init)
+diag-tcc-source: decl0-window:7154:                return 0;
+diag-tcc-source: decl0-window:7155:            /* skip redundant ';' if not in old parameter decl scope */
+diag-tcc-source: decl0-window:7156:            if (tok == ';' && l != VT_CMP) {
+diag-tcc-source: decl0-window:7157:                next();
+diag-tcc-source: decl0-window:7158:                continue;
+diag-tcc-source: decl0-window:7159:            }
+diag-tcc-source: decl0-window:7160:            if (l != VT_CONST)
+diag-tcc-source: decl0-window:7161:                break;
+diag-tcc-source: decl0-window:7162:            if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
+diag-tcc-source: decl0-window:7163:                /* global asm block */
+diag-tcc-source: decl0-window:7164:                asm_global_instr();
+diag-tcc-source: decl0-window:7165:                continue;
+diag-tcc-source: decl0-window:7166:            }
+diag-tcc-source: decl0-window:7167:            if (tok >= TOK_UIDENT) {
+diag-tcc-source: decl0-window:7168:               /* special test for old K&R protos without explicit int
+diag-tcc-source: decl0-window:7169:                  type. Only accepted when defining global data */
+diag-tcc-source: decl0-window:7170:                btype.t = VT_INT;
+diag-tcc-source: decl0-window:7171:            } else {
+diag-tcc-source: decl0-window:7172:                if (tok != TOK_EOF)
+diag-tcc-source: decl0-window:7173:                    expect("declaration");
+diag-tcc-source: decl0-window:7174:                break;
+diag-tcc-source: decl0-window:7175:            }
+diag-tcc-source: decl0-window:7176:        }
+diag-tcc-source: decl0-window:7177:        if (tok == ';') {
+diag-tcc-source: decl0-window:7178:	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
+diag-tcc-source: decl0-window:7179:		int v = btype.ref->v;
+diag-tcc-source: decl0-window:7180:		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
+diag-tcc-source: decl0-window:7181:        	    tcc_warning("unnamed struct/union that defines no instances");
+diag-tcc-source: decl0-window:7182:                next();
+diag-tcc-source: decl0-window:7183:                continue;
+diag-tcc-source: decl0-window:7184:	    }
+diag-tcc-source: decl0-window:7185:            if (IS_ENUM(btype.t)) {
+diag-tcc-source: decl0-window:7186:                next();
+diag-tcc-source: decl0-window:7187:                continue;
+diag-tcc-source: decl0-window:7188:            }
+diag-tcc-source: decl0-window:7189:        }
+diag-tcc-source: decl0-window:7190:        while (1) { /* iterate thru each declaration */
+diag-tcc-source: decl0-window:7191:            type = btype;
+diag-tcc-source: decl0-window:7192:	    /* If the base type itself was an array type of unspecified
+diag-tcc-source: decl0-window:7193:	       size (like in 'typedef int arr[]; arr x = {1};') then
+diag-tcc-source: decl0-window:7194:	       we will overwrite the unknown size by the real one for
+diag-tcc-source: decl0-window:7195:	       this decl.  We need to unshare the ref symbol holding
+diag-tcc-source: decl0-window:7196:	       that size.  */
+diag-tcc-source: decl0-window:7197:	    if ((type.t & VT_ARRAY) && type.ref->c < 0) {
+diag-tcc-source: decl0-window:7198:		type.ref = sym_push(SYM_FIELD, &type.ref->type, 0, type.ref->c);
+diag-tcc-source: decl0-window:7199:	    }
+diag-tcc-source: decl0-window:7200:            type_decl(&type, &ad, &v, TYPE_DIRECT);
+diag-tcc-source: decl0-window:7201:#if 0
+diag-tcc-source: decl0-window:7202:            {
+diag-tcc-source: decl0-window:7203:                char buf[500];
+diag-tcc-source: decl0-window:7204:                type_to_str(buf, sizeof(buf), &type, get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7205:                printf("type = '%s'\n", buf);
+diag-tcc-source: decl0-window:7206:            }
+diag-tcc-source: decl0-window:7207:#endif
+diag-tcc-source: decl0-window:7208:            if ((type.t & VT_BTYPE) == VT_FUNC) {
+diag-tcc-source: decl0-window:7209:                if ((type.t & VT_STATIC) && (l == VT_LOCAL)) {
+diag-tcc-source: decl0-window:7210:                    tcc_error("function without file scope cannot be static");
+diag-tcc-source: decl0-window:7211:                }
+diag-tcc-source: decl0-window:7212:                /* if old style function prototype, we accept a
+diag-tcc-source: decl0-window:7213:                   declaration list */
+diag-tcc-source: decl0-window:7214:                sym = type.ref;
+diag-tcc-source: decl0-window:7215:                if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
+diag-tcc-source: decl0-window:7216:                    decl0(VT_CMP, 0, sym);
+diag-tcc-source: decl0-window:7217:            }
+diag-tcc-source: decl0-window:7218:
+diag-tcc-source: decl0-window:7219:            if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
+diag-tcc-source: decl0-window:7220:                ad.asm_label = asm_label_instr();
+diag-tcc-source: decl0-window:7221:                /* parse one last attribute list, after asm label */
+diag-tcc-source: decl0-window:7222:                parse_attribute(&ad);
+diag-tcc-source: decl0-window:7223:                if (tok == '{')
+diag-tcc-source: decl0-window:7224:                    expect(";");
+diag-tcc-source: decl0-window:7225:            }
+diag-tcc-source: decl0-window:7226:
+diag-tcc-source: decl0-window:7227:#ifdef TCC_TARGET_PE
+diag-tcc-source: decl0-window:7228:            if (ad.a.dllimport || ad.a.dllexport) {
+diag-tcc-source: decl0-window:7229:                if (type.t & (VT_STATIC|VT_TYPEDEF))
+diag-tcc-source: decl0-window:7230:                    tcc_error("cannot have dll linkage with static or typedef");
+diag-tcc-source: decl0-window:7231:                if (ad.a.dllimport) {
+diag-tcc-source: decl0-window:7232:                    if ((type.t & VT_BTYPE) == VT_FUNC)
+diag-tcc-source: decl0-window:7233:                        ad.a.dllimport = 0;
+diag-tcc-source: decl0-window:7234:                    else
+diag-tcc-source: decl0-window:7235:                        type.t |= VT_EXTERN;
+diag-tcc-source: decl0-window:7236:                }
+diag-tcc-source: decl0-window:7237:            }
+diag-tcc-source: decl0-window:7238:#endif
+diag-tcc-source: decl0-window:7239:            if (tok == '{') {
+diag-tcc-source: decl0-window:7240:                if (l != VT_CONST)
+diag-tcc-source: decl0-window:7241:                    tcc_error("cannot use local functions");
+diag-tcc-source: decl0-window:7242:                if ((type.t & VT_BTYPE) != VT_FUNC)
+diag-tcc-source: decl0-window:7243:                    expect("function definition");
+diag-tcc-source: decl0-window:7244:
+diag-tcc-source: decl0-window:7245:                /* reject abstract declarators in function definition
+diag-tcc-source: decl0-window:7246:		   make old style params without decl have int type */
+diag-tcc-source: decl0-window:7247:                sym = type.ref;
+diag-tcc-source: decl0-window:7248:                while ((sym = sym->next) != NULL) {
+diag-tcc-source: decl0-window:7249:                    if (!(sym->v & ~SYM_FIELD))
+diag-tcc-source: decl0-window:7250:                        expect("identifier");
+diag-tcc-source: decl0-window:7251:		    if (sym->type.t == VT_VOID)
+diag-tcc-source: decl0-window:7252:		        sym->type = int_type;
+diag-tcc-source: decl0-window:7253:		}
+diag-tcc-source: decl0-window:7254:
+diag-tcc-source: decl0-window:7255:                /* XXX: cannot do better now: convert extern line to static inline */
+diag-tcc-source: decl0-window:7256:                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
+diag-tcc-source: decl0-window:7257:                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+diag-tcc-source: decl0-window:7258:
+diag-tcc-source: decl0-window:7259:                /* put function symbol */
+diag-tcc-source: decl0-window:7260:                sym = external_global_sym(v, &type, 0);
+diag-tcc-source: decl0-window:7261:                type.t &= ~VT_EXTERN;
+diag-tcc-source: decl0-window:7262:                patch_storage(sym, &ad, &type);
+diag-tcc-source: decl0-window:7263:
+diag-tcc-source: decl0-window:7264:                /* static inline functions are just recorded as a kind
+diag-tcc-source: decl0-window:7265:                   of macro. Their code will be emitted at the end of
+diag-tcc-source: decl0-window:7266:                   the compilation unit only if they are used */
+diag-tcc-source: decl0-window:7267:                if ((type.t & (VT_INLINE | VT_STATIC)) ==
+diag-tcc-source: decl0-window:7268:                    (VT_INLINE | VT_STATIC)) {
+diag-tcc-source: decl0-window:7269:                    struct InlineFunc *fn;
+diag-tcc-source: decl0-window:7270:                    const char *filename;
+diag-tcc-source: decl0-window:7271:
+diag-tcc-source: decl0-window:7272:                    filename = file ? file->filename : "";
+diag-tcc-source: decl0-window:7273:                    fn = tcc_malloc(sizeof *fn + strlen(filename));
+diag-tcc-source: decl0-window:7274:                    strcpy(fn->filename, filename);
+diag-tcc-source: decl0-window:7275:                    fn->sym = sym;
+diag-tcc-source: decl0-window:7276:		    skip_or_save_block(&fn->func_str);
+diag-tcc-source: decl0-window:7277:                    dynarray_add(&tcc_state->inline_fns,
+diag-tcc-source: decl0-window:7278:				 &tcc_state->nb_inline_fns, fn);
+diag-tcc-source: decl0-window:7279:                } else {
+diag-tcc-source: decl0-window:7280:                    /* compute text section */
+diag-tcc-source: decl0-window:7281:                    cur_text_section = ad.section;
+diag-tcc-source: decl0-window:7282:                    if (!cur_text_section)
+diag-tcc-source: decl0-window:7283:                        cur_text_section = text_section;
+diag-tcc-source: decl0-window:7284:                    gen_function(sym);
+diag-tcc-source: decl0-window:7285:                }
+diag-tcc-source: decl0-window:7286:                break;
+diag-tcc-source: decl0-window:7287:            } else {
+diag-tcc-source: decl0-window:7288:		if (l == VT_CMP) {
+diag-tcc-source: decl0-window:7289:		    /* find parameter in function parameter list */
+diag-tcc-source: decl0-window:7290:		    for (sym = func_sym->next; sym; sym = sym->next)
+diag-tcc-source: decl0-window:7291:			if ((sym->v & ~SYM_FIELD) == v)
+diag-tcc-source: decl0-window:7292:			    goto found;
+diag-tcc-source: decl0-window:7293:		    tcc_error("declaration for parameter '%s' but no such parameter",
+diag-tcc-source: decl0-window:7294:			      get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7295:found:
+diag-tcc-source: decl0-window:7296:		    if (type.t & VT_STORAGE) /* 'register' is okay */
+diag-tcc-source: decl0-window:7297:		        tcc_error("storage class specified for '%s'",
+diag-tcc-source: decl0-window:7298:				  get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7299:		    if (sym->type.t != VT_VOID)
+diag-tcc-source: decl0-window:7300:		        tcc_error("redefinition of parameter '%s'",
+diag-tcc-source: decl0-window:7301:				  get_tok_str(v, NULL));
+diag-tcc-source: decl0-window:7302:		    convert_parameter_type(&type);
+diag-tcc-source: decl0-window:7303:		    sym->type = type;
+
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-begin
+diag-cparse-trace: cparse_trace_valid_var_semicolon src:001:int cparse_trace_valid_var_probe;
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-end
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_eof_var_prefix source-begin
+diag-cparse-trace: cparse_trace_eof_var_prefix src:001:int cparse_trace_eof_var_probe
+diag-cparse-trace: cparse_trace_eof_var_prefix source-end
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly_rc=60
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_init_semicolon src:001:int cparse_trace_bad_init_probe = ;
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_comma_semicolon src:001:int cparse_trace_bad_comma_probe, ;
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocessed_compile_rc=skipped

@@ -26,6 +26,12 @@ let gcc_src = crunch.fetchTarball {
   name = "gcc-4.0.4-src",
 } in
 
+let tcc_src = crunch.fetchTarball {
+  url = "https://download-mirror.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2",
+  hash = "sha256-iaWFw3NwCH5fV71ybBYKzXJKC8ALl6Hn6woEW29aXfs=",
+  name = "tcc-0.9.27-src",
+} in
+
 {
   name = "diag-gcc40-c-parse-boundary",
   builder = "/bin/sh",
@@ -43,6 +49,7 @@ let gcc_src = crunch.fetchTarball {
       }
 
       TCC=$(find_input tcc-0.9.27-musl-v2)
+      TCC_SRC=$(find_input tcc-0.9.27-src)
       MUSL=$(find_input musl-1.1.24-tcc-musl)
       MAKE=$(find_input make-3.82-tcc)
       BINUTILS=$(find_input binutils-2.30-tcc)
@@ -1155,6 +1162,46 @@ EOF
               fi
             }
 
+            print_tcc_decl_parser_source_trace() {
+              tccgen="$TCC_SRC/tccgen.c"
+              echo "diag-tcc-source: tccgen=$tccgen" >&2
+              if [ ! -f "$tccgen" ]; then
+                echo "diag-tcc-source: missing tccgen.c" >&2
+                return
+              fi
+              $BB awk '
+                /^static int parse_btype\(/ || /^static int post_type\(/ || /^static CType \*type_decl\(/ || /^static int decl0\(/ || /^static void decl\(/ || /^static void decl_initializer/ || /^static void gen_function/ || /^static void skip_or_save_block/ {
+                  hit=$0
+                  gsub(/^[ \t]*/, "", hit)
+                  printf("diag-tcc-source: anchor:%04d:%s\n", NR, hit) > "/dev/stderr"
+                }
+              ' "$tccgen"
+              $BB awk '
+                /^static int parse_btype\(/ { in_parse=1; n=0 }
+                in_parse && n < 80 {
+                  printf("diag-tcc-source: parse-btype-window:%04d:%s\n", NR, $0) > "/dev/stderr"
+                  n++
+                }
+                in_parse && n >= 80 { in_parse=0 }
+              ' "$tccgen"
+              $BB awk '
+                /^static CType \*type_decl\(/ { in_type_decl=1; n=0 }
+                in_type_decl && n < 80 {
+                  printf("diag-tcc-source: type-decl-window:%04d:%s\n", NR, $0) > "/dev/stderr"
+                  n++
+                }
+                in_type_decl && n >= 80 { in_type_decl=0 }
+              ' "$tccgen"
+              $BB awk '
+                /^static int decl0\(/ { in_decl0=1; n=0 }
+                in_decl0 && n < 160 {
+                  printf("diag-tcc-source: decl0-window:%04d:%s\n", NR, $0) > "/dev/stderr"
+                  n++
+                }
+                in_decl0 && n >= 160 { in_decl0=0 }
+              ' "$tccgen"
+            }
+
             make_cparse_exact_after_includes_config_undef6() {
               label="$1"
               includes="$2"
@@ -2191,6 +2238,7 @@ EOF
             make_cparse_plain_exact cparse_plain_bad_init_semicolon_no_config 'int cparse_plain_bad_init_probe = ;'
             make_cparse_plain_exact cparse_plain_bad_param_semicolon_no_config 'void cparse_plain_bad_param_probe (void;'
             make_cparse_plain_exact cparse_plain_bad_comma_semicolon_no_config 'int cparse_plain_bad_comma_probe, ;'
+            print_tcc_decl_parser_source_trace
             trace_cparse_plain_exact_phases cparse_trace_valid_var_semicolon 'int cparse_trace_valid_var_probe;'
             trace_cparse_plain_exact_phases cparse_trace_eof_var_prefix 'int cparse_trace_eof_var_probe'
             trace_cparse_plain_exact_phases cparse_trace_bad_init_semicolon 'int cparse_trace_bad_init_probe = ;'
@@ -2255,6 +2303,6 @@ EOF
   ],
   inputs = [
     stage0, tcc, musl, make, binutils, sed, m4, grep, diffutils, bash,
-    gcc_src,
+    gcc_src, tcc_src,
   ],
 } | crunch.Derivation

@@ -1,0 +1,292 @@
+{
+  "date": "2026-05-07",
+  "interpretation": [
+    "Runtime reached diag-gcc40-c-parse-boundary and printed TinyCC tccgen.c source anchors/windows.",
+    "The relevant TinyCC parser path is parse_btype -> type_decl/post_type -> decl0, with decl0 branching from safe semicolon declarations to declaration error/function-body handling.",
+    "Existing rc boundary is preserved: valid semicolon declarations pass, malformed/EOF declarator paths return rc139.",
+    "Top-level -S/-E phase tracing remains unusable: -S returns rc60 with literal %s diagnostics and -E segfaults even for a valid semicolon declaration."
+  ],
+  "runner_build_exit_code": 1,
+  "schema": "gcc40-cparse-tcc-source-trace-v1",
+  "selected_rcs": [
+    {
+      "label": "cparse_plain_func_decl_semicolon_exact_no_config",
+      "line": "diag-cparse: cparse_plain_func_decl_semicolon_exact_no_config rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_plain_func_prefix_declarator_no_config",
+      "line": "diag-cparse: cparse_plain_func_prefix_declarator_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_oldstyle_prefix_no_config",
+      "line": "diag-cparse: cparse_plain_oldstyle_prefix_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_param_int_prefix_no_config",
+      "line": "diag-cparse: cparse_plain_param_int_prefix_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_var_prefix_no_config",
+      "line": "diag-cparse: cparse_plain_var_prefix_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_pointer_prefix_no_config",
+      "line": "diag-cparse: cparse_plain_pointer_prefix_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_var_semicolon_exact_no_config",
+      "line": "diag-cparse: cparse_plain_var_semicolon_exact_no_config rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_plain_pointer_semicolon_exact_no_config",
+      "line": "diag-cparse: cparse_plain_pointer_semicolon_exact_no_config rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_plain_bad_init_semicolon_no_config",
+      "line": "diag-cparse: cparse_plain_bad_init_semicolon_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_bad_param_semicolon_no_config",
+      "line": "diag-cparse: cparse_plain_bad_param_semicolon_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_bad_comma_semicolon_no_config",
+      "line": "diag-cparse: cparse_plain_bad_comma_semicolon_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_plain_decl_no_config",
+      "line": "diag-cparse: cparse_plain_decl_no_config rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_plain_global_no_config",
+      "line": "diag-cparse: cparse_plain_global_no_config rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_plain_func_no_config",
+      "line": "diag-cparse: cparse_plain_func_no_config rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_decl_semicolon_config_only",
+      "line": "diag-cparse: cparse_func_decl_semicolon_config_only rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_func_exact_config_only",
+      "line": "diag-cparse: cparse_func_exact_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_prefix_declarator_config_only",
+      "line": "diag-cparse: cparse_func_prefix_declarator_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_prefix_oldstyle_config_only",
+      "line": "diag-cparse: cparse_func_prefix_oldstyle_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_prefix_param_int_config_only",
+      "line": "diag-cparse: cparse_func_prefix_param_int_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_var_prefix_config_only",
+      "line": "diag-cparse: cparse_var_prefix_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_pointer_prefix_config_only",
+      "line": "diag-cparse: cparse_pointer_prefix_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_var_semicolon_config_only",
+      "line": "diag-cparse: cparse_var_semicolon_config_only rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_pointer_semicolon_config_only",
+      "line": "diag-cparse: cparse_pointer_semicolon_config_only rc=0",
+      "rc": "0"
+    },
+    {
+      "label": "cparse_bad_init_semicolon_config_only",
+      "line": "diag-cparse: cparse_bad_init_semicolon_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_bad_param_semicolon_config_only",
+      "line": "diag-cparse: cparse_bad_param_semicolon_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_bad_comma_semicolon_config_only",
+      "line": "diag-cparse: cparse_bad_comma_semicolon_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_prefix_open_brace_config_only",
+      "line": "diag-cparse: cparse_func_prefix_open_brace_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_prefix_local_decl_config_only",
+      "line": "diag-cparse: cparse_func_prefix_local_decl_config_only rc=139",
+      "rc": "139"
+    },
+    {
+      "label": "cparse_func_after_config_only",
+      "line": "diag-cparse: cparse_func_after_config_only rc=139",
+      "rc": "139"
+    }
+  ],
+  "status": "captured-build-failed-expected",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "tcc_source_anchors": [
+    {
+      "line": 80,
+      "source": "static int parse_btype(CType *type, AttributeDef *ad);"
+    },
+    {
+      "line": 81,
+      "source": "static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);"
+    },
+    {
+      "line": 84,
+      "source": "static void decl_initializer(CType *type, Section *sec, unsigned long c, int first, int size_only);"
+    },
+    {
+      "line": 86,
+      "source": "static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, int has_init, int v, int scope);"
+    },
+    {
+      "line": 87,
+      "source": "static void decl(int l);"
+    },
+    {
+      "line": 88,
+      "source": "static int decl0(int l, int is_for_loop_init, Sym *);"
+    },
+    {
+      "line": 99,
+      "source": "static void skip_or_save_block(TokenString **str);"
+    },
+    {
+      "line": 4001,
+      "source": "static int parse_btype(CType *type, AttributeDef *ad)"
+    },
+    {
+      "line": 4255,
+      "source": "static int post_type(CType *type, AttributeDef *ad, int storage, int td)"
+    },
+    {
+      "line": 4401,
+      "source": "static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)"
+    },
+    {
+      "line": 6241,
+      "source": "static void skip_or_save_block(TokenString **str)"
+    },
+    {
+      "line": 6635,
+      "source": "static void decl_initializer(CType *type, Section *sec, unsigned long c, "
+    },
+    {
+      "line": 6818,
+      "source": "static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r, "
+    },
+    {
+      "line": 7054,
+      "source": "static void gen_function(Sym *sym)"
+    },
+    {
+      "line": 7144,
+      "source": "static int decl0(int l, int is_for_loop_init, Sym *func_sym)"
+    },
+    {
+      "line": 7381,
+      "source": "static void decl(int l)"
+    }
+  ],
+  "trace_probes": [
+    {
+      "assembly_rc": "60",
+      "assembly_stderr": [
+        "tcc: error: invalid option -- 'invalid option -- '%s''",
+        "tcc: error: invalid option -- 'invalid option -- '%s''"
+      ],
+      "label": "cparse_trace_valid_var_semicolon",
+      "preprocess_rc": "139 preprocessed_lines=0",
+      "preprocess_stderr": [
+        "Segmentation fault (core dumped)"
+      ],
+      "preprocessed_compile_rc": "skipped",
+      "source": [
+        "int cparse_trace_valid_var_probe;"
+      ]
+    },
+    {
+      "assembly_rc": "60",
+      "assembly_stderr": [
+        "tcc: error: invalid option -- 'invalid option -- '%s''",
+        "tcc: error: invalid option -- 'invalid option -- '%s''"
+      ],
+      "label": "cparse_trace_eof_var_prefix",
+      "preprocess_rc": "139 preprocessed_lines=0",
+      "preprocess_stderr": [
+        "Segmentation fault (core dumped)"
+      ],
+      "preprocessed_compile_rc": "skipped",
+      "source": [
+        "int cparse_trace_eof_var_probe"
+      ]
+    },
+    {
+      "assembly_rc": "60",
+      "assembly_stderr": [
+        "tcc: error: invalid option -- 'invalid option -- '%s''",
+        "tcc: error: invalid option -- 'invalid option -- '%s''"
+      ],
+      "label": "cparse_trace_bad_init_semicolon",
+      "preprocess_rc": "139 preprocessed_lines=0",
+      "preprocess_stderr": [
+        "Segmentation fault (core dumped)"
+      ],
+      "preprocessed_compile_rc": "skipped",
+      "source": [
+        "int cparse_trace_bad_init_probe = ;"
+      ]
+    },
+    {
+      "assembly_rc": "60",
+      "assembly_stderr": [
+        "tcc: error: invalid option -- 'invalid option -- '%s''",
+        "tcc: error: invalid option -- 'invalid option -- '%s''"
+      ],
+      "label": "cparse_trace_bad_comma_semicolon",
+      "preprocess_rc": "139 preprocessed_lines=0",
+      "preprocess_stderr": [
+        "Segmentation fault (core dumped)"
+      ],
+      "preprocessed_compile_rc": "skipped",
+      "source": [
+        "int cparse_trace_bad_comma_probe, ;"
+      ]
+    }
+  ]
+}
