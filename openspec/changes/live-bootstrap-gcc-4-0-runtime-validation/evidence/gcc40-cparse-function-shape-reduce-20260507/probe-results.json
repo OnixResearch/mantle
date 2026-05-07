@@ -1,0 +1,30 @@
+{
+  "build_exit_code": 1,
+  "evidence_dir": "evidence/gcc40-cparse-function-shape-reduce-20260507",
+  "interpretation": {
+    "all_config_only_function_definitions_crash": true,
+    "declarations_pass": true,
+    "globals_pass": true,
+    "next_reduction": "Split entry into function-definition grammar from declaration grammar: storage/class specifier and declarator pass as declarations; isolate compound-statement/open-brace or finish_function hook under config-undef6.h."
+  },
+  "note": "Runner status is build-failed because the diagnostic derivation intentionally returns nonzero after capturing rc=139 probes.",
+  "results": {
+    "cparse_decl_after_config_only": 0,
+    "cparse_decl_after_system": 0,
+    "cparse_extern_func_after_config_only": 139,
+    "cparse_func_after_config_only": 139,
+    "cparse_func_after_system": 139,
+    "cparse_func_empty_stmt_after_config_only": 139,
+    "cparse_func_local_decl_after_config_only": 139,
+    "cparse_global_after_config_only": 0,
+    "cparse_global_after_system": 0,
+    "cparse_int_func_after_config_only": 139,
+    "cparse_int_func_after_system": 139,
+    "cparse_oldstyle_func_after_config_only": 139,
+    "cparse_oldstyle_func_after_system": 139,
+    "cparse_static_func_after_config_only": 139
+  },
+  "schema": "crunch-gcc40-cparse-function-shape-reduce-v1",
+  "status": "captured-build-failed-diagnostic",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl"
+}
