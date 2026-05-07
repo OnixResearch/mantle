@@ -1117,6 +1117,23 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
+            make_cparse_frontmatter_source_ranges_config_undef6() {
+              label="$1"
+              ranges="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              for range in $ranges; do
+                first=${range%:*}
+                last=${range#*:}
+                $BB awk -v first="$first" -v last="$last" 'NR >= first && NR <= last { print }' "$WORK/gcc-4.0.4/gcc/c-parse.c" >> "$probe"
+              done
+              echo 'int cparse_frontmatter_source_ranges_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
             print_tm_include_window() {
               $BB awk '/^#include / { seen++; printf("diag-tm-include: %03d %s\n", seen, $0) > "/dev/stderr" }' tm.h
             }
@@ -2152,6 +2169,28 @@ static void *malloced_yyvs;
 typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
 #define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))
 #define RESTORE_EXT_FLAGS(val) do { pedantic = val & 1; warn_pointer_arith = (val >> 1) & 1; warn_traditional = (val >> 2) & 1; flag_iso = (val >> 3) & 1; } while (0)'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_no_parser_protos '224:366'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_parser_only '370:384'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yystype_parser '281:293 370:384'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yystype_declspec_parser '281:326 370:384'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yyoverflow_yystype_parser '224:265 281:293 370:384'
+            for n in 370 371 372 373 374 375 376 377 378 379 380 381 382 383 384; do
+              make_cparse_frontmatter_source_ranges_config_undef6 "cparse_manual_src2_yystype_parser_lines_$n" "281:293 370:$n"
+            done
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yystype_parser_no_init_func '281:293 370:379'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yystype_init_func_only '281:293 380:384'
+            make_cparse_frontmatter_source_ranges_config_undef6 cparse_manual_src2_yystype_init_proto_func '281:293 377:384'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_init_oneline 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static void init_reswords (void);
+void c_parse_init (void) { init_reswords (); }'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_func_empty 'void c_parse_init (void) { }'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_func_call_only 'static void init_reswords (void);
+void c_parse_init (void) { init_reswords (); }'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_func_int_empty 'int c_parse_init (void) { return 0; }'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_func_empty 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+void c_parse_init (void) { }'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_init_decl_only 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static void init_reswords (void);'
             make_cparse_frontmatter_manual_config_undef6 cparse_manual_combined_frontmatter 'static short *malloced_yyss;
 static void *malloced_yyvs;
 #define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
@@ -2195,6 +2234,34 @@ void c_parse_init (void) { init_reswords (); }'
               > /tmp/cparse_full_config_undef6_no_custom_yyoverflow.c
             try_cparse_variant cparse_full_config_undef6_no_custom_yyoverflow /tmp/cparse_full_config_undef6_no_custom_yyoverflow.c
             $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 267 && NR <= 286 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_yystype.c
+            try_cparse_variant cparse_full_config_undef6_no_yystype /tmp/cparse_full_config_undef6_no_yystype.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 288 && NR <= 298 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_declspec_state.c
+            try_cparse_variant cparse_full_config_undef6_no_declspec_state /tmp/cparse_full_config_undef6_no_declspec_state.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 300 && NR <= 329 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_declspec_macros.c
+            try_cparse_variant cparse_full_config_undef6_no_declspec_macros /tmp/cparse_full_config_undef6_no_declspec_macros.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 330 && NR <= 363 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_ext_flags.c
+            try_cparse_variant cparse_full_config_undef6_no_ext_flags /tmp/cparse_full_config_undef6_no_ext_flags.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR == 365 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_objc_raw_id.c
+            try_cparse_variant cparse_full_config_undef6_no_objc_raw_id /tmp/cparse_full_config_undef6_no_objc_raw_id.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 367 && NR <= 389 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_parser_protos.c
+            try_cparse_variant cparse_full_config_undef6_no_parser_protos /tmp/cparse_full_config_undef6_no_parser_protos.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 224 && NR <= 265 { next } NR >= 330 && NR <= 363 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_yyoverflow_no_ext_flags.c
+            try_cparse_variant cparse_full_config_undef6_no_yyoverflow_no_ext_flags /tmp/cparse_full_config_undef6_no_yyoverflow_no_ext_flags.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
               | $BB awk '
                   NR == 330 {
                     print "static void crunch_push_declspec_stack (void) { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; }";
@@ -2208,255 +2275,6 @@ void c_parse_init (void) { init_reswords (); }'
                   { print }
                 ' > /tmp/cparse_full_config_undef6_declspec_funcs.c
             try_cparse_variant cparse_full_config_undef6_declspec_funcs /tmp/cparse_full_config_undef6_declspec_funcs.c
-            make_cparse_prefix_config_undef6 cparse_undef6_top_40 40
-            make_cparse_prefix_config_undef6 cparse_undef6_top_80 80
-            make_cparse_prefix_config_undef6 cparse_undef6_top_120 120
-            make_cparse_prefix_config_undef6 cparse_undef6_top_160 160
-            make_cparse_prefix_config_undef6 cparse_undef6_top_200 200
-            make_cparse_prefix_config_undef6 cparse_undef6_top_240 240
-            make_cparse_prefix_config_undef6 cparse_undef6_top_260 260
-            make_cparse_prefix_config_undef6 cparse_undef6_top_280 280
-            make_cparse_prefix_config_undef6 cparse_undef6_top_300 300
-            make_cparse_prefix_config_undef6 cparse_undef6_top_320 320
-            make_cparse_prefix_config_undef6 cparse_undef6_top_340 340
-            make_cparse_prefix_config_undef6 cparse_undef6_top_360 360
-            make_cparse_prefix_config_undef6 cparse_undef6_top_365 365
-            make_cparse_prefix_config_undef6 cparse_undef6_top_370 370
-            make_cparse_prefix_config_undef6 cparse_undef6_top_375 375
-            make_cparse_prefix_config_undef6 cparse_undef6_top_380 380
-            make_cparse_prefix_config_undef6 cparse_undef6_top_385 385
-            make_cparse_prefix_config_undef6 cparse_undef6_header_only 390
-            make_cparse_prefix_config_undef6 cparse_undef6_after_yytranslate 544
-            make_cparse_prefix_config_undef6 cparse_undef6_after_yyr1 1017
-            make_cparse_prefix_config_undef6 cparse_undef6_after_yyr2 1082
-            make_cparse_prefix_config_undef6 cparse_undef6_before_yytable 1338
-            make_cparse_prefix_config_undef6 cparse_undef6_before_yyparse 2455
-            make_autohost_define_range_probe autohost_defines_80_84_system 80 84
-            make_autohost_define_prefix_probe autohost_defines_85_system 85
-            make_autohost_define_prefix_probe autohost_defines_86_system 86
-            make_autohost_define_prefix_probe autohost_defines_87_system 87
-            make_autohost_define_prefix_probe autohost_defines_88_system 88
-            make_autohost_define_prefix_probe autohost_defines_89_system 89
-            make_autohost_define_prefix_probe autohost_defines_90_system 90
-            make_autohost_define_prefix_probe autohost_defines_95_system 95
-            make_autohost_define_prefix_probe autohost_defines_100_system 100
-            make_autohost_define_prefix_probe autohost_defines_200_system 200
-            make_autohost_define_prefix_probe autohost_defines_400_system 400
-            cat > /tmp/cparse_manual_config_system.c <<'EOF'
-#include "auto-host.h"
-#ifdef IN_GCC
-# include "ansidecl.h"
-#endif
-#include "system.h"
-int manual_config_system_probe;
-EOF
-            try_cparse_variant cparse_manual_config_system /tmp/cparse_manual_config_system.c
-            cat > /tmp/cparse_autohost_system.c <<'EOF'
-#include "auto-host.h"
-#include "system.h"
-int autohost_system_probe;
-EOF
-            try_cparse_variant cparse_autohost_system /tmp/cparse_autohost_system.c
-            cat > /tmp/cparse_ansidecl_system.c <<'EOF'
-#include "ansidecl.h"
-#include "system.h"
-int ansidecl_system_probe;
-EOF
-            try_cparse_variant cparse_ansidecl_system /tmp/cparse_ansidecl_system.c
-            make_include_probe cparse_inc_system_only 'system.h'
-            make_cparse_chunk_probe() {
-              label="$1"
-              body="$2"
-              probe="/tmp/$label.c"
-              printf '%s\n' "$body" > "$probe"
-              echo 'int cparse_system_chunk_probe;' >> "$probe"
-              try_cparse_variant "$label" "$probe"
-            }
-            make_cparse_chunk_probe chunk_safe_ctype '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>'
-            make_cparse_chunk_probe chunk_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>
-#include <sys/types.h>'
-            make_cparse_chunk_probe chunk_errno '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>
-#include <sys/types.h>
-#include <errno.h>'
-            make_cparse_chunk_probe ansimacro_gcc_version_sys_types '#ifndef GCC_VERSION
-#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
-#endif
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_ansi_defs_sys_types '#ifndef GCC_VERSION
-#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
-#endif
-#define ANSI_PROTOTYPES 1
-#define PTR void *
-#define PTRCONST void *const
-#define LONG_DOUBLE long double
-#ifndef PARAMS
-#define PARAMS(ARGS) ARGS
-#endif
-#define VPARAMS(ARGS) ARGS
-#define VA_START(VA_LIST, VAR) va_start(VA_LIST, VAR)
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_undef_keywords_sys_types '#ifndef GCC_VERSION
-#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
-#endif
-#undef const
-#undef volatile
-#undef signed
-#undef inline
-#if __STDC_VERSION__ > 199901L
-#else
-# if GCC_VERSION >= 2007
-#  define inline __inline__
-# else
-#  define inline
-# endif
-#endif
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_undef_const_sys_types '#undef const
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_undef_volatile_sys_types '#undef volatile
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_undef_signed_sys_types '#undef signed
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_undef_inline_sys_types '#undef inline
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_inline_empty_sys_types '#undef inline
-#define inline
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_inline_builtin_sys_types '#undef inline
-#define inline __inline__
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_attribute_blank_sys_types '#ifndef GCC_VERSION
-#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
-#endif
-#if (GCC_VERSION < 2007)
-# define __attribute__(x)
-#endif
-#include <sys/types.h>'
-            make_cparse_chunk_probe ansimacro_extension_blank_sys_types '#ifndef GCC_VERSION
-#define GCC_VERSION (__GNUC__ * 1000 + __GNUC_MINOR__)
-#endif
-#if GCC_VERSION < 2008
-#define __extension__
-#endif
-#include <sys/types.h>'
-
-            make_ansidecl_system_chunk_probe() {
-              label="$1"
-              body="$2"
-              probe="/tmp/$label.c"
-              echo '#include "ansidecl.h"' > "$probe"
-              printf '%s\n' "$body" >> "$probe"
-              echo 'int ansidecl_system_chunk_probe;' >> "$probe"
-              try_cparse_variant "$label" "$probe"
-            }
-            make_ansidecl_system_chunk_probe ansidecl_chunk_sys_types_only '#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdarg '#include <stdarg.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdarg_sys_types '#include <stdarg.h>
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_va_copy '#include <stdarg.h>
-#ifndef va_copy
-# ifdef __va_copy
-#  define va_copy(d,s) __va_copy((d),(s))
-# else
-#  define va_copy(d,s) ((d) = (s))
-# endif
-#endif'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_va_copy_sys_types '#include <stdarg.h>
-#ifndef va_copy
-# ifdef __va_copy
-#  define va_copy(d,s) __va_copy((d),(s))
-# else
-#  define va_copy(d,s) ((d) = (s))
-# endif
-#endif
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stddef '#include <stdarg.h>
-#include <stddef.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stddef_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_macros '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
-#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
-#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_stdio_macros_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
-#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
-#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_safe_ctype '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
-#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
-#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
-#undef fread_unlocked
-#undef fwrite_unlocked
-#include <safe-ctype.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_safe_ctype_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#define fopen(PATH,MODE) fopen_unlocked(PATH,MODE)
-#define fdopen(FILDES,MODE) fdopen_unlocked(FILDES,MODE)
-#define freopen(PATH,MODE,STREAM) freopen_unlocked(PATH,MODE,STREAM)
-#undef fread_unlocked
-#undef fwrite_unlocked
-#include <safe-ctype.h>
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_sys_types '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>
-#include <sys/types.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_errno '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>
-#include <sys/types.h>
-#include <errno.h>'
-            make_ansidecl_system_chunk_probe ansidecl_chunk_string '#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <safe-ctype.h>
-#include <sys/types.h>
-#include <errno.h>
-#define __NO_STRING_INLINES
-#include <string.h>'
-            make_include_probe cparse_inc_system 'config.h system.h'
-            make_include_probe cparse_inc_coretypes 'config.h system.h coretypes.h'
-            make_include_probe cparse_inc_tm 'config.h system.h coretypes.h tm.h'
-            make_include_probe cparse_inc_tree 'config.h system.h coretypes.h tm.h tree.h'
-            make_include_probe cparse_inc_langhooks 'config.h system.h coretypes.h tm.h tree.h langhooks.h'
-            make_include_probe cparse_inc_cpplib 'config.h system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h'
-            make_include_probe cparse_inc_ctree 'config.h system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
-
-            make_cparse_prefix cparse_header_only 390
-            make_cparse_prefix cparse_after_yytranslate 544
-            make_cparse_prefix cparse_after_yyr1 1017
-            make_cparse_prefix cparse_after_yyr2 1082
-            make_cparse_prefix cparse_before_yytable 1338
-            make_cparse_prefix cparse_before_yyparse 2455
-
             # Then try a full direct compile outside make so the diagnostic
             # records TinyCC's raw subprocess exit code before the make-level
             # failure masks it as exit 2.
