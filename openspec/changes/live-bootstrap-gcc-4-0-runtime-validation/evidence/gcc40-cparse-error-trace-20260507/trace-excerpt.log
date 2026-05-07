@@ -1,0 +1,36 @@
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-begin
+diag-cparse-trace: cparse_trace_valid_var_semicolon src:001:int cparse_trace_valid_var_probe;
+diag-cparse-trace: cparse_trace_valid_var_semicolon source-end
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_valid_var_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_eof_var_prefix source-begin
+diag-cparse-trace: cparse_trace_eof_var_prefix src:001:int cparse_trace_eof_var_probe
+diag-cparse-trace: cparse_trace_eof_var_prefix source-end
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly_rc=60
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_eof_var_prefix preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_init_semicolon src:001:int cparse_trace_bad_init_probe = ;
+diag-cparse-trace: cparse_trace_bad_init_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_init_semicolon preprocessed_compile_rc=skipped
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-begin
+diag-cparse-trace: cparse_trace_bad_comma_semicolon src:001:int cparse_trace_bad_comma_probe, ;
+diag-cparse-trace: cparse_trace_bad_comma_semicolon source-end
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly_rc=60
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon assembly-stderr: tcc: error: invalid option -- 'invalid option -- '%s''
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess_rc=139 preprocessed_lines=0
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocess-stderr: Segmentation fault (core dumped)
+diag-cparse-trace: cparse_trace_bad_comma_semicolon preprocessed_compile_rc=skipped

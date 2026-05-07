@@ -1107,6 +1107,54 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
+            trace_cparse_plain_exact_phases() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              preprocessed="/tmp/$label.i"
+              pre_err="/tmp/$label.preprocess.stderr"
+              compile_err="/tmp/$label.preprocessed-compile.stderr"
+              printf '%s\n' "$body" > "$probe"
+              echo "diag-cparse-trace: $label source-begin" >&2
+              $BB awk '{ printf("diag-cparse-trace: %s src:%03d:%s\n", label, NR, $0) > "/dev/stderr" }' label="$label" "$probe"
+              echo "diag-cparse-trace: $label source-end" >&2
+              set +e
+              gcc40-cc -S -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$probe" -o "/tmp/$label.s" 2> "/tmp/$label.assembly.stderr"
+              asm_rc=$?
+              set -e
+              echo "diag-cparse-trace: $label assembly_rc=$asm_rc" >&2
+              $BB sed 's/^/diag-cparse-trace: '$label' assembly-stderr: /' "/tmp/$label.assembly.stderr" >&2 || true
+              set +e
+              gcc40-cc -E -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$probe" > "$preprocessed" 2> "$pre_err"
+              pre_rc=$?
+              set -e
+              pre_lines=0
+              if [ -f "$preprocessed" ]; then
+                pre_lines=$($BB wc -l < "$preprocessed")
+              fi
+              echo "diag-cparse-trace: $label preprocess_rc=$pre_rc preprocessed_lines=$pre_lines" >&2
+              $BB sed 's/^/diag-cparse-trace: '$label' preprocess-stderr: /' "$pre_err" >&2 || true
+              if [ "$pre_rc" = 0 ]; then
+                set +e
+                gcc40-cc -c -DIN_GCC -DHAVE_CONFIG_H \
+                  -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                  -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                  "$preprocessed" -o "/tmp/$label.preprocessed.o" 2> "$compile_err"
+                compile_rc=$?
+                set -e
+                echo "diag-cparse-trace: $label preprocessed_compile_rc=$compile_rc" >&2
+                $BB sed 's/^/diag-cparse-trace: '$label' preprocessed-compile-stderr: /' "$compile_err" >&2 || true
+              else
+                echo "diag-cparse-trace: $label preprocessed_compile_rc=skipped" >&2
+              fi
+            }
+
             make_cparse_exact_after_includes_config_undef6() {
               label="$1"
               includes="$2"
@@ -2143,6 +2191,10 @@ EOF
             make_cparse_plain_exact cparse_plain_bad_init_semicolon_no_config 'int cparse_plain_bad_init_probe = ;'
             make_cparse_plain_exact cparse_plain_bad_param_semicolon_no_config 'void cparse_plain_bad_param_probe (void;'
             make_cparse_plain_exact cparse_plain_bad_comma_semicolon_no_config 'int cparse_plain_bad_comma_probe, ;'
+            trace_cparse_plain_exact_phases cparse_trace_valid_var_semicolon 'int cparse_trace_valid_var_probe;'
+            trace_cparse_plain_exact_phases cparse_trace_eof_var_prefix 'int cparse_trace_eof_var_probe'
+            trace_cparse_plain_exact_phases cparse_trace_bad_init_semicolon 'int cparse_trace_bad_init_probe = ;'
+            trace_cparse_plain_exact_phases cparse_trace_bad_comma_semicolon 'int cparse_trace_bad_comma_probe, ;'
             make_cparse_plain_body cparse_plain_decl_no_config 'void cparse_plain_probe (void);'
             make_cparse_plain_body cparse_plain_global_no_config 'int cparse_plain_global_probe;'
             make_cparse_plain_body cparse_plain_func_no_config 'void cparse_plain_function_probe (void) { }'

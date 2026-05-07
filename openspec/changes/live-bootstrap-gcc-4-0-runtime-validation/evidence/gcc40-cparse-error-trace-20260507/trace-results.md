@@ -1,0 +1,52 @@
+# GCC 4.0 c-parse declaration error trace results
+
+- `cparse_trace_valid_var_semicolon`
+  - source: `int cparse_trace_valid_var_probe;`
+  - assembly_rc: `60`
+  - preprocess_rc: `139`
+  - preprocessed_lines: `0`
+  - preprocessed_compile_rc: `skipped`
+  - assembly_stderr: `tcc: error: invalid option -- 'invalid option -- '%s'' | tcc: error: invalid option -- 'invalid option -- '%s''`
+  - preprocess_stderr: `Segmentation fault (core dumped)`
+- `cparse_trace_eof_var_prefix`
+  - source: `int cparse_trace_eof_var_probe`
+  - assembly_rc: `60`
+  - preprocess_rc: `139`
+  - preprocessed_lines: `0`
+  - preprocessed_compile_rc: `skipped`
+  - assembly_stderr: `tcc: error: invalid option -- 'invalid option -- '%s'' | tcc: error: invalid option -- 'invalid option -- '%s''`
+  - preprocess_stderr: `Segmentation fault (core dumped)`
+- `cparse_trace_bad_init_semicolon`
+  - source: `int cparse_trace_bad_init_probe = ;`
+  - assembly_rc: `60`
+  - preprocess_rc: `139`
+  - preprocessed_lines: `0`
+  - preprocessed_compile_rc: `skipped`
+  - assembly_stderr: `tcc: error: invalid option -- 'invalid option -- '%s'' | tcc: error: invalid option -- 'invalid option -- '%s''`
+  - preprocess_stderr: `Segmentation fault (core dumped)`
+- `cparse_trace_bad_comma_semicolon`
+  - source: `int cparse_trace_bad_comma_probe, ;`
+  - assembly_rc: `60`
+  - preprocess_rc: `139`
+  - preprocessed_lines: `0`
+  - preprocessed_compile_rc: `skipped`
+  - assembly_stderr: `tcc: error: invalid option -- 'invalid option -- '%s'' | tcc: error: invalid option -- 'invalid option -- '%s''`
+  - preprocess_stderr: `Segmentation fault (core dumped)`
+
+## Direct rc subset
+- `cparse_plain_func_decl_semicolon_exact_no_config` rc=`0`
+- `cparse_plain_var_prefix_no_config` rc=`139`
+- `cparse_plain_pointer_prefix_no_config` rc=`139`
+- `cparse_plain_var_semicolon_exact_no_config` rc=`0`
+- `cparse_plain_pointer_semicolon_exact_no_config` rc=`0`
+- `cparse_plain_bad_init_semicolon_no_config` rc=`139`
+- `cparse_plain_bad_param_semicolon_no_config` rc=`139`
+- `cparse_plain_bad_comma_semicolon_no_config` rc=`139`
+- `cparse_func_decl_semicolon_config_only` rc=`0`
+- `cparse_var_prefix_config_only` rc=`139`
+- `cparse_pointer_prefix_config_only` rc=`139`
+- `cparse_var_semicolon_config_only` rc=`0`
+- `cparse_pointer_semicolon_config_only` rc=`0`
+- `cparse_bad_init_semicolon_config_only` rc=`139`
+- `cparse_bad_param_semicolon_config_only` rc=`139`
+- `cparse_bad_comma_semicolon_config_only` rc=`139`
