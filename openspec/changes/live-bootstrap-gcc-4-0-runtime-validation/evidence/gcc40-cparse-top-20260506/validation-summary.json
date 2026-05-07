@@ -1,0 +1,30 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-top-20260506-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-top-20260506-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": 1,
+  "warmups": [],
+  "status": "build-failed",
+  "failure_class": "build",
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-top-20260506/validation-summary.md"
+  },
+  "leakage_findings": [
+    {
+      "source": "stdout",
+      "needle": "/bin/",
+      "count": 31
+    }
+  ],
+  "generated_at_unix": 1778119255
+}

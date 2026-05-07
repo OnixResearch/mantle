@@ -909,6 +909,20 @@ EOF
               try_cparse_variant "$label" "$probe"
             }
 
+            make_header_prefix_probe_config_undef6() {
+              label="$1"
+              includes="$2"
+              header="$3"
+              cutoff="$4"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for include in $includes; do
+                echo "#include \"$include\"" >> "$probe"
+              done
+              $BB awk -v cutoff="$cutoff" 'NR <= cutoff { print } END { print "int cparse_header_prefix_probe;" }' "$header" >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
             print_tm_include_window() {
               $BB awk '/^#include / { seen++; printf("diag-tm-include: %03d %s\n", seen, $0) > "/dev/stderr" }' tm.h
             }
@@ -1809,7 +1823,25 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_tree 'system.h coretypes.h tm.h tree.h'
             make_include_probe_config_undef6 cparse_undef6_inc_langhooks 'system.h coretypes.h tm.h tree.h langhooks.h'
             make_include_probe_config_undef6 cparse_undef6_inc_cpplib 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h'
-            make_include_probe_config_undef6 cparse_undef6_inc_ctree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_c_pragma 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h'
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_20 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 20
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_24 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 24
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_25 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 25
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_26 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 26
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_27 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 27
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_31 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 31
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_38 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 38
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_40 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 40
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_80 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 80
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_120 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 120
+            make_header_prefix_probe_config_undef6 cparse_undef6_c_tree_lines_200 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h' "$WORK/gcc-4.0.4/gcc/c-tree.h" 200
+            make_include_probe_config_undef6 cparse_undef6_inc_c_tree 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_flags 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_varray 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_output 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_toplev 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_ggc 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h'
+            make_include_probe_config_undef6 cparse_undef6_inc_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
             $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6.c
             try_cparse_variant cparse_full_config_undef6 /tmp/cparse_full_config_undef6.c
             make_cparse_prefix_config_undef6 cparse_undef6_top_40 40
