@@ -1077,6 +1077,46 @@ EOF
               $BB awk 'NR <= 180 { printf("diag-options-head: %03d %s\n", NR, $0) > "/dev/stderr" }' options.h
             }
 
+            make_cparse_frontmatter_manual_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              echo '#include "config-undef6.h"' > "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              printf '%s\n' "$body" >> "$probe"
+              echo 'int cparse_frontmatter_manual_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            make_cparse_preamble_before_includes_config_undef6() {
+              label="$1"
+              body="$2"
+              probe="/tmp/$label.c"
+              printf '%s\n' "$body" > "$probe"
+              echo '#include "config-undef6.h"' >> "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo 'int cparse_preamble_before_includes_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
+            make_cparse_source_range_before_includes_config_undef6() {
+              label="$1"
+              first="$2"
+              last="$3"
+              probe="/tmp/$label.c"
+              $BB awk -v first="$first" -v last="$last" 'NR >= first && NR <= last { print }' "$WORK/gcc-4.0.4/gcc/c-parse.c" > "$probe"
+              echo '#include "config-undef6.h"' >> "$probe"
+              for header in system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h; do
+                echo "#include \"$header\"" >> "$probe"
+              done
+              echo 'int cparse_source_range_before_includes_undef6_probe;' >> "$probe"
+              try_cparse_variant "$label" "$probe"
+            }
+
             print_tm_include_window() {
               $BB awk '/^#include / { seen++; printf("diag-tm-include: %03d %s\n", seen, $0) > "/dev/stderr" }' tm.h
             }
@@ -2025,8 +2065,149 @@ EOF
             make_include_probe_config_undef6 cparse_undef6_inc_toplev 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h'
             make_include_probe_config_undef6 cparse_undef6_inc_ggc 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h'
             make_include_probe_config_undef6 cparse_undef6_inc_c_common 'system.h coretypes.h tm.h tree.h langhooks.h input.h cpplib.h intl.h timevar.h c-pragma.h c-tree.h flags.h varray.h output.h toplev.h ggc.h c-common.h'
+            make_cparse_source_range_before_includes_config_undef6 cparse_preamble_bison_defines 36 47
+            make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_enum 50 127
+            make_cparse_source_range_before_includes_config_undef6 cparse_preamble_token_defines 128 197
+            make_cparse_source_range_before_includes_config_undef6 cparse_preamble_tokens_all 36 197
+            make_cparse_source_range_before_includes_config_undef6 cparse_preamble_tokens_no_static_define 128 197
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype;
+	struct c_arg_info *arginfotype; struct c_declarator *dtrtype;
+	struct c_type_name *typenametype; struct c_parm *parmtype;
+	struct c_declspecs *dsptype; struct c_typespec tstype;
+	enum tree_code code; location_t location; } YYSTYPE;
+#define yystype YYSTYPE
+#define YYSTYPE_IS_DECLARED 1
+#define YYSTYPE_IS_TRIVIAL 1'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_declspec_statics 'static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack {
+  struct c_declspecs *current_declspecs;
+  tree prefix_attributes;
+  tree all_prefix_attributes;
+  struct c_declspec_stack *next;
+};
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_push_declspec '#define PUSH_DECLSPEC_STACK do { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_pop_declspec '#define POP_DECLSPEC_STACK do { current_declspecs = declspec_stack->current_declspecs; prefix_attributes = declspec_stack->prefix_attributes; all_prefix_attributes = declspec_stack->all_prefix_attributes; declspec_stack = declspec_stack->next; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_save_ext '#define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_restore_ext '#define RESTORE_EXT_FLAGS(val) do { pedantic = val & 1; warn_pointer_arith = (val >> 1) & 1; warn_traditional = (val >> 2) & 1; flag_iso = (val >> 3) & 1; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_parser_protos 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+#define YYPRINT(FILE,YYCHAR,YYLVAL) yyprint(FILE,YYCHAR,YYLVAL)
+static void yyprint (FILE *, int, YYSTYPE);
+static void yyerror (const char *);
+static int yylexname (void);
+static inline int _yylex (void);
+static int  yylex (void);
+static void init_reswords (void);'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yyoverflow_void 'static short *malloced_yyss;
+static void *malloced_yyvs;
+#define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
+typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_declspec 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack { struct c_declspecs *current_declspecs; tree prefix_attributes; tree all_prefix_attributes; struct c_declspec_stack *next; };
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_declspec_pushpop 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack { struct c_declspecs *current_declspecs; tree prefix_attributes; tree all_prefix_attributes; struct c_declspec_stack *next; };
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;
+#define PUSH_DECLSPEC_STACK do { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; } while (0)
+#define POP_DECLSPEC_STACK do { current_declspecs = declspec_stack->current_declspecs; prefix_attributes = declspec_stack->prefix_attributes; all_prefix_attributes = declspec_stack->all_prefix_attributes; declspec_stack = declspec_stack->next; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yystype_save_restore 'typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+#define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))
+#define RESTORE_EXT_FLAGS(val) do { pedantic = val & 1; warn_pointer_arith = (val >> 1) & 1; warn_traditional = (val >> 2) & 1; flag_iso = (val >> 3) & 1; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yyoverflow_yystype_declspec 'static short *malloced_yyss;
+static void *malloced_yyvs;
+#define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
+typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack { struct c_declspecs *current_declspecs; tree prefix_attributes; tree all_prefix_attributes; struct c_declspec_stack *next; };
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yyoverflow_declspec_pushpop 'static short *malloced_yyss;
+static void *malloced_yyvs;
+#define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
+typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack { struct c_declspecs *current_declspecs; tree prefix_attributes; tree all_prefix_attributes; struct c_declspec_stack *next; };
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;
+#define PUSH_DECLSPEC_STACK do { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; } while (0)
+#define POP_DECLSPEC_STACK do { current_declspecs = declspec_stack->current_declspecs; prefix_attributes = declspec_stack->prefix_attributes; all_prefix_attributes = declspec_stack->all_prefix_attributes; declspec_stack = declspec_stack->next; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_yyoverflow_save_restore 'static short *malloced_yyss;
+static void *malloced_yyvs;
+#define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
+typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+#define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))
+#define RESTORE_EXT_FLAGS(val) do { pedantic = val & 1; warn_pointer_arith = (val >> 1) & 1; warn_traditional = (val >> 2) & 1; flag_iso = (val >> 3) & 1; } while (0)'
+            make_cparse_frontmatter_manual_config_undef6 cparse_manual_combined_frontmatter 'static short *malloced_yyss;
+static void *malloced_yyvs;
+#define yyoverflow(MSG, SS, SSSIZE, VS, VSSIZE, YYSSZ) do { size_t newsize; short *newss; void *newvs; newsize = *(YYSSZ) *= 2; if (malloced_yyss) { newss = really_call_realloc (*(SS), newsize * sizeof (short)); newvs = really_call_realloc (*(VS), newsize * sizeof (YYSTYPE)); } else { newss = really_call_malloc (newsize * sizeof (short)); newvs = really_call_malloc (newsize * sizeof (YYSTYPE)); if (newss) memcpy (newss, *(SS), (SSSIZE)); if (newvs) memcpy (newvs, *(VS), (VSSIZE)); } if (!newss || !newvs) { yyerror (MSG); return 2; } *(SS) = newss; *(VS) = newvs; malloced_yyss = newss; malloced_yyvs = (void *) newvs; } while (0)
+typedef union YYSTYPE {long itype; tree ttype; void *otype; struct c_expr exprtype; struct c_arg_info *arginfotype; struct c_declarator *dtrtype; struct c_type_name *typenametype; struct c_parm *parmtype; struct c_declspecs *dsptype; struct c_typespec tstype; enum tree_code code; location_t location; } YYSTYPE;
+#define yystype YYSTYPE
+#define YYSTYPE_IS_DECLARED 1
+#define YYSTYPE_IS_TRIVIAL 1
+static struct c_declspecs *current_declspecs;
+static GTY(()) tree prefix_attributes;
+static GTY(()) tree all_prefix_attributes;
+struct c_declspec_stack { struct c_declspecs *current_declspecs; tree prefix_attributes; tree all_prefix_attributes; struct c_declspec_stack *next; };
+static struct c_declspec_stack *declspec_stack;
+static tree offsetof_base;
+#define PUSH_DECLSPEC_STACK do { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; } while (0)
+#define POP_DECLSPEC_STACK do { current_declspecs = declspec_stack->current_declspecs; prefix_attributes = declspec_stack->prefix_attributes; all_prefix_attributes = declspec_stack->all_prefix_attributes; declspec_stack = declspec_stack->next; } while (0)
+#define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))
+#define RESTORE_EXT_FLAGS(val) do { pedantic = val & 1; warn_pointer_arith = (val >> 1) & 1; warn_traditional = (val >> 2) & 1; flag_iso = (val >> 3) & 1; } while (0)
+#define OBJC_NEED_RAW_IDENTIFIER(VAL)
+#define YYPRINT(FILE,YYCHAR,YYLVAL) yyprint(FILE,YYCHAR,YYLVAL)
+static void yyprint (FILE *, int, YYSTYPE);
+static void yyerror (const char *);
+static int yylexname (void);
+static inline int _yylex (void);
+static int  yylex (void);
+static void init_reswords (void);
+void c_parse_init (void) { init_reswords (); }'
             $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6.c
             try_cparse_variant cparse_full_config_undef6 /tmp/cparse_full_config_undef6.c
+            $BB sed \
+              -e 's/#include "config.h"/#include "config-undef6.h"/' \
+              -e 's/YYSTYPE \*newvs;/void *newvs;/' \
+              "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6_void_newvs.c
+            try_cparse_variant cparse_full_config_undef6_void_newvs /tmp/cparse_full_config_undef6_void_newvs.c
+            $BB sed \
+              -e 's/#include "config.h"/#include "config-undef6.h"/' \
+              -e '/^#line /d' \
+              "$WORK/gcc-4.0.4/gcc/c-parse.c" > /tmp/cparse_full_config_undef6_no_line.c
+            try_cparse_variant cparse_full_config_undef6_no_line /tmp/cparse_full_config_undef6_no_line.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk 'NR >= 224 && NR <= 265 { next } { print }' \
+              > /tmp/cparse_full_config_undef6_no_custom_yyoverflow.c
+            try_cparse_variant cparse_full_config_undef6_no_custom_yyoverflow /tmp/cparse_full_config_undef6_no_custom_yyoverflow.c
+            $BB sed 's/#include "config.h"/#include "config-undef6.h"/' "$WORK/gcc-4.0.4/gcc/c-parse.c" \
+              | $BB awk '
+                  NR == 330 {
+                    print "static void crunch_push_declspec_stack (void) { struct c_declspec_stack *t = XOBNEW (&parser_obstack, struct c_declspec_stack); t->current_declspecs = current_declspecs; t->prefix_attributes = prefix_attributes; t->all_prefix_attributes = all_prefix_attributes; t->next = declspec_stack; declspec_stack = t; }";
+                    print "static void crunch_pop_declspec_stack (void) { current_declspecs = declspec_stack->current_declspecs; prefix_attributes = declspec_stack->prefix_attributes; all_prefix_attributes = declspec_stack->all_prefix_attributes; declspec_stack = declspec_stack->next; }";
+                    print "#define PUSH_DECLSPEC_STACK crunch_push_declspec_stack ()";
+                    print "#define POP_DECLSPEC_STACK crunch_pop_declspec_stack ()";
+                    print "#define SAVE_EXT_FLAGS() (pedantic | (warn_pointer_arith << 1) | (warn_traditional << 2) | (flag_iso << 3))";
+                    print "#define RESTORE_EXT_FLAGS(val) do { pedantic = (val) & 1; warn_pointer_arith = ((val) >> 1) & 1; warn_traditional = ((val) >> 2) & 1; flag_iso = ((val) >> 3) & 1; } while (0)";
+                  }
+                  NR >= 330 && NR <= 363 { next }
+                  { print }
+                ' > /tmp/cparse_full_config_undef6_declspec_funcs.c
+            try_cparse_variant cparse_full_config_undef6_declspec_funcs /tmp/cparse_full_config_undef6_declspec_funcs.c
             make_cparse_prefix_config_undef6 cparse_undef6_top_40 40
             make_cparse_prefix_config_undef6 cparse_undef6_top_80 80
             make_cparse_prefix_config_undef6 cparse_undef6_top_120 120
