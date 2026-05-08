@@ -1,0 +1,19 @@
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_all_va_start_noop libtcc-vastart-full-all_va_start_noop.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_all_va_start_noop libtcc-vastart-full-all_va_start_noop.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-all_va_start_noop.c libtcc_vastart_full_all_va_start_noop common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_strcat_va_start_noop libtcc-vastart-full-strcat_va_start_noop.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_strcat_va_start_noop libtcc-vastart-full-strcat_va_start_noop.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-strcat_va_start_noop.c libtcc_vastart_full_strcat_va_start_noop common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_error1_va_start_noop libtcc-vastart-full-error1_va_start_noop.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_error1_va_start_noop libtcc-vastart-full-error1_va_start_noop.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-error1_va_start_noop.c libtcc_vastart_full_error1_va_start_noop common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_all_va_start_noop libtcc-vastart-full-all_va_start_noop.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_all_va_start_noop libtcc-vastart-full-all_va_start_noop.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-all_va_start_noop.c libtcc_vastart_full_all_va_start_noop one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_strcat_va_start_noop libtcc-vastart-full-strcat_va_start_noop.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_strcat_va_start_noop libtcc-vastart-full-strcat_va_start_noop.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-strcat_va_start_noop.c libtcc_vastart_full_strcat_va_start_noop one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_error1_va_start_noop libtcc-vastart-full-error1_va_start_noop.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_full_error1_va_start_noop libtcc-vastart-full-error1_va_start_noop.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-full-error1_va_start_noop.c libtcc_vastart_full_error1_va_start_noop one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: build rc=139

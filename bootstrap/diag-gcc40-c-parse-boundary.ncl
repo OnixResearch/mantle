@@ -1308,89 +1308,40 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               done
               # Earlier committed evidence covered the coarse libtcc range,
               # prefix, macro, body, signature/prototype, error1, prefix
-              # signature, and static-varargs probes. Keep this under the
-              # sandbox argument-size limit by refining the prefix-only
-              # va_start expansion trigger inside static variadic helpers.
-              make_libtcc_strcat_prefix_vastart() {
+              # signature, static-varargs, and va_start expansion probes. Keep
+              # this under the sandbox argument-size limit by testing whether
+              # full-file libtcc.c still crashes after removing va_start calls.
+              make_libtcc_vastart_full_variant() {
                 variant="$1"
-                shape="$2"
-                $BB awk -v shape="$shape" '
-                  NR < 468 { print; next }
-                  NR == 468 {
-                    if (shape == "original") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    va_start(ap, fmt);"
-                      print "    strcat_vprintf(buf, buf_size, fmt, ap);"
-                      print "    va_end(ap);"
-                      print "}"
-                    } else if (shape == "static_empty") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt;"
-                      print "}"
-                    } else if (shape == "static_va_start_macro") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    va_start(ap, fmt);"
-                      print "    (void)buf; (void)buf_size; (void)ap;"
-                      print "}"
-                    } else if (shape == "nonstatic_va_start_macro") {
-                      print "void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    va_start(ap, fmt);"
-                      print "    (void)buf; (void)buf_size; (void)ap;"
-                      print "}"
-                    } else if (shape == "static_frame_address_only") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    void *fp;"
-                      print "    fp = __builtin_frame_address(0);"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)fp;"
-                      print "}"
-                    } else if (shape == "static___va_start_frame") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    __va_start(ap, __builtin_frame_address(0));"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)ap;"
-                      print "}"
-                    } else if (shape == "static___va_start_zero") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    __va_start(ap, 0);"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)ap;"
-                      print "}"
-                    } else if (shape == "static___va_start_fmt_addr") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    va_list ap;"
-                      print "    __va_start(ap, (void *)&fmt);"
-                      print "    (void)buf; (void)buf_size; (void)ap;"
-                      print "}"
-                    }
-                    exit
-                  }
-                ' libtcc.c > "libtcc-strcat-prefix-vastart-$variant.c"
+                $BB cp libtcc.c "libtcc-vastart-full-$variant.c"
+                if [ "$variant" = all_va_start_noop ]; then
+                  $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed \*\//g' "libtcc-vastart-full-$variant.c"
+                elif [ "$variant" = strcat_va_start_noop ]; then
+                  $BB awk '
+                    /void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ { in_strcat = 1 }
+                    in_strcat && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: strcat_printf va_start removed */"; next }
+                    { print }
+                    in_strcat && /^}/ { in_strcat = 0 }
+                  ' libtcc.c > "libtcc-vastart-full-$variant.c"
+                elif [ "$variant" = error1_va_start_noop ]; then
+                  $BB awk '
+                    /static void error1\(TCCState \*s1, int is_warning, const char \*fmt, va_list ap\)/ { seen_error1 = 1 }
+                    seen_error1 && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: post-error1 va_start removed */"; next }
+                    { print }
+                  ' libtcc.c > "libtcc-vastart-full-$variant.c"
+                fi
               }
-              compile_libtcc_strcat_prefix_vastart() {
+              compile_libtcc_vastart_full_variant() {
                 variant="$1"
-                shape="$2"
-                make_libtcc_strcat_prefix_vastart "$variant" "$shape"
-                compile_decl0_prepart "libtcc_strcat_prefix_vastart_${variant}" common "libtcc-strcat-prefix-vastart-$variant.c"
+                flags_name="$2"
+                make_libtcc_vastart_full_variant "$variant"
+                compile_decl0_prepart "libtcc_vastart_full_${variant}" "$flags_name" "libtcc-vastart-full-$variant.c"
               }
-              compile_libtcc_strcat_prefix_vastart original original
-              compile_libtcc_strcat_prefix_vastart static_empty static_empty
-              compile_libtcc_strcat_prefix_vastart static_va_start_macro static_va_start_macro
-              compile_libtcc_strcat_prefix_vastart nonstatic_va_start_macro nonstatic_va_start_macro
-              compile_libtcc_strcat_prefix_vastart static_frame_address_only static_frame_address_only
-              compile_libtcc_strcat_prefix_vastart static___va_start_frame static___va_start_frame
-              compile_libtcc_strcat_prefix_vastart static___va_start_zero static___va_start_zero
-              compile_libtcc_strcat_prefix_vastart static___va_start_fmt_addr static___va_start_fmt_addr
+              for flags_name in common one_source; do
+                compile_libtcc_vastart_full_variant all_va_start_noop "$flags_name"
+                compile_libtcc_vastart_full_variant strcat_va_start_noop "$flags_name"
+                compile_libtcc_vastart_full_variant error1_va_start_noop "$flags_name"
+              done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
