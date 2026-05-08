@@ -1306,125 +1306,28 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              make_libtcc_range_disabled() {
-                range_name="$1"
-                first="$2"
-                last="$3"
-                $BB awk -v first="$first" -v last="$last" '
-                  NR == first { print "#if 0 /* CRUNCH diag: disable libtcc range " first ".." last " */" }
-                  { print }
-                  NR == last { print "#endif /* CRUNCH diag libtcc range */" }
-                ' libtcc.c > "libtcc-range-$range_name.c"
+              # Earlier committed evidence covered the coarse libtcc range,
+              # prefix, and varargs-stub probes. Keep this diagnostic under
+              # the sandbox argument-size limit by running only the current
+              # macro-toggle reduction plus the shared prepart controls.
+              compile_libtcc_macro_flags() {
+                stage="$1"
+                part_flags="$2"
+                echo "diag-tcc-decl0-prepart: compile $stage libtcc.c flags=macro" >&2
+                set +e
+                "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $part_flags libtcc.c -o "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.o" 2> "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.stderr"
+                part_rc=$?
+                set -e
+                echo "diag-tcc-decl0-prepart: compile $stage libtcc.c flags=macro rc=$part_rc" >&2
+                $BB sed 's/^/diag-tcc-decl0-prepart: libtcc.c '$stage' macro stderr: /' "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.stderr" >&2 || true
               }
-              compile_libtcc_range() {
-                range_name="$1"
-                first="$2"
-                last="$3"
-                make_libtcc_range_disabled "$range_name" "$first" "$last"
-                for flags_name in common one_source; do
-                  compile_decl0_prepart "libtcc_range_${range_name}_${first}_${last}" "$flags_name" "libtcc-range-$range_name.c"
-                done
-              }
-              compile_libtcc_range util 78 470
-              compile_libtcc_range error 471 570
-              compile_libtcc_range state 571 996
-              compile_libtcc_range addfile 997 1182
-              compile_libtcc_range options 1183 1583
-              compile_libtcc_range args 1584 1981
-              make_libtcc_prefix() {
-                prefix_name="$1"
-                last="$2"
-                $BB awk -v last="$last" 'NR <= last { print }' libtcc.c > "libtcc-prefix-$prefix_name.c"
-              }
-              compile_libtcc_prefix() {
-                prefix_name="$1"
-                last="$2"
-                make_libtcc_prefix "$prefix_name" "$last"
-                for flags_name in common one_source; do
-                  compile_decl0_prepart "libtcc_prefix_${prefix_name}_${last}" "$flags_name" "libtcc-prefix-$prefix_name.c"
-                done
-              }
-              compile_libtcc_prefix globals 77
-              compile_libtcc_prefix asmstubs 89
-              compile_libtcc_prefix pathutils 198
-              compile_libtcc_prefix alloc 237
-              compile_libtcc_prefix dynarray 432
-              compile_libtcc_prefix split_path 457
-              compile_libtcc_prefix strcat_vprintf 466
-              compile_libtcc_prefix strcat_printf 474
-              compile_libtcc_prefix error1 518
-              compile_libtcc_prefix set_error_func 525
-              compile_libtcc_prefix error_noabort 536
-              compile_libtcc_prefix tcc_error 553
-              compile_libtcc_prefix warning 566
-              compile_libtcc_prefix error_api 570
-              compile_libtcc_prefix compile_string 675
-              compile_libtcc_prefix state_new 894
-              compile_libtcc_prefix output_type 984
-              compile_libtcc_prefix add_files 1182
-              compile_libtcc_prefix option_linker 1583
-              compile_libtcc_prefix full 1981
-              make_libtcc_strcat_printf_stub() {
-                $BB awk '
-                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
-                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                    print "{"
-                    print "    pstrcat(buf, buf_size, fmt);"
-                    print "}"
-                    in_stub=1
-                    next
-                  }
-                  in_stub && /^}/ { in_stub=0; next }
-                  !in_stub { print }
-                ' libtcc.c > libtcc-strcat-printf-stub.c
-              }
-              make_libtcc_strcat_printf_stub
-              for flags_name in common one_source; do
-                compile_decl0_prepart libtcc_strcat_printf_stub "$flags_name" libtcc-strcat-printf-stub.c
-              done
-              make_libtcc_error_varargs_stub() {
-                $BB awk '
-                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
-                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                    print "{"
-                    print "    pstrcat(buf, buf_size, fmt);"
-                    print "}"
-                    in_stub=1
-                    next
-                  }
-                  /^PUB_FUNC void tcc_error_noabort\(const char \*fmt, \.\.\.\)/ {
-                    print "PUB_FUNC void tcc_error_noabort(const char *fmt, ...)"
-                    print "{"
-                    print "    (void)fmt;"
-                    print "}"
-                    in_stub=1
-                    next
-                  }
-                  /^PUB_FUNC void tcc_error\(const char \*fmt, \.\.\.\)/ {
-                    print "PUB_FUNC void tcc_error(const char *fmt, ...)"
-                    print "{"
-                    print "    (void)fmt;"
-                    print "    exit(1);"
-                    print "}"
-                    in_stub=1
-                    next
-                  }
-                  /^PUB_FUNC void tcc_warning\(const char \*fmt, \.\.\.\)/ {
-                    print "PUB_FUNC void tcc_warning(const char *fmt, ...)"
-                    print "{"
-                    print "    (void)fmt;"
-                    print "}"
-                    in_stub=1
-                    next
-                  }
-                  in_stub && /^}/ { in_stub=0; next }
-                  !in_stub { print }
-                ' libtcc.c > libtcc-error-varargs-stub.c
-              }
-              make_libtcc_error_varargs_stub
-              for flags_name in common one_source; do
-                compile_decl0_prepart libtcc_error_varargs_stub "$flags_name" libtcc-error-varargs-stub.c
-              done
+              compile_libtcc_macro_flags libtcc_macro_minimal '-D BOOTSTRAP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_setjmp '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_float '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_long_long '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_bitfield '-D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_static '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_USE_LIBGCC=1'
+              compile_libtcc_macro_flags libtcc_macro_no_use_libgcc '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1'
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
