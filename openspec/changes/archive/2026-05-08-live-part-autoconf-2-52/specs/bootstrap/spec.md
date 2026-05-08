@@ -11,8 +11,9 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.52.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.52.ncl`
-- AND it records a successful `crunch build bootstrap/autoconf-2.52.ncl` transcript
-- AND it records a smoke check for the produced output contract
+- AND it records a successful `crunch build bootstrap/autoconf-2.52.ncl` transcript when declared prerequisite providers exist
+- AND if declared prerequisite providers are absent, blocked, or unvalidated, it records fail-closed blocker evidence without substituting host or legacy providers
+- AND it records a smoke check for the produced output contract when an output exists
 
 #### Scenario: Downstream blockers stay local
 

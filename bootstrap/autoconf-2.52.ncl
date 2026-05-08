@@ -17,6 +17,8 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
 
 let src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/autoconf-2.52/sources
+  # first-consumer: bootstrap/autoconf-2.52.ncl
   url = "https://mirrors.kernel.org/gnu/autoconf/autoconf-2.52.tar.bz2",
   hash = "sha256-vCx4E2/YyJCkwgInpyyrGhJTYDyl70WVSkVHLeYr7Fg=",
   name = "autoconf-2.52-src",
@@ -39,15 +41,13 @@ let src = crunch.fetchTarball {
     export CONFIG_SHELL="$BASH/bin/bash"
     WORK=/tmp/autoconf252; $BB mkdir -p "$WORK"; cd "$WORK"
     $BB cp -r "$SRC" autoconf-2.52; $BB chmod -R u+w autoconf-2.52; cd autoconf-2.52
-    ./configure --prefix="$out" CC=tcc CFLAGS="-static" 2>/dev/null || {
-      make -j1 prefix="$out" 2>/dev/null || true
-    }
-    make -j1 install prefix="$out" 2>/dev/null || {
-      $BB mkdir -p "$out/bin" "$out/share/autoconf"
-      for f in bin/*; do [ -f "$f" ] && $BB cp "$f" "$out/$f" && $BB chmod 755 "$out/$f"; done
-      $BB cp -r lib/* "$out/share/autoconf/" 2>/dev/null || true
-    }
-    test -f "$out/bin/autoconf" || test -f "$out/bin/autoreconf"
+    ./configure --prefix="$out" CC=tcc CFLAGS="-static"
+    make -j1 prefix="$out"
+    make -j1 install prefix="$out"
+    for f in autoconf autoreconf autoheader autom4te; do
+      test -f "$out/bin/$f" || { echo "ERROR: $f not installed" >&2; exit 1; }
+    done
+    test -d "$out/share/autoconf" || { echo "ERROR: share/autoconf not installed" >&2; exit 1; }
   "%],
   inputs = [stage0, tcc, musl, make, sed, m4, perl, coreutils, gawk, grep, diffutils, bash, src],
 } | crunch.Derivation
