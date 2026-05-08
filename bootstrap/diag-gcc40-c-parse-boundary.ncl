@@ -1364,6 +1364,24 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               compile_libtcc_prefix add_files 1182
               compile_libtcc_prefix option_linker 1583
               compile_libtcc_prefix full 1981
+              make_libtcc_strcat_printf_stub() {
+                $BB awk '
+                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
+                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                    print "{"
+                    print "    pstrcat(buf, buf_size, fmt);"
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  in_stub && /^}/ { in_stub=0; next }
+                  !in_stub { print }
+                ' libtcc.c > libtcc-strcat-printf-stub.c
+              }
+              make_libtcc_strcat_printf_stub
+              for flags_name in common one_source; do
+                compile_decl0_prepart libtcc_strcat_printf_stub "$flags_name" libtcc-strcat-printf-stub.c
+              done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
