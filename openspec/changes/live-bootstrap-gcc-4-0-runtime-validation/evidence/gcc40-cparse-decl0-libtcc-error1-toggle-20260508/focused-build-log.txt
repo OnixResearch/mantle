@@ -1,0 +1,18 @@
+diag-tcc-decl0-prepart: compile libtcc_error1_empty libtcc-error1-empty.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_error1_empty libtcc-error1-empty.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-error1-empty.c libtcc_error1_empty common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_error1_buf_only libtcc-error1-buf_only.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_error1_buf_only libtcc-error1-buf_only.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-error1-buf_only.c libtcc_error1_buf_only common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_error1_vprintf_only libtcc-error1-vprintf_only.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_error1_vprintf_only libtcc-error1-vprintf_only.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-error1-vprintf_only.c libtcc_error1_vprintf_only common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_error1_fixed_prefix libtcc-error1-fixed_prefix.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_error1_fixed_prefix libtcc-error1-fixed_prefix.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-error1-fixed_prefix.c libtcc_error1_fixed_prefix common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-part: compile libtcc.c
+diag-tcc-decl0-part: compile libtcc.c rc=139
+diag-tcc-decl0: build instrumented compiler
+diag-tcc-decl0: build rc=139
+diag-tcc-decl0: build-stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: instrumented compiler unavailable

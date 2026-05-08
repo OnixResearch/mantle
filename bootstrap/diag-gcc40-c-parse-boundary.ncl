@@ -1307,58 +1307,53 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
               # Earlier committed evidence covered the coarse libtcc range,
-              # prefix, macro, and body probes. Keep this diagnostic under the
-              # sandbox argument-size limit by running only the current
-              # strcat_printf signature/prototype reduction plus shared controls.
-              make_libtcc_strcat_signature() {
+              # prefix, macro, body, and signature/prototype probes. Keep this
+              # diagnostic under the sandbox argument-size limit by running only
+              # the current error1/callsite reduction plus shared controls.
+              make_libtcc_error1_variant() {
                 variant="$1"
                 shape="$2"
-                $BB awk -v variant="$variant" -v shape="$shape" '
-                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
-                    if (shape == "prototype_only") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...);"
-                    } else if (shape == "fixed3_empty") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt)"
-                      print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt;"
-                      print "}"
-                    } else if (shape == "fixed4_empty") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, int unused)"
-                      print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)unused;"
-                      print "}"
-                    } else if (shape == "nonstatic_varargs_empty") {
-                      print "void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                      print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt;"
-                      print "}"
-                    } else if (shape == "kr_fixed_empty") {
-                      print "static void strcat_printf(buf, buf_size, fmt)"
-                      print "char *buf;"
-                      print "int buf_size;"
-                      print "const char *fmt;"
-                      print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt;"
-                      print "}"
+                $BB awk -v shape="$shape" '
+                  /^static void error1\(TCCState \*s1, int is_warning, const char \*fmt, va_list ap\)/ {
+                    print
+                    print "{"
+                    if (shape == "empty") {
+                      print "    (void)s1; (void)is_warning; (void)fmt; (void)ap;"
+                    } else if (shape == "buf_only") {
+                      print "    char buf[2048];"
+                      print "    buf[0] = '\''\\0'\'';"
+                      print "    (void)s1; (void)is_warning; (void)fmt; (void)ap;"
+                    } else if (shape == "vprintf_only") {
+                      print "    char buf[2048];"
+                      print "    buf[0] = '\''\\0'\'';"
+                      print "    strcat_vprintf(buf, sizeof(buf), fmt, ap);"
+                      print "    (void)s1; (void)is_warning;"
+                    } else if (shape == "fixed_prefix") {
+                      print "    char buf[2048];"
+                      print "    buf[0] = '\''\\0'\'';"
+                      print "    pstrcat(buf, sizeof(buf), \"tcc: \" );"
+                      print "    pstrcat(buf, sizeof(buf), is_warning ? \"warning: \" : \"error: \" );"
+                      print "    strcat_vprintf(buf, sizeof(buf), fmt, ap);"
+                      print "    (void)s1;"
                     }
-                    in_stub=1
+                    print "}"
+                    in_error1=1
                     next
                   }
-                  in_stub && /^}/ { in_stub=0; next }
-                  !in_stub { print }
-                ' libtcc.c > "libtcc-strcat-signature-$variant.c"
+                  in_error1 && /^}/ { in_error1=0; next }
+                  !in_error1 { print }
+                ' libtcc.c > "libtcc-error1-$variant.c"
               }
-              compile_libtcc_strcat_signature() {
+              compile_libtcc_error1_variant() {
                 variant="$1"
                 shape="$2"
-                make_libtcc_strcat_signature "$variant" "$shape"
-                compile_decl0_prepart "libtcc_strcat_signature_${variant}" common "libtcc-strcat-signature-$variant.c"
+                make_libtcc_error1_variant "$variant" "$shape"
+                compile_decl0_prepart "libtcc_error1_${variant}" common "libtcc-error1-$variant.c"
               }
-              compile_libtcc_strcat_signature prototype_only prototype_only
-              compile_libtcc_strcat_signature fixed3_empty fixed3_empty
-              compile_libtcc_strcat_signature fixed4_empty fixed4_empty
-              compile_libtcc_strcat_signature nonstatic_varargs_empty nonstatic_varargs_empty
-              compile_libtcc_strcat_signature kr_fixed_empty kr_fixed_empty
+              compile_libtcc_error1_variant empty empty
+              compile_libtcc_error1_variant buf_only buf_only
+              compile_libtcc_error1_variant vprintf_only vprintf_only
+              compile_libtcc_error1_variant fixed_prefix fixed_prefix
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
