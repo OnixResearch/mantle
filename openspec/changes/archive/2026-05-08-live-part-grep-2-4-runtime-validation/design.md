@@ -21,3 +21,9 @@ The parent grep derivation now fails closed on missing objects, but runtime vali
 ## Validation
 
 Build `bootstrap/grep-2.4-musl.ncl`, smoke `grep`/`egrep`/`fgrep`, scan for leakage, and run OpenSpec validation/gates.
+
+### 3. Reuse archived focused rerun evidence
+
+**Choice:** close this follow-up with the focused `bootstrap/grep-2.4-musl.ncl` validation captured during the archived binutils-tcc chain drain instead of launching another slow prerequisite rebuild.
+
+**Rationale:** that archived evidence is exactly scoped to this target, reports `status: passed` and `build_exit_code: 0`, includes the output path/build report, and records no host-leakage findings. Copying it into this change makes the runtime-validation proof standalone while avoiding repeated long bootstrap work.
