@@ -1306,36 +1306,111 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              # Prior paired-cleanup prefix-growth passed through the
-              # early I/O layer (line 621). Extend complete-function prefixes
-              # deeper into libtcc.c to find where full-file paired cleanup
-              # reintroduces the predecessor compile crash.
-              make_libtcc_vastart_end_prefix() {
+              # The paired-cleanup prefix crash reappears when adding
+              # the complete tcc_compile() function after line 621. Synthesize
+              # balanced tcc_compile body variants on top of the known passing
+              # prefix to isolate the source-shape trigger inside that function.
+              make_libtcc_compile_shape() {
                 label="$1"
-                max_line="$2"
-                dst="libtcc-vastart-end-prefix-$label.c"
-                $BB awk -v max="$max_line" 'NR <= max { print }' libtcc.c > "$dst"
-                $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed with va_end pair \*\//g' "$dst"
-                $BB sed -i 's/^[[:space:]]*va_end(ap);/    \/\* CRUNCH diag: va_end removed with va_start pair \*\//g' "$dst"
+                mode="$2"
+                dst="libtcc-compile-shape-$label.c"
+                $BB awk 'NR <= 621 { print }' libtcc.c > "$dst"
+                if [ "$mode" = empty ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    return 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = decls ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    Sym *define_start;
+    int filetype, is_asm;
+    return 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = init_preamble ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    Sym *define_start;
+    int filetype, is_asm;
+    define_start = define_stack;
+    filetype = s1->filetype;
+    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    return 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = begin_file ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    Sym *define_start;
+    int filetype, is_asm;
+    define_start = define_stack;
+    filetype = s1->filetype;
+    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    tccelf_begin_file(s1);
+    return 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = setjmp_empty ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    Sym *define_start;
+    int filetype, is_asm;
+    define_start = define_stack;
+    filetype = s1->filetype;
+    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    tccelf_begin_file(s1);
+    if (setjmp(s1->error_jmp_buf) == 0) {
+    }
+    return 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = setjmp_state ]; then
+                  cat >> "$dst" <<'EOF_DIAG_TCC_COMPILE'
+static int tcc_compile(TCCState *s1)
+{
+    Sym *define_start;
+    int filetype, is_asm;
+    define_start = define_stack;
+    filetype = s1->filetype;
+    is_asm = filetype == AFF_TYPE_ASM || filetype == AFF_TYPE_ASMPP;
+    tccelf_begin_file(s1);
+    if (setjmp(s1->error_jmp_buf) == 0) {
+        s1->nb_errors = 0;
+        s1->error_set_jmp_enabled = 1;
+    }
+    s1->error_set_jmp_enabled = 0;
+    return s1->nb_errors != 0 ? -1 : 0;
+}
+EOF_DIAG_TCC_COMPILE
+                elif [ "$mode" = full ]; then
+                  $BB awk 'NR >= 623 && NR <= 661 { print }' libtcc.c >> "$dst"
+                else
+                  echo "unknown compile shape mode: $mode" >&2
+                  return 1
+                fi
               }
-              compile_libtcc_vastart_end_prefix() {
+              compile_libtcc_compile_shape() {
                 label="$1"
-                max_line="$2"
+                mode="$2"
                 flags_name="$3"
-                make_libtcc_vastart_end_prefix "$label" "$max_line"
-                compile_decl0_prepart "libtcc_vastart_end_prefix_${label}" "$flags_name" "libtcc-vastart-end-prefix-$label.c"
+                make_libtcc_compile_shape "$label" "$mode"
+                compile_decl0_prepart "libtcc_compile_shape_${label}" "$flags_name" "libtcc-compile-shape-$label.c"
               }
               for flags_name in common one_source; do
-                compile_libtcc_vastart_end_prefix through_compile 661 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_compile_string 673 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_define_symbol 695 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_undefine_symbol 707 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_cleanup 722 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_new 893 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_delete 932 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_set_output_type 983 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_add_include_path 989 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_add_sysinclude_path 995 "$flags_name"
+                compile_libtcc_compile_shape empty empty "$flags_name"
+                compile_libtcc_compile_shape decls decls "$flags_name"
+                compile_libtcc_compile_shape init_preamble init_preamble "$flags_name"
+                compile_libtcc_compile_shape begin_file begin_file "$flags_name"
+                compile_libtcc_compile_shape setjmp_empty setjmp_empty "$flags_name"
+                compile_libtcc_compile_shape setjmp_state setjmp_state "$flags_name"
+                compile_libtcc_compile_shape full full "$flags_name"
               done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
