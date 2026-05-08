@@ -1307,68 +1307,58 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
               # Earlier committed evidence covered the coarse libtcc range,
-              # prefix, and varargs-stub probes. Keep this diagnostic under
-              # the sandbox argument-size limit by running only the current
-              # macro-toggle reduction plus the shared prepart controls.
-              compile_libtcc_macro_flags() {
-                stage="$1"
-                part_flags="$2"
-                echo "diag-tcc-decl0-prepart: compile $stage libtcc.c flags=macro" >&2
-                set +e
-                "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $part_flags libtcc.c -o "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.o" 2> "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.stderr"
-                part_rc=$?
-                set -e
-                echo "diag-tcc-decl0-prepart: compile $stage libtcc.c flags=macro rc=$part_rc" >&2
-                $BB sed 's/^/diag-tcc-decl0-prepart: libtcc.c '$stage' macro stderr: /' "/tmp/tcc-decl0-pre-${stage}-macro-libtcc.c.stderr" >&2 || true
-              }
-              compile_libtcc_macro_flags libtcc_macro_minimal '-D BOOTSTRAP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_setjmp '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_float '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_long_long '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_bitfield '-D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_static '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_USE_LIBGCC=1'
-              compile_libtcc_macro_flags libtcc_macro_no_use_libgcc '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1'
-              make_libtcc_strcat_body() {
+              # prefix, macro, and body probes. Keep this diagnostic under the
+              # sandbox argument-size limit by running only the current
+              # strcat_printf signature/prototype reduction plus shared controls.
+              make_libtcc_strcat_signature() {
                 variant="$1"
-                body="$2"
-                $BB awk -v variant="$variant" -v body="$body" '
+                shape="$2"
+                $BB awk -v variant="$variant" -v shape="$shape" '
                   /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
-                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
-                    print "{"
-                    if (body == "empty") {
+                    if (shape == "prototype_only") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...);"
+                    } else if (shape == "fixed3_empty") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt)"
+                      print "{"
                       print "    (void)buf; (void)buf_size; (void)fmt;"
-                    } else if (body == "declare_ap") {
-                      print "    va_list ap;"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)ap;"
-                    } else if (body == "va_start_only") {
-                      print "    va_list ap;"
-                      print "    va_start(ap, fmt);"
-                    } else if (body == "va_start_end") {
-                      print "    va_list ap;"
-                      print "    va_start(ap, fmt);"
-                      print "    va_end(ap);"
-                    } else if (body == "direct_pstrcat") {
-                      print "    pstrcat(buf, buf_size, fmt);"
+                      print "}"
+                    } else if (shape == "fixed4_empty") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, int unused)"
+                      print "{"
+                      print "    (void)buf; (void)buf_size; (void)fmt; (void)unused;"
+                      print "}"
+                    } else if (shape == "nonstatic_varargs_empty") {
+                      print "void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                      print "{"
+                      print "    (void)buf; (void)buf_size; (void)fmt;"
+                      print "}"
+                    } else if (shape == "kr_fixed_empty") {
+                      print "static void strcat_printf(buf, buf_size, fmt)"
+                      print "char *buf;"
+                      print "int buf_size;"
+                      print "const char *fmt;"
+                      print "{"
+                      print "    (void)buf; (void)buf_size; (void)fmt;"
+                      print "}"
                     }
-                    print "}"
                     in_stub=1
                     next
                   }
                   in_stub && /^}/ { in_stub=0; next }
                   !in_stub { print }
-                ' libtcc.c > "libtcc-strcat-body-$variant.c"
+                ' libtcc.c > "libtcc-strcat-signature-$variant.c"
               }
-              compile_libtcc_strcat_body() {
+              compile_libtcc_strcat_signature() {
                 variant="$1"
-                body="$2"
-                make_libtcc_strcat_body "$variant" "$body"
-                compile_decl0_prepart "libtcc_strcat_body_${variant}" common "libtcc-strcat-body-$variant.c"
+                shape="$2"
+                make_libtcc_strcat_signature "$variant" "$shape"
+                compile_decl0_prepart "libtcc_strcat_signature_${variant}" common "libtcc-strcat-signature-$variant.c"
               }
-              compile_libtcc_strcat_body empty empty
-              compile_libtcc_strcat_body declare_ap declare_ap
-              compile_libtcc_strcat_body va_start_only va_start_only
-              compile_libtcc_strcat_body va_start_end va_start_end
-              compile_libtcc_strcat_body direct_pstrcat direct_pstrcat
+              compile_libtcc_strcat_signature prototype_only prototype_only
+              compile_libtcc_strcat_signature fixed3_empty fixed3_empty
+              compile_libtcc_strcat_signature fixed4_empty fixed4_empty
+              compile_libtcc_strcat_signature nonstatic_varargs_empty nonstatic_varargs_empty
+              compile_libtcc_strcat_signature kr_fixed_empty kr_fixed_empty
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
