@@ -1307,11 +1307,11 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
               # Earlier committed evidence covered the coarse libtcc range,
-              # prefix, macro, body, signature/prototype, and error1 probes.
-              # Keep this diagnostic under the sandbox argument-size limit by
-              # running only prefix-only strcat_printf definition variants plus
-              # shared controls.
-              make_libtcc_strcat_prefix_signature() {
+              # prefix, macro, body, signature/prototype, error1, and prefix
+              # signature probes. Keep this under the sandbox argument-size
+              # limit by refining only the prefix-only static variadic
+              # strcat_printf definition trigger.
+              make_libtcc_strcat_prefix_static_varargs() {
                 variant="$1"
                 shape="$2"
                 $BB awk -v shape="$shape" '
@@ -1325,39 +1325,65 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
                       print "    strcat_vprintf(buf, buf_size, fmt, ap);"
                       print "    va_end(ap);"
                       print "}"
-                    } else if (shape == "prototype_only") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...);"
-                    } else if (shape == "fixed3_empty") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt)"
+                    } else if (shape == "static_empty") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
                       print "{"
                       print "    (void)buf; (void)buf_size; (void)fmt;"
                       print "}"
-                    } else if (shape == "fixed4_empty") {
-                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, int unused)"
+                    } else if (shape == "static_va_list") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
                       print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt; (void)unused;"
+                      print "    va_list ap;"
+                      print "    (void)buf; (void)buf_size; (void)fmt; (void)ap;"
                       print "}"
-                    } else if (shape == "nonstatic_varargs_empty") {
-                      print "void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                    } else if (shape == "static_va_start") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
                       print "{"
-                      print "    (void)buf; (void)buf_size; (void)fmt;"
+                      print "    va_list ap;"
+                      print "    va_start(ap, fmt);"
+                      print "    (void)buf; (void)buf_size; (void)ap;"
+                      print "}"
+                    } else if (shape == "static_va_start_end") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                      print "{"
+                      print "    va_list ap;"
+                      print "    va_start(ap, fmt);"
+                      print "    va_end(ap);"
+                      print "    (void)buf; (void)buf_size;"
+                      print "}"
+                    } else if (shape == "static_direct_call") {
+                      print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                      print "{"
+                      print "    va_list ap;"
+                      print "    strcat_vprintf(buf, buf_size, fmt, ap);"
+                      print "    (void)ap;"
+                      print "}"
+                    } else if (shape == "renamed_static_original") {
+                      print "static void crunch_diag_strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                      print "{"
+                      print "    va_list ap;"
+                      print "    va_start(ap, fmt);"
+                      print "    strcat_vprintf(buf, buf_size, fmt, ap);"
+                      print "    va_end(ap);"
                       print "}"
                     }
                     exit
                   }
-                ' libtcc.c > "libtcc-strcat-prefix-signature-$variant.c"
+                ' libtcc.c > "libtcc-strcat-prefix-static-varargs-$variant.c"
               }
-              compile_libtcc_strcat_prefix_signature() {
+              compile_libtcc_strcat_prefix_static_varargs() {
                 variant="$1"
                 shape="$2"
-                make_libtcc_strcat_prefix_signature "$variant" "$shape"
-                compile_decl0_prepart "libtcc_strcat_prefix_signature_${variant}" common "libtcc-strcat-prefix-signature-$variant.c"
+                make_libtcc_strcat_prefix_static_varargs "$variant" "$shape"
+                compile_decl0_prepart "libtcc_strcat_prefix_static_varargs_${variant}" common "libtcc-strcat-prefix-static-varargs-$variant.c"
               }
-              compile_libtcc_strcat_prefix_signature original original
-              compile_libtcc_strcat_prefix_signature prototype_only prototype_only
-              compile_libtcc_strcat_prefix_signature fixed3_empty fixed3_empty
-              compile_libtcc_strcat_prefix_signature fixed4_empty fixed4_empty
-              compile_libtcc_strcat_prefix_signature nonstatic_varargs_empty nonstatic_varargs_empty
+              compile_libtcc_strcat_prefix_static_varargs original original
+              compile_libtcc_strcat_prefix_static_varargs static_empty static_empty
+              compile_libtcc_strcat_prefix_static_varargs static_va_list static_va_list
+              compile_libtcc_strcat_prefix_static_varargs static_va_start static_va_start
+              compile_libtcc_strcat_prefix_static_varargs static_va_start_end static_va_start_end
+              compile_libtcc_strcat_prefix_static_varargs static_direct_call static_direct_call
+              compile_libtcc_strcat_prefix_static_varargs renamed_static_original renamed_static_original
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
