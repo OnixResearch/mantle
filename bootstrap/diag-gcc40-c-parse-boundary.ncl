@@ -1308,39 +1308,34 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               done
               # Earlier committed evidence covered the coarse libtcc range,
               # prefix, macro, body, signature/prototype, error1, prefix
-              # signature, static-varargs, and va_start expansion probes. Keep
-              # this under the sandbox argument-size limit by testing whether
-              # full-file libtcc.c still crashes after removing va_start calls.
-              make_libtcc_vastart_full_variant() {
-                variant="$1"
-                $BB cp libtcc.c "libtcc-vastart-full-$variant.c"
-                if [ "$variant" = all_va_start_noop ]; then
-                  $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed \*\//g' "libtcc-vastart-full-$variant.c"
-                elif [ "$variant" = strcat_va_start_noop ]; then
-                  $BB awk '
-                    /void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ { in_strcat = 1 }
-                    in_strcat && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: strcat_printf va_start removed */"; next }
-                    { print }
-                    in_strcat && /^}/ { in_strcat = 0 }
-                  ' libtcc.c > "libtcc-vastart-full-$variant.c"
-                elif [ "$variant" = error1_va_start_noop ]; then
-                  $BB awk '
-                    /static void error1\(TCCState \*s1, int is_warning, const char \*fmt, va_list ap\)/ { seen_error1 = 1 }
-                    seen_error1 && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: post-error1 va_start removed */"; next }
-                    { print }
-                  ' libtcc.c > "libtcc-vastart-full-$variant.c"
-                fi
+              # signature, static-varargs, va_start expansion, and full-file
+              # naive va_start removal probes. Keep this focused by growing
+              # balanced libtcc.c prefixes after neutralizing va_start calls,
+              # to distinguish the prefix-only trigger from later full-file
+              # context that still leaves libtcc.c at rc139.
+              make_libtcc_vastart_prefix_growth() {
+                label="$1"
+                line="$2"
+                $BB awk -v max="$line" 'NR <= max { print }' libtcc.c > "libtcc-vastart-prefix-$label.c"
+                $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed in prefix-growth probe \*\//g' "libtcc-vastart-prefix-$label.c"
               }
-              compile_libtcc_vastart_full_variant() {
-                variant="$1"
-                flags_name="$2"
-                make_libtcc_vastart_full_variant "$variant"
-                compile_decl0_prepart "libtcc_vastart_full_${variant}" "$flags_name" "libtcc-vastart-full-$variant.c"
+              compile_libtcc_vastart_prefix_growth() {
+                label="$1"
+                line="$2"
+                flags_name="$3"
+                make_libtcc_vastart_prefix_growth "$label" "$line"
+                compile_decl0_prepart "libtcc_vastart_prefix_${label}" "$flags_name" "libtcc-vastart-prefix-$label.c"
               }
               for flags_name in common one_source; do
-                compile_libtcc_vastart_full_variant all_va_start_noop "$flags_name"
-                compile_libtcc_vastart_full_variant strcat_va_start_noop "$flags_name"
-                compile_libtcc_vastart_full_variant error1_va_start_noop "$flags_name"
+                compile_libtcc_vastart_prefix_growth strcat_end_no_va_start 474 "$flags_name"
+                compile_libtcc_vastart_prefix_growth error1_end_no_va_start 518 "$flags_name"
+                compile_libtcc_vastart_prefix_growth set_error_func_end_no_va_start 525 "$flags_name"
+                compile_libtcc_vastart_prefix_growth error_noabort_end_no_va_start 536 "$flags_name"
+                compile_libtcc_vastart_prefix_growth error_end_no_va_start 553 "$flags_name"
+                compile_libtcc_vastart_prefix_growth warning_end_no_va_start 566 "$flags_name"
+                compile_libtcc_vastart_prefix_growth io_open_end_no_va_start 621 "$flags_name"
+                compile_libtcc_vastart_prefix_growth compile_end_no_va_start 661 "$flags_name"
+                compile_libtcc_vastart_prefix_growth compile_string_end_no_va_start 673 "$flags_name"
               done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }

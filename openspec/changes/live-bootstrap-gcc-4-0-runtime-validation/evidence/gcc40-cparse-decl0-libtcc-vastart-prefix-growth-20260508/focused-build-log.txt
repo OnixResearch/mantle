@@ -1,0 +1,63 @@
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_strcat_end_no_va_start libtcc-vastart-prefix-strcat_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_strcat_end_no_va_start libtcc-vastart-prefix-strcat_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-strcat_end_no_va_start.c libtcc_vastart_prefix_strcat_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error1_end_no_va_start libtcc-vastart-prefix-error1_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error1_end_no_va_start libtcc-vastart-prefix-error1_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error1_end_no_va_start.c libtcc_vastart_prefix_error1_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_set_error_func_end_no_va_start libtcc-vastart-prefix-set_error_func_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_set_error_func_end_no_va_start libtcc-vastart-prefix-set_error_func_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-set_error_func_end_no_va_start.c libtcc_vastart_prefix_set_error_func_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_noabort_end_no_va_start libtcc-vastart-prefix-error_noabort_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_noabort_end_no_va_start libtcc-vastart-prefix-error_noabort_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error_noabort_end_no_va_start.c libtcc_vastart_prefix_error_noabort_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_end_no_va_start libtcc-vastart-prefix-error_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_end_no_va_start libtcc-vastart-prefix-error_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error_end_no_va_start.c libtcc_vastart_prefix_error_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_warning_end_no_va_start libtcc-vastart-prefix-warning_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_warning_end_no_va_start libtcc-vastart-prefix-warning_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-warning_end_no_va_start.c libtcc_vastart_prefix_warning_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_io_open_end_no_va_start libtcc-vastart-prefix-io_open_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_io_open_end_no_va_start libtcc-vastart-prefix-io_open_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-io_open_end_no_va_start.c libtcc_vastart_prefix_io_open_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_end_no_va_start libtcc-vastart-prefix-compile_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_end_no_va_start libtcc-vastart-prefix-compile_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-compile_end_no_va_start.c libtcc_vastart_prefix_compile_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_string_end_no_va_start libtcc-vastart-prefix-compile_string_end_no_va_start.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_string_end_no_va_start libtcc-vastart-prefix-compile_string_end_no_va_start.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-compile_string_end_no_va_start.c libtcc_vastart_prefix_compile_string_end_no_va_start common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_strcat_end_no_va_start libtcc-vastart-prefix-strcat_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_strcat_end_no_va_start libtcc-vastart-prefix-strcat_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-strcat_end_no_va_start.c libtcc_vastart_prefix_strcat_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error1_end_no_va_start libtcc-vastart-prefix-error1_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error1_end_no_va_start libtcc-vastart-prefix-error1_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error1_end_no_va_start.c libtcc_vastart_prefix_error1_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_set_error_func_end_no_va_start libtcc-vastart-prefix-set_error_func_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_set_error_func_end_no_va_start libtcc-vastart-prefix-set_error_func_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-set_error_func_end_no_va_start.c libtcc_vastart_prefix_set_error_func_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_noabort_end_no_va_start libtcc-vastart-prefix-error_noabort_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_noabort_end_no_va_start libtcc-vastart-prefix-error_noabort_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error_noabort_end_no_va_start.c libtcc_vastart_prefix_error_noabort_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_end_no_va_start libtcc-vastart-prefix-error_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_error_end_no_va_start libtcc-vastart-prefix-error_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-error_end_no_va_start.c libtcc_vastart_prefix_error_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_warning_end_no_va_start libtcc-vastart-prefix-warning_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_warning_end_no_va_start libtcc-vastart-prefix-warning_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-warning_end_no_va_start.c libtcc_vastart_prefix_warning_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_io_open_end_no_va_start libtcc-vastart-prefix-io_open_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_io_open_end_no_va_start libtcc-vastart-prefix-io_open_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-io_open_end_no_va_start.c libtcc_vastart_prefix_io_open_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_end_no_va_start libtcc-vastart-prefix-compile_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_end_no_va_start libtcc-vastart-prefix-compile_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-compile_end_no_va_start.c libtcc_vastart_prefix_compile_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_string_end_no_va_start libtcc-vastart-prefix-compile_string_end_no_va_start.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_vastart_prefix_compile_string_end_no_va_start libtcc-vastart-prefix-compile_string_end_no_va_start.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-vastart-prefix-compile_string_end_no_va_start.c libtcc_vastart_prefix_compile_string_end_no_va_start one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0: build rc=139
