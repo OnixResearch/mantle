@@ -1,0 +1,430 @@
+{
+  "algorithm": "FastCDC",
+  "chunk_size_distribution": {
+    "avg": 357482,
+    "max": 524288,
+    "min": 7657,
+    "p50": 334718,
+    "p95": 524288
+  },
+  "corpus_manifest": "/home/brittonr/git/crunch/crunch/target/vectorcdc-corpus/manifest.json",
+  "entries": [
+    {
+      "avg_chunk_bytes": 210560,
+      "bytes": 210560,
+      "chunks": 1,
+      "id": "cargo-lock--base",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 210560,
+      "min_chunk_bytes": 210560,
+      "mutation": "base",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 53421,
+        "fastcdc": 103344,
+        "read": 114265,
+        "zstd_chunk_compress": 2209471
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 51052
+    },
+    {
+      "avg_chunk_bytes": 210560,
+      "bytes": 210560,
+      "chunks": 1,
+      "id": "cargo-lock--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 210560,
+      "min_chunk_bytes": 210560,
+      "mutation": "middle-64-byte-patch",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 46167,
+        "fastcdc": 104546,
+        "read": 122891,
+        "zstd_chunk_compress": 2125013
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 51435
+    },
+    {
+      "avg_chunk_bytes": 210604,
+      "bytes": 210604,
+      "chunks": 1,
+      "id": "cargo-lock--prefix-insert",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 210604,
+      "min_chunk_bytes": 210604,
+      "mutation": "prefix-insert",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 41418,
+        "fastcdc": 101761,
+        "read": 72085,
+        "zstd_chunk_compress": 2064138
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 51099
+    },
+    {
+      "avg_chunk_bytes": 214656,
+      "bytes": 214656,
+      "chunks": 1,
+      "id": "cargo-lock--tail-append",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 214656,
+      "min_chunk_bytes": 214656,
+      "mutation": "tail-append",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 35987,
+        "fastcdc": 106551,
+        "read": 63099,
+        "zstd_chunk_compress": 2157985
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 51597
+    },
+    {
+      "avg_chunk_bytes": 25450,
+      "bytes": 25450,
+      "chunks": 1,
+      "id": "castore-object-store-rs--base",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 25450,
+      "min_chunk_bytes": 25450,
+      "mutation": "base",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 13185,
+        "fastcdc": 2685,
+        "read": 37019,
+        "zstd_chunk_compress": 354877
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 7783
+    },
+    {
+      "avg_chunk_bytes": 25450,
+      "bytes": 25450,
+      "chunks": 1,
+      "id": "castore-object-store-rs--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 25450,
+      "min_chunk_bytes": 25450,
+      "mutation": "middle-64-byte-patch",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 6913,
+        "fastcdc": 851,
+        "read": 22392,
+        "zstd_chunk_compress": 312838
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 7893
+    },
+    {
+      "avg_chunk_bytes": 25494,
+      "bytes": 25494,
+      "chunks": 1,
+      "id": "castore-object-store-rs--prefix-insert",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 25494,
+      "min_chunk_bytes": 25494,
+      "mutation": "prefix-insert",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 6492,
+        "fastcdc": 521,
+        "read": 15158,
+        "zstd_chunk_compress": 308510
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 7815
+    },
+    {
+      "avg_chunk_bytes": 29546,
+      "bytes": 29546,
+      "chunks": 1,
+      "id": "castore-object-store-rs--tail-append",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 29546,
+      "min_chunk_bytes": 29546,
+      "mutation": "tail-append",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 7534,
+        "fastcdc": 381,
+        "read": 15129,
+        "zstd_chunk_compress": 315132
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 8197
+    },
+    {
+      "avg_chunk_bytes": 8128,
+      "bytes": 8128,
+      "chunks": 1,
+      "id": "castore-chunker-rs--base",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 8128,
+      "min_chunk_bytes": 8128,
+      "mutation": "base",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 5771,
+        "fastcdc": 451,
+        "read": 9418,
+        "zstd_chunk_compress": 95619
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 2155
+    },
+    {
+      "avg_chunk_bytes": 8128,
+      "bytes": 8128,
+      "chunks": 1,
+      "id": "castore-chunker-rs--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 8128,
+      "min_chunk_bytes": 8128,
+      "mutation": "middle-64-byte-patch",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 5650,
+        "fastcdc": 361,
+        "read": 7805,
+        "zstd_chunk_compress": 95279
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 2258
+    },
+    {
+      "avg_chunk_bytes": 8172,
+      "bytes": 8172,
+      "chunks": 1,
+      "id": "castore-chunker-rs--prefix-insert",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 8172,
+      "min_chunk_bytes": 8172,
+      "mutation": "prefix-insert",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 5741,
+        "fastcdc": 350,
+        "read": 7204,
+        "zstd_chunk_compress": 120647
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 2186
+    },
+    {
+      "avg_chunk_bytes": 12224,
+      "bytes": 12224,
+      "chunks": 1,
+      "id": "castore-chunker-rs--tail-append",
+      "kind": "repo-artifact",
+      "max_chunk_bytes": 12224,
+      "min_chunk_bytes": 12224,
+      "mutation": "tail-append",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 11201,
+        "fastcdc": 2084,
+        "read": 16000,
+        "zstd_chunk_compress": 108144
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 2518
+    },
+    {
+      "avg_chunk_bytes": 365407,
+      "bytes": 54080332,
+      "chunks": 148,
+      "id": "snix-castore-rlib--base",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 524288,
+      "min_chunk_bytes": 131174,
+      "mutation": "base",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 8848928,
+        "fastcdc": 45606168,
+        "read": 25030925,
+        "zstd_chunk_compress": 376831024
+      },
+      "unique_chunks": 148,
+      "zstd_bytes": 8918715
+    },
+    {
+      "avg_chunk_bytes": 365407,
+      "bytes": 54080332,
+      "chunks": 148,
+      "id": "snix-castore-rlib--middle-64-byte-patch",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 524288,
+      "min_chunk_bytes": 131174,
+      "mutation": "middle-64-byte-patch",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 8318871,
+        "fastcdc": 44196809,
+        "read": 25461674,
+        "zstd_chunk_compress": 384626884
+      },
+      "unique_chunks": 148,
+      "zstd_bytes": 8918796
+    },
+    {
+      "avg_chunk_bytes": 365407,
+      "bytes": 54080376,
+      "chunks": 148,
+      "id": "snix-castore-rlib--prefix-insert",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 524288,
+      "min_chunk_bytes": 131174,
+      "mutation": "prefix-insert",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 8337727,
+        "fastcdc": 44409088,
+        "read": 25024093,
+        "zstd_chunk_compress": 379527346
+      },
+      "unique_chunks": 148,
+      "zstd_bytes": 8918769
+    },
+    {
+      "avg_chunk_bytes": 365435,
+      "bytes": 54084428,
+      "chunks": 148,
+      "id": "snix-castore-rlib--tail-append",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 524288,
+      "min_chunk_bytes": 131174,
+      "mutation": "tail-append",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 8250473,
+        "fastcdc": 44085620,
+        "read": 25184794,
+        "zstd_chunk_compress": 380874614
+      },
+      "unique_chunks": 148,
+      "zstd_bytes": 8918983
+    },
+    {
+      "avg_chunk_bytes": 7657,
+      "bytes": 7657,
+      "chunks": 1,
+      "id": "snix-castore-depfile--base",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 7657,
+      "min_chunk_bytes": 7657,
+      "mutation": "base",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 10170,
+        "fastcdc": 3206,
+        "read": 35006,
+        "zstd_chunk_compress": 47970
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 680
+    },
+    {
+      "avg_chunk_bytes": 7657,
+      "bytes": 7657,
+      "chunks": 1,
+      "id": "snix-castore-depfile--middle-64-byte-patch",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 7657,
+      "min_chunk_bytes": 7657,
+      "mutation": "middle-64-byte-patch",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 5210,
+        "fastcdc": 601,
+        "read": 8666,
+        "zstd_chunk_compress": 39164
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 785
+    },
+    {
+      "avg_chunk_bytes": 7701,
+      "bytes": 7701,
+      "chunks": 1,
+      "id": "snix-castore-depfile--prefix-insert",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 7701,
+      "min_chunk_bytes": 7701,
+      "mutation": "prefix-insert",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 5270,
+        "fastcdc": 401,
+        "read": 6402,
+        "zstd_chunk_compress": 65033
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 722
+    },
+    {
+      "avg_chunk_bytes": 11753,
+      "bytes": 11753,
+      "chunks": 1,
+      "id": "snix-castore-depfile--tail-append",
+      "kind": "local-build-artifact",
+      "max_chunk_bytes": 11753,
+      "min_chunk_bytes": 11753,
+      "mutation": "tail-append",
+      "raw_digest_matches_manifest": true,
+      "timing_nanos": {
+        "blake3_raw": 9999,
+        "fastcdc": 2364,
+        "read": 24145,
+        "zstd_chunk_compress": 50455
+      },
+      "unique_chunks": 1,
+      "zstd_bytes": 1005
+    }
+  ],
+  "identity_invariant": "Blob identity remains BLAKE3(raw bytes); chunk metrics are physical-storage evidence only.",
+  "notes": [
+    "Object-store cost is estimated as unique physical chunk objects plus one blob metadata object per corpus entry; no remote object-store latency is included.",
+    "Chunk reuse is measured by identical BLAKE3(chunk bytes) across corpus entries under the v1 FastCDC profile."
+  ],
+  "profile": {
+    "avg_chunk_bytes": 262144,
+    "max_chunk_bytes": 524288,
+    "min_chunk_bytes": 131072,
+    "zstd_level": 3
+  },
+  "schema": "crunch.vectorcdc-fastcdc-baseline.v1",
+  "throughput_bytes_per_second": {
+    "blake3_raw": 6387714993,
+    "fastcdc": 1216088324,
+    "total_ingest_wall": 114578818,
+    "zstd_chunk_compress": 141842284
+  },
+  "timing_nanos": {
+    "blake3_raw": 34026128,
+    "fastcdc": 178728143,
+    "read": 101278170,
+    "total_ingest_wall": 1896940551,
+    "zstd_chunk_compress": 1532330143
+  },
+  "totals": {
+    "all_raw_digests_match_manifest": true,
+    "chunk_count": 608,
+    "compressed_chunk_bytes_zstd": 35924443,
+    "compression_ratio_ppm": 165284,
+    "dedup_reuse_ratio_ppm": 723684,
+    "entries": 20,
+    "estimated_object_count": 188,
+    "input_bytes": 217349208,
+    "reused_chunk_count": 440,
+    "unique_chunk_count": 168
+  }
+}

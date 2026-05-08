@@ -1326,10 +1326,13 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "nix-compat",
+ "serde",
+ "serde_json",
  "snix-castore",
  "snix-store",
  "thiserror 2.0.18",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

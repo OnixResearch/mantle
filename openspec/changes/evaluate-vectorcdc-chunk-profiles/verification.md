@@ -42,3 +42,25 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
   - `cargo run -p crunch-delta --example vectorcdc_corpus -- target/vectorcdc-corpus` → pass, wrote 20 entries.
   - `python -m json.tool target/vectorcdc-corpus/manifest.json` → pass.
   - JSON invariant check asserted schema, at least 12 entries, presence of both repo and local-build artifact source kinds, and all mutation classes → pass.
+
+## I4 FastCDC baseline metrics
+
+- Added `crates/crunch-delta/examples/vectorcdc_fastcdc_baseline.rs`, a rerunnable FastCDC baseline collector over the I3 corpus.
+- Captured evidence: `openspec/changes/evaluate-vectorcdc-chunk-profiles/evidence/i4-fastcdc-baseline.json`.
+- Baseline run summary:
+  - Entries: `20`.
+  - Input bytes: `217349208`.
+  - FastCDC profile: min `131072`, avg `262144`, max `524288`.
+  - Chunk count: `608`.
+  - Unique chunk count: `168`.
+  - Reused chunk count: `440`.
+  - Dedup reuse ratio: `723684` ppm.
+  - Estimated object count: `188` unique chunk objects plus blob metadata objects.
+  - Chunk size distribution: min `7657`, avg `357482`, p50 `334718`, p95 `524288`, max `524288`.
+  - zstd compressed chunk bytes at level 3: `35924443` (`165284` ppm of input bytes).
+  - Throughput bytes/second: FastCDC `1216088324`, raw BLAKE3 `6387714993`, zstd chunk compression `141842284`, total ingest wall `114578818`.
+- Verification:
+  - `cargo fmt -p crunch-delta` and `cargo fmt --check -p crunch-delta` → pass.
+  - `cargo check -p crunch-delta --example vectorcdc_fastcdc_baseline` → pass.
+  - `cargo run -p crunch-delta --example vectorcdc_fastcdc_baseline -- target/vectorcdc-corpus/manifest.json target/vectorcdc-fastcdc-baseline.json` → pass.
+  - JSON invariant check asserted schema, algorithm, profile, corpus size, positive chunk counts/timings, and raw BLAKE3 digest agreement with the I3 manifest → pass.
