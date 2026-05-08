@@ -1276,6 +1276,36 @@ EOF
                 compile_decl0_prepart native387_disabled "$flags_name" tccgen.c
                 compile_decl0_prepart native387_disabled "$flags_name" libtcc.c
               done
+              $BB cp libtcc.c libtcc.c.before-string-diag
+              $BB sed -i '/snprintf(buf, sizeof(buf), fmt, paths\[i\], filename);/c\
+        if (fmt[3] == '\''l'\'') {\
+            strcpy(buf, paths[i]); strcat(buf, "/lib"); strcat(buf, filename); strcat(buf, ".a");\
+        } else {\
+            strcpy(buf, paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        }' libtcc.c
+              $BB sed -i '/ST_FUNC int tcc_add_crt(TCCState \*s, const char \*filename)/,/^}/c\
+ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
+{\
+    char buf[1024];\
+    int i;\
+    if (!strcmp(filename, "crti.o") || !strcmp(filename, "crtn.o"))\
+        return 0;\
+    for (i = 0; i < s->nb_crt_paths; i++) {\
+        strcpy(buf, s->crt_paths[i]); strcat(buf, "/"); strcat(buf, filename);\
+        if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
+            return 0;\
+    }\
+    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0;\
+}' libtcc.c
+              $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
+              $BB sed -i '/default case: stderr/{n;n;n;n;s|.*|        fputs(buf, stderr); fputs("\\n", stderr);|;}' libtcc.c
+              $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
+              $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
+              $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
+              for flags_name in common one_source; do
+                compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
+              done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
