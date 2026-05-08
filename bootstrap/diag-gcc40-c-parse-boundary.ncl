@@ -1306,71 +1306,54 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              # Earlier committed evidence proved that deleting va_start
-              # alone does not clear even the strcat_printf-only prefix. Keep
-              # this follow-up minimal: synthesize the same balanced prefix
-              # through strcat_vprintf, then append small strcat_printf body
-              # variants that isolate va_list, va_start, va_end, and the
-              # strcat_vprintf call without growing into later libtcc context.
-              make_libtcc_strcat_cleanup_prefix() {
+              # Earlier committed evidence proved that the prefix-only
+              # strcat_printf crash clears only when both va_start and va_end
+              # are removed together. Test that paired cleanup hypothesis at
+              # full-file scale before returning to deeper source-shape edits.
+              make_libtcc_vastart_end_full() {
                 label="$1"
-                body_kind="$2"
-                dst="libtcc-strcat-cleanup-prefix-$label.c"
-                $BB awk 'NR <= 466 { print }' libtcc.c > "$dst"
-                {
-                  echo 'PUB_FUNC void strcat_printf(char *buf, int buf_size, const char *fmt, ...)'
-                  echo '{'
-                  if [ "$body_kind" = original ]; then
-                    echo '    va_list ap;'
-                    echo '    va_start(ap, fmt);'
-                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
-                    echo '    va_end(ap);'
-                  elif [ "$body_kind" = no_va_start ]; then
-                    echo '    va_list ap;'
-                    echo '    /* CRUNCH diag: va_start removed */'
-                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
-                    echo '    va_end(ap);'
-                  elif [ "$body_kind" = no_va_end ]; then
-                    echo '    va_list ap;'
-                    echo '    va_start(ap, fmt);'
-                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
-                    echo '    /* CRUNCH diag: va_end removed */'
-                  elif [ "$body_kind" = no_va_start_no_va_end ]; then
-                    echo '    va_list ap;'
-                    echo '    /* CRUNCH diag: va_start removed */'
-                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
-                    echo '    /* CRUNCH diag: va_end removed */'
-                  elif [ "$body_kind" = no_call ]; then
-                    echo '    va_list ap;'
-                    echo '    va_start(ap, fmt);'
-                    echo '    /* CRUNCH diag: strcat_vprintf call removed */'
-                    echo '    va_end(ap);'
-                  elif [ "$body_kind" = va_list_only ]; then
-                    echo '    va_list ap;'
-                    echo '    (void)ap;'
-                  elif [ "$body_kind" = empty_body ]; then
-                    echo '    (void)buf; (void)buf_size; (void)fmt;'
-                  else
-                    echo '    #error unknown body_kind'
-                  fi
-                  echo '}'
-                } >> "$dst"
+                mode="$2"
+                dst="libtcc-vastart-end-full-$label.c"
+                $BB cp libtcc.c "$dst"
+                if [ "$mode" = all_pairs ]; then
+                  $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed with va_end pair \*\//g' "$dst"
+                  $BB sed -i 's/^[[:space:]]*va_end(ap);/    \/\* CRUNCH diag: va_end removed with va_start pair \*\//g' "$dst"
+                elif [ "$mode" = strcat_pair ]; then
+                  $BB awk '
+                    /^PUB_FUNC void strcat_printf\(/ { in_fn=1 }
+                    in_fn && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: strcat va_start removed with va_end pair */"; next }
+                    in_fn && /^[[:space:]]*va_end\(ap\);/ { print "    /* CRUNCH diag: strcat va_end removed with va_start pair */"; next }
+                    in_fn && /^}/ { in_fn=0 }
+                    { print }
+                  ' "$dst" > "$dst.tmp"
+                  $BB mv "$dst.tmp" "$dst"
+                elif [ "$mode" = error_pairs ]; then
+                  $BB awk '
+                    /^static void error1\(/ { after_strcat=1 }
+                    after_strcat && /^[[:space:]]*va_start\(ap, fmt\);/ { print "    /* CRUNCH diag: error-family va_start removed with va_end pair */"; next }
+                    after_strcat && /^[[:space:]]*va_end\(ap\);/ { print "    /* CRUNCH diag: error-family va_end removed with va_start pair */"; next }
+                    { print }
+                  ' "$dst" > "$dst.tmp"
+                  $BB mv "$dst.tmp" "$dst"
+                elif [ "$mode" = all_va_end_only ]; then
+                  $BB sed -i 's/^[[:space:]]*va_end(ap);/    \/\* CRUNCH diag: va_end removed alone \*\//g' "$dst"
+                else
+                  echo "unknown vastart_end mode: $mode" >&2
+                  return 1
+                fi
               }
-              compile_libtcc_strcat_cleanup_prefix() {
+              compile_libtcc_vastart_end_full() {
                 label="$1"
-                body_kind="$2"
+                mode="$2"
                 flags_name="$3"
-                make_libtcc_strcat_cleanup_prefix "$label" "$body_kind"
-                compile_decl0_prepart "libtcc_strcat_cleanup_prefix_${label}" "$flags_name" "libtcc-strcat-cleanup-prefix-$label.c"
+                make_libtcc_vastart_end_full "$label" "$mode"
+                compile_decl0_prepart "libtcc_vastart_end_full_${label}" "$flags_name" "libtcc-vastart-end-full-$label.c"
               }
               for flags_name in common one_source; do
-                compile_libtcc_strcat_cleanup_prefix original original "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix no_va_start no_va_start "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix no_va_end no_va_end "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix no_va_start_no_va_end no_va_start_no_va_end "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix no_call no_call "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix va_list_only va_list_only "$flags_name"
-                compile_libtcc_strcat_cleanup_prefix empty_body empty_body "$flags_name"
+                compile_libtcc_vastart_end_full all_pairs all_pairs "$flags_name"
+                compile_libtcc_vastart_end_full strcat_pair strcat_pair "$flags_name"
+                compile_libtcc_vastart_end_full error_pairs error_pairs "$flags_name"
+                compile_libtcc_vastart_end_full all_va_end_only all_va_end_only "$flags_name"
               done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
