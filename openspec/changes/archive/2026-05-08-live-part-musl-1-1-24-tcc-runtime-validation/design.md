@@ -21,3 +21,9 @@ The parent derivation now fails closed if required musl outputs are missing. Act
 ## Validation
 
 Build `bootstrap/musl-1.1.24-tcc.ncl`, inspect output contract, scan for leakage, and run OpenSpec validation/gates.
+
+### 3. Close current drain as checkpointed prerequisite timeout
+
+**Choice:** archive this runtime-validation follow-up as an explicit incomplete/hung validation attempt rather than treating the source-level derivation as runtime proof.
+
+**Rationale:** the prerequisite make/TinyCC chain is now archived enough to attempt musl, but the musl validation runner remained in Mes prerequisite work past the local drain budget and produced no musl output. Archiving the blocker preserves the exact checkpoint evidence and prevents accidental promotion.

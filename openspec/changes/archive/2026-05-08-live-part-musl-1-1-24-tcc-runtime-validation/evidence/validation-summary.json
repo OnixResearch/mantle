@@ -1,0 +1,24 @@
+{
+  "schema": "crunch-bootstrap-validation-v1",
+  "target": "bootstrap/musl-1.1.24-tcc.ncl",
+  "evidence_dir": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence",
+  "store": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/musl-tcc-state",
+  "store_prefix": "/crunch/store",
+  "resume": true,
+  "doctor_ok": true,
+  "build_attempted": true,
+  "build_exit_code": null,
+  "warmups": [],
+  "status": "running",
+  "failure_class": "running",
+  "evidence": {
+    "doctor_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence/doctor.json",
+    "build_stdout": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence/build.stdout.log",
+    "build_stderr": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence/build.stderr.log",
+    "summary_json": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence/validation-summary.json",
+    "summary_md": "/home/brittonr/git/crunch/crunch/openspec/changes/live-part-musl-1-1-24-tcc-runtime-validation/evidence/validation-summary.md"
+  },
+  "leakage_findings": [],
+  "generated_at_unix": 1778274911
+}
