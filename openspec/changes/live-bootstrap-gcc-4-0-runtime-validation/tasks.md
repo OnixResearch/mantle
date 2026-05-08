@@ -32,3 +32,4 @@
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-vastart-end-prefix-growth.md` records paired-cleanup prefix growth after full-file cleanup stayed `rc=139`; direct `decl0` runtime markers remain blocked.
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-vastart-end-prefix-extended.md` extends paired-cleanup prefix growth past the early I/O layer; direct `decl0` runtime markers remain blocked.
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-compile-shape.md` narrows the paired-cleanup second trigger into `libtcc.c::tcc_compile`; direct `decl0` runtime markers remain blocked.
+  - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-compile-signature.md` tests the `tcc_compile` empty-definition signature/name trigger; direct `decl0` runtime markers remain blocked.

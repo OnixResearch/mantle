@@ -1,0 +1,4 @@
+command: timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "/home/brittonr/git/crunch/crunch/.crunch-drain/store" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+started: 2026-05-07T23:34:37-04:00
+finished: 2026-05-07T23:38:15-04:00
+exit_status: 1
