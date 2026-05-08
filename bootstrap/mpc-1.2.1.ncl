@@ -19,6 +19,9 @@ let mpfr = import "mpfr-4.1.0.ncl" in
 let stage0 = import "stage0-posix.ncl" in
 
 let mpc_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/mpc-1.2.1/sources
+  # first-consumer: bootstrap/mpc-1.2.1.ncl
+  # upstream parts.rst currently labels this section "mpc 3.2.1"; steps/manifest and sources use mpc-1.2.1.
   url = "https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz",
   hash = "sha256-nyt5XHt58wWilbLRlIDuECmD3qBqmKTx4jiGL/7n5Ws=",
   name = "mpc-1.2.1-src",
@@ -80,6 +83,7 @@ let mpc_src = crunch.fetchTarball {
       make -j1 install 2>&1
 
       test -f "$out/lib/libmpc.a" || { echo "ERROR: libmpc.a not built" >&2; exit 1; }
+      test -f "$out/include/mpc.h" || { echo "ERROR: mpc.h not installed" >&2; exit 1; }
       echo "mpc-1.2.1 build complete"
     "%,
   ],

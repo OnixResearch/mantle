@@ -35,6 +35,6 @@ Crunch currently has broad live-bootstrap OpenSpec changes that group many upstr
 ## Validation Plan
 
 1. Run `cargo -Zscript scripts/check-bootstrap-source-pins.rs bootstrap/mpc-1.2.1.ncl`.
-2. Run `/tmp/crunch-build/debug/crunch build bootstrap/mpc-1.2.1.ncl` with the documented bootstrap build environment.
-3. Smoke-test the output contract described by `bootstrap/mpc-1.2.1.ncl`.
-4. Record host-leakage scan results for paths, env usage, and undeclared tools.
+2. Run `/tmp/crunch-build/debug/crunch build bootstrap/mpc-1.2.1.ncl` with the documented bootstrap build environment when declared prerequisite providers exist; otherwise record the fail-closed prerequisite blocker and do not substitute host or legacy compilers.
+3. Smoke-test the output contract described by `bootstrap/mpc-1.2.1.ncl` when an output exists.
+4. Record host-leakage scan results for paths, env usage, and undeclared tools when a transcript exists; otherwise preserve the no-host-fallback gate.
