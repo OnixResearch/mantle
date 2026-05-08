@@ -1331,6 +1331,39 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               compile_libtcc_range addfile 997 1182
               compile_libtcc_range options 1183 1583
               compile_libtcc_range args 1584 1981
+              make_libtcc_prefix() {
+                prefix_name="$1"
+                last="$2"
+                $BB awk -v last="$last" 'NR <= last { print }' libtcc.c > "libtcc-prefix-$prefix_name.c"
+              }
+              compile_libtcc_prefix() {
+                prefix_name="$1"
+                last="$2"
+                make_libtcc_prefix "$prefix_name" "$last"
+                for flags_name in common one_source; do
+                  compile_decl0_prepart "libtcc_prefix_${prefix_name}_${last}" "$flags_name" "libtcc-prefix-$prefix_name.c"
+                done
+              }
+              compile_libtcc_prefix globals 77
+              compile_libtcc_prefix asmstubs 89
+              compile_libtcc_prefix pathutils 198
+              compile_libtcc_prefix alloc 237
+              compile_libtcc_prefix dynarray 432
+              compile_libtcc_prefix split_path 457
+              compile_libtcc_prefix strcat_vprintf 466
+              compile_libtcc_prefix strcat_printf 474
+              compile_libtcc_prefix error1 518
+              compile_libtcc_prefix set_error_func 525
+              compile_libtcc_prefix error_noabort 536
+              compile_libtcc_prefix tcc_error 553
+              compile_libtcc_prefix warning 566
+              compile_libtcc_prefix error_api 570
+              compile_libtcc_prefix compile_string 675
+              compile_libtcc_prefix state_new 894
+              compile_libtcc_prefix output_type 984
+              compile_libtcc_prefix add_files 1182
+              compile_libtcc_prefix option_linker 1583
+              compile_libtcc_prefix full 1981
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {

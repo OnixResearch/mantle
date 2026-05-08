@@ -1,0 +1,191 @@
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=common
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=common rc=139
+diag-tcc-decl0-prepart: tccgen.c baseline common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=common
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c baseline common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=one_source
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=one_source rc=139
+diag-tcc-decl0-prepart: tccgen.c baseline one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c baseline one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=common
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=common rc=0
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c native387_disabled common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=one_source
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=one_source rc=0
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c native387_disabled one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_string_patch common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_string_patch one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_util_78_470 libtcc-range-util.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_util_78_470 libtcc-range-util.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-util.c libtcc_range_util_78_470 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_util_78_470 libtcc-range-util.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_util_78_470 libtcc-range-util.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-util.c libtcc_range_util_78_470 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_error_471_570 libtcc-range-error.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_error_471_570 libtcc-range-error.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-error.c libtcc_range_error_471_570 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_error_471_570 libtcc-range-error.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_error_471_570 libtcc-range-error.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-error.c libtcc_range_error_471_570 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_state_571_996 libtcc-range-state.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_state_571_996 libtcc-range-state.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-state.c libtcc_range_state_571_996 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_state_571_996 libtcc-range-state.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_state_571_996 libtcc-range-state.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-state.c libtcc_range_state_571_996 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_addfile_997_1182 libtcc-range-addfile.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_addfile_997_1182 libtcc-range-addfile.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-addfile.c libtcc_range_addfile_997_1182 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_addfile_997_1182 libtcc-range-addfile.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_addfile_997_1182 libtcc-range-addfile.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-addfile.c libtcc_range_addfile_997_1182 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_options_1183_1583 libtcc-range-options.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_options_1183_1583 libtcc-range-options.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-options.c libtcc_range_options_1183_1583 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_options_1183_1583 libtcc-range-options.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_options_1183_1583 libtcc-range-options.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-options.c libtcc_range_options_1183_1583 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_args_1584_1981 libtcc-range-args.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_range_args_1584_1981 libtcc-range-args.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-range-args.c libtcc_range_args_1584_1981 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_range_args_1584_1981 libtcc-range-args.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_range_args_1584_1981 libtcc-range-args.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-range-args.c libtcc_range_args_1584_1981 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_globals_77 libtcc-prefix-globals.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_globals_77 libtcc-prefix-globals.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-globals.c libtcc_prefix_globals_77 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_globals_77 libtcc-prefix-globals.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_globals_77 libtcc-prefix-globals.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-globals.c libtcc_prefix_globals_77 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_asmstubs_89 libtcc-prefix-asmstubs.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_asmstubs_89 libtcc-prefix-asmstubs.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-asmstubs.c libtcc_prefix_asmstubs_89 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_asmstubs_89 libtcc-prefix-asmstubs.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_asmstubs_89 libtcc-prefix-asmstubs.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-asmstubs.c libtcc_prefix_asmstubs_89 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_pathutils_198 libtcc-prefix-pathutils.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_pathutils_198 libtcc-prefix-pathutils.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-pathutils.c libtcc_prefix_pathutils_198 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_pathutils_198 libtcc-prefix-pathutils.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_pathutils_198 libtcc-prefix-pathutils.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-pathutils.c libtcc_prefix_pathutils_198 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_alloc_237 libtcc-prefix-alloc.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_alloc_237 libtcc-prefix-alloc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-alloc.c libtcc_prefix_alloc_237 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_alloc_237 libtcc-prefix-alloc.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_alloc_237 libtcc-prefix-alloc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-alloc.c libtcc_prefix_alloc_237 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_dynarray_432 libtcc-prefix-dynarray.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_dynarray_432 libtcc-prefix-dynarray.c flags=common rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_dynarray_432 libtcc-prefix-dynarray.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_dynarray_432 libtcc-prefix-dynarray.c flags=one_source rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_split_path_457 libtcc-prefix-split_path.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_split_path_457 libtcc-prefix-split_path.c flags=common rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_split_path_457 libtcc-prefix-split_path.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_split_path_457 libtcc-prefix-split_path.c flags=one_source rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_vprintf_466 libtcc-prefix-strcat_vprintf.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_vprintf_466 libtcc-prefix-strcat_vprintf.c flags=common rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_vprintf_466 libtcc-prefix-strcat_vprintf.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_vprintf_466 libtcc-prefix-strcat_vprintf.c flags=one_source rc=0
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_printf_474 libtcc-prefix-strcat_printf.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_printf_474 libtcc-prefix-strcat_printf.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-strcat_printf.c libtcc_prefix_strcat_printf_474 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_printf_474 libtcc-prefix-strcat_printf.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_strcat_printf_474 libtcc-prefix-strcat_printf.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-strcat_printf.c libtcc_prefix_strcat_printf_474 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error1_518 libtcc-prefix-error1.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_error1_518 libtcc-prefix-error1.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error1.c libtcc_prefix_error1_518 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error1_518 libtcc-prefix-error1.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_error1_518 libtcc-prefix-error1.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error1.c libtcc_prefix_error1_518 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_set_error_func_525 libtcc-prefix-set_error_func.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_set_error_func_525 libtcc-prefix-set_error_func.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-set_error_func.c libtcc_prefix_set_error_func_525 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_set_error_func_525 libtcc-prefix-set_error_func.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_set_error_func_525 libtcc-prefix-set_error_func.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-set_error_func.c libtcc_prefix_set_error_func_525 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_noabort_536 libtcc-prefix-error_noabort.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_noabort_536 libtcc-prefix-error_noabort.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error_noabort.c libtcc_prefix_error_noabort_536 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_noabort_536 libtcc-prefix-error_noabort.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_noabort_536 libtcc-prefix-error_noabort.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error_noabort.c libtcc_prefix_error_noabort_536 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_tcc_error_553 libtcc-prefix-tcc_error.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_tcc_error_553 libtcc-prefix-tcc_error.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-tcc_error.c libtcc_prefix_tcc_error_553 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_tcc_error_553 libtcc-prefix-tcc_error.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_tcc_error_553 libtcc-prefix-tcc_error.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-tcc_error.c libtcc_prefix_tcc_error_553 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_warning_566 libtcc-prefix-warning.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_warning_566 libtcc-prefix-warning.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-warning.c libtcc_prefix_warning_566 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_warning_566 libtcc-prefix-warning.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_warning_566 libtcc-prefix-warning.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-warning.c libtcc_prefix_warning_566 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_api_570 libtcc-prefix-error_api.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_api_570 libtcc-prefix-error_api.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error_api.c libtcc_prefix_error_api_570 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_api_570 libtcc-prefix-error_api.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_error_api_570 libtcc-prefix-error_api.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-error_api.c libtcc_prefix_error_api_570 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_compile_string_675 libtcc-prefix-compile_string.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_compile_string_675 libtcc-prefix-compile_string.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-compile_string.c libtcc_prefix_compile_string_675 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_compile_string_675 libtcc-prefix-compile_string.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_compile_string_675 libtcc-prefix-compile_string.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-compile_string.c libtcc_prefix_compile_string_675 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_state_new_894 libtcc-prefix-state_new.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_state_new_894 libtcc-prefix-state_new.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-state_new.c libtcc_prefix_state_new_894 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_state_new_894 libtcc-prefix-state_new.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_state_new_894 libtcc-prefix-state_new.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-state_new.c libtcc_prefix_state_new_894 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_output_type_984 libtcc-prefix-output_type.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_output_type_984 libtcc-prefix-output_type.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-output_type.c libtcc_prefix_output_type_984 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_output_type_984 libtcc-prefix-output_type.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_output_type_984 libtcc-prefix-output_type.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-output_type.c libtcc_prefix_output_type_984 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_add_files_1182 libtcc-prefix-add_files.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_add_files_1182 libtcc-prefix-add_files.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-add_files.c libtcc_prefix_add_files_1182 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_add_files_1182 libtcc-prefix-add_files.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_add_files_1182 libtcc-prefix-add_files.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-add_files.c libtcc_prefix_add_files_1182 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_option_linker_1583 libtcc-prefix-option_linker.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_option_linker_1583 libtcc-prefix-option_linker.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-option_linker.c libtcc_prefix_option_linker_1583 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_option_linker_1583 libtcc-prefix-option_linker.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_option_linker_1583 libtcc-prefix-option_linker.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-option_linker.c libtcc_prefix_option_linker_1583 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_full_1981 libtcc-prefix-full.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_prefix_full_1981 libtcc-prefix-full.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-full.c libtcc_prefix_full_1981 common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_prefix_full_1981 libtcc-prefix-full.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_prefix_full_1981 libtcc-prefix-full.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc-prefix-full.c libtcc_prefix_full_1981 one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-part: preprocess one-source
+diag-tcc-decl0-part: preprocess rc=0 lines=19828
+diag-tcc-decl0-part: compile tccpp.c
+diag-tcc-decl0-part: compile tccpp.c rc=0
+diag-tcc-decl0-part: compile tccgen.c
+diag-tcc-decl0-part: compile tccgen.c rc=0
+diag-tcc-decl0-part: compile tccelf.c
+diag-tcc-decl0-part: compile tccelf.c rc=0
+diag-tcc-decl0-part: compile x86_64-gen.c
+diag-tcc-decl0-part: compile x86_64-gen.c rc=0
+diag-tcc-decl0-part: compile libtcc.c
+diag-tcc-decl0-part: compile libtcc.c rc=139
+diag-tcc-decl0-part: libtcc.c stderr: Segmentation fault (core dumped)
