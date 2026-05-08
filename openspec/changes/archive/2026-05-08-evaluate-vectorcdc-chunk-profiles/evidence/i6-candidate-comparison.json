@@ -1,0 +1,105 @@
+{
+  "adoption_decision": {
+    "decision": "continue-research",
+    "next": "Keep FastCDC as default/protocol-v1 profile; continue research/tuning behind explicit feature gates before considering promotion.",
+    "observed": {
+      "candidate_cdc_speed_ratio_ppm": 2332,
+      "candidate_object_count_ratio_ppm": 1361702,
+      "candidate_reuse_ratio_vs_fastcdc_ppm": 999060
+    },
+    "rationale": "The scalar VectorCDC-style prototype is useful as an opt-in research seam, but this one-run corpus comparison is not enough to promote a new default or protocol profile.",
+    "thresholds": {
+      "promotion_object_count_ceiling_ppm": 1100000,
+      "promotion_reuse_floor_ppm": 900000,
+      "promotion_speedup_ppm": 1200000
+    }
+  },
+  "algorithms": [
+    {
+      "algorithm": "FastCDC",
+      "chunk_size_distribution": {
+        "avg": 357482,
+        "max": 524288,
+        "min": 7657,
+        "p50": 334718,
+        "p95": 524288
+      },
+      "throughput_bytes_per_second": {
+        "blake3_raw": 5623589905,
+        "cdc": 1218070345,
+        "total_ingest_wall": 114675207,
+        "zstd_chunk_compress": 133358890
+      },
+      "timing_nanos": {
+        "blake3_raw": 38649548,
+        "cdc": 178437320,
+        "total_ingest_wall": 1895346107,
+        "zstd_chunk_compress": 1629806655
+      },
+      "totals": {
+        "all_raw_digests_match_manifest": true,
+        "chunk_count": 608,
+        "compressed_chunk_bytes_zstd": 35924443,
+        "compression_ratio_ppm": 165284,
+        "dedup_reuse_ratio_ppm": 723684,
+        "entries": 20,
+        "estimated_object_count": 188,
+        "input_bytes": 217349208,
+        "reused_chunk_count": 440,
+        "unique_chunk_count": 168
+      }
+    },
+    {
+      "algorithm": "ExperimentalVectorCDCScalar",
+      "chunk_size_distribution": {
+        "avg": 255104,
+        "max": 524288,
+        "min": 7657,
+        "p50": 188960,
+        "p95": 524288
+      },
+      "throughput_bytes_per_second": {
+        "blake3_raw": 5314429365,
+        "cdc": 2841668,
+        "total_ingest_wall": 2759005,
+        "zstd_chunk_compress": 99437227
+      },
+      "timing_nanos": {
+        "blake3_raw": 40897939,
+        "cdc": 76486474836,
+        "total_ingest_wall": 78778092060,
+        "zstd_chunk_compress": 2185793128
+      },
+      "totals": {
+        "all_raw_digests_match_manifest": true,
+        "chunk_count": 852,
+        "compressed_chunk_bytes_zstd": 35982005,
+        "compression_ratio_ppm": 165549,
+        "dedup_reuse_ratio_ppm": 723004,
+        "entries": 20,
+        "estimated_object_count": 256,
+        "input_bytes": 217349208,
+        "reused_chunk_count": 616,
+        "unique_chunk_count": 236
+      }
+    }
+  ],
+  "corpus_manifest": "/home/brittonr/git/crunch/crunch/target/vectorcdc-corpus/manifest.json",
+  "identity_invariant": "Blob identity remains BLAKE3(raw bytes); candidate chunking is physical-storage evidence only.",
+  "profile": {
+    "avg_chunk_bytes": 262144,
+    "max_chunk_bytes": 524288,
+    "min_chunk_bytes": 131072,
+    "zstd_level": 3
+  },
+  "relative_to_fastcdc": {
+    "candidate_cdc_speed_ratio_ppm": 2332,
+    "candidate_chunk_count_ratio_ppm": 1401315,
+    "candidate_object_count_ratio_ppm": 1361702,
+    "candidate_reuse_ratio_vs_fastcdc_ppm": 999060,
+    "candidate_total_ingest_ratio_ppm": 24059,
+    "candidate_unique_chunk_ratio_ppm": 1404761,
+    "candidate_zstd_bytes_ratio_ppm": 1001602
+  },
+  "schema": "crunch.vectorcdc-candidate-comparison.v1"
+}

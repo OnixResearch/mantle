@@ -102,3 +102,7 @@ The first implementation seam should not add VectorCDC to protocol negotiation. 
 ## I5 prototype boundary
 
 `vendor/snix-castore/src/blobservice/chunker.rs::ExperimentalVectorCdcChunker` is an intentionally non-default candidate behind the `snix-castore/experimental-vectorcdc` Cargo feature. It uses a portable scalar vector-window boundary score so every supported platform has a deterministic fallback; there is no mandatory SIMD dependency, and default builds do not export or compile the candidate. The candidate still returns only physical offset/length boundaries and reuses the same `validate_chunk_boundaries()` invariant gate as FastCDC, so `BLAKE3(raw blob)` remains the only stable blob identity.
+
+## I6 adoption decision
+
+The I6 comparison records `continue-research`: keep FastCDC as the default/protocol-v1 profile and continue tuning candidate CDC behind explicit gates. On the I3 corpus, the scalar candidate preserved raw BLAKE3 identity but was slower than FastCDC in CDC throughput, produced more chunks and unique chunk objects, and therefore does not justify a promotion OpenSpec. The prototype remains useful as a safe measurement seam rather than a production candidate.

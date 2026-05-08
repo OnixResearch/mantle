@@ -11,7 +11,7 @@
 - [x] I3 Build a representative benchmark corpus from local store/build artifacts plus synthetic small-delta mutations, with recorded corpus provenance. Evidence: `evidence/i3-corpus-manifest.json`. [covers=delta-transfer.vectorcdc-evaluation.evidence]
 - [x] I4 Capture baseline FastCDC evidence: CDC throughput, total ingest wall time, chunk-size distribution, chunk count, dedup/reuse ratio, object-count impact, and separated BLAKE3/zstd/object-store costs where practical. Evidence: `evidence/i4-fastcdc-baseline.json`. [covers=delta-transfer.vectorcdc-evaluation.evidence]
 - [x] I5 Prototype one hashless/VectorCDC-style candidate behind an explicit feature/config gate with scalar fallback or unsupported-platform fail-closed behavior. Evidence: `design.md`, `verification.md`. [covers=delta-transfer.vectorcdc-evaluation.optional-deps]
-- [ ] I6 Compare candidate metrics against FastCDC and record an adoption decision: keep FastCDC, tune FastCDC, continue research, or open a separate promotion OpenSpec. [covers=delta-transfer.vectorcdc-evaluation.promotion]
+- [x] I6 Compare candidate metrics against FastCDC and record an adoption decision: keep FastCDC, tune FastCDC, continue research, or open a separate promotion OpenSpec. Evidence: `evidence/i6-candidate-comparison.json`. [covers=delta-transfer.vectorcdc-evaluation.promotion]
 
 ## Verification
 

@@ -30,7 +30,7 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
 
 - Added `crates/crunch-delta/examples/vectorcdc_corpus.rs`, a deterministic corpus materializer for chunk-profile benchmarking.
 - The corpus builder copies benchmark inputs to `target/vectorcdc-corpus/files/` and records provenance in `target/vectorcdc-corpus/manifest.json`.
-- Committed provenance snapshot: `openspec/changes/evaluate-vectorcdc-chunk-profiles/evidence/i3-corpus-manifest.json`.
+- Committed provenance snapshot: `openspec/changes/archive/2026-05-08-evaluate-vectorcdc-chunk-profiles/evidence/i3-corpus-manifest.json`.
 - Corpus contents from this run:
   - 20 entries total.
   - Source kinds: `repo-artifact`, `local-build-artifact`.
@@ -46,7 +46,7 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
 ## I4 FastCDC baseline metrics
 
 - Added `crates/crunch-delta/examples/vectorcdc_fastcdc_baseline.rs`, a rerunnable FastCDC baseline collector over the I3 corpus.
-- Captured evidence: `openspec/changes/evaluate-vectorcdc-chunk-profiles/evidence/i4-fastcdc-baseline.json`.
+- Captured evidence: `openspec/changes/archive/2026-05-08-evaluate-vectorcdc-chunk-profiles/evidence/i4-fastcdc-baseline.json`.
 - Baseline run summary:
   - Entries: `20`.
   - Input bytes: `217349208`.
@@ -75,3 +75,19 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
   - `cargo fmt -p snix-castore` and `cargo fmt --check -p snix-castore` → pass.
   - `cargo check -p snix-castore --lib` → pass, proving default/no-feature build remains valid.
   - `cargo test -p snix-castore blobservice::chunker --lib --features experimental-vectorcdc` → pass, 7 tests including deterministic candidate coverage.
+
+## I6 candidate comparison and adoption decision
+
+- Added `crates/crunch-delta/examples/vectorcdc_candidate_compare.rs`, a gated comparison runner for FastCDC vs `ExperimentalVectorCDCScalar` over the I3 corpus.
+- Captured evidence: `openspec/changes/archive/2026-05-08-evaluate-vectorcdc-chunk-profiles/evidence/i6-candidate-comparison.json`.
+- Adoption decision: `continue-research`.
+- Comparison summary:
+  - FastCDC: `608` chunks, `168` unique chunks, estimated object count `188`, CDC throughput `1218070345` B/s.
+  - Candidate: `852` chunks, `236` unique chunks, estimated object count `256`, CDC throughput `2841668` B/s.
+  - Candidate relative to FastCDC: CDC speed `2332` ppm, chunk count `1401315` ppm, object count `1361702` ppm, reuse ratio `999060` ppm.
+  - Both algorithms preserved raw BLAKE3 digest agreement with the I3 manifest.
+- Verification:
+  - `cargo fmt -p crunch-delta` and `cargo fmt --check -p crunch-delta` → pass.
+  - `cargo check -p crunch-delta --features experimental-vectorcdc --example vectorcdc_candidate_compare` → pass.
+  - `cargo run -p crunch-delta --features experimental-vectorcdc --example vectorcdc_candidate_compare -- target/vectorcdc-corpus/manifest.json target/vectorcdc-candidate-comparison.json` → pass.
+  - JSON invariant check asserted schema, algorithms, corpus size, positive chunks/timings, raw BLAKE3 agreement, and a valid adoption decision → pass.
