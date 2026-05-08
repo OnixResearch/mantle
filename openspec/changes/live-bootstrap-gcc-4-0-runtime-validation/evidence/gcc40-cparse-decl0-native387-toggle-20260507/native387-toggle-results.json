@@ -1,0 +1,83 @@
+{
+  "conclusion": "Disabling the first TCC_IS_NATIVE_387 tccgen path moves tccgen.c from rc139 to rc0 under common and ONE_SOURCE flags; libtcc.c remains rc139 and the full instrumented compiler still fails before runtime decl0 markers.",
+  "full_instrumented_build_rc": 139,
+  "one_source_preprocess": {
+    "lines": 19816,
+    "rc": 0
+  },
+  "post_marker_component_compiles": [
+    {
+      "rc": 0,
+      "source": "tccpp.c"
+    },
+    {
+      "rc": 0,
+      "source": "tccgen.c"
+    },
+    {
+      "rc": 0,
+      "source": "tccelf.c"
+    },
+    {
+      "rc": 0,
+      "source": "x86_64-gen.c"
+    },
+    {
+      "rc": 139,
+      "source": "libtcc.c"
+    }
+  ],
+  "pre_marker_component_compiles": [
+    {
+      "flags": "common",
+      "rc": 139,
+      "source": "tccgen.c",
+      "stage": "baseline"
+    },
+    {
+      "flags": "common",
+      "rc": 139,
+      "source": "libtcc.c",
+      "stage": "baseline"
+    },
+    {
+      "flags": "one_source",
+      "rc": 139,
+      "source": "tccgen.c",
+      "stage": "baseline"
+    },
+    {
+      "flags": "one_source",
+      "rc": 139,
+      "source": "libtcc.c",
+      "stage": "baseline"
+    },
+    {
+      "flags": "common",
+      "rc": 0,
+      "source": "tccgen.c",
+      "stage": "native387_disabled"
+    },
+    {
+      "flags": "common",
+      "rc": 139,
+      "source": "libtcc.c",
+      "stage": "native387_disabled"
+    },
+    {
+      "flags": "one_source",
+      "rc": 0,
+      "source": "tccgen.c",
+      "stage": "native387_disabled"
+    },
+    {
+      "flags": "one_source",
+      "rc": 139,
+      "source": "libtcc.c",
+      "stage": "native387_disabled"
+    }
+  ],
+  "status": "captured",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}
