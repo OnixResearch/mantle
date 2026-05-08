@@ -21,3 +21,7 @@ The parent gcc-4.0.4 implementation relies on a functional binutils-tcc output. 
 ## Validation
 
 Run build, host-leakage audit, C/C++ compiler smoke, and OpenSpec validation.
+
+## Closeout decision
+
+The change closes as a deterministic negative runtime-validation drain rather than a successful GCC output promotion. V2/V4 evidence records that `gcc-4.0.4` output smoke tests cannot run until the predecessor TinyCC/Mes `libtcc.c` `rc=139` boundary is repaired. The canonical requirement remains conditional: C/C++ smoke evidence is required when `gcc-4.0.4` builds successfully, and this archive preserves the failure-class boundary without claiming that success.
