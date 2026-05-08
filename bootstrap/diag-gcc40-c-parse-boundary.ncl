@@ -1306,6 +1306,31 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
+              make_libtcc_range_disabled() {
+                range_name="$1"
+                first="$2"
+                last="$3"
+                $BB awk -v first="$first" -v last="$last" '
+                  NR == first { print "#if 0 /* CRUNCH diag: disable libtcc range " first ".." last " */" }
+                  { print }
+                  NR == last { print "#endif /* CRUNCH diag libtcc range */" }
+                ' libtcc.c > "libtcc-range-$range_name.c"
+              }
+              compile_libtcc_range() {
+                range_name="$1"
+                first="$2"
+                last="$3"
+                make_libtcc_range_disabled "$range_name" "$first" "$last"
+                for flags_name in common one_source; do
+                  compile_decl0_prepart "libtcc_range_${range_name}_${first}_${last}" "$flags_name" "libtcc-range-$range_name.c"
+                done
+              }
+              compile_libtcc_range util 78 470
+              compile_libtcc_range error 471 570
+              compile_libtcc_range state 571 996
+              compile_libtcc_range addfile 997 1182
+              compile_libtcc_range options 1183 1583
+              compile_libtcc_range args 1584 1981
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
