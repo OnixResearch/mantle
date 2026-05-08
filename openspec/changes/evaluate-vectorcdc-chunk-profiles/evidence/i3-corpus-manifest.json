@@ -1,0 +1,214 @@
+{
+  "schema": "crunch.vectorcdc-corpus.v1",
+  "purpose": "Representative CDC benchmark corpus: repo artifacts, local build artifacts, and deterministic small-delta mutations.",
+  "repo_root": "/home/brittonr/git/crunch/crunch",
+  "output_dir": "/home/brittonr/git/crunch/crunch/target/vectorcdc-corpus",
+  "identity_invariant": "Corpus files are benchmark inputs only; blob identity remains BLAKE3(raw bytes).",
+  "mutation_policy": {
+    "middle-64-byte-patch": "XOR up to 64 bytes at the midpoint with a deterministic pattern.",
+    "prefix-insert": "Insert a fixed marker after the first 4096 bytes or at EOF for smaller files.",
+    "tail-append": "Append 4096 deterministic bytes."
+  },
+  "entries": [
+    {
+      "id": "cargo-lock--base",
+      "kind": "repo-artifact",
+      "source_id": "cargo-lock",
+      "relative_path": "files/cargo-lock--base",
+      "source_path": "/home/brittonr/git/crunch/crunch/Cargo.lock",
+      "mutation": "base",
+      "bytes": 210560,
+      "blake3": "7a236da484e39c6925eb05e2ab84ff7f2db02f6c4433e190280f89cbe7314348"
+    },
+    {
+      "id": "cargo-lock--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "source_id": "cargo-lock",
+      "relative_path": "files/cargo-lock--middle-64-byte-patch",
+      "source_path": "/home/brittonr/git/crunch/crunch/Cargo.lock",
+      "mutation": "middle-64-byte-patch",
+      "bytes": 210560,
+      "blake3": "a5bf454d65338bcbb570634f88d3c57805afa4cbad152be156bebe3a69de527b"
+    },
+    {
+      "id": "cargo-lock--prefix-insert",
+      "kind": "repo-artifact",
+      "source_id": "cargo-lock",
+      "relative_path": "files/cargo-lock--prefix-insert",
+      "source_path": "/home/brittonr/git/crunch/crunch/Cargo.lock",
+      "mutation": "prefix-insert",
+      "bytes": 210604,
+      "blake3": "a7132e428443168db24eed947742c8dad7db21ce1749872fbd8628e52f047d2d"
+    },
+    {
+      "id": "cargo-lock--tail-append",
+      "kind": "repo-artifact",
+      "source_id": "cargo-lock",
+      "relative_path": "files/cargo-lock--tail-append",
+      "source_path": "/home/brittonr/git/crunch/crunch/Cargo.lock",
+      "mutation": "tail-append",
+      "bytes": 214656,
+      "blake3": "3d076c0121e742572ad2d1677e769385677a696fff3d282f730b2594ba5943db"
+    },
+    {
+      "id": "castore-object-store-rs--base",
+      "kind": "repo-artifact",
+      "source_id": "castore-object-store-rs",
+      "relative_path": "files/castore-object-store-rs--base",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/object_store.rs",
+      "mutation": "base",
+      "bytes": 25450,
+      "blake3": "5d2d2b4f054f89d5056f9260d4a23ebeb4c1f7d461f933ed1bb48479bd014da6"
+    },
+    {
+      "id": "castore-object-store-rs--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "source_id": "castore-object-store-rs",
+      "relative_path": "files/castore-object-store-rs--middle-64-byte-patch",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/object_store.rs",
+      "mutation": "middle-64-byte-patch",
+      "bytes": 25450,
+      "blake3": "3d27dbb481bb335a8e753b03aab5399021c45438c514cfec705b61b5e71a6212"
+    },
+    {
+      "id": "castore-object-store-rs--prefix-insert",
+      "kind": "repo-artifact",
+      "source_id": "castore-object-store-rs",
+      "relative_path": "files/castore-object-store-rs--prefix-insert",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/object_store.rs",
+      "mutation": "prefix-insert",
+      "bytes": 25494,
+      "blake3": "0ed4d28b596404ec3e01e776907d89ccedf79626af32fa2c0c5865f1c71be2fe"
+    },
+    {
+      "id": "castore-object-store-rs--tail-append",
+      "kind": "repo-artifact",
+      "source_id": "castore-object-store-rs",
+      "relative_path": "files/castore-object-store-rs--tail-append",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/object_store.rs",
+      "mutation": "tail-append",
+      "bytes": 29546,
+      "blake3": "90c2b8cdb8eebc43f2bf0003de65c5cef632d08b5bb1fbaa79fd9ef41da44ab9"
+    },
+    {
+      "id": "castore-chunker-rs--base",
+      "kind": "repo-artifact",
+      "source_id": "castore-chunker-rs",
+      "relative_path": "files/castore-chunker-rs--base",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/chunker.rs",
+      "mutation": "base",
+      "bytes": 8128,
+      "blake3": "742d3cf3a1b000f09e2e0afaa9d26bf23d08fbf13f20e91183c2b3e2b6883e84"
+    },
+    {
+      "id": "castore-chunker-rs--middle-64-byte-patch",
+      "kind": "repo-artifact",
+      "source_id": "castore-chunker-rs",
+      "relative_path": "files/castore-chunker-rs--middle-64-byte-patch",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/chunker.rs",
+      "mutation": "middle-64-byte-patch",
+      "bytes": 8128,
+      "blake3": "16d445bcc977f50aa26596c14ab109926d3da331e4579a9365d85e0b30967c46"
+    },
+    {
+      "id": "castore-chunker-rs--prefix-insert",
+      "kind": "repo-artifact",
+      "source_id": "castore-chunker-rs",
+      "relative_path": "files/castore-chunker-rs--prefix-insert",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/chunker.rs",
+      "mutation": "prefix-insert",
+      "bytes": 8172,
+      "blake3": "d8512988858c7e1eaff0587639f6265717eb5d07b2d6993a31cbdebaf8b6fb28"
+    },
+    {
+      "id": "castore-chunker-rs--tail-append",
+      "kind": "repo-artifact",
+      "source_id": "castore-chunker-rs",
+      "relative_path": "files/castore-chunker-rs--tail-append",
+      "source_path": "/home/brittonr/git/crunch/crunch/vendor/snix-castore/src/blobservice/chunker.rs",
+      "mutation": "tail-append",
+      "bytes": 12224,
+      "blake3": "f13e055599e3acedac818f1c310e0d13c4cbaed446eae3bfd25b74c37d22d184"
+    },
+    {
+      "id": "snix-castore-rlib--base",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-rlib",
+      "relative_path": "files/snix-castore-rlib--base",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/libsnix_castore-1f64de7ed91dd9a0.rlib",
+      "mutation": "base",
+      "bytes": 54080332,
+      "blake3": "50c7c1ef3261ec57a687d2437c1d59aac3f33b7ac878b87a9c91f8feed57ec13"
+    },
+    {
+      "id": "snix-castore-rlib--middle-64-byte-patch",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-rlib",
+      "relative_path": "files/snix-castore-rlib--middle-64-byte-patch",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/libsnix_castore-1f64de7ed91dd9a0.rlib",
+      "mutation": "middle-64-byte-patch",
+      "bytes": 54080332,
+      "blake3": "8c6270a538725895359b238852f016e5d1225e502f42915a6877767edc9392d6"
+    },
+    {
+      "id": "snix-castore-rlib--prefix-insert",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-rlib",
+      "relative_path": "files/snix-castore-rlib--prefix-insert",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/libsnix_castore-1f64de7ed91dd9a0.rlib",
+      "mutation": "prefix-insert",
+      "bytes": 54080376,
+      "blake3": "a815ea2e3dd096b762a4f11fbe05715241f19d50279dac40ec9f8f9fd703a8ca"
+    },
+    {
+      "id": "snix-castore-rlib--tail-append",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-rlib",
+      "relative_path": "files/snix-castore-rlib--tail-append",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/libsnix_castore-1f64de7ed91dd9a0.rlib",
+      "mutation": "tail-append",
+      "bytes": 54084428,
+      "blake3": "257a7176f68dbb5855928565c903522cf1a2015e3c2f2b6be9ce0d7b6151ec74"
+    },
+    {
+      "id": "snix-castore-depfile--base",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-depfile",
+      "relative_path": "files/snix-castore-depfile--base",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/snix_castore-1f64de7ed91dd9a0.d",
+      "mutation": "base",
+      "bytes": 7657,
+      "blake3": "12e3b236c99bed63e481a3b4f19201fa04ab38af3c269555de4d7d6287ba3551"
+    },
+    {
+      "id": "snix-castore-depfile--middle-64-byte-patch",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-depfile",
+      "relative_path": "files/snix-castore-depfile--middle-64-byte-patch",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/snix_castore-1f64de7ed91dd9a0.d",
+      "mutation": "middle-64-byte-patch",
+      "bytes": 7657,
+      "blake3": "f6c37ae208156b33946fb410e9ae89526b89a52317884f4faa04133557125247"
+    },
+    {
+      "id": "snix-castore-depfile--prefix-insert",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-depfile",
+      "relative_path": "files/snix-castore-depfile--prefix-insert",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/snix_castore-1f64de7ed91dd9a0.d",
+      "mutation": "prefix-insert",
+      "bytes": 7701,
+      "blake3": "c85b45ac384706d1ee902866486f3a0560e5a4b28c98676d2a38b97487ce04d2"
+    },
+    {
+      "id": "snix-castore-depfile--tail-append",
+      "kind": "local-build-artifact",
+      "source_id": "snix-castore-depfile",
+      "relative_path": "files/snix-castore-depfile--tail-append",
+      "source_path": "/home/brittonr/git/crunch/crunch/target/debug/deps/snix_castore-1f64de7ed91dd9a0.d",
+      "mutation": "tail-append",
+      "bytes": 11753,
+      "blake3": "4b74ab9597984524ccfa1d3e6f57bfee1fd1aee026e444f9786c441bb4b6df44"
+    }
+  ]
+}

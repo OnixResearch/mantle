@@ -25,3 +25,20 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
   - chunk boundary validation rejects gaps, overlaps, zero-length ranges, and out-of-bounds non-final chunks.
 - Formatting:
   - `cargo fmt --check` → pass.
+
+## I3 benchmark corpus provenance
+
+- Added `crates/crunch-delta/examples/vectorcdc_corpus.rs`, a deterministic corpus materializer for chunk-profile benchmarking.
+- The corpus builder copies benchmark inputs to `target/vectorcdc-corpus/files/` and records provenance in `target/vectorcdc-corpus/manifest.json`.
+- Committed provenance snapshot: `openspec/changes/evaluate-vectorcdc-chunk-profiles/evidence/i3-corpus-manifest.json`.
+- Corpus contents from this run:
+  - 20 entries total.
+  - Source kinds: `repo-artifact`, `local-build-artifact`.
+  - Mutation classes per source: `base`, `middle-64-byte-patch`, `prefix-insert`, `tail-append`.
+  - Total corpus bytes across entries: `217349208`.
+- Verification:
+  - `cargo fmt --check -p crunch-delta` → pass after formatting.
+  - `cargo check -p crunch-delta --example vectorcdc_corpus` → pass.
+  - `cargo run -p crunch-delta --example vectorcdc_corpus -- target/vectorcdc-corpus` → pass, wrote 20 entries.
+  - `python -m json.tool target/vectorcdc-corpus/manifest.json` → pass.
+  - JSON invariant check asserted schema, at least 12 entries, presence of both repo and local-build artifact source kinds, and all mutation classes → pass.
