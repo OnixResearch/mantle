@@ -9,6 +9,7 @@ use crate::composition::ServiceBuilder;
 use crate::proto::stat_blob_response::ChunkMeta;
 
 mod chunked_reader;
+pub mod chunker;
 mod combinator;
 mod from_addr;
 mod memory;
