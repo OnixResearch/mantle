@@ -1,0 +1,78 @@
+store error: build: nonzero exit code: exit status: 2
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=common
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=common rc=139
+diag-tcc-decl0-prepart: tccgen.c baseline common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=common
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c baseline common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=one_source
+diag-tcc-decl0-prepart: compile baseline tccgen.c flags=one_source rc=139
+diag-tcc-decl0-prepart: tccgen.c baseline one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile baseline libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c baseline one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=common
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=common rc=0
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c native387_disabled common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=one_source
+diag-tcc-decl0-prepart: compile native387_disabled tccgen.c flags=one_source rc=0
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile native387_disabled libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c native387_disabled one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_string_patch common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source
+diag-tcc-decl0-prepart: compile libtcc_string_patch libtcc.c flags=one_source rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_string_patch one_source stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_minimal libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_minimal libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_minimal macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_setjmp libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_setjmp libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_setjmp macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_float libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_float libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_float macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_long_long libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_long_long libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_long_long macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_bitfield libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_bitfield libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_bitfield macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_static libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_static libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_static macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_macro_no_use_libgcc libtcc.c flags=macro
+diag-tcc-decl0-prepart: compile libtcc_macro_no_use_libgcc libtcc.c flags=macro rc=139
+diag-tcc-decl0-prepart: libtcc.c libtcc_macro_no_use_libgcc macro stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_empty libtcc-strcat-body-empty.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_empty libtcc-strcat-body-empty.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-strcat-body-empty.c libtcc_strcat_body_empty common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_declare_ap libtcc-strcat-body-declare_ap.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_declare_ap libtcc-strcat-body-declare_ap.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-strcat-body-declare_ap.c libtcc_strcat_body_declare_ap common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_va_start_only libtcc-strcat-body-va_start_only.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_va_start_only libtcc-strcat-body-va_start_only.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-strcat-body-va_start_only.c libtcc_strcat_body_va_start_only common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_va_start_end libtcc-strcat-body-va_start_end.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_va_start_end libtcc-strcat-body-va_start_end.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-strcat-body-va_start_end.c libtcc_strcat_body_va_start_end common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_direct_pstrcat libtcc-strcat-body-direct_pstrcat.c flags=common
+diag-tcc-decl0-prepart: compile libtcc_strcat_body_direct_pstrcat libtcc-strcat-body-direct_pstrcat.c flags=common rc=139
+diag-tcc-decl0-prepart: libtcc-strcat-body-direct_pstrcat.c libtcc_strcat_body_direct_pstrcat common stderr: Segmentation fault (core dumped)
+diag-tcc-decl0-part: preprocess one-source
+diag-tcc-decl0-part: preprocess rc=0 lines=19828
+diag-tcc-decl0-part: compile tccpp.c
+diag-tcc-decl0-part: compile tccpp.c rc=0
+diag-tcc-decl0-part: compile tccgen.c
+diag-tcc-decl0-part: compile tccgen.c rc=0
+diag-tcc-decl0-part: compile tccelf.c
+diag-tcc-decl0-part: compile tccelf.c rc=0
+diag-tcc-decl0-part: compile x86_64-gen.c
+diag-tcc-decl0-part: compile x86_64-gen.c rc=0
+diag-tcc-decl0-part: compile libtcc.c
+diag-tcc-decl0-part: compile libtcc.c rc=139
+diag-tcc-decl0-part: libtcc.c stderr: Segmentation fault (core dumped)

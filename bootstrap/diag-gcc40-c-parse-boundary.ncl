@@ -1328,6 +1328,47 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               compile_libtcc_macro_flags libtcc_macro_no_bitfield '-D BOOTSTRAP=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
               compile_libtcc_macro_flags libtcc_macro_no_static '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_USE_LIBGCC=1'
               compile_libtcc_macro_flags libtcc_macro_no_use_libgcc '-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1'
+              make_libtcc_strcat_body() {
+                variant="$1"
+                body="$2"
+                $BB awk -v variant="$variant" -v body="$body" '
+                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
+                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                    print "{"
+                    if (body == "empty") {
+                      print "    (void)buf; (void)buf_size; (void)fmt;"
+                    } else if (body == "declare_ap") {
+                      print "    va_list ap;"
+                      print "    (void)buf; (void)buf_size; (void)fmt; (void)ap;"
+                    } else if (body == "va_start_only") {
+                      print "    va_list ap;"
+                      print "    va_start(ap, fmt);"
+                    } else if (body == "va_start_end") {
+                      print "    va_list ap;"
+                      print "    va_start(ap, fmt);"
+                      print "    va_end(ap);"
+                    } else if (body == "direct_pstrcat") {
+                      print "    pstrcat(buf, buf_size, fmt);"
+                    }
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  in_stub && /^}/ { in_stub=0; next }
+                  !in_stub { print }
+                ' libtcc.c > "libtcc-strcat-body-$variant.c"
+              }
+              compile_libtcc_strcat_body() {
+                variant="$1"
+                body="$2"
+                make_libtcc_strcat_body "$variant" "$body"
+                compile_decl0_prepart "libtcc_strcat_body_${variant}" common "libtcc-strcat-body-$variant.c"
+              }
+              compile_libtcc_strcat_body empty empty
+              compile_libtcc_strcat_body declare_ap declare_ap
+              compile_libtcc_strcat_body va_start_only va_start_only
+              compile_libtcc_strcat_body va_start_end va_start_end
+              compile_libtcc_strcat_body direct_pstrcat direct_pstrcat
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {

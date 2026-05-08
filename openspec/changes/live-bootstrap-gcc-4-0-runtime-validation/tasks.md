@@ -17,3 +17,5 @@
 - [x] V3 Validate no host compiler/libc/shell/Nix/legacy-provider leakage. Evidence: `evidence/V3-gcc40-c-parse-host-leakage-scan.md`. [covers=bootstrap.gcc40.runtime-validation]
 - [ ] V4 Run C and C++ compiler smoke tests with the gcc-4.0.4 output. [covers=bootstrap.gcc40.runtime-validation]
 - [ ] V5 Run OpenSpec validation/gates before archive. [covers=bootstrap.gcc40.runtime-validation]
+
+- V2 evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-strcat-body-toggle.md` tests `strcat_printf` body variants after prefix evidence placed the onset at that function; result: libtcc_strcat_body_empty rc=139, libtcc_strcat_body_declare_ap rc=139, libtcc_strcat_body_va_start_only rc=139, libtcc_strcat_body_va_start_end rc=139, libtcc_strcat_body_direct_pstrcat rc=139. Direct `decl0` runtime markers remain unclaimed unless the evidence records emitted markers.
