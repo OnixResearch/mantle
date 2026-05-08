@@ -29,3 +29,4 @@
 - [ ] V5 Run OpenSpec validation/gates before archive. [covers=bootstrap.gcc40.runtime-validation]
 
 - V2 evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-strcat-body-toggle.md` tests `strcat_printf` body variants after prefix evidence placed the onset at that function; result: libtcc_strcat_body_empty rc=139, libtcc_strcat_body_declare_ap rc=139, libtcc_strcat_body_va_start_only rc=139, libtcc_strcat_body_va_start_end rc=139, libtcc_strcat_body_direct_pstrcat rc=139. Direct `decl0` runtime markers remain unclaimed unless the evidence records emitted markers.
+  - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-vastart-end-prefix-growth.md` records paired-cleanup prefix growth after full-file cleanup stayed `rc=139`; direct `decl0` runtime markers remain blocked.
