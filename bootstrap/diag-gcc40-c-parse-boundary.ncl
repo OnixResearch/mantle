@@ -1382,6 +1382,49 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_strcat_printf_stub "$flags_name" libtcc-strcat-printf-stub.c
               done
+              make_libtcc_error_varargs_stub() {
+                $BB awk '
+                  /^static void strcat_printf\(char \*buf, int buf_size, const char \*fmt, \.\.\.\)/ {
+                    print "static void strcat_printf(char *buf, int buf_size, const char *fmt, ...)"
+                    print "{"
+                    print "    pstrcat(buf, buf_size, fmt);"
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  /^PUB_FUNC void tcc_error_noabort\(const char \*fmt, \.\.\.\)/ {
+                    print "PUB_FUNC void tcc_error_noabort(const char *fmt, ...)"
+                    print "{"
+                    print "    (void)fmt;"
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  /^PUB_FUNC void tcc_error\(const char \*fmt, \.\.\.\)/ {
+                    print "PUB_FUNC void tcc_error(const char *fmt, ...)"
+                    print "{"
+                    print "    (void)fmt;"
+                    print "    exit(1);"
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  /^PUB_FUNC void tcc_warning\(const char \*fmt, \.\.\.\)/ {
+                    print "PUB_FUNC void tcc_warning(const char *fmt, ...)"
+                    print "{"
+                    print "    (void)fmt;"
+                    print "}"
+                    in_stub=1
+                    next
+                  }
+                  in_stub && /^}/ { in_stub=0; next }
+                  !in_stub { print }
+                ' libtcc.c > libtcc-error-varargs-stub.c
+              }
+              make_libtcc_error_varargs_stub
+              for flags_name in common one_source; do
+                compile_decl0_prepart libtcc_error_varargs_stub "$flags_name" libtcc-error-varargs-stub.c
+              done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {
