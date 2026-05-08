@@ -98,3 +98,7 @@ Crunch delta transfer is castore-native: blobs and chunks are identified by BLAK
 ## Evaluation boundary implication
 
 The first implementation seam should not add VectorCDC to protocol negotiation. It should extract a deterministic chunk-boundary interface below the object-store upload path, with FastCDC as the default implementation and tests that candidate boundaries are ordered, contiguous, non-overlapping, and cover the raw byte stream exactly. Protocol-v1 advertising should continue to expose only `FastCdc/Blake3/131072/262144/524288` until a later evidence-backed promotion OpenSpec changes negotiation semantics.
+
+## I5 prototype boundary
+
+`vendor/snix-castore/src/blobservice/chunker.rs::ExperimentalVectorCdcChunker` is an intentionally non-default candidate behind the `snix-castore/experimental-vectorcdc` Cargo feature. It uses a portable scalar vector-window boundary score so every supported platform has a deterministic fallback; there is no mandatory SIMD dependency, and default builds do not export or compile the candidate. The candidate still returns only physical offset/length boundaries and reuses the same `validate_chunk_boundaries()` invariant gate as FastCDC, so `BLAKE3(raw blob)` remains the only stable blob identity.

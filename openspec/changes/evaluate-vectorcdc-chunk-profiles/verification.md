@@ -64,3 +64,14 @@ Implementation and benchmark tasks remain open intentionally; this change is an 
   - `cargo check -p crunch-delta --example vectorcdc_fastcdc_baseline` → pass.
   - `cargo run -p crunch-delta --example vectorcdc_fastcdc_baseline -- target/vectorcdc-corpus/manifest.json target/vectorcdc-fastcdc-baseline.json` → pass.
   - JSON invariant check asserted schema, algorithm, profile, corpus size, positive chunk counts/timings, and raw BLAKE3 digest agreement with the I3 manifest → pass.
+
+## I5 gated VectorCDC-style prototype
+
+- Added `snix-castore` feature gate `experimental-vectorcdc`; it is not part of the default feature set.
+- Added `ExperimentalVectorCdcChunker`, a scalar hashless/vector-window CDC boundary selector for prototype measurement only.
+- The candidate returns the same `ChunkBoundary` offset/length model as FastCDC and is validated by the same ordered/contiguous/full-coverage invariant gate.
+- No protocol-v1 negotiation, object-store upload default, or blob identity behavior changed; `BLAKE3(raw blob)` remains authoritative.
+- Verification:
+  - `cargo fmt -p snix-castore` and `cargo fmt --check -p snix-castore` → pass.
+  - `cargo check -p snix-castore --lib` → pass, proving default/no-feature build remains valid.
+  - `cargo test -p snix-castore blobservice::chunker --lib --features experimental-vectorcdc` → pass, 7 tests including deterministic candidate coverage.

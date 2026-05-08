@@ -58,6 +58,65 @@ impl Chunker for FastCdcChunker {
     }
 }
 
+/// Experimental hashless/vector-window CDC candidate.
+///
+/// This chunker is deliberately gated behind the `experimental-vectorcdc` Cargo
+/// feature. It is a scalar, portable prototype for measuring a VectorCDC-style
+/// byte-window boundary signal without changing the default FastCDC path.
+#[cfg(feature = "experimental-vectorcdc")]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExperimentalVectorCdcChunker;
+
+#[cfg(feature = "experimental-vectorcdc")]
+impl Chunker for ExperimentalVectorCdcChunker {
+    fn chunk_boundaries(&self, blob: &[u8], profile: ChunkProfile) -> Result<Vec<ChunkBoundary>, ChunkBoundaryError> {
+        validate_profile(profile)?;
+        if blob.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let min_len = profile.min_chunk_bytes as usize;
+        let avg_len = profile.avg_chunk_bytes as usize;
+        let max_len = profile.max_chunk_bytes as usize;
+        let boundary_mask = avg_len.next_power_of_two().saturating_sub(1);
+        let mut boundaries = Vec::new();
+        let mut chunk_start = 0usize;
+
+        while chunk_start < blob.len() {
+            let remaining = blob.len() - chunk_start;
+            if remaining <= max_len {
+                boundaries.push(ChunkBoundary::new(chunk_start, remaining));
+                break;
+            }
+
+            let min_end = chunk_start.saturating_add(min_len).min(blob.len());
+            let max_end = chunk_start.saturating_add(max_len).min(blob.len());
+            let mut chunk_end = max_end;
+            for candidate_end in min_end..max_end {
+                if vector_window_boundary_score(&blob[chunk_start..candidate_end]) & boundary_mask == 0 {
+                    chunk_end = candidate_end;
+                    break;
+                }
+            }
+
+            boundaries.push(ChunkBoundary::new(chunk_start, chunk_end - chunk_start));
+            chunk_start = chunk_end;
+        }
+
+        validate_chunk_boundaries(blob.len(), profile, &boundaries)?;
+        Ok(boundaries)
+    }
+}
+
+#[cfg(feature = "experimental-vectorcdc")]
+fn vector_window_boundary_score(bytes: &[u8]) -> usize {
+    const WINDOW_BYTES: usize = 64;
+    bytes.iter().rev().take(WINDOW_BYTES).enumerate().fold(0usize, |score, (lane, byte)| {
+        let lane_weight = (lane + 1).wrapping_mul(0x9e37usize);
+        score.wrapping_add((*byte as usize).wrapping_mul(lane_weight))
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChunkBoundaryError {
     InvalidProfile,
@@ -206,6 +265,23 @@ mod tests {
     #[test]
     fn boundary_validation_accepts_empty_blob_without_chunks() {
         validate_chunk_boundaries(0, test_profile(), &[]).expect("empty blob has no chunk boundaries");
+    }
+
+    #[cfg(feature = "experimental-vectorcdc")]
+    #[test]
+    fn experimental_vectorcdc_boundaries_are_deterministic_and_cover_blob() {
+        let blob = test_blob();
+        let first = ExperimentalVectorCdcChunker
+            .chunk_boundaries(&blob, test_profile())
+            .expect("experimental boundaries validate");
+        let second = ExperimentalVectorCdcChunker
+            .chunk_boundaries(&blob, test_profile())
+            .expect("experimental boundaries validate on repeat");
+
+        assert_eq!(first, second);
+        validate_chunk_boundaries(blob.len(), test_profile(), &first).expect("boundaries cover blob");
+        assert_eq!(first.first().map(|boundary| boundary.offset), Some(0));
+        assert_eq!(first.iter().map(|boundary| boundary.length).sum::<usize>(), blob.len());
     }
 
     #[test]
