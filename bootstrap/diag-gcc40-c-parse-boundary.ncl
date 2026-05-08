@@ -1306,10 +1306,10 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              # Full-file paired cleanup still leaves libtcc.c at rc=139.
-              # Grow balanced prefixes from the known passing paired-cleanup
-              # strcat_printf prefix to find where the second full-file trigger
-              # reappears without repeating malformed raw-prefix probes.
+              # Prior paired-cleanup prefix-growth passed through the
+              # early I/O layer (line 621). Extend complete-function prefixes
+              # deeper into libtcc.c to find where full-file paired cleanup
+              # reintroduces the predecessor compile crash.
               make_libtcc_vastart_end_prefix() {
                 label="$1"
                 max_line="$2"
@@ -1326,15 +1326,16 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
                 compile_decl0_prepart "libtcc_vastart_end_prefix_${label}" "$flags_name" "libtcc-vastart-end-prefix-$label.c"
               }
               for flags_name in common one_source; do
-                compile_libtcc_vastart_end_prefix through_strcat_printf 474 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_error1 518 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_set_error_func 525 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_error_noabort 536 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_error 553 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_warning 566 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_open_bf 588 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_close 601 "$flags_name"
-                compile_libtcc_vastart_end_prefix through_open 621 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_compile 661 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_compile_string 673 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_define_symbol 695 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_undefine_symbol 707 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_cleanup 722 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_new 893 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_delete 932 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_set_output_type 983 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_add_include_path 989 "$flags_name"
+                compile_libtcc_vastart_end_prefix through_add_sysinclude_path 995 "$flags_name"
               done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
