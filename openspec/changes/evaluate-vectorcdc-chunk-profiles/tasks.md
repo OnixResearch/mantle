@@ -6,7 +6,7 @@
 
 ## Implementation / Evidence
 
-- [ ] I1 Inventory current FastCDC chunking entrypoints, constants, tests, and delta negotiation call sites. [covers=delta-transfer.vectorcdc-evaluation.boundary]
+- [x] I1 Inventory current FastCDC chunking entrypoints, constants, tests, and delta negotiation call sites. Evidence: `design.md`. [covers=delta-transfer.vectorcdc-evaluation.boundary]
 - [ ] I2 Add a pure deterministic chunker boundary with FastCDC as the default implementation and invariant tests for ordered contiguous full coverage. [covers=delta-transfer.vectorcdc-evaluation.boundary]
 - [ ] I3 Build a representative benchmark corpus from local store/build artifacts plus synthetic small-delta mutations, with recorded corpus provenance. [covers=delta-transfer.vectorcdc-evaluation.evidence]
 - [ ] I4 Capture baseline FastCDC evidence: CDC throughput, total ingest wall time, chunk-size distribution, chunk count, dedup/reuse ratio, object-count impact, and separated BLAKE3/zstd/object-store costs where practical. [covers=delta-transfer.vectorcdc-evaluation.evidence]
