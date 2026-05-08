@@ -1,0 +1,5 @@
+# command
+started=2026-05-07T23:07:39-04:00
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/store" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+finished=2026-05-07T23:09:12-04:00
+exit=1

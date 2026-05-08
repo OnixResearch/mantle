@@ -1306,36 +1306,71 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              # Earlier committed evidence covered the coarse libtcc range,
-              # prefix, macro, body, signature/prototype, error1, prefix
-              # signature, static-varargs, va_start expansion, and full-file
-              # naive va_start removal probes. Keep this focused by growing
-              # balanced libtcc.c prefixes after neutralizing va_start calls,
-              # to distinguish the prefix-only trigger from later full-file
-              # context that still leaves libtcc.c at rc139.
-              make_libtcc_vastart_prefix_growth() {
+              # Earlier committed evidence proved that deleting va_start
+              # alone does not clear even the strcat_printf-only prefix. Keep
+              # this follow-up minimal: synthesize the same balanced prefix
+              # through strcat_vprintf, then append small strcat_printf body
+              # variants that isolate va_list, va_start, va_end, and the
+              # strcat_vprintf call without growing into later libtcc context.
+              make_libtcc_strcat_cleanup_prefix() {
                 label="$1"
-                line="$2"
-                $BB awk -v max="$line" 'NR <= max { print }' libtcc.c > "libtcc-vastart-prefix-$label.c"
-                $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed in prefix-growth probe \*\//g' "libtcc-vastart-prefix-$label.c"
+                body_kind="$2"
+                dst="libtcc-strcat-cleanup-prefix-$label.c"
+                $BB awk 'NR <= 466 { print }' libtcc.c > "$dst"
+                {
+                  echo 'PUB_FUNC void strcat_printf(char *buf, int buf_size, const char *fmt, ...)'
+                  echo '{'
+                  if [ "$body_kind" = original ]; then
+                    echo '    va_list ap;'
+                    echo '    va_start(ap, fmt);'
+                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
+                    echo '    va_end(ap);'
+                  elif [ "$body_kind" = no_va_start ]; then
+                    echo '    va_list ap;'
+                    echo '    /* CRUNCH diag: va_start removed */'
+                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
+                    echo '    va_end(ap);'
+                  elif [ "$body_kind" = no_va_end ]; then
+                    echo '    va_list ap;'
+                    echo '    va_start(ap, fmt);'
+                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
+                    echo '    /* CRUNCH diag: va_end removed */'
+                  elif [ "$body_kind" = no_va_start_no_va_end ]; then
+                    echo '    va_list ap;'
+                    echo '    /* CRUNCH diag: va_start removed */'
+                    echo '    strcat_vprintf(buf, buf_size, fmt, ap);'
+                    echo '    /* CRUNCH diag: va_end removed */'
+                  elif [ "$body_kind" = no_call ]; then
+                    echo '    va_list ap;'
+                    echo '    va_start(ap, fmt);'
+                    echo '    /* CRUNCH diag: strcat_vprintf call removed */'
+                    echo '    va_end(ap);'
+                  elif [ "$body_kind" = va_list_only ]; then
+                    echo '    va_list ap;'
+                    echo '    (void)ap;'
+                  elif [ "$body_kind" = empty_body ]; then
+                    echo '    (void)buf; (void)buf_size; (void)fmt;'
+                  else
+                    echo '    #error unknown body_kind'
+                  fi
+                  echo '}'
+                } >> "$dst"
               }
-              compile_libtcc_vastart_prefix_growth() {
+              compile_libtcc_strcat_cleanup_prefix() {
                 label="$1"
-                line="$2"
+                body_kind="$2"
                 flags_name="$3"
-                make_libtcc_vastart_prefix_growth "$label" "$line"
-                compile_decl0_prepart "libtcc_vastart_prefix_${label}" "$flags_name" "libtcc-vastart-prefix-$label.c"
+                make_libtcc_strcat_cleanup_prefix "$label" "$body_kind"
+                compile_decl0_prepart "libtcc_strcat_cleanup_prefix_${label}" "$flags_name" "libtcc-strcat-cleanup-prefix-$label.c"
               }
               for flags_name in common one_source; do
-                compile_libtcc_vastart_prefix_growth strcat_end_no_va_start 474 "$flags_name"
-                compile_libtcc_vastart_prefix_growth error1_end_no_va_start 518 "$flags_name"
-                compile_libtcc_vastart_prefix_growth set_error_func_end_no_va_start 525 "$flags_name"
-                compile_libtcc_vastart_prefix_growth error_noabort_end_no_va_start 536 "$flags_name"
-                compile_libtcc_vastart_prefix_growth error_end_no_va_start 553 "$flags_name"
-                compile_libtcc_vastart_prefix_growth warning_end_no_va_start 566 "$flags_name"
-                compile_libtcc_vastart_prefix_growth io_open_end_no_va_start 621 "$flags_name"
-                compile_libtcc_vastart_prefix_growth compile_end_no_va_start 661 "$flags_name"
-                compile_libtcc_vastart_prefix_growth compile_string_end_no_va_start 673 "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix original original "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix no_va_start no_va_start "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix no_va_end no_va_end "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix no_va_start_no_va_end no_va_start_no_va_end "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix no_call no_call "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix va_list_only va_list_only "$flags_name"
+                compile_libtcc_strcat_cleanup_prefix empty_body empty_body "$flags_name"
               done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
