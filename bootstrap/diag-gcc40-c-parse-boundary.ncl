@@ -1250,6 +1250,20 @@ EOF
               $BB sed -i '/sprintf(buf,/c\
     buf[0] = 34; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
               $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
+              tcc_diag_flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              tcc_diag_flags_one="$tcc_diag_flags_common -D ONE_SOURCE=1"
+              for flags_name in common one_source; do
+                if [ "$flags_name" = common ]; then part_flags="$tcc_diag_flags_common"; else part_flags="$tcc_diag_flags_one"; fi
+                for part_src in tccgen.c libtcc.c; do
+                  echo "diag-tcc-decl0-prepart: compile pre-marker $part_src flags=$flags_name" >&2
+                  set +e
+                  "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $part_flags "$part_src" -o "/tmp/tcc-decl0-pre-${flags_name}-${part_src}.o" 2> "/tmp/tcc-decl0-pre-${flags_name}-${part_src}.stderr"
+                  part_rc=$?
+                  set -e
+                  echo "diag-tcc-decl0-prepart: compile pre-marker $part_src flags=$flags_name rc=$part_rc" >&2
+                  $BB sed 's/^/diag-tcc-decl0-prepart: '$part_src' '$flags_name' stderr: /' "/tmp/tcc-decl0-pre-${flags_name}-${part_src}.stderr" >&2 || true
+                done
+              done
               $BB awk '
                 /^static int decl0\(int l, int is_for_loop_init, Sym \*func_sym\)/ { in_decl0=1 }
                 {

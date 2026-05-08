@@ -1,0 +1,55 @@
+{
+  "conclusion": "tccgen.c and libtcc.c segfault before decl0 marker insertion under both common and ONE_SOURCE compile flags; decl0 fputs instrumentation is not the cause of the instrumented compiler build blocker.",
+  "full_instrumented_build_rc": 139,
+  "one_source_preprocess": {
+    "lines": 19823,
+    "rc": 0
+  },
+  "post_marker_component_compiles": [
+    {
+      "rc": 0,
+      "source": "tccpp.c"
+    },
+    {
+      "rc": 139,
+      "source": "tccgen.c"
+    },
+    {
+      "rc": 0,
+      "source": "tccelf.c"
+    },
+    {
+      "rc": 0,
+      "source": "x86_64-gen.c"
+    },
+    {
+      "rc": 139,
+      "source": "libtcc.c"
+    }
+  ],
+  "pre_marker_component_compiles": [
+    {
+      "flags": "common",
+      "rc": 139,
+      "source": "tccgen.c"
+    },
+    {
+      "flags": "common",
+      "rc": 139,
+      "source": "libtcc.c"
+    },
+    {
+      "flags": "one_source",
+      "rc": 139,
+      "source": "tccgen.c"
+    },
+    {
+      "flags": "one_source",
+      "rc": 139,
+      "source": "libtcc.c"
+    }
+  ],
+  "status": "captured",
+  "target": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "task_id": "V2"
+}
