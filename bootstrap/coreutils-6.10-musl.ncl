@@ -17,6 +17,8 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/coreutils-6.10/sources
+  # first-consumer: bootstrap/coreutils-6.10-musl.ncl
   url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-6.10.tar.gz",
   hash = "sha256-WZ798TmMBEj5l+W0liycJjR4LmB0eBNy3YjsxB55Y+I=",
   name = "coreutils-6.10-src",
@@ -87,26 +89,39 @@ CONFIG
       CFLAGS="-I. -Ilib -Isrc -I$MUSL/include -DHAVE_CONFIG_H -D_FILE_OFFSET_BITS=64"
 
       # Build lib
+      LIBOBJS=""
       for src in lib/*.c; do
         base=$($BB basename "$src" .c)
-        tcc -c $CFLAGS "$src" -o "lib/$base.o" 2>/dev/null || true
+        tcc -c $CFLAGS "$src" -o "lib/$base.o"
+        test -f "lib/$base.o" || { echo "ERROR: missing library object lib/$base.o" >&2; exit 1; }
+        LIBOBJS="$LIBOBJS lib/$base.o"
       done
-      LIBOBJS=""
-      for f in lib/*.o; do [ -f "$f" ] && LIBOBJS="$LIBOBJS $f"; done
-      tcc -ar cr libcu.a $LIBOBJS 2>/dev/null || true
+      test -n "$LIBOBJS" || { echo "ERROR: no coreutils library objects compiled" >&2; exit 1; }
+      tcc -ar cr libcu.a $LIBOBJS
+      test -f libcu.a || { echo "ERROR: libcu.a not built" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin"
 
-      for util in cat chmod cp date echo install ln ls mkdir mktemp mv \
-                  rm rmdir sort test true false head tail wc basename \
-                  dirname tr uniq expr tee touch sha256sum; do
-        tcc -static $CFLAGS "src/$util.c" -L. -lcu -o "$out/bin/$util" 2>/dev/null || true
+      for util in cat chmod cp date echo install ln ls mkdir mktemp mv                   rm rmdir sort test true false head tail wc basename                   dirname tr uniq expr tee touch sha256sum; do
+        tcc -static $CFLAGS "src/$util.c" -L. -lcu -o "$out/bin/$util"
+        test -x "$out/bin/$util" || { echo "ERROR: missing installed utility $util" >&2; exit 1; }
       done
 
-      [ -x "$out/bin/test" ] && { cd "$out/bin"; $BB ln -s test "["; cd "$WORK/coreutils-6.10"; }
+      cd "$out/bin"
+      $BB ln -s test "["
+      cd "$WORK/coreutils-6.10"
 
-      test -x "$out/bin/cat"
-      test -x "$out/bin/mkdir"
+      for util in cat chmod cp date echo install ln ls mkdir mktemp mv rm rmdir sort test true false head tail wc basename dirname tr uniq expr tee touch sha256sum "["; do
+        test -x "$out/bin/$util" || { echo "ERROR: output contract missing $util" >&2; exit 1; }
+      done
+      "$out/bin/mkdir" /tmp/coreutils610-smoke
+      "$out/bin/echo" smoke-ok > /tmp/coreutils610-smoke/input
+      "$out/bin/cp" /tmp/coreutils610-smoke/input /tmp/coreutils610-smoke/output
+      "$out/bin/cat" /tmp/coreutils610-smoke/output | $BB grep -q smoke-ok
+      "$out/bin/mktemp" /tmp/coreutils610-smoke/tmp.XXXXXX >/tmp/coreutils610-smoke/mktemp-path
+      "$out/bin/sha256sum" /tmp/coreutils610-smoke/output >/tmp/coreutils610-smoke/sha256
+      "$out/bin/test" -f /tmp/coreutils610-smoke/output
+      "$out/bin/[" -f /tmp/coreutils610-smoke/output "]"
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, coreutils_old, diffutils, bzip2, coreutils_src],
