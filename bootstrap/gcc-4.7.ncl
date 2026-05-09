@@ -32,6 +32,8 @@ let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let gcc47_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/gcc-4.7.4/sources and pass1.sh
+  # first-consumer: bootstrap/gcc-4.7.ncl
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.7.4/gcc-4.7.4.tar.bz2",
   hash = "sha256-7ffdeULrk9WbESRDdRXHT1DoOvrThEBIbozmder5xTc=",
   name = "gcc-4.7.4-src",
@@ -98,7 +100,8 @@ let gcc47_src = crunch.fetchTarball {
 
       cd "$WORK/build"
 
-      # GCC 4.7.4 can build C++ with gcc 4.0.4 as the bootstrap compiler
+      # GCC 4.7.4 must preserve the C++ provider contract; do not fall back
+      # to a C-only compiler and claim this part complete.
       "$BASH/bin/bash" "$WORK/gcc-4.7.4/configure" \
         --prefix="$out" \
         --build=x86_64-unknown-linux-musl \
@@ -127,70 +130,16 @@ let gcc47_src = crunch.fetchTarball {
         CFLAGS_FOR_TARGET="-I$MUSL/include -D_GNU_SOURCE -O2" \
         LDFLAGS="-static -L$MUSL/lib" \
         MAKEINFO=true \
-        2>&1 || {
-          # If C++ configure fails, fall back to C only
-          echo "C+C++ configure failed, trying C-only..." >&2
-          cd "$WORK"
-          $BB rm -rf build
-          $BB mkdir -p build
-          cd build
-          "$BASH/bin/bash" "$WORK/gcc-4.7.4/configure" \
-            --prefix="$out" \
-            --build=x86_64-unknown-linux-musl \
-            --host=x86_64-unknown-linux-musl \
-            --target=x86_64-unknown-linux-musl \
-            --enable-languages=c \
-            --disable-bootstrap \
-            --disable-shared \
-            --disable-nls \
-            --disable-multilib \
-            --disable-decimal-float \
-            --disable-libmudflap \
-            --disable-libssp \
-            --disable-libgomp \
-            --disable-threads \
-            --disable-libquadmath \
-            --disable-libatomic \
-            --with-sysroot="$MUSL" \
-            --with-native-system-header-dir=/include \
-            --with-build-sysroot="$MUSL" \
-            CC="$GCC4/bin/gcc" \
-            CFLAGS="-I$MUSL/include -D_GNU_SOURCE -O2" \
-            CFLAGS_FOR_TARGET="-I$MUSL/include -D_GNU_SOURCE -O2" \
-            LDFLAGS="-static -L$MUSL/lib" \
-            MAKEINFO=true \
-            2>&1
-        }
+        2>&1 || { echo "ERROR: gcc-4.7 C/C++ configure failed" >&2; exit 1; }
 
-      # Build GCC
-      make -j1 all-gcc MAKEINFO=true 2>&1 || {
-        echo "make all-gcc failed, trying individual targets..." >&2
-        make -j1 -C libiberty 2>&1 || true
-        make -j1 -C gcc MAKEINFO=true 2>&1 || true
-      }
-
-      # Build target libraries
-      make -j1 all-target-libgcc MAKEINFO=true 2>&1 || {
-        echo "target libgcc failed, continuing..." >&2
-      }
+      # Build GCC and target libgcc; both are part of the output contract.
+      make -j1 all-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.7 all-gcc failed" >&2; exit 1; }
+      make -j1 all-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.7 all-target-libgcc failed" >&2; exit 1; }
 
       # Install
       $BB mkdir -p "$out/bin" "$out/lib" "$out/include" "$out/libexec"
-      make -j1 install-gcc MAKEINFO=true 2>&1 || {
-        echo "make install-gcc failed, manual install..." >&2
-        if [ -x "$WORK/build/gcc/xgcc" ]; then
-          $BB cp "$WORK/build/gcc/xgcc" "$out/bin/gcc"
-          $BB chmod 755 "$out/bin/gcc"
-        fi
-        $BB mkdir -p "$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4"
-        for tool in cc1 cc1plus collect2; do
-          if [ -x "$WORK/build/gcc/$tool" ]; then
-            $BB cp "$WORK/build/gcc/$tool" "$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/"
-          fi
-        done
-      }
-
-      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || true
+      make -j1 install-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.7 install-gcc failed" >&2; exit 1; }
+      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.7 install-target-libgcc failed" >&2; exit 1; }
 
       # Create symlinks
       if [ -x "$out/bin/gcc" ]; then
@@ -205,10 +154,18 @@ let gcc47_src = crunch.fetchTarball {
         $BB ln -sf x86_64-unknown-linux-musl-g++ "$out/bin/g++"
         $BB ln -sf x86_64-unknown-linux-musl-g++ "$out/bin/c++"
       fi
+      test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
+      test -x "$out/bin/c++" || { echo "ERROR: installed c++ missing" >&2; exit 1; }
+      test -x "$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/cc1" || { echo "ERROR: installed cc1 missing" >&2; exit 1; }
+      test -x "$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/cc1plus" || { echo "ERROR: installed cc1plus missing" >&2; exit 1; }
+      find "$out" -name libgcc.a -type f | $BB grep -q libgcc.a || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
 
-      # Verify: C compiler must exist
+      # Verify: C and C++ compiler entrypoints must exist.
       test -x "$out/bin/gcc" || test -x "$out/bin/x86_64-unknown-linux-musl-gcc" || {
         echo "ERROR: no gcc binary produced" >&2; exit 1
+      }
+      test -x "$out/bin/g++" || test -x "$out/bin/x86_64-unknown-linux-musl-g++" || {
+        echo "ERROR: no g++ binary produced" >&2; exit 1
       }
 
       # C smoke test
@@ -219,23 +176,24 @@ EOF
         -B"$BINUTILS/bin/" \
         -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/" \
         -o /tmp/smoke_c /tmp/smoke.c 2>&1 || {
-        echo "WARNING: C smoke test failed" >&2
+        echo "ERROR: C smoke test failed" >&2; exit 1
       }
+      test -x /tmp/smoke_c || { echo "ERROR: C smoke output missing" >&2; exit 1; }
 
-      # C++ smoke test (if g++ exists)
-      if [ -x "$out/bin/g++" ]; then
-        $BB cat > /tmp/smoke.cpp << 'EOF'
+      # C++ smoke test
+      $BB cat > /tmp/smoke.cpp << 'EOF'
 int main() { return 0; }
 EOF
-        "$out/bin/g++" -I"$MUSL/include" -L"$MUSL/lib" -static \
-          -B"$BINUTILS/bin/" \
-          -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/" \
-          -o /tmp/smoke_cpp /tmp/smoke.cpp 2>&1 || {
-          echo "WARNING: C++ smoke test failed" >&2
-        }
+      "$out/bin/g++" -I"$MUSL/include" -L"$MUSL/lib" -static \
+        -B"$BINUTILS/bin/" \
+        -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/" \
+        -o /tmp/smoke_cpp /tmp/smoke.cpp 2>&1 || {
+        echo "ERROR: C++ smoke test failed" >&2; exit 1
+      }
+      test -x /tmp/smoke_cpp || { echo "ERROR: C++ smoke output missing" >&2; exit 1; }
 
-        # C++11 smoke test
-        $BB cat > /tmp/smoke11.cpp << 'EOF'
+      # C++11 smoke test
+      $BB cat > /tmp/smoke11.cpp << 'EOF'
 #include <cstddef>
 auto add(int a, int b) -> int { return a + b; }
 int main() {
@@ -246,13 +204,13 @@ int main() {
   return sum == 6 ? 0 : 1;
 }
 EOF
-        "$out/bin/g++" -std=c++11 -I"$MUSL/include" -L"$MUSL/lib" -static \
-          -B"$BINUTILS/bin/" \
-          -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/" \
-          -o /tmp/smoke11 /tmp/smoke11.cpp 2>&1 || {
-          echo "WARNING: C++11 smoke test failed" >&2
-        }
-      fi
+      "$out/bin/g++" -std=c++11 -I"$MUSL/include" -L"$MUSL/lib" -static \
+        -B"$BINUTILS/bin/" \
+        -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.7.4/" \
+        -o /tmp/smoke11 /tmp/smoke11.cpp 2>&1 || {
+        echo "ERROR: C++11 smoke test failed" >&2; exit 1
+      }
+      test -x /tmp/smoke11 || { echo "ERROR: C++11 smoke output missing" >&2; exit 1; }
 
       echo "gcc-4.7.4 build complete"
     "%,
