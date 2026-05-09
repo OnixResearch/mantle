@@ -1,0 +1,25 @@
+diag-libtcc-tcc-version-source-audit: scripts=/home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-parse-args-switch-reduce-20260509/run-local-tcc-parse-args-dumpversion-printf-shape.sh /home/brittonr/git/crunch/crunch/openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-parse-args-switch-reduce-20260509/run-local-tcc-parse-args-dumpversion-macro-shape.sh
+diag-libtcc-tcc-version-source-audit: script=run-local-tcc-parse-args-dumpversion-printf-shape.sh
+13:: > config.h
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-printf-shape.sh clears generated config.h
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-printf-shape.sh flags_common=72:flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-printf-shape.sh lacks TCC_VERSION in flags_common
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-printf-shape.sh does not pass TCC_VERSION through extra flags
+
+diag-libtcc-tcc-version-source-audit: script=run-local-tcc-parse-args-dumpversion-macro-shape.sh
+13:: > config.h
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-macro-shape.sh clears generated config.h
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-macro-shape.sh flags_common=72:flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-macro-shape.sh lacks TCC_VERSION in flags_common
+diag-libtcc-tcc-version-source-audit: run-local-tcc-parse-args-dumpversion-macro-shape.sh does not pass TCC_VERSION through extra flags
+293:    ('03_undef_redefine_tcc_version_same_use', ['#undef TCC_VERSION', '#define TCC_VERSION "0.9.27"'], ['        case TCC_OPTION_dumpversion:', '            puts(TCC_VERSION);', '            break;']),
+294:    ('04_undef_redefine_tcc_version_short_use', ['#undef TCC_VERSION', '#define TCC_VERSION "x"'], ['        case TCC_OPTION_dumpversion:', '            puts(TCC_VERSION);', '            break;']),
+291:    ('01_define_local_literal_use', ['#define CRUNCH_LOCAL_VERSION "0.9.27"'], ['        case TCC_OPTION_dumpversion:', '            puts(CRUNCH_LOCAL_VERSION);', '            break;']),
+292:    ('02_define_local_alias_tcc_version_use', ['#define CRUNCH_LOCAL_VERSION TCC_VERSION'], ['        case TCC_OPTION_dumpversion:', '            puts(CRUNCH_LOCAL_VERSION);', '            break;']),
+296:    ('06_static_const_tcc_version_puts', ['static const char *crunch_local_version = TCC_VERSION;'], ['        case TCC_OPTION_dumpversion:', '            puts(crunch_local_version);', '            break;']),
+298:    ('08_char_array_tcc_version_puts', ['static char crunch_local_version[] = TCC_VERSION;'], ['        case TCC_OPTION_dumpversion:', '            puts(crunch_local_version);', '            break;']),
+
+diag-libtcc-tcc-version-source-audit: crunch derivation definitions
+1486:                -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
+339:        -D TCC_VERSION=\"0.9.27\" \
+diag-libtcc-tcc-version-source-audit: conclusion=focused replay clears config.h and omits command-line TCC_VERSION; direct TCC_VERSION uses are unresolved identifier tokens, while the successful local spelling is #define TCC_VERSION "0.9.27".

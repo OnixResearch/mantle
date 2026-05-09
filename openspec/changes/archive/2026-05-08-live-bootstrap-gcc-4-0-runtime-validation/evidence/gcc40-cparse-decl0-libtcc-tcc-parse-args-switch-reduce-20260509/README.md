@@ -72,4 +72,14 @@ The narrowed trigger is now specifically the `printf("%s\n", TCC_VERSION)` varar
 
 The narrowed trigger is now the original `TCC_VERSION` macro expansion path in the predecessor compiler context, not varargs, `printf`, string literal length, or use of stdout/stderr.
 
-Next useful reduction: locate where the active original `TCC_VERSION` definition enters this focused replay (config/header/command-line predefined macro) and compare its token spelling against the successful local `#undef/#define TCC_VERSION "0.9.27"` replacement.
+## TCC_VERSION source audit
+
+- `run-local-tcc-version-source-audit.sh`
+  - checks the focused replay scripts instead of rebuilding the unavailable `/crunch/store` inputs.
+- `focused-local-tcc-version-source-audit.txt`
+  - both printf/macro-shape focused replay scripts clear generated `config.h` with `: > config.h`.
+  - both scripts' `flags_common` omit `-D TCC_VERSION=...`, and the extra-flag matrix only adds `-D ONE_SOURCE=1`.
+  - Crunch's full diagnostic derivation still defines `TCC_VERSION` on the command line as `-D TCC_VERSION=\"0.9.27-decl0-diag\"`; the normal `tcc-musl-v2` build uses `-D TCC_VERSION=\"0.9.27\"`.
+  - the focused replay's successful spelling is the local source-level `#undef TCC_VERSION` / `#define TCC_VERSION "0.9.27"` immediately before `tcc_parse_args`.
+
+Conclusion: the latest focused replay did **not** have an active original `TCC_VERSION` macro definition. Its failing `TCC_VERSION` cases exercised unresolved identifier tokens in the predecessor compiler, while the local redefine converted those tokens to a normal string literal. The next correction is to rerun the printf/macro-shape reductions with a replay-faithful command-line `-D TCC_VERSION=\"0.9.27-decl0-diag\"` (or an equivalent generated `config.h`) before treating `TCC_VERSION` as a true macro-expansion blocker.
