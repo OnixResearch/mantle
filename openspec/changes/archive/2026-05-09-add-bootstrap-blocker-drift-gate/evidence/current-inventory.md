@@ -1,0 +1,319 @@
+# Bootstrap blocker inventory report
+
+- Schema version: 1
+- Enforcement mode: true
+- Findings: 296
+- Marker classes present: 6
+- Promotion claims: 0
+
+## Marker classes
+
+- `bridge-output`: 46 finding(s) — Bootstrap stage uses or documents a bridge output rather than end-to-end source-built proof.
+- `compiler-runtime-crash-boundary`: 67 finding(s) — Known compiler/runtime crash, timeout, or signal boundary still gates promotion evidence.
+- `legacy-provider-fallback`: 29 finding(s) — Legacy musl.cc or host-provider fallback remains part of the bootstrap path or documentation.
+- `normalization-only-provider`: 14 finding(s) — Provider contract is normalized but not yet accepted as full source-built proof.
+- `placeholder-deferred`: 41 finding(s) — Placeholder, TODO, or deferred full-source work remains in a bootstrap-critical surface.
+- `prerequisite-gated-evidence`: 99 finding(s) — Evidence is explicitly prerequisite-gated or records a blocked status rather than promotion.
+
+## Promotion claims
+
+No promotion claims detected.
+
+## Findings
+
+- `bridge-output` bootstrap/BLOCKER-INVENTORY.md:18 — `- `bridge-output`: a stage uses/documents a bridge output instead of source-built proof.`
+- `bridge-output` bootstrap/binutils-tcc.ncl:381 — `echo "WARNING: build failed in $dir; continuing with bootstrap bridges where available" >&2`
+- `bridge-output` bootstrap/binutils-tcc.ncl:507 — `echo "binutils-2.30 bridge smoke test passed"`
+- `bridge-output` bootstrap/bzip2-1.0.8-musl.ncl:69 — `# The Mes-linked tcc-musl-v2 bridge can still hit its fragile library`
+- `bridge-output` bootstrap/diag-gcc40-c-parse-boundary.ncl:225 — `tmp=/tmp/gcc40-errors-bridge.c`
+- `bridge-output` bootstrap/diag-gcc40-c-parse-boundary.ncl:401 — `/* bootstrap genflags stub: generator-only boundary bridge */`
+- `bridge-output` bootstrap/diag-gcc40-c-parse-boundary.ncl:707 — `# shell/tool bridge. Follow the live-bootstrap pass1 shape instead:`
+- `bridge-output` bootstrap/diag-gcc40-c-parse-boundary.ncl:817 — `/* bootstrap genflags stub: generator-only boundary bridge */`
+- `bridge-output` bootstrap/diag-gcc40-c-parse-boundary.ncl:2284 — `/* bootstrap genflags stub: generator-only boundary bridge */`
+- `bridge-output` bootstrap/gcc-4.0.ncl:219 — `tmp=/tmp/gcc40-errors-bridge.c`
+- `bridge-output` bootstrap/gcc-4.0.ncl:395 — `/* bootstrap genflags stub: generator-only boundary bridge */`
+- `bridge-output` bootstrap/gcc-4.0.ncl:701 — `# shell/tool bridge. Follow the live-bootstrap pass1 shape instead:`
+- `bridge-output` bootstrap/gcc-4.0.ncl:758 — `# genconstants/genflags bridge before tm.h can include them.`
+- `bridge-output` bootstrap/gcc-4.0.ncl:771 — `/* bootstrap genflags stub: generator-only boundary bridge */`
+- `bridge-output` bootstrap/gcc-4.0.ncl:776 — `# CRUNCH: c-common.h reaches ggc.h before the fragile gengtype bridge has`
+- `bridge-output` bootstrap/grep-2.4-musl.ncl:63 — `# src/grep.c. Install a small grep-compatible bootstrap bridge instead;`
+- `bridge-output` bootstrap/m4-1.4.7-musl.ncl:176 — `# deliberately small bootstrap m4 bridge so downstream release-tarball`
+- `bridge-output` bootstrap/musl-1.1.24-tcc-musl.ncl:3 — `# The first musl was built with the bridge tcc-musl compiler. Reuse the`
+- `bridge-output` bootstrap/musl-1.1.24-tcc-musl.ncl:4 — `# first-stage source compatibility bridge while moving the compiler input to`
+- `bridge-output` bootstrap/musl-1.1.24-tcc-musl.ncl:75 — `/* CRUNCH bridge TinyCC builtin va_list */\`
+- `bridge-output` bootstrap/musl-1.1.24-tcc.ncl:74 — `/* CRUNCH bridge TinyCC builtin va_list */\`
+- `bridge-output` bootstrap/sed-4.0.9-musl.ncl:57 — `# the previously validated sed-tcc runtime as the bootstrap bridge; it is`
+- `bridge-output` bootstrap/sed-4.0.9-musl.ncl:59 — `test -x "$SED_OLD/bin/sed" || { echo "ERROR: sed-tcc bridge input missing" >&2; exit 1; }`
+- `bridge-output` bootstrap/sed-4.0.9-musl.ncl:62 — `test -x sed-bin || { echo "ERROR: sed bridge copy missing" >&2; exit 1; }`
+- `bridge-output` bootstrap/sed-4.0.9-musl.ncl:71 — `printf 'alpha\n' | "$out/bin/sed" 's/alpha/sed409-musl-bridge-ok/' | $BB grep '^sed409-musl-bridge-ok$'`
+- `bridge-output` bootstrap/tcc-musl-prep.ncl:4 — `# instead of mes libc. It is the bridge compiler that builds the first musl.`
+- `bridge-output` bootstrap/tcc-musl-prep.ncl:65 — `# predecessor's fragile Mes inttypes/stdint bridge.`
+- `bridge-output` bootstrap/tcc-musl-prep.ncl:77 — `# The musl-prep compiler is still built by the Mes-linked TinyCC bridge,`
+- `bridge-output` bootstrap/tcc-musl-prep.ncl:337 — `# The raw Mes output lacks the TinyCC x86_64 stdarg/va_list bridge used by`
+- `bridge-output` bootstrap/tcc-musl-v2.ncl:3 — `# Reuse the validated bridge build shape from tcc-musl while targeting the`
+- `bridge-output` bootstrap/tcc-musl-v2.ncl:71 — `# predecessor's fragile Mes inttypes/stdint bridge.`
+- `bridge-output` bootstrap/tcc-musl-v2.ncl:83 — `# The musl-prep compiler is still built by the Mes-linked TinyCC bridge,`
+- `bridge-output` bootstrap/tcc-musl.ncl:70 — `# predecessor's fragile Mes inttypes/stdint bridge.`
+- `bridge-output` bootstrap/tcc-musl.ncl:82 — `# The musl-prep compiler is still built by the Mes-linked TinyCC bridge,`
+- `bridge-output` bootstrap/tinycc.ncl:4 — `# bridge. This derivation mirrors the live-bootstrap part boundary: patch the`
+- `bridge-output` openspec/specs/bootstrap/spec.md:1194 — `The system MUST keep the musl-prep TinyCC bridge runtime proof incomplete until prerequisite runtime blockers are resolved and the produced bridge/compiler carry-forward contract i…`
+- `bridge-output` openspec/specs/bootstrap/spec.md:1196 — `#### Scenario: Bridge carry-forward artifacts are mandatory [r[bootstrap.part.tcc.musl.prep.runtime-validation.bridge-artifacts]]`
+- `bridge-output` openspec/specs/bootstrap/spec.md:1201 — `#### Scenario: Bridge smoke proves output [r[bootstrap.part.tcc.musl.prep.runtime-validation.smoke]]`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2160 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/m4-1.4.7-musl.ncl` and direct predecessor compatibi…`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2358 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/sed-4.0.9-musl.ncl` and direct predecessor compatib…`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2366 — `- AND it records explicit bridge/gate evidence for the `sed-tcc` runtime copy`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2367 — `- AND it does not substitute the bridge output for musl source-build proof`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2373 — `- THEN the failure does not invalidate this part's completed source-hardening and bridge-gate evidence`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2424 — `The inventory MUST classify at least bridge outputs, placeholder or normalization-only providers, legacy-provider fallback, host-tool fallback, prerequisite-gated evidence, and kno…`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2428 — `- GIVEN the current repository still contains bootstrap bridge and prerequisite-gated markers`
+- `bridge-output` openspec/specs/bootstrap/spec.md:2450 — `- AND a known bridge, placeholder, fallback, or prerequisite-gated blocker remains`
+- `compiler-runtime-crash-boundary` bootstrap/BLOCKER-INVENTORY.md:19 — `- `compiler-runtime-crash-boundary`: a compiler/runtime segfault, timeout, signal, or static-link boundary gates promotion.`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:92 — `#define HAVE_SIGNAL_H 1`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:122 — `#define HAVE_STRSIGNAL 1`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:172 — `# for the bootstrap/nojobs shell to compile and report signal names.`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:174 — `#include <signal.h>`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:178 — `char *signal_names[NSIG + 2] = { "EXIT", "SIGHUP", "SIGINT", "SIGQUIT", "SIGILL", "SIGTRAP", "SIGABRT", "SIGBUS", "SIGFPE", "SIGKILL", "SIGUSR1", "SIGSEGV", "SIGUSR2", "SIGPIPE", "…`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:241 — `#include <signal.h>`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:277 — `extern char *signal_names[];`
+- `compiler-runtime-crash-boundary` bootstrap/bash-2.05b-tcc.ncl:305 — `char *strsignal(int sig) { return (sig >= 0 && sig < 16) ? signal_names[sig] : "signal"; }`
+- `compiler-runtime-crash-boundary` bootstrap/binutils-tcc.ncl:262 — `#include <signal.h>`
+- `compiler-runtime-crash-boundary` bootstrap/binutils-tcc.ncl:283 — `void signal_init (void) { }`
+- `compiler-runtime-crash-boundary` bootstrap/busybox.ncl:110 — `# The bootstrap GCC targets musl, so -static links against musl libc.`
+- `compiler-runtime-crash-boundary` bootstrap/bzip2-tcc.ncl:73 — `# The Mes-built TinyCC ar path can segfault after emitting only`
+- `compiler-runtime-crash-boundary` bootstrap/dash.ncl:132 — `#define HAVE_STRSIGNAL 1`
+- `compiler-runtime-crash-boundary` bootstrap/dash.ncl:173 — `/* signal is fine on Linux */`
+- `compiler-runtime-crash-boundary` bootstrap/dash.ncl:174 — `/* #undef signal */`
+- `compiler-runtime-crash-boundary` bootstrap/diag-gcc40-c-parse-boundary.ncl:697 — `for f in asprintf atexit basename bcmp bcopy bsearch bzero calloc clock ffs fork getcwd getpagesize getrusage gettimeofday index insque memchr memcmp memcpy memmove mempcpy memset …`
+- `compiler-runtime-crash-boundary` bootstrap/diag-gcc40-c-parse-boundary.ncl:718 — `# under the c-parse flags deterministically segfaults TinyCC after that`
+- `compiler-runtime-crash-boundary` bootstrap/diag-i386-tinycc26-emission.ncl:6 — `# stages separately so the segfault boundary is visible in the derivation log.`
+- `compiler-runtime-crash-boundary` bootstrap/diag-tcc27-runtime-patched-stdarg-libc.ncl:94 — `linux/setuid.c linux/signal.c linux/sigprogmask.c linux/symlink.c \`
+- `compiler-runtime-crash-boundary` bootstrap/diag-tcc27-static-runtime.ncl:4 — `# segfault class. It builds a nontrivial static executable with the same`
+- `compiler-runtime-crash-boundary` bootstrap/gcc-4.0.ncl:691 — `for f in asprintf atexit basename bcmp bcopy bsearch bzero calloc clock ffs fork getcwd getpagesize getrusage gettimeofday index insque memchr memcmp memcpy memmove mempcpy memset …`
+- `compiler-runtime-crash-boundary` bootstrap/gcc-4.0.ncl:712 — `# under the c-parse flags deterministically segfaults TinyCC after that`
+- `compiler-runtime-crash-boundary` bootstrap/gcc-4.0.ncl:745 — `rewrites before system.h trigger deterministic TinyCC segfaults. */`
+- `compiler-runtime-crash-boundary` bootstrap/gcc-4.0.ncl:756 — `# CRUNCH: the TinyCC/Mes handoff segfaults in missing-header diagnostics;`
+- `compiler-runtime-crash-boundary` bootstrap/gcc-4.0.ncl:778 — `# through TinyCC/Mes diagnostics and segfault; seed the same inert files`
+- `compiler-runtime-crash-boundary` bootstrap/m4-1.4.7-musl.ncl:74 — `# TinyCC/musl-v2 segfaults while compiling the two m4.c wrappers that`
+- `compiler-runtime-crash-boundary` bootstrap/m4-1.4.7-musl.ncl:174 — `# TinyCC/musl-v2 handoff still segfaults during static link after the`
+- `compiler-runtime-crash-boundary` bootstrap/make.ncl:89 — `#define HAVE_SIGNAL_H 1`
+- `compiler-runtime-crash-boundary` bootstrap/make.ncl:107 — `#define HAVE_STRSIGNAL 1`
+- `compiler-runtime-crash-boundary` bootstrap/mes.ncl:95 — `$BB cp include/linux/${MES_ARCH}/signal.h include/arch/signal.h`
+- `compiler-runtime-crash-boundary` bootstrap/musl-1.1.24-tcc-musl.ncl:69 — `$BB rm -rf src/complex src/aio src/legacy src/linux src/locale src/math src/misc src/mman src/mq src/multibyte src/network src/passwd src/prng src/process src/regex src/sched src/s…`
+- `compiler-runtime-crash-boundary` bootstrap/musl-1.1.24-tcc-musl.ncl:206 — `$BB mkdir -p src/stat src/signal src/time`
+- `compiler-runtime-crash-boundary` bootstrap/musl-1.1.24-tcc-musl.ncl:223 — `cat > src/signal/signal.c <<'EOF'`
+- `compiler-runtime-crash-boundary` bootstrap/musl-1.1.24-tcc-musl.ncl:225 — `sighandler_t signal(int sig, sighandler_t h) { (void)sig; return h; }`
+- `compiler-runtime-crash-boundary` bootstrap/musl-1.1.24-tcc.ncl:68 — `$BB rm -rf src/complex src/aio src/legacy src/linux src/locale src/math src/misc src/mman src/mq src/multibyte src/network src/passwd src/prng src/process src/regex src/sched src/s…`
+- `compiler-runtime-crash-boundary` bootstrap/sed-4.0.9-musl.ncl:55 — `# This TinyCC/musl handoff currently segfaults while compiling the GNU`
+- `compiler-runtime-crash-boundary` bootstrap/spike-i386-mes-runtime-layout.ncl:104 — `$BB cp "$MES_BUILD/include/linux/x86/signal.h" "$RUNTIME/include/mes/include/arch/signal.h"`
+- `compiler-runtime-crash-boundary` bootstrap/spike-i386-mes-runtime-layout.ncl:143 — `linux/setuid.c linux/signal.c linux/sigprogmask.c linux/symlink.c linux/stat.c linux/time.c \`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl-prep.ncl:228 — `# compile objects but segfault in the executable/DLL output path.`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl-prep.ncl:276 — `# varargs/path diagnostics and can corrupt the final static link.`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl-v2.ncl:250 — `# compile objects but segfault in the executable/DLL output path.`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl-v2.ncl:298 — `# varargs/path diagnostics and can corrupt the final static link.`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl.ncl:249 — `# compile objects but segfault in the executable/DLL output path.`
+- `compiler-runtime-crash-boundary` bootstrap/tcc-musl.ncl:297 — `# varargs/path diagnostics and can corrupt the final static link.`
+- `compiler-runtime-crash-boundary` bootstrap/tinycc-mes.ncl:190 — `linux/setuid.c linux/signal.c linux/sigprogmask.c linux/symlink.c \`
+- `compiler-runtime-crash-boundary` bootstrap/tinycc-mes.ncl:363 — `$BB cp "$MES_BUILD/include/linux/${MES_ARCH}/signal.h" "$MES_BUILD/include/arch/signal.h"`
+- `compiler-runtime-crash-boundary` bootstrap/tinycc.ncl:272 — `# compile objects but segfault in the executable/DLL output path.`
+- `compiler-runtime-crash-boundary` bootstrap/tinycc.ncl:320 — `# varargs/path diagnostics and can corrupt the final static link.`
+- `compiler-runtime-crash-boundary` bootstrap/tinycc.ncl:384 — `linux/setuid.c linux/signal.c linux/sigprogmask.c linux/symlink.c \`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:465 — `- THEN the evidence MUST show `tcc-mes` compiles at least `tcc-boot0` without segfaulting`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:517 — `The output MUST include `bin/tcc`, report `tcc version 0.9.27 (x86_64 Linux)`, complete `tcc -c hello.c -o hello.o` within the bounded smoke timeout, and produce a non-empty object…`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:529 — `- WHEN it compiles malformed C under a bounded timeout`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:531 — `- AND the exit status is not timeout-derived`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:532 — `- AND the exit status is not signal-derived`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:538 — `The predecessor compiler MUST compile a shift reproducer containing `x >> 8` and `x << 3` to an object whose disassembly contains `shr $0x8` and `shl $0x3` (or equivalent nonzero i…`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:555 — `### Requirement: TinyCC 0.9.27 amd64 static link succeeds [r[bootstrap.compiler.tinycc.0.9.27.amd64.static-link]]`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:590 — `- GIVEN the amd64 Make 3.82 path remains blocked by runtime segfaults`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:608 — `- GIVEN any i386 emission stage fails or segfaults`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:620 — `- THEN Crunch MUST identify whether the next target is assembly parsing, object emission, static linking, ELF materialization, or runtime execution.`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:979 — `The output MUST include `bin/make`, report `GNU Make 3.82`, execute a simple Makefile target successfully, and reject a missing target with a controlled nonzero exit rather than a …`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:993 — `- AND the exit status is not a signal-derived segmentation fault`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:1009 — `The proof MUST include a long-budget build transcript, the produced output path or concrete failure diagnostics, version smoke evidence for `GNU Make 3.82`, a simple Makefile posit…`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:1022 — `- AND the missing target exits nonzero without a signal-derived segmentation fault`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:1033 — `Crunch MUST repair the i386 TinyCC 0.9.26 proof so the generated x86_64-hosted/i386-targeting compiler can emit object files without segfaulting.`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:1152 — `- **WHEN** simple Makefile execution still segfaults or fails`
+- `compiler-runtime-crash-boundary` openspec/specs/bootstrap/spec.md:1356 — `- **WHEN** the validation run exceeds a short drain timeout`
+- `legacy-provider-fallback` bootstrap/BLOCKER-INVENTORY.md:20 — `- `legacy-provider-fallback`: legacy musl.cc/seed-legacy/host fallback remains in the path or documentation.`
+- `legacy-provider-fallback` bootstrap/seed-full.ncl:3 — `# Exposes the same normalized seed contract as seed-legacy.ncl but`
+- `legacy-provider-fallback` bootstrap/seed.ncl:4 — `# musl.cc-fetched seed depending on `CRUNCH_LEGACY_SEED`.`
+- `legacy-provider-fallback` bootstrap/seed.ncl:12 — `let legacy = import "seed-legacy.ncl" in`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:79 — `The source-built provider MUST expose the same contract fields later bootstrap stages consume today: target-prefixed tool paths, headers, libraries, retained-tool metadata, reducti…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:100 — `- THEN they label it as seed-assisted legacy provider evidence`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:108 — `The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manif…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:219 — `#### Scenario: Legacy provider cannot satisfy lineage provider requirement`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:239 — `The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary dig…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:251 — `- GIVEN any stage selected the legacy musl.cc provider`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:378 — `- THEN `bootstrap/seed-legacy.ncl` provides the concrete reduced musl.cc provider`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:379 — `- AND the legacy path does not import `seed-legacy.ncl` recursively`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:626 — `Crunch MUST build `bootstrap/binutils-tcc.ncl` from chain-internal TinyCC-era and post-musl derivations without using host compiler, host libc, host shell tools, or the legacy musl…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:640 — `- GIVEN any intermediate tool derivation invokes a host compiler, host libc, host shell tool, Nix command, or legacy provider executable`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:670 — `- GIVEN the stage transcript contains host compiler, host libc, host shell, Nix, or legacy provider execution`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:703 — `Crunch MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:706 — `The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.n…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:734 — `- AND neither transcript uses the legacy musl.cc provider`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:743 — `The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manif…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:764 — `The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary dig…`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:776 — `- GIVEN any stage selected the legacy musl.cc provider`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1230 — `- **THEN** the evidence proves `libc.a`, installed headers, and a startup object exist without host fallback`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1310 — `- **THEN** the evidence proves the produced compiler output works without host fallback`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1336 — `- **THEN** the evidence proves the produced compiler output works without host fallback`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1349 — `- **THEN** the evidence proves `libc.a`, installed headers, and a startup object exist without host fallback`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1362 — `- **THEN** `grep`, `egrep`, and `fgrep` are present and usable without undeclared host fallback`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1376 — `- AND if declared prerequisite providers are absent, it records fail-closed blocker evidence without substituting host or legacy providers`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1398 — `- AND if declared prerequisite providers are absent or unvalidated, it records fail-closed blocker evidence without substituting host or legacy providers`
+- `legacy-provider-fallback` openspec/specs/bootstrap/spec.md:1420 — `- AND if declared prerequisite providers are absent, blocked, or unvalidated, it records fail-closed blocker evidence without substituting host or legacy providers`
+- `normalization-only-provider` bootstrap/bwrap.ncl:142 — `# The normalized seed contract puts those headers in the target sysroot.`
+- `normalization-only-provider` bootstrap/seed-full.ncl:3 — `# Exposes the same normalized seed contract as seed-legacy.ncl but`
+- `normalization-only-provider` bootstrap/seed-full.ncl:126 — `"notes": "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end."`
+- `normalization-only-provider` bootstrap/seed-full.ncl:131 — `# --- Verify normalized seed contract ---`
+- `normalization-only-provider` bootstrap/seed-full.ncl:145 — `echo "full-source-seed-toolchain normalization complete"`
+- `normalization-only-provider` bootstrap/seed.ncl:14 — `# The full-source chain is not yet functional (placeholder derivations`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:11 — `Crunch MUST define a versioned full-source bootstrap root manifest that names every source artifact, patch, digest, extraction rule, and expected provider output needed before the …`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:22 — `- AND the output lists the exact normalized seed contract outputs it expects`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:74 — `### Requirement: Source-built provider satisfies normalized seed contract`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:202 — `The provider output MUST satisfy the existing normalized seed contract fields`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:329 — `### Requirement: Normalized seed contract preserved`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:703 — `Crunch MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:706 — `The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.n…`
+- `normalization-only-provider` openspec/specs/bootstrap/spec.md:731 — `- GIVEN the source-built provider satisfies the normalized seed contract`
+- `placeholder-deferred` bootstrap/BLOCKER-INVENTORY.md:22 — `- `placeholder-deferred`: placeholder/TODO/deferred work remains in a bootstrap-critical surface.`
+- `placeholder-deferred` bootstrap/binutils-tcc.ncl:338 — `void placeholder(void) {}`
+- `placeholder-deferred` bootstrap/diag-tcc27-warning-format.ncl:56 — `# not print literal printf placeholders.`
+- `placeholder-deferred` bootstrap/diag-tcc27-warning-format.ncl:57 — `placeholder=$($BB printf '\045s:\045d: warning')`
+- `placeholder-deferred` bootstrap/diag-tcc27-warning-format.ncl:58 — `if $BB grep -q "$placeholder" warn.stderr; then`
+- `placeholder-deferred` bootstrap/diag-tcc27-warning-format.ncl:59 — `echo "ERROR: literal warning placeholders remain" >&2`
+- `placeholder-deferred` bootstrap/seed.ncl:14 — `# The full-source chain is not yet functional (placeholder derivations`
+- `placeholder-deferred` bootstrap/seed.ncl:17 — `# TODO: once seed-full.ncl builds successfully, switch the default:`
+- `placeholder-deferred` bootstrap/spike-i386-mes-runtime-layout.ncl:121 — `echo 'i386-mes-layout: libtcc1 object is blocked; create placeholder archives to continue header-only tcc27 object probe' >&2`
+- `placeholder-deferred` bootstrap/tcc-musl-prep.ncl:170 — `# arguments instead of printing literal `%s:%d` placeholders.`
+- `placeholder-deferred` bootstrap/tcc-musl-v2.ncl:176 — `# arguments instead of printing literal `%s:%d` placeholders.`
+- `placeholder-deferred` bootstrap/tcc-musl.ncl:175 — `# arguments instead of printing literal `%s:%d` placeholders.`
+- `placeholder-deferred` bootstrap/tinycc.ncl:214 — `# arguments instead of printing literal `%s:%d` placeholders.`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:105 — `Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profi…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:108 — `The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manif…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:110 — `#### Scenario: Placeholder blocks full-source claim`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:112 — `- GIVEN any of `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, or …`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:115 — `- AND the report names the unresolved placeholder stage`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:239 — `The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary dig…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:376 — `- GIVEN the full-source seed chain still contains placeholder derivations`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:629 — `The chain MUST implement the scoped ladder groups named by the proposal: early tcc-hosted utilities (`bzip2`, `coreutils-5.0`, `oyacc`, `bash-2.05b`), first musl/tcc rebuilds, post…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:631 — `#### Scenario: Placeholder is replaced`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:635 — `- THEN it does not emit `ERROR: binutils-tcc.ncl is a placeholder``
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:661 — `#### Scenario: GCC 4.0.4 placeholder is replaced`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:665 — `- THEN it does not emit `ERROR: gcc-4.0.ncl is a placeholder``
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:685 — `#### Scenario: GCC 4.7.4 placeholder is replaced`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:689 — `- THEN it does not emit `ERROR: gcc-4.7.ncl is a placeholder``
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:706 — `The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.n…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:708 — `#### Scenario: Stage placeholder is rejected`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:710 — `- GIVEN a bootstrap stage emits `ERROR: ... is a placeholder``
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:740 — `Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profi…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:743 — `The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manif…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:745 — `#### Scenario: Placeholder blocks full-source claim`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:747 — `- GIVEN any of `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, or …`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:750 — `- AND the report names the unresolved placeholder stage`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:764 — `The proof metadata MUST bind audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary dig…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:1101 — `- THEN `runtime_libtcc1_object` and `runtime_libtcc1_archive` MUST exit 0 without using the prior placeholder object path.`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:1305 — `- **THEN** the transcript records command, provider, exit status, output path or failure class, fallback status, and placeholder rejection`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:1331 — `- **THEN** the transcript records command, provider, exit status, output path or failure class, fallback status, and placeholder rejection`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:2424 — `The inventory MUST classify at least bridge outputs, placeholder or normalization-only providers, legacy-provider fallback, host-tool fallback, prerequisite-gated evidence, and kno…`
+- `placeholder-deferred` openspec/specs/bootstrap/spec.md:2450 — `- AND a known bridge, placeholder, fallback, or prerequisite-gated blocker remains`
+- `prerequisite-gated-evidence` bootstrap/BLOCKER-INVENTORY.md:23 — `- `prerequisite-gated-evidence`: evidence is explicitly blocked or prerequisite-gated.`
+- `prerequisite-gated-evidence` bootstrap/seed-full.ncl:126 — `"notes": "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end."`
+- `prerequisite-gated-evidence` bootstrap/seed-full.ncl:167 — `"Intended source chain starts from a 229-byte hex0 seed; current promotion remains gated by predecessor runtime evidence.",`
+- `prerequisite-gated-evidence` bootstrap/spike-i386-mes-runtime-layout.ncl:86 — `echo "status=blocked"`
+- `prerequisite-gated-evidence` bootstrap/spike-i386-tcc27-make-pass1.ncl:74 — `echo "status=blocked"`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:590 — `- GIVEN the amd64 Make 3.82 path remains blocked by runtime segfaults`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:643 — `- AND full-source bootstrap status remains blocked`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:673 — `- AND parent full-source bootstrap status remains blocked`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:713 — `- AND full-source bootstrap status remains blocked`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1434 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.53.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1441 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.53.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1456 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.54.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1463 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.54.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1478 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.55.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1485 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.55.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1500 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.57.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1507 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.57.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1522 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.59.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1529 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.59.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1544 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.64.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1551 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.64.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1566 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.69.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1573 — `- AND it records either a successful `crunch build bootstrap/autoconf-2.69.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1588 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.10.3.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1595 — `- AND it records either a successful `crunch build bootstrap/automake-1.10.3.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1610 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.11.2.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1617 — `- AND it records either a successful `crunch build bootstrap/automake-1.11.2.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1632 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.15.1.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1639 — `- AND it records either a successful `crunch build bootstrap/automake-1.15.1.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1654 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.6.3.ncl` and direct predecessor compatib…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1661 — `- AND it records either a successful `crunch build bootstrap/automake-1.6.3.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1676 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.7.ncl` and direct predecessor compatibil…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1683 — `- AND it records either a successful `crunch build bootstrap/automake-1.7.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1698 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.7.8.ncl` and direct predecessor compatib…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1705 — `- AND it records either a successful `crunch build bootstrap/automake-1.7.8.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1720 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.8.5.ncl` and direct predecessor compatib…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1727 — `- AND it records either a successful `crunch build bootstrap/automake-1.8.5.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1742 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.9.6.ncl` and direct predecessor compatib…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1749 — `- AND it records either a successful `crunch build bootstrap/automake-1.9.6.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1764 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bash-2.05b-tcc.ncl` and direct predecessor compatib…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1771 — `- AND it records either a successful `crunch build bootstrap/bash-2.05b-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1786 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/binutils-tcc.ncl` and direct predecessor compatibil…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1793 — `- AND it records either a successful `crunch build bootstrap/binutils-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1808 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/binutils-full.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1815 — `- AND it records either a successful `crunch build bootstrap/binutils-full.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1830 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bison-3.4.1-musl.ncl` and direct predecessor compat…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1837 — `- AND it records either a successful `crunch build bootstrap/bison-3.4.1-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1852 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-5.0-musl.ncl` and direct predecessor comp…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1859 — `- AND it records either a successful `crunch build bootstrap/coreutils-5.0-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1874 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-5.0-tcc.ncl` and direct predecessor compa…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1881 — `- AND it records either a successful `crunch build bootstrap/coreutils-5.0-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1896 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-6.10-musl.ncl` and direct predecessor com…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1903 — `- AND it records either a successful `crunch build bootstrap/coreutils-6.10-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1918 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/diffutils-2.7-musl.ncl` and direct predecessor comp…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1925 — `- AND it records either a successful `crunch build bootstrap/diffutils-2.7-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1940 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/flex-2.5.11-musl.ncl` and direct predecessor compat…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1947 — `- AND it records either a successful `crunch build bootstrap/flex-2.5.11-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1962 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/flex-2.6.4-musl.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1969 — `- AND it records either a successful `crunch build bootstrap/flex-2.6.4-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1984 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gawk-3.0.4-musl.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:1991 — `- AND it records either a successful `crunch build bootstrap/gawk-3.0.4-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2006 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-10.ncl` and direct predecessor compatibility. B…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2013 — `- AND it records either a successful `crunch build bootstrap/gcc-10.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2028 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-4.0.ncl` and direct predecessor compatibility. …`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2035 — `- AND it records either a successful `crunch build bootstrap/gcc-4.0.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2050 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-4.7.ncl` and direct predecessor compatibility. …`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2057 — `- AND it records either a successful `crunch build bootstrap/gcc-4.7.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2072 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gmp-6.2.1.ncl` and direct predecessor compatibility…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2079 — `- AND it records either a successful `crunch build bootstrap/gmp-6.2.1.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2094 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gzip-tcc.ncl` and direct predecessor compatibility.…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2101 — `- AND it records either a successful `crunch build bootstrap/gzip-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2116 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/heirloom-devtools.ncl` and direct predecessor compa…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2123 — `- AND it records either a successful `crunch build bootstrap/heirloom-devtools.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2138 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/libtool-2.2.4.ncl` and direct predecessor compatibi…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2145 — `- AND it records either a successful `crunch build bootstrap/libtool-2.2.4.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2182 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/mpfr-4.1.0.ncl` and direct predecessor compatibilit…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2189 — `- AND it records either a successful `crunch build bootstrap/mpfr-4.1.0.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2204 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/musl-full.ncl` and direct predecessor compatibility…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2211 — `- AND it records either a successful `crunch build bootstrap/musl-full.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2226 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/oyacc-tcc.ncl` and direct predecessor compatibility…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2233 — `- AND it records either a successful `crunch build bootstrap/oyacc-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2248 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.000-musl.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2255 — `- AND it records either a successful `crunch build bootstrap/perl-5.000-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2270 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.003-musl.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2277 — `- AND it records either a successful `crunch build bootstrap/perl-5.003-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2292 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.004_05-musl.ncl` and direct predecessor comp…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2299 — `- AND it records either a successful `crunch build bootstrap/perl-5.004_05-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2314 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.005_03-musl.ncl` and direct predecessor comp…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2321 — `- AND it records either a successful `crunch build bootstrap/perl-5.005_03-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2336 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.6.2-musl.ncl` and direct predecessor compati…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2343 — `- AND it records either a successful `crunch build bootstrap/perl-5.6.2-musl.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2371 — `- GIVEN the TinyCC/musl sed source compile boundary remains blocked or a downstream bootstrap stage fails`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2380 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/seed-full.ncl` and direct predecessor compatibility…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2388 — `- AND it records either a successful `crunch build bootstrap/seed-full.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2402 — `The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tar-tcc.ncl` and direct predecessor compatibility. …`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2409 — `- AND it records either a successful `crunch build bootstrap/tar-tcc.ncl` transcript or explicit prerequisite-gated build evidence`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2424 — `The inventory MUST classify at least bridge outputs, placeholder or normalization-only providers, legacy-provider fallback, host-tool fallback, prerequisite-gated evidence, and kno…`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2428 — `- GIVEN the current repository still contains bootstrap bridge and prerequisite-gated markers`
+- `prerequisite-gated-evidence` openspec/specs/bootstrap/spec.md:2450 — `- AND a known bridge, placeholder, fallback, or prerequisite-gated blocker remains`

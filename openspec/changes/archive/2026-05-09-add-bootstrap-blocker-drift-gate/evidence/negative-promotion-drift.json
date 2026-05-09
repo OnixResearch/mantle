@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "enforce": true,
+  "summary": {
+    "finding_count": 1,
+    "class_count": 1,
+    "promotion_claim_count": 1
+  },
+  "classes": [
+    {"id": "bridge-output", "description": "Bootstrap stage uses or documents a bridge output rather than end-to-end source-built proof.", "count": 1},
+    {"id": "compiler-runtime-crash-boundary", "description": "Known compiler/runtime crash, timeout, or signal boundary still gates promotion evidence.", "count": 0},
+    {"id": "legacy-provider-fallback", "description": "Legacy musl.cc or host-provider fallback remains part of the bootstrap path or documentation.", "count": 0},
+    {"id": "normalization-only-provider", "description": "Provider contract is normalized but not yet accepted as full source-built proof.", "count": 0},
+    {"id": "placeholder-deferred", "description": "Placeholder, TODO, or deferred full-source work remains in a bootstrap-critical surface.", "count": 0},
+    {"id": "prerequisite-gated-evidence", "description": "Evidence is explicitly prerequisite-gated or records a blocked status rather than promotion.", "count": 0}
+  ],
+  "promotion_claims": [
+    {"path": "/tmp/tmp.GI367R6oTt/claim.md", "line": 1, "excerpt": "full-source bootstrap status: promoted"}
+  ],
+  "findings": [
+    {"class": "bridge-output", "path": "/tmp/tmp.GI367R6oTt/blocker.ncl", "line": 1, "excerpt": "# bridge output remains, so promotion must fail"}
+  ]
+}

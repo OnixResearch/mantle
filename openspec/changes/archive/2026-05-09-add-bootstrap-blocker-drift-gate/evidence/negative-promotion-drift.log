@@ -1,0 +1,3 @@
+bootstrap blocker inventory: 1 findings across 1 classes, 1 promotion claims, enforce=true
+FAIL: promotion claim conflicts with remaining bootstrap blockers; see report for details
+negative_rc=1
