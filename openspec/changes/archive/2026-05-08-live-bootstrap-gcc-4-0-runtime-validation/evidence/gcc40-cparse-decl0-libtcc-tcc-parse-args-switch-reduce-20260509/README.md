@@ -44,4 +44,18 @@ case TCC_OPTION_dumpversion:
 
 causes the local Mes/TCC compiler to segfault (`rc=-11`).
 
-Next useful reduction: split `TCC_OPTION_dumpversion` into `case`/empty, `printf`, `exit`, and `printf+exit` variants while preserving the full known-good through-`MF` body and the `unsupported_option`/`set_output_type` labels. Avoid generating incomplete switch slices with dangling `#ifdef` or missing labels, because those can produce unrelated Mes/TCC crashes.
+## Dumpversion split follow-up
+
+- `run-local-tcc-parse-args-dumpversion-split.sh`
+  - preserves the known-good manual cumulative body through `TCC_OPTION_MF` and varies only the next `TCC_OPTION_dumpversion` case.
+- `focused-local-tcc-parse-args-dumpversion-split.txt`
+  - `00_through_MF`: `rc=0` for common and `-D ONE_SOURCE=1`.
+  - `01_dump_case_only_break`: `rc=0` for common and `-D ONE_SOURCE=1`.
+  - `02_dump_printf_empty_break`: `rc=0` for common and `-D ONE_SOURCE=1`.
+  - `04_dump_exit_only`: `rc=0` for common and `-D ONE_SOURCE=1`.
+  - `03_dump_printf_version_break`: `rc=-11` for common and `-D ONE_SOURCE=1`.
+  - `05_dump_printf_version_exit`: `rc=-11` for common and `-D ONE_SOURCE=1`.
+
+The narrowed trigger is now specifically the `printf("%s\n", TCC_VERSION)` varargs call shape inside `TCC_OPTION_dumpversion`, not the case label or `exit(0)`.
+
+Next useful reduction: split that printf shape (`printf("literal")`, `printf("%s", "literal")`, `printf("%s", TCC_VERSION)`, `fputs(TCC_VERSION, stdout)`) while preserving the through-`MF` body and required labels. Avoid generating incomplete switch slices with dangling `#ifdef` or missing labels, because those can produce unrelated Mes/TCC crashes.

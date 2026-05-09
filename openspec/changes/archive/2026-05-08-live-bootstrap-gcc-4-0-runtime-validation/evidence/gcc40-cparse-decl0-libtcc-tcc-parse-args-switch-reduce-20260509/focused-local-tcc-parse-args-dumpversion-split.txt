@@ -1,0 +1,21 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-dumpversion-split: generated_variants=6
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 00_through_MF lines=1895
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 01_dump_case_only_break lines=1897
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 02_dump_printf_empty_break lines=1898
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 03_dump_printf_version_break lines=1898
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 04_dump_exit_only lines=1898
+diag-libtcc-tcc-parse-args-dumpversion-split: variant 05_dump_printf_version_exit lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_00_through_MF.c_common tcc_parse_args_dumpversion_split_variants/00_through_MF.c flags=common rc=0 lines=1895
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_01_dump_case_only_break.c_common tcc_parse_args_dumpversion_split_variants/01_dump_case_only_break.c flags=common rc=0 lines=1897
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_02_dump_printf_empty_break.c_common tcc_parse_args_dumpversion_split_variants/02_dump_printf_empty_break.c flags=common rc=0 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_03_dump_printf_version_break.c_common tcc_parse_args_dumpversion_split_variants/03_dump_printf_version_break.c flags=common rc=-11 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_04_dump_exit_only.c_common tcc_parse_args_dumpversion_split_variants/04_dump_exit_only.c flags=common rc=0 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_05_dump_printf_version_exit.c_common tcc_parse_args_dumpversion_split_variants/05_dump_printf_version_exit.c flags=common rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_00_through_MF.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/00_through_MF.c flags=-D ONE_SOURCE=1 rc=0 lines=1895
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_01_dump_case_only_break.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/01_dump_case_only_break.c flags=-D ONE_SOURCE=1 rc=0 lines=1897
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_02_dump_printf_empty_break.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/02_dump_printf_empty_break.c flags=-D ONE_SOURCE=1 rc=0 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_03_dump_printf_version_break.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/03_dump_printf_version_break.c flags=-D ONE_SOURCE=1 rc=-11 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_04_dump_exit_only.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/04_dump_exit_only.c flags=-D ONE_SOURCE=1 rc=0 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_split_05_dump_printf_version_exit.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_split_variants/05_dump_printf_version_exit.c flags=-D ONE_SOURCE=1 rc=-11 lines=1899
