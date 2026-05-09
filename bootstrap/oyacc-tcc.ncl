@@ -13,6 +13,8 @@ let tcc = import "tinycc.ncl" in
 let make = import "make-tcc.ncl" in
 
 let oyacc_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/oyacc-6.6/sources
+  # first-consumer: bootstrap/oyacc-tcc.ncl
   url = "https://github.com/ibara/yacc/releases/download/oyacc-6.6/oyacc-6.6.tar.gz",
   hash = "sha256-cnz6/3/RGk6t1XsJIrFhzkEEQqaw4rilMWHn+Ay2DUc=",
   name = "oyacc-6.6-src",
@@ -61,15 +63,25 @@ let oyacc_src = crunch.fetchTarball {
         reader.o skeleton.o symtab.o verbose.o warshall.o \
         -o yacc
 
-      # Verify
-      ./yacc --help 2>&1 | $BB head -1 || true
+      test -x ./yacc || { echo "ERROR: yacc binary missing" >&2; exit 1; }
+      $BB cat > /tmp/oyacc-smoke.y <<'EOF'
+%token NUM
+%%
+expr: NUM ;
+%%
+EOF
+      ./yacc /tmp/oyacc-smoke.y
+      test -s y.tab.c || { echo "ERROR: yacc smoke did not produce y.tab.c" >&2; exit 1; }
 
       # Install
       $BB mkdir -p "$out/bin"
       $BB cp yacc "$out/bin/yacc"
       $BB chmod 755 "$out/bin/yacc"
 
-      test -x "$out/bin/yacc"
+      test -x "$out/bin/yacc" || { echo "ERROR: installed yacc missing" >&2; exit 1; }
+      cd /tmp
+      "$out/bin/yacc" /tmp/oyacc-smoke.y
+      test -s y.tab.c || { echo "ERROR: installed yacc smoke did not produce y.tab.c" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, mes, tcc, make, oyacc_src],
