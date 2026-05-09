@@ -123,17 +123,24 @@ let seed_toolchain = {
   "target": "x86_64-linux-musl",
   "reduction": {
     "dropped_components": [],
-    "notes": "All source-built; no binary reduction needed"
+    "notes": "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end."
   }
 }
 PROVIDER
 
-      # --- Verify ---
+      # --- Verify normalized seed contract ---
+      for tool in %{std.array.join " " provider_retained_tools}; do
+        test -x "$out/bin/$tool" || { echo "ERROR: retained tool $tool not found" >&2; exit 1; }
+      done
       test -x "$out/bin/$TGT-gcc" || { echo "ERROR: $TGT-gcc not found" >&2; exit 1; }
       test -x "$out/bin/$TGT-as" || { echo "ERROR: $TGT-as not found" >&2; exit 1; }
       test -x "$out/bin/$TGT-ld" || { echo "ERROR: $TGT-ld not found" >&2; exit 1; }
       test -f "$out/$TGT/lib/libc.a" || { echo "ERROR: libc.a not found" >&2; exit 1; }
+      test -s "$out/$TGT/lib/crt1.o" || { echo "ERROR: crt1.o not found" >&2; exit 1; }
+      test -s "$out/$TGT/lib/crti.o" || { echo "ERROR: crti.o not found" >&2; exit 1; }
+      test -s "$out/$TGT/lib/crtn.o" || { echo "ERROR: crtn.o not found" >&2; exit 1; }
       test -d "$out/$TGT/include" || { echo "ERROR: headers not found" >&2; exit 1; }
+      test -s "$out/share/crunch-bootstrap/provider.json" || { echo "ERROR: provider metadata missing" >&2; exit 1; }
 
       echo "full-source-seed-toolchain normalization complete"
     "%,
@@ -148,7 +155,7 @@ PROVIDER
   toolchain = seed_toolchain,
   provider = {
     id = "full-source-v1",
-    summary = "Full-source seed built from hex0 through GCC version ladder",
+    summary = "Full-source seed normalization contract for the GCC/musl/binutils ladder",
     raw = {
       name = "from-source",
       url = "n/a",
@@ -157,7 +164,7 @@ PROVIDER
     retained_tools = provider_retained_tools,
     dropped_components = [],
     notes = [
-      "Every tool built from source starting from a 229-byte hex0 seed.",
+      "Intended source chain starts from a 229-byte hex0 seed; current promotion remains gated by predecessor runtime evidence.",
       "Chain: hex0 -> stage0-posix -> mes -> tcc -> gcc-4.0 -> gcc-4.7 -> gcc-10 -> musl + binutils.",
       "Source chain reference: live-bootstrap commit 9a268c4c39cae952b268bc86da342be2175f03d4.",
     ],
