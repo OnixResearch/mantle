@@ -10,6 +10,8 @@ let grep = import "grep-2.4-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
 let autoconf = import "autoconf-2.64.ncl" in
 let src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/automake-1.11.2/sources
+  # first-consumer: bootstrap/automake-1.11.2.ncl
   url = "https://mirrors.kernel.org/gnu/automake/automake-1.11.2.tar.bz2",
   hash = "sha256-DZ1+dyXNhrs3Z6n82rd64Nfj1Zrzkct+chxhT8QhCFQ=",
   name = "automake-1.11.2-src",
@@ -29,12 +31,13 @@ let src = crunch.fetchTarball {
     export CONFIG_SHELL="$BASH/bin/bash"
     WORK=/tmp/am1.11.2; $BB mkdir -p "$WORK"; cd "$WORK"
     $BB cp -r "$SRC" src; $BB chmod -R u+w src; cd src
-    ./configure --prefix="$out" 2>/dev/null || true
-    make -j1 install prefix="$out" 2>/dev/null || {
-      $BB mkdir -p "$out/bin" "$out/share/automake-1.11"
-      for f in bin/*; do [ -f "$f" ] && $BB cp "$f" "$out/$f" && $BB chmod 755 "$out/$f"; done
-    }
-    test -f "$out/bin/automake" || test -f "$out/bin/automake-1.11"
+    ./configure --prefix="$out"
+    make -j1 install prefix="$out"
+    test -f "$out/bin/automake"; $BB chmod 755 "$out/bin/automake"
+    test -f "$out/bin/automake-1.11"; $BB chmod 755 "$out/bin/automake-1.11"
+    test -f "$out/bin/aclocal"; $BB chmod 755 "$out/bin/aclocal"
+    test -f "$out/bin/aclocal-1.11"; $BB chmod 755 "$out/bin/aclocal-1.11"
+    test -d "$out/share/automake-1.11"
   "%],
   inputs = [stage0, make, sed, perl, coreutils, gawk, grep, bash, autoconf, src],
 } | crunch.Derivation
