@@ -1,0 +1,59 @@
+diag-libtcc-post894: endpoints 662 674 696 708 723 894 933 984 990 996 1069 1094 1100 1118 1126 1141 1163 1171 1179 1193 1199 1217 1248 1263 1314 1322 1333
+diag-libtcc-post894: compile post894_prefix_662_common prefix_662.c flags=common rc=0 lines=662
+diag-libtcc-post894: compile post894_prefix_674_common prefix_674.c flags=common rc=0 lines=674
+diag-libtcc-post894: compile post894_prefix_696_common prefix_696.c flags=common rc=0 lines=696
+diag-libtcc-post894: compile post894_prefix_708_common prefix_708.c flags=common rc=0 lines=708
+diag-libtcc-post894: compile post894_prefix_723_common prefix_723.c flags=common rc=0 lines=723
+diag-libtcc-post894: compile post894_prefix_894_common prefix_894.c flags=common rc=0 lines=894
+diag-libtcc-post894: compile post894_prefix_933_common prefix_933.c flags=common rc=0 lines=933
+diag-libtcc-post894: compile post894_prefix_984_common prefix_984.c flags=common rc=0 lines=984
+diag-libtcc-post894: compile post894_prefix_990_common prefix_990.c flags=common rc=0 lines=990
+diag-libtcc-post894: compile post894_prefix_996_common prefix_996.c flags=common rc=0 lines=996
+diag-libtcc-post894: compile post894_prefix_1069_common prefix_1069.c flags=common rc=0 lines=1069
+diag-libtcc-post894: compile post894_prefix_1094_common prefix_1094.c flags=common rc=0 lines=1094
+diag-libtcc-post894: compile post894_prefix_1100_common prefix_1100.c flags=common rc=0 lines=1100
+diag-libtcc-post894: compile post894_prefix_1118_common prefix_1118.c flags=common rc=0 lines=1118
+diag-libtcc-post894: compile post894_prefix_1126_common prefix_1126.c flags=common rc=0 lines=1126
+diag-libtcc-post894: compile post894_prefix_1141_common prefix_1141.c flags=common rc=0 lines=1141
+diag-libtcc-post894: compile post894_prefix_1163_common prefix_1163.c flags=common rc=0 lines=1163
+diag-libtcc-post894: compile post894_prefix_1171_common prefix_1171.c flags=common rc=0 lines=1171
+diag-libtcc-post894: compile post894_prefix_1179_common prefix_1179.c flags=common rc=0 lines=1179
+diag-libtcc-post894: compile post894_prefix_1193_common prefix_1193.c flags=common rc=0 lines=1193
+diag-libtcc-post894: compile post894_prefix_1199_common prefix_1199.c flags=common rc=0 lines=1199
+diag-libtcc-post894: compile post894_prefix_1217_common prefix_1217.c flags=common rc=0 lines=1217
+diag-libtcc-post894: compile post894_prefix_1248_common prefix_1248.c flags=common rc=0 lines=1248
+diag-libtcc-post894: compile post894_prefix_1263_common prefix_1263.c flags=common rc=0 lines=1263
+diag-libtcc-post894: compile post894_prefix_1314_common prefix_1314.c flags=common rc=0 lines=1314
+diag-libtcc-post894: compile post894_prefix_1322_common prefix_1322.c flags=common rc=0 lines=1322
+diag-libtcc-post894: compile post894_prefix_1333_common prefix_1333.c flags=common rc=0 lines=1333
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-post894-prefix-20260509/run-local-post894-prefix.sh: line 73: 2701311 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post894: compile full_asm_sscanf_simplified_common full_asm_sscanf_simplified.c flags=common rc=139 lines=1993
+diag-libtcc-post894: compile post894_prefix_662_D_ONE_SOURCE_1 prefix_662_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=662
+diag-libtcc-post894: compile post894_prefix_674_D_ONE_SOURCE_1 prefix_674_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=674
+diag-libtcc-post894: compile post894_prefix_696_D_ONE_SOURCE_1 prefix_696_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=696
+diag-libtcc-post894: compile post894_prefix_708_D_ONE_SOURCE_1 prefix_708_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=708
+diag-libtcc-post894: compile post894_prefix_723_D_ONE_SOURCE_1 prefix_723_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=723
+diag-libtcc-post894: compile post894_prefix_894_D_ONE_SOURCE_1 prefix_894_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=894
+diag-libtcc-post894: compile post894_prefix_933_D_ONE_SOURCE_1 prefix_933_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=933
+diag-libtcc-post894: compile post894_prefix_984_D_ONE_SOURCE_1 prefix_984_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=984
+diag-libtcc-post894: compile post894_prefix_990_D_ONE_SOURCE_1 prefix_990_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=990
+diag-libtcc-post894: compile post894_prefix_996_D_ONE_SOURCE_1 prefix_996_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=996
+diag-libtcc-post894: compile post894_prefix_1069_D_ONE_SOURCE_1 prefix_1069_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1069
+diag-libtcc-post894: compile post894_prefix_1094_D_ONE_SOURCE_1 prefix_1094_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1094
+diag-libtcc-post894: compile post894_prefix_1100_D_ONE_SOURCE_1 prefix_1100_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1100
+diag-libtcc-post894: compile post894_prefix_1118_D_ONE_SOURCE_1 prefix_1118_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1118
+diag-libtcc-post894: compile post894_prefix_1126_D_ONE_SOURCE_1 prefix_1126_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1126
+diag-libtcc-post894: compile post894_prefix_1141_D_ONE_SOURCE_1 prefix_1141_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1141
+diag-libtcc-post894: compile post894_prefix_1163_D_ONE_SOURCE_1 prefix_1163_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1163
+diag-libtcc-post894: compile post894_prefix_1171_D_ONE_SOURCE_1 prefix_1171_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1171
+diag-libtcc-post894: compile post894_prefix_1179_D_ONE_SOURCE_1 prefix_1179_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1179
+diag-libtcc-post894: compile post894_prefix_1193_D_ONE_SOURCE_1 prefix_1193_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1193
+diag-libtcc-post894: compile post894_prefix_1199_D_ONE_SOURCE_1 prefix_1199_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1199
+diag-libtcc-post894: compile post894_prefix_1217_D_ONE_SOURCE_1 prefix_1217_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1217
+diag-libtcc-post894: compile post894_prefix_1248_D_ONE_SOURCE_1 prefix_1248_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1248
+diag-libtcc-post894: compile post894_prefix_1263_D_ONE_SOURCE_1 prefix_1263_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1263
+diag-libtcc-post894: compile post894_prefix_1314_D_ONE_SOURCE_1 prefix_1314_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1314
+diag-libtcc-post894: compile post894_prefix_1322_D_ONE_SOURCE_1 prefix_1322_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1322
+diag-libtcc-post894: compile post894_prefix_1333_D_ONE_SOURCE_1 prefix_1333_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1333
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-post894-prefix-20260509/run-local-post894-prefix.sh: line 73: 2701483 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post894: compile full_asm_sscanf_simplified_D_ONE_SOURCE_1 full_asm_sscanf_simplified_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=1993

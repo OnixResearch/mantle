@@ -1,0 +1,30 @@
+diag-libtcc-post894: compile cumulative_copy_bypassed_0_common cumulative_copy_bypassed_0.c flags=common rc=0 lines=1342
+diag-libtcc-post894: compile cumulative_copy_bypassed_1_common cumulative_copy_bypassed_1.c flags=common rc=0 lines=1343
+diag-libtcc-post894: compile cumulative_copy_bypassed_2_common cumulative_copy_bypassed_2.c flags=common rc=0 lines=1345
+diag-libtcc-post894: compile cumulative_copy_bypassed_3_common cumulative_copy_bypassed_3.c flags=common rc=0 lines=1348
+diag-libtcc-post894: compile cumulative_copy_bypassed_4_common cumulative_copy_bypassed_4.c flags=common rc=0 lines=1352
+diag-libtcc-post894: compile cumulative_copy_bypassed_5_common cumulative_copy_bypassed_5.c flags=common rc=0 lines=1355
+diag-libtcc-post894: compile cumulative_copy_bypassed_6_common cumulative_copy_bypassed_6.c flags=common rc=0 lines=1362
+diag-libtcc-post894: compile cumulative_copy_bypassed_7_common cumulative_copy_bypassed_7.c flags=common rc=0 lines=1364
+diag-libtcc-post894: compile cumulative_copy_bypassed_8_common cumulative_copy_bypassed_8.c flags=common rc=0 lines=1366
+diag-libtcc-post894: compile cumulative_copy_bypassed_9_common cumulative_copy_bypassed_9.c flags=common rc=0 lines=1368
+diag-libtcc-post894: compile cumulative_copy_bypassed_10_common cumulative_copy_bypassed_10.c flags=common rc=0 lines=1370
+diag-libtcc-post894: compile cumulative_copy_bypassed_11_common cumulative_copy_bypassed_11.c flags=common rc=0 lines=1372
+diag-libtcc-post894: compile cumulative_copy_bypassed_12_common cumulative_copy_bypassed_12.c flags=common rc=0 lines=1374
+diag-libtcc-post894: compile cumulative_copy_bypassed_13_common cumulative_copy_bypassed_13.c flags=common rc=0 lines=1376
+diag-libtcc-post894: compile cumulative_copy_bypassed_14_common cumulative_copy_bypassed_14.c flags=common rc=0 lines=1378
+diag-libtcc-post894: compile cumulative_copy_bypassed_0_D_ONE_SOURCE_1 cumulative_copy_bypassed_0_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1342
+diag-libtcc-post894: compile cumulative_copy_bypassed_1_D_ONE_SOURCE_1 cumulative_copy_bypassed_1_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1343
+diag-libtcc-post894: compile cumulative_copy_bypassed_2_D_ONE_SOURCE_1 cumulative_copy_bypassed_2_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1345
+diag-libtcc-post894: compile cumulative_copy_bypassed_3_D_ONE_SOURCE_1 cumulative_copy_bypassed_3_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1348
+diag-libtcc-post894: compile cumulative_copy_bypassed_4_D_ONE_SOURCE_1 cumulative_copy_bypassed_4_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1352
+diag-libtcc-post894: compile cumulative_copy_bypassed_5_D_ONE_SOURCE_1 cumulative_copy_bypassed_5_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1355
+diag-libtcc-post894: compile cumulative_copy_bypassed_6_D_ONE_SOURCE_1 cumulative_copy_bypassed_6_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1362
+diag-libtcc-post894: compile cumulative_copy_bypassed_7_D_ONE_SOURCE_1 cumulative_copy_bypassed_7_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1364
+diag-libtcc-post894: compile cumulative_copy_bypassed_8_D_ONE_SOURCE_1 cumulative_copy_bypassed_8_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1366
+diag-libtcc-post894: compile cumulative_copy_bypassed_9_D_ONE_SOURCE_1 cumulative_copy_bypassed_9_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1368
+diag-libtcc-post894: compile cumulative_copy_bypassed_10_D_ONE_SOURCE_1 cumulative_copy_bypassed_10_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1370
+diag-libtcc-post894: compile cumulative_copy_bypassed_11_D_ONE_SOURCE_1 cumulative_copy_bypassed_11_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1372
+diag-libtcc-post894: compile cumulative_copy_bypassed_12_D_ONE_SOURCE_1 cumulative_copy_bypassed_12_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1374
+diag-libtcc-post894: compile cumulative_copy_bypassed_13_D_ONE_SOURCE_1 cumulative_copy_bypassed_13_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1376
+diag-libtcc-post894: compile cumulative_copy_bypassed_14_D_ONE_SOURCE_1 cumulative_copy_bypassed_14_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1378
