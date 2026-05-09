@@ -34,6 +34,8 @@ let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let gcc10_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/gcc-10.5.0/sources and pass1.sh
+  # first-consumer: bootstrap/gcc-10.ncl
   url = "https://ftpmirror.gnu.org/gcc/gcc-10.5.0/gcc-10.5.0.tar.xz",
   hash = "sha256-t4vO308XvqCAgwrl2jS1llkIvHHfSV4wlkdLMkYfrkU=",
   name = "gcc-10.5.0-src",
@@ -135,12 +137,12 @@ let gcc10_src = crunch.fetchTarball {
         MAKEINFO=true \
         2>&1
 
-      make -j1 all-gcc MAKEINFO=true 2>&1
-      make -j1 all-target-libgcc MAKEINFO=true 2>&1 || true
+      make -j1 all-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc all-gcc failed" >&2; exit 1; }
+      make -j1 all-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc all-target-libgcc failed" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin" "$out/lib" "$out/libexec"
-      make -j1 install-gcc MAKEINFO=true 2>&1
-      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || true
+      make -j1 install-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc install-gcc failed" >&2; exit 1; }
+      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc install-target-libgcc failed" >&2; exit 1; }
 
       # Create symlinks
       if [ -x "$out/bin/x86_64-unknown-linux-musl-gcc" ] && [ ! -x "$out/bin/gcc" ]; then
@@ -156,10 +158,17 @@ let gcc10_src = crunch.fetchTarball {
         $BB ln -sf g++ "$out/bin/c++"
       fi
 
-      # Verify
+      # Verify required compiler entrypoints and fail closed if the C/C++
+      # output contract is incomplete.
       test -x "$out/bin/gcc" || test -x "$out/bin/x86_64-unknown-linux-musl-gcc" || {
         echo "ERROR: no gcc binary" >&2; exit 1
       }
+      test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
+      test -x "$out/bin/g++" || test -x "$out/bin/x86_64-unknown-linux-musl-g++" || {
+        echo "ERROR: no g++ binary" >&2; exit 1
+      }
+      test -x "$out/bin/c++" || { echo "ERROR: installed c++ missing" >&2; exit 1; }
+      find "$out" -name libgcc.a -type f | $BB grep -q libgcc.a || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
 
       # C smoke test
       $BB cat > /tmp/smoke.c << 'EOF'
@@ -167,12 +176,12 @@ int main(void) { return 0; }
 EOF
       "$out/bin/gcc" -I"$MUSL/include" -L"$MUSL/lib" -static \
         -B"$BINUTILS/bin/" -o /tmp/smoke_c /tmp/smoke.c 2>&1 || {
-        echo "WARNING: C smoke test failed" >&2
+        echo "ERROR: C smoke test failed" >&2; exit 1
       }
+      test -x /tmp/smoke_c || { echo "ERROR: C smoke output missing" >&2; exit 1; }
 
       # C++ smoke test
-      if [ -x "$out/bin/g++" ]; then
-        $BB cat > /tmp/smoke.cpp << 'EOF'
+      $BB cat > /tmp/smoke.cpp << 'EOF'
 #include <cstddef>
 auto add(int a, int b) -> int { return a + b; }
 int main() {
@@ -182,11 +191,11 @@ int main() {
   return sum == 6 ? 0 : 1;
 }
 EOF
-        "$out/bin/g++" -std=c++11 -I"$MUSL/include" -L"$MUSL/lib" -static \
-          -B"$BINUTILS/bin/" -o /tmp/smoke_cpp /tmp/smoke.cpp 2>&1 || {
-          echo "WARNING: C++ smoke test failed" >&2
-        }
-      fi
+      "$out/bin/g++" -std=c++11 -I"$MUSL/include" -L"$MUSL/lib" -static \
+        -B"$BINUTILS/bin/" -o /tmp/smoke_cpp /tmp/smoke.cpp 2>&1 || {
+        echo "ERROR: C++ smoke test failed" >&2; exit 1
+      }
+      test -x /tmp/smoke_cpp || { echo "ERROR: C++ smoke output missing" >&2; exit 1; }
 
       echo "gcc-10.5.0 build complete"
     "%,
