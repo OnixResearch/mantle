@@ -18,6 +18,8 @@ let stage0 = import "stage0-posix.ncl" in
 let musl_old = import "musl-1.1.24-tcc-musl.ncl" in
 
 let musl_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/musl-1.2.5/sources
+  # first-consumer: bootstrap/musl-full.ncl
   url = "https://musl.libc.org/releases/musl-1.2.5.tar.gz",
   hash = "sha256-WLIl4Mb82rsOQm/nQ9TmBD067Nxqm6yNwGGDZ1jS+Y8=",
   name = "musl-1.2.5-src",
@@ -72,13 +74,25 @@ let musl_src = crunch.fetchTarball {
       make -j1 2>&1
       make -j1 install 2>&1
 
-      test -f "$out/lib/libc.a" || { echo "ERROR: libc.a not built" >&2; exit 1; }
-      test -d "$out/include" || { echo "ERROR: headers not installed" >&2; exit 1; }
+      test -s "$out/lib/libc.a" || { echo "ERROR: libc.a not built" >&2; exit 1; }
+      test -f "$out/include/stdio.h" || { echo "ERROR: stdio.h not installed" >&2; exit 1; }
+      test -f "$out/include/unistd.h" || { echo "ERROR: unistd.h not installed" >&2; exit 1; }
+      test -f "$out/lib/crt1.o" || { echo "ERROR: crt1.o not installed" >&2; exit 1; }
+      test -f "$out/lib/crti.o" || { echo "ERROR: crti.o not installed" >&2; exit 1; }
+      test -f "$out/lib/crtn.o" || { echo "ERROR: crtn.o not installed" >&2; exit 1; }
 
-      # Create dynamic linker symlink
+      # Create dynamic linker symlink when libc.so is produced, and fail closed
+      # if the symlink cannot be materialized.
       if [ -f "$out/lib/libc.so" ]; then
-        $BB ln -sf libc.so "$out/lib/ld-musl-x86_64.so.1" 2>/dev/null || true
+        $BB ln -sf libc.so "$out/lib/ld-musl-x86_64.so.1"
+        test -e "$out/lib/ld-musl-x86_64.so.1" || { echo "ERROR: dynamic linker symlink missing" >&2; exit 1; }
       fi
+
+      echo 'int main(void){ return 0; }' > /tmp/musl-smoke.c
+      "$GCC/bin/gcc" -static -nostdinc -isystem "$out/include" /tmp/musl-smoke.c \
+        "$out/lib/crt1.o" "$out/lib/crti.o" "$out/lib/libc.a" "$out/lib/crtn.o" \
+        -o /tmp/musl-smoke
+      /tmp/musl-smoke
 
       echo "musl-1.2.5 build complete"
     "%,
