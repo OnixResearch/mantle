@@ -1,0 +1,90 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-post-d: generated_variants=29
+diag-libtcc-tcc-parse-args-post-d: variant 00_prefix_through_d lines=1805
+diag-libtcc-tcc-parse-args-post-d: variant 01_through_static lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 02_through_std lines=1810
+diag-libtcc-tcc-parse-args-post-d: variant 03_through_shared lines=1813
+diag-libtcc-tcc-parse-args-post-d: variant 04_through_soname lines=1816
+diag-libtcc-tcc-parse-args-post-d: variant 05_through_o lines=1823
+diag-libtcc-tcc-parse-args-post-d: variant 06_through_r lines=1827
+diag-libtcc-tcc-parse-args-post-d: variant 07_through_isystem lines=1830
+diag-libtcc-tcc-parse-args-post-d: variant 08_through_include lines=1833
+diag-libtcc-tcc-parse-args-post-d: variant 09_through_nostdinc lines=1836
+diag-libtcc-tcc-parse-args-post-d: variant 10_through_nostdlib lines=1839
+diag-libtcc-tcc-parse-args-post-d: variant 11_through_run lines=1846
+diag-libtcc-tcc-parse-args-post-d: variant 12_through_v lines=1850
+diag-libtcc-tcc-parse-args-post-d: variant 13_through_f lines=1854
+diag-libtcc-tcc-parse-args-post-d: variant 14_through_m lines=1863
+diag-libtcc-tcc-parse-args-post-d: variant 50_single_static lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 51_single_std lines=1807
+diag-libtcc-tcc-parse-args-post-d: variant 52_single_shared lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 53_single_soname lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 54_single_o lines=1812
+diag-libtcc-tcc-parse-args-post-d: variant 55_single_r lines=1809
+diag-libtcc-tcc-parse-args-post-d: variant 56_single_isystem lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 57_single_include lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 58_single_nostdinc lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 59_single_nostdlib lines=1808
+diag-libtcc-tcc-parse-args-post-d: variant 60_single_run lines=1812
+diag-libtcc-tcc-parse-args-post-d: variant 61_single_v lines=1809
+diag-libtcc-tcc-parse-args-post-d: variant 62_single_f lines=1809
+diag-libtcc-tcc-parse-args-post-d: variant 63_single_m lines=1814
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_00_prefix_through_d.c_common tcc_parse_args_post_d_variants/00_prefix_through_d.c flags=common rc=0 lines=1805
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_01_through_static.c_common tcc_parse_args_post_d_variants/01_through_static.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_02_through_std.c_common tcc_parse_args_post_d_variants/02_through_std.c flags=common rc=0 lines=1810
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_03_through_shared.c_common tcc_parse_args_post_d_variants/03_through_shared.c flags=common rc=0 lines=1813
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_04_through_soname.c_common tcc_parse_args_post_d_variants/04_through_soname.c flags=common rc=0 lines=1816
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_05_through_o.c_common tcc_parse_args_post_d_variants/05_through_o.c flags=common rc=0 lines=1823
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_06_through_r.c_common tcc_parse_args_post_d_variants/06_through_r.c flags=common rc=0 lines=1827
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_07_through_isystem.c_common tcc_parse_args_post_d_variants/07_through_isystem.c flags=common rc=0 lines=1830
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_08_through_include.c_common tcc_parse_args_post_d_variants/08_through_include.c flags=common rc=0 lines=1833
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_09_through_nostdinc.c_common tcc_parse_args_post_d_variants/09_through_nostdinc.c flags=common rc=0 lines=1836
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_10_through_nostdlib.c_common tcc_parse_args_post_d_variants/10_through_nostdlib.c flags=common rc=0 lines=1839
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_11_through_run.c_common tcc_parse_args_post_d_variants/11_through_run.c flags=common rc=0 lines=1846
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_12_through_v.c_common tcc_parse_args_post_d_variants/12_through_v.c flags=common rc=0 lines=1850
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_13_through_f.c_common tcc_parse_args_post_d_variants/13_through_f.c flags=common rc=0 lines=1854
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_14_through_m.c_common tcc_parse_args_post_d_variants/14_through_m.c flags=common rc=0 lines=1863
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_50_single_static.c_common tcc_parse_args_post_d_variants/50_single_static.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_51_single_std.c_common tcc_parse_args_post_d_variants/51_single_std.c flags=common rc=0 lines=1807
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_52_single_shared.c_common tcc_parse_args_post_d_variants/52_single_shared.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_53_single_soname.c_common tcc_parse_args_post_d_variants/53_single_soname.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_54_single_o.c_common tcc_parse_args_post_d_variants/54_single_o.c flags=common rc=0 lines=1812
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_55_single_r.c_common tcc_parse_args_post_d_variants/55_single_r.c flags=common rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_56_single_isystem.c_common tcc_parse_args_post_d_variants/56_single_isystem.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_57_single_include.c_common tcc_parse_args_post_d_variants/57_single_include.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_58_single_nostdinc.c_common tcc_parse_args_post_d_variants/58_single_nostdinc.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_59_single_nostdlib.c_common tcc_parse_args_post_d_variants/59_single_nostdlib.c flags=common rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_60_single_run.c_common tcc_parse_args_post_d_variants/60_single_run.c flags=common rc=0 lines=1812
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_61_single_v.c_common tcc_parse_args_post_d_variants/61_single_v.c flags=common rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_62_single_f.c_common tcc_parse_args_post_d_variants/62_single_f.c flags=common rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_63_single_m.c_common tcc_parse_args_post_d_variants/63_single_m.c flags=common rc=0 lines=1814
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_00_prefix_through_d.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/00_prefix_through_d.c flags=-D ONE_SOURCE=1 rc=0 lines=1805
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_01_through_static.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/01_through_static.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_02_through_std.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/02_through_std.c flags=-D ONE_SOURCE=1 rc=0 lines=1810
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_03_through_shared.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/03_through_shared.c flags=-D ONE_SOURCE=1 rc=0 lines=1813
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_04_through_soname.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/04_through_soname.c flags=-D ONE_SOURCE=1 rc=0 lines=1816
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_05_through_o.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/05_through_o.c flags=-D ONE_SOURCE=1 rc=0 lines=1823
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_06_through_r.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/06_through_r.c flags=-D ONE_SOURCE=1 rc=0 lines=1827
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_07_through_isystem.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/07_through_isystem.c flags=-D ONE_SOURCE=1 rc=0 lines=1830
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_08_through_include.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/08_through_include.c flags=-D ONE_SOURCE=1 rc=0 lines=1833
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_09_through_nostdinc.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/09_through_nostdinc.c flags=-D ONE_SOURCE=1 rc=0 lines=1836
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_10_through_nostdlib.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/10_through_nostdlib.c flags=-D ONE_SOURCE=1 rc=0 lines=1839
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_11_through_run.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/11_through_run.c flags=-D ONE_SOURCE=1 rc=0 lines=1846
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_12_through_v.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/12_through_v.c flags=-D ONE_SOURCE=1 rc=0 lines=1850
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_13_through_f.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/13_through_f.c flags=-D ONE_SOURCE=1 rc=0 lines=1854
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_14_through_m.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/14_through_m.c flags=-D ONE_SOURCE=1 rc=0 lines=1863
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_50_single_static.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/50_single_static.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_51_single_std.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/51_single_std.c flags=-D ONE_SOURCE=1 rc=0 lines=1807
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_52_single_shared.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/52_single_shared.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_53_single_soname.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/53_single_soname.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_54_single_o.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/54_single_o.c flags=-D ONE_SOURCE=1 rc=0 lines=1812
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_55_single_r.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/55_single_r.c flags=-D ONE_SOURCE=1 rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_56_single_isystem.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/56_single_isystem.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_57_single_include.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/57_single_include.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_58_single_nostdinc.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/58_single_nostdinc.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_59_single_nostdlib.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/59_single_nostdlib.c flags=-D ONE_SOURCE=1 rc=0 lines=1808
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_60_single_run.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/60_single_run.c flags=-D ONE_SOURCE=1 rc=0 lines=1812
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_61_single_v.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/61_single_v.c flags=-D ONE_SOURCE=1 rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_62_single_f.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/62_single_f.c flags=-D ONE_SOURCE=1 rc=0 lines=1809
+diag-libtcc-post-options-m: compile tcc_parse_args_post_d_63_single_m.c_D_ONE_SOURCE_1 tcc_parse_args_post_d_variants/63_single_m.c flags=-D ONE_SOURCE=1 rc=0 lines=1814

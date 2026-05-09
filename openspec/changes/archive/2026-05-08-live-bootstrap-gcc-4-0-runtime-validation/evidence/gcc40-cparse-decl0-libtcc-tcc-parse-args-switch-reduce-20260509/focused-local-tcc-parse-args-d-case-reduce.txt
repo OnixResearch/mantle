@@ -1,0 +1,27 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-d-case: generated_variants=8
+diag-libtcc-tcc-parse-args-d-case: variant 00_prefix_through_c lines=1793
+diag-libtcc-tcc-parse-args-d-case: variant 01_d_empty lines=1795
+diag-libtcc-tcc-parse-args-d-case: variant 02_d_assign lines=1796
+diag-libtcc-tcc-parse-args-d-case: variant 03_d_if_D lines=1797
+diag-libtcc-tcc-parse-args-d-case: variant 04_d_if_D_else_M lines=1799
+diag-libtcc-tcc-parse-args-d-case: variant 05_d_if_D_M_t lines=1801
+diag-libtcc-tcc-parse-args-d-case: variant 06_d_if_D_M_t_isnum lines=1803
+diag-libtcc-tcc-parse-args-d-case: variant 07_d_full_with_goto lines=1805
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_00_prefix_through_c.c_common tcc_parse_args_d_case_variants/00_prefix_through_c.c flags=common rc=0 lines=1793
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_01_d_empty.c_common tcc_parse_args_d_case_variants/01_d_empty.c flags=common rc=0 lines=1795
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_02_d_assign.c_common tcc_parse_args_d_case_variants/02_d_assign.c flags=common rc=0 lines=1796
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_03_d_if_D.c_common tcc_parse_args_d_case_variants/03_d_if_D.c flags=common rc=0 lines=1797
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_04_d_if_D_else_M.c_common tcc_parse_args_d_case_variants/04_d_if_D_else_M.c flags=common rc=0 lines=1799
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_05_d_if_D_M_t.c_common tcc_parse_args_d_case_variants/05_d_if_D_M_t.c flags=common rc=0 lines=1801
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_06_d_if_D_M_t_isnum.c_common tcc_parse_args_d_case_variants/06_d_if_D_M_t_isnum.c flags=common rc=0 lines=1803
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_07_d_full_with_goto.c_common tcc_parse_args_d_case_variants/07_d_full_with_goto.c flags=common rc=0 lines=1805
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_00_prefix_through_c.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/00_prefix_through_c.c flags=-D ONE_SOURCE=1 rc=0 lines=1793
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_01_d_empty.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/01_d_empty.c flags=-D ONE_SOURCE=1 rc=0 lines=1795
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_02_d_assign.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/02_d_assign.c flags=-D ONE_SOURCE=1 rc=0 lines=1796
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_03_d_if_D.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/03_d_if_D.c flags=-D ONE_SOURCE=1 rc=0 lines=1797
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_04_d_if_D_else_M.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/04_d_if_D_else_M.c flags=-D ONE_SOURCE=1 rc=0 lines=1799
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_05_d_if_D_M_t.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/05_d_if_D_M_t.c flags=-D ONE_SOURCE=1 rc=0 lines=1801
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_06_d_if_D_M_t_isnum.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/06_d_if_D_M_t_isnum.c flags=-D ONE_SOURCE=1 rc=0 lines=1803
+diag-libtcc-post-options-m: compile tcc_parse_args_d_case_07_d_full_with_goto.c_D_ONE_SOURCE_1 tcc_parse_args_d_case_variants/07_d_full_with_goto.c flags=-D ONE_SOURCE=1 rc=0 lines=1805

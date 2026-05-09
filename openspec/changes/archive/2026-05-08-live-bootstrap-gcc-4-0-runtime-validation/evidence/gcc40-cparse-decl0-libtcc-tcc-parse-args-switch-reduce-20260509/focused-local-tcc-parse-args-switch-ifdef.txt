@@ -1,0 +1,24 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-switch-ifdef: generated_variants=7
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 00_through_bench_manual lines=1769
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 01_through_bench_empty_bt_ifdef lines=1771
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 02_through_bt_guarded lines=1774
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 03_through_bcheck_guarded lines=1780
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 04_through_c_after_guarded lines=1790
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 05_bt_block_only lines=1744
+diag-libtcc-tcc-parse-args-switch-ifdef: variant 06_bcheck_block_only lines=1745
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_00_through_bench_manual.c_common tcc_parse_args_switch_ifdef_variants/00_through_bench_manual.c flags=common rc=0 lines=1769
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_01_through_bench_empty_bt_ifdef.c_common tcc_parse_args_switch_ifdef_variants/01_through_bench_empty_bt_ifdef.c flags=common rc=0 lines=1771
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_02_through_bt_guarded.c_common tcc_parse_args_switch_ifdef_variants/02_through_bt_guarded.c flags=common rc=0 lines=1774
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_03_through_bcheck_guarded.c_common tcc_parse_args_switch_ifdef_variants/03_through_bcheck_guarded.c flags=common rc=0 lines=1780
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_04_through_c_after_guarded.c_common tcc_parse_args_switch_ifdef_variants/04_through_c_after_guarded.c flags=common rc=0 lines=1790
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_05_bt_block_only.c_common tcc_parse_args_switch_ifdef_variants/05_bt_block_only.c flags=common rc=0 lines=1744
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_06_bcheck_block_only.c_common tcc_parse_args_switch_ifdef_variants/06_bcheck_block_only.c flags=common rc=0 lines=1745
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_00_through_bench_manual.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/00_through_bench_manual.c flags=-D ONE_SOURCE=1 rc=0 lines=1769
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_01_through_bench_empty_bt_ifdef.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/01_through_bench_empty_bt_ifdef.c flags=-D ONE_SOURCE=1 rc=0 lines=1771
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_02_through_bt_guarded.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/02_through_bt_guarded.c flags=-D ONE_SOURCE=1 rc=0 lines=1774
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_03_through_bcheck_guarded.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/03_through_bcheck_guarded.c flags=-D ONE_SOURCE=1 rc=0 lines=1780
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_04_through_c_after_guarded.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/04_through_c_after_guarded.c flags=-D ONE_SOURCE=1 rc=0 lines=1790
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_05_bt_block_only.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/05_bt_block_only.c flags=-D ONE_SOURCE=1 rc=0 lines=1744
+diag-libtcc-post-options-m: compile tcc_parse_args_switch_ifdef_06_bcheck_block_only.c_D_ONE_SOURCE_1 tcc_parse_args_switch_ifdef_variants/06_bcheck_block_only.c flags=-D ONE_SOURCE=1 rc=0 lines=1745
