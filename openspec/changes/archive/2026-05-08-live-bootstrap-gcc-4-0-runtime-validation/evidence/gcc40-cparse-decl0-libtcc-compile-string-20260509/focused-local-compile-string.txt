@@ -1,0 +1,16 @@
+diag-libtcc-compile-string: compile base662_common base662.c flags=common rc=0 lines=662
+diag-libtcc-compile-string: compile proto_common proto.c flags=common rc=0 lines=663
+diag-libtcc-compile-string: compile empty_common empty.c flags=common rc=0 lines=667
+diag-libtcc-compile-string: compile locals_common locals.c flags=common rc=0 lines=670
+diag-libtcc-compile-string: compile open_only_common open_only.c flags=common rc=0 lines=670
+diag-libtcc-compile-string: compile open_memcpy_common open_memcpy.c flags=common rc=0 lines=671
+diag-libtcc-compile-string: compile call_compile_common call_compile.c flags=common rc=0 lines=672
+diag-libtcc-compile-string: compile full_compile_string_common full_compile_string.c flags=common rc=0 lines=673
+diag-libtcc-compile-string: compile base662_D_ONE_SOURCE_1 base662_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=662
+diag-libtcc-compile-string: compile proto_D_ONE_SOURCE_1 proto_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=663
+diag-libtcc-compile-string: compile empty_D_ONE_SOURCE_1 empty_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=667
+diag-libtcc-compile-string: compile locals_D_ONE_SOURCE_1 locals_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=670
+diag-libtcc-compile-string: compile open_only_D_ONE_SOURCE_1 open_only_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=670
+diag-libtcc-compile-string: compile open_memcpy_D_ONE_SOURCE_1 open_memcpy_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=671
+diag-libtcc-compile-string: compile call_compile_D_ONE_SOURCE_1 call_compile_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=672
+diag-libtcc-compile-string: compile full_compile_string_D_ONE_SOURCE_1 full_compile_string_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=673

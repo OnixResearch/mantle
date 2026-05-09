@@ -1,0 +1,40 @@
+diag-libtcc-post661: compile base723_common base723.c flags=common rc=0 lines=723
+diag-libtcc-post661: compile proto_common proto.c flags=common rc=0 lines=724
+diag-libtcc-post661: compile empty_common empty.c flags=common rc=0 lines=728
+diag-libtcc-post661: compile alloc_common alloc.c flags=common rc=0 lines=735
+diag-libtcc-post661: compile defaults_common defaults.c flags=common rc=0 lines=739
+diag-libtcc-post661: compile libpath_common libpath.c flags=common rc=0 lines=742
+diag-libtcc-post661: compile dummy_defines_common dummy_defines.c flags=common rc=0 lines=743
+diag-libtcc-post661: compile version_decls_common version_decls.c flags=common rc=0 lines=741
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2503332 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile version_sscanf_common version_sscanf.c flags=common rc=139 lines=742
+diag-libtcc-post661: compile version_sprintf_const_common version_sprintf_const.c flags=common rc=0 lines=742
+diag-libtcc-post661: compile version_sprintf_expr_common version_sprintf_expr.c flags=common rc=0 lines=742
+diag-libtcc-post661: compile version_define_only_common version_define_only.c flags=common rc=0 lines=742
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2508438 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile tinyc_version_common tinyc_version.c flags=common rc=139 lines=744
+diag-libtcc-post661: compile standard_defines_common standard_defines.c flags=common rc=0 lines=741
+diag-libtcc-post661: compile target_x86_common target_x86.c flags=common rc=0 lines=742
+diag-libtcc-post661: compile builtin_redirect_common builtin_redirect.c flags=common rc=0 lines=742
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2513018 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile full_tcc_new_common full_tcc_new.c flags=common rc=139 lines=894
+diag-libtcc-post661: compile base723_D_ONE_SOURCE_1 base723_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=723
+diag-libtcc-post661: compile proto_D_ONE_SOURCE_1 proto_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=724
+diag-libtcc-post661: compile empty_D_ONE_SOURCE_1 empty_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=728
+diag-libtcc-post661: compile alloc_D_ONE_SOURCE_1 alloc_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=735
+diag-libtcc-post661: compile defaults_D_ONE_SOURCE_1 defaults_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=739
+diag-libtcc-post661: compile libpath_D_ONE_SOURCE_1 libpath_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+diag-libtcc-post661: compile dummy_defines_D_ONE_SOURCE_1 dummy_defines_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=743
+diag-libtcc-post661: compile version_decls_D_ONE_SOURCE_1 version_decls_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=741
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2517498 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile version_sscanf_D_ONE_SOURCE_1 version_sscanf_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=742
+diag-libtcc-post661: compile version_sprintf_const_D_ONE_SOURCE_1 version_sprintf_const_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+diag-libtcc-post661: compile version_sprintf_expr_D_ONE_SOURCE_1 version_sprintf_expr_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+diag-libtcc-post661: compile version_define_only_D_ONE_SOURCE_1 version_define_only_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2518298 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile tinyc_version_D_ONE_SOURCE_1 tinyc_version_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=744
+diag-libtcc-post661: compile standard_defines_D_ONE_SOURCE_1 standard_defines_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=741
+diag-libtcc-post661: compile target_x86_D_ONE_SOURCE_1 target_x86_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+diag-libtcc-post661: compile builtin_redirect_D_ONE_SOURCE_1 builtin_redirect_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=742
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-new-20260509/run-local-tcc-new.sh: line 71: 2518718 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post661: compile full_tcc_new_D_ONE_SOURCE_1 full_tcc_new_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=894
