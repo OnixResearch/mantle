@@ -16,7 +16,7 @@ Both reports omit timestamps and host-specific absolute paths so they can be sav
 The current taxonomy is intentionally small:
 
 - `bridge-output`: a stage uses/documents a bridge output instead of source-built proof.
-- `compiler-runtime-crash-boundary`: a compiler/runtime segfault, timeout, signal, or static-link boundary gates promotion.
+- `compiler-runtime-crash-boundary`: a compiler/runtime segfault, timeout, signal-derived exit, or static-link boundary gates promotion.
 - `legacy-provider-fallback`: legacy musl.cc/seed-legacy/host fallback remains in the path or documentation.
 - `normalization-only-provider`: a provider satisfies shape/normalization but not full-source proof.
 - `placeholder-deferred`: placeholder/TODO/deferred work remains in a bootstrap-critical surface.

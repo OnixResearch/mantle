@@ -25,6 +25,12 @@ struct MarkerClass {
     needles: &'static [&'static str],
 }
 
+impl MarkerClass {
+    fn matches_line(&self, lower_line: &str) -> bool {
+        self.needles.iter().any(|needle| lower_line.contains(needle))
+    }
+}
+
 const MARKERS: &[MarkerClass] = &[
     MarkerClass {
         id: "bridge-output",
@@ -33,8 +39,17 @@ const MARKERS: &[MarkerClass] = &[
     },
     MarkerClass {
         id: "compiler-runtime-crash-boundary",
-        description: "Known compiler/runtime crash, timeout, or signal boundary still gates promotion evidence.",
-        needles: &["segfault", "rc=139", "timeout", "signal", "static link"],
+        description: "Known compiler/runtime crash, timeout, signal-derived exit, or static-link boundary still gates promotion evidence.",
+        needles: &[
+            "segfault",
+            "segmentation fault",
+            "rc=139",
+            "exit 139",
+            "timeout",
+            "signal-derived",
+            "static link",
+            "static-link",
+        ],
     },
     MarkerClass {
         id: "legacy-provider-fallback",
@@ -43,7 +58,7 @@ const MARKERS: &[MarkerClass] = &[
             "legacy musl.cc",
             "seed-legacy",
             "legacy provider",
-            "CRUNCH_LEGACY_SEED",
+            "crunch_legacy_seed",
             "host fallback",
             "host-bwrap fallback",
         ],
@@ -61,7 +76,7 @@ const MARKERS: &[MarkerClass] = &[
     MarkerClass {
         id: "placeholder-deferred",
         description: "Placeholder, TODO, or deferred full-source work remains in a bootstrap-critical surface.",
-        needles: &["placeholder", "TODO:", "deferred task", "not yet implemented"],
+        needles: &["placeholder", "todo:", "deferred task", "not yet implemented"],
     },
     MarkerClass {
         id: "prerequisite-gated-evidence",
@@ -111,6 +126,7 @@ struct Config {
     json_path: Option<PathBuf>,
     markdown_path: Option<PathBuf>,
     enforce: bool,
+    self_test: bool,
 }
 
 fn main() -> ExitCode {
@@ -146,6 +162,9 @@ struct Outcome {
 
 fn run() -> Result<Outcome, String> {
     let config = parse_args()?;
+    if config.self_test {
+        run_self_tests()?;
+    }
     let paths = if config.paths.is_empty() {
         vec![
             PathBuf::from("bootstrap"),
@@ -199,6 +218,7 @@ fn parse_args() -> Result<Config, String> {
                 config.markdown_path = Some(PathBuf::from(args.next().ok_or("--markdown requires a path")?))
             }
             "--enforce" => config.enforce = true,
+            "--self-test" => config.self_test = true,
             "--help" | "-h" => return Err(help()),
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}\n{}", help())),
             _ => config.paths.push(PathBuf::from(arg)),
@@ -208,7 +228,45 @@ fn parse_args() -> Result<Config, String> {
 }
 
 fn help() -> String {
-    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--json PATH] [--markdown PATH] [PATH ...]".to_string()
+    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--self-test] [--json PATH] [--markdown PATH] [PATH ...]"
+        .to_string()
+}
+
+fn run_self_tests() -> Result<(), String> {
+    let compiler_marker = MARKERS
+        .iter()
+        .find(|marker| marker.id == "compiler-runtime-crash-boundary")
+        .ok_or("missing compiler-runtime-crash-boundary marker")?;
+
+    let positive_cases = [
+        "TinyCC static link still exits 139",
+        "diagnostic rc=139 under libtcc.c",
+        "simple Makefile execution still segfaults",
+        "bounded timeout while compiling the compiler",
+        "exit status is not signal-derived",
+    ];
+    for case in positive_cases {
+        let lower = case.to_lowercase();
+        if !compiler_marker.matches_line(&lower) {
+            return Err(format!("self-test expected compiler marker match for: {case}"));
+        }
+    }
+
+    let negative_cases = [
+        "#define HAVE_SIGNAL_H 1",
+        "#include <signal.h>",
+        "char *strsignal(int sig);",
+        "signal names are available in this bootstrap shell",
+        "static int helper(void) { return 0; }",
+    ];
+    for case in negative_cases {
+        let lower = case.to_lowercase();
+        if compiler_marker.matches_line(&lower) {
+            return Err(format!("self-test expected no compiler marker match for: {case}"));
+        }
+    }
+
+    Ok(())
 }
 
 fn collect_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -262,7 +320,7 @@ fn scan_file(
     for (idx, line) in content.lines().enumerate() {
         let lower = line.to_lowercase();
         for marker in MARKERS {
-            if marker.needles.iter().any(|needle| lower.contains(&needle.to_lowercase())) {
+            if marker.matches_line(&lower) {
                 findings.push(Finding {
                     class_id: marker.id,
                     path: path_s.clone(),

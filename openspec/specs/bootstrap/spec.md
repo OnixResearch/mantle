@@ -2438,6 +2438,13 @@ The inventory MUST classify at least bridge outputs, placeholder or normalizatio
 - THEN the JSON report contains stable ordering for marker classes and findings
 - AND the Markdown report is suitable for checked-in evidence without timestamps or host-specific paths
 
+#### Scenario: Matcher regressions avoid generic C token noise [r[bootstrap.blocker-inventory.deterministic.matcher-regressions]]
+
+- GIVEN bootstrap sources contain ordinary C tokens such as `signal.h`, `strsignal`, and `static` helper declarations
+- WHEN the blocker inventory gate runs its built-in matcher self-tests
+- THEN those generic tokens are not classified as compiler/runtime crash boundaries
+- AND concrete blocker phrases such as `segfault`, `rc=139`, `exit 139`, `timeout`, `signal-derived`, and `static link` remain classified as compiler/runtime crash boundaries
+
 ### Requirement: Full-source promotion claims fail closed while blockers remain [r[bootstrap.blocker-inventory.promotion-drift]]
 
 Crunch MUST fail a bootstrap readiness or promotion check when repository-controlled status text, manifests, reports, or seed-provider metadata claim full-source bootstrap readiness while configured blocker markers remain present.

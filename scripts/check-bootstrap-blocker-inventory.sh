@@ -8,7 +8,7 @@ readonly DEFAULT_MARKDOWN="$REPO_ROOT/target/bootstrap-blocker-inventory/current
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/check-bootstrap-blocker-inventory.sh [--report-only] [--json PATH] [--markdown PATH]
+Usage: ./scripts/check-bootstrap-blocker-inventory.sh [--report-only] [--self-test] [--json PATH] [--markdown PATH]
 
 Run the lightweight bootstrap blocker inventory/readiness-drift gate. The gate
 scans repository-controlled bootstrap sources and canonical bootstrap specs,
@@ -17,6 +17,7 @@ only when a full-source promotion claim is present while blocker markers remain.
 
 Options:
   --report-only     inventory blockers but do not enforce promotion-drift failure
+  --self-test       run built-in matcher regression tests before scanning
   --json PATH       write JSON report (default: target/bootstrap-blocker-inventory/current.json)
   --markdown PATH   write Markdown report (default: target/bootstrap-blocker-inventory/current.md)
 EOF
@@ -25,11 +26,16 @@ EOF
 json_path="$DEFAULT_JSON"
 markdown_path="$DEFAULT_MARKDOWN"
 enforce=1
+self_test=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --report-only)
       enforce=0
+      shift
+      ;;
+    --self-test)
+      self_test=1
       shift
       ;;
     --json)
@@ -73,6 +79,9 @@ args=(
 
 if [[ "$enforce" == 1 ]]; then
   args+=(--enforce)
+fi
+if [[ "$self_test" == 1 ]]; then
+  args+=(--self-test)
 fi
 
 "$cargo_bin" "${args[@]}"
