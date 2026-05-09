@@ -58,4 +58,18 @@ causes the local Mes/TCC compiler to segfault (`rc=-11`).
 
 The narrowed trigger is now specifically the `printf("%s\n", TCC_VERSION)` varargs call shape inside `TCC_OPTION_dumpversion`, not the case label or `exit(0)`.
 
-Next useful reduction: split that printf shape (`printf("literal")`, `printf("%s", "literal")`, `printf("%s", TCC_VERSION)`, `fputs(TCC_VERSION, stdout)`) while preserving the through-`MF` body and required labels. Avoid generating incomplete switch slices with dangling `#ifdef` or missing labels, because those can produce unrelated Mes/TCC crashes.
+## Printf / macro shape follow-up
+
+- `run-local-tcc-parse-args-dumpversion-printf-shape.sh`
+  - literal calls compile: `printf("")`, `printf("0.9.27\n")`, and `printf("%s\n", "0.9.27")` all return `rc=0` under common and `-D ONE_SOURCE=1`.
+  - every direct `TCC_VERSION` expression form tested segfaults (`rc=-11`): `printf(TCC_VERSION)`, `printf("%s\n", TCC_VERSION)`, `fputs(TCC_VERSION, stdout)`, `fputs(TCC_VERSION, stderr)`, `puts(TCC_VERSION)`, and `tcc_warning("%s", TCC_VERSION)`.
+- `run-local-tcc-parse-args-dumpversion-macro-shape.sh`
+  - local literal macro use compiles: `#define CRUNCH_LOCAL_VERSION "0.9.27"` + `puts(CRUNCH_LOCAL_VERSION)` returns `rc=0`.
+  - aliasing through the original macro still fails: `#define CRUNCH_LOCAL_VERSION TCC_VERSION` + `puts(CRUNCH_LOCAL_VERSION)` returns `rc=-11`.
+  - top-level literal storage compiles: `static const char *... = "0.9.27"` and `static char ...[] = "0.9.27"` return `rc=0`.
+  - top-level storage initialized from the original `TCC_VERSION` macro fails (`rc=-11`), as does `sizeof(TCC_VERSION)`.
+  - explicitly `#undef`/redefining `TCC_VERSION` to a literal immediately before `tcc_parse_args` makes `puts(TCC_VERSION)` compile (`rc=0`), including both `"0.9.27"` and `"x"`.
+
+The narrowed trigger is now the original `TCC_VERSION` macro expansion path in the predecessor compiler context, not varargs, `printf`, string literal length, or use of stdout/stderr.
+
+Next useful reduction: locate where the active original `TCC_VERSION` definition enters this focused replay (config/header/command-line predefined macro) and compare its token spelling against the successful local `#undef/#define TCC_VERSION "0.9.27"` replacement.

@@ -1,0 +1,33 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: generated_variants=10
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 00_through_MF lines=1895
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 01_define_local_literal_use lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 02_define_local_alias_tcc_version_use lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 03_undef_redefine_tcc_version_same_use lines=1900
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 04_undef_redefine_tcc_version_short_use lines=1900
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 05_static_const_literal_puts lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 06_static_const_tcc_version_puts lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 07_char_array_literal_puts lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 08_char_array_tcc_version_puts lines=1899
+diag-libtcc-tcc-parse-args-dumpversion-macro-shape: variant 09_sizeof_tcc_version lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_00_through_MF.c_common tcc_parse_args_dumpversion_macro_shape_variants/00_through_MF.c flags=common rc=0 lines=1895
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_01_define_local_literal_use.c_common tcc_parse_args_dumpversion_macro_shape_variants/01_define_local_literal_use.c flags=common rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_02_define_local_alias_tcc_version_use.c_common tcc_parse_args_dumpversion_macro_shape_variants/02_define_local_alias_tcc_version_use.c flags=common rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_03_undef_redefine_tcc_version_same_use.c_common tcc_parse_args_dumpversion_macro_shape_variants/03_undef_redefine_tcc_version_same_use.c flags=common rc=0 lines=1900
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_04_undef_redefine_tcc_version_short_use.c_common tcc_parse_args_dumpversion_macro_shape_variants/04_undef_redefine_tcc_version_short_use.c flags=common rc=0 lines=1900
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_05_static_const_literal_puts.c_common tcc_parse_args_dumpversion_macro_shape_variants/05_static_const_literal_puts.c flags=common rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_06_static_const_tcc_version_puts.c_common tcc_parse_args_dumpversion_macro_shape_variants/06_static_const_tcc_version_puts.c flags=common rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_07_char_array_literal_puts.c_common tcc_parse_args_dumpversion_macro_shape_variants/07_char_array_literal_puts.c flags=common rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_08_char_array_tcc_version_puts.c_common tcc_parse_args_dumpversion_macro_shape_variants/08_char_array_tcc_version_puts.c flags=common rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_09_sizeof_tcc_version.c_common tcc_parse_args_dumpversion_macro_shape_variants/09_sizeof_tcc_version.c flags=common rc=-11 lines=1898
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_00_through_MF.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/00_through_MF.c flags=-D ONE_SOURCE=1 rc=0 lines=1895
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_01_define_local_literal_use.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/01_define_local_literal_use.c flags=-D ONE_SOURCE=1 rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_02_define_local_alias_tcc_version_use.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/02_define_local_alias_tcc_version_use.c flags=-D ONE_SOURCE=1 rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_03_undef_redefine_tcc_version_same_use.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/03_undef_redefine_tcc_version_same_use.c flags=-D ONE_SOURCE=1 rc=0 lines=1900
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_04_undef_redefine_tcc_version_short_use.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/04_undef_redefine_tcc_version_short_use.c flags=-D ONE_SOURCE=1 rc=0 lines=1900
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_05_static_const_literal_puts.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/05_static_const_literal_puts.c flags=-D ONE_SOURCE=1 rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_06_static_const_tcc_version_puts.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/06_static_const_tcc_version_puts.c flags=-D ONE_SOURCE=1 rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_07_char_array_literal_puts.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/07_char_array_literal_puts.c flags=-D ONE_SOURCE=1 rc=0 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_08_char_array_tcc_version_puts.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/08_char_array_tcc_version_puts.c flags=-D ONE_SOURCE=1 rc=-11 lines=1899
+diag-libtcc-post-options-m: compile tcc_parse_args_dumpversion_macro_shape_09_sizeof_tcc_version.c_D_ONE_SOURCE_1 tcc_parse_args_dumpversion_macro_shape_variants/09_sizeof_tcc_version.c flags=-D ONE_SOURCE=1 rc=-11 lines=1898
