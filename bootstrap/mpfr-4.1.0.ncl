@@ -18,6 +18,8 @@ let gmp = import "gmp-6.2.1.ncl" in
 let stage0 = import "stage0-posix.ncl" in
 
 let mpfr_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/mpfr-4.1.0/sources
+  # first-consumer: bootstrap/mpfr-4.1.0.ncl
   url = "https://ftpmirror.gnu.org/mpfr/mpfr-4.1.0.tar.xz",
   hash = "sha256-Q8xRKVAvE1c0uPSWy/Kav0Hfw0UxlnWzePXE13u6sDw=",
   name = "mpfr-4.1.0-src",
@@ -76,7 +78,12 @@ let mpfr_src = crunch.fetchTarball {
       make -j1 2>&1
       make -j1 install 2>&1
 
-      test -f "$out/lib/libmpfr.a" || { echo "ERROR: libmpfr.a not built" >&2; exit 1; }
+      test -s "$out/lib/libmpfr.a" || { echo "ERROR: libmpfr.a not built" >&2; exit 1; }
+      test -f "$out/include/mpfr.h" || { echo "ERROR: mpfr.h not installed" >&2; exit 1; }
+      test -f "$out/include/mpf2mpfr.h" || { echo "ERROR: mpf2mpfr.h not installed" >&2; exit 1; }
+      echo 'int main(void){ return 0; }' > /tmp/mpfr-smoke.c
+      "$GCC/bin/gcc" -static -I"$out/include" -I"$GMP/include" -I"$MUSL/include" /tmp/mpfr-smoke.c "$out/lib/libmpfr.a" "$GMP/lib/libgmp.a" -L"$MUSL/lib" -o /tmp/mpfr-smoke
+      /tmp/mpfr-smoke
       echo "mpfr-4.1.0 build complete"
     "%,
   ],
