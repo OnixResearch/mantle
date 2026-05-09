@@ -19,6 +19,8 @@ let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-tcc.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/coreutils-5.0/sources (tcc build)
+  # first-consumer: bootstrap/coreutils-5.0-tcc.ncl
   url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-5.0.tar.bz2",
   hash = "sha256-VtfMrIYHZZ4YT21zYxctKfFEvGXDKerxOvCO7mmOPlA=",
   name = "coreutils-5.0-src",
@@ -96,18 +98,15 @@ CONFIG
       # Compile libcoreutils support files
       LIBSRCS="lib/error lib/xmalloc lib/xstrdup lib/getopt lib/getopt1 lib/closeout lib/quotearg lib/quote lib/exitfail lib/hard-locale lib/xstrtol lib/xstrtoul lib/human lib/idcache lib/filemode lib/basename lib/stripslash lib/full-write lib/safe-read lib/safe-write lib/version-etc lib/long-options"
 
-      for src in $LIBSRCS; do
-        tcc -c $CFLAGS $src.c -o $src.o 2>/dev/null || true
-      done
-
-      # Create library archive from what compiled
       OBJS=""
       for src in $LIBSRCS; do
-        if [ -f "$src.o" ]; then
-          OBJS="$OBJS $src.o"
-        fi
+        tcc -c $CFLAGS $src.c -o $src.o
+        test -f "$src.o" || { echo "ERROR: missing library object $src.o" >&2; exit 1; }
+        OBJS="$OBJS $src.o"
       done
+      test -n "$OBJS" || { echo "ERROR: no coreutils library objects compiled" >&2; exit 1; }
       tcc -ar cr libcu.a $OBJS
+      test -f libcu.a || { echo "ERROR: libcu.a not built" >&2; exit 1; }
 
       # Build individual coreutils programs
       $BB mkdir -p "$out/bin"
@@ -115,33 +114,31 @@ CONFIG
       build_util() {
         name=$1
         shift
-        if tcc -static $CFLAGS "$@" -L. -lcu -o "$out/bin/$name" 2>/dev/null; then
-          $BB chmod 755 "$out/bin/$name"
-          return 0
-        fi
-        return 1
+        tcc -static $CFLAGS "$@" -L. -lcu -o "$out/bin/$name"
+        test -f "$out/bin/$name" || { echo "ERROR: $name not linked" >&2; exit 1; }
+        $BB chmod 755 "$out/bin/$name"
       }
 
       # Simple single-source utilities
-      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir \
-                  sort test true false head tail wc basename dirname \
-                  tr uniq expr tee touch; do
-        build_util "$util" "src/$util.c" || true
+      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir                   sort test true false head tail wc basename dirname                   tr uniq expr tee touch; do
+        build_util "$util" "src/$util.c"
       done
 
       # Create [ as a link to test
-      if [ -x "$out/bin/test" ]; then
-        cd "$out/bin"
-        $BB ln -s test "["
-        cd "$WORK/coreutils-5.0"
-      fi
+      cd "$out/bin"
+      $BB ln -s test "["
+      cd "$WORK/coreutils-5.0"
 
-      # Verify at least a few essential utilities exist
-      test -x "$out/bin/cat" || { echo "ERROR: cat not built" >&2; exit 1; }
-      test -x "$out/bin/chmod" || { echo "ERROR: chmod not built" >&2; exit 1; }
-      test -x "$out/bin/cp" || { echo "ERROR: cp not built" >&2; exit 1; }
-      test -x "$out/bin/mkdir" || { echo "ERROR: mkdir not built" >&2; exit 1; }
-      test -x "$out/bin/ln" || { echo "ERROR: ln not built" >&2; exit 1; }
+      # Verify the full declared utility subset and smoke it
+      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir sort test true false head tail wc basename dirname tr uniq expr tee touch "["; do
+        test -x "$out/bin/$util" || { echo "ERROR: output contract missing $util" >&2; exit 1; }
+      done
+      "$out/bin/mkdir" /tmp/coreutils-tcc-smoke
+      "$out/bin/echo" smoke-ok > /tmp/coreutils-tcc-smoke/input
+      "$out/bin/cp" /tmp/coreutils-tcc-smoke/input /tmp/coreutils-tcc-smoke/output
+      "$out/bin/cat" /tmp/coreutils-tcc-smoke/output | $BB grep -q smoke-ok
+      "$out/bin/test" -f /tmp/coreutils-tcc-smoke/output
+      "$out/bin/[" -f /tmp/coreutils-tcc-smoke/output "]"
     "%,
   ],
   inputs = [stage0, mes, tcc, make, sed, tar, bzip2, coreutils_src],
