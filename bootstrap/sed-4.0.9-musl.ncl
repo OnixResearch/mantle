@@ -12,6 +12,8 @@ let make = import "make-tcc.ncl" in
 let sed_old = import "sed-tcc.ncl" in
 
 let sed_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/sed-4.0.9/sources
+  # first-consumer: bootstrap/sed-4.0.9-musl.ncl
   url = "https://ftpmirror.gnu.org/sed/sed-4.0.9.tar.gz",
   hash = "sha256-k2YhQtIAYx0rPNFootM1VKppNsaoJsaTFpJ34SSPkIk=",
   name = "sed-4.0.9-src",
@@ -54,17 +56,19 @@ let sed_src = crunch.fetchTarball {
       # sed 4.0.9 getline replacement.  Keep the post-musl epoch moving with
       # the previously validated sed-tcc runtime as the bootstrap bridge; it is
       # replaced once the musl source compile boundary is repaired.
+      test -x "$SED_OLD/bin/sed" || { echo "ERROR: sed-tcc bridge input missing" >&2; exit 1; }
       $BB cp "$SED_OLD/bin/sed" sed-bin
       $BB chmod 755 sed-bin
-      test -x sed-bin
+      test -x sed-bin || { echo "ERROR: sed bridge copy missing" >&2; exit 1; }
 
-      echo test | ./sed-bin 's/test/ok/'
+      echo test | ./sed-bin 's/test/ok/' | $BB grep '^ok$'
 
       $BB mkdir -p "$out/bin"
       $BB cp sed-bin "$out/bin/sed"
       $BB chmod 755 "$out/bin/sed"
 
-      test -x "$out/bin/sed"
+      test -x "$out/bin/sed" || { echo "ERROR: installed sed missing" >&2; exit 1; }
+      printf 'alpha\n' | "$out/bin/sed" 's/alpha/sed409-musl-bridge-ok/' | $BB grep '^sed409-musl-bridge-ok$'
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed_old, sed_src],
