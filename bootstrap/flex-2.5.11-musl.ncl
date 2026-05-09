@@ -14,6 +14,8 @@ let m4 = import "m4-1.4.7-musl.ncl" in
 let heirloom = import "heirloom-devtools.ncl" in
 
 let flex_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/flex-2.5.11/sources
+  # first-consumer: bootstrap/flex-2.5.11-musl.ncl
   url = "https://github.com/westes/flex/archive/d160f0247ba1611aa59d28f027d6292ba24abb50.tar.gz",
   hash = "sha256-FZW6ydHxZ2gUpxDcAfMkwNoYp32RbpG5T2y6MuSe86Y=",
   name = "flex-2.5.11-src",
@@ -59,13 +61,15 @@ let flex_src = crunch.fetchTarball {
       CFLAGS="-I. -I$MUSL/include -DHAVE_STRING_H -DHAVE_LIMITS_H -DHAVE_UNISTD_H -DSTDC_HEADERS -DVERSION=\\\"2.5.11\\\""
 
       # Compile flex sources (pre-generated scanner if available)
-      for src in ccl dfa ecs gen main misc nfa parse scan skel sym tblcmp yylex; do
-        tcc -c $CFLAGS "$src.c" -o "$src.o" 2>/dev/null || true
-      done
-
       OBJS=""
-      for f in *.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
+      for src in ccl dfa ecs gen main misc nfa parse scan skel sym tblcmp yylex; do
+        tcc -c $CFLAGS "$src.c" -o "$src.o"
+        test -f "$src.o" || { echo "ERROR: missing flex object $src.o" >&2; exit 1; }
+        OBJS="$OBJS $src.o"
+      done
+      test -n "$OBJS" || { echo "ERROR: no flex objects compiled" >&2; exit 1; }
       tcc -static $OBJS -o flex
+      test -f flex || { echo "ERROR: flex executable not linked" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin"
       $BB cp flex "$out/bin/flex"
@@ -73,7 +77,10 @@ let flex_src = crunch.fetchTarball {
       cd "$out/bin"
       $BB ln -s flex lex
 
-      test -x "$out/bin/flex"
+      test -x "$out/bin/flex" || { echo "ERROR: installed flex missing" >&2; exit 1; }
+      test -x "$out/bin/lex" || { echo "ERROR: installed lex missing" >&2; exit 1; }
+      "$out/bin/flex" --version >/tmp/flex2511-version.txt
+      $BB grep -q 'flex' /tmp/flex2511-version.txt || { echo "ERROR: flex version smoke failed" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, m4, heirloom, flex_src],
