@@ -21,6 +21,8 @@ let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
 let binutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/binutils-2.30/sources
+  # first-consumer: bootstrap/binutils-tcc.ncl
   url = "https://ftpmirror.gnu.org/binutils/binutils-2.30.tar.xz",
   hash = "sha256-L8aaWezlL47cNdPIbSEAtryYUDXLe9htMSECT4xqpoc=",
   name = "binutils-2.30-src",
