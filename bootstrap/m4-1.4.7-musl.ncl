@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 
 let m4_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/m4-1.4.7/sources
+  # first-consumer: bootstrap/m4-1.4.7-musl.ncl
   url = "https://mirrors.kernel.org/gnu/m4/m4-1.4.7.tar.bz2",
   hash = "sha256-4SO98HrHjkV6a+NazK3EatKsynMNhfWXUpi1L5SeMMc=",
   name = "m4-1.4.7-src",
@@ -216,7 +218,9 @@ EOF
       $BB cp m4-bin "$out/bin/m4"
       $BB chmod 755 "$out/bin/m4"
 
-      test -x "$out/bin/m4"
+      test -x "$out/bin/m4" || { echo "ERROR: installed m4 missing" >&2; exit 1; }
+      echo 'define(FOO,bar)FOO' | "$out/bin/m4" | $BB grep '^bar$'
+      test -z "$(echo 'dnl ignored' | "$out/bin/m4")"
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, m4_src],
