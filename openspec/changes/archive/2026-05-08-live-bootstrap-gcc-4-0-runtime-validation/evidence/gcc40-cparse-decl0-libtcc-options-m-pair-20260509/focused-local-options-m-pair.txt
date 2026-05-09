@@ -1,0 +1,21 @@
+diag-libtcc-options-m-pair: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post894: compile base_options_m_common base_options_m.c flags=common rc=0 lines=1574
+diag-libtcc-post894: compile options_m_proto_common options_m_proto.c flags=common rc=0 lines=1575
+diag-libtcc-post894: compile options_m_empty_common options_m_empty.c flags=common rc=0 lines=1577
+diag-libtcc-post894: compile options_m_ms_bitfields_common options_m_ms_bitfields.c flags=common rc=0 lines=1578
+diag-libtcc-post894: compile options_m_nosse_common options_m_nosse.c flags=common rc=0 lines=1578
+diag-libtcc-post894: compile options_m_pair_no_ifdef_common options_m_pair_no_ifdef.c flags=common rc=0 lines=1579
+diag-libtcc-post894: compile options_m_pair_zero_first_common options_m_pair_zero_first.c flags=common rc=0 lines=1579
+diag-libtcc-post894: compile options_m_pair_zero_second_common options_m_pair_zero_second.c flags=common rc=0 lines=1579
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-options-m-pair-20260509/run-local-options-m-pair.sh: line 73: 2965034 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post894: compile options_m_full_common options_m_full.c flags=common rc=139 lines=1581
+diag-libtcc-post894: compile base_options_m_D_ONE_SOURCE_1 base_options_m_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1574
+diag-libtcc-post894: compile options_m_proto_D_ONE_SOURCE_1 options_m_proto_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1575
+diag-libtcc-post894: compile options_m_empty_D_ONE_SOURCE_1 options_m_empty_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1577
+diag-libtcc-post894: compile options_m_ms_bitfields_D_ONE_SOURCE_1 options_m_ms_bitfields_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1578
+diag-libtcc-post894: compile options_m_nosse_D_ONE_SOURCE_1 options_m_nosse_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1578
+diag-libtcc-post894: compile options_m_pair_no_ifdef_D_ONE_SOURCE_1 options_m_pair_no_ifdef_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1579
+diag-libtcc-post894: compile options_m_pair_zero_first_D_ONE_SOURCE_1 options_m_pair_zero_first_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1579
+diag-libtcc-post894: compile options_m_pair_zero_second_D_ONE_SOURCE_1 options_m_pair_zero_second_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1579
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-options-m-pair-20260509/run-local-options-m-pair.sh: line 73: 2965305 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-libtcc-post894: compile options_m_full_D_ONE_SOURCE_1 options_m_full_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=1581

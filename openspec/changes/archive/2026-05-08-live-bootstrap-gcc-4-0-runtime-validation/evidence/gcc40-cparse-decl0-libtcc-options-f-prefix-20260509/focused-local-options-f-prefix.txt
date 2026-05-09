@@ -1,0 +1,17 @@
+diag-libtcc-options-f-pairs: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post894: compile base1565_common base1565.c flags=common rc=0 lines=1565
+diag-libtcc-post894: compile options_f_prefix_0_common options_f_prefix_0.c flags=common rc=0 lines=1568
+diag-libtcc-post894: compile options_f_prefix_1_common options_f_prefix_1.c flags=common rc=0 lines=1569
+diag-libtcc-post894: compile options_f_prefix_2_common options_f_prefix_2.c flags=common rc=0 lines=1570
+diag-libtcc-post894: compile options_f_prefix_3_common options_f_prefix_3.c flags=common rc=0 lines=1571
+diag-libtcc-post894: compile options_f_prefix_4_common options_f_prefix_4.c flags=common rc=0 lines=1572
+diag-libtcc-post894: compile options_f_prefix_5_common options_f_prefix_5.c flags=common rc=0 lines=1573
+diag-libtcc-post894: compile options_f_prefix_6_common options_f_prefix_6.c flags=common rc=0 lines=1574
+diag-libtcc-post894: compile base1565_D_ONE_SOURCE_1 base1565_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1565
+diag-libtcc-post894: compile options_f_prefix_0_D_ONE_SOURCE_1 options_f_prefix_0_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1568
+diag-libtcc-post894: compile options_f_prefix_1_D_ONE_SOURCE_1 options_f_prefix_1_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1569
+diag-libtcc-post894: compile options_f_prefix_2_D_ONE_SOURCE_1 options_f_prefix_2_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1570
+diag-libtcc-post894: compile options_f_prefix_3_D_ONE_SOURCE_1 options_f_prefix_3_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1571
+diag-libtcc-post894: compile options_f_prefix_4_D_ONE_SOURCE_1 options_f_prefix_4_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1572
+diag-libtcc-post894: compile options_f_prefix_5_D_ONE_SOURCE_1 options_f_prefix_5_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1573
+diag-libtcc-post894: compile options_f_prefix_6_D_ONE_SOURCE_1 options_f_prefix_6_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1574
