@@ -16,6 +16,8 @@ let grep = import "grep-2.4-musl.ncl" in
 let diffutils = import "diffutils-2.7-musl.ncl" in
 
 let perl_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/perl-5.000/sources
+  # first-consumer: bootstrap/perl-5.000-musl.ncl
   url = "https://github.com/Perl/perl5/archive/perl-5.000.tar.gz",
   hash = "sha256-s9LMsFfFf6Ws84cG/GW55znYlQBbn56U/C9TSiWczFE=",
   name = "perl-5.000-src",
@@ -81,18 +83,21 @@ installman3dir="$out/man/man3"
 CONFIGSH
       sed -i "s|\$out|$out|g" config.sh
 
-      # Attempt standard build
-      make -j1 CC=tcc CFLAGS="-I$MUSL/include -static" LDFLAGS="-static" 2>/dev/null || {
-        # Fallback: compile miniperl from key sources
+      # Attempt standard build; if the early Perl makefile cannot run in this
+      # bootstrap environment, use the explicit miniperl source list below.
+      if ! make -j1 CC=tcc CFLAGS="-I$MUSL/include -static" LDFLAGS="-static"; then
         CFLAGS="-I. -I$MUSL/include -DPERL_CORE -static"
+        OBJS=""
         for src in av dump gv hv mg op perl perly pp regcomp regexec \
                    run scope sv toke util; do
-          tcc -c $CFLAGS "$src.c" -o "$src.o" 2>/dev/null || true
+          tcc -c $CFLAGS "$src.c" -o "$src.o"
+          OBJS="$OBJS $src.o"
         done
-        OBJS=""
-        for f in *.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-        tcc -static $OBJS -o miniperl -lm 2>/dev/null || tcc -static $OBJS -o miniperl || true
-      }
+        test -n "$OBJS" || { echo "ERROR: no Perl objects built" >&2; exit 1; }
+        if ! tcc -static $OBJS -o miniperl -lm; then
+          tcc -static $OBJS -o miniperl
+        fi
+      fi
 
       $BB mkdir -p "$out/bin"
       if [ -f perl ]; then
@@ -100,10 +105,14 @@ CONFIGSH
       elif [ -f miniperl ]; then
         $BB cp miniperl "$out/bin/perl"
         $BB cp miniperl "$out/bin/miniperl"
+      else
+        echo "ERROR: neither perl nor miniperl was built" >&2
+        exit 1
       fi
       $BB chmod 755 "$out/bin/perl"
 
-      test -x "$out/bin/perl"
+      test -x "$out/bin/perl" || { echo "ERROR: installed perl missing" >&2; exit 1; }
+      "$out/bin/perl" -e 'print "perl5000-ok\\n"' | $BB grep '^perl5000-ok$'
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, coreutils, gawk, grep, diffutils, perl_src],
