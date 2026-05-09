@@ -82,4 +82,16 @@ The narrowed trigger is now the original `TCC_VERSION` macro expansion path in t
   - Crunch's full diagnostic derivation still defines `TCC_VERSION` on the command line as `-D TCC_VERSION=\"0.9.27-decl0-diag\"`; the normal `tcc-musl-v2` build uses `-D TCC_VERSION=\"0.9.27\"`.
   - the focused replay's successful spelling is the local source-level `#undef TCC_VERSION` / `#define TCC_VERSION "0.9.27"` immediately before `tcc_parse_args`.
 
-Conclusion: the latest focused replay did **not** have an active original `TCC_VERSION` macro definition. Its failing `TCC_VERSION` cases exercised unresolved identifier tokens in the predecessor compiler, while the local redefine converted those tokens to a normal string literal. The next correction is to rerun the printf/macro-shape reductions with a replay-faithful command-line `-D TCC_VERSION=\"0.9.27-decl0-diag\"` (or an equivalent generated `config.h`) before treating `TCC_VERSION` as a true macro-expansion blocker.
+Conclusion: the latest focused replay did **not** have an active original `TCC_VERSION` macro definition. Its failing `TCC_VERSION` cases exercised unresolved identifier tokens in the predecessor compiler, while the local redefine converted those tokens to a normal string literal.
+
+## Replay-faithful TCC_VERSION rerun
+
+- `run-local-tcc-parse-args-dumpversion-faithful-version.sh`
+  - restores the needed Crunch PathInfo/NAR entries into `/tmp` with `crunch store push` + `nix-store --restore` when `/crunch/store` is not writable/materialized.
+  - patches the printf-shape and macro-shape replay scripts to use the restored source/compiler/runtime and adds `-DTCC_VERSION="0.9.27-decl0-diag"` to `flags_common`.
+- `focused-local-tcc-parse-args-dumpversion-faithful-version.txt`
+  - mode: `crunch-cache-restored`.
+  - all 40 generated variants compile (`rc=0`) under common flags and `-D ONE_SOURCE=1`.
+  - previously failing direct macro-use variants now compile, including `printf("%s\\n", TCC_VERSION)`, `puts(TCC_VERSION)`, static storage initialized from `TCC_VERSION`, and `sizeof(TCC_VERSION)`.
+
+Conclusion: `TCC_VERSION` is not the next real `tcc_parse_args()` blocker once the replay carries the command-line definition used by the full diagnostic derivation. The next useful reduction is to keep `-DTCC_VERSION="0.9.27-decl0-diag"` in the local replay and continue the tail cumulative switch past `TCC_OPTION_dumpversion`.
