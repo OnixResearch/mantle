@@ -1,0 +1,6 @@
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-post621-context-reconcile-20260509/run-local-reconcile-logical.sh: line 71: 295727 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-reconcile: compile prefix621_before_native387_common libtcc-prefix621-before-native387.c flags=common rc=139
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-post621-context-reconcile-20260509/run-local-reconcile-logical.sh: line 71: 295780 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-reconcile: compile prefix621_before_native387_one_source libtcc-prefix621-before-native387.c flags=-D ONE_SOURCE=1 rc=139
+diag-tcc-reconcile: compile prefix621_after_native387_common libtcc-prefix621-after-native387.c flags=common rc=0
+diag-tcc-reconcile: compile prefix621_after_native387_one_source libtcc-prefix621-after-native387.c flags=-D ONE_SOURCE=1 rc=0
