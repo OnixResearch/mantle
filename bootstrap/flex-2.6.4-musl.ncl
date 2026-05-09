@@ -14,6 +14,8 @@ let m4 = import "m4-1.4.7-musl.ncl" in
 let flex_old = import "flex-2.5.11-musl.ncl" in
 
 let flex_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/flex-2.6.4/sources
+  # first-consumer: bootstrap/flex-2.6.4-musl.ncl
   url = "https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz",
   hash = "sha256-HBPAUDpqF4HYocMD3YDIk6OaIUrZw8Gk3K59OmHB6xU=",
   name = "flex-2.6.4-src",
@@ -70,15 +72,23 @@ CONFIG
 
       CFLAGS="-I. -Isrc -I$MUSL/include -DHAVE_CONFIG_H"
 
-      # Compile flex sources from src/
+      # Compile flex sources from src/.  Required sources must not be
+      # hidden behind partial object/link fallback: a missing object means this
+      # bootstrap part is not proven.
+      OBJS=""
       for src in buf ccl dfa ecs filter gen main misc nfa options parse \
                  regex scan scanflags scanopt skel sym tables tblcmp yylex; do
-        tcc -c $CFLAGS src/$src.c -o src/$src.o 2>/dev/null || true
+        obj="src/$src.o"
+        tcc -c $CFLAGS "src/$src.c" -o "$obj" || { echo "ERROR: failed compiling src/$src.c" >&2; exit 1; }
+        test -f "$obj" || { echo "ERROR: missing object $obj" >&2; exit 1; }
+        OBJS="$OBJS $obj"
       done
+      test -n "$OBJS" || { echo "ERROR: no flex objects were built" >&2; exit 1; }
 
-      OBJS=""
-      for f in src/*.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-      tcc -static $OBJS -o flex -lm 2>/dev/null || tcc -static $OBJS -o flex
+      if ! tcc -static $OBJS -o flex -lm; then
+        tcc -static $OBJS -o flex || { echo "ERROR: failed linking flex" >&2; exit 1; }
+      fi
+      test -x flex || { echo "ERROR: linked flex missing" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin" "$out/lib" "$out/include"
       $BB cp flex "$out/bin/flex"
@@ -87,25 +97,39 @@ CONFIG
       $BB ln -s flex lex
       $BB ln -s flex flex++
 
-      # Install libfl if source has it
+      # Install libfl if source has it; otherwise create the required yywrap
+      # archive explicitly and fail if the archive is absent.
       cd "$WORK/flex-2.6.4"
       if [ -f src/libfl.a ]; then
-        $BB cp src/libfl.a "$out/lib/"
+        $BB cp src/libfl.a "$out/lib/libfl.a"
       else
-        # Create minimal libfl.a
         $BB cat > /tmp/libfl_main.c << 'LIBFL'
 int yywrap(void) { return 1; }
 LIBFL
-        tcc -c -I"$MUSL/include" /tmp/libfl_main.c -o /tmp/libfl_main.o
-        tcc -ar cr "$out/lib/libfl.a" /tmp/libfl_main.o
+        tcc -c -I"$MUSL/include" /tmp/libfl_main.c -o /tmp/libfl_main.o || { echo "ERROR: failed compiling libfl yywrap" >&2; exit 1; }
+        tcc -ar cr "$out/lib/libfl.a" /tmp/libfl_main.o || { echo "ERROR: failed archiving libfl.a" >&2; exit 1; }
       fi
+      test -f "$out/lib/libfl.a" || { echo "ERROR: installed libfl.a missing" >&2; exit 1; }
 
-      # Install FlexLexer.h if present
+      # Install FlexLexer.h if present and make the conditional boundary explicit.
       if [ -f src/FlexLexer.h ]; then
-        $BB cp src/FlexLexer.h "$out/include/"
+        $BB cp src/FlexLexer.h "$out/include/FlexLexer.h"
+        test -f "$out/include/FlexLexer.h" || { echo "ERROR: installed FlexLexer.h missing" >&2; exit 1; }
       fi
 
-      test -x "$out/bin/flex"
+      test -x "$out/bin/flex" || { echo "ERROR: installed flex missing" >&2; exit 1; }
+      test -L "$out/bin/lex" || { echo "ERROR: installed lex symlink missing" >&2; exit 1; }
+      test -L "$out/bin/flex++" || { echo "ERROR: installed flex++ symlink missing" >&2; exit 1; }
+      "$out/bin/flex" --version >/tmp/flex-version.txt || { echo "ERROR: flex --version smoke failed" >&2; exit 1; }
+      $BB grep -q 'flex 2.6.4' /tmp/flex-version.txt || { echo "ERROR: flex version output mismatch" >&2; exit 1; }
+      $BB cat > /tmp/flex-smoke.l << 'SMOKE'
+%%
+hello  ECHO;
+%%
+int yywrap(void) { return 1; }
+SMOKE
+      "$out/bin/flex" -o /tmp/flex-smoke.c /tmp/flex-smoke.l || { echo "ERROR: flex scanner generation smoke failed" >&2; exit 1; }
+      test -f /tmp/flex-smoke.c || { echo "ERROR: flex smoke output missing" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, m4, flex_old, flex_src],
