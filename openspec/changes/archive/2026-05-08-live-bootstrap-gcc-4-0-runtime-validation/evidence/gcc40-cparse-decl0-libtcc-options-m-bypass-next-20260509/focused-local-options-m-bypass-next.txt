@@ -1,0 +1,29 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-post-options-m: compile full_options_m_bypassed_common libtcc.asm_simplified.c flags=common rc=-11 lines=1993
+diag-libtcc-post-options-m: compile full_options_m_bypassed_D_ONE_SOURCE_1 libtcc.asm_simplified.c flags=-D ONE_SOURCE=1 rc=-11 lines=1993
+diag-libtcc-post-options-m: generated_variants=8
+diag-libtcc-post-options-m: variant 000 through_options_m end_line=1594
+diag-libtcc-post-options-m: variant 001 tcc_free end_line=1604
+diag-libtcc-post-options-m: variant 002 dynarray_add end_line=1613
+diag-libtcc-post-options-m: variant 003 ret end_line=1645
+diag-libtcc-post-options-m: variant 004 argv end_line=1674
+diag-libtcc-post-options-m: variant 005 OPT_HELP end_line=1967
+diag-libtcc-post-options-m: variant 006 dynarray_reset end_line=1976
+diag-libtcc-post-options-m: variant 007 endif end_line=1993
+diag-libtcc-post-options-m: compile post_options_m_000_through_options_m_to_1594.c_common post_options_m_variants/000_through_options_m_to_1594.c flags=common rc=0 lines=1594
+diag-libtcc-post-options-m: compile post_options_m_001_tcc_free_to_1604.c_common post_options_m_variants/001_tcc_free_to_1604.c flags=common rc=0 lines=1604
+diag-libtcc-post-options-m: compile post_options_m_002_dynarray_add_to_1613.c_common post_options_m_variants/002_dynarray_add_to_1613.c flags=common rc=0 lines=1613
+diag-libtcc-post-options-m: compile post_options_m_003_ret_to_1645.c_common post_options_m_variants/003_ret_to_1645.c flags=common rc=0 lines=1645
+diag-libtcc-post-options-m: compile post_options_m_004_argv_to_1674.c_common post_options_m_variants/004_argv_to_1674.c flags=common rc=0 lines=1674
+diag-libtcc-post-options-m: compile post_options_m_005_OPT_HELP_to_1967.c_common post_options_m_variants/005_OPT_HELP_to_1967.c flags=common rc=-11 lines=1967
+diag-libtcc-post-options-m: compile post_options_m_006_dynarray_reset_to_1976.c_common post_options_m_variants/006_dynarray_reset_to_1976.c flags=common rc=-11 lines=1976
+diag-libtcc-post-options-m: compile post_options_m_007_endif_to_1993.c_common post_options_m_variants/007_endif_to_1993.c flags=common rc=-11 lines=1993
+diag-libtcc-post-options-m: compile post_options_m_000_through_options_m_to_1594.c_D_ONE_SOURCE_1 post_options_m_variants/000_through_options_m_to_1594.c flags=-D ONE_SOURCE=1 rc=0 lines=1594
+diag-libtcc-post-options-m: compile post_options_m_001_tcc_free_to_1604.c_D_ONE_SOURCE_1 post_options_m_variants/001_tcc_free_to_1604.c flags=-D ONE_SOURCE=1 rc=0 lines=1604
+diag-libtcc-post-options-m: compile post_options_m_002_dynarray_add_to_1613.c_D_ONE_SOURCE_1 post_options_m_variants/002_dynarray_add_to_1613.c flags=-D ONE_SOURCE=1 rc=0 lines=1613
+diag-libtcc-post-options-m: compile post_options_m_003_ret_to_1645.c_D_ONE_SOURCE_1 post_options_m_variants/003_ret_to_1645.c flags=-D ONE_SOURCE=1 rc=0 lines=1645
+diag-libtcc-post-options-m: compile post_options_m_004_argv_to_1674.c_D_ONE_SOURCE_1 post_options_m_variants/004_argv_to_1674.c flags=-D ONE_SOURCE=1 rc=0 lines=1674
+diag-libtcc-post-options-m: compile post_options_m_005_OPT_HELP_to_1967.c_D_ONE_SOURCE_1 post_options_m_variants/005_OPT_HELP_to_1967.c flags=-D ONE_SOURCE=1 rc=-11 lines=1967
+diag-libtcc-post-options-m: compile post_options_m_006_dynarray_reset_to_1976.c_D_ONE_SOURCE_1 post_options_m_variants/006_dynarray_reset_to_1976.c flags=-D ONE_SOURCE=1 rc=-11 lines=1976
+diag-libtcc-post-options-m: compile post_options_m_007_endif_to_1993.c_D_ONE_SOURCE_1 post_options_m_variants/007_endif_to_1993.c flags=-D ONE_SOURCE=1 rc=-11 lines=1993

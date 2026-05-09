@@ -1,0 +1,48 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-signature: generated_variants=15
+diag-libtcc-tcc-parse-args-signature: variant 00 proto_exact lines=1675
+diag-libtcc-tcc-parse-args-signature: variant 01 empty_exact lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 02 empty_static_exact lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 03 empty_no_pub lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 04 empty_charpp lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 05 empty_void lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 06 empty_other_name lines=1678
+diag-libtcc-tcc-parse-args-signature: variant 07 decls_one_by_one_1 lines=1679
+diag-libtcc-tcc-parse-args-signature: variant 08 decls_one_by_one_2 lines=1680
+diag-libtcc-tcc-parse-args-signature: variant 09 decls_one_by_one_3 lines=1681
+diag-libtcc-tcc-parse-args-signature: variant 10 decls_one_by_one_4 lines=1683
+diag-libtcc-tcc-parse-args-signature: variant 11 decls_one_by_one_5 lines=1684
+diag-libtcc-tcc-parse-args-signature: variant 12 decls_one_by_one_6 lines=1685
+diag-libtcc-tcc-parse-args-signature: variant 13 decls_one_by_one_7 lines=1686
+diag-libtcc-tcc-parse-args-signature: variant 14 decls_one_by_one_8 lines=1687
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_00_proto_exact.c_common tcc_parse_args_signature_variants/00_proto_exact.c flags=common rc=0 lines=1675
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_01_empty_exact.c_common tcc_parse_args_signature_variants/01_empty_exact.c flags=common rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_02_empty_static_exact.c_common tcc_parse_args_signature_variants/02_empty_static_exact.c flags=common rc=-11 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_03_empty_no_pub.c_common tcc_parse_args_signature_variants/03_empty_no_pub.c flags=common rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_04_empty_charpp.c_common tcc_parse_args_signature_variants/04_empty_charpp.c flags=common rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_05_empty_void.c_common tcc_parse_args_signature_variants/05_empty_void.c flags=common rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_06_empty_other_name.c_common tcc_parse_args_signature_variants/06_empty_other_name.c flags=common rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_07_decls_one_by_one_1.c_common tcc_parse_args_signature_variants/07_decls_one_by_one_1.c flags=common rc=0 lines=1679
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_08_decls_one_by_one_2.c_common tcc_parse_args_signature_variants/08_decls_one_by_one_2.c flags=common rc=0 lines=1680
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_09_decls_one_by_one_3.c_common tcc_parse_args_signature_variants/09_decls_one_by_one_3.c flags=common rc=0 lines=1681
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_10_decls_one_by_one_4.c_common tcc_parse_args_signature_variants/10_decls_one_by_one_4.c flags=common rc=0 lines=1683
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_11_decls_one_by_one_5.c_common tcc_parse_args_signature_variants/11_decls_one_by_one_5.c flags=common rc=0 lines=1684
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_12_decls_one_by_one_6.c_common tcc_parse_args_signature_variants/12_decls_one_by_one_6.c flags=common rc=0 lines=1685
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_13_decls_one_by_one_7.c_common tcc_parse_args_signature_variants/13_decls_one_by_one_7.c flags=common rc=0 lines=1686
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_14_decls_one_by_one_8.c_common tcc_parse_args_signature_variants/14_decls_one_by_one_8.c flags=common rc=0 lines=1687
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_00_proto_exact.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/00_proto_exact.c flags=-D ONE_SOURCE=1 rc=0 lines=1675
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_01_empty_exact.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/01_empty_exact.c flags=-D ONE_SOURCE=1 rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_02_empty_static_exact.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/02_empty_static_exact.c flags=-D ONE_SOURCE=1 rc=-11 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_03_empty_no_pub.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/03_empty_no_pub.c flags=-D ONE_SOURCE=1 rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_04_empty_charpp.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/04_empty_charpp.c flags=-D ONE_SOURCE=1 rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_05_empty_void.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/05_empty_void.c flags=-D ONE_SOURCE=1 rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_06_empty_other_name.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/06_empty_other_name.c flags=-D ONE_SOURCE=1 rc=0 lines=1678
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_07_decls_one_by_one_1.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/07_decls_one_by_one_1.c flags=-D ONE_SOURCE=1 rc=0 lines=1679
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_08_decls_one_by_one_2.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/08_decls_one_by_one_2.c flags=-D ONE_SOURCE=1 rc=0 lines=1680
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_09_decls_one_by_one_3.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/09_decls_one_by_one_3.c flags=-D ONE_SOURCE=1 rc=0 lines=1681
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_10_decls_one_by_one_4.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/10_decls_one_by_one_4.c flags=-D ONE_SOURCE=1 rc=0 lines=1683
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_11_decls_one_by_one_5.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/11_decls_one_by_one_5.c flags=-D ONE_SOURCE=1 rc=0 lines=1684
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_12_decls_one_by_one_6.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/12_decls_one_by_one_6.c flags=-D ONE_SOURCE=1 rc=0 lines=1685
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_13_decls_one_by_one_7.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/13_decls_one_by_one_7.c flags=-D ONE_SOURCE=1 rc=0 lines=1686
+diag-libtcc-post-options-m: compile tcc_parse_args_sig_14_decls_one_by_one_8.c_D_ONE_SOURCE_1 tcc_parse_args_signature_variants/14_decls_one_by_one_8.c flags=-D ONE_SOURCE=1 rc=0 lines=1687

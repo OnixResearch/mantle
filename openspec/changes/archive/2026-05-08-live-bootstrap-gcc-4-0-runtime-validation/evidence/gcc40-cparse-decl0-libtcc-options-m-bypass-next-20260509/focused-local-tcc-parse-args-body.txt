@@ -1,0 +1,21 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-tcc-parse-args-body: generated_variants=6
+diag-libtcc-tcc-parse-args-body: variant 00 decls_return lines=1687
+diag-libtcc-tcc-parse-args-body: variant 01 cstr_new lines=1688
+diag-libtcc-tcc-parse-args-body: variant 02 while_min lines=1692
+diag-libtcc-tcc-parse-args-body: variant 03 while_file_branch lines=1700
+diag-libtcc-tcc-parse-args-body: variant 04 lookup_loop lines=1701
+diag-libtcc-tcc-parse-args-body: variant 05 full_exact_body lines=1965
+diag-libtcc-post-options-m: compile tcc_parse_args_body_00_decls_return.c_common tcc_parse_args_body_variants/00_decls_return.c flags=common rc=0 lines=1687
+diag-libtcc-post-options-m: compile tcc_parse_args_body_01_cstr_new.c_common tcc_parse_args_body_variants/01_cstr_new.c flags=common rc=0 lines=1688
+diag-libtcc-post-options-m: compile tcc_parse_args_body_02_while_min.c_common tcc_parse_args_body_variants/02_while_min.c flags=common rc=0 lines=1692
+diag-libtcc-post-options-m: compile tcc_parse_args_body_03_while_file_branch.c_common tcc_parse_args_body_variants/03_while_file_branch.c flags=common rc=0 lines=1700
+diag-libtcc-post-options-m: compile tcc_parse_args_body_04_lookup_loop.c_common tcc_parse_args_body_variants/04_lookup_loop.c flags=common rc=0 lines=1701
+diag-libtcc-post-options-m: compile tcc_parse_args_body_05_full_exact_body.c_common tcc_parse_args_body_variants/05_full_exact_body.c flags=common rc=-11 lines=1965
+diag-libtcc-post-options-m: compile tcc_parse_args_body_00_decls_return.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/00_decls_return.c flags=-D ONE_SOURCE=1 rc=0 lines=1687
+diag-libtcc-post-options-m: compile tcc_parse_args_body_01_cstr_new.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/01_cstr_new.c flags=-D ONE_SOURCE=1 rc=0 lines=1688
+diag-libtcc-post-options-m: compile tcc_parse_args_body_02_while_min.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/02_while_min.c flags=-D ONE_SOURCE=1 rc=0 lines=1692
+diag-libtcc-post-options-m: compile tcc_parse_args_body_03_while_file_branch.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/03_while_file_branch.c flags=-D ONE_SOURCE=1 rc=0 lines=1700
+diag-libtcc-post-options-m: compile tcc_parse_args_body_04_lookup_loop.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/04_lookup_loop.c flags=-D ONE_SOURCE=1 rc=0 lines=1701
+diag-libtcc-post-options-m: compile tcc_parse_args_body_05_full_exact_body.c_D_ONE_SOURCE_1 tcc_parse_args_body_variants/05_full_exact_body.c flags=-D ONE_SOURCE=1 rc=-11 lines=1965

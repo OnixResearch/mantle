@@ -1,0 +1,28 @@
+diag-libtcc-tcc-parse-args-cases: generated_variants=9
+diag-libtcc-tcc-parse-args-cases: variant 00 help_bench lines=1763
+diag-libtcc-tcc-parse-args-cases: variant 01 through_g_c lines=1784
+diag-libtcc-tcc-parse-args-cases: variant 02 through_d_static_std_shared_o lines=1816
+diag-libtcc-tcc-parse-args-cases: variant 03 through_include_nostd_run_v_f lines=1849
+diag-libtcc-tcc-parse-args-cases: variant 04 through_m lines=1870
+diag-libtcc-tcc-parse-args-cases: variant 05 through_Wl_Wp_E lines=1893
+diag-libtcc-tcc-parse-args-cases: variant 06 through_dumpversion_x_O lines=1919
+diag-libtcc-tcc-parse-args-cases: variant 07 through_default lines=1945
+diag-libtcc-tcc-parse-args-cases: variant 08 through_epilogue lines=1963
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_00_help_bench.c_common tcc_parse_args_case_variants/00_help_bench.c flags=common rc=-11 lines=1763
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_01_through_g_c.c_common tcc_parse_args_case_variants/01_through_g_c.c flags=common rc=-11 lines=1784
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_02_through_d_static_std_shared_o.c_common tcc_parse_args_case_variants/02_through_d_static_std_shared_o.c flags=common rc=-11 lines=1816
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_03_through_include_nostd_run_v_f.c_common tcc_parse_args_case_variants/03_through_include_nostd_run_v_f.c flags=common rc=-11 lines=1849
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_04_through_m.c_common tcc_parse_args_case_variants/04_through_m.c flags=common rc=-11 lines=1870
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_05_through_Wl_Wp_E.c_common tcc_parse_args_case_variants/05_through_Wl_Wp_E.c flags=common rc=-11 lines=1893
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_06_through_dumpversion_x_O.c_common tcc_parse_args_case_variants/06_through_dumpversion_x_O.c flags=common rc=-11 lines=1919
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_07_through_default.c_common tcc_parse_args_case_variants/07_through_default.c flags=common rc=-11 lines=1945
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_08_through_epilogue.c_common tcc_parse_args_case_variants/08_through_epilogue.c flags=common rc=-11 lines=1963
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_00_help_bench.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/00_help_bench.c flags=-D ONE_SOURCE=1 rc=-11 lines=1763
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_01_through_g_c.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/01_through_g_c.c flags=-D ONE_SOURCE=1 rc=-11 lines=1784
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_02_through_d_static_std_shared_o.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/02_through_d_static_std_shared_o.c flags=-D ONE_SOURCE=1 rc=-11 lines=1816
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_03_through_include_nostd_run_v_f.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/03_through_include_nostd_run_v_f.c flags=-D ONE_SOURCE=1 rc=-11 lines=1849
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_04_through_m.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/04_through_m.c flags=-D ONE_SOURCE=1 rc=-11 lines=1870
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_05_through_Wl_Wp_E.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/05_through_Wl_Wp_E.c flags=-D ONE_SOURCE=1 rc=-11 lines=1893
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_06_through_dumpversion_x_O.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/06_through_dumpversion_x_O.c flags=-D ONE_SOURCE=1 rc=-11 lines=1919
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_07_through_default.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/07_through_default.c flags=-D ONE_SOURCE=1 rc=-11 lines=1945
+diag-libtcc-post-options-m: compile tcc_parse_args_cases_08_through_epilogue.c_D_ONE_SOURCE_1 tcc_parse_args_case_variants/08_through_epilogue.c flags=-D ONE_SOURCE=1 rc=-11 lines=1963

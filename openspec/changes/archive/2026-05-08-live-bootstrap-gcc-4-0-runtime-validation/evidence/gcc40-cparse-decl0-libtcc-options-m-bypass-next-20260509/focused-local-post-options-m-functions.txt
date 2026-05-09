@@ -1,0 +1,18 @@
+diag-libtcc-post-options-m: removed_copy_linker_arg_field_calls=4
+diag-libtcc-post-options-m: normalized_options_m_ifdef_islands=1
+diag-libtcc-post-options-m-functions: generated_variants=5
+diag-libtcc-post-options-m-functions: variant 00 through_options_m end=1594
+diag-libtcc-post-options-m-functions: variant 01 parse_option_D end=1604
+diag-libtcc-post-options-m-functions: variant 02 args_parser_add_file end=1613
+diag-libtcc-post-options-m-functions: variant 03 args_parser_make_argv end=1645
+diag-libtcc-post-options-m-functions: variant 04 args_parser_listfile end=1674
+diag-libtcc-post-options-m: compile post_options_m_fn_00_through_options_m.c_common post_options_m_function_endpoints/00_through_options_m.c flags=common rc=0 lines=1594
+diag-libtcc-post-options-m: compile post_options_m_fn_01_parse_option_D.c_common post_options_m_function_endpoints/01_parse_option_D.c flags=common rc=0 lines=1604
+diag-libtcc-post-options-m: compile post_options_m_fn_02_args_parser_add_file.c_common post_options_m_function_endpoints/02_args_parser_add_file.c flags=common rc=0 lines=1613
+diag-libtcc-post-options-m: compile post_options_m_fn_03_args_parser_make_argv.c_common post_options_m_function_endpoints/03_args_parser_make_argv.c flags=common rc=0 lines=1645
+diag-libtcc-post-options-m: compile post_options_m_fn_04_args_parser_listfile.c_common post_options_m_function_endpoints/04_args_parser_listfile.c flags=common rc=0 lines=1674
+diag-libtcc-post-options-m: compile post_options_m_fn_00_through_options_m.c_D_ONE_SOURCE_1 post_options_m_function_endpoints/00_through_options_m.c flags=-D ONE_SOURCE=1 rc=0 lines=1594
+diag-libtcc-post-options-m: compile post_options_m_fn_01_parse_option_D.c_D_ONE_SOURCE_1 post_options_m_function_endpoints/01_parse_option_D.c flags=-D ONE_SOURCE=1 rc=0 lines=1604
+diag-libtcc-post-options-m: compile post_options_m_fn_02_args_parser_add_file.c_D_ONE_SOURCE_1 post_options_m_function_endpoints/02_args_parser_add_file.c flags=-D ONE_SOURCE=1 rc=0 lines=1613
+diag-libtcc-post-options-m: compile post_options_m_fn_03_args_parser_make_argv.c_D_ONE_SOURCE_1 post_options_m_function_endpoints/03_args_parser_make_argv.c flags=-D ONE_SOURCE=1 rc=0 lines=1645
+diag-libtcc-post-options-m: compile post_options_m_fn_04_args_parser_listfile.c_D_ONE_SOURCE_1 post_options_m_function_endpoints/04_args_parser_listfile.c flags=-D ONE_SOURCE=1 rc=0 lines=1674
