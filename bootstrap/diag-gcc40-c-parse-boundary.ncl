@@ -1306,10 +1306,61 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
-              # Adding even an empty tcc_compile() definition after the
-              # known passing prefix reintroduces rc139. Test whether that is
-              # tied to the function name, storage, return type, or parameter
-              # shape rather than the original body.
+              # The previous slice showed tcc_compile-shape additions returning
+              # rc139. First separate generic post-tcc_open declarations from
+              # function/prototype shapes so the next repair does not chase only
+              # the exact tcc_compile name.
+              make_libtcc_post621_declaration() {
+                label="$1"
+                mode="$2"
+                dst="libtcc-post621-declaration-$label.c"
+                $BB awk 'NR <= 621 { print }' libtcc.c > "$dst"
+                if [ "$mode" = prefix_only ]; then
+                  :
+                elif [ "$mode" = int_global ]; then
+                  echo 'int crunch_diag_post621_global;' >> "$dst"
+                elif [ "$mode" = int_extern ]; then
+                  echo 'extern int crunch_diag_post621_extern;' >> "$dst"
+                elif [ "$mode" = typedef_int ]; then
+                  echo 'typedef int crunch_diag_post621_typedef;' >> "$dst"
+                elif [ "$mode" = static_func_prototype_void ]; then
+                  echo 'static int crunch_diag_post621_func(void);' >> "$dst"
+                elif [ "$mode" = static_func_prototype_tccstate ]; then
+                  echo 'static int crunch_diag_post621_func(TCCState *s1);' >> "$dst"
+                elif [ "$mode" = static_func_empty_void ]; then
+                  cat >> "$dst" <<'EOF_DIAG_POST621'
+static int crunch_diag_post621_func(void)
+{
+    return 0;
+}
+EOF_DIAG_POST621
+                elif [ "$mode" = struct_ptr_global ]; then
+                  echo 'TCCState *crunch_diag_post621_state;' >> "$dst"
+                else
+                  echo "unknown post621 declaration mode: $mode" >&2
+                  return 1
+                fi
+              }
+              compile_libtcc_post621_declaration() {
+                label="$1"
+                mode="$2"
+                flags_name="$3"
+                make_libtcc_post621_declaration "$label" "$mode"
+                compile_decl0_prepart "libtcc_post621_declaration_${label}" "$flags_name" "libtcc-post621-declaration-$label.c"
+              }
+              for flags_name in common one_source; do
+                compile_libtcc_post621_declaration prefix_only prefix_only "$flags_name"
+                compile_libtcc_post621_declaration int_global int_global "$flags_name"
+                compile_libtcc_post621_declaration int_extern int_extern "$flags_name"
+                compile_libtcc_post621_declaration typedef_int typedef_int "$flags_name"
+                compile_libtcc_post621_declaration static_func_prototype_void static_func_prototype_void "$flags_name"
+                compile_libtcc_post621_declaration static_func_prototype_tccstate static_func_prototype_tccstate "$flags_name"
+                compile_libtcc_post621_declaration static_func_empty_void static_func_empty_void "$flags_name"
+                compile_libtcc_post621_declaration struct_ptr_global struct_ptr_global "$flags_name"
+              done
+              # Then test whether the later tcc_compile trigger is tied to the
+              # function name, storage, return type, or parameter shape rather
+              # than the original body.
               make_libtcc_compile_signature() {
                 label="$1"
                 mode="$2"

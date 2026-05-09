@@ -1,0 +1,196 @@
+# command
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/post621-store" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# started 2026-05-09T00:35:51-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/post621-store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# completed 2026-05-09T00:36:09-04:00 rc=1
+# retry command
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/store" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry started 2026-05-09T00:37:33-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# retry completed 2026-05-09T00:37:53-04:00 rc=1
+# retry2 command
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store" --state-dir "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry2 started 2026-05-09T00:38:13-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# retry2 completed 2026-05-09T00:38:33-04:00 rc=1
+# retry3 command
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store" --state-dir "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state" bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry3 started 2026-05-09T00:38:56-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# retry3 completed 2026-05-09T00:39:28-04:00 rc=1
+# retry4 command restored-state
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --store "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store" --state-dir "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry4 started 2026-05-09T00:41:21-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# retry4 completed 2026-05-09T00:41:41-04:00 rc=1
+# retry5 command trust-unsigned restored-state
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --trust-unsigned --store "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store" --state-dir "$PWD/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry5 started 2026-05-09T00:42:03-04:00
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-store",
+  "state_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/gcc40-cparse-decl0-libtcc-string-toggle-20260507-state/logs/9g5jk4n315svv5rnbydylh7pr9z8vf20-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
+# retry5 completed 2026-05-09T00:42:22-04:00 rc=1
+# retry6 command fresh-pulled-state
+timeout 590 nix shell nixpkgs#bubblewrap -c ./target/debug/crunch build --json --trust-unsigned --store "$PWD/.crunch-drain/post621-restored-store" --state-dir "$PWD/.crunch-drain/post621-state" --no-substitute bootstrap/diag-gcc40-c-parse-boundary.ncl
+# retry6 started 2026-05-09T00:43:19-04:00
+# retry6 completed 2026-05-09T00:53:09-04:00 rc=124
