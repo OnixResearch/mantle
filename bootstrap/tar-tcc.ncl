@@ -11,6 +11,8 @@ let tcc = import "tinycc.ncl" in
 let gzip = import "gzip-tcc.ncl" in
 
 let tar_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/tar-1.12/sources
+  # first-consumer: bootstrap/tar-tcc.ncl
   url = "https://ftpmirror.gnu.org/tar/tar-1.12.tar.gz",
   hash = "sha256-5LM4ezQqPKZECBwzpVjxpe923L358cGsdH6jHyCdpLY=",
   name = "tar-1.12-src",
@@ -102,15 +104,24 @@ STUB
         xmalloc.o xstrdup.o -o tar
       $BB chmod 755 tar
 
-      # Verify
-      ./tar --version
+      # Verify before install.
+      test -x ./tar || { echo "ERROR: tar link did not produce executable" >&2; exit 1; }
+      ./tar --version | $BB grep 'tar (GNU tar) 1.12'
 
-      # Install
+      # Install.
       $BB mkdir -p "$out/bin"
       $BB cp tar "$out/bin/tar"
       $BB chmod 755 "$out/bin/tar"
 
-      test -x "$out/bin/tar"
+      test -x "$out/bin/tar" || { echo "ERROR: installed tar missing" >&2; exit 1; }
+      SMOKE=/tmp/tar-smoke
+      $BB rm -rf "$SMOKE"
+      $BB mkdir -p "$SMOKE/in" "$SMOKE/out"
+      printf 'tar112-ok
+' > "$SMOKE/in/file.txt"
+      (cd "$SMOKE/in" && "$out/bin/tar" -cf "$SMOKE/archive.tar" file.txt)
+      (cd "$SMOKE/out" && "$out/bin/tar" -xf "$SMOKE/archive.tar")
+      $BB grep '^tar112-ok$' "$SMOKE/out/file.txt"
     "%,
   ],
   inputs = [stage0, tcc, gzip, tar_src],
