@@ -11,6 +11,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 
 let diffutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/diffutils-2.7/sources
+  # first-consumer: bootstrap/diffutils-2.7-musl.ncl
   url = "https://mirrors.kernel.org/gnu/diffutils/diffutils-2.7.tar.gz",
   hash = "sha256-AdsuvMN3btb0J5q9xxJs2zrSSO8+V7gd7yBMO4LVpxs=",
   name = "diffutils-2.7-src",
@@ -69,8 +71,20 @@ EOF
       $BB cp cmp "$out/bin/cmp"
       $BB chmod 755 "$out/bin/diff" "$out/bin/cmp"
 
-      test -x "$out/bin/diff"
-      test -x "$out/bin/cmp"
+      test -x "$out/bin/diff" || { echo "ERROR: installed diff missing" >&2; exit 1; }
+      test -x "$out/bin/cmp" || { echo "ERROR: installed cmp missing" >&2; exit 1; }
+      echo same > /tmp/diffutils-smoke-a
+      echo same > /tmp/diffutils-smoke-b
+      "$out/bin/diff" /tmp/diffutils-smoke-a /tmp/diffutils-smoke-b
+      "$out/bin/cmp" /tmp/diffutils-smoke-a /tmp/diffutils-smoke-b
+      echo changed > /tmp/diffutils-smoke-b
+      if "$out/bin/cmp" /tmp/diffutils-smoke-a /tmp/diffutils-smoke-b >/tmp/diffutils-cmp.out 2>&1; then
+        echo "ERROR: cmp did not detect different files" >&2; exit 1
+      fi
+      if "$out/bin/diff" /tmp/diffutils-smoke-a /tmp/diffutils-smoke-b >/tmp/diffutils-diff.out 2>&1; then
+        echo "ERROR: diff did not detect different files" >&2; exit 1
+      fi
+      $BB grep -q changed /tmp/diffutils-diff.out
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, diffutils_src],
