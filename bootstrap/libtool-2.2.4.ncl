@@ -16,6 +16,8 @@ let autoconf = import "autoconf-2.69.ncl" in
 let automake = import "automake-1.15.1.ncl" in
 
 let src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/libtool-2.2.4/sources
+  # first-consumer: bootstrap/libtool-2.2.4.ncl
   url = "https://mirrors.kernel.org/gnu/libtool/libtool-2.2.4.tar.bz2",
   hash = "sha256-v2lZrGlw6Mvrv9Fld/G8u3753WBU7Vupwbc2EeRjzwo=",
   name = "libtool-2.2.4-src",
@@ -39,14 +41,13 @@ let src = crunch.fetchTarball {
     export CONFIG_SHELL="$BASH/bin/bash"
     WORK=/tmp/libtool; $BB mkdir -p "$WORK"; cd "$WORK"
     $BB cp -r "$SRC" src; $BB chmod -R u+w src; cd src
-    ./configure --prefix="$out" CC=tcc CFLAGS="-I$MUSL/include -static" 2>/dev/null || true
-    make -j1 install prefix="$out" 2>/dev/null || {
-      $BB mkdir -p "$out/bin" "$out/share/libtool"
-      for f in libtool libtoolize; do
-        [ -f "$f" ] && $BB cp "$f" "$out/bin/$f" && $BB chmod 755 "$out/bin/$f"
-      done
-    }
-    test -f "$out/bin/libtool" || test -f "$out/bin/libtoolize"
+    ./configure --prefix="$out" CC=tcc CFLAGS="-I$MUSL/include -static"
+    make -j1 install prefix="$out"
+    test -x "$out/bin/libtool" || { echo "ERROR: installed libtool missing" >&2; exit 1; }
+    test -x "$out/bin/libtoolize" || { echo "ERROR: installed libtoolize missing" >&2; exit 1; }
+    test -d "$out/share/libtool" || { echo "ERROR: share/libtool missing" >&2; exit 1; }
+    "$out/bin/libtool" --version >/dev/null
+    "$out/bin/libtoolize" --version >/dev/null
   "%],
   inputs = [stage0, tcc, musl, make, sed, m4, perl, coreutils, gawk, grep, diffutils, bash, autoconf, automake, src],
 } | crunch.Derivation
