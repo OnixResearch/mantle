@@ -95,3 +95,17 @@ Conclusion: the latest focused replay did **not** have an active original `TCC_V
   - previously failing direct macro-use variants now compile, including `printf("%s\\n", TCC_VERSION)`, `puts(TCC_VERSION)`, static storage initialized from `TCC_VERSION`, and `sizeof(TCC_VERSION)`.
 
 Conclusion: `TCC_VERSION` is not the next real `tcc_parse_args()` blocker once the replay carries the command-line definition used by the full diagnostic derivation. The next useful reduction is to keep `-DTCC_VERSION="0.9.27-decl0-diag"` in the local replay and continue the tail cumulative switch past `TCC_OPTION_dumpversion`.
+
+## Replay-faithful tail cumulative rerun
+
+- `run-local-tcc-parse-args-tail-faithful-version.sh`
+  - restores the same Crunch PathInfo/NAR entries into `/tmp` with `crunch store push` + `nix-store --restore` when needed.
+  - patches the tail cumulative replay to use the restored source/compiler/runtime and adds `-DTCC_VERSION="0.9.27-decl0-diag"` to `flags_common`.
+  - compiles the cumulative `tcc_parse_args` variants, then compiles the whole locally-normalized `libtcc.asm_simplified.c` file under common flags and `-D ONE_SOURCE=1`.
+- `focused-local-tcc-parse-args-tail-faithful-version.txt`
+  - `TCC_OPTION_dumpversion` now compiles (`rc=0`) under common flags and `-D ONE_SOURCE=1`.
+  - cumulative variants through `x` and `O` also compile (`rc=0`).
+  - the `print_search_dirs` and `impdef` prefix-only variants still return `rc=-11`, but those are incomplete-goto artifacts because the later `ar` chunk supplies the shared `extra_action:` label; cumulative variants through `ar`, `ignored`, `default`, and `99_full_switch_real_epilogue` compile (`rc=0`).
+  - the full locally-normalized `libtcc.asm_simplified.c` file compiles (`rc=0`) under both common flags and `-D ONE_SOURCE=1`.
+
+Conclusion: after applying the faithful `TCC_VERSION` definition, the local replay has no remaining `tcc_parse_args()` tail blocker, and the cumulatively-normalized full `libtcc.c` compiles in the predecessor context. The next useful reduction should move from `libtcc.c` local compile bisection back toward the broader diagnostic derivation/runtime-marker path.
