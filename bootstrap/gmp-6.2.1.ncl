@@ -20,6 +20,8 @@ let m4 = import "m4-1.4.7-musl.ncl" in
 let stage0 = import "stage0-posix.ncl" in
 
 let gmp_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/gmp-6.2.1/sources
+  # first-consumer: bootstrap/gmp-6.2.1.ncl
   url = "https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.xz",
   hash = "sha256-69A2yy9AY8/OFO5FfNmsvd01vTknitC/wrQSjaZq86A=",
   name = "gmp-6.2.1-src",
@@ -80,6 +82,23 @@ let gmp_src = crunch.fetchTarball {
       make -j1 install 2>&1
 
       test -f "$out/lib/libgmp.a" || { echo "ERROR: libgmp.a not built" >&2; exit 1; }
+      test -f "$out/include/gmp.h" || { echo "ERROR: gmp.h not installed" >&2; exit 1; }
+
+      $BB cat > /tmp/gmp-smoke.c << 'EOF'
+#include <gmp.h>
+int main(void) {
+  mpz_t x;
+  mpz_init_set_ui(x, 42);
+  int ok = (mpz_cmp_ui(x, 42) == 0);
+  mpz_clear(x);
+  return ok ? 0 : 1;
+}
+EOF
+      "$GCC/bin/gcc" -I"$out/include" -I"$MUSL/include" -L"$out/lib" -L"$MUSL/lib" \
+        -static -o /tmp/gmp-smoke /tmp/gmp-smoke.c -lgmp 2>&1 || {
+        echo "ERROR: gmp compile smoke failed" >&2; exit 1
+      }
+      /tmp/gmp-smoke || { echo "ERROR: gmp smoke binary failed" >&2; exit 1; }
       echo "gmp-6.2.1 build complete"
     "%,
   ],
