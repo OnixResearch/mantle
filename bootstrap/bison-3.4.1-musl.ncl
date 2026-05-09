@@ -15,6 +15,8 @@ let flex = import "flex-2.6.4-musl.ncl" in
 let bison_old = import "bison-2.3-musl.ncl" in
 
 let bison_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/bison-3.4.1/sources
+  # first-consumer: bootstrap/bison-3.4.1-musl.ncl
   url = "https://mirrors.kernel.org/gnu/bison/bison-3.4.1.tar.xz",
   hash = "sha256-vKqyf0sdiIdtfaEILKmi1ULhs+AqVSboYSpGhgEsYsI=",
   name = "bison-3.4.1-src",
@@ -83,33 +85,42 @@ CONFIG
       CFLAGS="-I. -Ilib -I$MUSL/include -DHAVE_CONFIG_H -DEXEEXT=\\\"\\\""
 
       # Compile lib support
+      LIBOBJS=""
       for src in lib/*.c; do
         base=$($BB basename "$src" .c)
-        tcc -c $CFLAGS "$src" -o "lib/$base.o" 2>/dev/null || true
+        tcc -c $CFLAGS "$src" -o "lib/$base.o"
+        test -f "lib/$base.o" || { echo "ERROR: missing lib object lib/$base.o" >&2; exit 1; }
+        LIBOBJS="$LIBOBJS lib/$base.o"
       done
-      LIBOBJS=""
-      for f in lib/*.o; do [ -f "$f" ] && LIBOBJS="$LIBOBJS $f"; done
-      tcc -ar cr libbison.a $LIBOBJS 2>/dev/null || true
+      test -n "$LIBOBJS" || { echo "ERROR: no bison lib objects compiled" >&2; exit 1; }
+      tcc -ar cr libbison.a $LIBOBJS
+      test -f libbison.a || { echo "ERROR: libbison.a not built" >&2; exit 1; }
 
       # Compile bison sources
+      OBJS=""
       for src in src/*.c; do
         base=$($BB basename "$src" .c)
-        tcc -c $CFLAGS "$src" -o "src/$base.o" 2>/dev/null || true
+        tcc -c $CFLAGS "$src" -o "src/$base.o"
+        test -f "src/$base.o" || { echo "ERROR: missing source object src/$base.o" >&2; exit 1; }
+        OBJS="$OBJS src/$base.o"
       done
+      test -n "$OBJS" || { echo "ERROR: no bison source objects compiled" >&2; exit 1; }
 
-      OBJS=""
-      for f in src/*.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-      tcc -static $OBJS -L. -lbison -o bison 2>/dev/null || tcc -static $OBJS -o bison
+      tcc -static $OBJS -L. -lbison -o bison
+      test -f bison || { echo "ERROR: bison executable not linked" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin" "$out/share/bison"
       $BB cp bison "$out/bin/bison"
       $BB chmod 755 "$out/bin/bison"
 
-      if [ -d data ]; then
-        $BB cp -r data/* "$out/share/bison/" 2>/dev/null || true
-      fi
+      test -d data || { echo "ERROR: bison data directory missing" >&2; exit 1; }
+      $BB cp -r data/* "$out/share/bison/"
 
-      test -x "$out/bin/bison"
+      test -x "$out/bin/bison" || { echo "ERROR: installed bison missing" >&2; exit 1; }
+      test -d "$out/share/bison" || { echo "ERROR: installed bison data directory missing" >&2; exit 1; }
+      test -f "$out/share/bison/yacc.c" || { echo "ERROR: installed yacc.c skeleton missing" >&2; exit 1; }
+      "$out/bin/bison" --version >/tmp/bison341-version.txt
+      $BB grep -q 'bison' /tmp/bison341-version.txt || { echo "ERROR: bison version smoke failed" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, m4, flex, bison_old, bison_src],
