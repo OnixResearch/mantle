@@ -1,0 +1,36 @@
+diag-tcc-compile-body: compile prefix621_common prefix621.c flags=common rc=0 lines=621
+diag-tcc-compile-body: compile proto_common proto.c flags=common rc=0 lines=622
+diag-tcc-compile-body: compile empty_common empty.c flags=common rc=0 lines=627
+diag-tcc-compile-body: compile locals_common locals.c flags=common rc=0 lines=632
+diag-tcc-compile-body: compile begin_common begin.c flags=common rc=0 lines=633
+diag-tcc-compile-body: compile setjmp_empty_common setjmp_empty.c flags=common rc=0 lines=629
+diag-tcc-compile-body: compile setjmp_flags_common setjmp_flags.c flags=common rc=0 lines=632
+diag-tcc-compile-body: compile full_no_codegen_common full_no_codegen.c flags=common rc=0 lines=645
+diag-tcc-compile-body: compile direct_tccgen_common direct_tccgen.c flags=common rc=0 lines=628
+diag-tcc-compile-body: compile preprocess_branch_common preprocess_branch.c flags=common rc=0 lines=634
+diag-tcc-compile-body: compile asm_branch_common asm_branch.c flags=common rc=0 lines=633
+diag-tcc-compile-body: compile else_tccgen_branch_common else_tccgen_branch.c flags=common rc=0 lines=637
+diag-tcc-compile-body: compile full_branch_no_asm_ifdef_common full_branch_no_asm_ifdef.c flags=common rc=0 lines=652
+diag-tcc-compile-body: compile full_branch_no_return_ternary_common full_branch_no_return_ternary.c flags=common rc=0 lines=653
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-compile-body-20260509/run-local-compile-body.sh: line 72: 1222706 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-compile-body: compile full_original_common full_original.c flags=common rc=139 lines=660
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-compile-body-20260509/run-local-compile-body.sh: line 72: 1222751 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-compile-body: compile full_libtcc_no_compile_asm_ifdef_common full_libtcc_no_compile_asm_ifdef.c flags=common rc=139 lines=1989
+diag-tcc-compile-body: compile prefix621_D_ONE_SOURCE_1 prefix621_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=621
+diag-tcc-compile-body: compile proto_D_ONE_SOURCE_1 proto_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=622
+diag-tcc-compile-body: compile empty_D_ONE_SOURCE_1 empty_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=627
+diag-tcc-compile-body: compile locals_D_ONE_SOURCE_1 locals_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=632
+diag-tcc-compile-body: compile begin_D_ONE_SOURCE_1 begin_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=633
+diag-tcc-compile-body: compile setjmp_empty_D_ONE_SOURCE_1 setjmp_empty_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=629
+diag-tcc-compile-body: compile setjmp_flags_D_ONE_SOURCE_1 setjmp_flags_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=632
+diag-tcc-compile-body: compile full_no_codegen_D_ONE_SOURCE_1 full_no_codegen_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=645
+diag-tcc-compile-body: compile direct_tccgen_D_ONE_SOURCE_1 direct_tccgen_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=628
+diag-tcc-compile-body: compile preprocess_branch_D_ONE_SOURCE_1 preprocess_branch_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=634
+diag-tcc-compile-body: compile asm_branch_D_ONE_SOURCE_1 asm_branch_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=633
+diag-tcc-compile-body: compile else_tccgen_branch_D_ONE_SOURCE_1 else_tccgen_branch_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=637
+diag-tcc-compile-body: compile full_branch_no_asm_ifdef_D_ONE_SOURCE_1 full_branch_no_asm_ifdef_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=652
+diag-tcc-compile-body: compile full_branch_no_return_ternary_D_ONE_SOURCE_1 full_branch_no_return_ternary_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=0 lines=653
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-compile-body-20260509/run-local-compile-body.sh: line 72: 1223079 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-compile-body: compile full_original_D_ONE_SOURCE_1 full_original_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=660
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-tcc-compile-body-20260509/run-local-compile-body.sh: line 72: 1223123 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags_common $extra "$src" -o "/tmp/$label.o" > /tmp/$label.stdout 2> /tmp/$label.stderr
+diag-tcc-compile-body: compile full_libtcc_no_compile_asm_ifdef_D_ONE_SOURCE_1 full_libtcc_no_compile_asm_ifdef_D_ONE_SOURCE_1.c flags=-D ONE_SOURCE=1 rc=139 lines=1989
