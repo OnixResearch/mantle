@@ -11,6 +11,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 
 let coreutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/coreutils-5.0/sources (musl rebuild)
+  # first-consumer: bootstrap/coreutils-5.0-musl.ncl
   url = "https://mirrors.kernel.org/gnu/coreutils/coreutils-5.0.tar.bz2",
   hash = "sha256-VtfMrIYHZZ4YT21zYxctKfFEvGXDKerxOvCO7mmOPlA=",
   name = "coreutils-5.0-src",
@@ -81,26 +83,37 @@ CONFIG
       CFLAGS="-I. -Ilib -Isrc -I$MUSL/include -DHAVE_CONFIG_H -D_FILE_OFFSET_BITS=64"
 
       LIBSRCS="lib/error lib/xmalloc lib/xstrdup lib/getopt lib/getopt1 lib/closeout lib/quotearg lib/quote lib/exitfail lib/hard-locale lib/xstrtol lib/xstrtoul lib/human lib/idcache lib/filemode lib/basename lib/stripslash lib/full-write lib/safe-read lib/safe-write lib/version-etc lib/long-options"
-      for src in $LIBSRCS; do
-        tcc -c $CFLAGS $src.c -o $src.o 2>/dev/null || true
-      done
       OBJS=""
-      for src in $LIBSRCS; do [ -f "$src.o" ] && OBJS="$OBJS $src.o"; done
+      for src in $LIBSRCS; do
+        tcc -c $CFLAGS $src.c -o $src.o
+        test -f "$src.o" || { echo "ERROR: missing library object $src.o" >&2; exit 1; }
+        OBJS="$OBJS $src.o"
+      done
+      test -n "$OBJS" || { echo "ERROR: no coreutils library objects compiled" >&2; exit 1; }
       tcc -ar cr libcu.a $OBJS
+      test -f libcu.a || { echo "ERROR: libcu.a not built" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin"
 
-      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir \
-                  sort test true false head tail wc basename dirname \
-                  tr uniq expr tee touch; do
-        tcc -static $CFLAGS "src/$util.c" -L. -lcu -o "$out/bin/$util" 2>/dev/null || true
+      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir                   sort test true false head tail wc basename dirname                   tr uniq expr tee touch; do
+        tcc -static $CFLAGS "src/$util.c" -L. -lcu -o "$out/bin/$util"
+        test -x "$out/bin/$util" || { echo "ERROR: missing installed utility $util" >&2; exit 1; }
       done
 
-      [ -x "$out/bin/test" ] && { cd "$out/bin"; $BB ln -s test "["; cd "$WORK/coreutils-5.0"; }
+      cd "$out/bin"
+      $BB ln -s test "["
+      cd "$WORK/coreutils-5.0"
 
-      test -x "$out/bin/cat"
-      test -x "$out/bin/cp"
-      test -x "$out/bin/mkdir"
+      for util in cat chmod cp echo install ln ls mkdir mv rm rmdir sort test true false head tail wc basename dirname tr uniq expr tee touch "["; do
+        test -x "$out/bin/$util" || { echo "ERROR: output contract missing $util" >&2; exit 1; }
+      done
+
+      "$out/bin/mkdir" /tmp/coreutils-smoke-dir
+      "$out/bin/echo" smoke-ok > /tmp/coreutils-smoke-dir/input
+      "$out/bin/cp" /tmp/coreutils-smoke-dir/input /tmp/coreutils-smoke-dir/output
+      "$out/bin/cat" /tmp/coreutils-smoke-dir/output | $BB grep -q smoke-ok
+      "$out/bin/test" -f /tmp/coreutils-smoke-dir/output
+      "$out/bin/[" -f /tmp/coreutils-smoke-dir/output "]"
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, coreutils_src],
