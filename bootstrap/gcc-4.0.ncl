@@ -20,6 +20,8 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
 
 let gcc_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/gcc-4.0.4/sources and pass1.sh
+  # first-consumer: bootstrap/gcc-4.0.ncl
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.0.4/gcc-4.0.4.tar.bz2",
   hash = "sha256-QNHCUqWDcOtqVLokzAd3MfsWWR/jN3HdAld/Pm+GSM0=",
   name = "gcc-4.0.4-src",
@@ -824,50 +826,25 @@ EOF
 
       # Install
       $BB mkdir -p "$out/bin" "$out/lib" "$out/include" "$out/libexec"
-      make -j1 install-gcc MAKEINFO=true 2>&1 || {
-        echo "make install-gcc failed, manual install..." >&2
-        # Copy compiler binaries manually
-        for tool in gcc cc1 collect2; do
-          for cand in \
-            "gcc/$tool" \
-            "gcc/${tool}-cross" \
-            "gcc/xgcc"; do
-            if [ -x "$WORK/build/$cand" ]; then
-              $BB cp "$WORK/build/$cand" "$out/bin/" 2>/dev/null || true
-            fi
-          done
-        done
-        # xgcc is the stage-1 compiler
-        if [ -x "$WORK/build/gcc/xgcc" ]; then
-          $BB cp "$WORK/build/gcc/xgcc" "$out/bin/gcc"
-          $BB chmod 755 "$out/bin/gcc"
-        fi
-        # cc1 is the C compiler proper
-        $BB mkdir -p "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4"
-        if [ -x "$WORK/build/gcc/cc1" ]; then
-          $BB cp "$WORK/build/gcc/cc1" "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/"
-        fi
-        if [ -x "$WORK/build/gcc/cc1plus" ]; then
-          $BB cp "$WORK/build/gcc/cc1plus" "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/"
-        fi
-      }
+      make -j1 install-gcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.0 install-gcc failed" >&2; exit 1; }
+      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || { echo "ERROR: gcc-4.0 install-target-libgcc failed" >&2; exit 1; }
 
-      # Install target libraries if available
-      make -j1 install-target-libgcc MAKEINFO=true 2>&1 || true
-
-      # Verify: at minimum, the C compiler must work
+      # Verify: at minimum, the C compiler contract must be complete and usable.
       test -x "$out/bin/gcc" || test -x "$out/bin/x86_64-unknown-linux-musl-gcc" || {
         echo "ERROR: no gcc binary produced" >&2
         exit 1
       }
 
-      # Create cc symlink
+      # Create cc symlink and require it to exist.
       if [ -x "$out/bin/gcc" ]; then
         $BB ln -sf gcc "$out/bin/cc"
       elif [ -x "$out/bin/x86_64-unknown-linux-musl-gcc" ]; then
         $BB ln -sf x86_64-unknown-linux-musl-gcc "$out/bin/gcc"
         $BB ln -sf x86_64-unknown-linux-musl-gcc "$out/bin/cc"
       fi
+      test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
+      test -x "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" || { echo "ERROR: installed cc1 missing" >&2; exit 1; }
+      find "$out" -name libgcc.a -type f | $BB grep -q libgcc.a || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
 
       # C compiler smoke test
       $BB cat > /tmp/smoke.c << 'EOF'
@@ -877,8 +854,9 @@ EOF
       "$out/bin/gcc" -I"$MUSL/include" -L"$MUSL/lib" -static \
         -B"$BINUTILS/bin/" -B"$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/" \
         -o /tmp/smoke /tmp/smoke.c 2>&1 || {
-        echo "WARNING: gcc smoke test failed (may need runtime path adjustments)" >&2
+        echo "ERROR: gcc smoke test failed" >&2; exit 1
       }
+      test -x /tmp/smoke || { echo "ERROR: gcc smoke output missing" >&2; exit 1; }
 
       echo "gcc-4.0.4 build complete (languages: $LANGS)"
     "%,
