@@ -12,7 +12,7 @@ These `live-part-*` changes are scaffolds only: implementation, build, smoke, le
 | `live-part-tinycc-0-9-27` | `tinycc 0.9.27` | `bootstrap/tinycc.ncl` | self-hosted tcc |
 | `live-part-make-3-82` | `make 3.82` | `bootstrap/make-tcc.ncl` | first make |
 | `live-part-patch-2-5-9` | `patch 2.5.9` | `bootstrap/patch-tcc.ncl` | early tcc tools |
-| `live-part-gzip-1-2-5` | `gzip 1.2.5` | `bootstrap/gzip-tcc.ncl` | early tcc tools |
+| `live-part-gzip-1-2-4` | `gzip 1.2.4` | `bootstrap/gzip-tcc.ncl` | early tcc tools |
 | `live-part-tar-1-12` | `tar 1.12` | `bootstrap/tar-tcc.ncl` | early tcc tools |
 | `live-part-sed-4-0-9-tcc` | `sed 4.0.9` | `bootstrap/sed-tcc.ncl` | early tcc tools |
 | `live-part-bzip2-1-0-8-tcc` | `bzip2 1.0.8` | `bootstrap/bzip2-tcc.ncl` | early tcc tools |

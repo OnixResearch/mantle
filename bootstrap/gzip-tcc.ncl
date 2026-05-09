@@ -13,6 +13,9 @@ let stage0 = import "stage0-posix.ncl" in
 let tcc = import "tinycc.ncl" in
 
 let gzip_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap parts.rst labels this point `gzip 1.2.5`,
+  # but the implemented step is steps/gzip-1.2.4/sources.
+  # first-consumer: bootstrap/gzip-tcc.ncl
   url = "https://ftpmirror.gnu.org/gzip/gzip-1.2.4.tar.gz",
   hash = "sha256-s2cf/BeNFNWkTRjMvJU2F9PKGNrLwxWK3RtK67AcXNo=",
   name = "gzip-1.2.4-src",
@@ -85,21 +88,24 @@ int main() {
 MKPATCH
       tcc -static -o makecrc /tmp/makecrc_patch.c
       ./makecrc
+      test -s crc.c || { echo "ERROR: makecrc did not produce crc.c" >&2; exit 1; }
       $BB cat util.c crc.c > util.c.new
       $BB mv util.c.new util.c
 
       # Compile all sources
       CFLAGS="-I. -DNO_UTIME -Dstrlwr=unused"
+      OBJS=""
       for src in gzip bits crypt deflate getopt inflate lzw trees \
                  unlzh unlzw unpack unzip util zip; do
-        tcc -c $CFLAGS $src.c -o $src.o
+        obj="$src.o"
+        tcc -c $CFLAGS $src.c -o "$obj"
+        test -f "$obj" || { echo "ERROR: missing object $obj" >&2; exit 1; }
+        OBJS="$OBJS $obj"
       done
+      test -n "$OBJS" || { echo "ERROR: no gzip objects compiled" >&2; exit 1; }
 
       # Link
-      tcc -static \
-        gzip.o bits.o crypt.o deflate.o getopt.o inflate.o lzw.o \
-        trees.o unlzh.o unlzw.o unpack.o unzip.o util.o zip.o \
-        -o gzip
+      tcc -static $OBJS -o gzip
       $BB chmod 755 gzip
 
       # Verify
@@ -111,7 +117,15 @@ MKPATCH
       $BB cp gzip "$out/bin/gunzip"
       $BB chmod 755 "$out/bin/gzip" "$out/bin/gunzip"
 
-      test -x "$out/bin/gzip"
+      test -x "$out/bin/gzip" || { echo "ERROR: gzip output missing" >&2; exit 1; }
+      test -x "$out/bin/gunzip" || { echo "ERROR: gunzip output missing" >&2; exit 1; }
+      "$out/bin/gzip" --help >/dev/null
+      "$out/bin/gunzip" --help >/dev/null
+      $BB printf 'gzip smoke\n' > /tmp/gzip-smoke.txt
+      "$out/bin/gzip" -c /tmp/gzip-smoke.txt > /tmp/gzip-smoke.txt.gz
+      test -s /tmp/gzip-smoke.txt.gz || { echo "ERROR: gzip smoke archive missing" >&2; exit 1; }
+      "$out/bin/gunzip" -c /tmp/gzip-smoke.txt.gz > /tmp/gzip-smoke.out
+      $BB cmp /tmp/gzip-smoke.txt /tmp/gzip-smoke.out >/dev/null || { echo "ERROR: gzip roundtrip mismatch" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, tcc, gzip_src],
