@@ -27,6 +27,8 @@ let tar = import "tar-tcc.ncl" in
 let stage0 = import "stage0-posix.ncl" in
 
 let binutils_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/binutils-2.41/sources
+  # first-consumer: bootstrap/binutils-full.ncl
   url = "https://ftpmirror.gnu.org/binutils/binutils-2.41.tar.xz",
   hash = "sha256-8dGjwSZTk28XKXwkODNezqFVLXDA6Ycf/dLF+RoYGWo=",
   name = "binutils-2.41-src",
@@ -113,13 +115,32 @@ let binutils_src = crunch.fetchTarball {
       # Verify required tools
       for tool in as ld ar ranlib nm objcopy objdump readelf strip; do
         test -x "$out/bin/$tool" || test -x "$out/bin/x86_64-unknown-linux-musl-$tool" || {
-          echo "WARNING: $tool not found" >&2
+          echo "ERROR: $tool not found" >&2; exit 1
         }
       done
 
-      test -x "$out/bin/as" || test -x "$out/bin/x86_64-unknown-linux-musl-as" || {
-        echo "ERROR: no assembler" >&2; exit 1
-      }
+      AS="$out/bin/as"; [ -x "$AS" ] || AS="$out/bin/x86_64-unknown-linux-musl-as"
+      AR="$out/bin/ar"; [ -x "$AR" ] || AR="$out/bin/x86_64-unknown-linux-musl-ar"
+      RANLIB="$out/bin/ranlib"; [ -x "$RANLIB" ] || RANLIB="$out/bin/x86_64-unknown-linux-musl-ranlib"
+      NM="$out/bin/nm"; [ -x "$NM" ] || NM="$out/bin/x86_64-unknown-linux-musl-nm"
+      OBJCOPY="$out/bin/objcopy"; [ -x "$OBJCOPY" ] || OBJCOPY="$out/bin/x86_64-unknown-linux-musl-objcopy"
+      LD="$out/bin/ld"; [ -x "$LD" ] || LD="$out/bin/x86_64-unknown-linux-musl-ld"
+
+      $BB cat > /tmp/binutils241-smoke.s << 'ASM'
+.section .text
+.global _start
+_start:
+  mov $60, %rax
+  xor %rdi, %rdi
+  syscall
+ASM
+      "$AS" -o /tmp/binutils241-smoke.o /tmp/binutils241-smoke.s
+      "$AR" rc /tmp/libbinutils241-smoke.a /tmp/binutils241-smoke.o
+      "$RANLIB" /tmp/libbinutils241-smoke.a
+      "$NM" /tmp/binutils241-smoke.o >/tmp/binutils241-smoke.nm
+      "$OBJCOPY" /tmp/binutils241-smoke.o /tmp/binutils241-smoke.copy.o
+      "$LD" -o /tmp/binutils241-smoke-bin /tmp/binutils241-smoke.o
+      test -f /tmp/binutils241-smoke-bin
 
       echo "binutils-2.41 build complete"
     "%,
