@@ -12,6 +12,8 @@ let stage0 = import "stage0-posix.ncl" in
 let tcc = import "tinycc.ncl" in
 
 let bash_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/bash-2.05b/sources
+  # first-consumer: bootstrap/bash-2.05b-tcc.ncl
   url = "https://mirrors.kernel.org/gnu/bash/bash-2.05b.tar.gz",
   hash = "sha256-TsSxfIbg+xOIMfOVzjszOKbEG7Hj4b19D8oqMg0ek0g=",
   name = "bash-2.05b-src",
@@ -359,14 +361,15 @@ RLSTUB
         [ -f "$f" ] && OBJS="$OBJS $f"
       done
 
-      $BB chmod u+rw *.o || true
+      $BB chmod u+rw *.o
 
       # Link
       tcc -static $OBJS -o bash
       $BB chmod 755 bash
 
       # Verify
-      ./bash --version 2>&1 | $BB head -1 || ./bash -c 'echo bash-ok' || true
+      ./bash --version 2>&1 | $BB head -1
+      ./bash -c 'echo bash-ok' | $BB grep -q bash-ok
 
       # Install
       $BB mkdir -p "$out/bin"
@@ -376,6 +379,7 @@ RLSTUB
       $BB ln -s bash sh
 
       test -x "$out/bin/bash"
+      test -L "$out/bin/sh" || test -x "$out/bin/sh"
     "%,
   ],
   inputs = [stage0, tcc, bash_src],
