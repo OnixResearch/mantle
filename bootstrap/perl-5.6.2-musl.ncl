@@ -14,6 +14,8 @@ let grep = import "grep-2.4-musl.ncl" in
 let perl_old = import "perl-5.005_03-musl.ncl" in
 
 let perl_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/perl-5.6.2/sources
+  # first-consumer: bootstrap/perl-5.6.2-musl.ncl
   url = "https://www.cpan.org/src/5.0/perl-5.6.2.tar.gz",
   hash = "sha256-nkx05j4lJWByRFx60ySwH40RB0dj12+VplJyVzzIFQo=",
   name = "perl-5.6.2-src",
@@ -35,17 +37,29 @@ let perl_src = crunch.fetchTarball {
     WORK=/tmp/perl562; $BB mkdir -p "$WORK"; cd "$WORK"
     $BB cp -r "$SRC" src; $BB chmod -R u+w src; cd src
     : > config.h
-    make -j1 CC=tcc CFLAGS="-I$MUSL/include -static" LDFLAGS="-static" 2>/dev/null || {
+    if ! make -j1 CC=tcc CFLAGS="-I$MUSL/include -static" LDFLAGS="-static"; then
       CFLAGS="-I. -I$MUSL/include -DPERL_CORE -static"
+      O=""
       for s in av dump gv hv mg op perl perly pp regcomp regexec run scope sv toke util; do
-        tcc -c $CFLAGS "$s.c" -o "$s.o" 2>/dev/null || true
+        tcc -c $CFLAGS "$s.c" -o "$s.o"
+        O="$O $s.o"
       done
-      O=""; for f in *.o; do [ -f "$f" ] && O="$O $f"; done
-      tcc -static $O -o miniperl -lm 2>/dev/null || tcc -static $O -o miniperl || true
-    }
+      test -n "$O" || { echo "ERROR: no Perl objects built" >&2; exit 1; }
+      if ! tcc -static $O -o miniperl -lm; then
+        tcc -static $O -o miniperl
+      fi
+    fi
     $BB mkdir -p "$out/bin"
-    if [ -f perl ]; then $BB cp perl "$out/bin/perl"; elif [ -f miniperl ]; then $BB cp miniperl "$out/bin/perl"; fi
-    $BB chmod 755 "$out/bin/perl"; test -x "$out/bin/perl"
+    if [ -f perl ]; then
+      $BB cp perl "$out/bin/perl"
+    elif [ -f miniperl ]; then
+      $BB cp miniperl "$out/bin/perl"
+    else
+      echo "ERROR: neither perl nor miniperl was built" >&2; exit 1
+    fi
+    $BB chmod 755 "$out/bin/perl"
+    test -x "$out/bin/perl" || { echo "ERROR: installed perl missing" >&2; exit 1; }
+    "$out/bin/perl" -e 'print "perl562-ok\n"' | $BB grep '^perl562-ok$'
   "%],
   inputs = [stage0, tcc, musl, make, sed, coreutils, gawk, grep, perl_old, perl_src],
 } | crunch.Derivation
