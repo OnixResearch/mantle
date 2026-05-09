@@ -12,6 +12,8 @@ let diffutils = import "diffutils-2.7-musl.ncl" in
 let bash = import "bash-2.05b-tcc.ncl" in
 let prev_am = import "automake-1.11.2.ncl" in
 let src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/autoconf-2.69/sources
+  # first-consumer: bootstrap/autoconf-2.69.ncl
   url = "https://mirrors.kernel.org/gnu/autoconf/autoconf-2.69.tar.xz",
   hash = "sha256-tpVLeuvm1/He9UvOAGzup4fc7YTQYp1xWTowDs1rR4I=",
   name = "autoconf-2.69-src",
@@ -32,12 +34,13 @@ let src = crunch.fetchTarball {
     export CONFIG_SHELL="$BASH/bin/bash"
     WORK=/tmp/ac2.69; $BB mkdir -p "$WORK"; cd "$WORK"
     $BB cp -r "$SRC" src; $BB chmod -R u+w src; cd src
-    ./configure --prefix="$out" 2>/dev/null || true
-    make -j1 install prefix="$out" 2>/dev/null || {
-      $BB mkdir -p "$out/bin" "$out/share/autoconf"
-      for f in bin/*; do [ -f "$f" ] && $BB cp "$f" "$out/$f" && $BB chmod 755 "$out/$f"; done
-    }
-    test -f "$out/bin/autoconf" || test -f "$out/bin/autoreconf"
+    ./configure --prefix="$out"
+    make -j1 install prefix="$out"
+    test -f "$out/bin/autoconf"; $BB chmod 755 "$out/bin/autoconf"
+    test -f "$out/bin/autoreconf"; $BB chmod 755 "$out/bin/autoreconf"
+    test -f "$out/bin/autoheader"; $BB chmod 755 "$out/bin/autoheader"
+    test -f "$out/bin/autom4te"; $BB chmod 755 "$out/bin/autom4te"
+    test -d "$out/share/autoconf"
   "%],
   inputs = [stage0, make, sed, m4, perl, coreutils, gawk, grep, diffutils, bash, prev_am, src],
 } | crunch.Derivation
