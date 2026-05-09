@@ -14,6 +14,8 @@ let make = import "make-tcc.ncl" in
 let sed = import "sed-4.0.9-musl.ncl" in
 
 let heirloom_src = crunch.fetchTarball {
+  # provenance: fosslinux/live-bootstrap steps/heirloom-devtools-070527/sources
+  # first-consumer: bootstrap/heirloom-devtools.ncl
   url = "http://downloads.sourceforge.net/project/heirloom/heirloom-devtools/070527/heirloom-devtools-070527.tar.bz2",
   hash = "sha256-yJ2pXfdovrJ9VwR1kq0Op5J8bRq8zXMohk8GCRfX7ZY=",
   name = "heirloom-devtools-070527-src",
@@ -52,56 +54,55 @@ let heirloom_src = crunch.fetchTarball {
       $BB chmod -R u+w heirloom-devtools-070527
       cd heirloom-devtools-070527
 
-      # Patch Makefile to use tcc
-      sed -i 's|CC = .*|CC = tcc|' mk.config 2>/dev/null || true
-      sed -i 's|CFLAGS = .*|CFLAGS = -I'"$MUSL"'/include|' mk.config 2>/dev/null || true
-      sed -i 's|LDFLAGS = .*|LDFLAGS = -static|' mk.config 2>/dev/null || true
-      sed -i 's|AR = .*|AR = tcc -ar|' mk.config 2>/dev/null || true
-      sed -i 's|RANLIB = .*|RANLIB = true|' mk.config 2>/dev/null || true
-      sed -i 's|INSTALL = .*|INSTALL = /bin/busybox cp|' mk.config 2>/dev/null || true
+      # Patch Makefile to use tcc. These edits are part of the declared build
+      # contract, so missing or incompatible `mk.config` must fail closed.
+      test -f mk.config || { echo "ERROR: heirloom mk.config missing" >&2; exit 1; }
+      sed -i 's|CC = .*|CC = tcc|' mk.config
+      sed -i 's|CFLAGS = .*|CFLAGS = -I'"$MUSL"'/include|' mk.config
+      sed -i 's|LDFLAGS = .*|LDFLAGS = -static|' mk.config
+      sed -i 's|AR = .*|AR = tcc -ar|' mk.config
+      sed -i 's|RANLIB = .*|RANLIB = true|' mk.config
+      sed -i 's|INSTALL = .*|INSTALL = /bin/busybox cp|' mk.config
 
       # Set prefix
-      sed -i 's|PREFIX = .*|PREFIX = '"$out"'|' mk.config 2>/dev/null || true
+      sed -i 's|PREFIX = .*|PREFIX = '"$out"'|' mk.config
 
-      # Build yacc
+      build_manual() {
+        tool="$1"
+        shift
+        cd "$WORK/heirloom-devtools-070527/$tool"
+        OBJS=""
+        for src in "$@"; do
+          obj="$src.o"
+          tcc -c -I"$MUSL/include" "$src.c" -o "$obj"
+          test -f "$obj" || { echo "ERROR: missing $tool object $obj" >&2; exit 1; }
+          OBJS="$OBJS $obj"
+        done
+        test -n "$OBJS" || { echo "ERROR: no $tool objects compiled" >&2; exit 1; }
+        tcc -static $OBJS -o "$tool"
+        test -x "$tool" || { echo "ERROR: $tool not linked" >&2; exit 1; }
+      }
+
+      # Build yacc and lex. The make path is preferred, but the direct compile
+      # path is still explicit and fail-closed rather than best-effort.
       cd yacc
-      make CC=tcc AR="tcc -ar" CFLAGS="-I$MUSL/include" LDFLAGS="-static" 2>/dev/null || {
-        # Manual fallback: compile yacc sources directly
-        cd "$WORK/heirloom-devtools-070527/yacc"
-        for src in y1 y2 y3 y4; do
-          tcc -c -I"$MUSL/include" "$src.c" -o "$src.o" 2>/dev/null || true
-        done
-        OBJS=""
-        for f in *.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-        if [ -n "$OBJS" ]; then
-          tcc -static $OBJS -o yacc 2>/dev/null || true
-        fi
-      }
+      make CC=tcc AR="tcc -ar" CFLAGS="-I$MUSL/include" LDFLAGS="-static" || build_manual yacc y1 y2 y3 y4
+      test -x "$WORK/heirloom-devtools-070527/yacc/yacc" || { echo "ERROR: yacc build output missing" >&2; exit 1; }
 
-      # Build lex
       cd "$WORK/heirloom-devtools-070527/lex"
-      make CC=tcc AR="tcc -ar" CFLAGS="-I$MUSL/include" LDFLAGS="-static" 2>/dev/null || {
-        for src in main sub header search nfa; do
-          tcc -c -I"$MUSL/include" "$src.c" -o "$src.o" 2>/dev/null || true
-        done
-        OBJS=""
-        for f in *.o; do [ -f "$f" ] && OBJS="$OBJS $f"; done
-        if [ -n "$OBJS" ]; then
-          tcc -static $OBJS -o lex 2>/dev/null || true
-        fi
-      }
+      make CC=tcc AR="tcc -ar" CFLAGS="-I$MUSL/include" LDFLAGS="-static" || build_manual lex main sub header search nfa
+      test -x "$WORK/heirloom-devtools-070527/lex/lex" || { echo "ERROR: lex build output missing" >&2; exit 1; }
 
       $BB mkdir -p "$out/bin"
       for tool in yacc lex; do
         f="$WORK/heirloom-devtools-070527/$tool/$tool"
-        if [ -x "$f" ]; then
-          $BB cp "$f" "$out/bin/$tool"
-          $BB chmod 755 "$out/bin/$tool"
-        fi
+        test -x "$f" || { echo "ERROR: $tool binary missing before install" >&2; exit 1; }
+        $BB cp "$f" "$out/bin/$tool"
+        $BB chmod 755 "$out/bin/$tool"
       done
 
-      # At least yacc must be present
-      test -x "$out/bin/yacc"
+      test -x "$out/bin/yacc" || { echo "ERROR: installed yacc missing" >&2; exit 1; }
+      test -x "$out/bin/lex" || { echo "ERROR: installed lex missing" >&2; exit 1; }
     "%,
   ],
   inputs = [stage0, tcc, musl, make, sed, heirloom_src],
