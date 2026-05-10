@@ -1,0 +1,36 @@
+diag-predecessor-verbose: tiny base
+diag-predecessor-verbose: tiny base rc=0 obj=yes
+diag-predecessor-verbose: tiny base stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-predecessor-verbose: tiny base stdout: -> -> %s
+diag-predecessor-verbose: tiny base stdout:
+diag-predecessor-verbose: tiny base stdout: <- <- %s
+diag-predecessor-verbose: tiny base stdout:
+diag-predecessor-verbose: tiny boot
+diag-predecessor-verbose: tiny boot rc=0 obj=yes
+diag-predecessor-verbose: tiny boot stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-predecessor-verbose: tiny boot stdout: -> -> %s
+diag-predecessor-verbose: tiny boot stdout:
+diag-predecessor-verbose: tiny boot stdout: <- <- %s
+diag-predecessor-verbose: tiny boot stdout:
+diag-predecessor-verbose: tiny full
+diag-predecessor-verbose: tiny full rc=0 obj=yes
+diag-predecessor-verbose: tiny full stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-predecessor-verbose: tiny full stdout: -> -> %s
+diag-predecessor-verbose: tiny full stdout:
+diag-predecessor-verbose: tiny full stdout: <- <- %s
+diag-predecessor-verbose: tiny full stdout:
+diag-predecessor-verbose: source h_only
+diag-predecessor-verbose: source h_only rc=0 obj=yes
+diag-predecessor-verbose: source tcctools
+diag-predecessor-verbose: source tcctools rc=0 obj=yes
+diag-predecessor-verbose: source h_tools
+diag-predecessor-verbose: source h_tools rc=0 obj=yes
+diag-predecessor-verbose: source libtcc
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-predecessor-verbose-20260510/run-local-probes.sh: line 77: 76919 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 -D CONFIG_TCCDIR="$TCC/lib/tcc" -D CONFIG_TCC_CRTPREFIX="$MUSL/lib" -D CONFIG_TCC_ELFINTERP="/lib/ld-musl-x86_64.so.1" -D CONFIG_TCC_LIBPATHS="$MUSL/lib:$TCC/lib/tcc" -D CONFIG_TCC_SYSINCLUDEPATHS="$MUSL/include" -D CONFIG_SYSROOT="/" -D TCC_LIBGCC="$MUSL/lib/libc.a" -D TCC_LIBTCC1="$TCC/lib/tcc/libtcc1.a" "$source" -o "$WORK/src/$name.o" > "$WORK/src/$name.out" 2> "$WORK/src/$name.err"
+diag-predecessor-verbose: source libtcc rc=139 obj=no
+diag-predecessor-verbose: source h_lib
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-predecessor-verbose-20260510/run-local-probes.sh: line 77: 98819 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 -D CONFIG_TCCDIR="$TCC/lib/tcc" -D CONFIG_TCC_CRTPREFIX="$MUSL/lib" -D CONFIG_TCC_ELFINTERP="/lib/ld-musl-x86_64.so.1" -D CONFIG_TCC_LIBPATHS="$MUSL/lib:$TCC/lib/tcc" -D CONFIG_TCC_SYSINCLUDEPATHS="$MUSL/include" -D CONFIG_SYSROOT="/" -D TCC_LIBGCC="$MUSL/lib/libc.a" -D TCC_LIBTCC1="$TCC/lib/tcc/libtcc1.a" "$source" -o "$WORK/src/$name.o" > "$WORK/src/$name.out" 2> "$WORK/src/$name.err"
+diag-predecessor-verbose: source h_lib rc=139 obj=no
+diag-predecessor-verbose: source h_lib_tools
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-predecessor-verbose-20260510/run-local-probes.sh: line 77: 104095 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 -D CONFIG_TCCDIR="$TCC/lib/tcc" -D CONFIG_TCC_CRTPREFIX="$MUSL/lib" -D CONFIG_TCC_ELFINTERP="/lib/ld-musl-x86_64.so.1" -D CONFIG_TCC_LIBPATHS="$MUSL/lib:$TCC/lib/tcc" -D CONFIG_TCC_SYSINCLUDEPATHS="$MUSL/include" -D CONFIG_SYSROOT="/" -D TCC_LIBGCC="$MUSL/lib/libc.a" -D TCC_LIBTCC1="$TCC/lib/tcc/libtcc1.a" "$source" -o "$WORK/src/$name.o" > "$WORK/src/$name.out" 2> "$WORK/src/$name.err"
+diag-predecessor-verbose: source h_lib_tools rc=139 obj=no
