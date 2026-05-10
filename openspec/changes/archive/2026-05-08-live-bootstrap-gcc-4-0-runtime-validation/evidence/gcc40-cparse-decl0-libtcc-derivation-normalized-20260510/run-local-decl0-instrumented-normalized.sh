@@ -114,6 +114,41 @@ libtcc_rc=$?
 set -e
 printf 'diag-decl0-normalized-local: libtcc rc=%s\n' "$libtcc_rc"
 sed 's/^/diag-decl0-normalized-local: libtcc stderr: /' /tmp/decl0-normalized-libtcc.stderr || true
+BUILD_DEFS=(
+  -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1
+  -D TCC_TARGET_X86_64=1
+  -D CONFIG_TCCDIR="$TCC/lib/tcc"
+  -D CONFIG_TCC_CRTPREFIX="$MUSL/lib"
+  -D CONFIG_TCC_ELFINTERP="/lib/ld-musl-x86_64.so.1"
+  -D CONFIG_TCC_LIBPATHS="$MUSL/lib:$TCC/lib/tcc"
+  -D CONFIG_TCC_SYSINCLUDEPATHS="$MUSL/include"
+  -D CONFIG_SYSROOT="/" -D TCC_LIBGCC="$MUSL/lib/libc.a" -D TCC_LIBTCC1="$TCC/lib/tcc/libtcc1.a"
+  -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION="0.9.27-decl0-diag" -D ONE_SOURCE=1
+)
+run_phase() {
+  phase=$1
+  shift
+  printf 'diag-decl0-normalized-local: phase %s\n' "$phase"
+  set +e
+  "$@" 2> "/tmp/decl0-normalized-${phase}.stderr"
+  phase_rc=$?
+  set -e
+  printf 'diag-decl0-normalized-local: phase %s rc=%s\n' "$phase" "$phase_rc"
+  sed 's/^/diag-decl0-normalized-local: phase '$phase' stderr: /' "/tmp/decl0-normalized-${phase}.stderr" || true
+}
+
+run_phase compile-only-quiet "$TCC/bin/tcc" -c -I . -I "$MUSL/include" "${BUILD_DEFS[@]}" tcc.c -o /tmp/tcc-decl0-normalized.o
+run_phase compile-only-verbose "$TCC/bin/tcc" -c -v -I . -I "$MUSL/include" "${BUILD_DEFS[@]}" tcc.c -o /tmp/tcc-decl0-normalized.o
+run_phase link-object-default "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-normalized-from-object /tmp/tcc-decl0-normalized.o
+run_phase link-object-explicit-archives "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-normalized-from-object-explicit /tmp/tcc-decl0-normalized.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
+for input in tcc.c /tmp/tcc-decl0-normalized.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" "$MUSL/lib/crtn.o"; do
+  if [ -e "$input" ]; then
+    printf 'diag-decl0-normalized-local: input-exists %s\n' "$input"
+  else
+    printf 'diag-decl0-normalized-local: input-missing %s\n' "$input"
+  fi
+done
+
 printf 'diag-decl0-normalized-local: build instrumented compiler\n'
 set +e
 "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-normalized \

@@ -1496,6 +1496,50 @@ EOF_DIAG_TCC_COMPILE
                 echo "diag-tcc-decl0-part: compile $part_src rc=$part_rc" >&2
                 $BB sed 's/^/diag-tcc-decl0-part: '$part_src' stderr: /' "/tmp/tcc-decl0-${part_src}.stderr" >&2 || true
               done
+              run_decl0_build_phase() {
+                phase="$1"
+                shift
+                echo "diag-tcc-decl0-phase: $phase" >&2
+                set +e
+                "$@" 2> "/tmp/tcc-decl0-${phase}.stderr"
+                phase_rc=$?
+                set -e
+                echo "diag-tcc-decl0-phase: $phase rc=$phase_rc" >&2
+                $BB sed 's/^/diag-tcc-decl0-phase: '$phase' stderr: /' "/tmp/tcc-decl0-${phase}.stderr" >&2 || true
+              }
+              run_decl0_build_phase compile-only-quiet "$TCC/bin/tcc" -c \
+                -I . -I "$MUSL/include" \
+                -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 \
+                -D TCC_TARGET_X86_64=1 \
+                -D CONFIG_TCCDIR=\"$TCC/lib/tcc\" \
+                -D CONFIG_TCC_CRTPREFIX=\"$MUSL/lib\" \
+                -D CONFIG_TCC_ELFINTERP=\"/lib/ld-musl-x86_64.so.1\" \
+                -D CONFIG_TCC_LIBPATHS=\"$MUSL/lib:$TCC/lib/tcc\" \
+                -D CONFIG_TCC_SYSINCLUDEPATHS=\"$MUSL/include\" \
+                -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"$TCC/lib/tcc/libtcc1.a\" \
+                -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
+                tcc.c -o /tmp/tcc-decl0-instrumented.o
+              run_decl0_build_phase compile-only-verbose "$TCC/bin/tcc" -c -v \
+                -I . -I "$MUSL/include" \
+                -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 \
+                -D TCC_TARGET_X86_64=1 \
+                -D CONFIG_TCCDIR=\"$TCC/lib/tcc\" \
+                -D CONFIG_TCC_CRTPREFIX=\"$MUSL/lib\" \
+                -D CONFIG_TCC_ELFINTERP=\"/lib/ld-musl-x86_64.so.1\" \
+                -D CONFIG_TCC_LIBPATHS=\"$MUSL/lib:$TCC/lib/tcc\" \
+                -D CONFIG_TCC_SYSINCLUDEPATHS=\"$MUSL/include\" \
+                -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"$TCC/lib/tcc/libtcc1.a\" \
+                -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
+                tcc.c -o /tmp/tcc-decl0-instrumented.o
+              run_decl0_build_phase link-object-default "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object /tmp/tcc-decl0-instrumented.o
+              run_decl0_build_phase link-object-explicit-archives "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object-explicit /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
+              for input in tcc.c /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" "$MUSL/lib/crtn.o"; do
+                if [ -e "$input" ]; then
+                  echo "diag-tcc-decl0-phase: input-exists $input" >&2
+                else
+                  echo "diag-tcc-decl0-phase: input-missing $input" >&2
+                fi
+              done
               echo "diag-tcc-decl0: build instrumented compiler" >&2
               set +e
               "$TCC/bin/tcc" -v -static -o "$diag_tcc" \

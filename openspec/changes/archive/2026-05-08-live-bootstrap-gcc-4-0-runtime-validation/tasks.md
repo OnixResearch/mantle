@@ -34,3 +34,4 @@
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-compile-shape.md` narrows the paired-cleanup second trigger into `libtcc.c::tcc_compile`; direct `decl0` runtime markers remain blocked.
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-compile-signature.md` tests the `tcc_compile` empty-definition signature/name trigger; direct `decl0` runtime markers remain blocked.
   - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-post621-declaration.md` separates generic post-`tcc_open` declarations from the exact `tcc_compile` name/signature; direct `decl0` runtime markers remain blocked.
+  - Evidence: `evidence/V2-gcc40-gcc-c-parse-decl0-libtcc-derivation-normalized.md` carries accumulated `libtcc.c` normalizations into the derivation and splits instrumented one-source TinyCC build phases; `libtcc.c` compiles (`rc=0`), but compile-only `tcc.c` still segfaults (`rc=139`) before any object/link phase, with verbose input already degraded to `-> %s`.
