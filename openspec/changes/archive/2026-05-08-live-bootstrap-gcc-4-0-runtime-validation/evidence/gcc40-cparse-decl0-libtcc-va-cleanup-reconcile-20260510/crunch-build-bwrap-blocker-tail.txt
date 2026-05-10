@@ -1,0 +1,43 @@
+command: nix-shell -p bubblewrap --run ./target/debug/crunch build bootstrap/diag-gcc40-c-parse-boundary.ncl --store $PWD/.crunch-drain/store -j 4 --trust-unsigned
+result: rc=1 before diag script; dependency bash-2.05b-tcc.drv failed parsing command under TCC-built bash
+
+unwind_prot.c:307: warning: implicit declaration of function 'bcopy'
+sig.c:80: warning: implicit declaration of function 'initialize_job_signals'
+sig.c:80: warning: implicit declaration of function 'initialize_job_signals'
+stringlib.c:283: warning: implicit declaration of function 'bcopy'
+stringlib.c:283: warning: implicit declaration of function 'bcopy'
+lib/readline/readline_stub.c:10: warning: implicit declaration of function 'malloc'
+lib/readline/readline_stub.c:10: warning: implicit declaration of function 'malloc'
+lib/readline/readline_stub.c:10: warning: assignment makes pointer from integer without a cast
+lib/readline/readline_stub.c:10: warning: assignment makes pointer from integer without a cast
+lib/readline/readline_stub.c:11: warning: implicit declaration of function 'memcpy'
+lib/readline/readline_stub.c:11: warning: implicit declaration of function 'memcpy'
+lib/glob/glob.c:503: warning: implicit declaration of function 'bcopy'
+lib/glob/glob.c:503: warning: implicit declaration of function 'bcopy'
+In file included from lib/glob/smatch.c:226:
+lib/glob/sm_loop.c:345: warning: implicit declaration of function 'bcopy'
+In file included from lib/glob/smatch.c:226:
+lib/glob/sm_loop.c:345: warning: implicit declaration of function 'bcopy'
+lib/tilde/tilde.c:376: warning: implicit declaration of function 'endpwent'
+lib/tilde/tilde.c:376: warning: implicit declaration of function 'endpwent'
+lib/sh/oslib.c:227: warning: implicit declaration of function 'kill'
+lib/sh/oslib.c:227: warning: implicit declaration of function 'kill'
+lib/sh/setlinebuf.c:59: warning: implicit declaration of function 'setlinebuf'
+lib/sh/setlinebuf.c:59: warning: implicit declaration of function 'setlinebuf'
+lib/sh/netopen.c:334: warning: implicit declaration of function 'internal_error'
+lib/sh/netopen.c:334: warning: implicit declaration of function 'internal_error'
+lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
+lib/sh/strindex.c:44: warning: implicit declaration of function 'strncasecmp'
+builtins/common.c:109: warning: implicit declaration of function 'vfprintf'
+builtins/common.c:109: warning: implicit declaration of function 'vfprintf'
+builtins/evalstring.c:324: warning: implicit declaration of function 'zcatfd'
+builtins/evalstring.c:324: warning: implicit declaration of function 'zcatfd'
+./bash: -c: line 1: unexpected EOF while looking for matching `a'
+./bash: -c: line 2: syntax error: unexpected end of file
+
+hermeticity: practical (no degraded facts)
+FAILED root: diag-gcc40-c-parse-boundary
+  phase: build
+  error_class: builder
+  saved_log_path: /home/brittonr/.local/state/crunch/logs/p85sd8x850w75kg0i0ai2jf1sfpb7l5m-diag-gcc40-c-parse-boundary.drv.log
+  message: dependency bash-2.05b-tcc.drv failed

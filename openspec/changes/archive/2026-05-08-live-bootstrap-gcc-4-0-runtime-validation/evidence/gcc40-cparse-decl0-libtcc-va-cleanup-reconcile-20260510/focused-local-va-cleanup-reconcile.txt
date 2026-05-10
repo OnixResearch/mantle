@@ -1,0 +1,5 @@
+diag-libtcc-va-cleanup: tcc=/home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/b557z7jmjqnlz118c8zvwdjvkv4v5qb3-tcc-0.9.27-musl-v2/bin/tcc
+diag-libtcc-va-cleanup: source=/home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/4jp67gx0k6h76np8wazalwlg5wyg5g3q-tcc-0.9.27-src
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-va-cleanup-reconcile-20260510/run-local-va-cleanup-reconcile.sh: line 68: 2079239 Segmentation fault         (core dumped) "$TCC/bin/tcc" -c -I . -I "$MUSL/include" $flags libtcc.c -o "$WORK/$label.o" > "$WORK/$label.stdout" 2> "$WORK/$label.stderr"
+diag-libtcc-va-cleanup: compile asm_simplified_one_source rc=139 object=no
+diag-libtcc-va-cleanup: compile va_cleanup_one_source rc=0 object=yes

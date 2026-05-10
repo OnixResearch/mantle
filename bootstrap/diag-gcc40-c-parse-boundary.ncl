@@ -1305,7 +1305,13 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
               $BB awk 'NR == 642 { print "            tcc_error_noabort(\"asm not supported\");"; skip = 1; next } skip && NR <= 646 { print "            /* CRUNCH diag: CONFIG_TCC_ASM island removed */"; next } { print }' libtcc.c > libtcc.c.tmp
               $BB mv libtcc.c.tmp libtcc.c
+              for flags_name in common one_source; do
+                compile_decl0_prepart libtcc_asm_simplified "$flags_name" libtcc.c
+              done
               $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed with va_end pair \*\//g; s/^[[:space:]]*va_end(ap);/    \/\* CRUNCH diag: va_end removed with va_start pair \*\//g' libtcc.c
+              for flags_name in common one_source; do
+                compile_decl0_prepart libtcc_va_cleanup "$flags_name" libtcc.c
+              done
               $BB awk '{ if ($0 ~ /^[[:space:]]*sscanf\(TCC_VERSION,/) print "        a = 0; b = 9; c = 27; /* CRUNCH diag: sscanf(TCC_VERSION) bypassed */"; else print }' libtcc.c > libtcc.c.tmp
               $BB mv libtcc.c.tmp libtcc.c
               $BB sed -i '/copy_linker_arg(\&s->/c\            /* CRUNCH diag: copy_linker_arg field call removed */' libtcc.c
