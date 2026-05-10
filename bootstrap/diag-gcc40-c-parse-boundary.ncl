@@ -1250,7 +1250,7 @@ EOF
               $BB sed -i '/sprintf(buf,/c\
     buf[0] = 34; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
               $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
-              tcc_diag_flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1'
+              tcc_diag_flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION="0.9.27-decl0-diag"'
               tcc_diag_flags_one="$tcc_diag_flags_common -D ONE_SOURCE=1"
               compile_decl0_prepart() {
                 stage="$1"
@@ -1295,7 +1295,7 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
         if (tcc_add_file_internal(s, buf, AFF_TYPE_BIN) == 0)\
             return 0;\
     }\
-    tcc_error_noabort("file '\''%s'\'' not found", filename);\
+    return 0; /* CRUNCH diag: suppress missing crt error in predecessor build */;\
     return 0;\
 }' libtcc.c
               $BB sed -i '/vsnprintf(buf + len/s|.*|    strcat(buf, fmt);|' libtcc.c
@@ -1303,6 +1303,31 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
               $BB sed -i '/default case: stderr/,/fflush(stderr)/s|^[[:space:]]*fprintf(stderr, .*|        fputs(buf, stderr); fputs("\\n", stderr);|' libtcc.c
               $BB sed -i '/s1->error_set_jmp_enabled = 0;/a\    if (s1->nb_errors != 0) return -1;' libtcc.c
               $BB sed -i '/snprintf(buf, sizeof(buf),/s|.*|    strcpy(buf, name);|' tcc.c
+              $BB awk 'NR == 642 { print "            tcc_error_noabort(\"asm not supported\");"; skip = 1; next } skip && NR <= 646 { print "            /* CRUNCH diag: CONFIG_TCC_ASM island removed */"; next } { print }' libtcc.c > libtcc.c.tmp
+              $BB mv libtcc.c.tmp libtcc.c
+              $BB sed -i 's/^[[:space:]]*va_start(ap, fmt);/    \/\* CRUNCH diag: va_start removed with va_end pair \*\//g; s/^[[:space:]]*va_end(ap);/    \/\* CRUNCH diag: va_end removed with va_start pair \*\//g' libtcc.c
+              $BB awk '{ if ($0 ~ /^[[:space:]]*sscanf\(TCC_VERSION,/) print "        a = 0; b = 9; c = 27; /* CRUNCH diag: sscanf(TCC_VERSION) bypassed */"; else print }' libtcc.c > libtcc.c.tmp
+              $BB mv libtcc.c.tmp libtcc.c
+              $BB sed -i '/copy_linker_arg(\&s->/c\            /* CRUNCH diag: copy_linker_arg field call removed */' libtcc.c
+              $BB awk '
+                {
+                  if ($0 == "#ifdef TCC_TARGET_X86_64" && prev ~ /ms_bitfields/) {
+                    print "/* CRUNCH diag: options_m TCC_TARGET_X86_64 guard removed */"
+                    while ((getline line) > 0) {
+                      if (line == "#endif") {
+                        print "/* CRUNCH diag: end removed options_m guard */"
+                        break
+                      }
+                      print line
+                    }
+                    prev = ""
+                    next
+                  }
+                  print
+                  prev = $0
+                }
+              ' libtcc.c > libtcc.c.tmp
+              $BB mv libtcc.c.tmp libtcc.c
               for flags_name in common one_source; do
                 compile_decl0_prepart libtcc_string_patch "$flags_name" libtcc.c
               done
@@ -1482,7 +1507,7 @@ EOF_DIAG_TCC_COMPILE
                 -D CONFIG_TCC_ELFINTERP=\"/lib/ld-musl-x86_64.so.1\" \
                 -D CONFIG_TCC_LIBPATHS=\"$MUSL/lib:$TCC/lib/tcc\" \
                 -D CONFIG_TCC_SYSINCLUDEPATHS=\"$MUSL/include\" \
-                -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"libtcc1.a\" \
+                -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"$TCC/lib/tcc/libtcc1.a\" \
                 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
                 tcc.c 2> /tmp/tcc-decl0-build.stderr
               build_rc=$?

@@ -109,3 +109,7 @@ Conclusion: `TCC_VERSION` is not the next real `tcc_parse_args()` blocker once t
   - the full locally-normalized `libtcc.asm_simplified.c` file compiles (`rc=0`) under both common flags and `-D ONE_SOURCE=1`.
 
 Conclusion: after applying the faithful `TCC_VERSION` definition, the local replay has no remaining `tcc_parse_args()` tail blocker, and the cumulatively-normalized full `libtcc.c` compiles in the predecessor context. The next useful reduction should move from `libtcc.c` local compile bisection back toward the broader diagnostic derivation/runtime-marker path.
+
+## Broader diagnostic path follow-up
+
+See `../V2-gcc40-gcc-c-parse-decl0-libtcc-derivation-normalized.md` and `../gcc40-cparse-decl0-libtcc-derivation-normalized-20260510/` for the first broader-path rerun. The diagnostic NCL now carries the accumulated local normalizations and evaluates successfully; the full Crunch build was blocked by a prerequisite `bash-2.05b-tcc.drv` failure before the target derivation ran. A restored-output local replay still compiles full normalized `libtcc.c` (`rc=0`) but the instrumented one-source TinyCC executable build fails at the link/add-file path (`rc=139`) with a malformed missing-file diagnostic, before any `diag-tcc-decl0-runtime:` markers can execute.

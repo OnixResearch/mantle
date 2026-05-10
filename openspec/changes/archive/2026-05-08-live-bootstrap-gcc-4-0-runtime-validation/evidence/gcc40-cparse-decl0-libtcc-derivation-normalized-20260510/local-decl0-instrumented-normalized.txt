@@ -1,0 +1,14 @@
+diag-decl0-normalized-local: mode=crunch-cache-restored
+diag-decl0-normalized-local: tcc=/tmp/crunch-tcc-version-faithful-restore/wl2qc53zbwka1qkq5kn1vk5lqzn6zh8l-tcc-0.9.27-musl-v2/bin/tcc
+diag-decl0-normalized-local: musl=/tmp/crunch-tcc-version-faithful-restore/p1m8x9l2kbprlqbwy8xxahqjrkrb7v8i-musl-1.1.24-tcc-musl
+diag-decl0-normalized-local: source=/tmp/crunch-tcc-version-faithful-restore/4jp67gx0k6h76np8wazalwlg5wyg5g3q-tcc-0.9.27-src
+diag-decl0-normalized-local: compile full libtcc
+diag-decl0-normalized-local: libtcc rc=0
+diag-decl0-normalized-local: build instrumented compiler
+tcc version 0.9.27 (x86_64 Linux)
+-> -> %s
+
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-libtcc-derivation-normalized-20260510/run-local-decl0-instrumented-normalized.sh: line 130: 2838711 Segmentation fault         (core dumped) "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-normalized -I . -I "$MUSL/include" -D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCDIR="$TCC/lib/tcc" -D CONFIG_TCC_CRTPREFIX="$MUSL/lib" -D CONFIG_TCC_ELFINTERP="/lib/ld-musl-x86_64.so.1" -D CONFIG_TCC_LIBPATHS="$MUSL/lib:$TCC/lib/tcc" -D CONFIG_TCC_SYSINCLUDEPATHS="$MUSL/include" -D CONFIG_SYSROOT="/" -D TCC_LIBGCC="$MUSL/lib/libc.a" -D TCC_LIBTCC1="$TCC/lib/tcc/libtcc1.a" -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION="0.9.27-decl0-diag" -D ONE_SOURCE=1 tcc.c 2> /tmp/decl0-normalized-build.stderr
+diag-decl0-normalized-local: build rc=139
+diag-decl0-normalized-local: build stderr: tcc: error: file 'file '%s' not found' not found
+diag-decl0-normalized-local: build stderr: tcc: error: file 'file '%s' not found' not found

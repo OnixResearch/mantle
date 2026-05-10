@@ -1,0 +1,28 @@
+{
+  "schema": "crunch-build-report-v1",
+  "file": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+  "output_dir": "/home/brittonr/git/crunch/crunch/.crunch-drain/store",
+  "state_dir": "/home/brittonr/.local/state/crunch",
+  "store_dir": "/crunch/store",
+  "hermeticity_mode": "practical",
+  "hermeticity_audit_events": [],
+  "diagnostic_persistence_failures": [],
+  "counts": {
+    "succeeded_total": 0,
+    "built_total": 0,
+    "cached_total": 0,
+    "failed_total": 1
+  },
+  "outcomes": [],
+  "failed": [
+    {
+      "root": "diag-gcc40-c-parse-boundary",
+      "drv_key": "/crunch/store/bwi8ijf4i878cd3m7i6vbximf4iqswhk-diag-gcc40-c-parse-boundary.drv",
+      "phase": "build",
+      "error_class": "builder",
+      "message": "dependency bash-2.05b-tcc.drv failed",
+      "saved_log_path": "/home/brittonr/.local/state/crunch/logs/bwi8ijf4i878cd3m7i6vbximf4iqswhk-diag-gcc40-c-parse-boundary.drv.log"
+    }
+  ],
+  "fod_mismatches": []
+}
