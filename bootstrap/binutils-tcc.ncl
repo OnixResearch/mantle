@@ -16,7 +16,6 @@ let sed = import "sed-4.0.9-musl.ncl" in
 let m4 = import "m4-1.4.7-musl.ncl" in
 let grep = import "grep-2.4-musl.ncl" in
 let diffutils = import "diffutils-2.7-musl.ncl" in
-let bash = import "bash-2.05b-tcc.ncl" in
 let tar = import "tar-tcc.ncl" in
 let bzip2 = import "bzip2-1.0.8-musl.ncl" in
 
@@ -52,12 +51,14 @@ let binutils_src = crunch.fetchTarball {
       M4=$(find_input m4-1.4.7-musl)
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
-      BASH=$(find_input bash-2.05b-tcc)
       TAR=$(find_input tar-1.12-tcc)
       BZIP2=$(find_input bzip2-1.0.8-musl)
       SRC=$(find_input binutils-2.30-src)
 
-      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
+      # Avoid the tcc-built bash handoff here. The derivation executes all
+      # configure/build phases through the native sandbox /bin/sh and only needs
+      # bootstrap userland tools on PATH.
+      export PATH="$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$TAR/bin:$BZIP2/bin:$STAGE0/bin:$PATH"
       export CONFIG_SHELL=/bin/sh
       export SHELL=/bin/sh
       export CC=tcc
@@ -507,5 +508,5 @@ ASM
       echo "binutils-2.30 bridge smoke test passed"
     "%,
   ],
-  inputs = [stage0, mes, tcc, musl, make, sed, m4, grep, diffutils, bash, tar, bzip2, binutils_src],
+  inputs = [stage0, mes, tcc, musl, make, sed, m4, grep, diffutils, tar, bzip2, binutils_src],
 } | crunch.Derivation
