@@ -203,6 +203,7 @@ static void crunch_diag_uint(char *buf, int buf_size, int *pos, unsigned long lo
 static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)\
 {\
     int pos = strlen(buf);\
+    (void)va_arg(ap, char *); /* CRUNCH: TinyCC/Mes x86_64 va_start exposes the named fmt slot first. */\
     while (*fmt) {\
         int long_mod = 0;\
         if (*fmt != '\''%'\'') { crunch_diag_putc(buf, buf_size, &pos, *fmt++); continue; }\

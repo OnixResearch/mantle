@@ -1251,8 +1251,8 @@ EOF
               $BB sed -i '/sprintf(buf,/c\
     buf[0] = 34; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
               $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
-              tcc_diag_flags_common='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION="0.9.27-decl0-diag"'
-              tcc_diag_flags_one="$tcc_diag_flags_common -D ONE_SOURCE=1"
+              tcc_diag_flags_common='-DBOOTSTRAP=1 -DHAVE_BITFIELD=1 -DHAVE_FLOAT=1 -DHAVE_LONG_LONG=1 -DHAVE_SETJMP=1 -DTCC_TARGET_X86_64=1 -DCONFIG_TCCBOOT=1 -DCONFIG_TCC_STATIC=1 -DCONFIG_USE_LIBGCC=1 -DTCC_VERSION="0.9.27-decl0-diag"'
+              tcc_diag_flags_one="$tcc_diag_flags_common -DONE_SOURCE=1"
               compile_decl0_prepart() {
                 stage="$1"
                 flags_name="$2"
@@ -1516,7 +1516,7 @@ EOF_DIAG_TCC_COMPILE
                 }
               ' tcc.c > tcc.c.tmp
               $BB mv tcc.c.tmp tcc.c
-              tcc_diag_flags='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D ONE_SOURCE=1'
+              tcc_diag_flags='-DBOOTSTRAP=1 -DHAVE_BITFIELD=1 -DHAVE_FLOAT=1 -DHAVE_LONG_LONG=1 -DHAVE_SETJMP=1 -DTCC_TARGET_X86_64=1 -DCONFIG_TCCBOOT=1 -DCONFIG_TCC_STATIC=1 -DCONFIG_USE_LIBGCC=1 -DONE_SOURCE=1 -DTCC_VERSION="0.9.27-decl0-diag"'
               echo "diag-tcc-decl0-part: preprocess one-source" >&2
               set +e
               "$TCC/bin/tcc" -E -P -I . -I "$MUSL/include" $tcc_diag_flags tcc.c > /tmp/tcc-decl0-one-source.i 2> /tmp/tcc-decl0-preprocess.stderr
@@ -1568,6 +1568,10 @@ EOF_DIAG_TCC_COMPILE
                 -D CONFIG_SYSROOT=\"/\" -D TCC_LIBGCC=\"$MUSL/lib/libc.a\" -D TCC_LIBTCC1=\"$TCC/lib/tcc/libtcc1.a\" \
                 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-decl0-diag\" -D ONE_SOURCE=1 \
                 tcc.c -o /tmp/tcc-decl0-instrumented.o
+              if [ -x "$BINUTILS/bin/nm" ] && [ -f /tmp/tcc-decl0-instrumented.o ]; then
+                echo "diag-tcc-decl0-phase: object undefined symbols" >&2
+                "$BINUTILS/bin/nm" -u /tmp/tcc-decl0-instrumented.o 2>&1 | $BB sed 's/^/diag-tcc-decl0-phase: object-undef: /' >&2 || true
+              fi
               run_decl0_build_phase link-object-default "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object /tmp/tcc-decl0-instrumented.o
               run_decl0_build_phase link-object-explicit-archives "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object-explicit /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
               for input in tcc.c /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" "$MUSL/lib/crtn.o"; do
