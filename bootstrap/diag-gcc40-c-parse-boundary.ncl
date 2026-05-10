@@ -1479,6 +1479,36 @@ EOF_DIAG_TCC_COMPILE
                 }
               ' tccgen.c > tccgen.c.tmp
               $BB mv tccgen.c.tmp tccgen.c
+              $BB awk '
+                {
+                  print
+                  if ($0 ~ /^ST_FUNC int tcc_open\(TCCState \*s1, const char \*filename\)/) in_open = 1
+                  if (in_open && $0 ~ /^[[:space:]]*int fd;/) {
+                    print "    fputs(\"diag-tcc-file: tcc_open enter\\n\", stderr);"
+                    in_open = 0
+                  }
+                  if ($0 ~ /^ST_FUNC int tcc_add_file_internal\(TCCState \*s1, const char \*filename, int flags\)/) in_internal = 1
+                  if (in_internal && $0 ~ /^[[:space:]]*int ret;/) {
+                    print "    fputs(\"diag-tcc-file: add_file_internal enter\\n\", stderr);"
+                    in_internal = 0
+                  }
+                  if ($0 ~ /^LIBTCCAPI int tcc_add_file\(TCCState \*s, const char \*filename\)/) in_public = 1
+                  if (in_public && $0 ~ /^[[:space:]]*int filetype = s->filetype;/) {
+                    print "    fputs(\"diag-tcc-file: add_file public enter\\n\", stderr);"
+                    in_public = 0
+                  }
+                }
+              ' libtcc.c > libtcc.c.tmp
+              $BB mv libtcc.c.tmp libtcc.c
+              $BB awk '
+                {
+                  if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
+                    print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
+                  }
+                  print
+                }
+              ' tcc.c > tcc.c.tmp
+              $BB mv tcc.c.tmp tcc.c
               tcc_diag_flags='-D BOOTSTRAP=1 -D HAVE_BITFIELD=1 -D HAVE_FLOAT=1 -D HAVE_LONG_LONG=1 -D HAVE_SETJMP=1 -D TCC_TARGET_X86_64=1 -D CONFIG_TCCBOOT=1 -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D ONE_SOURCE=1'
               echo "diag-tcc-decl0-part: preprocess one-source" >&2
               set +e

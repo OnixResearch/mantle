@@ -1,0 +1,34 @@
+diag-tcc-add-file-phase: compile-only-quiet
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-add-file-loop-20260510/run-local-probes.sh: line 85: 3959311 Segmentation fault         (core dumped) "$@" > /tmp/tcc-add-file-$phase.stdout 2> /tmp/tcc-add-file-$phase.stderr
+diag-tcc-add-file-phase: compile-only-quiet rc=139
+diag-tcc-add-file-phase: compile-only-verbose
+openspec/changes/archive/2026-05-08-live-bootstrap-gcc-4-0-runtime-validation/evidence/gcc40-cparse-decl0-add-file-loop-20260510/run-local-probes.sh: line 85: 3959643 Segmentation fault         (core dumped) "$@" > /tmp/tcc-add-file-$phase.stdout 2> /tmp/tcc-add-file-$phase.stderr
+diag-tcc-add-file-phase: compile-only-verbose rc=139
+diag-tcc-add-file-phase: compile-only-verbose stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-tcc-add-file-phase: compile-only-verbose stdout: -> -> %s
+diag-tcc-add-file-phase: compile-only-verbose stdout:
+diag-tcc-add-file-phase: link-object-default
+diag-tcc-add-file-phase: link-object-default rc=1
+diag-tcc-add-file-phase: link-object-default stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-tcc-add-file-phase: link-object-default stdout: -> -> %s
+diag-tcc-add-file-phase: link-object-default stdout:
+diag-tcc-add-file-phase: link-object-default stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-default stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-default stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-default stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-explicit-archives
+diag-tcc-add-file-phase: link-object-explicit-archives rc=1
+diag-tcc-add-file-phase: link-object-explicit-archives stdout: tcc version 0.9.27 (x86_64 Linux)
+diag-tcc-add-file-phase: link-object-explicit-archives stdout: -> -> %s
+diag-tcc-add-file-phase: link-object-explicit-archives stdout:
+diag-tcc-add-file-phase: link-object-explicit-archives stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-explicit-archives stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-explicit-archives stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: link-object-explicit-archives stderr: tcc: error: file 'file '%s' not found' not found
+diag-tcc-add-file-phase: input-exists tcc.c
+diag-tcc-add-file-phase: input-missing /tmp/tcc-add-file-instrumented.o
+diag-tcc-add-file-phase: input-exists /home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/b557z7jmjqnlz118c8zvwdjvkv4v5qb3-tcc-0.9.27-musl-v2/lib/tcc/libtcc1.a
+diag-tcc-add-file-phase: input-exists /home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/g38fpdz6wrs7n2p5f3afqbcb3w4s2m64-musl-1.1.24-tcc-musl/lib/libc.a
+diag-tcc-add-file-phase: input-exists /home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/g38fpdz6wrs7n2p5f3afqbcb3w4s2m64-musl-1.1.24-tcc-musl/lib/crt1.o
+diag-tcc-add-file-phase: input-exists /home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/g38fpdz6wrs7n2p5f3afqbcb3w4s2m64-musl-1.1.24-tcc-musl/lib/crti.o
+diag-tcc-add-file-phase: input-exists /home/brittonr/git/crunch/crunch/.crunch-drain/post621-restored-store/g38fpdz6wrs7n2p5f3afqbcb3w4s2m64-musl-1.1.24-tcc-musl/lib/crtn.o
