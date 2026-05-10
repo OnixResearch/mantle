@@ -1517,7 +1517,9 @@ EOF_DIAG_TCC_COMPILE
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
-                    print "    fputs(\"diag-tcc-main: enter\\n\", stderr);"
+                    print "    static volatile const char *diag_tcc_main_marker = \"diag-tcc-main: enter\";"
+                    print "    write(2, (const void *)diag_tcc_main_marker, 20);"
+                    print "    write(2, \"\\n\", 1);"
                     in_main = 0
                   }
                 }
@@ -1532,6 +1534,9 @@ EOF_DIAG_TCC_COMPILE
               set -e
               echo "diag-tcc-decl0-part: preprocess rc=$part_rc lines=$($BB wc -l < /tmp/tcc-decl0-one-source.i 2>/dev/null || echo 0)" >&2
               $BB sed 's/^/diag-tcc-decl0-part: preprocess-stderr: /' /tmp/tcc-decl0-preprocess.stderr >&2 || true
+              $BB grep -a 'diag-tcc-main: enter' /tmp/tcc-decl0-one-source.i >/dev/null \
+                && echo "diag-tcc-decl0-materialized: preprocessed has-marker diag-tcc-main: enter" >&2 \
+                || echo "diag-tcc-decl0-materialized: preprocessed missing-marker diag-tcc-main: enter" >&2
               for part_src in tccpp.c tccgen.c tccelf.c x86_64-gen.c libtcc.c; do
                 echo "diag-tcc-decl0-part: compile $part_src" >&2
                 set +e
@@ -1552,6 +1557,26 @@ EOF_DIAG_TCC_COMPILE
                 echo "diag-tcc-decl0-phase: $phase rc=$phase_rc" >&2
                 $BB sed 's/^/diag-tcc-decl0-phase: '$phase' stdout: /' "/tmp/tcc-decl0-${phase}.stdout" >&2 || true
                 $BB sed 's/^/diag-tcc-decl0-phase: '$phase' stderr: /' "/tmp/tcc-decl0-${phase}.stderr" >&2 || true
+              }
+              probe_decl0_materialized_file() {
+                label="$1"
+                path="$2"
+                if [ -f "$path" ]; then
+                  bytes=$($BB wc -c < "$path" 2>/dev/null || echo unknown)
+                  echo "diag-tcc-decl0-materialized: $label exists bytes=$bytes path=$path" >&2
+                  for marker in 'diag-tcc-main: enter' '0.9.27-decl0-diag'; do
+                    $BB grep -a "$marker" "$path" >/dev/null \
+                      && echo "diag-tcc-decl0-materialized: $label has-marker $marker" >&2 \
+                      || echo "diag-tcc-decl0-materialized: $label missing-marker $marker" >&2
+                  done
+                  if [ -x "$BINUTILS/bin/nm" ]; then
+                    "$BINUTILS/bin/nm" "$path" 2>&1 \
+                      | $BB grep -E '(^| )[TtU] (main|_start|write)$' \
+                      | $BB sed 's/^/diag-tcc-decl0-materialized: '$label' symbol: /' >&2 || true
+                  fi
+                else
+                  echo "diag-tcc-decl0-materialized: $label missing path=$path" >&2
+                fi
               }
               run_decl0_build_phase compile-only-quiet "$TCC/bin/tcc" -c \
                 -I . -I "$MUSL/include" \
@@ -1581,8 +1606,9 @@ EOF_DIAG_TCC_COMPILE
                 echo "diag-tcc-decl0-phase: object undefined symbols" >&2
                 "$BINUTILS/bin/nm" -u /tmp/tcc-decl0-instrumented.o 2>&1 | $BB sed 's/^/diag-tcc-decl0-phase: object-undef: /' >&2 || true
               fi
+              if [ -f /tmp/tcc-decl0-instrumented.o ]; then $BB chmod u+rw /tmp/tcc-decl0-instrumented.o || true; fi
+              probe_decl0_materialized_file compile-object /tmp/tcc-decl0-instrumented.o
               if [ -f /tmp/tcc-decl0-instrumented.o ]; then
-                $BB chmod u+rw /tmp/tcc-decl0-instrumented.o || true
                 $BB cp /tmp/tcc-decl0-instrumented.o ./tcc-decl0-instrumented.o
                 $BB cat > /tmp/tcc-decl0-link-shims.c <<'EOF_DECL0_LINK_SHIMS'
 typedef long time_t;
@@ -1599,12 +1625,38 @@ int execvp(const char *file, char *const argv[]) { (void)file; (void)argv; retur
 int gettimeofday(struct timeval *tv, void *tz) { (void)tz; if (tv) { tv->tv_sec = 0; tv->tv_usec = 0; } return 0; }
 EOF_DECL0_LINK_SHIMS
                 run_decl0_build_phase compile-link-shims "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-link-shims.c -o /tmp/tcc-decl0-link-shims.o
+                $BB cat > /tmp/tcc-decl0-startup-smoke.c <<'EOF_DECL0_STARTUP_SMOKE'
+int write(int fd, const void *buf, unsigned long count);
+int main(int argc, char **argv) { (void)argv; write(2, "diag-startup-smoke: main\n", 25); return argc == 123; }
+EOF_DECL0_STARTUP_SMOKE
+                run_decl0_build_phase startup-smoke-compile "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-startup-smoke.c -o /tmp/tcc-decl0-startup-smoke.o
+                if [ -f /tmp/tcc-decl0-startup-smoke.o ]; then $BB chmod u+rw /tmp/tcc-decl0-startup-smoke.o || true; fi
+                run_decl0_build_phase startup-smoke-link-manual "$TCC/bin/tcc" -nostdlib -static \
+                  -o /tmp/tcc-decl0-startup-smoke-manual \
+                  "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/tcc-decl0-startup-smoke.o \
+                  "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+                run_decl0_build_phase startup-smoke-link-driver "$TCC/bin/tcc" -static \
+                  -o /tmp/tcc-decl0-startup-smoke-driver /tmp/tcc-decl0-startup-smoke.c
+                for startup_smoke in manual driver; do
+                  startup_path="/tmp/tcc-decl0-startup-smoke-$startup_smoke"
+                  if [ -f "$startup_path" ]; then $BB chmod 755 "$startup_path" || true; fi
+                  echo "diag-tcc-decl0-startup-smoke: run $startup_smoke" >&2
+                  set +e
+                  $BB timeout 5 "$startup_path" > "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stdout" 2> "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stderr"
+                  startup_rc=$?
+                  set -e
+                  echo "diag-tcc-decl0-startup-smoke: $startup_smoke rc=$startup_rc" >&2
+                  $BB sed 's/^/diag-tcc-decl0-startup-smoke: '$startup_smoke' stdout: /' "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stdout" >&2 || true
+                  $BB sed 's/^/diag-tcc-decl0-startup-smoke: '$startup_smoke' stderr: /' "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stderr" >&2 || true
+                done
                 if [ -f /tmp/tcc-decl0-link-shims.o ]; then $BB chmod u+rw /tmp/tcc-decl0-link-shims.o || true; fi
                 run_decl0_build_phase link-object-musl-shims "$TCC/bin/tcc" -v -nostdlib -static \
                   -o /tmp/tcc-decl0-instrumented-musl-shims \
                   "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" ./tcc-decl0-instrumented.o /tmp/tcc-decl0-link-shims.o \
                   "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
                 if [ -f /tmp/tcc-decl0-instrumented-musl-shims ]; then
+                  $BB chmod u+rw /tmp/tcc-decl0-instrumented-musl-shims || true
+                  probe_decl0_materialized_file musl-shim-binary /tmp/tcc-decl0-instrumented-musl-shims
                   $BB grep -a 'diag-tcc-main: enter' /tmp/tcc-decl0-instrumented-musl-shims >/dev/null \
                     && echo "diag-tcc-decl0-phase: binary-has-main-marker" >&2 \
                     || echo "diag-tcc-decl0-phase: binary-missing-main-marker" >&2
@@ -1641,6 +1693,7 @@ EOF_DECL0_LINK_SHIMS
               echo "diag-tcc-decl0: build rc=$build_rc" >&2
               $BB sed 's/^/diag-tcc-decl0: build-stderr: /' /tmp/tcc-decl0-build.stderr >&2 || true
               if [ "$build_rc" = 0 ]; then
+                probe_decl0_materialized_file direct-build-binary "$diag_tcc"
                 $BB chmod 755 "$diag_tcc"
                 echo "$diag_tcc"
               elif [ -x /tmp/tcc-decl0-instrumented-musl-shims ] || [ -f /tmp/tcc-decl0-instrumented-musl-shims ]; then
