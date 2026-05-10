@@ -1514,10 +1514,16 @@ EOF_DIAG_TCC_COMPILE
                   if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
                     print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
                   }
+                  if ($0 ~ /main\(.*argc/) in_main = 1
                   print
+                  if (in_main && $0 ~ /^[[:space:]]*\{/) {
+                    print "    fputs(\"diag-tcc-main: enter\\n\", stderr);"
+                    in_main = 0
+                  }
                 }
               ' tcc.c > tcc.c.tmp
               $BB mv tcc.c.tmp tcc.c
+              $BB grep -n 'diag-tcc-main' tcc.c 2>&1 | $BB sed 's/^/diag-tcc-main-source: /' >&2 || true
               tcc_diag_flags='-DBOOTSTRAP=1 -DHAVE_BITFIELD=1 -DHAVE_FLOAT=1 -DHAVE_LONG_LONG=1 -DHAVE_SETJMP=1 -DTCC_TARGET_X86_64=1 -DCONFIG_TCCBOOT=1 -DCONFIG_TCC_STATIC=1 -DCONFIG_USE_LIBGCC=1 -DONE_SOURCE=1 -DTCC_VERSION="0.9.27-decl0-diag"'
               echo "diag-tcc-decl0-part: preprocess one-source" >&2
               set +e
@@ -1598,6 +1604,14 @@ EOF_DECL0_LINK_SHIMS
                   -o /tmp/tcc-decl0-instrumented-musl-shims \
                   "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" ./tcc-decl0-instrumented.o /tmp/tcc-decl0-link-shims.o \
                   "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+                if [ -f /tmp/tcc-decl0-instrumented-musl-shims ]; then
+                  $BB grep -a 'diag-tcc-main: enter' /tmp/tcc-decl0-instrumented-musl-shims >/dev/null \
+                    && echo "diag-tcc-decl0-phase: binary-has-main-marker" >&2 \
+                    || echo "diag-tcc-decl0-phase: binary-missing-main-marker" >&2
+                  "$BINUTILS/bin/nm" /tmp/tcc-decl0-instrumented-musl-shims 2>&1 \
+                    | $BB grep -E '(^| )[Tt] (main|_start)$' \
+                    | $BB sed 's/^/diag-tcc-decl0-phase: linked-symbol: /' >&2 || true
+                fi
               fi
               run_decl0_build_phase link-object-default "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object /tmp/tcc-decl0-instrumented.o
               run_decl0_build_phase link-object-explicit-archives "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object-explicit /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
@@ -1647,6 +1661,19 @@ EOF_DECL0_LINK_SHIMS
               probe="/tmp/$label.c"
               printf '%s\\n' "$body" > "$probe"
               try_cparse_variant_with_compiler "$compiler" "$label" "$probe"
+            }
+
+            run_decl0_runtime_probe() {
+              label="$1"
+              shift
+              echo "diag-tcc-decl0-runtime-probe: $label" >&2
+              set +e
+              $BB timeout 5 "$@" > "/tmp/tcc-decl0-runtime-$label.stdout" 2> "/tmp/tcc-decl0-runtime-$label.stderr"
+              rc=$?
+              set -e
+              echo "diag-tcc-decl0-runtime-probe: $label rc=$rc" >&2
+              $BB sed 's/^/diag-tcc-decl0-runtime-probe: '$label' stdout: /' "/tmp/tcc-decl0-runtime-$label.stdout" >&2 || true
+              $BB sed 's/^/diag-tcc-decl0-runtime-probe: '$label' stderr: /' "/tmp/tcc-decl0-runtime-$label.stderr" >&2 || true
             }
 
             make_cparse_exact_after_includes_config_undef6() {
@@ -2286,6 +2313,10 @@ enum tree_code {
             decl0_tcc=$(build_decl0_instrumented_tcc | $BB tail -n 1)
             echo "diag-tcc-decl0: selected compiler '$decl0_tcc'" >&2
             if [ -n "$decl0_tcc" ] && [ -x "$decl0_tcc" ]; then
+              printf '' > /tmp/cparse_decl0_empty.c
+              run_decl0_runtime_probe no_args "$decl0_tcc"
+              run_decl0_runtime_probe version "$decl0_tcc" -v
+              run_decl0_runtime_probe compile_empty "$decl0_tcc" -c /tmp/cparse_decl0_empty.c -o /tmp/cparse_decl0_empty.o
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_eof_var_prefix 'int cparse_decl0_trace_eof_var_probe'
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_bad_init_semicolon 'int cparse_decl0_trace_bad_init_probe = ;'
