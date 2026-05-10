@@ -18,7 +18,6 @@ let sed = import "sed-4.0.9-musl.ncl" in
 let m4 = import "m4-1.4.7-musl.ncl" in
 let grep = import "grep-2.4-musl.ncl" in
 let diffutils = import "diffutils-2.7-musl.ncl" in
-let bash = import "bash-2.05b-tcc.ncl" in
 
 let gcc_src = crunch.fetchTarball {
   url = "https://ftpmirror.gnu.org/gcc/gcc-4.0.4/gcc-4.0.4.tar.bz2",
@@ -58,10 +57,12 @@ let tcc_src = crunch.fetchTarball {
       M4=$(find_input m4-1.4.7-musl)
       GREP=$(find_input grep-2.4-musl)
       DIFF=$(find_input diffutils-2.7-musl)
-      BASH=$(find_input bash-2.05b-tcc)
       SRC=$(find_input gcc-4.0.4-src)
 
-      export PATH="$BINUTILS/bin:$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$BASH/bin:$STAGE0/bin:$PATH"
+      # Avoid a direct bash-2.05b-tcc dependency here: this diagnostic forces
+      # CONFIG_SHELL/SHELL to /bin/sh below. The binutils bridge still carries
+      # the broader GCC-toolchain dependency chain.
+      export PATH="$BINUTILS/bin:$TCC/bin:$MAKE/bin:$SED/bin:$M4/bin:$GREP/bin:$DIFF/bin:$STAGE0/bin:$PATH"
       TOOLBIN=/tmp/gcc-tools
       $BB mkdir -p "$TOOLBIN"
       for applet in rm rmdir mkdir cp mv ln chmod touch cat sed grep egrep fgrep awk expr basename dirname tr sort uniq cmp diff test printf echo pwd uname sleep false true head tail wc cut; do
@@ -2721,7 +2722,7 @@ EOF
     "%,
   ],
   inputs = [
-    stage0, tcc, musl, make, binutils, sed, m4, grep, diffutils, bash,
+    stage0, tcc, musl, make, binutils, sed, m4, grep, diffutils,
     gcc_src, tcc_src,
   ],
 } | crunch.Derivation

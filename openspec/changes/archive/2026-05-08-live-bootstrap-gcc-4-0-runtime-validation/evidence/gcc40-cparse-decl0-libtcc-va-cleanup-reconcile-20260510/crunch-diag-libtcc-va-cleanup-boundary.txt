@@ -1,0 +1,13 @@
+command: nix-shell -p bubblewrap --run './target/debug/crunch build bootstrap/diag-libtcc-va-cleanup-boundary.ncl --store "$PWD/.crunch-drain/store" -j 4 --trust-unsigned'
+result: rc=0 output=/home/brittonr/git/crunch/crunch/.crunch-drain/store/g04hgbp4a1lvp2mvfdi35ry7l9dfdmqs-diag-libtcc-va-cleanup-boundary
+
+# crunch build log
+# derivation: diag-libtcc-va-cleanup-boundary
+# drv_path: pqy9r3l6zpa2wbx2ghjgb1q4n4iacjxi-diag-libtcc-va-cleanup-boundary.drv
+# status: success
+# timestamp: 1778429171
+
+diag-libtcc-va-cleanup: tcc=/crunch/store/6aclnb24dcijm264j4y6vfsj1z942gw7-tcc-0.9.27-musl-v2/bin/tcc
+diag-libtcc-va-cleanup: source=/crunch/store/4jp67gx0k6h76np8wazalwlg5wyg5g3q-tcc-0.9.27-src
+diag-libtcc-va-cleanup: compile asm_simplified_one_source rc=139 object=no
+diag-libtcc-va-cleanup: compile va_cleanup_one_source rc=0 object=yes
