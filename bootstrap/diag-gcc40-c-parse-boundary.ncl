@@ -1637,7 +1637,28 @@ EOF_DECL0_STARTUP_SMOKE
                   "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
                 run_decl0_build_phase startup-smoke-link-driver "$TCC/bin/tcc" -static \
                   -o /tmp/tcc-decl0-startup-smoke-driver /tmp/tcc-decl0-startup-smoke.c
-                for startup_smoke in manual driver; do
+                $BB cat > /tmp/tcc-decl0-syscall-start.s <<'EOF_DECL0_SYSCALL_START'
+.global _start
+_start:
+    mov $1, %rax
+    mov $2, %rdi
+    lea msg(%rip), %rsi
+    mov $27, %rdx
+    syscall
+    mov $60, %rax
+    xor %rdi, %rdi
+    syscall
+msg:
+    .ascii "diag-syscall-start: _start\n"
+msgend:
+EOF_DECL0_SYSCALL_START
+                run_decl0_build_phase startup-syscall-assemble "$BINUTILS/bin/as" -o /tmp/tcc-decl0-syscall-start.o /tmp/tcc-decl0-syscall-start.s
+                if [ -f /tmp/tcc-decl0-syscall-start.o ]; then $BB chmod u+rw /tmp/tcc-decl0-syscall-start.o || true; fi
+                run_decl0_build_phase startup-syscall-link-tcc "$TCC/bin/tcc" -nostdlib -static \
+                  -o /tmp/tcc-decl0-startup-smoke-syscall-tcc /tmp/tcc-decl0-syscall-start.o
+                run_decl0_build_phase startup-syscall-link-ld "$BINUTILS/bin/ld" -static \
+                  -o /tmp/tcc-decl0-startup-smoke-syscall-ld /tmp/tcc-decl0-syscall-start.o
+                for startup_smoke in manual driver syscall-tcc syscall-ld; do
                   startup_path="/tmp/tcc-decl0-startup-smoke-$startup_smoke"
                   if [ -f "$startup_path" ]; then $BB chmod 755 "$startup_path" || true; fi
                   echo "diag-tcc-decl0-startup-smoke: run $startup_smoke" >&2
