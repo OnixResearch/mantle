@@ -879,6 +879,8 @@ EOF
               echo "diag-cparse: $label rc=$rc" >&2
             }
 
+            DECL0_TRACE_TIMEOUT_SECONDS=20
+
             try_cparse_variant_with_compiler() {
               compiler="$1"
               label="$2"
@@ -886,7 +888,7 @@ EOF
               shift 3
               echo "diag-cparse-decl0: compile $label compiler=$compiler" >&2
               set +e
-              "$compiler" -c "$@" -g -DIN_GCC -DHAVE_CONFIG_H \
+              $BB timeout "$DECL0_TRACE_TIMEOUT_SECONDS" "$compiler" -c "$@" -g -DIN_GCC -DHAVE_CONFIG_H \
                 -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
                 -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
                 "$src" -o "/tmp/$label.o" 2> "/tmp/$label.decl0.stderr"
@@ -1538,10 +1540,11 @@ EOF_DIAG_TCC_COMPILE
                 shift
                 echo "diag-tcc-decl0-phase: $phase" >&2
                 set +e
-                "$@" 2> "/tmp/tcc-decl0-${phase}.stderr"
+                "$@" > "/tmp/tcc-decl0-${phase}.stdout" 2> "/tmp/tcc-decl0-${phase}.stderr"
                 phase_rc=$?
                 set -e
                 echo "diag-tcc-decl0-phase: $phase rc=$phase_rc" >&2
+                $BB sed 's/^/diag-tcc-decl0-phase: '$phase' stdout: /' "/tmp/tcc-decl0-${phase}.stdout" >&2 || true
                 $BB sed 's/^/diag-tcc-decl0-phase: '$phase' stderr: /' "/tmp/tcc-decl0-${phase}.stderr" >&2 || true
               }
               run_decl0_build_phase compile-only-quiet "$TCC/bin/tcc" -c \
@@ -1572,6 +1575,30 @@ EOF_DIAG_TCC_COMPILE
                 echo "diag-tcc-decl0-phase: object undefined symbols" >&2
                 "$BINUTILS/bin/nm" -u /tmp/tcc-decl0-instrumented.o 2>&1 | $BB sed 's/^/diag-tcc-decl0-phase: object-undef: /' >&2 || true
               fi
+              if [ -f /tmp/tcc-decl0-instrumented.o ]; then
+                $BB chmod u+rw /tmp/tcc-decl0-instrumented.o || true
+                $BB cp /tmp/tcc-decl0-instrumented.o ./tcc-decl0-instrumented.o
+                $BB cat > /tmp/tcc-decl0-link-shims.c <<'EOF_DECL0_LINK_SHIMS'
+typedef long time_t;
+typedef long off_t;
+struct tm { int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year, tm_wday, tm_yday, tm_isdst; };
+struct timeval { long tv_sec; long tv_usec; };
+char __stderr_FILE[256];
+double ldexp(double x, int exp) { while (exp > 0) { x = x * 2.0; exp = exp - 1; } while (exp < 0) { x = x / 2.0; exp = exp + 1; } return x; }
+time_t time(time_t *t) { if (t) *t = 0; return 0; }
+struct tm *localtime(const time_t *t) { static struct tm tm; (void)t; return &tm; }
+off_t lseek(int fd, off_t offset, int whence) { (void)fd; (void)offset; (void)whence; return -1; }
+int mprotect(void *addr, unsigned long len, int prot) { (void)addr; (void)len; (void)prot; return 0; }
+int execvp(const char *file, char *const argv[]) { (void)file; (void)argv; return -1; }
+int gettimeofday(struct timeval *tv, void *tz) { (void)tz; if (tv) { tv->tv_sec = 0; tv->tv_usec = 0; } return 0; }
+EOF_DECL0_LINK_SHIMS
+                run_decl0_build_phase compile-link-shims "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-link-shims.c -o /tmp/tcc-decl0-link-shims.o
+                if [ -f /tmp/tcc-decl0-link-shims.o ]; then $BB chmod u+rw /tmp/tcc-decl0-link-shims.o || true; fi
+                run_decl0_build_phase link-object-musl-shims "$TCC/bin/tcc" -v -nostdlib -static \
+                  -o /tmp/tcc-decl0-instrumented-musl-shims \
+                  "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" ./tcc-decl0-instrumented.o /tmp/tcc-decl0-link-shims.o \
+                  "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+              fi
               run_decl0_build_phase link-object-default "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object /tmp/tcc-decl0-instrumented.o
               run_decl0_build_phase link-object-explicit-archives "$TCC/bin/tcc" -v -static -o /tmp/tcc-decl0-instrumented-from-object-explicit /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a"
               for input in tcc.c /tmp/tcc-decl0-instrumented.o "$TCC/lib/tcc/libtcc1.a" "$MUSL/lib/libc.a" "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" "$MUSL/lib/crtn.o"; do
@@ -1601,6 +1628,11 @@ EOF_DIAG_TCC_COMPILE
               $BB sed 's/^/diag-tcc-decl0: build-stderr: /' /tmp/tcc-decl0-build.stderr >&2 || true
               if [ "$build_rc" = 0 ]; then
                 $BB chmod 755 "$diag_tcc"
+                echo "$diag_tcc"
+              elif [ -x /tmp/tcc-decl0-instrumented-musl-shims ] || [ -f /tmp/tcc-decl0-instrumented-musl-shims ]; then
+                echo "diag-tcc-decl0: using musl-shim linked instrumented compiler" >&2
+                diag_tcc=/tmp/tcc-decl0-instrumented-musl-shims
+                $BB chmod 755 "$diag_tcc" || true
                 echo "$diag_tcc"
               else
                 echo ""
@@ -2251,7 +2283,8 @@ enum tree_code {
             # diagnostic useful while leaving the sh -c argument below Linux
             # MAX_ARGSTRLEN.
             print_tcc_decl_parser_source_trace
-            decl0_tcc=$(build_decl0_instrumented_tcc)
+            decl0_tcc=$(build_decl0_instrumented_tcc | $BB tail -n 1)
+            echo "diag-tcc-decl0: selected compiler '$decl0_tcc'" >&2
             if [ -n "$decl0_tcc" ] && [ -x "$decl0_tcc" ]; then
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_eof_var_prefix 'int cparse_decl0_trace_eof_var_probe'
