@@ -1497,12 +1497,25 @@ EOF_DIAG_TCC_COMPILE
               ' tccgen.c > tccgen.c.tmp
               $BB mv tccgen.c.tmp tccgen.c
               $BB awk '
+                /^static int tcc_write_elf_file\(TCCState \*s1,/ { in_wr=1 }
                 /^static int elf_output_file\(TCCState \*s1,/ { in_elf=1 }
                 /^LIBTCCAPI int tcc_output_file\(TCCState \*s,/ { in_out=1 }
                 {
                   if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/) print "    write(2, \"z\\n\", 2);"
-                  if (in_elf && $0 ~ /^[[:space:]]*if \(file_type != TCC_OUTPUT_OBJ\)/) { print "    write(2, \"g\\n\", 2);"; print "    if (0) {"; next }
+                  if (in_elf && $0 ~ /^[[:space:]]*if \(file_type != TCC_OUTPUT_OBJ\)/) { ifc++; if (ifc == 1) { print "    write(2, \"g\\n\", 2);"; print "    if (0) {"; next } else { print "    write(2, \"G\\n\", 2);"; print "    if (0) {"; next } }
+                  if (in_elf && $0 ~ /^[[:space:]]*strsec = new_section\(s1, ".shstrtab"/) print "    write(2, \"P\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*ret = tcc_write_elf_file/) print "    write(2, \"T\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/) print "    write(2, \"4\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*if \(s1->output_format == TCC_OUTPUT_FORMAT_ELF\)/) print "    write(2, \"5\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*if \(fd < 0\)/) { print "    write(2, \"7\\n\", 2);"; print "    fd_bad = (fd < 0);"; print "    write(2, \"9\\n\", 2);"; print "    if (fd_bad) {"; next }
+                  if (in_wr && $0 ~ /^[[:space:]]*int fd, mode, file_type;/) sub(/file_type;/, "file_type, fd_bad;")
                   print
+                  if (in_wr && $0 ~ /^[[:space:]]*FILE \*f;/) print "    write(2, \"0\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*file_type = s1->output_type;/) print "    write(2, \"1\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*unlink\(filename\);/) print "    write(2, \"2\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*fd = open/) print "    write(2, \"3\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*tcc_error_noabort/) print "        write(2, \"8\\n\", 2);"
+                  if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/) print "    write(2, \"6\\n\", 2);"
                   if (in_elf && $0 ~ /^[[:space:]]*int i, ret/) print "    write(2, \"e\\n\", 2);"
                   if (in_elf && $0 ~ /^[[:space:]]*file_type = s1->output_type;/) print "    write(2, \"f\\n\", 2);"
                   if (in_elf && $0 ~ /^[[:space:]]*s1->nb_errors = 0;/) print "    write(2, \"i\\n\", 2);"
@@ -1517,6 +1530,7 @@ EOF_DIAG_TCC_COMPILE
                   if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/) print "    write(2, \"Y\\n\", 2);"
                   if (in_elf && $0 ~ /^}/) in_elf=0
                   if (in_out && $0 ~ /^}/) in_out=0
+                  if (in_wr && $0 ~ /^}/) in_wr=0
                 }
               ' tccelf.c > tccelf.c.tmp
               $BB mv tccelf.c.tmp tccelf.c
