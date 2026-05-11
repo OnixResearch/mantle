@@ -1578,11 +1578,18 @@ EOF_DIAG_TCC_COMPILE
                   }
                   if (skip_reset_cond > 0) { skip_reset_cond--; next }
                   if (reset_break && $0 ~ /^[[:space:]]*break;/) { print "            write(2, \"r5\\n\", 3);"; print; print "        }"; reset_break = 0; next }
-                  if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) print "    write(2, \"q0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) {
+                    print "    write(2, \"q0\\n\", 3);"
+                    print "    write(2, \"u0\\n\", 3);"
+                    print "    t = s->run_test;"
+                    print "    write(2, \"u1\\n\", 3);"
+                    print "    if (t) {"
+                    print "        write(2, \"q1\\n\", 3);"
+                    next
+                  }
                   if ($0 ~ /^[[:space:]]*} else if \(s->output_type == TCC_OUTPUT_PREPROCESS/) print "    write(2, \"q2\\n\", 3);"
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
-                  if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) print "        write(2, \"q1\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r1\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->alacarte_link = 1;/) print "        write(2, \"r3\\n\", 3);"
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
