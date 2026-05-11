@@ -1497,59 +1497,29 @@ EOF_DIAG_TCC_COMPILE
               ' tccgen.c > tccgen.c.tmp
               $BB mv tccgen.c.tmp tccgen.c
               $BB awk '
+                /^static int elf_output_file\(TCCState \*s1,/ { in_elf=1 }
+                /^LIBTCCAPI int tcc_output_file\(TCCState \*s,/ { in_out=1 }
                 {
-                  if ($0 ~ /^static void args_parser_add_file\(TCCState \*s,/) in_apadd = 1
-                  if ($0 ~ /^LIBTCCAPI int tcc_parse_args\(TCCState \*s,/) in_parse = 1
-                  if (in_apadd && $0 ~ /^[[:space:]]*struct filespec \*f = tcc_malloc/) print "    write(2, \"a0\\n\", 3);"
-                  if (in_apadd && $0 ~ /^[[:space:]]*strcpy\(f->name, filename\);/) print "    write(2, \"a2\\n\", 3);"
-                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) print "    write(2, \"a4\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*cstr_new\(&linker_arg\);/) print "    write(2, \"p0\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*r = argv\[optind\];/) print "        write(2, \"p2\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*if \(r\[0\] !=/) print "        write(2, \"p4\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p6\\n\", 3);"
+                  if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/) print "    write(2, \"z\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*if \(file_type != TCC_OUTPUT_OBJ\)/) { print "    write(2, \"g\\n\", 2);"; print "    if (0) {"; next }
                   print
-                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) {
-                    print "    write(2, \"a5\\n\", 3);"
-                    print "    if (s->nb_files) write(2, \"aN\\n\", 3); else write(2, \"aZ\\n\", 3);"
-                  }
-                  if (in_apadd && $0 ~ /^}/) in_apadd = 0
-                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p7\\n\", 3);"
-                  if (in_parse && $0 ~ /^}/) in_parse = 0
-                  if ($0 ~ /^ST_FUNC int tcc_open\(TCCState \*s1, const char \*filename\)/) in_open = 1
-                  if (in_open && $0 ~ /^[[:space:]]*int fd;/) {
-                    print "    fputs(\"diag-tcc-file: tcc_open enter\\n\", stderr);"
-                    in_open = 0
-                  }
-                  if ($0 ~ /^ST_FUNC int tcc_add_file_internal\(TCCState \*s1, const char \*filename, int flags\)/) in_internal = 1
-                  if (in_internal && $0 ~ /^[[:space:]]*int ret;/) {
-                    print "    fputs(\"diag-tcc-file: add_file_internal enter\\n\", stderr);"
-                    in_internal = 0
-                  }
-                  if ($0 ~ /^LIBTCCAPI int tcc_add_file\(TCCState \*s, const char \*filename\)/) in_public = 1
-                  if (in_public && $0 ~ /^[[:space:]]*int filetype = s->filetype;/) {
-                    print "    fputs(\"diag-tcc-file: add_file public enter\\n\", stderr);"
-                    in_public = 0
-                  }
+                  if (in_elf && $0 ~ /^[[:space:]]*int i, ret/) print "    write(2, \"e\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*file_type = s1->output_type;/) print "    write(2, \"f\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*s1->nb_errors = 0;/) print "    write(2, \"i\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*ret = -1;/) print "    write(2, \"j\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*phdr = NULL;/) print "    write(2, \"k\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*sec_order = NULL;/) print "    write(2, \"l\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*interp = dynamic = dynstr = NULL/) print "    write(2, \"m\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*textrel = 0;/) print "    write(2, \"o\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*strsec = new_section\(s1, ".shstrtab"/) print "    write(2, \"p\\n\", 2);"
+                  if (in_elf && $0 ~ /^[[:space:]]*tcc_add_runtime\(s1\);/) print "        write(2, \"h\\n\", 2);"
+                  if (in_out && $0 ~ /^[[:space:]]*int ret;/) print "    write(2, \"y\\n\", 2);"
+                  if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/) print "    write(2, \"Y\\n\", 2);"
+                  if (in_elf && $0 ~ /^}/) in_elf=0
+                  if (in_out && $0 ~ /^}/) in_out=0
                 }
-              ' libtcc.c > libtcc.c.tmp
-              $BB mv libtcc.c.tmp libtcc.c
-              $BB awk '
-                /^static TokenSym \*tok_alloc_new\(TokenSym \*\*pts,/ { in_toknew=1 }
-                /^ST_INLN void define_push\(int v, int macro_type,/ { in_def=1 }
-                /^ST_INLN Sym \*define_find\(int v\)/ { in_find=1 }
-                {
-                  if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d0\\n\", 3);"
-                  print
-                  if (in_toknew && $0 ~ /^[[:space:]]*ts->tok = tok_ident\+\+;/) print "    if (ts->tok == TOK___LINE__) write(2, \"kL\\n\", 3);"
-                  if (in_toknew && $0 ~ /^}/) { in_toknew=0 }
-                  if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d1\\n\", 3);"
-                  if (in_def && $0 ~ /table_ident\[v - TOK_IDENT\]->sym_define/) print "    write(2, \"d5\\n\", 3);"
-                  if (in_def && $0 ~ /^}/) { in_def=0 }
-                  if (in_find && $0 ~ /^[[:space:]]*return table_ident\[v\]->sym_define;/) print "    if (!table_ident[v]) write(2, \"fZ\\n\", 3); else write(2, \"fT\\n\", 3);"
-                  if (in_find && $0 ~ /^}/) { in_find=0 }
-                }
-              ' tccpp.c > tccpp.c.tmp
-              $BB mv tccpp.c.tmp tccpp.c
+              ' tccelf.c > tccelf.c.tmp
+              $BB mv tccelf.c.tmp tccelf.c
               $BB awk '
                 /^static void args_parser_add_file\(TCCState \*s,/ { in_apadd=1 }
                 /^[[:space:]]*(PUB_FUNC )?int tcc_parse_args\(TCCState \*s,/ { in_parse=1 }
