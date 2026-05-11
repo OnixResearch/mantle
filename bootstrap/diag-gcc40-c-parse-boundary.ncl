@@ -1685,6 +1685,14 @@ typedef long off_t;
 struct tm { int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year, tm_wday, tm_yday, tm_isdst; };
 struct timeval { long tv_sec; long tv_usec; };
 char __stderr_FILE[256];
+static unsigned char crunch_diag_heap[1024 * 1024];
+static unsigned long crunch_diag_heap_pos;
+void *malloc(unsigned long n) { unsigned long a = (n + 15) & ~15UL; void *p; if (crunch_diag_heap_pos + a > sizeof(crunch_diag_heap)) return 0; p = crunch_diag_heap + crunch_diag_heap_pos; crunch_diag_heap_pos += a; return p; }
+void free(void *p) { (void)p; }
+void *calloc(unsigned long n, unsigned long s) { unsigned long total = n * s; unsigned char *p = malloc(total); unsigned long i; if (p) for (i = 0; i < total; i++) p[i] = 0; return p; }
+void *realloc(void *p, unsigned long n) { (void)p; return malloc(n); }
+void *memalign(unsigned long a, unsigned long n) { (void)a; return malloc(n); }
+int posix_memalign(void **m, unsigned long a, unsigned long n) { (void)a; *m = malloc(n); return *m ? 0 : 12; }
 double ldexp(double x, int exp) { while (exp > 0) { x = x * 2.0; exp = exp - 1; } while (exp < 0) { x = x / 2.0; exp = exp + 1; } return x; }
 time_t time(time_t *t) { if (t) *t = 0; return 0; }
 struct tm *localtime(const time_t *t) { static struct tm tm; (void)t; return &tm; }
@@ -1694,40 +1702,33 @@ int execvp(const char *file, char *const argv[]) { (void)file; (void)argv; retur
 int gettimeofday(struct timeval *tv, void *tz) { (void)tz; if (tv) { tv->tv_sec = 0; tv->tv_usec = 0; } return 0; }
 EOF_DECL0_LINK_SHIMS
                 run_decl0_build_phase compile-link-shims "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-link-shims.c -o /tmp/tcc-decl0-link-shims.o
+                if [ -f /tmp/tcc-decl0-link-shims.o ]; then $BB chmod u+rw /tmp/tcc-decl0-link-shims.o || true; fi
                 $BB cat > /tmp/tcc-decl0-startup-smoke.c <<'EOF_DECL0_STARTUP_SMOKE'
 int write(int fd, const void *buf, unsigned long count);
 int main(int argc, char **argv) { (void)argv; write(2, "diag-startup-smoke: main\n", 25); return argc == 123; }
 EOF_DECL0_STARTUP_SMOKE
+                $BB cat > /tmp/tcc-decl0-malloc-smoke.c <<'EOF_DECL0_MALLOC_SMOKE'
+int write(int fd, const void *buf, unsigned long count);
+void *malloc(unsigned long n);
+int main(void) { void *p; write(2, "diag-malloc-smoke: before\n", 26); p = malloc(32); write(2, "diag-malloc-smoke: after\n", 25); return p ? 0 : 1; }
+EOF_DECL0_MALLOC_SMOKE
                 run_decl0_build_phase startup-smoke-compile "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-startup-smoke.c -o /tmp/tcc-decl0-startup-smoke.o
+                run_decl0_build_phase malloc-smoke-compile "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/tcc-decl0-malloc-smoke.c -o /tmp/tcc-decl0-malloc-smoke.o
                 if [ -f /tmp/tcc-decl0-startup-smoke.o ]; then $BB chmod u+rw /tmp/tcc-decl0-startup-smoke.o || true; fi
+                if [ -f /tmp/tcc-decl0-malloc-smoke.o ]; then $BB chmod u+rw /tmp/tcc-decl0-malloc-smoke.o || true; fi
                 run_decl0_build_phase startup-smoke-link-manual "$TCC/bin/tcc" -nostdlib -static \
                   -o /tmp/tcc-decl0-startup-smoke-manual \
                   "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/tcc-decl0-startup-smoke.o \
                   "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
-                run_decl0_build_phase startup-smoke-link-driver "$TCC/bin/tcc" -static \
-                  -o /tmp/tcc-decl0-startup-smoke-driver /tmp/tcc-decl0-startup-smoke.c
-                $BB cat > /tmp/tcc-decl0-syscall-start.s <<'EOF_DECL0_SYSCALL_START'
-.global _start
-_start:
-    mov $1, %rax
-    mov $2, %rdi
-    lea msg(%rip), %rsi
-    mov $27, %rdx
-    syscall
-    mov $60, %rax
-    xor %rdi, %rdi
-    syscall
-msg:
-    .ascii "diag-syscall-start: _start\n"
-msgend:
-EOF_DECL0_SYSCALL_START
-                run_decl0_build_phase startup-syscall-assemble "$BINUTILS/bin/as" -o /tmp/tcc-decl0-syscall-start.o /tmp/tcc-decl0-syscall-start.s
-                if [ -f /tmp/tcc-decl0-syscall-start.o ]; then $BB chmod u+rw /tmp/tcc-decl0-syscall-start.o || true; fi
-                run_decl0_build_phase startup-syscall-link-tcc "$TCC/bin/tcc" -nostdlib -static \
-                  -o /tmp/tcc-decl0-startup-smoke-syscall-tcc /tmp/tcc-decl0-syscall-start.o
-                run_decl0_build_phase startup-syscall-link-ld "$BINUTILS/bin/ld" -static \
-                  -o /tmp/tcc-decl0-startup-smoke-syscall-ld /tmp/tcc-decl0-syscall-start.o
-                for startup_smoke in manual driver syscall-tcc syscall-ld; do
+                run_decl0_build_phase malloc-smoke-link-libc "$TCC/bin/tcc" -nostdlib -static \
+                  -o /tmp/tcc-decl0-malloc-smoke-libc \
+                  "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/tcc-decl0-malloc-smoke.o \
+                  "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+                run_decl0_build_phase malloc-smoke-link-shim "$TCC/bin/tcc" -nostdlib -static \
+                  -o /tmp/tcc-decl0-malloc-smoke-shim \
+                  "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/tcc-decl0-malloc-smoke.o /tmp/tcc-decl0-link-shims.o \
+                  "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+                for startup_smoke in manual; do
                   startup_path="/tmp/tcc-decl0-startup-smoke-$startup_smoke"
                   if [ -f "$startup_path" ]; then $BB chmod 755 "$startup_path" || true; fi
                   echo "diag-tcc-decl0-startup-smoke: run $startup_smoke" >&2
@@ -1738,6 +1739,18 @@ EOF_DECL0_SYSCALL_START
                   echo "diag-tcc-decl0-startup-smoke: $startup_smoke rc=$startup_rc" >&2
                   $BB sed 's/^/diag-tcc-decl0-startup-smoke: '$startup_smoke' stdout: /' "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stdout" >&2 || true
                   $BB sed 's/^/diag-tcc-decl0-startup-smoke: '$startup_smoke' stderr: /' "/tmp/tcc-decl0-startup-smoke-$startup_smoke.stderr" >&2 || true
+                done
+                for malloc_smoke in libc shim; do
+                  malloc_path="/tmp/tcc-decl0-malloc-smoke-$malloc_smoke"
+                  if [ -f "$malloc_path" ]; then $BB chmod 755 "$malloc_path" || true; fi
+                  echo "diag-tcc-decl0-malloc-smoke: run $malloc_smoke" >&2
+                  set +e
+                  $BB timeout 5 "$malloc_path" > "/tmp/tcc-decl0-malloc-smoke-$malloc_smoke.stdout" 2> "/tmp/tcc-decl0-malloc-smoke-$malloc_smoke.stderr"
+                  malloc_rc=$?
+                  set -e
+                  echo "diag-tcc-decl0-malloc-smoke: $malloc_smoke rc=$malloc_rc" >&2
+                  $BB sed 's/^/diag-tcc-decl0-malloc-smoke: '$malloc_smoke' stdout: /' "/tmp/tcc-decl0-malloc-smoke-$malloc_smoke.stdout" >&2 || true
+                  $BB sed 's/^/diag-tcc-decl0-malloc-smoke: '$malloc_smoke' stderr: /' "/tmp/tcc-decl0-malloc-smoke-$malloc_smoke.stderr" >&2 || true
                 done
                 if [ -f /tmp/tcc-decl0-link-shims.o ]; then $BB chmod u+rw /tmp/tcc-decl0-link-shims.o || true; fi
                 run_decl0_build_phase link-object-musl-shims "$TCC/bin/tcc" -v -nostdlib -static \
@@ -2490,11 +2503,11 @@ enum tree_code {
             make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_local_decl_config_only '' 'void cparse_local_decl_prefix_probe (void) { int local_probe;'
             make_cparse_body_after_includes_config_undef6 cparse_decl_after_config_only '' 'void cparse_function_probe (void);'
             make_cparse_body_after_includes_config_undef6 cparse_global_after_config_only '' 'int cparse_global_probe;'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only ''
+            make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only '' || true
             # Earlier frontmatter/full-source probes are preserved in committed
             # evidence; keep the active diagnostic matrix focused so the generated
             # builder script stays below the host argument-size limit.
-          )
+          ) || true
 
           cp gcc/config.h gcc/config.h.generated
           cat > gcc/config.h <<'EOF'
