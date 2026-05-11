@@ -1258,6 +1258,9 @@ static void set_environment(TCCState *s)\
 {\
     (void)s;\
 }' tcc.c
+              $BB sed -i '/if (!first_file)/,+1c\            /* CRUNCH diag: first_file bookkeeping removed */' tcc.c
+              $BB sed -i 's/if (tcc_add_file(s, f->name) < 0)/if (0 \/\* CRUNCH diag: bypass tcc_add_file \*\/)/g' tcc.c
+
               tcc_diag_flags_common='-DBOOTSTRAP=1 -DHAVE_BITFIELD=1 -DHAVE_FLOAT=1 -DHAVE_LONG_LONG=1 -DHAVE_SETJMP=1 -DTCC_TARGET_X86_64=1 -DCONFIG_TCCBOOT=1 -DCONFIG_TCC_STATIC=1 -DCONFIG_USE_LIBGCC=1 -DTCC_VERSION="0.9.27-decl0-diag"'
               tcc_diag_flags_one="$tcc_diag_flags_common -DONE_SOURCE=1"
               compile_decl0_prepart() {
@@ -1553,6 +1556,7 @@ EOF_DIAG_TCC_COMPILE
                 {
                   if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
                     print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
+                    print "            write(2, \"g0\\n\", 3);"
                   }
                   if (in_apadd && $0 ~ /^[[:space:]]*struct filespec \*f = tcc_malloc/) print "    write(2, \"a0\\n\", 3);"
                   if (in_apadd && $0 ~ /^[[:space:]]*strcpy\(f->name, filename\);/) print "    write(2, \"a2\\n\", 3);"
@@ -1570,9 +1574,10 @@ EOF_DIAG_TCC_COMPILE
                   if ($0 ~ /^[[:space:]]*if \(f->type == AFF_TYPE_LIB\)/) print "        write(2, \"l6\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*if \(1 == s->verbose\)/) print "            write(2, \"l8\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*if \(!first_file\)/) print "            write(2, \"f0\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*first_file = f->name;/) print "                write(2, \"f1\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r0\\n\", 3);"
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
+                  if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r1\\n\", 3);"
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
                     print "    static volatile const char *diag_tcc_main_marker = \"diag-tcc-main: enter\";"
                     print "    write(2, (const void *)diag_tcc_main_marker, 20);"
