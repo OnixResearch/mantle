@@ -1561,6 +1561,30 @@ EOF_DIAG_TCC_COMPILE
               ' libtcc.c > libtcc.c.tmp
               $BB mv libtcc.c.tmp libtcc.c
               $BB awk '
+                /^ST_FUNC void tccelf_new\(TCCState \*s\)/ { in_elf = 1 }
+                /^ST_FUNC Section \*new_symtab\(TCCState \*s1,/ { in_sym = 1 }
+                {
+                  if (in_elf && $0 ~ /symtab_section = new_symtab/) print "    write(2, \"e:bsym\\n\", 7);"
+                  if (in_sym && $0 ~ /symtab = new_section/) print "    write(2, \"s:bs\\n\", 5);"
+                  if (in_sym && $0 ~ /strtab = new_section/) print "    write(2, \"s:bst\\n\", 6);"
+                  if (in_sym && $0 ~ /put_elf_str\(strtab/) print "    write(2, \"s:bstr\\n\", 7);"
+                  if (in_sym && $0 ~ /put_elf_sym\(symtab/) print "    write(2, \"s:bsym\\n\", 7);"
+                  if (in_sym && $0 ~ /hash = new_section/) print "    write(2, \"s:bh\\n\", 5);"
+                  if (in_sym && $0 ~ /ptr = section_ptr_add/) print "    write(2, \"s:bptr\\n\", 7);"
+                  print
+                  if (in_elf && $0 ~ /common_section->sh_num = SHN_COMMON;/) print "    write(2, \"e:astd\\n\", 7);"
+                  if (in_elf && $0 ~ /s->symtab = symtab_section;/) print "    write(2, \"e:asym\\n\", 7);"
+                  if (in_sym && $0 ~ /symtab = new_section/) print "    write(2, \"s:as\\n\", 5);"
+                  if (in_sym && $0 ~ /strtab = new_section/) print "    write(2, \"s:ast\\n\", 6);"
+                  if (in_sym && $0 ~ /put_elf_str\(strtab/) print "    write(2, \"s:astr\\n\", 7);"
+                  if (in_sym && $0 ~ /put_elf_sym\(symtab/) print "    write(2, \"s:asym\\n\", 7);"
+                  if (in_sym && $0 ~ /hash = new_section/) print "    write(2, \"s:ah\\n\", 5);"
+                  if (in_sym && $0 ~ /ptr = section_ptr_add/) print "    write(2, \"s:aptr\\n\", 7);"
+                  if (in_sym && $0 ~ /return symtab;/) { print "    write(2, \"s:ret\\n\", 6);"; in_sym = 0 }
+                }
+              ' tccelf.c > tccelf.c.tmp
+              $BB mv tccelf.c.tmp tccelf.c
+              $BB awk '
                 {
                   if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
                     print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
@@ -2480,29 +2504,12 @@ enum tree_code {
             else
               echo "diag-tcc-decl0: instrumented compiler unavailable" >&2
             fi
-            trace_cparse_plain_exact_phases cparse_trace_valid_var_semicolon 'int cparse_trace_valid_var_probe;'
-            trace_cparse_plain_exact_phases cparse_trace_eof_var_prefix 'int cparse_trace_eof_var_probe'
-            trace_cparse_plain_exact_phases cparse_trace_bad_init_semicolon 'int cparse_trace_bad_init_probe = ;'
-            trace_cparse_plain_exact_phases cparse_trace_bad_comma_semicolon 'int cparse_trace_bad_comma_probe, ;'
             make_cparse_plain_body cparse_plain_decl_no_config 'void cparse_plain_probe (void);'
             make_cparse_plain_body cparse_plain_global_no_config 'int cparse_plain_global_probe;'
             make_cparse_plain_body cparse_plain_func_no_config 'void cparse_plain_function_probe (void) { }'
             make_cparse_exact_after_includes_config_undef6 cparse_func_decl_semicolon_config_only '' 'void cparse_decl_semicolon_probe (void);'
             make_cparse_exact_after_includes_config_undef6 cparse_func_exact_config_only '' 'void cparse_exact_function_probe (void) { }'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_declarator_config_only '' 'void cparse_prefix_probe (void)'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_oldstyle_config_only '' 'void cparse_oldstyle_prefix_probe ()'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_param_int_config_only '' 'void cparse_param_int_prefix_probe (int x)'
-            make_cparse_exact_after_includes_config_undef6 cparse_var_prefix_config_only '' 'int cparse_var_prefix_probe'
-            make_cparse_exact_after_includes_config_undef6 cparse_pointer_prefix_config_only '' 'int *cparse_pointer_prefix_probe'
             make_cparse_exact_after_includes_config_undef6 cparse_var_semicolon_config_only '' 'int cparse_var_semicolon_probe;'
-            make_cparse_exact_after_includes_config_undef6 cparse_pointer_semicolon_config_only '' 'int *cparse_pointer_semicolon_probe;'
-            make_cparse_exact_after_includes_config_undef6 cparse_bad_init_semicolon_config_only '' 'int cparse_bad_init_probe = ;'
-            make_cparse_exact_after_includes_config_undef6 cparse_bad_param_semicolon_config_only '' 'void cparse_bad_param_probe (void;'
-            make_cparse_exact_after_includes_config_undef6 cparse_bad_comma_semicolon_config_only '' 'int cparse_bad_comma_probe, ;'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_open_brace_config_only '' 'void cparse_open_brace_probe (void) {'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_prefix_local_decl_config_only '' 'void cparse_local_decl_prefix_probe (void) { int local_probe;'
-            make_cparse_body_after_includes_config_undef6 cparse_decl_after_config_only '' 'void cparse_function_probe (void);'
-            make_cparse_body_after_includes_config_undef6 cparse_global_after_config_only '' 'int cparse_global_probe;'
             make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only '' || true
             # Earlier frontmatter/full-source probes are preserved in committed
             # evidence; keep the active diagnostic matrix focused so the generated
