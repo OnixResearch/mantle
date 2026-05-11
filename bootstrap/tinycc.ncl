@@ -265,6 +265,16 @@ static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
         $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's/const char filename../const char *filename/' tccelf.c
 
+        # The Mes libc getenv path currently faults under the Mes-linked amd64
+        # handoff compiler. TinyCC already receives deterministic include and
+        # library roots through CONFIG_TCC_* at compile time, so avoid optional
+        # ambient environment path probing in this bootstrap compiler.
+        $BB sed -i '/static void set_environment(TCCState \*s)/,/^}/c\
+static void set_environment(TCCState *s)\
+{\
+    (void)s;\
+}' tcc.c
+
         # Carry the same Mes/TCC source-normalization seams used by the
         # predecessor compiler. The 0.9.26 handoff still inherits Mes-built
         # x86_64 codegen defects around aggregate SValue copies and variable

@@ -1253,6 +1253,11 @@ EOF
               $BB sed -i '/sprintf(buf,/c\
     buf[0] = 34; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
               $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
+              $BB sed -i '/static void set_environment(TCCState \*s)/,/^}/c\
+static void set_environment(TCCState *s)\
+{\
+    (void)s;\
+}' tcc.c
               tcc_diag_flags_common='-DBOOTSTRAP=1 -DHAVE_BITFIELD=1 -DHAVE_FLOAT=1 -DHAVE_LONG_LONG=1 -DHAVE_SETJMP=1 -DTCC_TARGET_X86_64=1 -DCONFIG_TCCBOOT=1 -DCONFIG_TCC_STATIC=1 -DCONFIG_USE_LIBGCC=1 -DTCC_VERSION="0.9.27-decl0-diag"'
               tcc_diag_flags_one="$tcc_diag_flags_common -DONE_SOURCE=1"
               compile_decl0_prepart() {
@@ -1490,60 +1495,23 @@ EOF_DIAG_TCC_COMPILE
               $BB mv tccgen.c.tmp tccgen.c
               $BB awk '
                 {
+                  if ($0 ~ /^static void args_parser_add_file\(TCCState \*s,/) in_apadd = 1
+                  if ($0 ~ /^LIBTCCAPI int tcc_parse_args\(TCCState \*s,/) in_parse = 1
+                  if (in_apadd && $0 ~ /^[[:space:]]*struct filespec \*f = tcc_malloc/) print "    write(2, \"a0\\n\", 3);"
+                  if (in_apadd && $0 ~ /^[[:space:]]*strcpy\(f->name, filename\);/) print "    write(2, \"a2\\n\", 3);"
+                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) print "    write(2, \"a4\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*cstr_new\(&linker_arg\);/) print "    write(2, \"p0\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*r = argv\[optind\];/) print "        write(2, \"p2\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*if \(r\[0\] !=/) print "        write(2, \"p4\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p6\\n\", 3);"
                   print
-                  if ($0 ~ /^PUB_FUNC void \*tcc_malloc\(unsigned long size\)/) in_malloc = 1
-                  if (in_malloc && $0 ~ /^[[:space:]]*\{/) {
-                    print "    write(2, \"diag-tcc-malloc: enter\\n\", 23);"
+                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) {
+                    print "    write(2, \"a5\\n\", 3);"
+                    print "    if (s->nb_files) write(2, \"aN\\n\", 3); else write(2, \"aZ\\n\", 3);"
                   }
-                  if (in_malloc && $0 ~ /^[[:space:]]*ptr = malloc\(size\);/) {
-                    print "    write(2, \"diag-tcc-malloc: after-libc\\n\", 28);"
-                    in_malloc = 0
-                  }
-                  if ($0 ~ /^PUB_FUNC void \*tcc_mallocz\(unsigned long size\)/) in_mallocz = 1
-                  if (in_mallocz && $0 ~ /^[[:space:]]*\{/) {
-                    print "    write(2, \"diag-tcc-mallocz: enter\\n\", 24);"
-                  }
-                  if (in_mallocz && $0 ~ /^[[:space:]]*ptr = tcc_malloc\(size\);/) {
-                    print "    write(2, \"diag-tcc-mallocz: after-malloc\\n\", 31);"
-                  }
-                  if (in_mallocz && $0 ~ /^[[:space:]]*memset\(ptr, 0, size\);/) {
-                    print "    write(2, \"diag-tcc-mallocz: after-memset\\n\", 31);"
-                    in_mallocz = 0
-                  }
-                  if ($0 ~ /^LIBTCCAPI TCCState \*tcc_new\(void\)/) in_new = 1
-                  if (in_new && $0 ~ /^[[:space:]]*\{/) {
-                    print "    write(2, \"diag-tcc-new: enter\\n\", 20);"
-                  }
-                  if (in_new && $0 ~ /^[[:space:]]*tcc_cleanup\(\);/) {
-                    print "    write(2, \"diag-tcc-new: after-cleanup\\n\", 28);"
-                  }
-                  if (in_new && $0 ~ /^[[:space:]]*s = tcc_mallocz/) {
-                    print "    write(2, \"diag-tcc-new: after-alloc\\n\", 26);"
-                  }
-                  if (in_new && $0 ~ /^[[:space:]]*tccelf_new\(s\);/) {
-                    print "    write(2, \"diag-tcc-new: after-elf\\n\", 24);"
-                  }
-                  if (in_new && $0 ~ /^[[:space:]]*tccpp_new\(s\);/) {
-                    print "    write(2, \"diag-tcc-new: after-pp\\n\", 23);"
-                  }
-
-                  if (in_new && $0 ~ /^[[:space:]]*sscanf\(TCC_VERSION/) {
-                    print "        write(2, \"diag-tcc-new: before-version\\n\", 29);"
-                  }
-                  if (in_new && $0 ~ /tcc_define_symbol\(s, \"__TINYC__\"/) {
-                    print "        write(2, \"diag-tcc-new: after-version\\n\", 28);"
-                  }
-                  if (in_new && $0 ~ /target defines/) {
-                    print "    write(2, \"diag-tcc-new: before-target\\n\", 28);"
-                  }
-                  if (in_new && $0 ~ /TinyCC & gcc defines/) {
-                    print "    write(2, \"diag-tcc-new: before-types\\n\", 27);"
-                  }
-
-                  if (in_new && $0 ~ /^[[:space:]]*return s;/) {
-                    print "    write(2, \"diag-tcc-new: return\\n\", 21);"
-                    in_new = 0
-                  }
+                  if (in_apadd && $0 ~ /^}/) in_apadd = 0
+                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p7\\n\", 3);"
+                  if (in_parse && $0 ~ /^}/) in_parse = 0
                   if ($0 ~ /^ST_FUNC int tcc_open\(TCCState \*s1, const char \*filename\)/) in_open = 1
                   if (in_open && $0 ~ /^[[:space:]]*int fd;/) {
                     print "    fputs(\"diag-tcc-file: tcc_open enter\\n\", stderr);"
@@ -1580,10 +1548,29 @@ EOF_DIAG_TCC_COMPILE
               ' tccpp.c > tccpp.c.tmp
               $BB mv tccpp.c.tmp tccpp.c
               $BB awk '
+                /^static void args_parser_add_file\(TCCState \*s,/ { in_apadd=1 }
+                /^[[:space:]]*(PUB_FUNC )?int tcc_parse_args\(TCCState \*s,/ { in_parse=1 }
                 {
                   if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
                     print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
                   }
+                  if (in_apadd && $0 ~ /^[[:space:]]*struct filespec \*f = tcc_malloc/) print "    write(2, \"a0\\n\", 3);"
+                  if (in_apadd && $0 ~ /^[[:space:]]*strcpy\(f->name, filename\);/) print "    write(2, \"a2\\n\", 3);"
+                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) print "    write(2, \"a4\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*cstr_new\(&linker_arg\);/) print "    write(2, \"p0\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*r = argv\[optind\];/) print "        write(2, \"p2\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*if \(r\[0\] != .-. \|\| r\[1\] ==/) print "        write(2, \"p4\\n\", 3);"
+                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p6\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(s->nb_libraries\)/) print "            write(2, \"oL\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(n > 1/) print "            write(2, \"o1\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*set_environment\(s\);/) print "    write(2, \"e0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*struct filespec \*f = s->files/) print "        write(2, \"l0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*s->filetype = f->type;/) print "        write(2, \"l2\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*s->alacarte_link = f->alacarte;/) print "        write(2, \"l4\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(f->type == AFF_TYPE_LIB\)/) print "        write(2, \"l6\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(1 == s->verbose\)/) print "            write(2, \"l8\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(!first_file\)/) print "            write(2, \"f0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*first_file = f->name;/) print "                write(2, \"f1\\n\", 3);"
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
@@ -1603,22 +1590,17 @@ EOF_DIAG_TCC_COMPILE
                   }
                   if ($0 ~ /^[[:space:]]*n = s->nb_files;/) {
                     print "        write(2, \"m0\\n\", 3);"
-                  }
-                  if ($0 ~ /^[[:space:]]*if \(n == 0\)/) {
-                    print "        write(2, \"m2\\n\", 3);"
-                    print "        write(2, \"diag-tcc-main: before-no-input\\n\", 31);"
+                    print "        if (n) write(2, \"mN\\n\", 3); else write(2, \"mZ\\n\", 3);"
                   }
                   if ($0 ~ /^[[:space:]]*if \(s->output_type == TCC_OUTPUT_PREPROCESS\)/) {
-                    print "        write(2, \"m4\\n\", 3);"
+                    print "        write(2, \"o0\\n\", 3);"
+                    print "        if (s->output_type == TCC_OUTPUT_PREPROCESS) write(2, \"oP\\n\", 3);"
                   }
                   if ($0 ~ /^[[:space:]]*} else if \(s->output_type == TCC_OUTPUT_OBJ/) {
-                    print "        write(2, \"m6\\n\", 3);"
+                    print "        if (s->output_type == TCC_OUTPUT_OBJ) write(2, \"oO\\n\", 3);"
                   }
                   if ($0 ~ /^[[:space:]]*if \(s->do_bench\)/) {
                     print "        write(2, \"m8\\n\", 3);"
-                  }
-                  if ($0 ~ /^[[:space:]]*set_environment\(s\);/) {
-                    print "    write(2, \"diag-tcc-main: before-env\\n\", 26);"
                   }
                   if ($0 ~ /^[[:space:]]*tcc_set_output_type\(s, s->output_type\);/) {
                     print "    write(2, \"diag-tcc-main: after-output-type\\n\", 33);"
