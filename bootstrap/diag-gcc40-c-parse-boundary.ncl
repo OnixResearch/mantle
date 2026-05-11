@@ -1581,12 +1581,8 @@ EOF_DIAG_TCC_COMPILE
                   if (skip_post_loop && $0 ~ /^[[:space:]]*if \(s->do_bench/) skip_post_loop = 0
                   if (skip_post_loop) next
                   if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) {
-                    print "    write(2, \"q0\\n\", 3);"
-                    print "    write(2, \"v0\\n\", 3);"
-                    print "    if (0) {"
-                    print "        t = 0;"
-                    print "    }"
-                    print "    write(2, \"w0\\n\", 3);"
+                    print "    if(0){}else if(s->output_type==TCC_OUTPUT_PREPROCESS){}else if(!ret){if(s->output_type==TCC_OUTPUT_MEMORY){}else{if(!s->outfile)s->outfile=default_outputfile(s,first_file);write(2,\"x\\n\",2);if(tcc_output_file(s,s->outfile))ret=1;}}"
+                    print "    write(2, \"w\\n\", 2);"
                     skip_post_loop = 1
                     next
                   }
