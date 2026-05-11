@@ -88,8 +88,16 @@ EOF
       $BB mkdir -p src/unistd
       cat > src/unistd/minunistd.c <<'EOF'
 typedef long ssize_t; typedef unsigned long size_t; typedef long off_t;
-void _exit(int c){(void)c;for(;;){}}
-int close(int fd){(void)fd;return 0;} ssize_t read(int fd, void *b, size_t n){(void)fd;(void)b;(void)n;return 0;} ssize_t write(int fd, const void*b, size_t n){(void)fd;(void)b;return (ssize_t)n;}
+__asm__(".global _exit\n"
+        "_exit:\n"
+        "    mov $60,%rax\n"
+        "    syscall\n");
+__asm__(".global write\n"
+        "write:\n"
+        "    mov $1,%rax\n"
+        "    syscall\n"
+        "    ret\n");
+int close(int fd){(void)fd;return 0;} ssize_t read(int fd, void *b, size_t n){(void)fd;(void)b;(void)n;return 0;}
 int access(const char*p,int m){(void)p;(void)m;return -1;} int chdir(const char*p){(void)p;return -1;} char *getcwd(char*b,size_t n){if(b&&n)b[0]=0;return b;} int dup(int fd){return fd;} int dup2(int a,int b){(void)a;return b;} int isatty(int fd){(void)fd;return 0;} int unlink(const char*p){(void)p;return -1;} int rmdir(const char*p){(void)p;return -1;}
 int pipe(int p[2]){if(p){p[0]=p[1]=-1;}return -1;} unsigned int sleep(unsigned int s){return s;} int usleep(unsigned int u){(void)u;return 0;}
 EOF
@@ -225,7 +233,19 @@ typedef void (*sighandler_t)(int);
 sighandler_t signal(int sig, sighandler_t h) { (void)sig; return h; }
 EOF
       cat > crt/crt1.c <<'EOF'
-void _start(void) { for (;;) {} }
+extern int main(int, char **, char **);
+extern int __libc_start_main(int (*)(int,char **,char **), int, char **);
+__asm__(".global _start\n"
+        "_start:\n"
+        "    xor %rbp,%rbp\n"
+        "    mov (%rsp),%rsi\n"
+        "    lea 8(%rsp),%rdx\n"
+        "    lea main(%rip),%rdi\n"
+        "    andq $-16,%rsp\n"
+        "    call __libc_start_main\n"
+        "    mov %rax,%rdi\n"
+        "    mov $60,%rax\n"
+        "    syscall\n");
 EOF
       cat > src/conf/confstr.c <<'EOF'
 #include <stddef.h>

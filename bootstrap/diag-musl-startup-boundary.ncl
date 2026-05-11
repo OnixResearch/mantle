@@ -1,9 +1,10 @@
 # Diagnostic: isolate the predecessor TCC + musl static startup boundary.
 #
 # This focused probe avoids the broad GCC c-parse matrix. It proves the C
-# front-end can emit main objects and that static links succeed, then splits
-# execution at the musl crt1/__libc_start_main path where both manual and
-# driver static binaries time out before main writes.
+# front-end can emit main objects, static links succeed, and the minimal
+# crt1/__libc_start_main path can now enter/return from main. The remaining
+# write-main failure is past startup, in the tiny syscall/libc surface used by
+# marker-printing probes.
 
 let crunch = import "lib.ncl" in
 
@@ -12,7 +13,7 @@ let tcc = import "tcc-musl-v2.ncl" in
 let musl = import "musl-1.1.24-tcc-musl.ncl" in
 
 {
-  name = "diag-musl-startup-boundary-v4",
+  name = "diag-musl-startup-boundary-v8",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -92,7 +93,7 @@ EOF_RETURN_MAIN
       $BB mkdir -p "$out"
       {
         echo 'diag-musl-startup-boundary complete'
-        echo 'expected-current-boundary: compile/link succeed; crt/libc startup probes time out before main writes'
+        echo 'expected-current-boundary: compile/link succeed; return-main exits rc0 through crt/libc startup; write-main still segfaults in the marker syscall/libc surface'
       } > "$out/report.txt"
     "%,
   ],
