@@ -1491,6 +1491,57 @@ EOF_DIAG_TCC_COMPILE
               $BB awk '
                 {
                   print
+                  if ($0 ~ /^PUB_FUNC void \*tcc_malloc\(unsigned long size\)/) in_malloc = 1
+                  if (in_malloc && $0 ~ /^[[:space:]]*\{/) {
+                    print "    write(2, \"diag-tcc-malloc: enter\\n\", 23);"
+                  }
+                  if (in_malloc && $0 ~ /^[[:space:]]*ptr = malloc\(size\);/) {
+                    print "    write(2, \"diag-tcc-malloc: after-libc\\n\", 28);"
+                    in_malloc = 0
+                  }
+                  if ($0 ~ /^PUB_FUNC void \*tcc_mallocz\(unsigned long size\)/) in_mallocz = 1
+                  if (in_mallocz && $0 ~ /^[[:space:]]*\{/) {
+                    print "    write(2, \"diag-tcc-mallocz: enter\\n\", 24);"
+                  }
+                  if (in_mallocz && $0 ~ /^[[:space:]]*ptr = tcc_malloc\(size\);/) {
+                    print "    write(2, \"diag-tcc-mallocz: after-malloc\\n\", 31);"
+                  }
+                  if (in_mallocz && $0 ~ /^[[:space:]]*memset\(ptr, 0, size\);/) {
+                    print "    write(2, \"diag-tcc-mallocz: after-memset\\n\", 31);"
+                    in_mallocz = 0
+                  }
+                  if ($0 ~ /^LIBTCCAPI TCCState \*tcc_new\(void\)/) in_new = 1
+                  if (in_new && $0 ~ /^[[:space:]]*\{/) {
+                    print "    write(2, \"diag-tcc-new: enter\\n\", 20);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*tcc_cleanup\(\);/) {
+                    print "    write(2, \"diag-tcc-new: after-cleanup\\n\", 28);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*s = tcc_mallocz/) {
+                    print "    write(2, \"diag-tcc-new: after-alloc\\n\", 26);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*tccelf_new\(s\);/) {
+                    print "    write(2, \"diag-tcc-new: after-elf\\n\", 24);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*tccpp_new\(s\);/) {
+                    print "    write(2, \"diag-tcc-new: after-pp\\n\", 23);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*sscanf\(TCC_VERSION/) {
+                    print "        write(2, \"diag-tcc-new: before-version\\n\", 29);"
+                  }
+                  if (in_new && $0 ~ /tcc_define_symbol\(s, \"__TINYC__\"/) {
+                    print "        write(2, \"diag-tcc-new: after-version\\n\", 28);"
+                  }
+                  if (in_new && $0 ~ /target defines/) {
+                    print "    write(2, \"diag-tcc-new: before-target\\n\", 28);"
+                  }
+                  if (in_new && $0 ~ /TinyCC & gcc defines/) {
+                    print "    write(2, \"diag-tcc-new: before-types\\n\", 27);"
+                  }
+                  if (in_new && $0 ~ /^[[:space:]]*return s;/) {
+                    print "    write(2, \"diag-tcc-new: return\\n\", 21);"
+                    in_new = 0
+                  }
                   if ($0 ~ /^ST_FUNC int tcc_open\(TCCState \*s1, const char \*filename\)/) in_open = 1
                   if (in_open && $0 ~ /^[[:space:]]*int fd;/) {
                     print "    fputs(\"diag-tcc-file: tcc_open enter\\n\", stderr);"
@@ -1521,6 +1572,24 @@ EOF_DIAG_TCC_COMPILE
                     print "    write(2, (const void *)diag_tcc_main_marker, 20);"
                     print "    write(2, \"\\n\", 1);"
                     in_main = 0
+                  }
+                  if ($0 ~ /^[[:space:]]*s = tcc_new\(\);/) {
+                    print "    write(2, \"diag-tcc-main: after-new\\n\", 25);"
+                  }
+                  if ($0 ~ /^[[:space:]]*opt = tcc_parse_args/) {
+                    print "    write(2, \"diag-tcc-main: after-parse\\n\", 27);"
+                  }
+                  if ($0 ~ /^[[:space:]]*if \(\(n \| t\) == 0\)/) {
+                    print "    write(2, \"diag-tcc-main: before-first\\n\", 28);"
+                  }
+                  if ($0 ~ /^[[:space:]]*if \(n == 0\)/) {
+                    print "        write(2, \"diag-tcc-main: before-no-input\\n\", 31);"
+                  }
+                  if ($0 ~ /^[[:space:]]*set_environment\(s\);/) {
+                    print "    write(2, \"diag-tcc-main: before-env\\n\", 26);"
+                  }
+                  if ($0 ~ /^[[:space:]]*tcc_set_output_type\(s, s->output_type\);/) {
+                    print "    write(2, \"diag-tcc-main: after-output-type\\n\", 33);"
                   }
                 }
               ' tcc.c > tcc.c.tmp

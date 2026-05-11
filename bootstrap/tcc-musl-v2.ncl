@@ -267,12 +267,22 @@ static void crunch_ar_size(char dst[10], unsigned long v)\
         # so helper calls jump through zeroed GOT entries at runtime. PC32 lets
         # the final static link resolve direct calls to the known code address.
         $BB sed -i 's/R_X86_64_PLT32/R_X86_64_PC32/g' x86_64-gen.c
-        # Likewise, materialize non-static symbol addresses directly in static
+        $BB sed -i '/R_X86_64_GOTPCREL/c\    gen_addrpc32(r, sym, c); return;' x86_64-gen.c
+        $BB sed -i '/gen_modrm64(0x8b, tr, fr, sv->sym, 0);/c\            orex(1, 0, tr, 0x8d); o(0x05 + REG_VALUE(tr) * 8); gen_addrpc32(fr, sv->sym, 0);' x86_64-gen.c
+        $BB awk 'BEGIN{done=0;skip=0} skip {skip=0; next} { if (!done && index($0, "if ((fr & VT_VALMASK) == VT_CONST && (fr & VT_SYM) &&") != 0) { print "    if (0) {"; done=1; skip=1; next } print }' x86_64-gen.c > x86_64-gen.c.tmp
+        $BB mv x86_64-gen.c.tmp x86_64-gen.c
+        $BB sed -i '/(fr \& VT_LVAL) \&\& !(sv->sym->type.t \& VT_STATIC))/c\        0) {' x86_64-gen.c
         # code instead of loading them through GOTPCREL slots. Function-pointer
         # initializers otherwise load zero from the unfilled static GOT and
         # indirect-call through address 0.
+        # Global lvalue loads/stores in static outputs must use direct RIP-relative
+        # addressing too. The upstream x86_64 backend routes non-static globals
+        # through GOTPCREL even for static executables; Crunch's static link path
+        # does not reliably materialize those GOT slots, so stores like `x = 1`
+        # can load a zero pointer and segfault.
+        $BB sed -i '/if (fr == VT_CONST \&\& (v->r \& VT_SYM)) {/c\    if (0 && fr == VT_CONST && (v->r & VT_SYM)) {' x86_64-gen.c
         $BB sed -i 's/if (sv->sym->type.t \& VT_STATIC) {/if (1 || (sv->sym->type.t \& VT_STATIC)) {/' x86_64-gen.c
-        $BB sed -i 's/is_got = (op_reg \& TREG_MEM) \&\& !(sym->type.t \& VT_STATIC);/is_got = 0;/' x86_64-gen.c
+        $BB sed -i '/^[[:space:]]*is_got = /c\    is_got = 0;' x86_64-gen.c
         $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
         $BB sed -i '/sprintf(buf,/c\
     buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
