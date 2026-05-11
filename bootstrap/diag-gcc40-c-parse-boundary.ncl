@@ -1558,24 +1558,33 @@ EOF_DIAG_TCC_COMPILE
                     print "            fputs(\"diag-tcc-file: before tcc_add_file loop call\\n\", stderr);"
                     print "            write(2, \"g0\\n\", 3);"
                   }
-                  if (in_apadd && $0 ~ /^[[:space:]]*struct filespec \*f = tcc_malloc/) print "    write(2, \"a0\\n\", 3);"
-                  if (in_apadd && $0 ~ /^[[:space:]]*strcpy\(f->name, filename\);/) print "    write(2, \"a2\\n\", 3);"
-                  if (in_apadd && $0 ~ /^[[:space:]]*dynarray_add\(&s->files/) print "    write(2, \"a4\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*cstr_new\(&linker_arg\);/) print "    write(2, \"p0\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*r = argv\[optind\];/) print "        write(2, \"p2\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*if \(r\[0\] != .-. \|\| r\[1\] ==/) print "        write(2, \"p4\\n\", 3);"
-                  if (in_parse && $0 ~ /^[[:space:]]*args_parser_add_file\(s, r, s->filetype\);/) print "                write(2, \"p6\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(s->nb_libraries\)/) print "            write(2, \"oL\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(n > 1/) print "            write(2, \"o1\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*set_environment\(s\);/) print "    write(2, \"e0\\n\", 3);"
+
                   if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r0\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->alacarte_link = 1;/) print "        write(2, \"r2\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(--n == 0 \|\| ret/) { print "        write(2, \"r4\\n\", 3);"; reset_break = 1 }
+                  if ($0 ~ /^[[:space:]]*if \(--n == 0 \|\| ret/) {
+                    print "        write(2, \"r4\\n\", 3);"
+                    print "        {"
+                    print "          write(2, \"n0\\n\", 3);"
+                    print "          --n;"
+                    print "          write(2, \"n1\\n\", 3);"
+                    print "          if (n == 0) write(2, \"nZ\\n\", 3);"
+                    print "          if (ret) write(2, \"nR\\n\", 3);"
+                    print "          if (s->output_type == TCC_OUTPUT_OBJ) write(2, \"nO\\n\", 3);"
+                    print "          if (!s->option_r) write(2, \"nr\\n\", 3);"
+                    print "          if (n == 0 || ret || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))"
+                    skip_reset_cond = 1
+                    reset_break = 1
+                    next
+                  }
+                  if (skip_reset_cond > 0) { skip_reset_cond--; next }
+                  if (reset_break && $0 ~ /^[[:space:]]*break;/) { print "            write(2, \"r5\\n\", 3);"; print; print "        }"; reset_break = 0; next }
+                  if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) print "    write(2, \"q0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*} else if \(s->output_type == TCC_OUTPUT_PREPROCESS/) print "    write(2, \"q2\\n\", 3);"
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
+                  if ($0 ~ /^[[:space:]]*if \(s->run_test\)/) print "        write(2, \"q1\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r1\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->alacarte_link = 1;/) print "        write(2, \"r3\\n\", 3);"
-                  if (reset_break && $0 ~ /^[[:space:]]*break;/) { print "            write(2, \"r5\\n\", 3);"; reset_break = 0 }
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
                     print "    static volatile const char *diag_tcc_main_marker = \"diag-tcc-main: enter\";"
                     print "    write(2, (const void *)diag_tcc_main_marker, 20);"
