@@ -3,8 +3,8 @@
 # This focused probe avoids the broad GCC c-parse matrix. It proves the C
 # front-end can emit main objects, static links succeed, and the minimal
 # crt1/__libc_start_main path can now enter/return from main. The remaining
-# write-main failure is past startup, in the tiny syscall/libc surface used by
-# marker-printing probes.
+# write-main failure is past startup; this diagnostic splits syscall-only entry,
+# main-owned raw syscall, and libc write marker paths.
 
 let crunch = import "lib.ncl" in
 
@@ -13,7 +13,7 @@ let tcc = import "tcc-musl-v2.ncl" in
 let musl = import "musl-1.1.24-tcc-musl.ncl" in
 
 {
-  name = "diag-musl-startup-boundary-v8",
+  name = "diag-musl-startup-boundary-v9",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -67,13 +67,38 @@ let musl = import "musl-1.1.24-tcc-musl.ncl" in
 int write(int fd, const void *buf, unsigned long count);
 int main(int argc, char **argv) { (void)argv; write(2, "diag-musl-startup-main: write-main\n", 36); return argc == 123; }
 EOF_WRITE_MAIN
+      $BB cat > /tmp/raw-write-main.c <<'EOF_RAW_WRITE_MAIN'
+__asm__(".global raw_write\n"
+        "raw_write:\n"
+        "    mov $1,%rax\n"
+        "    syscall\n"
+        "    ret\n");
+int raw_write(int fd, const void *buf, unsigned long count);
+int main(int argc, char **argv) { (void)argv; raw_write(2, "diag-musl-startup-main: raw-write-main\n", 40); return argc == 123; }
+EOF_RAW_WRITE_MAIN
       $BB cat > /tmp/return-main.c <<'EOF_RETURN_MAIN'
 int main(int argc, char **argv) { (void)argv; return argc == 123; }
 EOF_RETURN_MAIN
+      $BB cat > /tmp/syscall-start.s <<'EOF_SYSCALL_START'
+.global _start
+_start:
+    mov $1,%rax
+    mov $2,%rdi
+    lea msg(%rip),%rsi
+    mov $37,%rdx
+    syscall
+    mov $60,%rax
+    xor %rdi,%rdi
+    syscall
+msg:
+    .ascii "diag-musl-startup-main: syscall-start\n"
+EOF_SYSCALL_START
 
       run_phase compile-write-main "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/write-main.c -o /tmp/write-main.o
+      run_phase compile-raw-write-main "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/raw-write-main.c -o /tmp/raw-write-main.o
       run_phase compile-return-main "$TCC/bin/tcc" -c -I "$MUSL/include" /tmp/return-main.c -o /tmp/return-main.o
-      for obj in /tmp/write-main.o /tmp/return-main.o; do
+      run_phase compile-syscall-start "$TCC/bin/tcc" -c /tmp/syscall-start.s -o /tmp/syscall-start.o
+      for obj in /tmp/write-main.o /tmp/raw-write-main.o /tmp/return-main.o /tmp/syscall-start.o; do
         if [ -f "$obj" ]; then
           $BB chmod u+rw "$obj" || true
           echo "diag-musl-startup-object: exists $obj" >&2
@@ -82,18 +107,20 @@ EOF_RETURN_MAIN
         fi
       done
 
+      run_phase link-syscall-start "$TCC/bin/tcc" -nostdlib -static -o /tmp/diag-musl-syscall-start /tmp/syscall-start.o
       run_phase link-manual-crt-return "$TCC/bin/tcc" -nostdlib -static -o /tmp/diag-musl-manual-crt-return "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/return-main.o "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
+      run_phase link-manual-crt-raw-write "$TCC/bin/tcc" -nostdlib -static -o /tmp/diag-musl-manual-crt-raw-write "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/raw-write-main.o "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
       run_phase link-manual-crt-write "$TCC/bin/tcc" -nostdlib -static -o /tmp/diag-musl-manual-crt-write "$MUSL/lib/crt1.o" "$MUSL/lib/crti.o" /tmp/write-main.o "$MUSL/lib/libc.a" "$MUSL/lib/crtn.o"
       run_phase link-driver-write "$TCC/bin/tcc" -static -o /tmp/diag-musl-driver-write /tmp/write-main.c
 
-      for probe in manual-crt-return manual-crt-write driver-write; do
+      for probe in syscall-start manual-crt-return manual-crt-raw-write manual-crt-write driver-write; do
         run_probe "$probe"
       done
 
       $BB mkdir -p "$out"
       {
         echo 'diag-musl-startup-boundary complete'
-        echo 'expected-current-boundary: compile/link succeed; return-main exits rc0 through crt/libc startup; write-main still segfaults in the marker syscall/libc surface'
+        echo 'expected-current-boundary: compile/link succeed; syscall-only start and return-main exit rc0; raw-write vs libc-write probes isolate the remaining marker syscall/libc surface'
       } > "$out/report.txt"
     "%,
   ],
