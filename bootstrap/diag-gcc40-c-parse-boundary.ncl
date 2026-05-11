@@ -1583,7 +1583,8 @@ EOF_DIAG_TCC_COMPILE
                     print "    write(2, \"u0\\n\", 3);"
                     print "    t = s->run_test;"
                     print "    write(2, \"u1\\n\", 3);"
-                    print "    if (t) {"
+                    print "    write(2, \"v0\\n\", 3);"
+                    print "    if (0) {"
                     print "        write(2, \"q1\\n\", 3);"
                     next
                   }
