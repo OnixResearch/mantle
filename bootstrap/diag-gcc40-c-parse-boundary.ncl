@@ -1526,6 +1526,7 @@ EOF_DIAG_TCC_COMPILE
                   if (in_new && $0 ~ /^[[:space:]]*tccpp_new\(s\);/) {
                     print "    write(2, \"diag-tcc-new: after-pp\\n\", 23);"
                   }
+
                   if (in_new && $0 ~ /^[[:space:]]*sscanf\(TCC_VERSION/) {
                     print "        write(2, \"diag-tcc-new: before-version\\n\", 29);"
                   }
@@ -1538,6 +1539,7 @@ EOF_DIAG_TCC_COMPILE
                   if (in_new && $0 ~ /TinyCC & gcc defines/) {
                     print "    write(2, \"diag-tcc-new: before-types\\n\", 27);"
                   }
+
                   if (in_new && $0 ~ /^[[:space:]]*return s;/) {
                     print "    write(2, \"diag-tcc-new: return\\n\", 21);"
                     in_new = 0
@@ -1561,29 +1563,39 @@ EOF_DIAG_TCC_COMPILE
               ' libtcc.c > libtcc.c.tmp
               $BB mv libtcc.c.tmp libtcc.c
               $BB awk '
-                /^ST_FUNC void tccelf_new\(TCCState \*s\)/ { in_elf = 1 }
-                /^ST_FUNC Section \*new_symtab\(TCCState \*s1,/ { in_sym = 1 }
+                /^ST_INLN void define_push\(int v, int macro_type,/ { in_def=1 }
+                /^ST_FUNC void tccpp_new\(TCCState \*s\)/ { in_pp=1 }
                 {
-                  if (in_elf && $0 ~ /symtab_section = new_symtab/) print "    write(2, \"e:bsym\\n\", 7);"
-                  if (in_sym && $0 ~ /symtab = new_section/) print "    write(2, \"s:bs\\n\", 5);"
-                  if (in_sym && $0 ~ /strtab = new_section/) print "    write(2, \"s:bst\\n\", 6);"
-                  if (in_sym && $0 ~ /put_elf_str\(strtab/) print "    write(2, \"s:bstr\\n\", 7);"
-                  if (in_sym && $0 ~ /put_elf_sym\(symtab/) print "    write(2, \"s:bsym\\n\", 7);"
-                  if (in_sym && $0 ~ /hash = new_section/) print "    write(2, \"s:bh\\n\", 5);"
-                  if (in_sym && $0 ~ /ptr = section_ptr_add/) print "    write(2, \"s:bptr\\n\", 7);"
+                  if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d0\\n\", 3);"
+                  if (in_def && $0 ~ /^[[:space:]]*s = sym_push2/) print "    write(2, \"d2\\n\", 3);"
+                  if (in_def && $0 ~ /table_ident\[v - TOK_IDENT\]->sym_define/) print "    write(2, \"d4\\n\", 3);"
+                  if (in_pp && $0 ~ /s->include_stack_ptr/) print "    write(2, \"u0\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&toksym_alloc/) print "    write(2, \"u1\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&tokstr_alloc/) print "    write(2, \"u3\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&cstr_alloc/) print "    write(2, \"u5\\n\", 3);"
+                  if (in_pp && $0 ~ /memset\(hash_ident/) print "    write(2, \"u7\\n\", 3);"
+                  if (in_pp && $0 ~ /cstr_realloc\(&cstr_buf/) print "    write(2, \"u9\\n\", 3);"
+                  if (in_pp && $0 ~ /tok_str_realloc\(&tokstr_buf/) print "    write(2, \"v1\\n\", 3);"
+                  if (in_pp && $0 ~ /p = tcc_keywords;/) print "    write(2, \"v3\\n\", 3);"
+                  if (in_pp && $0 ~ /tok_alloc\(p, r - p - 1\);/) print "    write(2, \"v5\\n\", 3);"
                   print
-                  if (in_elf && $0 ~ /common_section->sh_num = SHN_COMMON;/) print "    write(2, \"e:astd\\n\", 7);"
-                  if (in_elf && $0 ~ /s->symtab = symtab_section;/) print "    write(2, \"e:asym\\n\", 7);"
-                  if (in_sym && $0 ~ /symtab = new_section/) print "    write(2, \"s:as\\n\", 5);"
-                  if (in_sym && $0 ~ /strtab = new_section/) print "    write(2, \"s:ast\\n\", 6);"
-                  if (in_sym && $0 ~ /put_elf_str\(strtab/) print "    write(2, \"s:astr\\n\", 7);"
-                  if (in_sym && $0 ~ /put_elf_sym\(symtab/) print "    write(2, \"s:asym\\n\", 7);"
-                  if (in_sym && $0 ~ /hash = new_section/) print "    write(2, \"s:ah\\n\", 5);"
-                  if (in_sym && $0 ~ /ptr = section_ptr_add/) print "    write(2, \"s:aptr\\n\", 7);"
-                  if (in_sym && $0 ~ /return symtab;/) { print "    write(2, \"s:ret\\n\", 6);"; in_sym = 0 }
+                  if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d1\\n\", 3);"
+                  if (in_def && $0 ~ /^[[:space:]]*s = sym_push2/) print "    write(2, \"d3\\n\", 3);"
+                  if (in_def && $0 ~ /table_ident\[v - TOK_IDENT\]->sym_define/) print "    write(2, \"d5\\n\", 3);"
+                  if (in_def && $0 ~ /^}/) { in_def=0 }
+                  if (in_pp && $0 ~ /s->ppfp = stdout;/) print "    write(2, \"uA\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&toksym_alloc/) print "    write(2, \"u2\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&tokstr_alloc/) print "    write(2, \"u4\\n\", 3);"
+                  if (in_pp && $0 ~ /tal_new\(&cstr_alloc/) print "    write(2, \"u6\\n\", 3);"
+                  if (in_pp && $0 ~ /memset\(hash_ident/) print "    write(2, \"u8\\n\", 3);"
+                  if (in_pp && $0 ~ /cstr_realloc\(&cstr_buf/) print "    write(2, \"v0\\n\", 3);"
+                  if (in_pp && $0 ~ /tok_str_realloc\(&tokstr_buf/) print "    write(2, \"v2\\n\", 3);"
+                  if (in_pp && $0 ~ /p = tcc_keywords;/) print "    write(2, \"v4\\n\", 3);"
+                  if (in_pp && $0 ~ /tok_alloc\(p, r - p - 1\);/) print "    write(2, \"v6\\n\", 3);"
+                  if (in_pp && $0 ~ /^}/) { in_pp=0 }
                 }
-              ' tccelf.c > tccelf.c.tmp
-              $BB mv tccelf.c.tmp tccelf.c
+              ' tccpp.c > tccpp.c.tmp
+              $BB mv tccpp.c.tmp tccpp.c
               $BB awk '
                 {
                   if ($0 ~ /if \(tcc_add_file\(s, f->name\) < 0\)/) {
@@ -1709,7 +1721,7 @@ typedef long off_t;
 struct tm { int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year, tm_wday, tm_yday, tm_isdst; };
 struct timeval { long tv_sec; long tv_usec; };
 char __stderr_FILE[256];
-static unsigned char crunch_diag_heap[1024 * 1024];
+static unsigned char crunch_diag_heap[4 * 1024 * 1024];
 static unsigned long crunch_diag_heap_pos;
 void *malloc(unsigned long n) { unsigned long a = (n + 15) & ~15UL; void *p; if (crunch_diag_heap_pos + a > sizeof(crunch_diag_heap)) return 0; p = crunch_diag_heap + crunch_diag_heap_pos; crunch_diag_heap_pos += a; return p; }
 void free(void *p) { (void)p; }
@@ -1717,6 +1729,8 @@ void *calloc(unsigned long n, unsigned long s) { unsigned long total = n * s; un
 void *realloc(void *p, unsigned long n) { (void)p; return malloc(n); }
 void *memalign(unsigned long a, unsigned long n) { (void)a; return malloc(n); }
 int posix_memalign(void **m, unsigned long a, unsigned long n) { (void)a; *m = malloc(n); return *m ? 0 : 12; }
+void *memcpy(void *d, const void *s, unsigned long n) { char *D=d; const char *S=s; while (n--) *D++ = *S++; return d; }
+void *memmove(void *d, const void *s, unsigned long n) { char *D=d; const char *S=s; if (D < S) while (n--) *D++ = *S++; else { D += n; S += n; while (n--) *--D = *--S; } return d; }
 double ldexp(double x, int exp) { while (exp > 0) { x = x * 2.0; exp = exp - 1; } while (exp < 0) { x = x / 2.0; exp = exp + 1; } return x; }
 time_t time(time_t *t) { if (t) *t = 0; return 0; }
 struct tm *localtime(const time_t *t) { static struct tm tm; (void)t; return &tm; }
@@ -2498,19 +2512,9 @@ enum tree_code {
               run_decl0_runtime_probe version "$decl0_tcc" -v
               run_decl0_runtime_probe compile_empty "$decl0_tcc" -c /tmp/cparse_decl0_empty.c -o /tmp/cparse_decl0_empty.o
               make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'
-              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_eof_var_prefix 'int cparse_decl0_trace_eof_var_probe'
-              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_bad_init_semicolon 'int cparse_decl0_trace_bad_init_probe = ;'
-              make_cparse_plain_exact_with_compiler "$decl0_tcc" cparse_decl0_trace_bad_comma_semicolon 'int cparse_decl0_trace_bad_comma_probe, ;'
             else
               echo "diag-tcc-decl0: instrumented compiler unavailable" >&2
             fi
-            make_cparse_plain_body cparse_plain_decl_no_config 'void cparse_plain_probe (void);'
-            make_cparse_plain_body cparse_plain_global_no_config 'int cparse_plain_global_probe;'
-            make_cparse_plain_body cparse_plain_func_no_config 'void cparse_plain_function_probe (void) { }'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_decl_semicolon_config_only '' 'void cparse_decl_semicolon_probe (void);'
-            make_cparse_exact_after_includes_config_undef6 cparse_func_exact_config_only '' 'void cparse_exact_function_probe (void) { }'
-            make_cparse_exact_after_includes_config_undef6 cparse_var_semicolon_config_only '' 'int cparse_var_semicolon_probe;'
-            make_cparse_function_after_includes_config_undef6 cparse_func_after_config_only '' || true
             # Earlier frontmatter/full-source probes are preserved in committed
             # evidence; keep the active diagnostic matrix focused so the generated
             # builder script stays below the host argument-size limit.
