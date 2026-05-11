@@ -1563,36 +1563,19 @@ EOF_DIAG_TCC_COMPILE
               ' libtcc.c > libtcc.c.tmp
               $BB mv libtcc.c.tmp libtcc.c
               $BB awk '
+                /^static TokenSym \*tok_alloc_new\(TokenSym \*\*pts,/ { in_toknew=1 }
                 /^ST_INLN void define_push\(int v, int macro_type,/ { in_def=1 }
-                /^ST_FUNC void tccpp_new\(TCCState \*s\)/ { in_pp=1 }
+                /^ST_INLN Sym \*define_find\(int v\)/ { in_find=1 }
                 {
                   if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d0\\n\", 3);"
-                  if (in_def && $0 ~ /^[[:space:]]*s = sym_push2/) print "    write(2, \"d2\\n\", 3);"
-                  if (in_def && $0 ~ /table_ident\[v - TOK_IDENT\]->sym_define/) print "    write(2, \"d4\\n\", 3);"
-                  if (in_pp && $0 ~ /s->include_stack_ptr/) print "    write(2, \"u0\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&toksym_alloc/) print "    write(2, \"u1\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&tokstr_alloc/) print "    write(2, \"u3\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&cstr_alloc/) print "    write(2, \"u5\\n\", 3);"
-                  if (in_pp && $0 ~ /memset\(hash_ident/) print "    write(2, \"u7\\n\", 3);"
-                  if (in_pp && $0 ~ /cstr_realloc\(&cstr_buf/) print "    write(2, \"u9\\n\", 3);"
-                  if (in_pp && $0 ~ /tok_str_realloc\(&tokstr_buf/) print "    write(2, \"v1\\n\", 3);"
-                  if (in_pp && $0 ~ /p = tcc_keywords;/) print "    write(2, \"v3\\n\", 3);"
-                  if (in_pp && $0 ~ /tok_alloc\(p, r - p - 1\);/) print "    write(2, \"v5\\n\", 3);"
                   print
+                  if (in_toknew && $0 ~ /^[[:space:]]*ts->tok = tok_ident\+\+;/) print "    if (ts->tok == TOK___LINE__) write(2, \"kL\\n\", 3);"
+                  if (in_toknew && $0 ~ /^}/) { in_toknew=0 }
                   if (in_def && $0 ~ /^[[:space:]]*o = define_find/) print "    write(2, \"d1\\n\", 3);"
-                  if (in_def && $0 ~ /^[[:space:]]*s = sym_push2/) print "    write(2, \"d3\\n\", 3);"
                   if (in_def && $0 ~ /table_ident\[v - TOK_IDENT\]->sym_define/) print "    write(2, \"d5\\n\", 3);"
                   if (in_def && $0 ~ /^}/) { in_def=0 }
-                  if (in_pp && $0 ~ /s->ppfp = stdout;/) print "    write(2, \"uA\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&toksym_alloc/) print "    write(2, \"u2\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&tokstr_alloc/) print "    write(2, \"u4\\n\", 3);"
-                  if (in_pp && $0 ~ /tal_new\(&cstr_alloc/) print "    write(2, \"u6\\n\", 3);"
-                  if (in_pp && $0 ~ /memset\(hash_ident/) print "    write(2, \"u8\\n\", 3);"
-                  if (in_pp && $0 ~ /cstr_realloc\(&cstr_buf/) print "    write(2, \"v0\\n\", 3);"
-                  if (in_pp && $0 ~ /tok_str_realloc\(&tokstr_buf/) print "    write(2, \"v2\\n\", 3);"
-                  if (in_pp && $0 ~ /p = tcc_keywords;/) print "    write(2, \"v4\\n\", 3);"
-                  if (in_pp && $0 ~ /tok_alloc\(p, r - p - 1\);/) print "    write(2, \"v6\\n\", 3);"
-                  if (in_pp && $0 ~ /^}/) { in_pp=0 }
+                  if (in_find && $0 ~ /^[[:space:]]*return table_ident\[v\]->sym_define;/) print "    if (!table_ident[v]) write(2, \"fZ\\n\", 3); else write(2, \"fT\\n\", 3);"
+                  if (in_find && $0 ~ /^}/) { in_find=0 }
                 }
               ' tccpp.c > tccpp.c.tmp
               $BB mv tccpp.c.tmp tccpp.c
@@ -1618,8 +1601,21 @@ EOF_DIAG_TCC_COMPILE
                   if ($0 ~ /^[[:space:]]*if \(\(n \| t\) == 0\)/) {
                     print "    write(2, \"diag-tcc-main: before-first\\n\", 28);"
                   }
+                  if ($0 ~ /^[[:space:]]*n = s->nb_files;/) {
+                    print "        write(2, \"m0\\n\", 3);"
+                  }
                   if ($0 ~ /^[[:space:]]*if \(n == 0\)/) {
+                    print "        write(2, \"m2\\n\", 3);"
                     print "        write(2, \"diag-tcc-main: before-no-input\\n\", 31);"
+                  }
+                  if ($0 ~ /^[[:space:]]*if \(s->output_type == TCC_OUTPUT_PREPROCESS\)/) {
+                    print "        write(2, \"m4\\n\", 3);"
+                  }
+                  if ($0 ~ /^[[:space:]]*} else if \(s->output_type == TCC_OUTPUT_OBJ/) {
+                    print "        write(2, \"m6\\n\", 3);"
+                  }
+                  if ($0 ~ /^[[:space:]]*if \(s->do_bench\)/) {
+                    print "        write(2, \"m8\\n\", 3);"
                   }
                   if ($0 ~ /^[[:space:]]*set_environment\(s\);/) {
                     print "    write(2, \"diag-tcc-main: before-env\\n\", 26);"
@@ -1723,10 +1719,10 @@ struct timeval { long tv_sec; long tv_usec; };
 char __stderr_FILE[256];
 static unsigned char crunch_diag_heap[4 * 1024 * 1024];
 static unsigned long crunch_diag_heap_pos;
-void *malloc(unsigned long n) { unsigned long a = (n + 15) & ~15UL; void *p; if (crunch_diag_heap_pos + a > sizeof(crunch_diag_heap)) return 0; p = crunch_diag_heap + crunch_diag_heap_pos; crunch_diag_heap_pos += a; return p; }
+void *malloc(unsigned long n) { unsigned long total = (n + 32 + 15) & ~15UL; unsigned char *p; if (crunch_diag_heap_pos + total > sizeof(crunch_diag_heap)) return 0; p = crunch_diag_heap + crunch_diag_heap_pos + 32; ((unsigned long *)p)[-1] = n; crunch_diag_heap_pos += total; return p; }
 void free(void *p) { (void)p; }
-void *calloc(unsigned long n, unsigned long s) { unsigned long total = n * s; unsigned char *p = malloc(total); unsigned long i; if (p) for (i = 0; i < total; i++) p[i] = 0; return p; }
-void *realloc(void *p, unsigned long n) { (void)p; return malloc(n); }
+void *calloc(unsigned long n, unsigned long s) { unsigned long total = n * s; unsigned char *p = malloc(total); unsigned long i; if (!p) return 0; for (i = 0; i < total; i++) p[i] = 0; return p; }
+void *realloc(void *p, unsigned long n) { unsigned char *q; unsigned long old, i, limit; if (!p) return malloc(n); q = malloc(n); if (!q) return 0; old = ((unsigned long *)p)[-1]; limit = old < n ? old : n; for (i = 0; i < limit; i++) q[i] = ((unsigned char *)p)[i]; return q; }
 void *memalign(unsigned long a, unsigned long n) { (void)a; return malloc(n); }
 int posix_memalign(void **m, unsigned long a, unsigned long n) { (void)a; *m = malloc(n); return *m ? 0 : 12; }
 void *memcpy(void *d, const void *s, unsigned long n) { char *D=d; const char *S=s; while (n--) *D++ = *S++; return d; }
