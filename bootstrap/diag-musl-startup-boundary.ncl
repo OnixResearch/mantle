@@ -2,9 +2,9 @@
 #
 # This focused probe avoids the broad GCC c-parse matrix. It proves the C
 # front-end can emit main objects, static links succeed, and the minimal
-# crt1/__libc_start_main path can now enter/return from main. The remaining
-# write-main failure is past startup; this diagnostic splits syscall-only entry,
-# main-owned raw syscall, and libc write marker paths.
+# crt1/__libc_start_main path can enter/return from main. It also guards the
+# predecessor TinyCC static-call relocation repair: direct calls, function
+# pointers, raw syscall helpers, and libc write markers all run successfully.
 
 let crunch = import "lib.ncl" in
 
@@ -13,7 +13,7 @@ let tcc = import "tcc-musl-v2.ncl" in
 let musl = import "musl-1.1.24-tcc-musl.ncl" in
 
 {
-  name = "diag-musl-startup-boundary-v12",
+  name = "diag-musl-startup-boundary-v15",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -217,7 +217,7 @@ EOF_SYSCALL_START
       $BB mkdir -p "$out"
       {
         echo 'diag-musl-startup-boundary complete'
-        echo 'expected-current-boundary: compile/link succeed; syscall-only start and return-main exit rc0; direct-vs-pointer helper probes isolate whether user-object calls fail at direct call encoding/relocation or at all calls'
+        echo 'expected-current-boundary: compile/link succeed; syscall-only start, return-main, direct helpers, function-pointer helpers, raw syscall helpers, libc write, and driver-static write all exit rc0 after static call/GOTPCREL relocation repair'
       } > "$out/report.txt"
     "%,
   ],

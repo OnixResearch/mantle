@@ -261,6 +261,18 @@ static void crunch_ar_size(char dst[10], unsigned long v)\
         $BB sed -i 's/loc = 0;/loc = 0;\
     ind = cur_text_section->data_offset;/' x86_64-gen.c
         $BB sed -i 's/g(vtop->c.i \& (ll ? 63 : 31));/g(vtop->c.i);/' x86_64-gen.c
+        # The bootstrap compiler only produces static executables here. Avoid
+        # emitting PLT32 call relocations for ordinary function calls: the
+        # Mes-built linker path can leave static PLT/GOT slots unmaterialized,
+        # so helper calls jump through zeroed GOT entries at runtime. PC32 lets
+        # the final static link resolve direct calls to the known code address.
+        $BB sed -i 's/R_X86_64_PLT32/R_X86_64_PC32/g' x86_64-gen.c
+        # Likewise, materialize non-static symbol addresses directly in static
+        # code instead of loading them through GOTPCREL slots. Function-pointer
+        # initializers otherwise load zero from the unfilled static GOT and
+        # indirect-call through address 0.
+        $BB sed -i 's/if (sv->sym->type.t \& VT_STATIC) {/if (1 || (sv->sym->type.t \& VT_STATIC)) {/' x86_64-gen.c
+        $BB sed -i 's/is_got = (op_reg \& TREG_MEM) \&\& !(sym->type.t \& VT_STATIC);/is_got = 0;/' x86_64-gen.c
         $BB sed -i 's/if (!is_compatible_types(\&sym->type, type))/if (0 \&\& !is_compatible_types(\&sym->type, type))/' tccgen.c
         $BB sed -i '/sprintf(buf,/c\
     buf[0] = '\''"'\''; strcpy(buf + 1, file->filename); strcat(buf, "\\"");' tccpp.c
