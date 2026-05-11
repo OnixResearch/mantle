@@ -1568,16 +1568,14 @@ EOF_DIAG_TCC_COMPILE
                   if ($0 ~ /^[[:space:]]*if \(s->nb_libraries\)/) print "            write(2, \"oL\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*if \(n > 1/) print "            write(2, \"o1\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*set_environment\(s\);/) print "    write(2, \"e0\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*struct filespec \*f = s->files/) print "        write(2, \"l0\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*s->filetype = f->type;/) print "        write(2, \"l2\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*s->alacarte_link = f->alacarte;/) print "        write(2, \"l4\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(f->type == AFF_TYPE_LIB\)/) print "        write(2, \"l6\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(1 == s->verbose\)/) print "            write(2, \"l8\\n\", 3);"
-                  if ($0 ~ /^[[:space:]]*if \(!first_file\)/) print "            write(2, \"f0\\n\", 3);"
                   if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r0\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*s->alacarte_link = 1;/) print "        write(2, \"r2\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*if \(--n == 0 \|\| ret/) { print "        write(2, \"r4\\n\", 3);"; reset_break = 1 }
                   if ($0 ~ /main\(.*argc/) in_main = 1
                   print
                   if ($0 ~ /^[[:space:]]*s->filetype = 0;/) print "        write(2, \"r1\\n\", 3);"
+                  if ($0 ~ /^[[:space:]]*s->alacarte_link = 1;/) print "        write(2, \"r3\\n\", 3);"
+                  if (reset_break && $0 ~ /^[[:space:]]*break;/) { print "            write(2, \"r5\\n\", 3);"; reset_break = 0 }
                   if (in_main && $0 ~ /^[[:space:]]*\{/) {
                     print "    static volatile const char *diag_tcc_main_marker = \"diag-tcc-main: enter\";"
                     print "    write(2, (const void *)diag_tcc_main_marker, 20);"
