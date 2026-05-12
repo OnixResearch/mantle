@@ -126,6 +126,123 @@ pub struct RealizerProfileFacts {
     pub parameters: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedRealizationArtifact {
+    pub outputs: BTreeMap<String, snix_store::path_info::PathInfo>,
+    pub substitutions: BTreeMap<String, crunch_store::OutputSubstitutionReport>,
+}
+
+impl VerifiedRealizationArtifact {
+    pub fn new(
+        outputs: BTreeMap<String, snix_store::path_info::PathInfo>,
+        substitutions: BTreeMap<String, crunch_store::OutputSubstitutionReport>,
+    ) -> Result<Self, ArtifactAdapterError> {
+        if outputs.is_empty() {
+            return Err(ArtifactAdapterError::EmptyArtifact);
+        }
+        for output_name in substitutions.keys() {
+            if !outputs.contains_key(output_name) {
+                return Err(ArtifactAdapterError::UnknownSubstitutionOutput {
+                    output: output_name.clone(),
+                });
+            }
+        }
+        Ok(Self { outputs, substitutions })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactResolveRequest {
+    pub key: RealizationKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolveOutcome {
+    Hit(VerifiedRealizationArtifact),
+    Miss,
+    Unavailable { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishOutcome {
+    pub published_outputs: u32,
+    pub skipped_outputs: u32,
+}
+
+#[async_trait::async_trait]
+pub trait ArtifactResolver: Send {
+    async fn resolve(&mut self, request: &ArtifactResolveRequest) -> Result<ResolveOutcome, ArtifactAdapterError>;
+}
+
+#[async_trait::async_trait]
+pub trait ArtifactPublisher: Send {
+    async fn publish(
+        &mut self,
+        key: &RealizationKey,
+        artifact: &VerifiedRealizationArtifact,
+    ) -> Result<PublishOutcome, ArtifactAdapterError>;
+}
+
+/// Local test adapter that models a resolver/publisher over verified PathInfo
+/// records without naming a remote provider or transport.
+#[derive(Debug, Clone, Default)]
+pub struct InMemoryArtifactAdapter {
+    artifacts: BTreeMap<RealizationKey, VerifiedRealizationArtifact>,
+}
+
+impl InMemoryArtifactAdapter {
+    pub fn insert_verified(
+        &mut self,
+        key: RealizationKey,
+        artifact: VerifiedRealizationArtifact,
+    ) -> Option<VerifiedRealizationArtifact> {
+        self.artifacts.insert(key, artifact)
+    }
+
+    pub fn contains_key(&self, key: &RealizationKey) -> bool {
+        self.artifacts.contains_key(key)
+    }
+}
+
+#[async_trait::async_trait]
+impl ArtifactResolver for InMemoryArtifactAdapter {
+    async fn resolve(&mut self, request: &ArtifactResolveRequest) -> Result<ResolveOutcome, ArtifactAdapterError> {
+        Ok(self.artifacts.get(&request.key).cloned().map(ResolveOutcome::Hit).unwrap_or(ResolveOutcome::Miss))
+    }
+}
+
+#[async_trait::async_trait]
+impl ArtifactPublisher for InMemoryArtifactAdapter {
+    async fn publish(
+        &mut self,
+        key: &RealizationKey,
+        artifact: &VerifiedRealizationArtifact,
+    ) -> Result<PublishOutcome, ArtifactAdapterError> {
+        let published_outputs: u32 =
+            artifact.outputs.len().try_into().map_err(|_| ArtifactAdapterError::TooManyOutputs)?;
+        let skipped_outputs = if self.artifacts.contains_key(key) {
+            published_outputs
+        } else {
+            0
+        };
+        self.artifacts.insert(key.clone(), artifact.clone());
+        Ok(PublishOutcome {
+            published_outputs: published_outputs.saturating_sub(skipped_outputs),
+            skipped_outputs,
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ArtifactAdapterError {
+    #[error("verified artifact must contain at least one output")]
+    EmptyArtifact,
+    #[error("substitution report references unknown output {output}")]
+    UnknownSubstitutionOutput { output: String },
+    #[error("artifact contains too many outputs to report as u32")]
+    TooManyOutputs,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RealizationKeyError {
     #[error("realization key field {field} must not be empty")]
@@ -219,6 +336,88 @@ mod tests {
 
     fn key(request: &RealizationKeyRequest) -> RealizationKey {
         DefaultRealizationKeyDeriver.derive_key(request).unwrap()
+    }
+
+    fn verified_artifact() -> VerifiedRealizationArtifact {
+        let store_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("artifact", [7u8; 20]).unwrap();
+        let path_info = snix_store::path_info::PathInfo {
+            store_path,
+            node: snix_castore::Node::Symlink {
+                target: "/crunch/store/source".try_into().unwrap(),
+            },
+            references: vec![],
+            nar_sha256: [8u8; 32],
+            nar_size: 128,
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        VerifiedRealizationArtifact::new(BTreeMap::from([("out".to_string(), path_info)]), BTreeMap::new()).unwrap()
+    }
+
+    #[test]
+    fn in_memory_adapter_reports_miss_then_hit_after_publish() {
+        let mut adapter = InMemoryArtifactAdapter::default();
+        let key = key(&base_request());
+        let artifact = verified_artifact();
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            assert_eq!(
+                adapter.resolve(&ArtifactResolveRequest { key: key.clone() }).await.unwrap(),
+                ResolveOutcome::Miss
+            );
+            assert_eq!(adapter.publish(&key, &artifact).await.unwrap(), PublishOutcome {
+                published_outputs: 1,
+                skipped_outputs: 0,
+            });
+            assert!(matches!(
+                adapter.resolve(&ArtifactResolveRequest { key }).await.unwrap(),
+                ResolveOutcome::Hit(hit) if hit == artifact
+            ));
+        });
+    }
+
+    #[test]
+    fn in_memory_publisher_reports_idempotent_skip() {
+        let mut adapter = InMemoryArtifactAdapter::default();
+        let key = key(&base_request());
+        let artifact = verified_artifact();
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            adapter.publish(&key, &artifact).await.unwrap();
+            assert_eq!(adapter.publish(&key, &artifact).await.unwrap(), PublishOutcome {
+                published_outputs: 0,
+                skipped_outputs: 1,
+            });
+        });
+    }
+
+    #[test]
+    fn verified_artifact_rejects_empty_outputs() {
+        assert!(matches!(
+            VerifiedRealizationArtifact::new(BTreeMap::new(), BTreeMap::new()),
+            Err(ArtifactAdapterError::EmptyArtifact)
+        ));
+    }
+
+    #[test]
+    fn verified_artifact_rejects_substitution_for_unknown_output() {
+        let err = VerifiedRealizationArtifact::new(
+            verified_artifact().outputs,
+            BTreeMap::from([("missing".to_string(), crunch_store::OutputSubstitutionReport {
+                mode: crunch_store::OutputSubstitutionMode::Full,
+                transferred_bytes: 0,
+                reused_bytes: 0,
+                fallback_reason: None,
+            })]),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err,
+            ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
+        ));
     }
 
     #[test]
