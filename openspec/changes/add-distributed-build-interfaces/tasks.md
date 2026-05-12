@@ -18,7 +18,7 @@
 
 ## Verification
 
-- [ ] [depends:I2] V1 Run unit tests for realization-key determinism and negative perturbations. [covers=distributed-builds.interfaces.keys]
+- [x] [depends:I2] V1 Run unit tests for realization-key determinism and negative perturbations. [covers=distributed-builds.interfaces.keys] ✅ 1m (started: 2026-05-12T02:39:05Z → completed: 2026-05-12T02:39:21Z; evidence: `cargo test -p crunch-build distributed --lib` — 32 passed)
 - [ ] [depends:I4] V2 Run integration tests proving local-only defaults perform no network/external resolver calls and preserve current realization outcomes. [covers=distributed-builds.interfaces.resolver-order]
 - [ ] [depends:I7] V3 Run fake-remote positive and negative contract tests: accepted candidate after verification, rejected digest mismatch, rejected missing log/metadata, and local fallback on remote unavailable. [covers=distributed-builds.interfaces.remote-verification]
 - [ ] [depends:I9] V4 Capture operator-facing diagnostics/receipt evidence for cache hit, miss, local realization, remote fallback, and verification rejection. [covers=distributed-builds.interfaces.diagnostics]
