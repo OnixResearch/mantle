@@ -137,7 +137,11 @@ struct StageSpec {
 enum EvidenceCheck {
     None,
     SeedFullSourceRootContract,
+    BinutilsTccToolTranscript,
 }
+
+const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
+const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
     let report = collect_bootstrap_parity_report(project_root);
@@ -224,7 +228,8 @@ fn summarize_axis(axis: ParityAxis, rows: &[ParityRow]) -> AxisSummary {
 fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let path = spec.derivation.map(|derivation| project_root.join(BOOTSTRAP_DIR).join(derivation));
     let file_state = path.as_ref().map(|p| inspect_derivation(p));
-    let evidence_failure = path.as_ref().and_then(|p| validate_stage_evidence(p, spec.evidence_check).err());
+    let evidence_failure =
+        path.as_ref().and_then(|p| validate_stage_evidence(project_root, p, spec.evidence_check).err());
     let status = match (spec.expected_complete, file_state) {
         (_, None) => StageStatus::Blocked,
         (_, Some(FileState::Missing)) => StageStatus::NotStarted,
@@ -288,10 +293,11 @@ fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>, evidenc
     notes.join("; ")
 }
 
-fn validate_stage_evidence(path: &Path, check: EvidenceCheck) -> Result<(), String> {
+fn validate_stage_evidence(project_root: &Path, path: &Path, check: EvidenceCheck) -> Result<(), String> {
     match check {
         EvidenceCheck::None => Ok(()),
         EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(path),
+        EvidenceCheck::BinutilsTccToolTranscript => validate_binutils_tcc_tool_transcript(project_root),
     }
 }
 
@@ -328,6 +334,101 @@ fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
         if content.contains(needle) {
             return Err(format!("seed-full source-root contract contains legacy provider marker `{needle}`"));
         }
+    }
+    Ok(())
+}
+
+fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), String> {
+    let path = project_root.join(BINUTILS_TCC_TOOL_TRANSCRIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "binutils-tcc tool transcript missing `{}` ({err}); expected JSON fields: schema, derivation, output_path, provider_kind, host_fallback, fallback_markers, and tool_smokes for as/ld/ar/ranlib/nm/objcopy",
+            BINUTILS_TCC_TOOL_TRANSCRIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("binutils-tcc tool transcript is not valid JSON: {err}"))?;
+    require_json_string(&value, "schema", "crunch-binutils-tcc-tool-smoke-v1")?;
+    require_json_string(&value, "derivation", "bootstrap/binutils-tcc.ncl")?;
+    require_non_empty_json_string(&value, "output_path")?;
+    require_non_empty_json_string(&value, "provider_kind")?;
+    require_json_bool(&value, "host_fallback", false)?;
+    require_empty_array(&value, "fallback_markers")?;
+    let tool_smokes = value
+        .get("tool_smokes")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| "binutils-tcc tool transcript missing object field `tool_smokes`".to_string())?;
+    for tool in BINUTILS_TCC_REQUIRED_TOOLS {
+        let smoke = tool_smokes
+            .get(*tool)
+            .and_then(|v| v.as_object())
+            .ok_or_else(|| format!("binutils-tcc tool transcript missing `tool_smokes.{tool}`"))?;
+        require_object_string(smoke, "path")?;
+        require_object_string(smoke, "command")?;
+        let exit_status = smoke
+            .get("exit_status")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| format!("binutils-tcc transcript `tool_smokes.{tool}.exit_status` must be an integer"))?;
+        if exit_status != 0 {
+            return Err(format!(
+                "binutils-tcc transcript `tool_smokes.{tool}.exit_status` is {exit_status}, expected 0"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn require_json_string(value: &serde_json::Value, field: &str, expected: &str) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("binutils-tcc transcript missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("binutils-tcc transcript `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(())
+}
+
+fn require_non_empty_json_string(value: &serde_json::Value, field: &str) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("binutils-tcc transcript missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("binutils-tcc transcript `{field}` must not be empty"));
+    }
+    Ok(())
+}
+
+fn require_json_bool(value: &serde_json::Value, field: &str, expected: bool) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| format!("binutils-tcc transcript missing bool field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("binutils-tcc transcript `{field}` is {actual}, expected {expected}"));
+    }
+    Ok(())
+}
+
+fn require_empty_array(value: &serde_json::Value, field: &str) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("binutils-tcc transcript missing array field `{field}`"))?;
+    if !actual.is_empty() {
+        return Err(format!("binutils-tcc transcript `{field}` must be empty when host_fallback=false"));
+    }
+    Ok(())
+}
+
+fn require_object_string(object: &serde_json::Map<String, serde_json::Value>, field: &str) -> Result<(), String> {
+    let actual = object
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("binutils-tcc transcript smoke missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("binutils-tcc transcript smoke field `{field}` must not be empty"));
     }
     Ok(())
 }
@@ -373,25 +474,15 @@ fn marker_is_standalone(content: &str, marker: &str) -> bool {
         // on the line is whitespace/newline, and everything after it on
         // the line is whitespace/newline (marker is the sole non-whitespace).
         // Find the start of the current line.
-        let line_start = lower[..abs]
-            .rfind('\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
+        let line_start = lower[..abs].rfind('\n').map(|i| i + 1).unwrap_or(0);
         let line_before = &lower[line_start..abs];
         let prev_line_is_blank = line_before.chars().all(|c| c == ' ' || c == '\t');
         let after = &lower[end..];
-        let next_line_is_blank = after
-            .chars()
-            .take_while(|c| *c != '\n')
-            .all(|c| c == ' ' || c == '\t');
+        let next_line_is_blank = after.chars().take_while(|c| *c != '\n').all(|c| c == ' ' || c == '\t');
         let is_heredoc_terminator = prev_line_is_blank && next_line_is_blank;
         // Reject if any of these are word characters, quote-bounded,
         // or a heredoc terminator.
-        if !prev_is_word
-            && !next_is_word
-            && !(prev_is_quote && next_is_quote)
-            && !is_heredoc_terminator
-        {
+        if !prev_is_word && !next_is_word && !(prev_is_quote && next_is_quote) && !is_heredoc_terminator {
             return true;
         }
         start = abs + 1;
@@ -677,10 +768,10 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("binutils-tcc.ncl"),
             expected_complete: false,
             graph_evidence: "binutils-tcc derivation present",
-            semantic_evidence: "assembler/linker smokes required",
-            proof_evidence: "source transcript required",
-            notes: "placeholder/bridge output must not count as full parity",
-            evidence_check: EvidenceCheck::None,
+            semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
+            proof_evidence: "source transcript plus no-host-fallback markers required",
+            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses",
+            evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         },
         StageSpec {
             id: "gcc.4.0",
@@ -830,6 +921,49 @@ mod tests {
         }
     }
 
+    fn binutils_tcc_spec() -> StageSpec {
+        StageSpec {
+            id: "binutils.tcc",
+            title: "binutils TCC bridge",
+            axes: LIVE_GUIX,
+            lineage: "live-bootstrap",
+            derivation: Some("binutils-tcc.ncl"),
+            expected_complete: false,
+            graph_evidence: "binutils-tcc derivation present",
+            semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
+            proof_evidence: "source transcript plus no-host-fallback markers required",
+            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses",
+            evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
+        }
+    }
+
+    fn write_binutils_tcc_transcript(root: &Path, extra: &str) {
+        let path = root.join(BINUTILS_TCC_TOOL_TRANSCRIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "crunch-binutils-tcc-tool-smoke-v1",
+  "derivation": "bootstrap/binutils-tcc.ncl",
+  "output_path": "/crunch/store/example-binutils-2.30-tcc",
+  "provider_kind": "source-root",
+  "host_fallback": false,
+  "fallback_markers": [],
+  "tool_smokes": {{
+    "as": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/as", "command": "as --version", "exit_status": 0 }},
+    "ld": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/ld", "command": "ld --version", "exit_status": 0 }},
+    "ar": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/ar", "command": "ar --version", "exit_status": 0 }},
+    "ranlib": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/ranlib", "command": "ranlib --version", "exit_status": 0 }},
+    "nm": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/nm", "command": "nm --version", "exit_status": 0 }},
+    "objcopy": {{ "path": "/crunch/store/example-binutils-2.30-tcc/bin/objcopy", "command": "objcopy --version", "exit_status": 0 }}
+  }}
+{extra}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
     fn valid_seed_full_contract() -> &'static str {
         r#"
         share/crunch-bootstrap/provider.json
@@ -946,6 +1080,57 @@ mod tests {
         assert_eq!(row.status, StageStatus::Partial);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
         assert!(row.notes.contains("legacy provider marker"));
+    }
+
+    #[test]
+    fn binutils_tcc_without_transcript_remains_partial() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "binutils-tcc.ncl", "# real binutils tcc derivation body\n");
+
+        let row = evaluate_stage(dir.path(), &binutils_tcc_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.notes.contains("tool transcript missing"));
+        assert!(row.notes.contains(BINUTILS_TCC_TOOL_TRANSCRIPT));
+        assert!(row.notes.contains("as/ld/ar/ranlib/nm/objcopy"));
+    }
+
+    #[test]
+    fn binutils_tcc_valid_transcript_satisfies_evidence_check_but_not_full_parity() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "binutils-tcc.ncl", "# real binutils tcc derivation body\n");
+        write_binutils_tcc_transcript(dir.path(), "");
+
+        let row = evaluate_stage(dir.path(), &binutils_tcc_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn binutils_tcc_transcript_rejects_host_fallback() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(BINUTILS_TCC_TOOL_TRANSCRIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            r#"{
+              "schema": "crunch-binutils-tcc-tool-smoke-v1",
+              "derivation": "bootstrap/binutils-tcc.ncl",
+              "output_path": "/crunch/store/example-binutils-2.30-tcc",
+              "provider_kind": "source-root",
+              "host_fallback": true,
+              "fallback_markers": ["/usr/bin/as"],
+              "tool_smokes": {}
+            }"#,
+        )
+        .unwrap();
+
+        let err = validate_binutils_tcc_tool_transcript(dir.path()).unwrap_err();
+
+        assert!(err.contains("host_fallback"));
     }
 
     #[test]

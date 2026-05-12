@@ -1,6 +1,6 @@
 ## Phase 1: Evidence Contract
 
-- [ ] [serial] Add a `binutils.tcc` parity evidence check that keeps the row blocked without a checked transcript and documents the expected transcript fields.
+- [x] [serial] Add a `binutils.tcc` parity evidence check that keeps the row blocked without a checked transcript and documents the expected transcript fields. ✅ 12m (started: 2026-05-12T18:53:00Z → completed: 2026-05-12T19:05:00Z)
 - [ ] [serial] Add parity-report regression coverage proving `--require live-bootstrap` and `--require guix` reject unevidenced `binutils.tcc` output.
 
 ## Phase 2: Runtime Probe
