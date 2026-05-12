@@ -139,11 +139,13 @@ enum EvidenceCheck {
     SeedFullSourceRootContract,
     BinutilsTccToolTranscript,
     SelfBuildProviderKindLinkage,
+    StagexLineageProviderReceipt,
 }
 
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
 const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
     "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
+const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage-provider-receipt.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -231,9 +233,11 @@ fn summarize_axis(axis: ParityAxis, rows: &[ParityRow]) -> AxisSummary {
 fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let path = spec.derivation.map(|derivation| project_root.join(BOOTSTRAP_DIR).join(derivation));
     let file_state = path.as_ref().map(|p| inspect_derivation(p));
-    let evidence_failure =
-        path.as_ref().and_then(|p| validate_stage_evidence(project_root, p, spec.evidence_check).err());
+    let evidence_failure = validate_stage_evidence(project_root, path.as_deref(), spec.evidence_check).err();
     let status = match (spec.expected_complete, file_state) {
+        (false, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
+            StageStatus::Partial
+        }
         (_, None) => StageStatus::Blocked,
         (_, Some(FileState::Missing)) => StageStatus::NotStarted,
         (_, Some(FileState::Present)) if evidence_failure.is_some() => StageStatus::Partial,
@@ -296,13 +300,83 @@ fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>, evidenc
     notes.join("; ")
 }
 
-fn validate_stage_evidence(project_root: &Path, path: &Path, check: EvidenceCheck) -> Result<(), String> {
+fn validate_stage_evidence(project_root: &Path, path: Option<&Path>, check: EvidenceCheck) -> Result<(), String> {
     match check {
         EvidenceCheck::None => Ok(()),
-        EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(path),
+        EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(
+            path.ok_or_else(|| "seed-full source-root contract requires a derivation path".to_string())?,
+        ),
         EvidenceCheck::BinutilsTccToolTranscript => validate_binutils_tcc_tool_transcript(project_root),
         EvidenceCheck::SelfBuildProviderKindLinkage => validate_self_build_provider_kind_linkage(project_root),
+        EvidenceCheck::StagexLineageProviderReceipt => validate_stagex_lineage_provider_receipt(project_root),
     }
+}
+
+fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), String> {
+    let path = project_root.join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "StageX lineage provider receipt missing `{}` ({err}); expected schema, provider_kind=stagex-lineage, lineage_receipt_status=scaffold-only, digest fields, and fallback_events=[]",
+            STAGEX_LINEAGE_PROVIDER_RECEIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("StageX lineage provider receipt is not valid JSON: {err}"))?;
+    require_stagex_json_string(&value, "schema", "crunch-stagex-lineage-provider-receipt-v1")?;
+    require_stagex_json_string(&value, "provider_kind", "stagex-lineage")?;
+    require_stagex_json_string(&value, "lineage_receipt_status", "scaffold-only")?;
+    for field in [
+        "audited_seed_digest",
+        "lineage_manifest_digest",
+        "stage_graph_digest",
+        "normalized_provider_digest",
+    ] {
+        let digest = require_stagex_non_empty_string(&value, field)?;
+        validate_lower_hex_digest(digest, field)?;
+    }
+    require_stagex_empty_array(&value, "fallback_events")?;
+    Ok(())
+}
+
+fn require_stagex_json_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = require_stagex_non_empty_string(value, field)?;
+    if actual != expected {
+        return Err(format!("StageX lineage provider receipt `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_stagex_non_empty_string<'a>(value: &'a serde_json::Value, field: &str) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("StageX lineage provider receipt missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("StageX lineage provider receipt `{field}` must not be empty"));
+    }
+    Ok(actual)
+}
+
+fn validate_lower_hex_digest(digest: &str, field: &str) -> Result<(), String> {
+    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err(format!("StageX lineage provider receipt `{field}` must be a 64-character lowercase hex digest"));
+    }
+    Ok(())
+}
+
+fn require_stagex_empty_array(value: &serde_json::Value, field: &str) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("StageX lineage provider receipt missing array field `{field}`"))?;
+    if !actual.is_empty() {
+        return Err(format!("StageX lineage provider receipt `{field}` must be empty for scaffold-only evidence"));
+    }
+    Ok(())
 }
 
 fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), String> {
@@ -928,8 +1002,8 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "StageX lineage provider derivation/proof not yet bound",
             semantic_evidence: "audited lineage provider contract validation required",
             proof_evidence: "lineage provider digest and transcript required",
-            notes: "Guix source-root seed-full evidence must not satisfy this StageX row",
-            evidence_check: EvidenceCheck::None,
+            notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
+            evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
         },
         StageSpec {
             id: "selftest",
@@ -1031,6 +1105,49 @@ mod tests {
             notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
             evidence_check: EvidenceCheck::SelfBuildProviderKindLinkage,
         }
+    }
+
+    fn stagex_lineage_spec() -> StageSpec {
+        StageSpec {
+            id: "seed-full.stagex-lineage",
+            title: "StageX lineage normalized seed provider",
+            axes: STAGEX_ONLY,
+            lineage: "stagex",
+            derivation: None,
+            expected_complete: false,
+            graph_evidence: "StageX lineage provider derivation/proof not yet bound",
+            semantic_evidence: "audited lineage provider contract validation required",
+            proof_evidence: "lineage provider digest and transcript required",
+            notes: "Guix source-root seed-full evidence must not satisfy this StageX row; checked scaffold receipt at bootstrap/evidence/stagex-lineage-provider-receipt.json records provider_kind=stagex-lineage but does not prove audited lineage",
+            evidence_check: EvidenceCheck::StagexLineageProviderReceipt,
+        }
+    }
+
+    fn write_stagex_lineage_receipt(
+        root: &Path,
+        provider_kind: &str,
+        status: &str,
+        audited_seed_digest: &str,
+        fallback_events: &str,
+    ) {
+        let path = root.join(STAGEX_LINEAGE_PROVIDER_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "crunch-stagex-lineage-provider-receipt-v1",
+  "provider_kind": "{provider_kind}",
+  "lineage_receipt_status": "{status}",
+  "audited_seed_digest": "{audited_seed_digest}",
+  "lineage_manifest_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "stage_graph_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+  "normalized_provider_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "fallback_events": {fallback_events}
+}}"#
+            ),
+        )
+        .unwrap();
     }
 
     fn write_self_build_provider_kind_linkage(
@@ -1325,6 +1442,96 @@ mod tests {
         assert!(row.status.blocks_parity());
         assert!(!row.notes.contains("provider-kind linkage receipt missing"));
         assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn stagex_lineage_without_receipt_remains_blocked() {
+        let dir = tempdir().unwrap();
+
+        let row = evaluate_stage(dir.path(), &stagex_lineage_spec());
+
+        assert_eq!(row.status, StageStatus::Blocked);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.notes.contains("StageX lineage provider receipt missing"));
+        assert!(row.notes.contains(STAGEX_LINEAGE_PROVIDER_RECEIPT));
+    }
+
+    #[test]
+    fn stagex_lineage_scaffold_receipt_is_partial_not_complete() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "stagex-lineage",
+            "scaffold-only",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "[]",
+        );
+
+        let row = evaluate_stage(dir.path(), &stagex_lineage_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn stagex_lineage_receipt_rejects_source_root_provider() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "source-root",
+            "scaffold-only",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            "[]",
+        );
+
+        let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
+
+        assert!(err.contains("provider_kind"));
+        assert!(err.contains("expected `stagex-lineage`"));
+    }
+
+    #[test]
+    fn stagex_lineage_receipt_rejects_malformed_digest() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(dir.path(), "stagex-lineage", "scaffold-only", "ABC", "[]");
+
+        let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
+
+        assert!(err.contains("audited_seed_digest"));
+        assert!(err.contains("64-character lowercase hex digest"));
+    }
+
+    #[test]
+    fn stagex_lineage_receipt_rejects_fallback_events() {
+        let dir = tempdir().unwrap();
+        write_stagex_lineage_receipt(
+            dir.path(),
+            "stagex-lineage",
+            "scaffold-only",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            r#"["host-bwrap"]"#,
+        );
+
+        let err = validate_stagex_lineage_provider_receipt(dir.path()).unwrap_err();
+
+        assert!(err.contains("fallback_events"));
+        assert!(err.contains("must be empty"));
+    }
+
+    #[test]
+    fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let report = collect_bootstrap_parity_report(project_root);
+        let row = report.rows.iter().find(|row| row.id == "seed-full.stagex-lineage").unwrap();
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+        let stagex = report.axes.iter().find(|axis| axis.axis == ParityAxis::Stagex).unwrap();
+        assert!(stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
     }
 
     #[test]

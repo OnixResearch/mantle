@@ -1,0 +1,11 @@
+{
+  "schema": "crunch-stagex-lineage-provider-receipt-v1",
+  "provider_kind": "stagex-lineage",
+  "lineage_receipt_status": "scaffold-only",
+  "audited_seed_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "lineage_manifest_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "stage_graph_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+  "normalized_provider_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "fallback_events": [],
+  "notes": "Scaffold-only parity receipt. This records the StageX lineage evidence seam but does not prove audited StageX lineage or unblock StageX parity."
+}
