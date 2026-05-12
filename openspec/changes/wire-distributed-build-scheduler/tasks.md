@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate wire-distributed-build-scheduler --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate wire-distributed-build-scheduler --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:35:09Z → completed: 2026-05-12T03:35:28Z)
+  Evidence: `openspec validate wire-distributed-build-scheduler --strict` passed before archive.
