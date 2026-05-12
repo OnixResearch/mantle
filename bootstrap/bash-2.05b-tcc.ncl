@@ -150,6 +150,7 @@ let bash_src = crunch.fetchTarball {
 #define PROGRAM "bash"
 #define DEFAULT_PATH_VALUE "/bin"
 #define STANDARD_UTILS_PATH "/bin"
+extern int echo_builtin();
 extern int eval_builtin();
 extern int source_builtin();
 extern int exit_builtin();
@@ -227,14 +228,47 @@ int tcsetattr(int fd, int action, const struct termios *t);
 #endif
 TERM
 
+      # Configure normally generates syntax.c with shell metacharacter flags.
+      # A zero table makes quotes ordinary characters, so `bash -c '...'` fails
+      # before later configure scripts can run. Keep a small generated-equivalent
+      # table instead of building mksyntax in this early bootstrap step.
       $BB cat > syntax.c << 'SYN'
 #include "config.h"
-unsigned char sh_syntaxtab[256];
-int shellmeta(int c) { return 0; }
-int shellbreak(int c) { return 0; }
-int shellquote(int c) { return 0; }
-int shellxquote(int c) { return 0; }
-int shellexp(int c) { return 0; }
+#include "syntax.h"
+const int sh_syntaxtab[256] = {
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 2, 66, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  2, 2560, 1112, 2048, 2288, 0, 19, 1048,
+  19, 19, 2832, 4608, 0, 6144, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 4096, 19, 19, 4096, 19, 6928,
+  2560, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 272, 1232, 272, 272, 0,
+  1244, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 19, 4096, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0
+};
 SYN
       $BB cat > siglist.c << 'SIGL'
 #include "config.h"
@@ -258,12 +292,13 @@ SIGL
 #include "command.h"
 #include "builtins.h"
 #include <termios.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-struct builtin static_shell_builtins[] = { { "eval", eval_builtin, BUILTIN_ENABLED|STATIC_BUILTIN, 0, "eval", 0 }, { 0, 0, 0, 0, 0, 0 } };
+struct builtin static_shell_builtins[] = { { "echo", echo_builtin, BUILTIN_ENABLED|STATIC_BUILTIN, 0, "echo", 0 }, { "eval", eval_builtin, BUILTIN_ENABLED|STATIC_BUILTIN, 0, "eval", 0 }, { 0, 0, 0, 0, 0, 0 } };
 struct builtin *shell_builtins = static_shell_builtins;
 struct builtin *current_builtin = 0;
-int num_shell_builtins = 1;
+int num_shell_builtins = 2;
 int breaking = 0;
 int continuing = 0;
 int loop_level = 0;
@@ -303,6 +338,17 @@ int tcgetattr(int fd, struct termios *t) { memset(t, 0, sizeof(*t)); return 0; }
 int tcsetattr(int fd, int action, const struct termios *t) { return 0; }
 void tzset(void) {}
 char *strsignal(int sig) { return (sig >= 0 && sig < 16) ? signal_names[sig] : "signal"; }
+int echo_builtin(WORD_LIST *list) {
+  int first = 1;
+  while (list) {
+    if (!first) fputc(' ', stdout);
+    first = 0;
+    if (list->word && list->word->word) fputs(list->word->word, stdout);
+    list = list->next;
+  }
+  fputc('\n', stdout);
+  return 0;
+}
 BSTUB
       tcc -c -o bootstrap_stubs.o $CFLAGS builtins/bootstrap_stubs.c
 

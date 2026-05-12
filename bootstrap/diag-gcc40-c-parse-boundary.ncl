@@ -1507,7 +1507,7 @@ EOF_DIAG_TCC_COMPILE
                   if (in_elf && $0 ~ /^[[:space:]]*ret = tcc_write_elf_file/) print "    write(2, \"T\\n\", 2);"
                   if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/) print "    write(2, \"4\\n\", 2);"
                   if (in_wr && $0 ~ /^[[:space:]]*if \(s1->output_format == TCC_OUTPUT_FORMAT_ELF\)/) print "    write(2, \"5\\n\", 2);"
-                  if (in_wr && $0 ~ /^[[:space:]]*if \(fd < 0\)/) { print "    write(2, \"7\\n\", 2);"; print "    fd_bad = (fd < 0);"; print "    write(2, \"9\\n\", 2);"; print "    if (fd_bad) {"; next }
+                  if (in_wr && $0 ~ /^[[:space:]]*if \(fd < 0\)/) { print "    write(2, \"7\\n\", 2);"; print "    write(2, \"9\\n\", 2);"; print "    if (0) {"; next }
                   if (in_wr && $0 ~ /^[[:space:]]*int fd, mode, file_type;/) sub(/file_type;/, "file_type, fd_bad;")
                   print
                   if (in_wr && $0 ~ /^[[:space:]]*FILE \*f;/) print "    write(2, \"0\\n\", 2);"

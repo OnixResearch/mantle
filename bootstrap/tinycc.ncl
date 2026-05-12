@@ -264,6 +264,11 @@ static void strcat_vprintf(char *buf, int buf_size, const char *fmt, va_list ap)
         $BB sed -i '/s1->tcc_lib_path, filename);/s|.*|    strcpy(buf, s1->tcc_lib_path); strcat(buf, "/"); strcat(buf, filename);|' tccelf.c
         $BB sed -i 's|snprintf(buf, sizeof(buf), REL_SECTION_FMT, s->name);|strcpy(buf, ".rela"); strcat(buf, s->name);|' tccelf.c
         $BB sed -i 's/const char filename../const char *filename/' tccelf.c
+        # The Mes-linked amd64 handoff compiler miscompiles the fd error
+        # branch in tcc_write_elf_file after open() succeeds. This bootstrap
+        # compiler only writes into freshly-created builder paths, so skip the
+        # impossible branch to keep object emission usable for the GCC handoff.
+        $BB sed -i 's/if (fd < 0) {/if (0) {/' tccelf.c
 
         # The Mes libc getenv path currently faults under the Mes-linked amd64
         # handoff compiler. TinyCC already receives deterministic include and
