@@ -90,6 +90,7 @@ saw_errors_src=0
 saw_c_parse_src=0
 saw_c_lang_src=0
 saw_stub_objc_src=0
+saw_attribs_src=0
 prev_o=0
 for arg in "\$@"; do
   if [ "\$prev_o" = 1 ]; then
@@ -123,6 +124,7 @@ for arg in "\$@"; do
     */c-parse.c|c-parse.c) saw_c_parse_src=1 ;;
     */c-lang.c|c-lang.c) saw_c_lang_src=1 ;;
     */stub-objc.c|stub-objc.c) saw_stub_objc_src=1 ;;
+    */attribs.c|attribs.c) saw_attribs_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -297,6 +299,13 @@ int objc_static_init_needed_p() { return 0; }
 int objc_generate_static_init_call() { return 0; }
 int objc_is_public() { return 1; }
 OBJC_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_attribs_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-attribs-bridge.c
+  cat > "\$tmp" <<'ATTRIBS_C'
+void *decl_attributes(void *node, void *attributes, int flags) { (void)node; (void)flags; return attributes; }
+ATTRIBS_C
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 case "\$out" in
