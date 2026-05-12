@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate plan-gcc40-correctness-promotion --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate plan-gcc40-correctness-promotion --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:21:54Z → completed: 2026-05-12T03:22:13Z)
+  Evidence: `openspec validate plan-gcc40-correctness-promotion --strict` passed before archive.
