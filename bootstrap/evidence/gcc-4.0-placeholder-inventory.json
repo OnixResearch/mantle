@@ -2,13 +2,8 @@
   "schema": "crunch-gcc40-placeholder-inventory-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "inventory-only",
-  "marker_count": 10,
+  "marker_count": 9,
   "markers": [
-    {
-      "line": 574,
-      "marker": "stub",
-      "classification": "pass1-generator-or-driver-bridge"
-    },
     {
       "line": 590,
       "marker": "stub",
@@ -40,17 +35,17 @@
       "classification": "pass1-driver-boundary"
     },
     {
-      "line": 1123,
+      "line": 1135,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1138,
+      "line": 1150,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1205,
+      "line": 1217,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     }

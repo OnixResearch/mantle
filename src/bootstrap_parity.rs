@@ -1156,9 +1156,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 and generator-header boundary smokes only; native compiler correctness not proven",
+            semantic_evidence: "bounded libgcc/driver/cc1 and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, and native-boundary receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator headers are only checked empty-machine boundaries, not native generator correctness",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator outputs are only checked empty-machine/disabled-checking boundaries, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -1321,9 +1321,9 @@ mod tests {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 and generator-header boundary smokes only; native compiler correctness not proven",
+            semantic_evidence: "bounded libgcc/driver/cc1 and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, and native-boundary receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator headers are only checked empty-machine boundaries, not native generator correctness",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator outputs are only checked empty-machine/disabled-checking boundaries, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -1973,6 +1973,21 @@ mod tests {
         assert!(content.contains("bootstrap genflags s[t]ub"));
         assert!(!content.contains("bootstrap genconstants stub: no md constants required"));
         assert!(!content.contains("bootstrap genflags stub: generator-only boundary bridge"));
+    }
+
+    #[test]
+    fn gcc40_real_derivation_contains_gencheck_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_gencheck_disabled_tree_check_boundary"));
+        assert!(content.contains("disabled-tree-checking boundary"));
+        assert!(content.contains("ERROR: gencheck boundary executable missing"));
+        assert!(content.contains("ERROR: gencheck boundary guard missing"));
+        assert!(content.contains("ERROR: gencheck boundary marker missing"));
+        assert!(content.contains("bootstrap gencheck s[t]ub"));
+        assert!(!content.contains("bootstrap gencheck stub"));
+        assert!(!content.contains("gcc40_gencheck_bootstrap_stub"));
     }
 
     #[test]

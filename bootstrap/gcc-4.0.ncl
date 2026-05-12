@@ -260,7 +260,7 @@ if [ "\$saw_print_rtl_src" = 1 ] && [ "\$saw_c" = 1 ]; then
 fi
 if [ "\$saw_gencheck_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-gencheck-empty.c
-  echo 'int gcc40_gencheck_bootstrap_stub;' > "\$tmp"
+  echo 'int gcc40_gencheck_disabled_tree_check_boundary;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -571,7 +571,7 @@ GENCONDITIONS_SCRIPT
 cat <<'H'
 #ifndef GCC_TREE_CHECK_H
 #define GCC_TREE_CHECK_H
-/* bootstrap gencheck stub */
+/* Crunch GCC 4.0 disabled-tree-checking boundary: native gencheck promotion pending. */
 #endif
 H
 GENCHECK_SCRIPT
@@ -1119,6 +1119,18 @@ EOF
             echo "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge" >&2
           }
       done
+
+      if [ ! -x "$WORK/build/gcc/build/gencheck" ]; then
+        echo 'ERROR: gencheck boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/gencheck" > /tmp/gcc40-tree-check.h
+      $BB grep -q '^#ifndef GCC_TREE_CHECK_H' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary guard missing' >&2; exit 1; }
+      $BB grep -q 'disabled-tree-checking boundary' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap gencheck s[t]ub' /tmp/gcc40-tree-check.h; then
+        echo 'ERROR: legacy gencheck boundary label present' >&2
+        exit 1
+      fi
 
       # Install a pass1 bridge contract.  The build above proves configure and
       # generator handoff through the c-parse boundary; until the full GCC cc1
