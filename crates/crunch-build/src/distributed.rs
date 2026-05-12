@@ -269,6 +269,40 @@ pub async fn resolve_before_dispatch(
     Ok(RealizationDispatchDecision::BuildLocally)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyDerivationGoal {
+    pub goal_key: String,
+    pub request: RealizationKeyRequest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledRealization {
+    pub goal_key: String,
+    pub plan: RealizationPlan,
+}
+
+pub fn select_ready_realizations<P>(
+    policy: &P,
+    ready: &[ReadyDerivationGoal],
+    running_jobs: usize,
+    max_jobs: usize,
+) -> Vec<ScheduledRealization>
+where
+    P: RealizationPolicy,
+{
+    let available_slots = max_jobs.saturating_sub(running_jobs);
+    let mut seen = std::collections::BTreeSet::new();
+    ready
+        .iter()
+        .filter(|goal| seen.insert(goal.goal_key.clone()))
+        .take(available_slots)
+        .map(|goal| ScheduledRealization {
+            goal_key: goal.goal_key.clone(),
+            plan: policy.plan_for(&goal.request),
+        })
+        .collect()
+}
+
 /// Local test adapter that models a resolver/publisher over verified PathInfo
 /// records without naming a remote provider or transport.
 #[derive(Debug, Clone, Default)]
@@ -504,6 +538,55 @@ mod tests {
             err,
             ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
         ));
+    }
+
+    #[test]
+    fn scheduler_selection_preserves_max_jobs_budget() {
+        let mut second = base_request();
+        second.derivation.identity = "second.drv".to_string();
+        let ready = vec![
+            ReadyDerivationGoal {
+                goal_key: "a".to_string(),
+                request: base_request(),
+            },
+            ReadyDerivationGoal {
+                goal_key: "b".to_string(),
+                request: second,
+            },
+        ];
+
+        let scheduled = select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, 1, 2);
+        assert_eq!(scheduled.len(), 1);
+        assert_eq!(scheduled[0].goal_key, "a");
+        assert_eq!(scheduled[0].plan, RealizationPlan::RequireLocal);
+    }
+
+    #[test]
+    fn scheduler_selection_keeps_goal_dedup_owned_by_scheduler() {
+        let ready = vec![
+            ReadyDerivationGoal {
+                goal_key: "dup".to_string(),
+                request: base_request(),
+            },
+            ReadyDerivationGoal {
+                goal_key: "dup".to_string(),
+                request: base_request(),
+            },
+        ];
+
+        let scheduled = select_ready_realizations(&RemoteAllowedRealizationPolicy, &ready, 0, 8);
+        assert_eq!(scheduled.len(), 1);
+        assert_eq!(scheduled[0].plan, RealizationPlan::AllowRemote);
+    }
+
+    #[test]
+    fn scheduler_selection_does_not_schedule_when_at_capacity() {
+        let ready = vec![ReadyDerivationGoal {
+            goal_key: "a".to_string(),
+            request: base_request(),
+        }];
+
+        assert!(select_ready_realizations(&LocalOnlyRealizationPolicy, &ready, 2, 2).is_empty());
     }
 
     #[test]
