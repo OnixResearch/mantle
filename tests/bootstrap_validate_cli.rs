@@ -45,10 +45,11 @@ fn write_success_fixture(
 fn bootstrap_validate_preflight_failure_writes_evidence_bundle() {
     let root = TempDir::new().unwrap();
     let state_dir = root.path().join("state");
-    let missing_store = root.path().join("missing-store");
+    let store_file = root.path().join("store-file");
     let evidence_dir = root.path().join("evidence");
     let target = root.path().join("make-tcc.ncl");
     fs::create_dir_all(&state_dir).unwrap();
+    fs::write(&store_file, "not a directory").unwrap();
     write_minimal_derivation(&target);
 
     crunch()
@@ -56,7 +57,7 @@ fn bootstrap_validate_preflight_failure_writes_evidence_bundle() {
         .arg("--state-dir")
         .arg(&state_dir)
         .arg("--store")
-        .arg(&missing_store)
+        .arg(&store_file)
         .arg("bootstrap")
         .arg("validate")
         .arg(&target)
