@@ -1162,6 +1162,10 @@ EOF
           cat > "$src" <<'EOF'
 long long _muldi3(long long lhs, long long rhs) { return lhs * rhs; }
 EOF
+        elif [ "$fn" = _lshrdi3 ]; then
+          cat > "$src" <<'EOF'
+unsigned long long _lshrdi3(unsigned long long value, int count) { return value >> count; }
+EOF
         else
           cat > "$src" <<EOF
 int $fn(void) { return 0; }
