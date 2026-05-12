@@ -1150,9 +1150,15 @@ EOF
       for fn in $gcc40_libgcc_funcs; do
         obj=/tmp/gcc40-libgcc-objs/$fn.o
         src=/tmp/gcc40-libgcc-objs/$fn.c
-        cat > "$src" <<EOF
+        if [ "$fn" = _negdi2 ]; then
+          cat > "$src" <<'EOF'
+long long _negdi2(long long value) { return -value; }
+EOF
+        else
+          cat > "$src" <<EOF
 int $fn(void) { return 0; }
 EOF
+        fi
         gcc40-cc -c "$src" -o "$obj"
         $BB chmod u+r "$obj" 2>/dev/null || true
         test -s "$obj" || { echo "ERROR: libgcc member object missing: $obj" >&2; exit 1; }
