@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate add-bootstrap-validate-success-regression --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate add-bootstrap-validate-success-regression --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:06:10Z → completed: 2026-05-12T03:06:51Z)
+  Evidence: `openspec validate add-bootstrap-validate-success-regression --strict` passed.
