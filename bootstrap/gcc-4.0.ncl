@@ -1167,6 +1167,10 @@ EOF
           cat > "$src" <<'EOF'
 unsigned long long _lshrdi3(unsigned long long value, int count) { return value >> count; }
 EOF
+        elif [ "$fn" = _ashldi3 ]; then
+          cat > "$src" <<'EOF'
+long long _ashldi3(long long value, int count) { return value << count; }
+EOF
         else
           cat > "$src" <<EOF
 int $fn(void) { return 0; }
