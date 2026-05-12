@@ -148,6 +148,7 @@ const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
     "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
 const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage-provider-receipt.json";
 const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholder-inventory.json";
+const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-boundary.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -383,7 +384,109 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
             format_marker_occurrences(&actual)
         ));
     }
+    validate_gcc40_native_boundary_receipt(project_root, &actual_content)?;
     Ok(())
+}
+
+fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_content: &str) -> Result<(), String> {
+    let path = project_root.join(GCC40_NATIVE_BOUNDARY_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "GCC 4.0 native boundary receipt missing `{}` ({err}); expected boundary-only receipt for bootstrap/gcc-4.0.ncl",
+            GCC40_NATIVE_BOUNDARY_RECEIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("GCC 4.0 native boundary receipt is not valid JSON: {err}"))?;
+    require_gcc40_boundary_string(&value, "schema", "crunch-gcc40-native-boundary-v1")?;
+    require_gcc40_boundary_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
+    require_gcc40_boundary_string(&value, "status", "boundary-only")?;
+    require_gcc40_boundary_string(&value, "boundary", "native-gcc-make-to-pass1-bridge")?;
+
+    let native_attempt = require_gcc40_boundary_object(&value, "native_attempt")?;
+    for field in ["command_marker", "diagnostic_marker"] {
+        let marker = require_gcc40_boundary_object_string(native_attempt, field)?;
+        require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+
+    let installed_bridge_markers = value
+        .get("installed_bridge_markers")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "GCC 4.0 native boundary receipt missing array field `installed_bridge_markers`".to_string())?;
+    if installed_bridge_markers.is_empty() {
+        return Err("GCC 4.0 native boundary receipt `installed_bridge_markers` must not be empty".to_string());
+    }
+    for marker in installed_bridge_markers {
+        let marker = marker
+            .as_str()
+            .ok_or_else(|| "GCC 4.0 native boundary receipt marker must be a string".to_string())?;
+        require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+
+    let last_log = require_gcc40_boundary_object(&value, "last_observed_build_log")?;
+    require_gcc40_boundary_object_string(last_log, "status")?;
+    let log_markers = last_log.get("boundary_log_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+        "GCC 4.0 native boundary receipt missing array field `last_observed_build_log.boundary_log_markers`".to_string()
+    })?;
+    if log_markers.is_empty() {
+        return Err("GCC 4.0 native boundary receipt `last_observed_build_log.boundary_log_markers` must not be empty"
+            .to_string());
+    }
+    require_gcc40_boundary_string(
+        &value,
+        "parity_effect",
+        "evidence-backed partial; does not prove native gcc.4.0 correctness",
+    )?;
+    Ok(())
+}
+
+fn require_gcc40_derivation_marker(content: &str, marker: &str) -> Result<(), String> {
+    if marker.trim().is_empty() {
+        return Err("GCC 4.0 native boundary receipt marker must not be empty".to_string());
+    }
+    if !content.contains(marker) {
+        return Err(format!("GCC 4.0 native boundary receipt marker not found in derivation: {marker}"));
+    }
+    Ok(())
+}
+
+fn require_gcc40_boundary_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("GCC 4.0 native boundary receipt missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("GCC 4.0 native boundary receipt `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_gcc40_boundary_object<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, String> {
+    value
+        .get(field)
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| format!("GCC 4.0 native boundary receipt missing object field `{field}`"))
+}
+
+fn require_gcc40_boundary_object_string<'a>(
+    value: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("GCC 4.0 native boundary receipt missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("GCC 4.0 native boundary receipt `{field}` must not be empty"));
+    }
+    Ok(actual)
 }
 
 fn require_gcc40_inventory_string<'a>(
@@ -1053,9 +1156,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript required",
-            notes: "pass1 bridge and selected libgcc members are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records the current intentional bridge markers but does not prove native compiler correctness",
+            semantic_evidence: "bounded libgcc/driver/cc1 smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript and native-boundary receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json and native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json record the current intentional bridge boundary but do not prove native compiler correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -1218,9 +1321,9 @@ mod tests {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript required",
-            notes: "pass1 bridge and selected libgcc members are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records the current intentional bridge markers but does not prove native compiler correctness",
+            semantic_evidence: "bounded libgcc/driver/cc1 smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript and native-boundary receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json and native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json record the current intentional bridge boundary but do not prove native compiler correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -1334,6 +1437,36 @@ mod tests {
         .unwrap();
     }
 
+    fn write_gcc40_native_boundary_receipt(root: &Path) {
+        let path = root.join(GCC40_NATIVE_BOUNDARY_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            r#"{
+  "schema": "crunch-gcc40-native-boundary-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "boundary-only",
+  "boundary": "native-gcc-make-to-pass1-bridge",
+  "native_attempt": {
+    "command_marker": "make -j1 -C \"$dir\"",
+    "diagnostic_marker": "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge"
+  },
+  "installed_bridge_markers": [
+    "gcc (Crunch pass1 bridge) 4.0.4",
+    "Crunch GCC 4.0 pass1 cc1 object boundary",
+    "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\""
+  ],
+  "last_observed_build_log": {
+    "status": "complete-with-pass1-bridge",
+    "boundary_log_markers": ["gcc-4.0.4 build complete (languages: c)"]
+  },
+  "parity_effect": "evidence-backed partial; does not prove native gcc.4.0 correctness"
+}
+"#,
+        )
+        .unwrap();
+    }
+
     fn write_gcc40_placeholder_inventory(root: &Path, content: &str) {
         let path = root.join(GCC40_PLACEHOLDER_INVENTORY);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1429,9 +1562,18 @@ mod tests {
     #[test]
     fn gcc40_placeholder_inventory_matching_receipt_reports_partial() {
         let dir = tempdir().unwrap();
-        let content = "# pass1 bridge\necho stub\n";
+        let content = concat!(
+            "# pass1 bridge\n",
+            "echo stub\n",
+            "make -j1 -C \"$dir\"\n",
+            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+        );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -1458,12 +1600,51 @@ mod tests {
         let original = "# pass1 bridge\n";
         write_stage(dir.path(), "gcc-4.0.ncl", original);
         write_gcc40_placeholder_inventory(dir.path(), original);
+        write_gcc40_native_boundary_receipt(dir.path());
         write_stage(dir.path(), "gcc-4.0.ncl", "# pass1 bridge\necho stub\n");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("GCC 4.0 placeholder inventory drift"));
+    }
+
+    #[test]
+    fn gcc40_native_boundary_missing_receipt_stays_placeholder_with_failure() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native boundary receipt missing"));
+    }
+
+    #[test]
+    fn gcc40_native_boundary_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
     }
 
     #[test]
