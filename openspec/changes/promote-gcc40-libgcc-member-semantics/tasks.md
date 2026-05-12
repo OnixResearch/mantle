@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate promote-gcc40-libgcc-member-semantics --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate promote-gcc40-libgcc-member-semantics --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:26:31Z → completed: 2026-05-12T03:26:55Z)
+  Evidence: `openspec validate promote-gcc40-libgcc-member-semantics --strict` passed before archive.
