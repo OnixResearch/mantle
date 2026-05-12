@@ -249,6 +249,83 @@ where S: snix_build::buildservice::BuildService + Send + Sync
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWorkerMetadata {
+    pub worker_id: String,
+    pub realizer_profile: String,
+    pub attestation: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputReference {
+    pub output_name: String,
+    pub store_path: String,
+    pub nar_sha256_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RemoteVerificationStatus {
+    Verified,
+    Unverified { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteRealizationCandidate {
+    pub key: RealizationKey,
+    pub log: String,
+    pub outputs: Vec<RemoteOutputReference>,
+    pub worker: RemoteWorkerMetadata,
+    pub verification: RemoteVerificationStatus,
+}
+
+impl RemoteRealizationCandidate {
+    pub fn verify_for_persistence(
+        &self,
+        expected_key: &RealizationKey,
+        expected_outputs: &[String],
+    ) -> Result<(), RemoteVerificationError> {
+        if &self.key != expected_key {
+            return Err(RemoteVerificationError::KeyMismatch);
+        }
+        if self.log.is_empty() {
+            return Err(RemoteVerificationError::MissingLog);
+        }
+        if self.worker.worker_id.is_empty() || self.worker.realizer_profile.is_empty() {
+            return Err(RemoteVerificationError::MissingWorkerMetadata);
+        }
+        match &self.verification {
+            RemoteVerificationStatus::Verified => {}
+            RemoteVerificationStatus::Unverified { reason } => {
+                return Err(RemoteVerificationError::Unverified { reason: reason.clone() });
+            }
+        }
+        let expected: std::collections::BTreeSet<_> = expected_outputs.iter().cloned().collect();
+        let actual: std::collections::BTreeSet<_> =
+            self.outputs.iter().map(|output| output.output_name.clone()).collect();
+        if actual != expected {
+            return Err(RemoteVerificationError::OutputMismatch);
+        }
+        if self.outputs.iter().any(|output| output.store_path.is_empty() || output.nar_sha256_hex.is_empty()) {
+            return Err(RemoteVerificationError::OutputMismatch);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum RemoteVerificationError {
+    #[error("remote candidate key does not match requested realization")]
+    KeyMismatch,
+    #[error("remote candidate is unverified: {reason}")]
+    Unverified { reason: String },
+    #[error("remote candidate omitted build log evidence")]
+    MissingLog,
+    #[error("remote candidate omitted worker metadata")]
+    MissingWorkerMetadata,
+    #[error("remote candidate outputs do not match expected outputs")]
+    OutputMismatch,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealizationDispatchDecision {
     UseResolvedArtifact(VerifiedRealizationArtifact),
@@ -538,6 +615,83 @@ mod tests {
             err,
             ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
         ));
+    }
+
+    fn remote_candidate(key: RealizationKey) -> RemoteRealizationCandidate {
+        RemoteRealizationCandidate {
+            key,
+            log: "remote build log".to_string(),
+            outputs: vec![RemoteOutputReference {
+                output_name: "out".to_string(),
+                store_path: "/crunch/store/abc-out".to_string(),
+                nar_sha256_hex: "0123456789abcdef".to_string(),
+            }],
+            worker: RemoteWorkerMetadata {
+                worker_id: "worker-1".to_string(),
+                realizer_profile: "fake-remote@1".to_string(),
+                attestation: BTreeMap::new(),
+            },
+            verification: RemoteVerificationStatus::Verified,
+        }
+    }
+
+    #[test]
+    fn remote_candidate_verification_accepts_verified_outputs() {
+        let key = key(&base_request());
+        remote_candidate(key.clone()).verify_for_persistence(&key, &["out".to_string()]).unwrap();
+    }
+
+    #[test]
+    fn remote_candidate_verification_rejects_key_mismatch() {
+        let key = key(&base_request());
+        let mut expected = key.clone();
+        expected.0 = "different".to_string();
+        assert_eq!(
+            remote_candidate(key).verify_for_persistence(&expected, &["out".to_string()]).unwrap_err(),
+            RemoteVerificationError::KeyMismatch
+        );
+    }
+
+    #[test]
+    fn remote_candidate_verification_rejects_unverified_status() {
+        let key = key(&base_request());
+        let mut candidate = remote_candidate(key.clone());
+        candidate.verification = RemoteVerificationStatus::Unverified {
+            reason: "digest mismatch".to_string(),
+        };
+        assert_eq!(
+            candidate.verify_for_persistence(&key, &["out".to_string()]).unwrap_err(),
+            RemoteVerificationError::Unverified {
+                reason: "digest mismatch".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn remote_candidate_verification_rejects_missing_log_or_metadata() {
+        let key = key(&base_request());
+        let mut missing_log = remote_candidate(key.clone());
+        missing_log.log.clear();
+        assert_eq!(
+            missing_log.verify_for_persistence(&key, &["out".to_string()]).unwrap_err(),
+            RemoteVerificationError::MissingLog
+        );
+
+        let mut missing_metadata = remote_candidate(key.clone());
+        missing_metadata.worker.worker_id.clear();
+        assert_eq!(
+            missing_metadata.verify_for_persistence(&key, &["out".to_string()]).unwrap_err(),
+            RemoteVerificationError::MissingWorkerMetadata
+        );
+    }
+
+    #[test]
+    fn remote_candidate_verification_rejects_output_mismatch() {
+        let key = key(&base_request());
+        assert_eq!(
+            remote_candidate(key.clone()).verify_for_persistence(&key, &["dev".to_string()]).unwrap_err(),
+            RemoteVerificationError::OutputMismatch
+        );
     }
 
     #[test]
