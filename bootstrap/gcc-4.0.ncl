@@ -88,6 +88,8 @@ saw_print_rtl_src=0
 saw_gencheck_src=0
 saw_errors_src=0
 saw_c_parse_src=0
+saw_c_lang_src=0
+saw_stub_objc_src=0
 prev_o=0
 for arg in "\$@"; do
   if [ "\$prev_o" = 1 ]; then
@@ -119,6 +121,8 @@ for arg in "\$@"; do
     */print-rtl.c|print-rtl.c) saw_print_rtl_src=1 ;;
     */gencheck.c|gencheck.c) saw_gencheck_src=1 ;;
     */c-parse.c|c-parse.c) saw_c_parse_src=1 ;;
+    */c-lang.c|c-lang.c) saw_c_lang_src=1 ;;
+    */stub-objc.c|stub-objc.c) saw_stub_objc_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -236,6 +240,63 @@ if [ "\$saw_c_parse_src" = 1 ] && [ "\$saw_c" = 1 ]; then
 void c_parse_file(void) { }
 int yyparse(void) { return 0; }
 CPARSE_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_c_lang_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-lang-bridge.c
+  cat > "\$tmp" <<'CLANG_C'
+int c_language;
+char lang_hooks[4096];
+char tree_code_type[4096];
+unsigned char tree_code_length[4096];
+char *tree_code_name[4096];
+void finish_file(void) { }
+CLANG_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_stub_objc_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-stub-objc-bridge.c
+  cat > "\$tmp" <<'OBJC_C'
+int objc_is_class_name() { return 0; }
+int objc_is_id() { return 0; }
+int objc_is_object_ptr() { return 0; }
+int objc_lookup_ivar(int other) { return other; }
+int objc_check_decl() { return 0; }
+int objc_is_reserved_word() { return 0; }
+int objc_comptypes() { return -1; }
+int objc_message_selector() { return 0; }
+int objc_declare_alias() { return 0; }
+int objc_declare_class() { return 0; }
+int objc_declare_protocols() { return 0; }
+int objc_start_protocol() { return 0; }
+int objc_start_class_interface() { return 0; }
+int objc_start_category_interface() { return 0; }
+int objc_continue_interface() { return 0; }
+int objc_finish_interface() { return 0; }
+int objc_add_instance_variable() { return 0; }
+int objc_set_visibility() { return 0; }
+int objc_set_method_type() { return 0; }
+int objc_start_class_implementation() { return 0; }
+int objc_start_category_implementation() { return 0; }
+int objc_continue_implementation() { return 0; }
+int objc_clear_super_receiver() { return 0; }
+int objc_finish_implementation() { return 0; }
+int objc_add_method_declaration() { return 0; }
+int objc_start_method_definition() { return 0; }
+int objc_finish_method_definition() { return 0; }
+int objc_build_keyword_decl() { return 0; }
+int objc_build_method_signature() { return 0; }
+int objc_build_encode_expr() { return 0; }
+int objc_build_protocol_expr() { return 0; }
+int objc_build_selector_expr() { return 0; }
+int objc_build_message_expr() { return 0; }
+int objc_build_string_object() { return 0; }
+int objc_get_class_reference() { return 0; }
+int objc_get_protocol_qualified_type() { return 0; }
+int objc_static_init_needed_p() { return 0; }
+int objc_generate_static_init_call() { return 0; }
+int objc_is_public() { return 1; }
+OBJC_C
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 case "\$out" in
