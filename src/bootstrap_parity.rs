@@ -340,6 +340,34 @@ enum FileState {
     Unreadable,
 }
 
+/// Check if a marker occurs as a standalone word (bounded by non-word
+/// characters: non-alphanumeric, non-underscore, and not a path separator)
+/// to avoid false positives from substrings like `stub/atan2.c` or
+/// `placeholders` in comment prose.
+fn marker_is_standalone(content: &str, marker: &str) -> bool {
+    let lower = content.to_ascii_lowercase();
+    let search = marker.to_ascii_lowercase();
+    let mut start = 0;
+    while let Some(pos) = lower[start..].find(&search) {
+        let abs = start + pos;
+        let end = abs + search.len();
+        let prev_is_word = abs > 0
+            && (lower[..abs].chars().last().unwrap().is_ascii_alphanumeric()
+                || lower[..abs].chars().last().unwrap() == '_'
+                || lower[..abs].chars().last().unwrap() == '.');
+        let next_is_word = end < lower.len()
+            && (lower[end..].chars().next().unwrap().is_ascii_alphanumeric()
+                || lower[end..].chars().next() == Some('_')
+                || lower[end..].chars().next() == Some('/')
+                || lower[end..].chars().next() == Some('.'));
+        if !prev_is_word && !next_is_word {
+            return true;
+        }
+        start = abs + 1;
+    }
+    false
+}
+
 fn inspect_derivation(path: &Path) -> FileState {
     let Ok(content) = fs::read_to_string(path) else {
         return if path.exists() {
@@ -348,8 +376,7 @@ fn inspect_derivation(path: &Path) -> FileState {
             FileState::Missing
         };
     };
-    let lower = content.to_ascii_lowercase();
-    if PLACEHOLDER_MARKERS.iter().any(|marker| lower.contains(&marker.to_ascii_lowercase())) {
+    if PLACEHOLDER_MARKERS.iter().any(|marker| marker_is_standalone(&content, marker)) {
         FileState::Placeholder
     } else {
         FileState::Present
@@ -905,5 +932,52 @@ mod tests {
         assert_eq!(stagex_seed.status, StageStatus::Blocked);
         assert!(stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
         assert!(!stagex.blocking_rows.contains(&"seed-full".to_string()));
+    }
+
+    #[test]
+    fn marker_is_standalone_rejects_substring_in_path() {
+        // `stub/atan2.c` must NOT trigger "stub"
+        assert!(!marker_is_standalone("stub/atan2.c", "stub"));
+    }
+
+    #[test]
+    fn marker_is_standalone_rejects_plural_word() {
+        // `placeholders` must NOT trigger "placeholder"
+        assert!(!marker_is_standalone("# printf format placeholders here", "placeholder"));
+    }
+
+    #[test]
+    fn marker_is_standalone_accepts_standalone_word() {
+        assert!(marker_is_standalone("void placeholder(void) {}", "placeholder"));
+    }
+
+    #[test]
+    fn marker_is_standalone_accepts_comment_marker() {
+        assert!(marker_is_standalone("# placeholder marker", "placeholder"));
+        assert!(marker_is_standalone("// pass1 bridge", "pass1 bridge"));
+    }
+
+    #[test]
+    fn marker_is_standalone_accepts_escaped_quote() {
+        // `\"stub\"` should match because `"` is non-alphanumeric
+        assert!(marker_is_standalone("has a \"stub\" section", "stub"));
+    }
+
+    #[test]
+    fn tinycc_mes_stub_path_is_false_positive() {
+        // Reproduce the tinycc-mes.ncl false positive: stub/atan2.c paths
+        // should NOT cause the file to be classified as placeholder
+        let content = r#"
+          stub/atan2.c stub/bsearch.c
+          stub/cos.c stub/ctime.c
+        "#;
+        assert!(!marker_is_standalone(content, "stub"));
+    }
+
+    #[test]
+    fn tcc_placeholder_comment_is_false_positive() {
+        // Reproduce tinycc.ncl false positive: "placeholders" in comment
+        let content = "arguments instead of printing literal `%s:%d placeholders.\n";
+        assert!(!marker_is_standalone(content, "placeholder"));
     }
 }
