@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate reconcile-bootstrap-drain-state --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate reconcile-bootstrap-drain-state --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:30:23Z → completed: 2026-05-12T03:30:41Z)
+  Evidence: `openspec validate reconcile-bootstrap-drain-state --strict` passed before archive.
