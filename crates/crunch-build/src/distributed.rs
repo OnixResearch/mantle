@@ -183,6 +183,26 @@ pub trait ArtifactPublisher: Send {
     ) -> Result<PublishOutcome, ArtifactAdapterError>;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RealizationDispatchDecision {
+    UseResolvedArtifact(VerifiedRealizationArtifact),
+    BuildLocally,
+}
+
+pub async fn resolve_before_dispatch(
+    resolvers: &mut [&mut dyn ArtifactResolver],
+    request: &ArtifactResolveRequest,
+) -> Result<RealizationDispatchDecision, ArtifactAdapterError> {
+    for resolver in resolvers.iter_mut() {
+        match resolver.resolve(request).await? {
+            ResolveOutcome::Hit(artifact) => return Ok(RealizationDispatchDecision::UseResolvedArtifact(artifact)),
+            ResolveOutcome::Miss => continue,
+            ResolveOutcome::Unavailable { .. } => continue,
+        }
+    }
+    Ok(RealizationDispatchDecision::BuildLocally)
+}
+
 /// Local test adapter that models a resolver/publisher over verified PathInfo
 /// records without naming a remote provider or transport.
 #[derive(Debug, Clone, Default)]
@@ -418,6 +438,71 @@ mod tests {
             err,
             ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
         ));
+    }
+
+    #[test]
+    fn empty_resolver_chain_preserves_local_build_decision() {
+        let request = ArtifactResolveRequest {
+            key: key(&base_request()),
+        };
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            let mut resolvers: Vec<&mut dyn ArtifactResolver> = vec![];
+            assert_eq!(
+                resolve_before_dispatch(&mut resolvers, &request).await.unwrap(),
+                RealizationDispatchDecision::BuildLocally
+            );
+        });
+    }
+
+    #[test]
+    fn resolver_chain_uses_first_hit_before_local_build() {
+        let request = ArtifactResolveRequest {
+            key: key(&base_request()),
+        };
+        let artifact = verified_artifact();
+        let mut miss = InMemoryArtifactAdapter::default();
+        let mut hit = InMemoryArtifactAdapter::default();
+        hit.insert_verified(request.key.clone(), artifact.clone());
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            let mut resolvers: Vec<&mut dyn ArtifactResolver> = vec![&mut miss, &mut hit];
+            assert_eq!(
+                resolve_before_dispatch(&mut resolvers, &request).await.unwrap(),
+                RealizationDispatchDecision::UseResolvedArtifact(artifact)
+            );
+        });
+    }
+
+    #[test]
+    fn resolver_chain_skips_unavailable_resolvers() {
+        struct UnavailableResolver;
+
+        #[async_trait::async_trait]
+        impl ArtifactResolver for UnavailableResolver {
+            async fn resolve(
+                &mut self,
+                _request: &ArtifactResolveRequest,
+            ) -> Result<ResolveOutcome, ArtifactAdapterError> {
+                Ok(ResolveOutcome::Unavailable {
+                    reason: "maintenance".to_string(),
+                })
+            }
+        }
+
+        let request = ArtifactResolveRequest {
+            key: key(&base_request()),
+        };
+        let mut unavailable = UnavailableResolver;
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            let mut resolvers: Vec<&mut dyn ArtifactResolver> = vec![&mut unavailable];
+            assert_eq!(
+                resolve_before_dispatch(&mut resolvers, &request).await.unwrap(),
+                RealizationDispatchDecision::BuildLocally
+            );
+        });
     }
 
     #[test]
