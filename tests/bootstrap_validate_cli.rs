@@ -79,3 +79,52 @@ fn bootstrap_validate_preflight_failure_writes_evidence_bundle() {
     assert!(!evidence_dir.join("build.stdout.log").exists());
     assert!(evidence_dir.join("validation-summary.md").exists());
 }
+
+#[test]
+fn bootstrap_validate_success_writes_logs_and_summary() {
+    let root = TempDir::new().unwrap();
+    let (state_dir, store_dir, evidence_dir, target) = write_success_fixture(root.path());
+
+    crunch()
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("bootstrap")
+        .arg("validate")
+        .arg(&target)
+        .arg("--evidence-dir")
+        .arg(&evidence_dir)
+        .current_dir(root.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("crunch-bootstrap-validation-v1"))
+        .stdout(predicate::str::contains("passed"));
+
+    let summary_path = evidence_dir.join("validation-summary.json");
+    let summary: Value = serde_json::from_slice(&fs::read(&summary_path).unwrap()).unwrap();
+    assert_eq!(summary["schema"], "crunch-bootstrap-validation-v1");
+    assert_eq!(summary["status"], "passed");
+    assert_eq!(summary["doctor_ok"], true);
+    assert_eq!(summary["build_attempted"], true);
+    assert_eq!(summary["build_exit_code"], 0);
+    assert_eq!(summary["failure_class"], Value::Null);
+
+    let doctor_path = evidence_dir.join("doctor.json");
+    let stdout_path = evidence_dir.join("build.stdout.log");
+    let stderr_path = evidence_dir.join("build.stderr.log");
+    let markdown_path = evidence_dir.join("validation-summary.md");
+    assert!(doctor_path.exists());
+    assert!(stdout_path.exists());
+    assert!(stderr_path.exists());
+    assert!(markdown_path.exists());
+    assert_eq!(summary["evidence"]["doctor_json"], doctor_path.display().to_string());
+    assert_eq!(summary["evidence"]["build_stdout"], stdout_path.display().to_string());
+    assert_eq!(summary["evidence"]["build_stderr"], stderr_path.display().to_string());
+    assert_eq!(summary["evidence"]["summary_md"], markdown_path.display().to_string());
+
+    let markdown = fs::read_to_string(markdown_path).unwrap();
+    assert!(markdown.contains("- Status: `Passed`"));
+    assert!(markdown.contains("- Build attempted: `true`"));
+}
