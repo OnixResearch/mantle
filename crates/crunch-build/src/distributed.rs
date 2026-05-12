@@ -183,6 +183,72 @@ pub trait ArtifactPublisher: Send {
     ) -> Result<PublishOutcome, ArtifactAdapterError>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealizationPlan {
+    RequireLocal,
+    AllowRemote,
+}
+
+pub trait RealizationPolicy: Send + Sync {
+    fn plan_for(&self, request: &RealizationKeyRequest) -> RealizationPlan;
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LocalOnlyRealizationPolicy;
+
+impl RealizationPolicy for LocalOnlyRealizationPolicy {
+    fn plan_for(&self, _request: &RealizationKeyRequest) -> RealizationPlan {
+        RealizationPlan::RequireLocal
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RemoteAllowedRealizationPolicy;
+
+impl RealizationPolicy for RemoteAllowedRealizationPolicy {
+    fn plan_for(&self, _request: &RealizationKeyRequest) -> RealizationPlan {
+        RealizationPlan::AllowRemote
+    }
+}
+
+#[async_trait::async_trait]
+pub trait DerivationRealizer: Send + Sync {
+    fn profile(&self) -> RealizerProfileFacts;
+
+    async fn realize(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult>;
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalBuildServiceRealizer<S> {
+    service: S,
+    profile: RealizerProfileFacts,
+}
+
+impl<S> LocalBuildServiceRealizer<S> {
+    pub fn new(service: S, profile: RealizerProfileFacts) -> Self {
+        Self { service, profile }
+    }
+}
+
+#[async_trait::async_trait]
+impl<S> DerivationRealizer for LocalBuildServiceRealizer<S>
+where S: snix_build::buildservice::BuildService + Send + Sync
+{
+    fn profile(&self) -> RealizerProfileFacts {
+        self.profile.clone()
+    }
+
+    async fn realize(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        self.service.do_build(request).await
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealizationDispatchDecision {
     UseResolvedArtifact(VerifiedRealizationArtifact),
@@ -438,6 +504,82 @@ mod tests {
             err,
             ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
         ));
+    }
+
+    #[test]
+    fn local_only_policy_requires_local_realizer() {
+        assert_eq!(LocalOnlyRealizationPolicy.plan_for(&base_request()), RealizationPlan::RequireLocal);
+    }
+
+    #[test]
+    fn remote_allowed_policy_allows_remote_realizer() {
+        assert_eq!(RemoteAllowedRealizationPolicy.plan_for(&base_request()), RealizationPlan::AllowRemote);
+    }
+
+    #[test]
+    fn local_build_service_realizer_delegates_to_build_service() {
+        #[derive(Clone)]
+        struct RecordingBuildService(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+        #[async_trait::async_trait]
+        impl snix_build::buildservice::BuildService for RecordingBuildService {
+            async fn do_build(
+                &self,
+                request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                assert_eq!(request.command_args, vec!["/bin/true".to_string()]);
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(snix_build::buildservice::BuildResult {
+                    outputs: vec![],
+                    log: Some("local".to_string()),
+                })
+            }
+        }
+
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let realizer =
+            LocalBuildServiceRealizer::new(RecordingBuildService(calls.clone()), base_request().realizer_profile);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let result = rt
+            .block_on(realizer.realize(snix_build::buildservice::BuildRequest {
+                command_args: vec!["/bin/true".to_string()],
+                ..Default::default()
+            }))
+            .unwrap();
+        assert_eq!(result.log.as_deref(), Some("local"));
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fake_remote_realizer_can_satisfy_contract_tests_without_local_service() {
+        struct FakeRemoteRealizer;
+
+        #[async_trait::async_trait]
+        impl DerivationRealizer for FakeRemoteRealizer {
+            fn profile(&self) -> RealizerProfileFacts {
+                RealizerProfileFacts {
+                    name: "fake-remote".to_string(),
+                    version: 1,
+                    capabilities: vec!["remote".to_string()],
+                    parameters: BTreeMap::new(),
+                }
+            }
+
+            async fn realize(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                Ok(snix_build::buildservice::BuildResult {
+                    outputs: vec![],
+                    log: Some("remote".to_string()),
+                })
+            }
+        }
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let result = rt.block_on(FakeRemoteRealizer.realize(Default::default())).unwrap();
+        assert_eq!(result.log.as_deref(), Some("remote"));
+        assert_eq!(FakeRemoteRealizer.profile().name, "fake-remote");
     }
 
     #[test]
