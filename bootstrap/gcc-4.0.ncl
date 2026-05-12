@@ -1149,8 +1149,11 @@ EOF
       # `_lshrdi3` is the third bounded semantic promotion: unsigned 64-bit
       # logical right shift for representative counts below 64.
       # `_ashldi3` is the fourth bounded semantic promotion: 64-bit left shift
-      # for representative counts below 64.  The remaining members stay explicit
-      # placeholders until promoted by separate evidence-backed slices.
+      # for representative counts below 64.
+      # `_ashrdi3` is the fifth bounded semantic promotion: signed 64-bit
+      # arithmetic right shift for representative counts below 64.  The
+      # remaining members stay explicit placeholders until promoted by separate
+      # evidence-backed slices.
       gcc40_libgcc_funcs="_eprintf __gcc_bcmp _divdi3 _moddi3 _udivdi3 _umoddi3 _udiv_w_sdiv _udivmoddi4 _muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3 _cmpdi2 _ucmpdi2 _clear_cache"
       for fn in $gcc40_libgcc_funcs; do
         obj=/tmp/gcc40-libgcc-objs/$fn.o
