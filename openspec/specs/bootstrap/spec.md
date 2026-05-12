@@ -623,7 +623,7 @@ Crunch MUST record the next repair target after the diagnostic stage identifies 
 
 ### Requirement: Binutils-TCC chain implementation
 
-Crunch MUST build `bootstrap/binutils-tcc.ncl` from chain-internal TinyCC-era and post-musl derivations without using host compiler, host libc, host shell tools, or the legacy musl.cc provider.
+Crunch MUST build `bootstrap/binutils-tcc.ncl` from chain-internal TinyCC-era and post-musl derivations without using host compiler, host libc, host shell tools, or the legacy musl.cc provider. The binutils-tcc stage MUST NOT satisfy live-bootstrap or Guix parity until reproducible evidence proves the produced assembler/linker/archive tools and records absence of host fallback.
 ID: bootstrap.binutils.tcc.chain
 
 The chain MUST implement the scoped ladder groups named by the proposal: early tcc-hosted utilities (`bzip2`, `coreutils-5.0`, `oyacc`, `bash-2.05b`), first musl/tcc rebuilds, post-musl text/parser tools (`grep`, rebuilt `sed`, rebuilt `bzip2`, `m4`, Heirloom devtools, `flex`, `bison`), diffutils/coreutils/gawk, Perl/autoconf/automake/libtool, and binutils 2.30. The chain MUST pin every source, carried patch, and generated artifact with URL or repository path, digest, and provenance at the first consuming derivation. Validation transcripts MUST record command, provider selection, exit status, output path, fallback status/event marker, and placeholder rejection result. Validation MUST prove post-musl `m4`, `flex`, `bison`, and `grep` link against musl, and MUST prove binutils 2.30 can assemble a trivial ELF object for the gcc-4.0.4 transition.
@@ -634,6 +634,13 @@ The chain MUST implement the scoped ladder groups named by the proposal: early t
 - WHEN the derivation builds
 - THEN it does not emit `ERROR: binutils-tcc.ncl is a placeholder`
 - AND it produces working `as`, `ld`, `ar`, `ranlib`, `nm`, and `objcopy` tools
+
+#### Scenario: Placeholder is replaced with evidence [r[bootstrap.binutils.tcc.chain.evidence-promotion]]
+
+- GIVEN `crunch bootstrap parity-report` evaluates the `binutils.tcc` row
+- WHEN the row is considered for live-bootstrap or Guix parity
+- THEN it remains `placeholder` or `partial` unless a checked transcript proves `as`, `ld`, `ar`, `ranlib`, `nm`, and `objcopy` from `bootstrap/binutils-tcc.ncl`
+- AND the transcript records the build command, output path, provider kind, fallback markers, and smoke command exit statuses
 
 #### Scenario: Host leakage is rejected
 
@@ -2644,6 +2651,22 @@ The report MUST classify each stage as `complete`, `partial`, `placeholder`, `bl
 - WHEN the parity gap report is generated
 - THEN the row records whether the evidence came from `legacy-fetch`, `source-root`, or `stagex-lineage`
 - AND StageX parity is incomplete unless the row is backed by StageX-class lineage evidence where required
+
+### Requirement: Bootstrap parity map rejects unevidenced binutils bridges [r[bootstrap.parity.binutils-tcc-evidence]]
+
+The parity report MUST fail closed for `binutils.tcc` when the derivation contains placeholder markers, bridge-only notes, missing smoke transcripts, or unchecked evidence references.
+
+#### Scenario: Require checked evidence for promotion [r[bootstrap.parity.binutils-tcc-evidence.require-checked]]
+
+- GIVEN `bootstrap/binutils-tcc.ncl` exists but no checked binutils tool transcript is present
+- WHEN `crunch bootstrap parity-report --require live-bootstrap` or `--require guix` runs
+- THEN the command fails and identifies `binutils.tcc` as a blocker
+
+#### Scenario: Promote only after tool smokes [r[bootstrap.parity.binutils-tcc-evidence.tool-smokes]]
+
+- GIVEN a checked transcript proves the binutils-tcc output tools
+- WHEN the parity report loads that evidence
+- THEN the `binutils.tcc` row may advance only to the status justified by the transcript and must not imply downstream GCC correctness
 
 ### Requirement: Bootstrap parity claim gating
 
