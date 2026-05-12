@@ -6,7 +6,7 @@
 
 ## Implementation / Evidence
 
-- [ ] [serial] I1 Inventory current build scheduler, PathInfo lookup, substitution, store-push, and build-finalization seams; record the concrete modules that will host each interface without adding provider dependencies. [covers=distributed-builds.interfaces.inventory]
+- [x] [serial] I1 Inventory current build scheduler, PathInfo lookup, substitution, store-push, and build-finalization seams; record the concrete modules that will host each interface without adding provider dependencies. [covers=distributed-builds.interfaces.inventory] ✅ 1m (started: 2026-05-12T02:16:30Z → completed: 2026-05-12T02:17:42Z; evidence: `openspec/changes/add-distributed-build-interfaces/inventory.md`, `openspec validate add-distributed-build-interfaces --strict`, `test -s inventory.md` + required-host grep checks)
 - [ ] [depends:I1] I2 Add a pure `RealizationKeyDeriver` core model with deterministic serialization and positive/negative tests for derivation, input closure, platform, toolchain, sandbox/hermeticity, environment, and store-prefix changes. [covers=distributed-builds.interfaces.keys]
 - [ ] [depends:I2] I3 Add `ArtifactResolver` and `ArtifactPublisher` traits plus local/in-memory adapters that wrap existing PathInfo/substitution/export behavior without hard-coded remote services. [covers=distributed-builds.interfaces.artifact-adapters]
 - [ ] [depends:I3] I4 Refactor the realization pipeline to consult configured artifact resolvers before dispatching realization, preserving existing local-only behavior when no external resolver is configured. [covers=distributed-builds.interfaces.resolver-order]
