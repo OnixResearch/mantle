@@ -336,7 +336,7 @@ EOF
           libiberty/Makefile
         for name in regex cplus-dem cp-demangle md5 sha1 fibheap getopt getopt1 pex-common pex-one pex-unix pexecute vprintf-support; do
           $BB cat > "libiberty/$name.c" <<EOF
-void placeholder(void) {}
+void crunch_omitted_member(void) {}
 EOF
         done
       fi

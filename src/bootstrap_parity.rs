@@ -770,7 +770,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "binutils-tcc derivation present",
             semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
             proof_evidence: "source transcript plus no-host-fallback markers required",
-            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; 2026-05-12 bounded probe produced a cached output but tool smoke was blocked by missing /crunch/store runtime closure members",
+            notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
             evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         },
         StageSpec {
@@ -932,7 +932,7 @@ mod tests {
             graph_evidence: "binutils-tcc derivation present",
             semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
             proof_evidence: "source transcript plus no-host-fallback markers required",
-            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; 2026-05-12 bounded probe produced a cached output but tool smoke was blocked by missing /crunch/store runtime closure members",
+            notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
             evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         }
     }
@@ -1106,6 +1106,19 @@ mod tests {
 
         assert_eq!(row.status, StageStatus::Partial);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn binutils_tcc_real_derivation_reports_evidence_backed_partial() {
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let report = collect_bootstrap_parity_report(project_root);
+        let row = report.rows.iter().find(|row| row.id == "binutils.tcc").unwrap();
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("placeholder markers found"));
         assert!(!row.notes.contains("evidence check failed"));
     }
 
