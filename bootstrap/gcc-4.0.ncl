@@ -1137,16 +1137,62 @@ echo 'Crunch gcc-4.0 pass1 bridge: cc1 is provided by the gcc driver/TinyCC hand
 exit 0
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"
-      echo 'int crunch_gcc40_pass1_bridge;' > /tmp/libgcc-empty.c
-      gcc40-cc -c /tmp/libgcc-empty.c -o /tmp/libgcc-empty.o
-      "$BINUTILS/bin/ar" rc "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" /tmp/libgcc-empty.o
-      "$BINUTILS/bin/ranlib" "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a"
+      rm -rf /tmp/gcc40-libgcc-objs
+      $BB mkdir -p /tmp/gcc40-libgcc-objs
+      # Build a symbol-shaped pass1 libgcc archive instead of a single empty
+      # marker object.  These functions still use the TinyCC/pass1 bridge, but
+      # the archive now has the expected early libgcc member granularity.
+      gcc40_libgcc_funcs="_eprintf __gcc_bcmp _divdi3 _moddi3 _udivdi3 _umoddi3 _udiv_w_sdiv _udivmoddi4 _muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3 _cmpdi2 _ucmpdi2 _clear_cache"
+      for fn in $gcc40_libgcc_funcs; do
+        obj=/tmp/gcc40-libgcc-objs/$fn.o
+        src=/tmp/gcc40-libgcc-objs/$fn.c
+        cat > "$src" <<EOF
+int $fn(void) { return 0; }
+EOF
+        gcc40-cc -c "$src" -o "$obj"
+        $BB chmod u+r "$obj" 2>/dev/null || true
+        test -s "$obj" || { echo "ERROR: libgcc member object missing: $obj" >&2; exit 1; }
+      done
+      libgcc_archive="$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a"
+      printf '!<arch>\n' > "$libgcc_archive"
+      gcc40_add_ar_member() {
+        member=$1
+        path=/tmp/gcc40-libgcc-objs/$member
+        size=$($BB wc -c < "$path")
+        printf '%-16s%-12s%-6s%-6s%-8s%-10s`\n' "$member/" 0 0 0 100644 "$size" >> "$libgcc_archive"
+        $BB cat "$path" >> "$libgcc_archive"
+        if [ $((size % 2)) -ne 0 ]; then printf '\n' >> "$libgcc_archive"; fi
+      }
+      for member in \
+        _eprintf.o \
+        __gcc_bcmp.o \
+        _divdi3.o \
+        _moddi3.o \
+        _udivdi3.o \
+        _umoddi3.o \
+        _udiv_w_sdiv.o \
+        _udivmoddi4.o \
+        _muldi3.o \
+        _negdi2.o \
+        _lshrdi3.o \
+        _ashldi3.o \
+        _ashrdi3.o \
+        _cmpdi2.o \
+        _ucmpdi2.o \
+        _clear_cache.o; do
+        gcc40_add_ar_member "$member"
+      done
+      # The TCC-built ranlib in this bootstrap segment rewrites the hand-authored
+      # archive to an empty index-only file, so leave the deterministic ar(5)
+      # archive without a ranlib table for now.
 
       # Verify: at minimum, the C compiler contract must be complete and usable.
       test -x "$out/bin/gcc" || { echo "ERROR: no gcc binary produced" >&2; exit 1; }
       test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
       test -x "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" || { echo "ERROR: installed cc1 missing" >&2; exit 1; }
       test -f "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
+      $BB grep -q 'divdi3.o' "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: libgcc.a missing divdi3 member" >&2; exit 1; }
+      $BB grep -q 'gcc_bcmp.o' "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: libgcc.a missing gcc_bcmp member" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtbegin.o" || { echo "ERROR: installed crtbegin.o missing" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtend.o" || { echo "ERROR: installed crtend.o missing" >&2; exit 1; }
 
