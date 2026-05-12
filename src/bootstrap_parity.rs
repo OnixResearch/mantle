@@ -1156,9 +1156,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript and native-boundary receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json and native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json record the current intentional bridge boundary but do not prove native compiler correctness",
+            semantic_evidence: "bounded libgcc/driver/cc1 and generator-header boundary smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript, placeholder inventory, and native-boundary receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator headers are only checked empty-machine boundaries, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -1321,9 +1321,9 @@ mod tests {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript and native-boundary receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json and native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json record the current intentional bridge boundary but do not prove native compiler correctness",
+            semantic_evidence: "bounded libgcc/driver/cc1 and generator-header boundary smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript, placeholder inventory, and native-boundary receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, and generator headers are only checked empty-machine boundaries, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -1958,6 +1958,21 @@ mod tests {
         assert!(content.contains("-quiet /tmp/cc1-smoke.c -o /tmp/cc1-smoke.o"));
         assert!(content.contains("ERROR: cc1 object smoke failed"));
         assert!(content.contains("ERROR: cc1 object smoke output missing"));
+    }
+
+    #[test]
+    fn gcc40_real_derivation_contains_generator_header_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("empty-machine constants boundary"));
+        assert!(content.contains("empty-machine flags boundary"));
+        assert!(content.contains("ERROR: insn-constants boundary guard missing"));
+        assert!(content.contains("ERROR: insn-flags boundary guard missing"));
+        assert!(content.contains("bootstrap genconstants s[t]ub"));
+        assert!(content.contains("bootstrap genflags s[t]ub"));
+        assert!(!content.contains("bootstrap genconstants stub: no md constants required"));
+        assert!(!content.contains("bootstrap genflags stub: generator-only boundary bridge"));
     }
 
     #[test]

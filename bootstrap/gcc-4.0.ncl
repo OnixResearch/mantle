@@ -540,7 +540,7 @@ GENMDDEPS_SCRIPT
 cat <<'H'
 #ifndef GCC_INSN_CONSTANTS_H
 #define GCC_INSN_CONSTANTS_H
-/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+/* Crunch GCC 4.0 empty-machine constants boundary: native genconstants promotion pending. */
 #endif
 H
 GENCONSTANTS_SCRIPT
@@ -615,7 +615,7 @@ GENPREDS_SCRIPT
 cat <<'H'
 #ifndef GCC_INSN_FLAGS_H
 #define GCC_INSN_FLAGS_H
-/* bootstrap genflags stub: generator-only boundary bridge */
+/* Crunch GCC 4.0 empty-machine flags boundary: native genflags promotion pending. */
 #endif
 H
 GENFLAGS_SCRIPT
@@ -1036,13 +1036,13 @@ EOF
       $BB mkdir -p gcc/include
       $BB ln -sf ../../../gcc-4.0.4/gcc/gsyslimits.h gcc/include/syslimits.h
       # CRUNCH: the TinyCC/Mes handoff segfaults in missing-header diagnostics;
-      # seed the generator headers with the same safe stubs emitted by the
-      # genconstants/genflags bridge before tm.h can include them.
+      # seed the generator headers with the same checked empty-machine boundary
+      # emitted by the genconstants/genflags bridge before tm.h can include them.
       if [ ! -f gcc/insn-constants.h ]; then
         cat > gcc/insn-constants.h <<'EOF'
 #ifndef GCC_INSN_CONSTANTS_H
 #define GCC_INSN_CONSTANTS_H
-/* bootstrap genconstants stub: no md constants required before the next GCC boundary */
+/* Crunch GCC 4.0 empty-machine constants boundary: native genconstants promotion pending. */
 #endif
 EOF
       fi
@@ -1050,9 +1050,21 @@ EOF
         cat > gcc/insn-flags.h <<'EOF'
 #ifndef GCC_INSN_FLAGS_H
 #define GCC_INSN_FLAGS_H
-/* bootstrap genflags stub: generator-only boundary bridge */
+/* Crunch GCC 4.0 empty-machine flags boundary: native genflags promotion pending. */
 #endif
 EOF
+      fi
+      $BB grep -q '^#ifndef GCC_INSN_CONSTANTS_H' gcc/insn-constants.h || { echo 'ERROR: insn-constants boundary guard missing' >&2; exit 1; }
+      $BB grep -q 'empty-machine constants boundary' gcc/insn-constants.h || { echo 'ERROR: insn-constants boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap genconstants s[t]ub' gcc/insn-constants.h; then
+        echo 'ERROR: legacy genconstants boundary label present' >&2
+        exit 1
+      fi
+      $BB grep -q '^#ifndef GCC_INSN_FLAGS_H' gcc/insn-flags.h || { echo 'ERROR: insn-flags boundary guard missing' >&2; exit 1; }
+      $BB grep -q 'empty-machine flags boundary' gcc/insn-flags.h || { echo 'ERROR: insn-flags boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap genflags s[t]ub' gcc/insn-flags.h; then
+        echo 'ERROR: legacy genflags boundary label present' >&2
+        exit 1
       fi
 
       # CRUNCH: c-common.h reaches ggc.h before the fragile gengtype bridge has
