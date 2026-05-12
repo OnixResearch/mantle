@@ -1189,6 +1189,14 @@ int _cmpdi2(long long lhs, long long rhs) {
   return 1;
 }
 EOF
+        elif [ "$fn" = _ucmpdi2 ]; then
+          cat > "$src" <<'EOF'
+int _ucmpdi2(unsigned long long lhs, unsigned long long rhs) {
+  if (lhs < rhs) return 0;
+  if (lhs > rhs) return 2;
+  return 1;
+}
+EOF
         else
           cat > "$src" <<EOF
 int $fn(void) { return 0; }
