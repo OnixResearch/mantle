@@ -140,12 +140,14 @@ enum EvidenceCheck {
     BinutilsTccToolTranscript,
     SelfBuildProviderKindLinkage,
     StagexLineageProviderReceipt,
+    Gcc40PlaceholderInventory,
 }
 
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
 const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
     "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
 const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage-provider-receipt.json";
+const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholder-inventory.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -242,6 +244,11 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         (_, Some(FileState::Missing)) => StageStatus::NotStarted,
         (_, Some(FileState::Present)) if evidence_failure.is_some() => StageStatus::Partial,
         (false, Some(FileState::Present)) => StageStatus::Partial,
+        (false, Some(FileState::Placeholder))
+            if spec.evidence_check == EvidenceCheck::Gcc40PlaceholderInventory && evidence_failure.is_none() =>
+        {
+            StageStatus::Partial
+        }
         (false, Some(FileState::Placeholder)) => StageStatus::Placeholder,
         (true, Some(FileState::Present)) => StageStatus::Complete,
         (true, Some(FileState::Placeholder)) => StageStatus::Placeholder,
@@ -309,7 +316,118 @@ fn validate_stage_evidence(project_root: &Path, path: Option<&Path>, check: Evid
         EvidenceCheck::BinutilsTccToolTranscript => validate_binutils_tcc_tool_transcript(project_root),
         EvidenceCheck::SelfBuildProviderKindLinkage => validate_self_build_provider_kind_linkage(project_root),
         EvidenceCheck::StagexLineageProviderReceipt => validate_stagex_lineage_provider_receipt(project_root),
+        EvidenceCheck::Gcc40PlaceholderInventory => validate_gcc40_placeholder_inventory(
+            project_root,
+            path.ok_or_else(|| "GCC 4.0 placeholder inventory requires a derivation path".to_string())?,
+        ),
     }
+}
+
+fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &Path) -> Result<(), String> {
+    let receipt_path = project_root.join(GCC40_PLACEHOLDER_INVENTORY);
+    let receipt_content = fs::read_to_string(&receipt_path).map_err(|err| {
+        format!(
+            "GCC 4.0 placeholder inventory missing `{}` ({err}); expected exact marker inventory for bootstrap/gcc-4.0.ncl",
+            GCC40_PLACEHOLDER_INVENTORY
+        )
+    })?;
+    let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
+        .map_err(|err| format!("GCC 4.0 placeholder inventory is not valid JSON: {err}"))?;
+    require_gcc40_inventory_string(&receipt, "schema", "crunch-gcc40-placeholder-inventory-v1")?;
+    require_gcc40_inventory_string(&receipt, "derivation", "bootstrap/gcc-4.0.ncl")?;
+    require_gcc40_inventory_string(&receipt, "status", "inventory-only")?;
+    let actual_content = fs::read_to_string(derivation_path)
+        .map_err(|err| format!("read GCC 4.0 derivation {}: {err}", derivation_path.display()))?;
+    let actual = collect_placeholder_marker_occurrences(&actual_content);
+    let receipt_markers = receipt
+        .get("markers")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "GCC 4.0 placeholder inventory missing array field `markers`".to_string())?;
+    let marker_count = receipt
+        .get("marker_count")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| "GCC 4.0 placeholder inventory missing integer field `marker_count`".to_string())?;
+    if marker_count as usize != receipt_markers.len() {
+        return Err(format!(
+            "GCC 4.0 placeholder inventory marker_count={} does not match markers length {}",
+            marker_count,
+            receipt_markers.len()
+        ));
+    }
+    let mut expected = Vec::new();
+    for marker in receipt_markers {
+        let line = marker
+            .get("line")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing integer `line`".to_string())?;
+        let marker_name = marker
+            .get("marker")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `marker`".to_string())?;
+        let classification = marker
+            .get("classification")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "GCC 4.0 placeholder inventory marker missing string `classification`".to_string())?;
+        if classification.trim().is_empty() {
+            return Err("GCC 4.0 placeholder inventory marker classification must not be empty".to_string());
+        }
+        expected.push(PlaceholderMarkerOccurrence {
+            line: line as usize,
+            marker: marker_name.to_string(),
+        });
+    }
+    if actual != expected {
+        return Err(format!(
+            "GCC 4.0 placeholder inventory drift: expected {}, recomputed {}",
+            format_marker_occurrences(&expected),
+            format_marker_occurrences(&actual)
+        ));
+    }
+    Ok(())
+}
+
+fn require_gcc40_inventory_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("GCC 4.0 placeholder inventory missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("GCC 4.0 placeholder inventory `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct PlaceholderMarkerOccurrence {
+    line: usize,
+    marker: String,
+}
+
+fn collect_placeholder_marker_occurrences(content: &str) -> Vec<PlaceholderMarkerOccurrence> {
+    let mut occurrences = Vec::new();
+    for (idx, line) in content.lines().enumerate() {
+        for marker in PLACEHOLDER_MARKERS {
+            if marker_is_standalone(line, marker) {
+                occurrences.push(PlaceholderMarkerOccurrence {
+                    line: idx + 1,
+                    marker: (*marker).to_string(),
+                });
+            }
+        }
+    }
+    occurrences
+}
+
+fn format_marker_occurrences(occurrences: &[PlaceholderMarkerOccurrence]) -> String {
+    occurrences
+        .iter()
+        .map(|occurrence| format!("{}:{}", occurrence.line, occurrence.marker))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), String> {
@@ -937,8 +1055,8 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript required",
-            notes: "pass1 bridge and selected libgcc members are partial progress",
-            evidence_check: EvidenceCheck::None,
+            notes: "pass1 bridge and selected libgcc members are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records the current intentional bridge markers but does not prove native compiler correctness",
+            evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
             id: "gcc.4.7",
@@ -1091,6 +1209,22 @@ mod tests {
         }
     }
 
+    fn gcc40_spec() -> StageSpec {
+        StageSpec {
+            id: "gcc.4.0",
+            title: "GCC 4.0",
+            axes: LIVE_GUIX,
+            lineage: "live-bootstrap",
+            derivation: Some("gcc-4.0.ncl"),
+            expected_complete: false,
+            graph_evidence: "late graph completion recorded",
+            semantic_evidence: "bounded libgcc smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript required",
+            notes: "pass1 bridge and selected libgcc members are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records the current intentional bridge markers but does not prove native compiler correctness",
+            evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
+        }
+    }
+
     fn self_build_spec() -> StageSpec {
         StageSpec {
             id: "crunch.self-build",
@@ -1200,6 +1334,40 @@ mod tests {
         .unwrap();
     }
 
+    fn write_gcc40_placeholder_inventory(root: &Path, content: &str) {
+        let path = root.join(GCC40_PLACEHOLDER_INVENTORY);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let markers = collect_placeholder_marker_occurrences(content);
+        let rendered = markers
+            .iter()
+            .map(|occurrence| {
+                format!(
+                    r#"{{ "line": {}, "marker": "{}", "classification": "test-boundary" }}"#,
+                    occurrence.line, occurrence.marker
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n    ");
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "crunch-gcc40-placeholder-inventory-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "inventory-only",
+  "marker_count": {},
+  "markers": [
+    {}
+  ]
+}}
+"#,
+                markers.len(),
+                rendered
+            ),
+        )
+        .unwrap();
+    }
+
     fn valid_seed_full_contract() -> &'static str {
         r#"
         share/crunch-bootstrap/provider.json
@@ -1256,6 +1424,46 @@ mod tests {
         let row = evaluate_stage(dir.path(), &spec);
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.status.blocks_parity());
+    }
+
+    #[test]
+    fn gcc40_placeholder_inventory_matching_receipt_reports_partial() {
+        let dir = tempdir().unwrap();
+        let content = "# pass1 bridge\necho stub\n";
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc40_placeholder_inventory_missing_receipt_stays_placeholder_with_failure() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "gcc-4.0.ncl", "# pass1 bridge\n");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("GCC 4.0 placeholder inventory missing"));
+    }
+
+    #[test]
+    fn gcc40_placeholder_inventory_drift_stays_placeholder_with_failure() {
+        let dir = tempdir().unwrap();
+        let original = "# pass1 bridge\n";
+        write_stage(dir.path(), "gcc-4.0.ncl", original);
+        write_gcc40_placeholder_inventory(dir.path(), original);
+        write_stage(dir.path(), "gcc-4.0.ncl", "# pass1 bridge\necho stub\n");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 placeholder inventory drift"));
     }
 
     #[test]
@@ -1518,6 +1726,18 @@ mod tests {
 
         assert!(err.contains("fallback_events"));
         assert!(err.contains("must be empty"));
+    }
+
+    #[test]
+    fn gcc40_real_derivation_reports_inventory_backed_partial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        let row = evaluate_stage(root, &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("checked placeholder inventory"));
     }
 
     #[test]

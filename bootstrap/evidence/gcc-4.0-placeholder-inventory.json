@@ -1,0 +1,83 @@
+{
+  "schema": "crunch-gcc40-placeholder-inventory-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "inventory-only",
+  "marker_count": 15,
+  "markers": [
+    {
+      "line": 543,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 574,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 590,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 603,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 618,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 724,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 727,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1045,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1053,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1066,
+      "marker": "stub",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1107,
+      "marker": "pass1 bridge",
+      "classification": "pass1-driver-placeholder-boundary"
+    },
+    {
+      "line": 1111,
+      "marker": "pass1 bridge",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1126,
+      "marker": "pass1 bridge",
+      "classification": "pass1-generator-or-driver-bridge"
+    },
+    {
+      "line": 1136,
+      "marker": "pass1 bridge",
+      "classification": "pass1-driver-placeholder-boundary"
+    },
+    {
+      "line": 1143,
+      "marker": "pass1 bridge",
+      "classification": "pass1-generator-or-driver-bridge"
+    }
+  ]
+}

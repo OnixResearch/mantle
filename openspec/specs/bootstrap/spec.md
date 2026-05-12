@@ -2700,25 +2700,22 @@ The map MUST enumerate every planned or implemented bootstrap stage from the aud
 
 ### Requirement: Bootstrap parity gap report
 
-Crunch MUST produce a deterministic bootstrap parity gap report from the canonical map and current repository state.
-ID: bootstrap.parity.gap-report
+The bootstrap parity report MUST classify intentional GCC 4.0 pass1 bridge markers using a checked placeholder inventory receipt. The receipt MUST use schema `crunch-gcc40-placeholder-inventory-v1`, MUST name `bootstrap/gcc-4.0.ncl`, MUST mark the inventory as `inventory-only`, and MUST enumerate the exact standalone placeholder-marker occurrences currently present in the derivation. The report MUST fail closed when the receipt is missing or when the recomputed marker set differs from the receipt. A matching inventory MAY classify `gcc.4.0` as evidence-backed `partial`, but MUST NOT mark it `complete` or unblock live-bootstrap/Guix parity without native compiler correctness evidence.
 
-The report MUST classify each stage as `complete`, `partial`, `placeholder`, `blocked`, `out-of-scope-replaced`, or `not-started`. It MUST distinguish graph-completion evidence from semantic correctness evidence, name runtime smokes and host-linked semantic smokes separately, and record whether evidence was produced by the legacy fetched provider, source-root provider, or StageX-class lineage provider. It MUST preserve the current distinction that the GCC 4.0 pass1 bridge and bounded libgcc semantic members are progress toward native correctness, not full native GCC correctness.
+#### Scenario: GCC 4.0 placeholder inventory matches
 
-#### Scenario: Report separates graph completion from correctness
+- GIVEN `bootstrap/gcc-4.0.ncl` contains intentional pass1 bridge markers
+- AND `bootstrap/evidence/gcc-4.0-placeholder-inventory.json` enumerates the exact marker set
+- WHEN the parity report evaluates `gcc.4.0`
+- THEN the row reports `partial` rather than unclassified `placeholder`
+- AND the row remains a live-bootstrap and Guix blocker
 
-- GIVEN GCC 4.0 builds through a late generator/executable graph using stubs or bridge behavior
-- AND only selected libgcc members have semantic implementations
-- WHEN the parity gap report is generated
-- THEN the graph-completion row is marked separately from native compiler correctness rows
-- AND the report does not claim full GCC correctness
+#### Scenario: GCC 4.0 placeholder inventory drifts
 
-#### Scenario: Provider kind is visible in every evidence row
-
-- GIVEN a stage has runtime-smoke evidence
-- WHEN the parity gap report is generated
-- THEN the row records whether the evidence came from `legacy-fetch`, `source-root`, or `stagex-lineage`
-- AND StageX parity is incomplete unless the row is backed by StageX-class lineage evidence where required
+- GIVEN a standalone marker is added, removed, moved, or renamed without updating the receipt
+- WHEN the parity report evaluates `gcc.4.0`
+- THEN the evidence check fails
+- AND the row remains a blocker with a drift note
 
 ### Requirement: Bootstrap parity map rejects unevidenced binutils bridges [r[bootstrap.parity.binutils-tcc-evidence]]
 
