@@ -28,6 +28,19 @@ fn write_minimal_derivation(path: &Path) {
     .unwrap();
 }
 
+fn write_success_fixture(
+    root: &Path,
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    let state_dir = root.join("state");
+    let store_dir = root.join("store");
+    let evidence_dir = root.join("evidence");
+    let target = root.join("success.ncl");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    write_minimal_derivation(&target);
+    (state_dir, store_dir, evidence_dir, target)
+}
+
 #[test]
 fn bootstrap_validate_preflight_failure_writes_evidence_bundle() {
     let root = TempDir::new().unwrap();
