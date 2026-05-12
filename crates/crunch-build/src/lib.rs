@@ -11,6 +11,7 @@ mod build_request;
 pub mod ca_mapping;
 pub mod ca_plan;
 pub mod dispatch_build_service;
+pub mod distributed;
 pub mod dynamic;
 mod error;
 pub mod export;

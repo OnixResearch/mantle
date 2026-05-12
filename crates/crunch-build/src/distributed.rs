@@ -1,0 +1,318 @@
+//! Provider-neutral distributed build seams.
+//!
+//! This module is intentionally pure for the first distributed-build slice:
+//! it defines realization-key inputs and deterministic key derivation without
+//! contacting stores, schedulers, providers, or network services.
+
+use std::collections::BTreeMap;
+
+use serde::Deserialize;
+use serde::Serialize;
+
+const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
+
+/// Stable provider-neutral key for a derivation realization request.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RealizationKey(String);
+
+impl RealizationKey {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Derives deterministic realization keys from normalized Crunch facts.
+pub trait RealizationKeyDeriver {
+    fn derive_key(&self, request: &RealizationKeyRequest) -> Result<RealizationKey, RealizationKeyError>;
+}
+
+/// Default BLAKE3-based provider-neutral key deriver.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultRealizationKeyDeriver;
+
+impl RealizationKeyDeriver for DefaultRealizationKeyDeriver {
+    fn derive_key(&self, request: &RealizationKeyRequest) -> Result<RealizationKey, RealizationKeyError> {
+        request.validate()?;
+        let bytes = serde_json::to_vec(request).map_err(|source| RealizationKeyError::Serialize { source })?;
+        let digest = blake3::hash(&bytes);
+        Ok(RealizationKey(format!(
+            "{REALIZATION_KEY_SCHEMA}:{}",
+            data_encoding::HEXLOWER.encode(digest.as_bytes())
+        )))
+    }
+}
+
+/// Normalized facts that can affect a derivation realization output or the
+/// admissible execution environment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RealizationKeyRequest {
+    pub derivation: DerivationKeyFacts,
+    pub input_closure: Vec<InputClosureFact>,
+    pub platform: PlatformFacts,
+    pub toolchains: Vec<ToolchainFact>,
+    pub sandbox: SandboxFacts,
+    pub environment: BTreeMap<String, Vec<u8>>,
+    pub store: StorePrefixFacts,
+    pub realizer_profile: RealizerProfileFacts,
+}
+
+impl RealizationKeyRequest {
+    fn validate(&self) -> Result<(), RealizationKeyError> {
+        validate_non_empty("derivation.identity", &self.derivation.identity)?;
+        validate_non_empty("derivation.builder", &self.derivation.builder)?;
+        validate_non_empty("platform.system", &self.platform.system)?;
+        validate_non_empty("store.logical_prefix", &self.store.logical_prefix)?;
+        validate_non_empty("store.output_prefix", &self.store.output_prefix)?;
+        validate_non_empty("sandbox.hermeticity", &self.sandbox.hermeticity)?;
+        validate_non_empty("realizer_profile.name", &self.realizer_profile.name)?;
+        validate_sorted_unique_by(&self.input_closure, |fact| fact.store_path.as_str(), "input_closure.store_path")?;
+        validate_sorted_unique_by(&self.toolchains, |fact| fact.name.as_str(), "toolchains.name")?;
+        validate_sorted_unique_by(
+            &self.realizer_profile.capabilities,
+            String::as_str,
+            "realizer_profile.capabilities",
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DerivationKeyFacts {
+    pub identity: String,
+    pub builder: String,
+    pub args: Vec<String>,
+    pub outputs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InputClosureFact {
+    pub store_path: String,
+    pub nar_hash: String,
+    pub references: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformFacts {
+    pub system: String,
+    pub cpu: String,
+    pub os: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolchainFact {
+    pub name: String,
+    pub store_path: String,
+    pub digest: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxFacts {
+    pub hermeticity: String,
+    pub network_allowed: bool,
+    pub fixed_output: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorePrefixFacts {
+    pub logical_prefix: String,
+    pub output_prefix: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RealizerProfileFacts {
+    pub name: String,
+    pub version: u32,
+    pub capabilities: Vec<String>,
+    pub parameters: BTreeMap<String, String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RealizationKeyError {
+    #[error("realization key field {field} must not be empty")]
+    EmptyField { field: &'static str },
+    #[error("realization key collection {field} must be sorted and unique")]
+    NotSortedUnique { field: &'static str },
+    #[error("serializing realization key request: {source}")]
+    Serialize { source: serde_json::Error },
+}
+
+fn validate_non_empty(field: &'static str, value: &str) -> Result<(), RealizationKeyError> {
+    if value.is_empty() {
+        return Err(RealizationKeyError::EmptyField { field });
+    }
+    Ok(())
+}
+
+fn validate_sorted_unique_by<'a, T, F>(items: &'a [T], key: F, field: &'static str) -> Result<(), RealizationKeyError>
+where F: Fn(&'a T) -> &'a str {
+    let mut previous: Option<&str> = None;
+    for item in items {
+        let current = key(item);
+        if current.is_empty() || previous.is_some_and(|prev| prev >= current) {
+            return Err(RealizationKeyError::NotSortedUnique { field });
+        }
+        previous = Some(current);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_ne;
+
+    use super::*;
+
+    fn base_request() -> RealizationKeyRequest {
+        RealizationKeyRequest {
+            derivation: DerivationKeyFacts {
+                identity: "/crunch/store/11111111111111111111111111111111-example.drv".to_string(),
+                builder: "/crunch/store/22222222222222222222222222222222-builder/bin/build".to_string(),
+                args: vec!["--build".to_string(), "example".to_string()],
+                outputs: vec!["out".to_string()],
+            },
+            input_closure: vec![
+                InputClosureFact {
+                    store_path: "/crunch/store/33333333333333333333333333333333-libc".to_string(),
+                    nar_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                    references: vec![],
+                },
+                InputClosureFact {
+                    store_path: "/crunch/store/44444444444444444444444444444444-tool".to_string(),
+                    nar_hash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+                    references: vec!["/crunch/store/33333333333333333333333333333333-libc".to_string()],
+                },
+            ],
+            platform: PlatformFacts {
+                system: "x86_64-linux".to_string(),
+                cpu: "x86_64".to_string(),
+                os: "linux".to_string(),
+            },
+            toolchains: vec![ToolchainFact {
+                name: "cc".to_string(),
+                store_path: "/crunch/store/55555555555555555555555555555555-gcc".to_string(),
+                digest: Some("sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string()),
+            }],
+            sandbox: SandboxFacts {
+                hermeticity: "strict".to_string(),
+                network_allowed: false,
+                fixed_output: false,
+            },
+            environment: BTreeMap::from([
+                ("PATH".to_string(), b"/crunch/store/55555555555555555555555555555555-gcc/bin".to_vec()),
+                ("SOURCE_DATE_EPOCH".to_string(), b"1".to_vec()),
+            ]),
+            store: StorePrefixFacts {
+                logical_prefix: "/crunch/store".to_string(),
+                output_prefix: "/tmp/crunch-store".to_string(),
+            },
+            realizer_profile: RealizerProfileFacts {
+                name: "local-sandbox".to_string(),
+                version: 1,
+                capabilities: vec!["local".to_string(), "sandbox".to_string()],
+                parameters: BTreeMap::from([(
+                    "sandbox-shell".to_string(),
+                    "/crunch/store/static-busybox/bin/sh".to_string(),
+                )]),
+            },
+        }
+    }
+
+    fn key(request: &RealizationKeyRequest) -> RealizationKey {
+        DefaultRealizationKeyDeriver.derive_key(request).unwrap()
+    }
+
+    #[test]
+    fn equivalent_requests_have_stable_keys() {
+        let request = base_request();
+        let equivalent = base_request();
+
+        assert_eq!(key(&request), key(&equivalent));
+        assert!(key(&request).as_str().starts_with("crunch-realization-key-v1:"));
+    }
+
+    #[test]
+    fn derivation_identity_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.derivation.identity = "/crunch/store/99999999999999999999999999999999-example.drv".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn input_closure_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.input_closure[0].nar_hash =
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn platform_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.platform.system = "aarch64-linux".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn toolchain_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.toolchains[0].store_path = "/crunch/store/66666666666666666666666666666666-gcc".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn sandbox_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.sandbox.hermeticity = "practical".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn environment_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.environment.insert("CC".to_string(), b"gcc".to_vec());
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn store_prefix_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.store.logical_prefix = "/nix/store".to_string();
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn realizer_profile_changes_key() {
+        let original = base_request();
+        let mut changed = base_request();
+        changed.realizer_profile.parameters.insert("cpu".to_string(), "zen4".to_string());
+
+        assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn input_closure_order_is_validated() {
+        let mut changed = base_request();
+        changed.input_closure.swap(0, 1);
+
+        assert!(matches!(
+            DefaultRealizationKeyDeriver.derive_key(&changed),
+            Err(RealizationKeyError::NotSortedUnique {
+                field: "input_closure.store_path"
+            })
+        ));
+    }
+}
