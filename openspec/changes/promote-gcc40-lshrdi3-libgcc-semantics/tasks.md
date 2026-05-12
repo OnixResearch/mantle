@@ -9,4 +9,5 @@
 
 ## Phase 2: Completion
 
-- [ ] [depends:implementation] Run `openspec validate promote-gcc40-lshrdi3-libgcc-semantics --strict` and record evidence before archive.
+- [x] [depends:implementation] Run `openspec validate promote-gcc40-lshrdi3-libgcc-semantics --strict` and record evidence before archive. ✅ 1m (started: 2026-05-12T03:51:32Z → completed: 2026-05-12T03:51:42Z)
+  Evidence: `openspec validate promote-gcc40-lshrdi3-libgcc-semantics --strict` passed before archive.
