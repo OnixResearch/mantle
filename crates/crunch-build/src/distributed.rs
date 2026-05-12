@@ -183,6 +183,50 @@ pub trait ArtifactPublisher: Send {
     ) -> Result<PublishOutcome, ArtifactAdapterError>;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DistributedProfileConfig {
+    pub resolvers: Vec<ResolverProfileConfig>,
+    pub publishers: Vec<PublisherProfileConfig>,
+    pub realizers: Vec<RealizerProfileConfig>,
+}
+
+impl Default for DistributedProfileConfig {
+    fn default() -> Self {
+        Self {
+            resolvers: vec![],
+            publishers: vec![],
+            realizers: vec![RealizerProfileConfig {
+                name: "local".to_string(),
+                capabilities: vec!["local-build".to_string()],
+                required: true,
+                parameters: BTreeMap::new(),
+            }],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolverProfileConfig {
+    pub name: String,
+    pub capabilities: Vec<String>,
+    pub parameters: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublisherProfileConfig {
+    pub name: String,
+    pub capabilities: Vec<String>,
+    pub parameters: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RealizerProfileConfig {
+    pub name: String,
+    pub capabilities: Vec<String>,
+    pub required: bool,
+    pub parameters: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RealizationPlan {
     RequireLocal,
@@ -633,6 +677,45 @@ mod tests {
             },
             verification: RemoteVerificationStatus::Verified,
         }
+    }
+
+    #[test]
+    fn distributed_profile_default_is_provider_neutral_local_only() {
+        let config = DistributedProfileConfig::default();
+        assert!(config.resolvers.is_empty());
+        assert!(config.publishers.is_empty());
+        assert_eq!(config.realizers.len(), 1);
+        assert_eq!(config.realizers[0].name, "local");
+        let serialized = serde_json::to_string(&config).unwrap();
+        for forbidden in ["ssh", "http", "https", "s3", "gcs", "nomad", "buildfarm"] {
+            assert!(!serialized.contains(forbidden), "default config named provider {forbidden}");
+        }
+    }
+
+    #[test]
+    fn distributed_profile_config_round_trips_capabilities_and_parameters() {
+        let config = DistributedProfileConfig {
+            resolvers: vec![ResolverProfileConfig {
+                name: "resolver-a".to_string(),
+                capabilities: vec!["pathinfo".to_string()],
+                parameters: BTreeMap::from([("priority".to_string(), "10".to_string())]),
+            }],
+            publishers: vec![PublisherProfileConfig {
+                name: "publisher-a".to_string(),
+                capabilities: vec!["nar-export".to_string()],
+                parameters: BTreeMap::new(),
+            }],
+            realizers: vec![RealizerProfileConfig {
+                name: "realizer-a".to_string(),
+                capabilities: vec!["remote-build".to_string()],
+                required: false,
+                parameters: BTreeMap::from([("system".to_string(), "x86_64-linux".to_string())]),
+            }],
+        };
+
+        let encoded = serde_json::to_string(&config).unwrap();
+        let decoded: DistributedProfileConfig = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, config);
     }
 
     #[test]
