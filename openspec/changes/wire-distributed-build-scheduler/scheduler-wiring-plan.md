@@ -95,3 +95,16 @@ Reuse `DistributedDiagnostic::receipt()` as the stable operator-facing format. R
 - scheduling remote jobs concurrently with local jobs;
 - changing root/dependency goal identity away from drv path;
 - enabling resolver/publisher behavior by default.
+
+## Follow-up implementation task cut
+
+A later implementation drain should keep the first code slice narrow and testable:
+
+1. Add `DistributedSchedulerConfig`/`DistributedSchedulerMode` to `distributed.rs` with `Default = LocalOnly` and unit tests that prove no resolver/publisher names are set by default.
+2. Add optional distributed fields to `Builder` plus constructor/builder methods that preserve existing `Builder::new*` defaults.
+3. Add a pure helper that converts a `BuildRequest`/derivation/store facts into `RealizationKeyRequest`; test deterministic ordering and rejection of incomplete facts.
+4. In `Builder::prepare_build`, after `derivation_to_build_request(...)`, call the resolver only when `mode == ResolveThenLocalFallback`; add tests with a fake resolver for hit, miss, unavailable, and rejected-artifact fallback.
+5. Adapt `VerifiedRealizationArtifact` into `BuildOutcome` on resolver hit and record output paths in `DerivationRegistry` the same way cache hits do.
+6. Add a diagnostic sink/receipt collector on `Builder`; assert `LocalOnly` emits no distributed receipts and opt-in miss/fallback emits the expected redacted `DistributedDiagnostic::receipt()` lines.
+7. Keep `Worker::new`, `Worker::want`, goal keys, and semaphore `max_jobs` behavior unchanged; add a regression that resolver hit completes synchronously without spawning a sandbox build.
+8. Run `cargo test -p crunch-build distributed`, the focused worker/orchestration tests touched by the seam, `cargo fmt`, and `openspec validate --all --strict`.
