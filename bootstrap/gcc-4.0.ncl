@@ -1180,6 +1180,14 @@ EOF
           cat > "$src" <<'EOF'
 long long _ashrdi3(long long value, int count) { return value >> count; }
 EOF
+        elif [ "$fn" = _cmpdi2 ]; then
+          cat > "$src" <<'EOF'
+int _cmpdi2(long long lhs, long long rhs) {
+  if (lhs < rhs) return 0;
+  if (lhs > rhs) return 2;
+  return 1;
+}
+EOF
         else
           cat > "$src" <<EOF
 int $fn(void) { return 0; }
