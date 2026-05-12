@@ -32,3 +32,66 @@ The first distributed scheduler seam belongs after existing local/remote PathInf
 ### Completion/publish boundary
 
 The optional publish seam belongs after `finish_build` has produced verified `PathInfo` outputs and before returning the root/non-root `BuildOutcome`. Publishing must be best-effort/diagnostic-only until a later provider change defines retry, auth, and remote consistency policy.
+
+## Default-local wiring shape
+
+### Configuration object
+
+Add a small `DistributedSchedulerConfig` owned by `crunch-build` with these defaults:
+
+```rust
+pub struct DistributedSchedulerConfig {
+    pub mode: DistributedSchedulerMode,
+    pub resolver_name: Option<String>,
+    pub publisher_name: Option<String>,
+}
+
+pub enum DistributedSchedulerMode {
+    LocalOnly,
+    ResolveThenLocalFallback,
+}
+```
+
+`Default::default()` MUST be `LocalOnly` with no resolver or publisher. `Builder::build_all` and existing `Worker::new(max_jobs)` callers should continue using that default until CLI/config plumbing explicitly opts in.
+
+### Builder-held integration point
+
+Keep provider adapters on `Builder`, not `Worker`:
+
+- `Worker` remains the goal scheduler and keeps drv-path goal dedup/max-jobs semantics unchanged.
+- `Builder::prepare_build` has the normalized facts needed to derive a `RealizationKey` and can return a synchronous `Done(BuildOutcome)` on resolver hit.
+- `Builder::finish_build` already owns verified output `PathInfo` values and can attempt optional publish without changing worker concurrency accounting.
+
+### Resolver decision contract
+
+For `LocalOnly`:
+
+1. Do not derive a distributed realization key.
+2. Do not call an artifact resolver.
+3. Do not emit distributed diagnostics unless an explicit diagnostics sink asks for `local-only-disabled` receipts in a later change.
+4. Continue the existing local cache/fetcher/sandbox path exactly as today.
+
+For `ResolveThenLocalFallback`:
+
+1. Derive `RealizationKey` after `derivation_to_build_request(...)` succeeds.
+2. Call the configured `ArtifactResolver` once before sandbox dispatch.
+3. On `ResolveOutcome::Hit(artifact)`, verify/adapt outputs into the same `BuildOutcome` shape used by cache hits, record `DistributedDiagnostic::CacheHit`, and complete the goal synchronously.
+4. On `Miss`, `Unavailable`, adapter error, or verification rejection, record `CacheMiss`, `RemoteFallback`, or `VerificationRejected` and continue to local sandbox dispatch.
+5. Never consume a `max_jobs` semaphore permit for a resolver hit; only local sandbox execution remains semaphore-gated in the first wiring slice.
+
+### Diagnostic receipts
+
+Reuse `DistributedDiagnostic::receipt()` as the stable operator-facing format. Required first-slice events:
+
+- resolver hit: `CacheHit { key, resolver }`;
+- resolver miss: `CacheMiss { key, resolver }`;
+- resolver unavailable or rejected: `RemoteFallback` or `VerificationRejected`;
+- local fallback after an opt-in decision: `LocalRealization { key, realizer: "local-sandbox" }`;
+- publisher skipped by default: no event in `LocalOnly`; explicit opt-in with no publisher may use `PublishSkipped`.
+
+### Out of scope for implementation slice
+
+- provider-specific auth, discovery, network clients, retry policy, and remote execution;
+- scheduling remote jobs concurrently with local jobs;
+- changing root/dependency goal identity away from drv path;
+- enabling resolver/publisher behavior by default.
