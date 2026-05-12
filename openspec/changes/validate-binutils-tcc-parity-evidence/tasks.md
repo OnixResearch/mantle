@@ -6,4 +6,4 @@
 ## Phase 2: Runtime Probe
 
 - [x] [depends:binutils-evidence-check] Run a bounded `bootstrap/binutils-tcc.ncl` build/smoke probe, recording output path or blocker logs under this change's evidence directory. ✅ 18m (started: 2026-05-12T19:15:00Z → completed: 2026-05-12T19:33:00Z; evidence: evidence/binutils-tcc-runtime-probe-20260512.md)
-- [ ] [depends:runtime-probe] Update the parity row status/notes only to the level justified by the probe, then rerun OpenSpec and parity CLI verification.
+- [x] [depends:runtime-probe] Update the parity row status/notes only to the level justified by the probe, then rerun OpenSpec and parity CLI verification. ✅ 7m (started: 2026-05-12T19:35:00Z → completed: 2026-05-12T19:42:00Z)

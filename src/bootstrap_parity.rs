@@ -770,7 +770,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "binutils-tcc derivation present",
             semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
             proof_evidence: "source transcript plus no-host-fallback markers required",
-            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses",
+            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; 2026-05-12 bounded probe produced a cached output but tool smoke was blocked by missing /crunch/store runtime closure members",
             evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         },
         StageSpec {
@@ -932,7 +932,7 @@ mod tests {
             graph_evidence: "binutils-tcc derivation present",
             semantic_evidence: "checked binutils-tcc tool transcript required for as/ld/ar/ranlib/nm/objcopy",
             proof_evidence: "source transcript plus no-host-fallback markers required",
-            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses",
+            notes: "placeholder/bridge output must not count as full parity; expected transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json with schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; 2026-05-12 bounded probe produced a cached output but tool smoke was blocked by missing /crunch/store runtime closure members",
             evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         }
     }
