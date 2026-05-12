@@ -341,9 +341,11 @@ enum FileState {
 }
 
 /// Check if a marker occurs as a standalone word (bounded by non-word
-/// characters: non-alphanumeric, non-underscore, and not a path separator)
-/// to avoid false positives from substrings like `stub/atan2.c` or
-/// `placeholders` in comment prose.
+/// characters: non-alphanumeric, non-underscore, non-dash, non-quote,
+/// and not a path separator) to avoid false positives from substrings like
+/// `stub/atan2.c`, `stub-objc.c`, `placeholders` in comment prose.
+/// Also rejects heredoc delimiters (`'STUB'`) and heredoc terminators
+/// (`STUB` on a line with only optional whitespace around it).
 fn marker_is_standalone(content: &str, marker: &str) -> bool {
     let lower = content.to_ascii_lowercase();
     let search = marker.to_ascii_lowercase();
@@ -351,16 +353,45 @@ fn marker_is_standalone(content: &str, marker: &str) -> bool {
     while let Some(pos) = lower[start..].find(&search) {
         let abs = start + pos;
         let end = abs + search.len();
+        // Word boundary check: reject if adjacent to alphanumeric, underscore,
+        // dot, dash, or forward slash.
         let prev_is_word = abs > 0
             && (lower[..abs].chars().last().unwrap().is_ascii_alphanumeric()
                 || lower[..abs].chars().last().unwrap() == '_'
-                || lower[..abs].chars().last().unwrap() == '.');
+                || lower[..abs].chars().last().unwrap() == '.'
+                || lower[..abs].chars().last().unwrap() == '-');
         let next_is_word = end < lower.len()
             && (lower[end..].chars().next().unwrap().is_ascii_alphanumeric()
                 || lower[end..].chars().next() == Some('_')
                 || lower[end..].chars().next() == Some('/')
-                || lower[end..].chars().next() == Some('.'));
-        if !prev_is_word && !next_is_word {
+                || lower[end..].chars().next() == Some('-'));
+        // Reject quote-bounded matches: `'STUB'` is a heredoc delimiter,
+        // not a placeholder marker.
+        let prev_is_quote = abs > 0 && lower[..abs].chars().last().unwrap() == '\'';
+        let next_is_quote = end < lower.len() && lower[end..].chars().next() == Some('\'');
+        // Reject heredoc terminators: marker where everything before it
+        // on the line is whitespace/newline, and everything after it on
+        // the line is whitespace/newline (marker is the sole non-whitespace).
+        // Find the start of the current line.
+        let line_start = lower[..abs]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let line_before = &lower[line_start..abs];
+        let prev_line_is_blank = line_before.chars().all(|c| c == ' ' || c == '\t');
+        let after = &lower[end..];
+        let next_line_is_blank = after
+            .chars()
+            .take_while(|c| *c != '\n')
+            .all(|c| c == ' ' || c == '\t');
+        let is_heredoc_terminator = prev_line_is_blank && next_line_is_blank;
+        // Reject if any of these are word characters, quote-bounded,
+        // or a heredoc terminator.
+        if !prev_is_word
+            && !next_is_word
+            && !(prev_is_quote && next_is_quote)
+            && !is_heredoc_terminator
+        {
             return true;
         }
         start = abs + 1;
@@ -979,5 +1010,41 @@ mod tests {
         // Reproduce tinycc.ncl false positive: "placeholders" in comment
         let content = "arguments instead of printing literal `%s:%d placeholders.\n";
         assert!(!marker_is_standalone(content, "placeholder"));
+    }
+
+    #[test]
+    fn dash_compound_path_rejects_stub() {
+        // Reproduce gcc-4.0.ncl false positive: /stub-objc.c path component
+        // should NOT cause the file to be classified as placeholder
+        let content = "    */stub-objc.c|stub-objc.c) saw_stub_objc_src=1 ;;";
+        assert!(!marker_is_standalone(content, "stub"));
+    }
+
+    #[test]
+    fn heredoc_delimiter_rejects_stub() {
+        // Heredoc delimiter `'STUB'` (quote-bounded) is NOT a standalone
+        // placeholder marker — shell syntax should not count.
+        let content = "      $BB cat > lib/getdate_stub.c << 'STUB'\n#include <time.h>\ntime_t get_date(const char *p, const time_t *now) { return -1; }\nSTUB\n";
+        assert!(!marker_is_standalone(content, "stub"));
+    }
+
+    #[test]
+    fn heredoc_terminator_on_own_line_rejected() {
+        // `STUB` at the start of its own line (heredoc terminator) is
+        // rejected, but `stub` in `# stub` on the prior line is
+        // a standalone word and IS accepted.
+        let content = "# stub\nSTUB\n";
+        assert!(marker_is_standalone(content, "stub"));
+    }
+
+    #[test]
+    fn tar_tcc_heredoc_delimiter_and_terminator_rejected() {
+        // Reproduce the tar-tcc.ncl false positive: `<< 'STUB'` and
+        // `STUB` heredoc delimiter/terminator must NOT cause the
+        // file to be classified as having placeholder markers.
+        // The `stub` substring inside `getdate_stub.c` is also
+        // rejected because it's adjacent to `_` and `.`.
+        let content = "      $BB cat > lib/getdate_stub.c << 'STUB'\n#include <time.h>\ntime_t get_date(const char *p, const time_t *now) { return -1; }\nSTUB\n";
+        assert!(!marker_is_standalone(content, "stub"));
     }
 }
