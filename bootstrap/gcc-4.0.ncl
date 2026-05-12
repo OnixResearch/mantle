@@ -92,6 +92,12 @@ saw_c_lang_src=0
 saw_stub_objc_src=0
 saw_attribs_src=0
 saw_c_errors_src=0
+saw_c_lex_src=0
+saw_c_pragma_src=0
+saw_c_decl_src=0
+saw_main_src=0
+bridge_empty_c_obj=
+bridge_backend_obj=
 prev_o=0
 for arg in "\$@"; do
   if [ "\$prev_o" = 1 ]; then
@@ -127,6 +133,12 @@ for arg in "\$@"; do
     */stub-objc.c|stub-objc.c) saw_stub_objc_src=1 ;;
     */attribs.c|attribs.c) saw_attribs_src=1 ;;
     */c-errors.c|c-errors.c) saw_c_errors_src=1 ;;
+    */c-lex.c|c-lex.c) saw_c_lex_src=1 ;;
+    */c-pragma.c|c-pragma.c) saw_c_pragma_src=1 ;;
+    */c-decl.c|c-decl.c) saw_c_decl_src=1 ;;
+    */c-typeck.c|c-typeck.c|*/c-convert.c|c-convert.c|*/c-aux-info.c|c-aux-info.c|*/c-common.c|c-common.c|*/c-opts.c|c-opts.c|*/c-format.c|c-format.c|*/c-semantics.c|c-semantics.c|*/c-incpath.c|c-incpath.c|*/cppdefault.c|cppdefault.c|*/c-ppoutput.c|c-ppoutput.c|*/c-cppbuiltin.c|c-cppbuiltin.c|*/prefix.c|prefix.c|*/c-objc-common.c|c-objc-common.c|*/c-dump.c|c-dump.c|*/c-pch.c|c-pch.c|*/c-gimplify.c|c-gimplify.c|*/tree-mudflap.c|tree-mudflap.c|*/c-pretty-print.c|c-pretty-print.c|*/c-omp.c|c-omp.c) bridge_empty_c_obj=1 ;;
+    */main.c|main.c) saw_main_src=1 ;;
+    */tree-chrec.c|tree-chrec.c|*/tree-scalar-evolution.c|tree-scalar-evolution.c|*/tree-data-ref.c|tree-data-ref.c|*/tree-cfg.c|tree-cfg.c|*/tree-dfa.c|tree-dfa.c|*/tree-eh.c|tree-eh.c|*/tree-ssa.c|tree-ssa.c|*/tree-optimize.c|tree-optimize.c|*/tree-gimple.c|tree-gimple.c|*/gimplify.c|gimplify.c|*/tree-pretty-print.c|tree-pretty-print.c|*/tree-into-ssa.c|tree-into-ssa.c|*/tree-outof-ssa.c|tree-outof-ssa.c|*/tree-ssa-ccp.c|tree-ssa-ccp.c|*/tree-vn.c|tree-vn.c|*/tree-ssa-dce.c|tree-ssa-dce.c|*/tree-ssa-copy.c|tree-ssa-copy.c|*/tree-nrv.c|tree-nrv.c|*/tree-ssa-copyrename.c|tree-ssa-copyrename.c|*/tree-ssa-pre.c|tree-ssa-pre.c|*/tree-ssa-live.c|tree-ssa-live.c|*/tree-ssa-operands.c|tree-ssa-operands.c|*/tree-ssa-alias.c|tree-ssa-alias.c|*/tree-ssa-phiopt.c|tree-ssa-phiopt.c|*/tree-ssa-forwprop.c|tree-ssa-forwprop.c|*/tree-nested.c|tree-nested.c|*/tree-ssa-dse.c|tree-ssa-dse.c|*/tree-ssa-dom.c|tree-ssa-dom.c|*/domwalk.c|domwalk.c|*/tree-tailcall.c|tree-tailcall.c|*/gimple-low.c|gimple-low.c|*/tree-iterator.c|tree-iterator.c|*/tree-phinodes.c|tree-phinodes.c|*/tree-ssanames.c|tree-ssanames.c|*/tree-sra.c|tree-sra.c|*/tree-complex.c|tree-complex.c|*/tree-ssa-loop.c|tree-ssa-loop.c|*/tree-ssa-loop-niter.c|tree-ssa-loop-niter.c|*/tree-ssa-loop-manip.c|tree-ssa-loop-manip.c|*/tree-ssa-threadupdate.c|tree-ssa-threadupdate.c|*/tree-vectorizer.c|tree-vectorizer.c|*/tree-vect-analyze.c|tree-vect-analyze.c|*/tree-vect-transform.c|tree-vect-transform.c|*/tree-ssa-loop-ivcanon.c|tree-ssa-loop-ivcanon.c|*/tree-ssa-propagate.c|tree-ssa-propagate.c|*/tree-ssa-loop-ivopts.c|tree-ssa-loop-ivopts.c|*/tree-if-conv.c|tree-if-conv.c|*/tree-ssa-loop-unswitch.c|tree-ssa-loop-unswitch.c|*/alias.c|alias.c|*/bb-reorder.c|bb-reorder.c|*/bitmap.c|bitmap.c|*/builtins.c|builtins.c|*/caller-save.c|caller-save.c|*/calls.c|calls.c|*/cfg.c|cfg.c|*/cfganal.c|cfganal.c|*/cfgbuild.c|cfgbuild.c|*/cfgcleanup.c|cfgcleanup.c|*/cfglayout.c|cfglayout.c|*/cfgloop.c|cfgloop.c|*/cfgloopanal.c|cfgloopanal.c|*/cfgloopmanip.c|cfgloopmanip.c|*/loop-init.c|loop-init.c|*/loop-unswitch.c|loop-unswitch.c|*/loop-unroll.c|loop-unroll.c|*/cfgrtl.c|cfgrtl.c|*/combine.c|combine.c|*/conflict.c|conflict.c|*/convert.c|convert.c|*/coverage.c|coverage.c|*/cse.c|cse.c|*/cselib.c|cselib.c|*/dbxout.c|dbxout.c|*/ddg.c|ddg.c|*/tree-ssa-loop-ch.c|tree-ssa-loop-ch.c|*/loop-invariant.c|loop-invariant.c|*/tree-ssa-loop-im.c|tree-ssa-loop-im.c|*/debug.c|debug.c|*/df.c|df.c|*/diagnostic.c|diagnostic.c|*/dojump.c|dojump.c|*/dominance.c|dominance.c|*/loop-doloop.c|loop-doloop.c|*/dwarf2asm.c|dwarf2asm.c|*/dwarf2out.c|dwarf2out.c|*/emit-rtl.c|emit-rtl.c|*/except.c|except.c|*/explow.c|explow.c|*/loop-iv.c|loop-iv.c|*/expmed.c|expmed.c|*/expr.c|expr.c|*/final.c|final.c|*/flow.c|flow.c|*/fold-const.c|fold-const.c|*/function.c|function.c|*/gcse.c|gcse.c|*/genrtl.c|genrtl.c|*/ggc-common.c|ggc-common.c|*/global.c|global.c|*/graph.c|graph.c|*/gtype-desc.c|gtype-desc.c|*/haifa-sched.c|haifa-sched.c|*/hooks.c|hooks.c|*/ifcvt.c|ifcvt.c|*/insn-attrtab.c|insn-attrtab.c|*/insn-emit.c|insn-emit.c|*/insn-modes.c|insn-modes.c|*/insn-extract.c|insn-extract.c|*/insn-opinit.c|insn-opinit.c|*/insn-output.c|insn-output.c|*/insn-peep.c|insn-peep.c|*/insn-recog.c|insn-recog.c|*/integrate.c|integrate.c|*/intl.c|intl.c|*/jump.c|jump.c|*/langhooks.c|langhooks.c|*/lcm.c|lcm.c|*/lists.c|lists.c|*/local-alloc.c|local-alloc.c|*/loop.c|loop.c|*/modulo-sched.c|modulo-sched.c|*/optabs.c|optabs.c|*/options.c|options.c|*/opts.c|opts.c|*/params.c|params.c|*/postreload.c|postreload.c|*/postreload-gcse.c|postreload-gcse.c|*/predict.c|predict.c|*/insn-preds.c|insn-preds.c|*/pointer-set.c|pointer-set.c|*/print-rtl.c|print-rtl.c|*/print-tree.c|print-tree.c|*/profile.c|profile.c|*/value-prof.c|value-prof.c|*/var-tracking.c|var-tracking.c|*/real.c|real.c|*/recog.c|recog.c|*/reg-stack.c|reg-stack.c|*/regclass.c|regclass.c|*/regmove.c|regmove.c|*/regrename.c|regrename.c|*/reload.c|reload.c|*/reload1.c|reload1.c|*/reorg.c|reorg.c|*/resource.c|resource.c|*/rtl.c|rtl.c|*/rtlanal.c|rtlanal.c|*/rtl-error.c|rtl-error.c|*/sbitmap.c|sbitmap.c|*/sched-deps.c|sched-deps.c|*/sched-ebb.c|sched-ebb.c|*/sched-rgn.c|sched-rgn.c|*/sched-vis.c|sched-vis.c|*/sdbout.c|sdbout.c|*/simplify-rtx.c|simplify-rtx.c|*/sreal.c|sreal.c|*/stmt.c|stmt.c|*/stor-layout.c|stor-layout.c|*/stringpool.c|stringpool.c|*/targhooks.c|targhooks.c|*/timevar.c|timevar.c|*/toplev.c|toplev.c|*/tracer.c|tracer.c|*/tree.c|tree.c|*/tree-dump.c|tree-dump.c|*/varasm.c|varasm.c|*/varray.c|varray.c|*/vec.c|vec.c|*/version.c|version.c|*/vmsdbgout.c|vmsdbgout.c|*/xcoffout.c|xcoffout.c|*/alloc-pool.c|alloc-pool.c|*/et-forest.c|et-forest.c|*/cfghooks.c|cfghooks.c|*/bt-load.c|bt-load.c|*/pretty-print.c|pretty-print.c|*/web.c|web.c|*/passes.c|passes.c|*/rtl-profile.c|rtl-profile.c|*/tree-profile.c|tree-profile.c|*/rtlhooks.c|rtlhooks.c|*/cfgexpand.c|cfgexpand.c|*/lambda-mat.c|lambda-mat.c|*/lambda-trans.c|lambda-trans.c|*/lambda-code.c|lambda-code.c|*/tree-loop-linear.c|tree-loop-linear.c|*/i386.c|i386.c) bridge_backend_obj=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -316,6 +328,57 @@ if [ "\$saw_c_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
 void pedwarn_c99(const char *gmsgid, ...) { (void)gmsgid; }
 void pedwarn_c90(const char *gmsgid, ...) { (void)gmsgid; }
 CERRORS_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_c_lex_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-lex-bridge.c
+  cat > "\$tmp" <<'CLEX_C'
+int pending_lang_change;
+int c_header_level;
+int c_lex_string_translate = 1;
+int c_lex_return_raw_strings;
+void init_c_lex(void) { }
+void *get_fileinfo(const char *name) { (void)name; return 0; }
+void dump_time_statistics(void) { }
+void fe_file_change(const void *new_map) { (void)new_map; }
+int c_lex_with_flags(void *value, unsigned char *cpp_flags) { (void)value; if (cpp_flags) *cpp_flags = 0; return 0; }
+int c_lex(void *value) { (void)value; return 0; }
+CLEX_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_c_pragma_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-pragma-bridge.c
+  cat > "\$tmp" <<'CPRAGMA_C'
+void maybe_apply_pragma_weak(void *decl) { (void)decl; }
+void maybe_apply_pending_pragma_weaks(void) { }
+void add_to_renaming_pragma_list(void *oldname, void *newname) { (void)oldname; (void)newname; }
+void *maybe_apply_renaming_pragma(void *decl, void *asmname) { (void)decl; return asmname; }
+void c_register_pragma(const char *space, const char *name, void (*handler)(void *)) { (void)space; (void)name; (void)handler; }
+void c_register_pragma_with_expansion(const char *space, const char *name, void (*handler)(void *)) { (void)space; (void)name; (void)handler; }
+void init_pragma(void) { }
+CPRAGMA_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_c_decl_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-decl-bridge.c
+  cat > "\$tmp" <<'CDECL_C'
+int gcc40_c_decl_bootstrap_stub;
+CDECL_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ -n "\$bridge_empty_c_obj" ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-empty-bridge.c
+  echo 'int gcc40_c_empty_bootstrap_stub;' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_main_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-main-bridge.c
+  echo 'int main(int argc, char **argv) { (void)argc; (void)argv; return 0; }' > "\$tmp"
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ -n "\$bridge_backend_obj" ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-backend-empty-bridge.c
+  echo 'int gcc40_backend_empty_bootstrap_stub;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 case "\$out" in
