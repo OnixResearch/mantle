@@ -138,9 +138,12 @@ enum EvidenceCheck {
     None,
     SeedFullSourceRootContract,
     BinutilsTccToolTranscript,
+    SelfBuildProviderKindLinkage,
 }
 
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
+const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
+    "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -298,7 +301,84 @@ fn validate_stage_evidence(project_root: &Path, path: &Path, check: EvidenceChec
         EvidenceCheck::None => Ok(()),
         EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(path),
         EvidenceCheck::BinutilsTccToolTranscript => validate_binutils_tcc_tool_transcript(project_root),
+        EvidenceCheck::SelfBuildProviderKindLinkage => validate_self_build_provider_kind_linkage(project_root),
     }
+}
+
+fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), String> {
+    let path = project_root.join(SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "crunch self-build provider-kind linkage receipt missing `{}` ({err}); expected schema, proof_identity.selected_provider_kind, proof_linkage.selected_provider_kind, and prerequisites.provider_kind",
+            SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("crunch self-build provider-kind linkage receipt is not valid JSON: {err}"))?;
+
+    require_self_build_json_string(&value, "schema", "crunch-self-build-provider-kind-linkage-v1")?;
+    let proof_identity = require_self_build_object(&value, "proof_identity")?;
+    let proof_linkage = require_self_build_object(&value, "proof_linkage")?;
+    let prerequisites = require_self_build_object(&value, "prerequisites")?;
+    let proof_identity_kind = require_self_build_object_string(proof_identity, "selected_provider_kind")?;
+    let proof_linkage_kind = require_self_build_object_string(proof_linkage, "selected_provider_kind")?;
+    let prerequisites_kind = require_self_build_object_string(prerequisites, "provider_kind")?;
+
+    validate_closed_provider_kind(proof_identity_kind, "proof_identity.selected_provider_kind")?;
+    validate_closed_provider_kind(proof_linkage_kind, "proof_linkage.selected_provider_kind")?;
+    validate_closed_provider_kind(prerequisites_kind, "prerequisites.provider_kind")?;
+    if proof_identity_kind != proof_linkage_kind || proof_identity_kind != prerequisites_kind {
+        return Err(format!(
+            "crunch self-build provider-kind linkage mismatch: proof_identity.selected_provider_kind={proof_identity_kind}, proof_linkage.selected_provider_kind={proof_linkage_kind}, prerequisites.provider_kind={prerequisites_kind}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_closed_provider_kind(kind: &str, field: &str) -> Result<(), String> {
+    match kind {
+        "legacy-fetch" | "source-root" | "stagex-lineage" => Ok(()),
+        other => Err(format!("crunch self-build provider-kind linkage `{field}` has unknown provider kind `{other}`")),
+    }
+}
+
+fn require_self_build_json_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("crunch self-build provider-kind linkage missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("crunch self-build provider-kind linkage `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_self_build_object<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, String> {
+    value
+        .get(field)
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| format!("crunch self-build provider-kind linkage missing object field `{field}`"))
+}
+
+fn require_self_build_object_string<'a>(
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, String> {
+    let actual = object
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("crunch self-build provider-kind linkage missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("crunch self-build provider-kind linkage `{field}` must not be empty"));
+    }
+    Ok(actual)
 }
 
 fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
@@ -887,8 +967,8 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "crunch derivation present",
             semantic_evidence: "stage1/stage2 binary comparison required",
             proof_evidence: "full proof bundle required",
-            notes: "release evidence must bind selected provider kind",
-            evidence_check: EvidenceCheck::None,
+            notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
+            evidence_check: EvidenceCheck::SelfBuildProviderKindLinkage,
         },
     ]
 }
@@ -935,6 +1015,45 @@ mod tests {
             notes: "bridge/omitted-member output must not count as full parity; transcript at bootstrap/evidence/binutils-tcc-tool-smoke.json records schema, derivation, output_path, provider_kind, host_fallback=false, fallback_markers=[], and per-tool smoke exit statuses; row remains partial until native/full-source binutils correctness is proven",
             evidence_check: EvidenceCheck::BinutilsTccToolTranscript,
         }
+    }
+
+    fn self_build_spec() -> StageSpec {
+        StageSpec {
+            id: "crunch.self-build",
+            title: "Crunch self-build proof",
+            axes: GUIX_STAGEX,
+            lineage: "crunch",
+            derivation: Some("crunch.ncl"),
+            expected_complete: false,
+            graph_evidence: "crunch derivation present",
+            semantic_evidence: "stage1/stage2 binary comparison required",
+            proof_evidence: "full proof bundle required",
+            notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
+            evidence_check: EvidenceCheck::SelfBuildProviderKindLinkage,
+        }
+    }
+
+    fn write_self_build_provider_kind_linkage(
+        root: &Path,
+        proof_identity: &str,
+        proof_linkage: &str,
+        prerequisites: &str,
+    ) {
+        let path = root.join(SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "crunch-self-build-provider-kind-linkage-v1",
+  "derivation": "bootstrap/crunch.ncl",
+  "proof_identity": {{ "selected_provider_kind": "{proof_identity}" }},
+  "proof_linkage": {{ "selected_provider_kind": "{proof_linkage}" }},
+  "prerequisites": {{ "provider_kind": "{prerequisites}" }}
+}}"#
+            ),
+        )
+        .unwrap();
     }
 
     fn write_binutils_tcc_transcript(root: &Path, extra: &str) {
@@ -1144,6 +1263,68 @@ mod tests {
         let err = validate_binutils_tcc_tool_transcript(dir.path()).unwrap_err();
 
         assert!(err.contains("host_fallback"));
+    }
+
+    #[test]
+    fn self_build_without_provider_kind_linkage_receipt_remains_partial() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "crunch.ncl", "# real crunch derivation body\n");
+
+        let row = evaluate_stage(dir.path(), &self_build_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.notes.contains("provider-kind linkage receipt missing"));
+        assert!(row.notes.contains(SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT));
+    }
+
+    #[test]
+    fn self_build_provider_kind_linkage_accepts_matching_closed_kind_but_remains_partial() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "crunch.ncl", "# real crunch derivation body\n");
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+
+        let row = evaluate_stage(dir.path(), &self_build_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn self_build_provider_kind_linkage_rejects_mismatched_kind() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "stagex-lineage", "source-root");
+
+        let err = validate_self_build_provider_kind_linkage(dir.path()).unwrap_err();
+
+        assert!(err.contains("provider-kind linkage mismatch"));
+        assert!(err.contains("proof_linkage.selected_provider_kind=stagex-lineage"));
+    }
+
+    #[test]
+    fn self_build_provider_kind_linkage_rejects_unknown_kind() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "mystery-provider");
+
+        let err = validate_self_build_provider_kind_linkage(dir.path()).unwrap_err();
+
+        assert!(err.contains("unknown provider kind `mystery-provider`"));
+        assert!(err.contains("prerequisites.provider_kind"));
+    }
+
+    #[test]
+    fn self_build_real_derivation_reports_provider_kind_linkage_backed_partial() {
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let report = collect_bootstrap_parity_report(project_root);
+        let row = report.rows.iter().find(|row| row.id == "crunch.self-build").unwrap();
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("provider-kind linkage receipt missing"));
+        assert!(!row.notes.contains("evidence check failed"));
     }
 
     #[test]
