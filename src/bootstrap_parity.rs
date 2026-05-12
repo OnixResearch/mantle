@@ -1753,6 +1753,21 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_driver_query_smoke() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("-dumpversion)"));
+        assert!(content.contains("echo '4.0.4'"));
+        assert!(content.contains("-dumpmachine)"));
+        assert!(content.contains("echo 'x86_64-unknown-linux-musl'"));
+        assert!(content.contains("-print-libgcc-file-name)"));
+        assert!(content.contains("driver_libgcc=$(\"$out/bin/gcc\" -print-libgcc-file-name)"));
+        assert!(content.contains("ERROR: gcc -print-libgcc-file-name path missing"));
+        assert!(content.contains("ERROR: gcc -print-search-dirs missing install dir"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);

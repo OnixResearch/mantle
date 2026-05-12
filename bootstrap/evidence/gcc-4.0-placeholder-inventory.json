@@ -70,12 +70,12 @@
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1136,
+      "line": 1154,
       "marker": "pass1 bridge",
       "classification": "pass1-driver-boundary"
     },
     {
-      "line": 1143,
+      "line": 1161,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     }

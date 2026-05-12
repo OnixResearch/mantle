@@ -1126,6 +1126,24 @@ case "\$1" in
     echo 'gcc (Crunch pass1 bridge) 4.0.4'
     exit 0
     ;;
+  -dumpversion)
+    echo '4.0.4'
+    exit 0
+    ;;
+  -dumpmachine)
+    echo 'x86_64-unknown-linux-musl'
+    exit 0
+    ;;
+  -print-libgcc-file-name)
+    echo '$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a'
+    exit 0
+    ;;
+  -print-search-dirs)
+    echo 'install: $out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/'
+    echo 'programs: =$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/:$out/bin/'
+    echo 'libraries: =$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/:$MUSL/lib/'
+    exit 0
+    ;;
 esac
 exec "$TCC/bin/tcc" -I"$MUSL/include" -L"$MUSL/lib" -static "\$@"
 EOF
@@ -1273,6 +1291,14 @@ EOF
       test -f "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
       $BB grep -q 'divdi3.o' "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: libgcc.a missing divdi3 member" >&2; exit 1; }
       $BB grep -q 'gcc_bcmp.o' "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: libgcc.a missing gcc_bcmp member" >&2; exit 1; }
+      driver_version=$("$out/bin/gcc" -dumpversion)
+      test "x$driver_version" = x4.0.4 || { echo "ERROR: gcc -dumpversion returned $driver_version" >&2; exit 1; }
+      driver_machine=$("$out/bin/gcc" -dumpmachine)
+      test "x$driver_machine" = xx86_64-unknown-linux-musl || { echo "ERROR: gcc -dumpmachine returned $driver_machine" >&2; exit 1; }
+      driver_libgcc=$("$out/bin/gcc" -print-libgcc-file-name)
+      test "x$driver_libgcc" = "x$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: gcc -print-libgcc-file-name returned $driver_libgcc" >&2; exit 1; }
+      test -f "$driver_libgcc" || { echo "ERROR: gcc -print-libgcc-file-name path missing" >&2; exit 1; }
+      "$out/bin/gcc" -print-search-dirs | $BB grep -q "install: $out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/" || { echo "ERROR: gcc -print-search-dirs missing install dir" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtbegin.o" || { echo "ERROR: installed crtbegin.o missing" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtend.o" || { echo "ERROR: installed crtend.o missing" >&2; exit 1; }
 
