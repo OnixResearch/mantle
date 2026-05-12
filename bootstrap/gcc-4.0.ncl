@@ -1156,6 +1156,10 @@ EOF
           cat > "$src" <<'EOF'
 long long _negdi2(long long value) { return -value; }
 EOF
+        elif [ "$fn" = _muldi3 ]; then
+          cat > "$src" <<'EOF'
+long long _muldi3(long long lhs, long long rhs) { return lhs * rhs; }
+EOF
         else
           cat > "$src" <<EOF
 int $fn(void) { return 0; }
