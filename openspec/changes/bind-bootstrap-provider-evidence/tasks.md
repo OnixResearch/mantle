@@ -6,5 +6,5 @@
 
 ## Phase 2: Verification
 
-- [ ] [serial] Run targeted release evidence/self-hosting/parity tests.
-- [ ] [serial] Run `openspec validate --all --strict`, commit, and push.
+- [x] [serial] Run targeted release evidence/self-hosting/parity tests.
+- [x] [serial] Run `openspec validate --all --strict`, commit, and push.
