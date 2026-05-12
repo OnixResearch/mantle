@@ -421,6 +421,31 @@ case "\$out" in
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'BOOTSTRAP_PROG_SCRIPT'
 #!/bin/sh
+TCC_BIN="$TCC/bin/tcc"
+out=a.out
+compile=0
+prev_o=0
+for arg in "\$@"; do
+  if [ "\$prev_o" = 1 ]; then
+    out="\$arg"
+    prev_o=0
+    continue
+  fi
+  case "\$arg" in
+    -c) compile=1 ;;
+    -o) prev_o=1 ;;
+    -dumpspecs|--print-multi-lib) exit 0 ;;
+  esac
+done
+if [ "\$compile" = 1 ]; then
+  tmp=/tmp/gcc40-xgcc-object-\$\$.c
+  echo 'static int crunch_gcc40_xgcc_object_stub;' > "\$tmp"
+  exec "\$TCC_BIN" -c "\$tmp" -o "\$out"
+fi
+if [ "\$out" != a.out ]; then
+  printf '%s\n' '#!/bin/sh' 'exit 0' > "\$out"
+  chmod +x "\$out" 2>/dev/null || true
+fi
 exit 0
 BOOTSTRAP_PROG_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1088,6 +1113,12 @@ EOF
       # can self-compile under TinyCC/Mes, expose a GCC-4.0-shaped driver that
       # delegates C compilation to the validated musl TinyCC toolchain.
       $BB mkdir -p "$out/bin" "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4" "$out/include" "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4"
+      for f in crtbegin.o crtbeginS.o crtbeginT.o crtend.o crtendS.o; do
+        if [ -s "$WORK/build/gcc/$f" ]; then
+          $BB chmod u+r "$WORK/build/gcc/$f" 2>/dev/null || true
+          $BB cp "$WORK/build/gcc/$f" "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/$f"
+        fi
+      done
       cat > "$out/bin/gcc" <<EOF
 #!/bin/sh
 case "\$1" in
@@ -1116,6 +1147,8 @@ EOF
       test -x "$out/bin/cc" || { echo "ERROR: installed cc missing" >&2; exit 1; }
       test -x "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" || { echo "ERROR: installed cc1 missing" >&2; exit 1; }
       test -f "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a" || { echo "ERROR: installed libgcc.a missing" >&2; exit 1; }
+      test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtbegin.o" || { echo "ERROR: installed crtbegin.o missing" >&2; exit 1; }
+      test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtend.o" || { echo "ERROR: installed crtend.o missing" >&2; exit 1; }
 
       # C compiler smoke test
       $BB cat > /tmp/smoke.c << 'EOF'
