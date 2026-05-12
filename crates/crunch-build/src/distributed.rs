@@ -184,6 +184,98 @@ pub trait ArtifactPublisher: Send {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DistributedDiagnostic {
+    CacheHit {
+        key: RealizationKey,
+        resolver: String,
+    },
+    CacheMiss {
+        key: RealizationKey,
+        resolver: String,
+    },
+    PublishSkipped {
+        key: RealizationKey,
+        publisher: String,
+        reason: String,
+    },
+    LocalRealization {
+        key: RealizationKey,
+        realizer: String,
+    },
+    RemoteCandidate {
+        key: RealizationKey,
+        worker_id: String,
+        verified: bool,
+    },
+    RemoteFallback {
+        key: RealizationKey,
+        reason: String,
+    },
+    VerificationRejected {
+        key: RealizationKey,
+        reason: String,
+    },
+}
+
+impl DistributedDiagnostic {
+    pub fn receipt(&self) -> String {
+        match self {
+            Self::CacheHit { key, resolver } => {
+                format!("cache-hit key={} resolver={}", key.short(), redact_for_operator(resolver))
+            }
+            Self::CacheMiss { key, resolver } => {
+                format!("cache-miss key={} resolver={}", key.short(), redact_for_operator(resolver))
+            }
+            Self::PublishSkipped { key, publisher, reason } => format!(
+                "publish-skipped key={} publisher={} reason={}",
+                key.short(),
+                redact_for_operator(publisher),
+                redact_for_operator(reason)
+            ),
+            Self::LocalRealization { key, realizer } => {
+                format!("local-realization key={} realizer={}", key.short(), redact_for_operator(realizer))
+            }
+            Self::RemoteCandidate {
+                key,
+                worker_id,
+                verified,
+            } => format!(
+                "remote-candidate key={} worker={} verified={}",
+                key.short(),
+                redact_for_operator(worker_id),
+                verified
+            ),
+            Self::RemoteFallback { key, reason } => {
+                format!("remote-fallback key={} reason={}", key.short(), redact_for_operator(reason))
+            }
+            Self::VerificationRejected { key, reason } => {
+                format!("verification-rejected key={} reason={}", key.short(), redact_for_operator(reason))
+            }
+        }
+    }
+}
+
+pub fn redact_for_operator(value: &str) -> String {
+    let lower = value.to_ascii_lowercase();
+    if lower.contains("bearer ")
+        || lower.contains("token=")
+        || lower.contains("authorization")
+        || lower.contains("secret")
+        || lower.contains("password")
+    {
+        "[REDACTED]".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+impl RealizationKey {
+    pub fn short(&self) -> &str {
+        self.0.get(..12).unwrap_or(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DistributedProfileConfig {
     pub resolvers: Vec<ResolverProfileConfig>,
     pub publishers: Vec<PublisherProfileConfig>,
@@ -677,6 +769,59 @@ mod tests {
             },
             verification: RemoteVerificationStatus::Verified,
         }
+    }
+
+    #[test]
+    fn diagnostic_receipts_cover_operator_events_and_redact_secrets() {
+        let key = key(&base_request());
+        let diagnostics = vec![
+            DistributedDiagnostic::CacheHit {
+                key: key.clone(),
+                resolver: "local-cache".to_string(),
+            },
+            DistributedDiagnostic::CacheMiss {
+                key: key.clone(),
+                resolver: "remote-cache token=SHOULD_NOT_LEAK".to_string(),
+            },
+            DistributedDiagnostic::PublishSkipped {
+                key: key.clone(),
+                publisher: "publisher".to_string(),
+                reason: "authorization Bearer SHOULD_NOT_LEAK".to_string(),
+            },
+            DistributedDiagnostic::LocalRealization {
+                key: key.clone(),
+                realizer: "local".to_string(),
+            },
+            DistributedDiagnostic::RemoteCandidate {
+                key: key.clone(),
+                worker_id: "worker-secret".to_string(),
+                verified: true,
+            },
+            DistributedDiagnostic::RemoteFallback {
+                key: key.clone(),
+                reason: "password=SHOULD_NOT_LEAK".to_string(),
+            },
+            DistributedDiagnostic::VerificationRejected {
+                key,
+                reason: "digest mismatch".to_string(),
+            },
+        ];
+
+        let receipts: Vec<_> = diagnostics.iter().map(DistributedDiagnostic::receipt).collect();
+        for expected in [
+            "cache-hit",
+            "cache-miss",
+            "publish-skipped",
+            "local-realization",
+            "remote-candidate",
+            "remote-fallback",
+            "verification-rejected",
+        ] {
+            assert!(receipts.iter().any(|receipt| receipt.contains(expected)), "missing {expected}");
+        }
+        let joined = receipts.join("\n");
+        assert!(!joined.contains("SHOULD_NOT_LEAK"));
+        assert!(joined.contains("[REDACTED]"));
     }
 
     #[test]
