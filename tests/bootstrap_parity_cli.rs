@@ -1,3 +1,5 @@
+use std::fs;
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::Value;
@@ -64,4 +66,42 @@ fn bootstrap_parity_report_stagex_requires_lineage_seed_provider() {
     let stdout = String::from_utf8(output).unwrap();
     assert!(stdout.contains("stagex: incomplete"));
     assert!(stdout.contains("seed-full.stagex-lineage"));
+}
+
+#[test]
+fn bootstrap_parity_report_requires_binutils_tcc_transcript_for_live_bootstrap_and_guix() {
+    let root = TempDir::new().unwrap();
+    let bootstrap = root.path().join("bootstrap");
+    fs::create_dir_all(&bootstrap).unwrap();
+    fs::write(bootstrap.join("binutils-tcc.ncl"), "# concrete binutils tcc derivation body\n").unwrap();
+
+    for axis in ["live-bootstrap", "guix"] {
+        let output = crunch()
+            .arg("bootstrap")
+            .arg("parity-report")
+            .arg("--require")
+            .arg(axis)
+            .current_dir(root.path())
+            .assert()
+            .failure()
+            .get_output()
+            .stdout
+            .clone();
+
+        let stdout = String::from_utf8(output).unwrap();
+        assert!(stdout.contains(&format!("{axis}: incomplete")), "stdout missing axis {axis}: {stdout}");
+        assert!(stdout.contains("binutils.tcc [partial]"), "stdout missing binutils row: {stdout}");
+        assert!(
+            stdout.contains("checked binutils-tcc tool transcript required"),
+            "stdout missing semantic evidence: {stdout}"
+        );
+        assert!(
+            stdout.contains("evidence check failed: binutils-tcc tool transcript missing"),
+            "stdout missing missing-transcript note: {stdout}"
+        );
+        assert!(
+            stdout.contains("bootstrap/evidence/binutils-tcc-tool-smoke.json"),
+            "stdout missing transcript path: {stdout}"
+        );
+    }
 }
