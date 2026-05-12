@@ -1768,6 +1768,18 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_cc1_object_smoke() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("cc1 object boundary"));
+        assert!(content.contains("exec \"$TCC/bin/tcc\" -c"));
+        assert!(content.contains("-quiet /tmp/cc1-smoke.c -o /tmp/cc1-smoke.o"));
+        assert!(content.contains("ERROR: cc1 object smoke failed"));
+        assert!(content.contains("ERROR: cc1 object smoke output missing"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);

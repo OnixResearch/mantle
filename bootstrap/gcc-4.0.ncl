@@ -1149,10 +1149,42 @@ exec "$TCC/bin/tcc" -I"$MUSL/include" -L"$MUSL/lib" -static "\$@"
 EOF
       $BB chmod 755 "$out/bin/gcc"
       $BB ln -sf gcc "$out/bin/cc"
-      cat > "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" <<'EOF'
+      cat > "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" <<EOF
 #!/bin/sh
-echo 'Crunch gcc-4.0 pass1 bridge: cc1 is provided by the gcc driver/TinyCC handoff' >&2
-exit 0
+# Crunch GCC 4.0 pass1 cc1 object boundary: parse the bounded
+# GCC-shaped frontend invocation used by the build and emit an object through
+# the validated TinyCC handoff. This remains a bridge until native cc1 builds.
+outfile=
+input=
+while [ \$# -gt 0 ]; do
+  case "\$1" in
+    -quiet|-dumpbase|-auxbase|-auxbase-strip)
+      if [ "\$1" = -dumpbase ] || [ "\$1" = -auxbase ] || [ "\$1" = -auxbase-strip ]; then
+        shift
+      fi
+      ;;
+    -o)
+      shift
+      outfile=\$1
+      ;;
+    -*)
+      ;;
+    *)
+      if [ -z "\$input" ]; then
+        input=\$1
+      fi
+      ;;
+  esac
+  shift
+done
+if [ -z "\$input" ]; then
+  echo 'cc1: no input file' >&2
+  exit 1
+fi
+if [ -z "\$outfile" ]; then
+  outfile=./cc1-output.o
+fi
+exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"
       rm -rf /tmp/gcc40-libgcc-objs
@@ -1301,6 +1333,17 @@ EOF
       "$out/bin/gcc" -print-search-dirs | $BB grep -q "install: $out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/" || { echo "ERROR: gcc -print-search-dirs missing install dir" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtbegin.o" || { echo "ERROR: installed crtbegin.o missing" >&2; exit 1; }
       test -s "$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/crtend.o" || { echo "ERROR: installed crtend.o missing" >&2; exit 1; }
+
+      # Installed cc1 object smoke: exercise the direct frontend phase boundary
+      # with a GCC-shaped invocation instead of only proving driver delegation.
+      $BB cat > /tmp/cc1-smoke.c << 'EOF'
+int cc1_smoke(void) { return 42; }
+EOF
+      "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1" \
+        -quiet /tmp/cc1-smoke.c -o /tmp/cc1-smoke.o 2>&1 || {
+        echo "ERROR: cc1 object smoke failed" >&2; exit 1
+      }
+      test -s /tmp/cc1-smoke.o || { echo "ERROR: cc1 object smoke output missing" >&2; exit 1; }
 
       # C compiler smoke test
       $BB cat > /tmp/smoke.c << 'EOF'
