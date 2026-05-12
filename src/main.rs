@@ -2,6 +2,7 @@
 #![register_tool(tigerstyle)]
 mod attest_cmd;
 mod bootstrap;
+mod bootstrap_parity;
 mod bootstrap_source_root;
 mod bootstrap_validate;
 mod build_cmd;
@@ -430,6 +431,13 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum BootstrapAction {
+    /// Produce the deterministic whole-bootstrap parity gap report
+    ParityReport {
+        /// Fail closed unless the requested parity axes are complete
+        #[arg(long = "require")]
+        require: Vec<bootstrap_parity::ParityAxis>,
+    },
+
     /// Run build-profile preflight, build a bootstrap derivation, and save evidence
     Validate {
         /// Bootstrap .ncl derivation to validate
@@ -1302,6 +1310,9 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
 
 fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<(), RunError> {
     match action {
+        BootstrapAction::ParityReport { require } => {
+            bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
+        }
         BootstrapAction::Validate {
             target,
             import_paths,
