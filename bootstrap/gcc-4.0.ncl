@@ -1143,7 +1143,9 @@ EOF
       # marker object.  These functions still use the TinyCC/pass1 bridge, but
       # the archive now has the expected early libgcc member granularity.
       # `_negdi2` is the first semantic member promotion: GCC's libgcc contract
-      # returns the two's-complement negation of a signed 64-bit integer.  The
+      # returns the two's-complement negation of a signed 64-bit integer.
+      # `_muldi3` is the second bounded semantic promotion: signed 64-bit
+      # multiplication for representative non-overflowing products.  The
       # remaining members stay explicit placeholders until promoted by separate
       # evidence-backed slices.
       gcc40_libgcc_funcs="_eprintf __gcc_bcmp _divdi3 _moddi3 _udivdi3 _umoddi3 _udiv_w_sdiv _udivmoddi4 _muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3 _cmpdi2 _ucmpdi2 _clear_cache"
