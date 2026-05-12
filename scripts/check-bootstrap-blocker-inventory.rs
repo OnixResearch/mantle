@@ -233,33 +233,61 @@ fn help() -> String {
 }
 
 fn run_self_tests() -> Result<(), String> {
+    let fixture_cases: &[(&str, &[&str])] = &[
+        ("bridge-output", &[
+            "GCC pass1 bridge smoke remains the current proof boundary",
+            "bridge input copied into the derivation output",
+        ]),
+        ("compiler-runtime-crash-boundary", &[
+            "TinyCC static link still exits 139",
+            "diagnostic rc=139 under libtcc.c",
+            "simple Makefile execution still segfaults",
+            "bounded timeout while compiling the compiler",
+            "exit status is not signal-derived",
+        ]),
+        ("legacy-provider-fallback", &[
+            "legacy musl.cc provider remains the bootstrap seed",
+            "CRUNCH_LEGACY_SEED keeps host fallback available",
+        ]),
+        ("normalization-only-provider", &[
+            "normalized seed contract is not yet functional",
+            "normalization contract only for the provider",
+        ]),
+        ("placeholder-deferred", &[
+            "placeholder libgcc member remains in the archive",
+            "TODO: replace this deferred task with native source proof",
+        ]),
+        ("prerequisite-gated-evidence", &[
+            "full-source bootstrap status remains blocked",
+            "promotion is still gated by GCC correctness evidence",
+        ]),
+    ];
+
+    for (marker_id, cases) in fixture_cases {
+        let marker = MARKERS
+            .iter()
+            .find(|marker| marker.id == *marker_id)
+            .ok_or_else(|| format!("missing marker fixture class: {marker_id}"))?;
+        for case in *cases {
+            let lower = case.to_lowercase();
+            if !marker.matches_line(&lower) {
+                return Err(format!("self-test expected {marker_id} marker match for: {case}"));
+            }
+        }
+    }
+
     let compiler_marker = MARKERS
         .iter()
         .find(|marker| marker.id == "compiler-runtime-crash-boundary")
         .ok_or("missing compiler-runtime-crash-boundary marker")?;
-
-    let positive_cases = [
-        "TinyCC static link still exits 139",
-        "diagnostic rc=139 under libtcc.c",
-        "simple Makefile execution still segfaults",
-        "bounded timeout while compiling the compiler",
-        "exit status is not signal-derived",
-    ];
-    for case in positive_cases {
-        let lower = case.to_lowercase();
-        if !compiler_marker.matches_line(&lower) {
-            return Err(format!("self-test expected compiler marker match for: {case}"));
-        }
-    }
-
-    let negative_cases = [
+    let compiler_negative_cases = [
         "#define HAVE_SIGNAL_H 1",
         "#include <signal.h>",
         "char *strsignal(int sig);",
         "signal names are available in this bootstrap shell",
         "static int helper(void) { return 0; }",
     ];
-    for case in negative_cases {
+    for case in compiler_negative_cases {
         let lower = case.to_lowercase();
         if compiler_marker.matches_line(&lower) {
             return Err(format!("self-test expected no compiler marker match for: {case}"));
