@@ -36,6 +36,7 @@ const MAX_BUNDLE_TREE_ENTRIES: u32 = 4096;
 pub(crate) struct FullSelfHostingProofIdentity {
     pub schema: String,
     pub proof_mode: String,
+    pub selected_provider_kind: String,
     pub staged_source: String,
     pub stage2_binary_digest_blake3: String,
     pub prerequisite_inventory_digest_blake3: String,
@@ -121,6 +122,7 @@ pub(crate) fn create_release_evidence_bundle(
             source_archive_digest_blake3,
             proof_bundle_schema: proof_identity.schema,
             proof_mode: proof_identity.proof_mode,
+            selected_provider_kind: proof_identity.selected_provider_kind,
             staged_source: proof_identity.staged_source,
             stage2_binary_digest_blake3: proof_identity.stage2_binary_digest_blake3,
             prerequisite_inventory_digest_blake3: proof_identity.prerequisite_inventory_digest_blake3,
@@ -165,6 +167,7 @@ pub(crate) fn load_full_self_hosting_proof_identity(
     Ok(FullSelfHostingProofIdentity {
         schema: manifest.schema,
         proof_mode: manifest.proof_mode,
+        selected_provider_kind: manifest.selected_provider_kind,
         staged_source: manifest.staged_source,
         stage2_binary_digest_blake3: manifest.stage2_binary_digest_blake3,
         prerequisite_inventory_digest_blake3: manifest.prerequisite_inventory_digest_blake3,
@@ -616,6 +619,9 @@ fn verify_manifest_proof_linkage(manifest: &ReleaseEvidenceManifest, bundle_dir:
     if proof_identity.proof_mode != manifest.proof_linkage.proof_mode {
         return Err(RunError::Internal("release evidence proof linkage proof_mode mismatch".to_string()));
     }
+    if proof_identity.selected_provider_kind != manifest.proof_linkage.selected_provider_kind {
+        return Err(RunError::Internal("release evidence proof linkage selected_provider_kind mismatch".to_string()));
+    }
     if proof_identity.staged_source != manifest.proof_linkage.staged_source {
         return Err(RunError::Internal("release evidence proof linkage staged_source mismatch".to_string()));
     }
@@ -691,6 +697,7 @@ mod tests {
                 source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),
+                selected_provider_kind: "source-root".to_string(),
                 staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),
                 stage2_binary_digest_blake3: stage2_binary.digest_blake3,
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
@@ -705,6 +712,7 @@ mod tests {
             "staged_source": "/tmp/proof-store/abcd-crunch-src",
             "prerequisites": {
                 "mode": "fixed-point",
+                "provider_kind": "source-root",
                 "inventory_doc": {
                     "path": "/tmp/proof-bundle/stage0-prerequisites/inventory.md",
                     "size_bytes": 9,
@@ -851,10 +859,40 @@ mod tests {
         let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
 
         assert_eq!(created.release_id, "crunch-0.1.0-rc1");
+        assert_eq!(created.proof_linkage.selected_provider_kind, "source-root");
         assert_eq!(created, verified);
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    #[test]
+    fn verify_rejects_provider_kind_linkage_mismatch() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("crunch-src.tar");
+        let binary_path = temp.path().join("crunch");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source");
+        write_file(&binary_path, b"crunch-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let request = ReleaseBundleCreateRequest::with_defaults(
+            "crunch-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        let mut created = create_release_evidence_bundle(&request).unwrap();
+        created.proof_linkage.selected_provider_kind = "stagex-lineage".to_string();
+        write_manifest_file(&output_bundle_dir, &created).unwrap();
+
+        let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(err.to_string().contains("selected_provider_kind mismatch"));
     }
 
     #[test]

@@ -66,6 +66,7 @@ const PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
 const PROOF_COMMAND_SENTINEL_ENV: &str = "CRUNCH_TEST_PROOF_COMMAND_SENTINEL";
 const PROOF_MODE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_MODE";
+const PROOF_PROVIDER_KIND_ENV: &str = "CRUNCH_SELF_HOSTING_PROVIDER_KIND";
 const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY_DOC";
 const PROOF_NO_HOST_TOOLS_ENV: &str = "CRUNCH_SELF_HOSTING_NO_HOST_TOOLS";
 const PROOF_STAGE0_INVENTORY_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY";
@@ -76,6 +77,9 @@ const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-crunch";
 const PROOF_STAGE0_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/stage0-inventory.ncl";
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
+const PROOF_PROVIDER_KIND_LEGACY_FETCH: &str = "legacy-fetch";
+const PROOF_PROVIDER_KIND_SOURCE_ROOT: &str = "source-root";
+const PROOF_PROVIDER_KIND_STAGEX_LINEAGE: &str = "stagex-lineage";
 const DEFAULT_PROOF_SCRATCH_SOURCE: &str = "default repo-local policy";
 const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
     "cargo",
@@ -171,6 +175,7 @@ enum ProofMode {
 #[derive(Debug, Serialize)]
 struct ProofPrerequisiteSet {
     mode: ProofMode,
+    provider_kind: String,
     inventory_doc: ProofHashedPath,
     sandbox_shell: ProofHashedPath,
     helper_tools: Vec<ProofResolvedTool>,
@@ -1102,6 +1107,17 @@ fn collect_absent_binaries(path_var: &OsStr, blocked_binaries: &[&str]) -> Vec<S
     absent
 }
 
+fn selected_provider_kind() -> String {
+    let provider_kind =
+        std::env::var(PROOF_PROVIDER_KIND_ENV).unwrap_or_else(|_| PROOF_PROVIDER_KIND_LEGACY_FETCH.to_string());
+    match provider_kind.as_str() {
+        PROOF_PROVIDER_KIND_LEGACY_FETCH | PROOF_PROVIDER_KIND_SOURCE_ROOT | PROOF_PROVIDER_KIND_STAGEX_LINEAGE => {
+            provider_kind
+        }
+        other => panic!("unsupported self-hosting provider kind: {other}"),
+    }
+}
+
 fn collect_prerequisites(
     bundle_dir: &Path,
     proof_mode: ProofMode,
@@ -1142,6 +1158,7 @@ fn collect_prerequisites(
 
     ProofPrerequisiteSet {
         mode: proof_mode,
+        provider_kind: selected_provider_kind(),
         inventory_doc,
         sandbox_shell,
         helper_tools: collect_resolved_tools(&helper_tool_names, &helper_path),
@@ -1486,6 +1503,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("store_dir: {}\n", manifest.store_dir));
     out.push_str(&format!("staged_source: {}\n", manifest.staged_source));
     out.push_str(&format!("proof_mode: {:?}\n", manifest.prerequisites.mode));
+    out.push_str(&format!("selected_provider_kind: {}\n", manifest.prerequisites.provider_kind));
     out.push_str(&format!("protected_exec_result: {}\n", derived_proof_result(manifest)));
     out.push_str(&format!("protected_exec_audit: {} {}\n", protected_audit.digest_blake3, protected_audit.path));
     match bundled_inventory {

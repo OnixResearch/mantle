@@ -115,13 +115,39 @@ let seed_toolchain = {
       $BB cat > "$out/share/crunch-bootstrap/provider.json" << 'PROVIDER'
 {
   "provider_id": "full-source-v1",
+  "name": "full-source-seed-toolchain",
   "summary": "Full-source seed: hex0 -> stage0-posix -> mes -> tcc -> gcc ladder -> musl + binutils",
-  "source_chain": "live-bootstrap commit 9a268c4c39cae952b268bc86da342be2175f03d4",
+  "target": "x86_64-linux-musl",
+  "dynamic_linker": "ld-musl-x86_64.so.1",
+  "source_root": {
+    "manifest_digest": "pending-full-source-manifest-digest",
+    "source_chain": "live-bootstrap commit 9a268c4c39cae952b268bc86da342be2175f03d4"
+  },
   "gcc_version": "10.5.0",
   "musl_version": "1.2.5",
   "binutils_version": "2.41",
-  "target": "x86_64-linux-musl",
   "reduction": {
+    "retained_tools": [
+      "x86_64-linux-musl-gcc",
+      "x86_64-linux-musl-g++",
+      "x86_64-linux-musl-c++",
+      "x86_64-linux-musl-cpp",
+      "x86_64-linux-musl-gcc-ar",
+      "x86_64-linux-musl-gcc-nm",
+      "x86_64-linux-musl-gcc-ranlib",
+      "x86_64-linux-musl-ar",
+      "x86_64-linux-musl-as",
+      "x86_64-linux-musl-ld",
+      "x86_64-linux-musl-nm",
+      "x86_64-linux-musl-objcopy",
+      "x86_64-linux-musl-objdump",
+      "x86_64-linux-musl-ranlib",
+      "x86_64-linux-musl-readelf",
+      "x86_64-linux-musl-size",
+      "x86_64-linux-musl-strings",
+      "x86_64-linux-musl-strip",
+      "x86_64-linux-musl-include"
+    ],
     "dropped_components": [],
     "notes": "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end."
   }
@@ -156,11 +182,6 @@ PROVIDER
   provider = {
     id = "full-source-v1",
     summary = "Full-source seed normalization contract for the GCC/musl/binutils ladder",
-    raw = {
-      name = "from-source",
-      url = "n/a",
-      hash = "n/a",
-    },
     retained_tools = provider_retained_tools,
     dropped_components = [],
     notes = [

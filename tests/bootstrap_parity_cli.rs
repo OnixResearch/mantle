@@ -44,3 +44,24 @@ fn bootstrap_parity_report_require_fails_closed_on_gaps() {
         .stdout(predicate::str::contains("Bootstrap parity gap report"))
         .stdout(predicate::str::contains("live-bootstrap: incomplete"));
 }
+
+#[test]
+fn bootstrap_parity_report_stagex_requires_lineage_seed_provider() {
+    let root = TempDir::new().unwrap();
+
+    let output = crunch()
+        .arg("bootstrap")
+        .arg("parity-report")
+        .arg("--require")
+        .arg("stagex")
+        .current_dir(root.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).unwrap();
+    assert!(stdout.contains("stagex: incomplete"));
+    assert!(stdout.contains("seed-full.stagex-lineage"));
+}

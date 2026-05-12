@@ -130,6 +130,13 @@ struct StageSpec {
     semantic_evidence: &'static str,
     proof_evidence: &'static str,
     notes: &'static str,
+    evidence_check: EvidenceCheck,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum EvidenceCheck {
+    None,
+    SeedFullSourceRootContract,
 }
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -217,9 +224,11 @@ fn summarize_axis(axis: ParityAxis, rows: &[ParityRow]) -> AxisSummary {
 fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let path = spec.derivation.map(|derivation| project_root.join(BOOTSTRAP_DIR).join(derivation));
     let file_state = path.as_ref().map(|p| inspect_derivation(p));
+    let evidence_failure = path.as_ref().and_then(|p| validate_stage_evidence(p, spec.evidence_check).err());
     let status = match (spec.expected_complete, file_state) {
         (_, None) => StageStatus::Blocked,
         (_, Some(FileState::Missing)) => StageStatus::NotStarted,
+        (_, Some(FileState::Present)) if evidence_failure.is_some() => StageStatus::Partial,
         (false, Some(FileState::Present)) => StageStatus::Partial,
         (false, Some(FileState::Placeholder)) => StageStatus::Placeholder,
         (true, Some(FileState::Present)) => StageStatus::Complete,
@@ -228,7 +237,7 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         (false, Some(FileState::Unreadable)) => StageStatus::Blocked,
     };
     let provider_kind = provider_kind_for(spec, status);
-    let notes = row_notes(spec, status, path.as_deref());
+    let notes = row_notes(spec, status, path.as_deref(), evidence_failure.as_deref());
     ParityRow {
         id: spec.id,
         title: spec.title,
@@ -257,7 +266,7 @@ fn provider_kind_for(spec: &StageSpec, status: StageStatus) -> ProviderKind {
     }
 }
 
-fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>) -> String {
+fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>, evidence_failure: Option<&str>) -> String {
     let mut notes = Vec::new();
     if !spec.notes.is_empty() {
         notes.push(spec.notes.to_string());
@@ -273,7 +282,54 @@ fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>) -> Stri
         }
         _ => {}
     }
+    if let Some(reason) = evidence_failure {
+        notes.push(format!("evidence check failed: {reason}"));
+    }
     notes.join("; ")
+}
+
+fn validate_stage_evidence(path: &Path, check: EvidenceCheck) -> Result<(), String> {
+    match check {
+        EvidenceCheck::None => Ok(()),
+        EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(path),
+    }
+}
+
+fn validate_seed_full_source_root_contract(path: &Path) -> Result<(), String> {
+    let content = fs::read_to_string(path).map_err(|err| format!("read {}: {err}", path.display()))?;
+    let required = [
+        "share/crunch-bootstrap/provider.json",
+        "\"provider_id\": \"full-source-v1\"",
+        "\"target\": \"x86_64-linux-musl\"",
+        "\"dynamic_linker\": \"ld-musl-x86_64.so.1\"",
+        "\"source_root\"",
+        "\"manifest_digest\"",
+        "\"reduction\"",
+        "\"retained_tools\"",
+        "x86_64-linux-musl-gcc",
+        "x86_64-linux-musl-as",
+        "x86_64-linux-musl-ld",
+        "x86_64-linux-musl-include",
+        "libc.a",
+    ];
+    for needle in required {
+        if !content.contains(needle) {
+            return Err(format!("seed-full source-root contract missing `{needle}`"));
+        }
+    }
+    let forbidden = [
+        "musl.cc/x86_64",
+        "LEGACY_MUSL_CC_URL",
+        "LEGACY_MUSL_CC_HASH",
+        "raw = {",
+        "\"raw\"",
+    ];
+    for needle in forbidden {
+        if content.contains(needle) {
+            return Err(format!("seed-full source-root contract contains legacy provider marker `{needle}`"));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -303,6 +359,8 @@ fn inspect_derivation(path: &Path) -> FileState {
 const ALL_AXES: &[ParityAxis] = &[ParityAxis::LiveBootstrap, ParityAxis::Guix, ParityAxis::Stagex];
 const LIVE_GUIX: &[ParityAxis] = &[ParityAxis::LiveBootstrap, ParityAxis::Guix];
 const GUIX_STAGEX: &[ParityAxis] = &[ParityAxis::Guix, ParityAxis::Stagex];
+const GUIX_ONLY: &[ParityAxis] = &[ParityAxis::Guix];
+const STAGEX_ONLY: &[ParityAxis] = &[ParityAxis::Stagex];
 
 fn parity_stage_specs() -> &'static [StageSpec] {
     &[
@@ -317,6 +375,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "seed size/source audit required",
             proof_evidence: "stagex lineage digest required",
             notes: "root trust is environmental until audited-seed proof is bound",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "stage0.transition-tools",
@@ -329,6 +388,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "stage0 toolchain smoke required",
             proof_evidence: "stage graph digest required",
             notes: "covers stage0-posix handoff rather than host compiler trust",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "mes",
@@ -341,6 +401,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "mes runtime smoke required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "tinycc.mes",
@@ -353,6 +414,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "version/object smoke required",
             proof_evidence: "source transcript required",
             notes: "Mes runtime defects remain important gap-report details",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "tinycc.0.9.27",
@@ -365,6 +427,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "compile/link smoke required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "tcc-musl-prep",
@@ -377,6 +440,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "musl.tcc",
@@ -389,6 +453,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "libc startup smoke required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "tcc-musl",
@@ -401,6 +466,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "make.3.82",
@@ -413,6 +479,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "real recipe smoke required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "patch.2.5.9",
@@ -425,6 +492,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "grep.2.4",
@@ -437,6 +505,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "sed.4.0.9",
@@ -449,6 +518,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "archive-tools",
@@ -461,6 +531,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "archive round-trip smokes required",
             proof_evidence: "source transcript required",
             notes: "gap report also checks bzip2/gzip rows through explicit derivations",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "coreutils.5",
@@ -473,6 +544,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "coreutils.6",
@@ -485,6 +557,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "runtime validation required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "parser-generators",
@@ -497,6 +570,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "generator smoke required",
             proof_evidence: "source transcript required",
             notes: "gap report also requires flex and oyacc derivations in repository",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "autotools",
@@ -509,6 +583,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "configure-generation smokes required",
             proof_evidence: "source transcript required",
             notes: "intermediate autoconf/automake versions remain part of map",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "perl.ladder",
@@ -521,6 +596,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "Perl smoke required",
             proof_evidence: "source transcript required",
             notes: "Perl 5.000 through 5.6.2 are mapped",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "math-libs",
@@ -533,6 +609,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "library link smokes required",
             proof_evidence: "source transcript required",
             notes: "MPC upstream heading mismatch remains documented",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "binutils.tcc",
@@ -545,6 +622,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "assembler/linker smokes required",
             proof_evidence: "source transcript required",
             notes: "placeholder/bridge output must not count as full parity",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "gcc.4.0",
@@ -557,6 +635,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "bounded libgcc smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript required",
             notes: "pass1 bridge and selected libgcc members are partial progress",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "gcc.4.7",
@@ -569,6 +648,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "native correctness evidence required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "gcc.10",
@@ -581,6 +661,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "native correctness evidence required",
             proof_evidence: "source transcript required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "full-musl-binutils",
@@ -593,18 +674,33 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "full toolchain smokes required",
             proof_evidence: "source-root proof required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "seed-full",
             title: "Normalized full source seed provider",
-            axes: GUIX_STAGEX,
+            axes: GUIX_ONLY,
             lineage: "guix",
             derivation: Some("seed-full.ncl"),
-            expected_complete: false,
+            expected_complete: true,
             graph_evidence: "seed-full derivation present",
-            semantic_evidence: "provider contract validation required",
-            proof_evidence: "provider digest and transcript required",
-            notes: "must replace legacy fetched provider evidence",
+            semantic_evidence: "source-root provider contract validation present",
+            proof_evidence: "provider digest/transcript remains required before broader Guix parity",
+            notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
+            evidence_check: EvidenceCheck::SeedFullSourceRootContract,
+        },
+        StageSpec {
+            id: "seed-full.stagex-lineage",
+            title: "StageX lineage normalized seed provider",
+            axes: STAGEX_ONLY,
+            lineage: "stagex",
+            derivation: None,
+            expected_complete: false,
+            graph_evidence: "StageX lineage provider derivation/proof not yet bound",
+            semantic_evidence: "audited lineage provider contract validation required",
+            proof_evidence: "lineage provider digest and transcript required",
+            notes: "Guix source-root seed-full evidence must not satisfy this StageX row",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "selftest",
@@ -617,6 +713,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "bootstrap selftest transcript required",
             proof_evidence: "proof bundle digest required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "integration-test",
@@ -629,6 +726,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "integration transcript required",
             proof_evidence: "proof bundle digest required",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         },
         StageSpec {
             id: "crunch.self-build",
@@ -641,6 +739,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "stage1/stage2 binary comparison required",
             proof_evidence: "full proof bundle required",
             notes: "release evidence must bind selected provider kind",
+            evidence_check: EvidenceCheck::None,
         },
     ]
 }
@@ -657,6 +756,37 @@ mod tests {
         fs::write(bootstrap.join(name), content).unwrap();
     }
 
+    fn seed_full_spec() -> StageSpec {
+        StageSpec {
+            id: "seed-full",
+            title: "Normalized full source seed provider",
+            axes: GUIX_ONLY,
+            lineage: "guix",
+            derivation: Some("seed-full.ncl"),
+            expected_complete: true,
+            graph_evidence: "seed-full derivation present",
+            semantic_evidence: "source-root provider contract validation present",
+            proof_evidence: "provider digest/transcript remains required before broader Guix parity",
+            notes: "source-root provider contract evidence only; does not satisfy StageX lineage evidence",
+            evidence_check: EvidenceCheck::SeedFullSourceRootContract,
+        }
+    }
+
+    fn valid_seed_full_contract() -> &'static str {
+        r#"
+        share/crunch-bootstrap/provider.json
+        "provider_id": "full-source-v1"
+        "target": "x86_64-linux-musl"
+        "dynamic_linker": "ld-musl-x86_64.so.1"
+        "source_root" { "manifest_digest": "pending" }
+        "reduction" { "retained_tools": [
+          "x86_64-linux-musl-gcc", "x86_64-linux-musl-as", "x86_64-linux-musl-ld",
+          "x86_64-linux-musl-include"
+        ] }
+        libc.a
+        "#
+    }
+
     #[test]
     fn missing_derivation_becomes_not_started() {
         let dir = tempdir().unwrap();
@@ -671,6 +801,7 @@ mod tests {
             semantic_evidence: "semantic",
             proof_evidence: "proof",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         };
         let row = evaluate_stage(dir.path(), &spec);
         assert_eq!(row.status, StageStatus::NotStarted);
@@ -692,6 +823,7 @@ mod tests {
             semantic_evidence: "semantic",
             proof_evidence: "proof",
             notes: "",
+            evidence_check: EvidenceCheck::None,
         };
         let row = evaluate_stage(dir.path(), &spec);
         assert_eq!(row.status, StageStatus::Placeholder);
@@ -731,5 +863,47 @@ mod tests {
         let summary = summarize_axis(ParityAxis::LiveBootstrap, &rows);
         assert!(!summary.complete);
         assert_eq!(summary.blocking_rows, vec!["blocked".to_string()]);
+    }
+
+    #[test]
+    fn seed_full_source_root_contract_completes_guix_row() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "seed-full.ncl", valid_seed_full_contract());
+
+        let row = evaluate_stage(dir.path(), &seed_full_spec());
+
+        assert_eq!(row.status, StageStatus::Complete);
+        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
+        assert_eq!(row.axes, vec![ParityAxis::Guix]);
+        assert!(!row.axes.contains(&ParityAxis::Stagex));
+    }
+
+    #[test]
+    fn seed_full_legacy_metadata_blocks_guix_row() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "seed-full.ncl", &format!("{}\nraw = {{}}\n", valid_seed_full_contract()));
+
+        let row = evaluate_stage(dir.path(), &seed_full_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.notes.contains("legacy provider marker"));
+    }
+
+    #[test]
+    fn stagex_lineage_seed_provider_remains_separate_blocker() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "seed-full.ncl", valid_seed_full_contract());
+
+        let report = collect_bootstrap_parity_report(dir.path());
+        let seed_full = report.rows.iter().find(|row| row.id == "seed-full").unwrap();
+        let stagex_seed = report.rows.iter().find(|row| row.id == "seed-full.stagex-lineage").unwrap();
+        let stagex = report.axes.iter().find(|axis| axis.axis == ParityAxis::Stagex).unwrap();
+
+        assert_eq!(seed_full.status, StageStatus::Complete);
+        assert_eq!(seed_full.axes, vec![ParityAxis::Guix]);
+        assert_eq!(stagex_seed.status, StageStatus::Blocked);
+        assert!(stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
+        assert!(!stagex.blocking_rows.contains(&"seed-full".to_string()));
     }
 }

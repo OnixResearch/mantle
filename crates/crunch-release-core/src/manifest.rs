@@ -63,6 +63,7 @@ pub struct ReleaseProofLinkage {
     pub source_archive_digest_blake3: String,
     pub proof_bundle_schema: String,
     pub proof_mode: String,
+    pub selected_provider_kind: String,
     pub staged_source: String,
     pub stage2_binary_digest_blake3: String,
     pub prerequisite_inventory_digest_blake3: String,
@@ -102,6 +103,7 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
 pub struct FullSelfHostingProofIdentityFields {
     pub schema: String,
     pub proof_mode: String,
+    pub selected_provider_kind: String,
     pub staged_source: String,
     pub stage2_binary_digest_blake3: String,
     pub prerequisite_inventory_digest_blake3: String,
@@ -117,6 +119,7 @@ pub fn extract_full_self_hosting_proof_identity_fields(
     Ok(FullSelfHostingProofIdentityFields {
         schema: manifest.schema,
         proof_mode: manifest.prerequisites.mode,
+        selected_provider_kind: manifest.prerequisites.provider_kind,
         staged_source: manifest.staged_source,
         stage2_binary_digest_blake3: manifest.binaries.stage2.digest_blake3,
         prerequisite_inventory_digest_blake3: manifest.prerequisites.inventory_doc.digest_blake3,
@@ -138,6 +141,7 @@ struct SelfHostingProofManifestView {
 #[derive(Debug, Deserialize)]
 struct SelfHostingProofPrerequisitesView {
     mode: String,
+    provider_kind: String,
     inventory_doc: SelfHostingProofHashedPath,
 }
 
@@ -294,6 +298,7 @@ fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), R
     if manifest.proof_linkage.proof_mode.trim().is_empty() {
         return Err(validation_error("release evidence proof_mode must not be empty".to_string()));
     }
+    validate_provider_kind(&manifest.proof_linkage.selected_provider_kind, "proof_linkage.selected_provider_kind")?;
     if manifest.proof_linkage.staged_source.trim().is_empty() {
         return Err(validation_error("release evidence staged_source must not be empty".to_string()));
     }
@@ -343,6 +348,7 @@ fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Resu
     if manifest.prerequisites.mode.trim().is_empty() {
         return Err(validation_error("full proof artifact required: proof mode is missing".to_string()));
     }
+    validate_provider_kind(&manifest.prerequisites.provider_kind, "prerequisites.provider_kind")?;
 
     validate_hashed_path(&manifest.prerequisites.inventory_doc, "prerequisites.inventory_doc")?;
     validate_hashed_path(&manifest.binaries.stage1, "binaries.stage1")?;
@@ -374,6 +380,16 @@ fn validate_full_proof_manifest(manifest: &SelfHostingProofManifestView) -> Resu
         ));
     }
     Ok(())
+}
+
+fn validate_provider_kind(provider_kind: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    match provider_kind {
+        "legacy-fetch" | "source-root" | "stagex-lineage" => Ok(()),
+        "" => Err(validation_error(format!("{field_name} must not be empty"))),
+        other => Err(validation_error(format!(
+            "{field_name} must be one of legacy-fetch, source-root, stagex-lineage; got {other}"
+        ))),
+    }
 }
 
 fn validate_hashed_path(hashed: &SelfHostingProofHashedPath, field_name: &str) -> Result<(), ReleaseEvidenceError> {
@@ -498,6 +514,7 @@ mod tests {
                 source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),
+                selected_provider_kind: "source-root".to_string(),
                 staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),
                 stage2_binary_digest_blake3: stage2_binary.digest_blake3,
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
@@ -512,6 +529,7 @@ mod tests {
             "staged_source": "/tmp/proof-store/abcd-crunch-src",
             "prerequisites": {
                 "mode": "fixed-point",
+                "provider_kind": "source-root",
                 "inventory_doc": {
                     "path": "/tmp/proof-bundle/stage0-prerequisites/inventory.md",
                     "size_bytes": 9,
@@ -614,9 +632,27 @@ mod tests {
         let identity = extract_full_self_hosting_proof_identity_fields(manifest_bytes).unwrap();
         assert_eq!(identity.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
         assert_eq!(identity.proof_mode, "fixed-point");
+        assert_eq!(identity.selected_provider_kind, "source-root");
         assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-crunch-src");
         assert_eq!(identity.stage2_binary_digest_blake3, sample_digest(11));
         assert_eq!(identity.prerequisite_inventory_digest_blake3, sample_digest(9));
+    }
+
+    #[test]
+    fn extract_full_proof_identity_fields_rejects_missing_provider_kind() {
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&sample_full_proof_manifest(&sample_digest(9), &sample_digest(11))).unwrap();
+        manifest["prerequisites"].as_object_mut().unwrap().remove("provider_kind");
+        let err = extract_full_self_hosting_proof_identity_fields(serde_json::to_vec(&manifest).unwrap()).unwrap_err();
+        assert!(err.to_string().contains("provider_kind"));
+    }
+
+    #[test]
+    fn release_manifest_rejects_unknown_selected_provider_kind() {
+        let mut manifest = sample_manifest();
+        manifest.proof_linkage.selected_provider_kind = "mystery".to_string();
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("selected_provider_kind"));
     }
 
     #[test]
