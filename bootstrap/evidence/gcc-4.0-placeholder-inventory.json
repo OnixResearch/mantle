@@ -57,7 +57,7 @@
     {
       "line": 1107,
       "marker": "pass1 bridge",
-      "classification": "pass1-driver-placeholder-boundary"
+      "classification": "pass1-driver-boundary"
     },
     {
       "line": 1111,
@@ -72,7 +72,7 @@
     {
       "line": 1136,
       "marker": "pass1 bridge",
-      "classification": "pass1-driver-placeholder-boundary"
+      "classification": "pass1-driver-boundary"
     },
     {
       "line": 1143,

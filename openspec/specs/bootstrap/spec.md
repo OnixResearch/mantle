@@ -343,22 +343,15 @@ MUST be capable of building early GCC.
 
 ### Requirement: GCC version ladder
 
-GCC MUST be built through a version ladder where each version is compiled
-by the previous. The minimum chain MUST include: tinycc → gcc-4.0.4 →
-gcc-4.7.4 → gcc-10.x (or newer). Supporting tools (make, binutils, musl)
-MUST be built at each level as needed by the next GCC version.
+GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a time. The `__gcc_bcmp` member MUST implement byte-wise comparison semantics: it MUST return `0` for equal byte ranges and a non-zero value for the first differing byte over the requested length. The promotion MUST include a derivation-local smoke that exercises equal and unequal comparisons. This promotion MUST NOT mark `gcc.4.0` complete or unblock live-bootstrap/Guix parity by itself.
 
-#### Scenario: Each GCC version builds from the previous
+#### Scenario: `__gcc_bcmp` distinguishes equal and unequal byte ranges
 
-- GIVEN the tinycc output
-- WHEN the GCC chain derivations are built in sequence
-- THEN each GCC version produces a working C/C++ compiler
-
-#### Scenario: Modern GCC can build the existing bootstrap chain
-
-- GIVEN the final GCC from the version ladder
-- WHEN `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` are built
-- THEN both tests pass using the from-source toolchain
+- GIVEN the GCC 4.0 pass1 libgcc member sources are generated
+- WHEN the derivation compiles and runs the `__gcc_bcmp` smoke
+- THEN equal byte ranges return `0`
+- AND unequal byte ranges return non-zero
+- AND the `gcc.4.0` parity row remains partial until broader native correctness evidence exists
 
 ### Requirement: Normalized seed contract preserved
 

@@ -1741,6 +1741,18 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_bcmp_semantic_smoke() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("int __gcc_bcmp(const unsigned char *lhs"));
+        assert!(content.contains("if (__gcc_bcmp(a, b, 4) != 0) return 1;"));
+        assert!(content.contains("if (__gcc_bcmp(a, c, 4) == 0) return 2;"));
+        assert!(content.contains("if (__gcc_bcmp(a, c, 2) != 0) return 3;"));
+        assert!(content.contains("ERROR: __gcc_bcmp semantic smoke failed"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);

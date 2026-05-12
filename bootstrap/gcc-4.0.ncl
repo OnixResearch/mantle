@@ -1155,13 +1155,24 @@ EOF
       # `_cmpdi2` is the sixth bounded semantic promotion: signed 64-bit
       # comparison using GCC libgcc's 0/1/2 less/equal/greater contract.
       # `_ucmpdi2` is the seventh bounded semantic promotion: unsigned 64-bit
-      # comparison using the same 0/1/2 contract.  The remaining members stay
-      # explicit placeholders until promoted by separate evidence-backed slices.
+      # comparison using the same 0/1/2 contract. `__gcc_bcmp` is the eighth
+      # promotion: byte-wise comparison with zero/non-zero bcmp semantics.
       gcc40_libgcc_funcs="_eprintf __gcc_bcmp _divdi3 _moddi3 _udivdi3 _umoddi3 _udiv_w_sdiv _udivmoddi4 _muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3 _cmpdi2 _ucmpdi2 _clear_cache"
       for fn in $gcc40_libgcc_funcs; do
         obj=/tmp/gcc40-libgcc-objs/$fn.o
         src=/tmp/gcc40-libgcc-objs/$fn.c
-        if [ "$fn" = _negdi2 ]; then
+        if [ "$fn" = __gcc_bcmp ]; then
+          cat > "$src" <<'EOF'
+int __gcc_bcmp(const unsigned char *lhs, const unsigned char *rhs, unsigned long size) {
+  unsigned long idx;
+  for (idx = 0; idx < size; idx++) {
+    int diff = (int)lhs[idx] - (int)rhs[idx];
+    if (diff != 0) return diff;
+  }
+  return 0;
+}
+EOF
+        elif [ "$fn" = _negdi2 ]; then
           cat > "$src" <<'EOF'
 long long _negdi2(long long value) { return -value; }
 EOF
@@ -1205,6 +1216,22 @@ EOF
         gcc40-cc -c "$src" -o "$obj"
         $BB chmod u+r "$obj" 2>/dev/null || true
         test -s "$obj" || { echo "ERROR: libgcc member object missing: $obj" >&2; exit 1; }
+        if [ "$fn" = __gcc_bcmp ]; then
+          $BB cat > /tmp/gcc40-libgcc-objs/bcmp-smoke.c <<'EOF'
+extern int __gcc_bcmp(const unsigned char *, const unsigned char *, unsigned long);
+int main(void) {
+  const unsigned char a[4] = {1, 2, 3, 4};
+  const unsigned char b[4] = {1, 2, 3, 4};
+  const unsigned char c[4] = {1, 2, 9, 4};
+  if (__gcc_bcmp(a, b, 4) != 0) return 1;
+  if (__gcc_bcmp(a, c, 4) == 0) return 2;
+  if (__gcc_bcmp(a, c, 2) != 0) return 3;
+  return 0;
+}
+EOF
+          gcc40-cc /tmp/gcc40-libgcc-objs/bcmp-smoke.c "$obj" -o /tmp/gcc40-libgcc-objs/bcmp-smoke
+          /tmp/gcc40-libgcc-objs/bcmp-smoke || { echo "ERROR: __gcc_bcmp semantic smoke failed" >&2; exit 1; }
+        fi
       done
       libgcc_archive="$out/lib/gcc/x86_64-unknown-linux-musl/4.0.4/libgcc.a"
       printf '!<arch>\n' > "$libgcc_archive"
