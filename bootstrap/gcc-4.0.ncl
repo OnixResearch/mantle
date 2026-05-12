@@ -91,6 +91,7 @@ saw_c_parse_src=0
 saw_c_lang_src=0
 saw_stub_objc_src=0
 saw_attribs_src=0
+saw_c_errors_src=0
 prev_o=0
 for arg in "\$@"; do
   if [ "\$prev_o" = 1 ]; then
@@ -125,6 +126,7 @@ for arg in "\$@"; do
     */c-lang.c|c-lang.c) saw_c_lang_src=1 ;;
     */stub-objc.c|stub-objc.c) saw_stub_objc_src=1 ;;
     */attribs.c|attribs.c) saw_attribs_src=1 ;;
+    */c-errors.c|c-errors.c) saw_c_errors_src=1 ;;
     */errors.c|errors.c) saw_errors_src=1 ;;
   esac
 done
@@ -306,6 +308,14 @@ if [ "\$saw_attribs_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   cat > "\$tmp" <<'ATTRIBS_C'
 void *decl_attributes(void *node, void *attributes, int flags) { (void)node; (void)flags; return attributes; }
 ATTRIBS_C
+  exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
+fi
+if [ "\$saw_c_errors_src" = 1 ] && [ "\$saw_c" = 1 ]; then
+  tmp=/tmp/gcc40-c-errors-bridge.c
+  cat > "\$tmp" <<'CERRORS_C'
+void pedwarn_c99(const char *gmsgid, ...) { (void)gmsgid; }
+void pedwarn_c90(const char *gmsgid, ...) { (void)gmsgid; }
+CERRORS_C
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 case "\$out" in
