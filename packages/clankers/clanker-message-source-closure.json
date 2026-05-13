@@ -371,6 +371,11 @@
   "schema": "crunch-clankers-source-closure-v1",
   "sibling_path_crates": [],
   "source": "/home/brittonr/git/clankers",
+  "source_archive": {
+    "contents": "synthesized minimal workspace root, fixed lockfile, and clanker-message source files",
+    "path": "packages/clankers/clanker-message-src.tar.gz",
+    "sha256": "9de8eab60bf4762904727bb1f0886283f28e4b2ce30966812e9561030b17f3b1"
+  },
   "workspace_source_files": [
     {
       "path": "crates/clanker-message/Cargo.toml",

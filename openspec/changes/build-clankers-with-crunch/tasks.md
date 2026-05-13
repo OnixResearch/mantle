@@ -2,7 +2,7 @@
 
 - [x] [serial] Inventory the Clankers package/dependency graph for the first rung and confirm `clanker-message` is the smallest useful target. ✅ 2m 4s (started: 2026-05-13T04:25:26Z → completed: 2026-05-13T04:27:30Z; evidence: `bootstrap/evidence/clankers-first-rung-inventory.json`, `cargo metadata --locked --offline`)
 - [x] [serial] Create a fixed Clankers source/vendor closure for the first rung, including any required registry, git, path, and workspace sources. ✅ 3m 17s (started: 2026-05-13T04:27:30Z → completed: 2026-05-13T04:30:47Z; evidence: `packages/clankers/clanker-message-source-closure.json`, `packages/clankers/clanker-message-Cargo.lock`; verified JSON/lock consistency and `openspec validate build-clankers-with-crunch --strict`)
-- [ ] [depends:source-closure] Add `packages/clankers/clanker-message.ncl` or equivalent package-set entry that uses `bootstrap/rust.ncl`, offline Cargo, sandbox-local `CARGO_HOME`, and deterministic `CARGO_TARGET_DIR`.
+- [x] [depends:source-closure] Add `packages/clankers/clanker-message.ncl` or equivalent package-set entry that uses `bootstrap/rust.ncl`, offline Cargo, sandbox-local `CARGO_HOME`, and deterministic `CARGO_TARGET_DIR`. ✅ 1m 4s (started: 2026-05-13T04:32:52Z → completed: 2026-05-13T04:33:56Z; evidence: `packages/clankers/clanker-message.ncl`, `crunch eval`, extracted `/bin/sh -n`)
 - [ ] [depends:first-rung-derivation] Validate the first-rung derivation with `crunch eval`, extracted shell syntax check, and `git diff --check`.
 - [ ] [depends:first-rung-derivation] Build the first rung with Crunch and record source/vendor closure digests, Cargo command, and output artifact path.
 
