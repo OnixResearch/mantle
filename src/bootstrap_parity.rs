@@ -432,6 +432,26 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
         return Err("GCC 4.0 native boundary receipt `last_observed_build_log.boundary_log_markers` must not be empty"
             .to_string());
     }
+
+    let native_frontier = require_gcc40_boundary_object(&value, "native_frontier")?;
+    require_gcc40_boundary_object_string(native_frontier, "status")?;
+    let frontier_blockers = native_frontier
+        .get("blockers")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "GCC 4.0 native boundary receipt missing array field `native_frontier.blockers`".to_string())?;
+    if frontier_blockers.is_empty() {
+        return Err("GCC 4.0 native boundary receipt `native_frontier.blockers` must not be empty".to_string());
+    }
+    for blocker in frontier_blockers {
+        let blocker = blocker.as_object().ok_or_else(|| {
+            "GCC 4.0 native boundary receipt `native_frontier.blockers` entries must be objects".to_string()
+        })?;
+        require_gcc40_boundary_object_string(blocker, "id")?;
+        let marker = require_gcc40_boundary_object_string(blocker, "derivation_marker")?;
+        require_gcc40_boundary_object_string(blocker, "frontier")?;
+        require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+
     require_gcc40_boundary_string(
         &value,
         "parity_effect",
@@ -1460,6 +1480,26 @@ mod tests {
     "status": "complete-with-pass1-bridge",
     "boundary_log_markers": ["gcc-4.0.4 build complete (languages: c)"]
   },
+  "native_frontier": {
+    "status": "frontier-only",
+    "blockers": [
+      {
+        "id": "cc1-tcc-delegation",
+        "derivation_marker": "Crunch GCC 4.0 pass1 cc1 object boundary",
+        "frontier": "installed cc1 delegates object output to TinyCC instead of native GCC cc1"
+      },
+      {
+        "id": "generator-empty-boundaries",
+        "derivation_marker": "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
+        "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
+      },
+      {
+        "id": "libiberty-demangle-shim",
+        "derivation_marker": "libiberty_cp_demangle_bootstrap_stub",
+        "frontier": "libiberty demangling remains bootstrap-shimmed"
+      }
+    ]
+  },
   "parity_effect": "evidence-backed partial; does not prove native gcc.4.0 correctness"
 }
 "#,
@@ -1570,6 +1610,8 @@ mod tests {
             "gcc (Crunch pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
+            "libiberty_cp_demangle_bootstrap_stub\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -1645,6 +1687,28 @@ mod tests {
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
+    }
+
+    #[test]
+    fn gcc40_native_frontier_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "libiberty_cp_demangle_bootstrap_stub\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
+        assert!(row.notes.contains("empty-attrtab source boundary"));
     }
 
     #[test]

@@ -20,5 +20,25 @@
       "gcc-4.0.4 build complete (languages: c)"
     ]
   },
-  "parity_effect": "evidence-backed partial; does not prove native gcc.4.0 correctness"
+  "parity_effect": "evidence-backed partial; does not prove native gcc.4.0 correctness",
+  "native_frontier": {
+    "status": "frontier-only",
+    "blockers": [
+      {
+        "id": "cc1-tcc-delegation",
+        "derivation_marker": "Crunch GCC 4.0 pass1 cc1 object boundary",
+        "frontier": "installed cc1 delegates object output to TinyCC instead of native GCC cc1"
+      },
+      {
+        "id": "generator-empty-boundaries",
+        "derivation_marker": "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
+        "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
+      },
+      {
+        "id": "libiberty-demangle-shim",
+        "derivation_marker": "libiberty_cp_demangle_bootstrap_stub",
+        "frontier": "libiberty demangling remains bootstrap-shimmed"
+      }
+    ]
+  }
 }
