@@ -2109,6 +2109,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genattrtab_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genattrtab_empty_attrtab_source_boundary"));
+        assert!(content.contains("empty-attrtab source boundary"));
+        assert!(content.contains("ERROR: genattrtab boundary executable missing"));
+        assert!(content.contains("ERROR: genattrtab source boundary symbol missing"));
+        assert!(content.contains("ERROR: genattrtab source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("void generated_bootstrap_stub(void) { }"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();

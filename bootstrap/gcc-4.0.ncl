@@ -789,16 +789,17 @@ GENOUTPUT_SCRIPT
     ;;
   */build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
-      cat > "\$out" <<'GENSRC_SCRIPT'
+      cat > "\$out" <<'GENATTRTAB_SCRIPT'
 #!/bin/sh
 cat <<'C'
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-void generated_bootstrap_stub(void) { }
+void gcc40_genattrtab_empty_attrtab_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending. */
 C
-GENSRC_SCRIPT
+GENATTRTAB_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
       exit 0
     fi
@@ -1290,6 +1291,18 @@ EOF
       $BB grep -q 'empty-output source boundary' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-output.c; then
         echo 'ERROR: legacy genoutput boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genattrtab" ]; then
+        echo 'ERROR: genattrtab boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genattrtab" > /tmp/gcc40-insn-attrtab.c
+      $BB grep -q 'gcc40_genattrtab_empty_attrtab_source_boundary' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-attrtab source boundary' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-attrtab.c; then
+        echo 'ERROR: legacy genattrtab boundary label present' >&2
         exit 1
       fi
 
