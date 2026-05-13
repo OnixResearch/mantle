@@ -236,7 +236,7 @@ if [ "\$saw_genpreds_src" = 1 ] && [ "\$saw_c" = 1 ]; then
 fi
 if [ "\$saw_genattr_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-genattr-empty.c
-  echo 'int gcc40_genattr_bootstrap_stub;' > "\$tmp"
+  echo 'int gcc40_genattr_empty_attribute_object_boundary;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_gcov_iov_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -248,7 +248,7 @@ case "\$out" in
   */build/genattr.o|build/genattr.o|*/build/genemit.o|build/genemit.o|*/build/genrecog.o|build/genrecog.o|*/build/genextract.o|build/genextract.o|*/build/genpeep.o|build/genpeep.o|*/build/genopinit.o|build/genopinit.o|*/build/genoutput.o|build/genoutput.o|*/build/genattrtab.o|build/genattrtab.o|*/build/genautomata.o|build/genautomata.o)
     if [ "\$saw_c" = 1 ]; then
       tmp=/tmp/gcc40-genattr-out-empty.c
-      echo 'int gcc40_genattr_out_bootstrap_stub;' > "\$tmp"
+      echo 'int gcc40_genattr_empty_attribute_source_object_boundary;' > "\$tmp"
       exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
     fi
     ;;
@@ -665,6 +665,7 @@ cat <<'H'
 #ifndef GCC_INSN_ATTR_H
 #define GCC_INSN_ATTR_H
 #define HAVE_ATTR_enabled 0
+/* Crunch GCC 4.0 empty-attribute header boundary: native genattr promotion pending. */
 #endif
 H
 GENATTR_SCRIPT
@@ -1131,6 +1132,19 @@ EOF
       $BB grep -q 'disabled-tree-checking boundary' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'bootstrap gencheck s[t]ub' /tmp/gcc40-tree-check.h; then
         echo 'ERROR: legacy gencheck boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genattr" ]; then
+        echo 'ERROR: genattr boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genattr" > /tmp/gcc40-insn-attr.h
+      $BB grep -q '^#ifndef GCC_INSN_ATTR_H' /tmp/gcc40-insn-attr.h || { echo 'ERROR: genattr boundary guard missing' >&2; exit 1; }
+      $BB grep -q 'empty-attribute header boundary' /tmp/gcc40-insn-attr.h || { echo 'ERROR: genattr boundary marker missing' >&2; exit 1; }
+      $BB grep -q '^#define HAVE_ATTR_enabled 0' /tmp/gcc40-insn-attr.h || { echo 'ERROR: genattr enabled attribute boundary missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap genattr s[t]ub' /tmp/gcc40-insn-attr.h; then
+        echo 'ERROR: legacy genattr boundary label present' >&2
         exit 1
       fi
 

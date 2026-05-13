@@ -2010,6 +2010,21 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genattr_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genattr_empty_attribute_object_boundary"));
+        assert!(content.contains("empty-attribute header boundary"));
+        assert!(content.contains("ERROR: genattr boundary executable missing"));
+        assert!(content.contains("ERROR: genattr boundary guard missing"));
+        assert!(content.contains("ERROR: genattr enabled attribute boundary missing"));
+        assert!(content.contains("bootstrap genattr s[t]ub"));
+        assert!(!content.contains("gcc40_genattr_bootstrap_stub"));
+        assert!(!content.contains("bootstrap genattr stub"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
