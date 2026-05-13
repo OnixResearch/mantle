@@ -723,10 +723,10 @@ GENSRC_SCRIPT
 #!/bin/sh
 files="gt-cgraph.h gt-coverage.h gtype-desc.h gt-except.h gt-function.h gt-integrate.h gt-tree.h gt-varasm.h gt-emit-rtl.h gt-explow.h gt-stor-layout.h gt-regclass.h gt-lists.h gt-alias.h gt-cselib.h gt-gcse.h gt-expr.h gt-sdbout.h gt-optabs.h gt-bitmap.h gt-dojump.h gt-dwarf2out.h gt-reg-stack.h gt-dwarf2asm.h gt-dbxout.h gt-c-common.h gt-c-decl.h gt-c-parse.h gt-c-pragma.h gtype-c.h gt-cfglayout.h gt-tree-mudflap.h gt-tree-complex.h gt-tree-eh.h gt-tree-ssanames.h gt-tree-iterator.h gt-gimplify.h gt-tree-phinodes.h gt-tree-cfg.h gt-tree-nested.h gt-tree-ssa-operands.h gt-tree-ssa-propagate.h gt-stringpool.h"
 for f in \$files; do
-  printf '/* bootstrap gengtype stub: %s */\n' "\$f" > "\$f"
+  printf '/* Crunch GCC 4.0 empty-GTY header boundary: %s */\n' "\$f" > "\$f"
 done
 cat > gtype-desc.c <<'GTYPE_DESC_C'
-/* bootstrap gengtype stub */
+/* Crunch GCC 4.0 empty-GTY descriptor boundary: native gengtype promotion pending. */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -1078,7 +1078,7 @@ EOF
       gcc40_gengtype_stub_files="gt-cgraph.h gt-coverage.h gtype-desc.h gt-except.h gt-function.h gt-integrate.h gt-tree.h gt-varasm.h gt-emit-rtl.h gt-explow.h gt-stor-layout.h gt-regclass.h gt-lists.h gt-alias.h gt-cselib.h gt-gcse.h gt-expr.h gt-sdbout.h gt-optabs.h gt-bitmap.h gt-dojump.h gt-dwarf2out.h gt-reg-stack.h gt-dwarf2asm.h gt-dbxout.h gt-c-common.h gt-c-decl.h gt-c-parse.h gt-c-pragma.h gtype-c.h gt-cfglayout.h gt-tree-mudflap.h gt-tree-complex.h gt-tree-eh.h gt-tree-ssanames.h gt-tree-iterator.h gt-gimplify.h gt-tree-phinodes.h gt-tree-cfg.h gt-tree-nested.h gt-tree-ssa-operands.h gt-tree-ssa-propagate.h gt-stringpool.h"
       for f in $gcc40_gengtype_stub_files; do
         if [ ! -f "gcc/$f" ]; then
-          printf '/* bootstrap gengtype stub: %s */\n' "$f" > "gcc/$f"
+          printf '/* Crunch GCC 4.0 empty-GTY header boundary: %s */\n' "$f" > "gcc/$f"
         fi
       done
 
@@ -1132,6 +1132,22 @@ EOF
       $BB grep -q 'disabled-tree-checking boundary' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'bootstrap gencheck s[t]ub' /tmp/gcc40-tree-check.h; then
         echo 'ERROR: legacy gencheck boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/gengtype" ]; then
+        echo 'ERROR: gengtype boundary executable missing' >&2
+        exit 1
+      fi
+      rm -rf /tmp/gcc40-gengtype-boundary
+      $BB mkdir -p /tmp/gcc40-gengtype-boundary
+      ( cd /tmp/gcc40-gengtype-boundary && "$WORK/build/gcc/build/gengtype" )
+      test -f /tmp/gcc40-gengtype-boundary/gt-cgraph.h || { echo 'ERROR: gengtype boundary header missing' >&2; exit 1; }
+      test -f /tmp/gcc40-gengtype-boundary/gtype-desc.c || { echo 'ERROR: gengtype descriptor boundary missing' >&2; exit 1; }
+      $BB grep -q 'empty-GTY header boundary: gt-cgraph.h' /tmp/gcc40-gengtype-boundary/gt-cgraph.h || { echo 'ERROR: gengtype header boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'empty-GTY descriptor boundary' /tmp/gcc40-gengtype-boundary/gtype-desc.c || { echo 'ERROR: gengtype descriptor boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap gengtype s[t]ub' /tmp/gcc40-gengtype-boundary/gt-cgraph.h /tmp/gcc40-gengtype-boundary/gtype-desc.c; then
+        echo 'ERROR: legacy gengtype boundary label present' >&2
         exit 1
       fi
 

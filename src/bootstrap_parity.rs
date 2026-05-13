@@ -2025,6 +2025,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("empty-GTY header boundary"));
+        assert!(content.contains("empty-GTY descriptor boundary"));
+        assert!(content.contains("ERROR: gengtype boundary executable missing"));
+        assert!(content.contains("ERROR: gengtype boundary header missing"));
+        assert!(content.contains("ERROR: gengtype descriptor boundary marker missing"));
+        assert!(content.contains("bootstrap gengtype s[t]ub"));
+        assert!(!content.contains("bootstrap gengtype stub"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);

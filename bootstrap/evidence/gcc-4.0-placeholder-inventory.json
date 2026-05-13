@@ -2,40 +2,25 @@
   "schema": "crunch-gcc40-placeholder-inventory-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "inventory-only",
-  "marker_count": 7,
+  "marker_count": 4,
   "markers": [
-    {
-      "line": 726,
-      "marker": "stub",
-      "classification": "pass1-generator-or-driver-bridge"
-    },
-    {
-      "line": 729,
-      "marker": "stub",
-      "classification": "pass1-generator-or-driver-bridge"
-    },
-    {
-      "line": 1081,
-      "marker": "stub",
-      "classification": "pass1-generator-or-driver-bridge"
-    },
     {
       "line": 1122,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1195,
+      "line": 1211,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1210,
+      "line": 1226,
       "marker": "pass1 bridge",
       "classification": "pass1-driver-boundary"
     },
     {
-      "line": 1277,
+      "line": 1293,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     }
