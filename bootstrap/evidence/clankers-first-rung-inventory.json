@@ -1,0 +1,181 @@
+{
+  "candidate_comparison": [
+    {
+      "git_packages": [],
+      "package": "clanker-message",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 65,
+      "total_packages": 66,
+      "workspace_packages": [
+        "clanker-message"
+      ]
+    },
+    {
+      "git_packages": [],
+      "package": "clankers-prompts",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 68,
+      "total_packages": 69,
+      "workspace_packages": [
+        "clankers-prompts"
+      ]
+    },
+    {
+      "git_packages": [
+        {
+          "name": "rat-branches",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-leaderkey",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-markdown",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "ratcore",
+          "source": "git+ssh://git@github.com:22/brittonr/ratcore.git?rev=16333a505696b324637f021b657c474600a9b838#16333a505696b324637f021b657c474600a9b838"
+        }
+      ],
+      "package": "clanker-tui-types",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 220,
+      "total_packages": 225,
+      "workspace_packages": [
+        "clanker-tui-types"
+      ]
+    },
+    {
+      "git_packages": [
+        {
+          "name": "rat-branches",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-leaderkey",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-markdown",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "ratcore",
+          "source": "git+ssh://git@github.com:22/brittonr/ratcore.git?rev=16333a505696b324637f021b657c474600a9b838#16333a505696b324637f021b657c474600a9b838"
+        }
+      ],
+      "package": "clankers-util",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 378,
+      "total_packages": 385,
+      "workspace_packages": [
+        "clanker-message",
+        "clanker-tui-types",
+        "clankers-util"
+      ]
+    },
+    {
+      "git_packages": [
+        {
+          "name": "rat-branches",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-keymap",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-leaderkey",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-markdown",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-spinner",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "rat-widgets",
+          "source": "git+ssh://git@github.com/brittonr/subwayrat.git?rev=d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc#d930e8ce693bc3761eff5a4ed4a8bd109b2cd7fc"
+        },
+        {
+          "name": "ratcore",
+          "source": "git+ssh://git@github.com:22/brittonr/ratcore.git?rev=16333a505696b324637f021b657c474600a9b838#16333a505696b324637f021b657c474600a9b838"
+        }
+      ],
+      "package": "clankers-config",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 613,
+      "total_packages": 632,
+      "workspace_packages": [
+        "clanker-auth",
+        "clanker-message",
+        "clanker-router",
+        "clanker-tui-types",
+        "clankers-agent-defs",
+        "clankers-autoresearch",
+        "clankers-config",
+        "clankers-hooks",
+        "clankers-model-selection",
+        "clankers-protocol",
+        "clankers-tui",
+        "clankers-ucan"
+      ]
+    },
+    {
+      "git_packages": [],
+      "package": "clanker-router",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 463,
+      "total_packages": 465,
+      "workspace_packages": [
+        "clanker-message",
+        "clanker-router"
+      ]
+    },
+    {
+      "git_packages": [],
+      "package": "clankers-protocol",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 81,
+      "total_packages": 82,
+      "workspace_packages": [
+        "clankers-protocol"
+      ]
+    },
+    {
+      "git_packages": [],
+      "package": "clanker-auth",
+      "path_nonworkspace_packages": [],
+      "registry_packages": 438,
+      "total_packages": 439,
+      "workspace_packages": [
+        "clanker-auth"
+      ]
+    }
+  ],
+  "conclusion": {
+    "next_source_closure_scope": "workspace root plus crates/clanker-message and registry crates from Cargo.lock for the clanker-message closure; no subwayrat/ratcore git inputs for the first rung.",
+    "requires_native_build_tools_observed_in_metadata": false,
+    "requires_private_git_sources": false,
+    "requires_sibling_path_sources": false,
+    "smallest_useful_target_confirmed": true
+  },
+  "direct_dependencies": [
+    "chrono",
+    "hex",
+    "pretty_assertions",
+    "rand",
+    "serde",
+    "serde_json"
+  ],
+  "generated_from": "/home/brittonr/git/clankers Cargo.lock via cargo metadata --locked --offline",
+  "schema": "crunch-clankers-first-rung-inventory-v1",
+  "selected_first_rung": "clanker-message",
+  "selected_manifest_path": "/home/brittonr/git/clankers/crates/clanker-message/Cargo.toml",
+  "selection_rationale": "clanker-message is a workspace crate with useful shared conversation message/content/tool-result/streaming types, only registry dependencies in its resolved build closure, no workspace/path/git/private SSH dependencies, and the smallest observed useful closure among candidate Clankers crates."
+}

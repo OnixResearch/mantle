@@ -1,6 +1,6 @@
 ## Phase 1: Source closure and first rung
 
-- [ ] [serial] Inventory the Clankers package/dependency graph for the first rung and confirm `clanker-message` is the smallest useful target.
+- [x] [serial] Inventory the Clankers package/dependency graph for the first rung and confirm `clanker-message` is the smallest useful target. ✅ 2m 4s (started: 2026-05-13T04:25:26Z → completed: 2026-05-13T04:27:30Z; evidence: `bootstrap/evidence/clankers-first-rung-inventory.json`, `cargo metadata --locked --offline`)
 - [ ] [serial] Create a fixed Clankers source/vendor closure for the first rung, including any required registry, git, path, and workspace sources.
 - [ ] [depends:source-closure] Add `packages/clankers/clanker-message.ncl` or equivalent package-set entry that uses `bootstrap/rust.ncl`, offline Cargo, sandbox-local `CARGO_HOME`, and deterministic `CARGO_TARGET_DIR`.
 - [ ] [depends:first-rung-derivation] Validate the first-rung derivation with `crunch eval`, extracted shell syntax check, and `git diff --check`.
