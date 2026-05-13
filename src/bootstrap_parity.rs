@@ -1494,9 +1494,9 @@ mod tests {
         "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
       },
       {
-        "id": "libiberty-demangle-shim",
-        "derivation_marker": "libiberty_cp_demangle_bootstrap_stub",
-        "frontier": "libiberty demangling remains bootstrap-shimmed"
+        "id": "libiberty-demangle-boundary",
+        "derivation_marker": "gcc40_cp_demangle_disabled_boundary",
+        "frontier": "libiberty demangling remains a checked disabled-demangle boundary"
       }
     ]
   },
@@ -1611,7 +1611,7 @@ mod tests {
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
-            "libiberty_cp_demangle_bootstrap_stub\n",
+            "gcc40_cp_demangle_disabled_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -1698,7 +1698,7 @@ mod tests {
             "gcc (Crunch pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
-            "libiberty_cp_demangle_bootstrap_stub\n",
+            "gcc40_cp_demangle_disabled_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -2184,6 +2184,16 @@ mod tests {
         assert!(content.contains("ERROR: genattrtab source boundary marker missing"));
         assert!(content.contains("generated_bootstrap_s[t]ub"));
         assert!(!content.contains("void generated_bootstrap_stub(void) { }"));
+    }
+
+    #[test]
+    fn gcc40_real_derivation_contains_demangle_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_cp_demangle_disabled_boundary"));
+        assert!(content.contains("disabled-demangle boundary"));
+        assert!(!content.contains("libiberty_cp_demangle_bootstrap_stub"));
     }
 
     #[test]

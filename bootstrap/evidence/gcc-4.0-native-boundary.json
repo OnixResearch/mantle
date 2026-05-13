@@ -35,9 +35,9 @@
         "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
       },
       {
-        "id": "libiberty-demangle-shim",
-        "derivation_marker": "libiberty_cp_demangle_bootstrap_stub",
-        "frontier": "libiberty demangling remains bootstrap-shimmed"
+        "id": "libiberty-demangle-boundary",
+        "derivation_marker": "gcc40_cp_demangle_disabled_boundary",
+        "frontier": "libiberty demangling remains a checked disabled-demangle boundary"
       }
     ]
   }

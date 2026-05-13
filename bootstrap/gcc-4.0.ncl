@@ -948,8 +948,8 @@ enum gnu_v3_ctor_kinds is_gnu_v3_mangled_ctor(const char *name) { (void)name; re
 enum gnu_v3_dtor_kinds is_gnu_v3_mangled_dtor(const char *name) { (void)name; return 0; }
 CPLUS_DEM_EOF
       $BB cat > gcc-4.0.4/libiberty/cp-demangle.c <<'CP_DEMANGLE_EOF'
-/* Bootstrap shim: C++ demangling is disabled by cplus-dem.c. */
-int libiberty_cp_demangle_bootstrap_stub;
+/* Crunch GCC 4.0 disabled-demangle boundary: native cp-demangle promotion pending. */
+int gcc40_cp_demangle_disabled_boundary(void) { return 0; }
 CP_DEMANGLE_EOF
       $BB cat > gcc-4.0.4/libiberty/md5.c <<'MD5_EOF'
 #include "md5.h"
