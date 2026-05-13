@@ -1,0 +1,38 @@
+{
+  "artifact_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/store/g3sx425njr9khhx5vlh6rb9czjr5lyzv-clankers-prompts-0.1.0/lib/libclankers_prompts.rlib",
+  "build_command": "nix-shell -p bubblewrap --run './target/debug/crunch build packages/clankers/clankers-prompts.ncl --store \"$PWD/.crunch-drain/store\" -j 4 --trust-unsigned'",
+  "build_timestamp": "2026-05-13T13:29:26Z",
+  "cargo_command": "cargo build --release --locked --offline -p clankers-prompts --target x86_64-unknown-linux-musl",
+  "change_id": "build-clankers-with-crunch",
+  "digests_sha256": {
+    "artifact": "166fab3e97f14de164c2458af27f8e1505fa8a0b46a4497f5ff58b703c776c2f",
+    "derivation": "e1f09f24d2fbae5813d3ffd3b7d6aab082dd08ee1c851768f7d30b1eaa9387f8",
+    "lockfile": "22a2e3fbd1c5ea96e3cca12abc337175627abaab060eb3026c7d3dca60739745",
+    "source_archive": "b4a24af9e442414396ffa46818c9d04892a7dde12d08489b18fd89f4be4fdd66",
+    "source_closure": "8056787f643b20253e84c69bbeeb550b9d37ccd8156047f42ea9a31eb0558f36"
+  },
+  "output_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/store/g3sx425njr9khhx5vlh6rb9czjr5lyzv-clankers-prompts-0.1.0",
+  "package": "clankers-prompts",
+  "receipt_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/store/g3sx425njr9khhx5vlh6rb9czjr5lyzv-clankers-prompts-0.1.0/share/clankers/clankers-prompts-build-receipt.txt",
+  "schema": "crunch-clankers-next-rung-build-v1",
+  "selected_after": "clanker-message",
+  "selection_rationale": "clankers-prompts is the next smallest useful candidate from the first-rung inventory, has no git or sibling path dependencies, and only requires a fixed registry closure.",
+  "source_closure": {
+    "derivation_path": "packages/clankers/clankers-prompts.ncl",
+    "git_crate_count": 0,
+    "lockfile_path": "packages/clankers/clankers-prompts-Cargo.lock",
+    "manifest_path": "packages/clankers/clankers-prompts-source-closure.json",
+    "network_allowed_during_derivation": false,
+    "registry_crate_count": 49,
+    "sibling_path_crate_count": 0,
+    "source_archive_path": "packages/clankers/clankers-prompts-src.tar.gz"
+  },
+  "status": "built-with-crunch",
+  "validation": [
+    "./target/debug/crunch eval packages/clankers/clankers-prompts.ncl",
+    "/bin/sh -n /tmp/clankers-prompts-builder.sh",
+    "python -m json.tool packages/clankers/clankers-prompts-source-closure.json",
+    "git diff --check"
+  ],
+  "version": "0.1.0"
+}

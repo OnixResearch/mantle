@@ -8,7 +8,7 @@
 
 ## Phase 2: Clankers ladder expansion
 
-- [ ] [depends:first-rung-build] Add the next low-dependency Clankers crates one at a time, preserving offline Cargo and fixed source closure behavior.
+- [x] [depends:first-rung-build] Add the next low-dependency Clankers crates one at a time, preserving offline Cargo and fixed source closure behavior. ✅ 4m 46s (started: 2026-05-13T13:24:40Z → completed: 2026-05-13T13:29:26Z; evidence: `packages/clankers/clankers-prompts.ncl`, `packages/clankers/clankers-prompts-source-closure.json`, `bootstrap/evidence/clankers-prompts-build.json`; output: `.crunch-drain/store/g3sx425njr9khhx5vlh6rb9czjr5lyzv-clankers-prompts-0.1.0/lib/libclankers_prompts.rlib`)
 - [ ] [depends:ladder-expansion] Introduce native build-script tool inputs only when a selected crate requires them, with a receipt explaining the observed failure and smallest added tool.
 - [ ] [depends:ladder-expansion] Add the root `clankers` binary derivation and install `$out/bin/clankers`.
 - [ ] [depends:root-binary] Run a network-free root binary smoke such as `$out/bin/clankers --help` or `$out/bin/clankers --version` and record the observed output.
