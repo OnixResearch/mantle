@@ -719,7 +719,24 @@ GENRECOG_SCRIPT
       exit 0
     fi
     ;;
-  */build/genextract|build/genextract|*/build/genpeep|build/genpeep|*/build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
+  */build/genextract|build/genextract)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENEXTRACT_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+void gcc40_genextract_empty_extraction_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-extraction source boundary: native genextract promotion pending. */
+C
+GENEXTRACT_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genpeep|build/genpeep|*/build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENSRC_SCRIPT'
 #!/bin/sh
@@ -1174,6 +1191,18 @@ EOF
       $BB grep -q 'empty-recognition source boundary' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-recog.c; then
         echo 'ERROR: legacy genrecog boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genextract" ]; then
+        echo 'ERROR: genextract boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genextract" > /tmp/gcc40-insn-extract.c
+      $BB grep -q 'gcc40_genextract_empty_extraction_source_boundary' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-extraction source boundary' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-extract.c; then
+        echo 'ERROR: legacy genextract boundary label present' >&2
         exit 1
       fi
 

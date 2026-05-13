@@ -2053,6 +2053,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genextract_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genextract_empty_extraction_source_boundary"));
+        assert!(content.contains("empty-extraction source boundary"));
+        assert!(content.contains("ERROR: genextract boundary executable missing"));
+        assert!(content.contains("ERROR: genextract source boundary symbol missing"));
+        assert!(content.contains("ERROR: genextract source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("genextract|build/genextract|*/build/genpeep"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
