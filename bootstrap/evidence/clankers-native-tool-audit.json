@@ -1,0 +1,32 @@
+{
+  "built_rungs": [
+    {
+      "evidence": "bootstrap/evidence/clankers-first-rung-build.json",
+      "extra_native_tool_inputs": [],
+      "git_crate_count": 0,
+      "package": "clanker-message",
+      "registry_crate_count": 57,
+      "sibling_path_crate_count": 0,
+      "status": "built-without-extra-native-build-script-tools"
+    },
+    {
+      "evidence": "bootstrap/evidence/clankers-prompts-build.json",
+      "extra_native_tool_inputs": [],
+      "git_crate_count": 0,
+      "package": "clankers-prompts",
+      "registry_crate_count": 49,
+      "sibling_path_crate_count": 0,
+      "status": "built-without-extra-native-build-script-tools"
+    }
+  ],
+  "change_id": "build-clankers-with-crunch",
+  "decision": "Do not introduce cmake, go, pkg-config, onnxruntime, or other native build-script tool inputs until an attempted selected rung produces a concrete build-script failure naming such a tool. The current built rungs use only the existing bootstrap Rust, musl, seed toolchain, fixed source archive, and fixed Cargo registry inputs.",
+  "generated_at": "2026-05-13T13:31:24Z",
+  "schema": "crunch-clankers-native-tool-audit-v1",
+  "status": "no-extra-native-tools-required-for-built-rungs",
+  "validation": [
+    "clanker-message Crunch build receipt exists",
+    "clankers-prompts Crunch build receipt exists",
+    "openspec validate build-clankers-with-crunch --strict"
+  ]
+}
