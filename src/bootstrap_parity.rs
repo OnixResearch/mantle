@@ -2095,6 +2095,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genoutput_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genoutput_empty_output_source_boundary"));
+        assert!(content.contains("empty-output source boundary"));
+        assert!(content.contains("ERROR: genoutput boundary executable missing"));
+        assert!(content.contains("ERROR: genoutput source boundary symbol missing"));
+        assert!(content.contains("ERROR: genoutput source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("genoutput|build/genoutput|*/build/genattrtab"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();

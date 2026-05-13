@@ -770,7 +770,24 @@ GENOPINIT_SCRIPT
       exit 0
     fi
     ;;
-  */build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
+  */build/genoutput|build/genoutput)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENOUTPUT_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+void gcc40_genoutput_empty_output_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending. */
+C
+GENOUTPUT_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENSRC_SCRIPT'
 #!/bin/sh
@@ -1261,6 +1278,18 @@ EOF
       $BB grep -q 'empty-opinit source boundary' /tmp/gcc40-insn-opinit.c || { echo 'ERROR: genopinit source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-opinit.c; then
         echo 'ERROR: legacy genopinit boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genoutput" ]; then
+        echo 'ERROR: genoutput boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genoutput" > /tmp/gcc40-insn-output.c
+      $BB grep -q 'gcc40_genoutput_empty_output_source_boundary' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-output source boundary' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-output.c; then
+        echo 'ERROR: legacy genoutput boundary label present' >&2
         exit 1
       fi
 
