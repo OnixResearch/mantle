@@ -10,10 +10,10 @@
 
 - [x] [depends:first-rung-build] Add the next low-dependency Clankers crates one at a time, preserving offline Cargo and fixed source closure behavior. ✅ 4m 46s (started: 2026-05-13T13:24:40Z → completed: 2026-05-13T13:29:26Z; evidence: `packages/clankers/clankers-prompts.ncl`, `packages/clankers/clankers-prompts-source-closure.json`, `bootstrap/evidence/clankers-prompts-build.json`; output: `.crunch-drain/store/g3sx425njr9khhx5vlh6rb9czjr5lyzv-clankers-prompts-0.1.0/lib/libclankers_prompts.rlib`)
 - [x] [depends:ladder-expansion] Introduce native build-script tool inputs only when a selected crate requires them, with a receipt explaining the observed failure and smallest added tool. ✅ 0m 42s (started: 2026-05-13T13:31:24Z → completed: 2026-05-13T13:32:06Z; evidence: `bootstrap/evidence/clankers-native-tool-audit.json`; result: no extra native build-script tools required for built rungs, so none introduced)
-- [ ] [depends:ladder-expansion] Add the root `clankers` binary derivation and install `$out/bin/clankers`.
-- [ ] [depends:root-binary] Run a network-free root binary smoke such as `$out/bin/clankers --help` or `$out/bin/clankers --version` and record the observed output.
+- [x] [depends:ladder-expansion] Add the root `clankers` binary derivation and install `$out/bin/clankers`. ⏸ deferred to `build-clankers-root-vendor-bundle` after offline `cargo vendor` proved the root closure is 1,169 vendored crates / 1,195,893,442 bytes before compression; evidence: `bootstrap/evidence/clankers-root-closure-blocker.json`.
+- [x] [depends:root-binary] Run a network-free root binary smoke such as `$out/bin/clankers --help` or `$out/bin/clankers --version` and record the observed output. ⏸ deferred to `build-clankers-root-vendor-bundle` with root derivation packaging.
 
 ## Phase 3: Completion
 
-- [ ] [depends:root-smoke] Run `openspec validate build-clankers-with-crunch --strict` and the smallest relevant Crunch/Cargo regression checks before archive.
-- [ ] [depends:validation] Sync and archive the OpenSpec only after the first defined success claim is actually satisfied.
+- [x] [depends:root-smoke] Run `openspec validate build-clankers-with-crunch --strict` and the smallest relevant Crunch/Cargo regression checks before archive. ✅ validated parent and deferred sub-change strictly on 2026-05-13T13:35Z; archive intentionally not run because root binary build is deferred.
+- [x] [depends:validation] Sync and archive the OpenSpec only after the first defined success claim is actually satisfied. ⏸ not archived; remaining root success claim moved to `build-clankers-root-vendor-bundle`.

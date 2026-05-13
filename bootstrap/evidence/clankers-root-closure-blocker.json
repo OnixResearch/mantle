@@ -1,0 +1,19 @@
+{
+  "attempt": "CARGO_NET_OFFLINE=true cargo vendor --locked --offline --versioned-dirs /tmp/clankers-root-vendor",
+  "blocker": "The root clankers binary closure vendors successfully offline, but the fixed vendor input is too large for the existing per-crate committed-input pattern and should not be added to git as a monolithic package artifact.",
+  "cargo_lock_sha256": "879e526f9dfbe48432226ba43871d92931998a3674daea4a723e93984bc6a256",
+  "change_id": "build-clankers-with-crunch",
+  "generated_at": "2026-05-13T13:32:55Z",
+  "next_change": "build-clankers-root-vendor-bundle",
+  "next_decision_needed": "Design a scalable fixed-input representation for the root vendor/source bundle, likely content-addressed external artifact or chunked manifest, before adding packages/clankers/clankers.ncl.",
+  "observations": [
+    "cargo vendor resolved registry and git sources from local Cargo cache without network",
+    "root closure size is about 1.3 GiB before compression",
+    "existing clanker-message/clankers-prompts derivations use committed source tarballs and per-crate inputs, which does not scale to the root closure"
+  ],
+  "schema": "crunch-clankers-root-closure-blocker-v1",
+  "status": "deferred-to-subchange",
+  "vendor_crate_count": 1169,
+  "vendor_directory": "/tmp/clankers-root-vendor",
+  "vendor_size_bytes": 1195893442
+}
