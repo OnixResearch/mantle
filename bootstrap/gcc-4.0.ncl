@@ -694,7 +694,8 @@ cat <<'C'
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-void genemit_bootstrap_stub(void) { }
+void gcc40_genemit_empty_emit_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-emit source boundary: native genemit promotion pending. */
 C
 GENEMIT_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1132,6 +1133,18 @@ EOF
       $BB grep -q 'disabled-tree-checking boundary' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'bootstrap gencheck s[t]ub' /tmp/gcc40-tree-check.h; then
         echo 'ERROR: legacy gencheck boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genemit" ]; then
+        echo 'ERROR: genemit boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genemit" > /tmp/gcc40-insn-emit.c
+      $BB grep -q 'gcc40_genemit_empty_emit_source_boundary' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-emit source boundary' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'genemit_bootstrap_s[t]ub' /tmp/gcc40-insn-emit.c; then
+        echo 'ERROR: legacy genemit boundary label present' >&2
         exit 1
       fi
 

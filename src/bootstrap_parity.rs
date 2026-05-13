@@ -2025,6 +2025,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genemit_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genemit_empty_emit_source_boundary"));
+        assert!(content.contains("empty-emit source boundary"));
+        assert!(content.contains("ERROR: genemit boundary executable missing"));
+        assert!(content.contains("ERROR: genemit source boundary symbol missing"));
+        assert!(content.contains("ERROR: genemit source boundary marker missing"));
+        assert!(content.contains("genemit_bootstrap_s[t]ub"));
+        assert!(!content.contains("void genemit_bootstrap_stub"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
