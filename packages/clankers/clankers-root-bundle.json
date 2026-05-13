@@ -1,0 +1,35 @@
+{
+  "bundle": {
+    "archive_bytes": 70169792,
+    "archive_hash": "sha256-uMLtEAKljm6oyduquA3EIdzabrc6MX1BlYDRRSQEAvM=",
+    "local_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/artifacts/clankers-root-bundle.tar.zst",
+    "recursive_unpack_hash": "sha256-Kxh6OEdoNRj94tyQZyqGoOEqMFx5QJmpCwCH4V1LQ/o=",
+    "top_level_dir": "clankers-root-bundle",
+    "url": "file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst"
+  },
+  "cargo": {
+    "build_command": "cargo build --locked --offline --bin clankers",
+    "cargo_home": "$TMPDIR/cargo-home",
+    "cargo_target_dir": "$TMPDIR/cargo-target"
+  },
+  "change_id": "build-clankers-root-vendor-bundle",
+  "generated_at": "2026-05-13T13:55:36Z",
+  "notes": [
+    "bundle payload is intentionally not committed to git",
+    "metadata commits the fixed hashes and generation recipe",
+    "source status may include pre-existing Clankers WIP and must not be attributed to this change"
+  ],
+  "schema": "crunch-clankers-root-bundle-v1",
+  "source": {
+    "cargo_lock_sha256": "879e526f9dfbe48432226ba43871d92931998a3674daea4a723e93984bc6a256",
+    "git_head": "57c3cccccc5ad4f9a987f07e598008c2a0751f82",
+    "git_status_short": [],
+    "path": "/home/brittonr/git/clankers"
+  },
+  "vendor": {
+    "bytes": 887236688,
+    "command": "CARGO_NET_OFFLINE=true cargo vendor --locked --offline --versioned-dirs .crunch-drain/stage/clankers-root-bundle/cargo-vendor",
+    "crate_count": 786,
+    "directory": "cargo-vendor"
+  }
+}
