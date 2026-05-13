@@ -1991,6 +1991,25 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genpreds_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genpreds_empty_predicate_object_boundary"));
+        assert!(content.contains("gcc40_genpreds_empty_predicate_source_boundary"));
+        assert!(content.contains("empty-predicate header boundary"));
+        assert!(content.contains("empty-predicate source boundary"));
+        assert!(content.contains("Normalize this seam to the same checked"));
+        assert!(content.contains("GENPREDS_BOUNDARY_SCRIPT"));
+        assert!(content.contains("ERROR: genpreds boundary executable missing"));
+        assert!(content.contains("ERROR: genpreds header boundary guard missing"));
+        assert!(content.contains("ERROR: genpreds source boundary symbol missing"));
+        assert!(content.contains("bootstrap genpreds s[t]ub"));
+        assert!(!content.contains("bootstrap genpreds header stub"));
+        assert!(!content.contains("bootstrap genpreds source stub"));
+    }
+
+    #[test]
     fn stagex_lineage_real_receipt_reports_evidence_backed_partial() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);

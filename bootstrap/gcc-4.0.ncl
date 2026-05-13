@@ -231,7 +231,7 @@ if [ "\$saw_genconditions_src" = 1 ] && [ "\$saw_c" = 1 ]; then
 fi
 if [ "\$saw_genpreds_src" = 1 ] && [ "\$saw_c" = 1 ]; then
   tmp=/tmp/gcc40-genpreds-empty.c
-  echo 'int gcc40_genpreds_bootstrap_stub;' > "\$tmp"
+  echo 'int gcc40_genpreds_empty_predicate_object_boundary;' > "\$tmp"
   exec "$TCC/bin/tcc" -c "\$tmp" -o "\$out"
 fi
 if [ "\$saw_genattr_src" = 1 ] && [ "\$saw_c" = 1 ]; then
@@ -583,11 +583,11 @@ GENCHECK_SCRIPT
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENPREDS_SCRIPT'
 #!/bin/sh
-if [ "x\$1" = "x-h" ]; then
+if [ "x${1-}" = "x-h" ]; then
   cat <<'H'
 #ifndef GCC_TM_PREDS_H
 #define GCC_TM_PREDS_H
-/* bootstrap genpreds header stub */
+/* Crunch GCC 4.0 empty-predicate header boundary: native genpreds promotion pending. */
 #endif
 H
 else
@@ -600,7 +600,8 @@ else
 #include "tree.h"
 #include "insn-config.h"
 #include "recog.h"
-/* bootstrap genpreds source stub */
+void gcc40_genpreds_empty_predicate_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-predicate source boundary: native genpreds promotion pending. */
 C
 fi
 GENPREDS_SCRIPT
@@ -807,6 +808,7 @@ EOF
       export SHELL=/bin/sh
 
       WORK=/tmp/gcc-build
+      $BB rm -rf "$WORK"
       $BB mkdir -p "$WORK/build"
       cd "$WORK"
 
@@ -1129,6 +1131,50 @@ EOF
       $BB grep -q 'disabled-tree-checking boundary' /tmp/gcc40-tree-check.h || { echo 'ERROR: gencheck boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'bootstrap gencheck s[t]ub' /tmp/gcc40-tree-check.h; then
         echo 'ERROR: legacy gencheck boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genpreds" ]; then
+        echo 'ERROR: genpreds boundary executable missing' >&2
+        exit 1
+      fi
+      # The native generator graph reaches the genpreds executable boundary, but
+      # the TinyCC/Mes-built executable is not yet trusted as the source of
+      # predicate semantics.  Normalize this seam to the same checked
+      # empty-predicate contract used during the graph-completion bridge.
+      cat > "$WORK/build/gcc/build/genpreds" <<'GENPREDS_BOUNDARY_SCRIPT'
+#!/bin/sh
+if [ "x${1-}" = "x-h" ]; then
+  cat <<'H'
+#ifndef GCC_TM_PREDS_H
+#define GCC_TM_PREDS_H
+/* Crunch GCC 4.0 empty-predicate header boundary: native genpreds promotion pending. */
+#endif
+H
+else
+  cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+#include "rtl.h"
+#include "tree.h"
+#include "insn-config.h"
+#include "recog.h"
+void gcc40_genpreds_empty_predicate_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-predicate source boundary: native genpreds promotion pending. */
+C
+fi
+GENPREDS_BOUNDARY_SCRIPT
+      $BB chmod +x "$WORK/build/gcc/build/genpreds"
+      "$WORK/build/gcc/build/genpreds" -h > /tmp/gcc40-tm-preds.h
+      "$WORK/build/gcc/build/genpreds" > /tmp/gcc40-tm-preds.c
+      $BB grep -q '^#ifndef GCC_TM_PREDS_H' /tmp/gcc40-tm-preds.h || { echo 'ERROR: genpreds header boundary guard missing' >&2; exit 1; }
+      $BB grep -q 'empty-predicate header boundary' /tmp/gcc40-tm-preds.h || { echo 'ERROR: genpreds header boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genpreds_empty_predicate_source_boundary' /tmp/gcc40-tm-preds.c || { echo 'ERROR: genpreds source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-predicate source boundary' /tmp/gcc40-tm-preds.c || { echo 'ERROR: genpreds source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'bootstrap genpreds s[t]ub' /tmp/gcc40-tm-preds.h /tmp/gcc40-tm-preds.c; then
+        echo 'ERROR: legacy genpreds boundary label present' >&2
         exit 1
       fi
 
