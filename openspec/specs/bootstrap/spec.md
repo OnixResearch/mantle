@@ -2218,6 +2218,14 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided GCC, or legacy compiler outputs for bootstrap proof
 
+#### Scenario: Parity report requires checked C++ provider contract
+
+- GIVEN `bootstrap/evidence/gcc-4.7-cxx-provider-contract.json` records the expected C/C++ configure, build, install, and smoke markers
+- WHEN `crunch bootstrap parity-report` evaluates the `gcc.4.7` row
+- THEN the row remains `partial` until native/full GCC 4.7 correctness is proven
+- AND the row does not report an evidence failure while every required marker is present in `bootstrap/gcc-4.7.ncl`
+- AND marker drift or a missing receipt is reported as an evidence failure
+
 #### Scenario: Downstream blockers stay local
 
 - GIVEN a predecessor or downstream bootstrap stage fails before full `bootstrap/gcc-4.7.ncl` runtime proof exists
