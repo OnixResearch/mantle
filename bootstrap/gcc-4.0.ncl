@@ -736,7 +736,24 @@ GENEXTRACT_SCRIPT
       exit 0
     fi
     ;;
-  */build/genpeep|build/genpeep|*/build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
+  */build/genpeep|build/genpeep)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENPEEP_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+void gcc40_genpeep_empty_peephole_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-peephole source boundary: native genpeep promotion pending. */
+C
+GENPEEP_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENSRC_SCRIPT'
 #!/bin/sh
@@ -1203,6 +1220,18 @@ EOF
       $BB grep -q 'empty-extraction source boundary' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-extract.c; then
         echo 'ERROR: legacy genextract boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genpeep" ]; then
+        echo 'ERROR: genpeep boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genpeep" > /tmp/gcc40-insn-peep.c
+      $BB grep -q 'gcc40_genpeep_empty_peephole_source_boundary' /tmp/gcc40-insn-peep.c || { echo 'ERROR: genpeep source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-peephole source boundary' /tmp/gcc40-insn-peep.c || { echo 'ERROR: genpeep source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-peep.c; then
+        echo 'ERROR: legacy genpeep boundary label present' >&2
         exit 1
       fi
 

@@ -2067,6 +2067,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genpeep_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genpeep_empty_peephole_source_boundary"));
+        assert!(content.contains("empty-peephole source boundary"));
+        assert!(content.contains("ERROR: genpeep boundary executable missing"));
+        assert!(content.contains("ERROR: genpeep source boundary symbol missing"));
+        assert!(content.contains("ERROR: genpeep source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("genpeep|build/genpeep|*/build/genopinit"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
