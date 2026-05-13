@@ -2039,6 +2039,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genrecog_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genrecog_empty_recognition_source_boundary"));
+        assert!(content.contains("empty-recognition source boundary"));
+        assert!(content.contains("ERROR: genrecog boundary executable missing"));
+        assert!(content.contains("ERROR: genrecog source boundary symbol missing"));
+        assert!(content.contains("ERROR: genrecog source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("genrecog|build/genrecog|*/build/genextract"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();

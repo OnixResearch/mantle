@@ -702,7 +702,24 @@ GENEMIT_SCRIPT
       exit 0
     fi
     ;;
-  */build/genrecog|build/genrecog|*/build/genextract|build/genextract|*/build/genpeep|build/genpeep|*/build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
+  */build/genrecog|build/genrecog)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENRECOG_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+void gcc40_genrecog_empty_recognition_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-recognition source boundary: native genrecog promotion pending. */
+C
+GENRECOG_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genextract|build/genextract|*/build/genpeep|build/genpeep|*/build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENSRC_SCRIPT'
 #!/bin/sh
@@ -1145,6 +1162,18 @@ EOF
       $BB grep -q 'empty-emit source boundary' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'genemit_bootstrap_s[t]ub' /tmp/gcc40-insn-emit.c; then
         echo 'ERROR: legacy genemit boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genrecog" ]; then
+        echo 'ERROR: genrecog boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genrecog" > /tmp/gcc40-insn-recog.c
+      $BB grep -q 'gcc40_genrecog_empty_recognition_source_boundary' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-recognition source boundary' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-recog.c; then
+        echo 'ERROR: legacy genrecog boundary label present' >&2
         exit 1
       fi
 
