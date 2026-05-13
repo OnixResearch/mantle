@@ -753,7 +753,24 @@ GENPEEP_SCRIPT
       exit 0
     fi
     ;;
-  */build/genopinit|build/genopinit|*/build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
+  */build/genopinit|build/genopinit)
+    if [ "\$saw_c" = 0 ]; then
+      cat > "\$out" <<'GENOPINIT_SCRIPT'
+#!/bin/sh
+cat <<'C'
+#include "config.h"
+#include "system.h"
+#include "coretypes.h"
+#include "tm.h"
+void gcc40_genopinit_empty_opinit_source_boundary(void) { }
+/* Crunch GCC 4.0 empty-opinit source boundary: native genopinit promotion pending. */
+C
+GENOPINIT_SCRIPT
+      chmod +x "\$out" 2>/dev/null || true
+      exit 0
+    fi
+    ;;
+  */build/genoutput|build/genoutput|*/build/genattrtab|build/genattrtab)
     if [ "\$saw_c" = 0 ]; then
       cat > "\$out" <<'GENSRC_SCRIPT'
 #!/bin/sh
@@ -1232,6 +1249,18 @@ EOF
       $BB grep -q 'empty-peephole source boundary' /tmp/gcc40-insn-peep.c || { echo 'ERROR: genpeep source boundary marker missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-peep.c; then
         echo 'ERROR: legacy genpeep boundary label present' >&2
+        exit 1
+      fi
+
+      if [ ! -x "$WORK/build/gcc/build/genopinit" ]; then
+        echo 'ERROR: genopinit boundary executable missing' >&2
+        exit 1
+      fi
+      "$WORK/build/gcc/build/genopinit" > /tmp/gcc40-insn-opinit.c
+      $BB grep -q 'gcc40_genopinit_empty_opinit_source_boundary' /tmp/gcc40-insn-opinit.c || { echo 'ERROR: genopinit source boundary symbol missing' >&2; exit 1; }
+      $BB grep -q 'empty-opinit source boundary' /tmp/gcc40-insn-opinit.c || { echo 'ERROR: genopinit source boundary marker missing' >&2; exit 1; }
+      if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-opinit.c; then
+        echo 'ERROR: legacy genopinit boundary label present' >&2
         exit 1
       fi
 

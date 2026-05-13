@@ -2081,6 +2081,20 @@ mod tests {
     }
 
     #[test]
+    fn gcc40_real_derivation_contains_genopinit_boundary_checks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
+
+        assert!(content.contains("gcc40_genopinit_empty_opinit_source_boundary"));
+        assert!(content.contains("empty-opinit source boundary"));
+        assert!(content.contains("ERROR: genopinit boundary executable missing"));
+        assert!(content.contains("ERROR: genopinit source boundary symbol missing"));
+        assert!(content.contains("ERROR: genopinit source boundary marker missing"));
+        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(!content.contains("genopinit|build/genopinit|*/build/genoutput"));
+    }
+
+    #[test]
     fn gcc40_real_derivation_contains_gengtype_boundary_checks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
