@@ -930,26 +930,56 @@ REGEX_EOF
       $BB cat > gcc-4.0.4/libiberty/cplus-dem.c <<'CPLUS_DEM_EOF'
 #include "demangle.h"
 
-enum demangling_styles current_demangling_style = no_demangling;
+enum demangling_styles current_demangling_style = gnu_v3_demangling;
 const struct demangler_engine libiberty_demanglers[] = {
-  { NO_DEMANGLING_STYLE_STRING, no_demangling, "Demangling disabled for bootstrap" },
+  { GNU_V3_DEMANGLING_STYLE_STRING, gnu_v3_demangling, "Crunch bounded Itanium v0 demangling" },
+  { NO_DEMANGLING_STYLE_STRING, no_demangling, "No demangling" },
   { 0, unknown_demangling, 0 }
 };
 
-char *cplus_demangle(const char *mangled, int options) { (void)mangled; (void)options; return 0; }
+/* Crunch GCC 4.0 bounded Itanium zero-argument function semantic slice. */
+int gcc40_cplus_demangle_bounded_itanium_v0_boundary(void) { return 0; }
+
+static char *gcc40_demangle_itanium_v0_function(const char *mangled) {
+  const char *p;
+  unsigned long len = 0;
+  unsigned long i;
+  static char out[132];
+  if (!mangled || mangled[0] != '_' || mangled[1] != 'Z') return 0;
+  p = mangled + 2;
+  if (*p < '1' || *p > '9') return 0;
+  while (*p >= '0' && *p <= '9') {
+    len = len * 10 + (unsigned long)(*p - '0');
+    if (len > 128) return 0;
+    p++;
+  }
+  if (len == 0) return 0;
+  for (i = 0; i < len; i++) {
+    char ch = p[i];
+    if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_')) return 0;
+  }
+  if (p[len] != 'v' || p[len + 1] != 0) return 0;
+  for (i = 0; i < len; i++) out[i] = p[i];
+  out[len] = '(';
+  out[len + 1] = ')';
+  out[len + 2] = 0;
+  return out;
+}
+
+char *cplus_demangle(const char *mangled, int options) { (void)options; return gcc40_demangle_itanium_v0_function(mangled); }
 int cplus_demangle_opname(const char *opname, char *result, int options) { (void)opname; (void)result; (void)options; return 0; }
 const char *cplus_mangle_opname(const char *opname, int options) { (void)options; return opname; }
 void set_cplus_marker_for_demangling(int ch) { (void)ch; }
 enum demangling_styles cplus_demangle_set_style(enum demangling_styles style) { enum demangling_styles old = current_demangling_style; current_demangling_style = style; return old; }
-enum demangling_styles cplus_demangle_name_to_style(const char *name) { (void)name; return no_demangling; }
-char *cplus_demangle_v3(const char *mangled, int options) { (void)mangled; (void)options; return 0; }
+enum demangling_styles cplus_demangle_name_to_style(const char *name) { (void)name; return gnu_v3_demangling; }
+char *cplus_demangle_v3(const char *mangled, int options) { (void)options; return gcc40_demangle_itanium_v0_function(mangled); }
 char *java_demangle_v3(const char *mangled) { (void)mangled; return 0; }
 enum gnu_v3_ctor_kinds is_gnu_v3_mangled_ctor(const char *name) { (void)name; return 0; }
 enum gnu_v3_dtor_kinds is_gnu_v3_mangled_dtor(const char *name) { (void)name; return 0; }
 CPLUS_DEM_EOF
       $BB cat > gcc-4.0.4/libiberty/cp-demangle.c <<'CP_DEMANGLE_EOF'
-/* Crunch GCC 4.0 disabled-demangle boundary: native cp-demangle promotion pending. */
-int gcc40_cp_demangle_disabled_boundary(void) { return 0; }
+/* Crunch GCC 4.0 bounded-demangle boundary: cplus-dem.c supports _Z<length><name>v functions; native cp-demangle promotion pending. */
+int gcc40_cp_demangle_bounded_itanium_v0_boundary(void) { return 0; }
 CP_DEMANGLE_EOF
       $BB cat > gcc-4.0.4/libiberty/md5.c <<'MD5_EOF'
 #include "md5.h"
@@ -1185,6 +1215,22 @@ EOF
             done
             "$BINUTILS/bin/ar" rc libiberty.a regex.o cplus-dem.o cp-demangle.o md5.o
             "$BINUTILS/bin/ranlib" libiberty.a
+            $BB cat > /tmp/gcc40-demangle-smoke.c <<'EOF'
+extern char *cplus_demangle(const char *, int);
+extern char *cplus_demangle_v3(const char *, int);
+static int same(const char *lhs, const char *rhs) { while (*lhs && *rhs && *lhs == *rhs) { lhs++; rhs++; } return *lhs == *rhs; }
+int main(void) {
+  char *a = cplus_demangle("_Z3foov", 0);
+  if (!a || !same(a, "foo()")) return 1;
+  a = cplus_demangle_v3("_Z3barv", 0);
+  if (!a || !same(a, "bar()")) return 2;
+  if (cplus_demangle("_Z3fooi", 0) != 0) return 3;
+  if (cplus_demangle("not_mangled", 0) != 0) return 4;
+  return 0;
+}
+EOF
+            gcc40-cc -I$MUSL/include -D_GNU_SOURCE -I. -I$WORK/gcc-4.0.4/include /tmp/gcc40-demangle-smoke.c cplus-dem.o -o /tmp/gcc40-demangle-smoke
+            /tmp/gcc40-demangle-smoke || { echo "ERROR: cplus_demangle bounded semantic smoke failed" >&2; exit 1; }
           )
           continue
         fi

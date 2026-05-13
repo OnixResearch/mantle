@@ -2834,7 +2834,7 @@ ID: bootstrap.parity.claim-gating
 
 A parity claim MUST be scoped to the exact axis satisfied. Live-bootstrap parity MUST require the complete mapped stage ladder or accepted Crunch-specific replacements. Guix full-source parity MUST require source-built inputs, trust-root documentation, and final source proof comparable to Guix's full-source bootstrap claim semantics. StageX parity MUST require the audited hex0 seed lineage, no prebuilt compiler/tool root, protected execution audit when used, and `stagex-lineage` self-build proof.
 
-GCC 4.0 MUST remain evidence-backed partial unless native compiler correctness is proven, and its checked evidence MUST include a native-frontier receipt that names remaining non-native blockers. The libiberty demangle frontier MUST use a checked disabled-demangle boundary marker rather than a generic stub marker.
+GCC 4.0 MUST remain evidence-backed partial unless native compiler correctness is proven, and its checked evidence MUST include a native-frontier receipt that names remaining non-native blockers. The libiberty demangle frontier MUST expose a checked bounded-demangle semantic marker for the supported Itanium zero-argument function slice rather than a disabled-demangle marker.
 
 #### Scenario: GCC 4.0 native frontier remains partial
 - GIVEN `bootstrap/evidence/gcc-4.0-native-boundary.json` has `status=boundary-only`
@@ -2844,11 +2844,14 @@ GCC 4.0 MUST remain evidence-backed partial unless native compiler correctness i
 - AND the evidence check passes only if each frontier marker is present in `bootstrap/gcc-4.0.ncl`
 - AND the report does not mark live-bootstrap or Guix parity complete for GCC 4.0
 
-#### Scenario: GCC 4.0 libiberty demangle boundary is explicit
-- GIVEN `bootstrap/gcc-4.0.ncl` writes `libiberty/cp-demangle.c`
-- WHEN the GCC 4.0 parity checks inspect the derivation and native-frontier receipt
-- THEN they require `gcc40_cp_demangle_disabled_boundary`
-- AND they reject the legacy `libiberty_cp_demangle_bootstrap_stub` marker
+#### Scenario: GCC 4.0 libiberty demangle has bounded semantics
+- GIVEN `bootstrap/gcc-4.0.ncl` writes the libiberty demangle bridge
+- WHEN the derivation-local smoke calls `cplus_demangle` and `cplus_demangle_v3`
+- THEN `_Z3foov` demangles to `foo()`
+- AND malformed or unsupported names return null
+- AND parity checks require `gcc40_cplus_demangle_bounded_itanium_v0_boundary`
+- AND parity checks require `gcc40_cp_demangle_bounded_itanium_v0_boundary`
+- AND parity checks reject `gcc40_cp_demangle_disabled_boundary`
 - AND `gcc.4.0` remains `partial` until native compiler correctness is proven
 
 ### Requirement: Bootstrap parity report gates provider rows by axis-specific evidence

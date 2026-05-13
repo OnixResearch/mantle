@@ -35,9 +35,9 @@
         "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
       },
       {
-        "id": "libiberty-demangle-boundary",
-        "derivation_marker": "gcc40_cp_demangle_disabled_boundary",
-        "frontier": "libiberty demangling remains a checked disabled-demangle boundary"
+        "id": "libiberty-demangle-bounded-semantics",
+        "derivation_marker": "gcc40_cplus_demangle_bounded_itanium_v0_boundary",
+        "frontier": "libiberty demangling has a checked bounded Itanium zero-argument function semantic slice; full native cp-demangle remains pending"
       }
     ]
   }
