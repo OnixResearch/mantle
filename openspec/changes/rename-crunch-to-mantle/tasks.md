@@ -1,8 +1,8 @@
 ## Phase 1: Identity contract
 
-- [ ] [serial] Confirm the final spelling is `Mantle`/`mantle` and keep `mantel` out of current docs, help text, and tests.
-- [ ] [parallel] Inventory tracked user-facing Crunch/crunch occurrences and classify each as current surface, compatibility surface, or historical archive.
-- [ ] [parallel] Inventory generated/release/proof artifact schemas and fixtures that carry product identity or command names.
+- [x] [serial] Confirm the final spelling is `Mantle`/`mantle` and keep `mantel` out of current docs, help text, and tests. Evidence: `evidence/identity-inventory.md`.
+- [x] [parallel] Inventory tracked user-facing Crunch/crunch occurrences and classify each as current surface, compatibility surface, or historical archive. Evidence: `evidence/identity-inventory.md`.
+- [x] [parallel] Inventory generated/release/proof artifact schemas and fixtures that carry product identity or command names. Evidence: `evidence/identity-inventory.md`.
 
 ## Phase 2: CLI and defaults
 
