@@ -25,14 +25,18 @@ use crate::errors::RunError;
 use crate::project_resolve::LiveResolver;
 
 /// Project file names.
-const MANIFEST_FILE: &str = "crunch-project.ncl";
-const LOCK_FILE: &str = "crunch.lock";
-const INPUTS_DIR: &str = ".crunch";
-const INPUTS_FILE: &str = ".crunch/inputs.ncl";
-const GITIGNORE_ENTRY: &str = ".crunch/";
+const MANIFEST_FILE: &str = "mantle-project.ncl";
+const LOCK_FILE: &str = "mantle.lock";
+const INPUTS_DIR: &str = ".mantle";
+const INPUTS_FILE: &str = ".mantle/inputs.ncl";
+const GITIGNORE_ENTRY: &str = ".mantle/";
+const LEGACY_MANIFEST_FILE: &str = "crunch-project.ncl";
+const LEGACY_LOCK_FILE: &str = "crunch.lock";
+const LEGACY_INPUTS_DIR: &str = ".crunch";
 
 /// `crunch init` — scaffold a new project.
 pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let manifest_path = dir.join(MANIFEST_FILE);
     let lock_path = dir.join(LOCK_FILE);
     let inputs_dir = dir.join(INPUTS_DIR);
@@ -43,7 +47,7 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     }
 
     // Write manifest template
-    let manifest_template = r#"# crunch project manifest.
+    let manifest_template = r#"# Mantle project manifest.
 # See: lib/project.ncl for the contract definition.
 {
   version = "1.0.0",
@@ -59,15 +63,15 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     let lock_json = lock.clone().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
     std::fs::write(&lock_path, &lock_json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
 
-    // Create .crunch/ and generate empty inputs
+    // Create .mantle/ and generate empty inputs
     std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
     let inputs_ncl = generate_inputs_ncl(lock);
     std::fs::write(&inputs_path, &inputs_ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
 
-    // Add .crunch/ to .gitignore if not already there
+    // Add .mantle/ to .gitignore if not already there
     add_gitignore_entry(dir);
 
-    eprintln!("Initialized crunch project:");
+    eprintln!("Initialized Mantle project:");
     eprintln!("  {MANIFEST_FILE}  (edit this)");
     eprintln!("  {LOCK_FILE}      (machine-managed)");
     eprintln!("  {INPUTS_FILE}    (generated)");
@@ -76,6 +80,7 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
 
 /// `crunch check` — validate project state.
 pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
 
@@ -128,6 +133,7 @@ pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
 
 /// `crunch show` — render resolved input state.
 pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
 
@@ -175,6 +181,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 
 /// `crunch refresh [names...]` — update inputs.
 pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
     let resolver = LiveResolver::new(dir);
@@ -214,6 +221,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
 
 /// `crunch list-stale` — show which inputs would change.
 pub fn cmd_list_stale(dir: &Path) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
     let resolver = LiveResolver::new(dir);
@@ -237,6 +245,7 @@ pub fn cmd_list_stale(dir: &Path) -> Result<(), RunError> {
 
 /// `crunch upgrade` — migrate project files to current schema.
 pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
+    reject_conflicting_legacy_project_files(dir)?;
     let lock = load_lockfile(dir)?;
 
     if lock.version == SchemaVersion::CURRENT {
@@ -259,7 +268,7 @@ fn load_manifest(dir: &Path) -> Result<ProjectManifest, RunError> {
     let path = dir.join(MANIFEST_FILE);
     if !path.exists() {
         return Err(RunError::Internal(format!(
-            "{MANIFEST_FILE} not found in {}. Run `crunch init` first.",
+            "{MANIFEST_FILE} not found in {}. Run `mantle init` first.",
             dir.display()
         )));
     }
@@ -273,7 +282,7 @@ fn load_lockfile(dir: &Path) -> Result<Lockfile, RunError> {
     let path = dir.join(LOCK_FILE);
     if !path.exists() {
         return Err(RunError::Internal(format!(
-            "{LOCK_FILE} not found in {}. Run `crunch init` first.",
+            "{LOCK_FILE} not found in {}. Run `mantle init` first.",
             dir.display()
         )));
     }
@@ -297,6 +306,34 @@ fn write_inputs_ncl(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let path = dir.join(INPUTS_FILE);
     std::fs::write(&path, &ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
     Ok(())
+}
+
+fn reject_conflicting_legacy_project_files(dir: &Path) -> Result<(), RunError> {
+    let conflicts = [
+        (MANIFEST_FILE, LEGACY_MANIFEST_FILE),
+        (LOCK_FILE, LEGACY_LOCK_FILE),
+        (INPUTS_DIR, LEGACY_INPUTS_DIR),
+    ]
+    .into_iter()
+    .filter_map(|(current, legacy)| {
+        let has_current = dir.join(current).exists();
+        let has_legacy = dir.join(legacy).exists();
+        if has_current && has_legacy {
+            Some(format!("{legacy} conflicts with {current}"))
+        } else {
+            None
+        }
+    })
+    .collect::<Vec<_>>();
+
+    if conflicts.is_empty() {
+        Ok(())
+    } else {
+        Err(RunError::Internal(format!(
+            "conflicting legacy Crunch project files: {}. Move or migrate the legacy files before running mantle.",
+            conflicts.join(", ")
+        )))
+    }
 }
 
 fn add_gitignore_entry(dir: &Path) {

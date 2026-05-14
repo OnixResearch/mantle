@@ -4,28 +4,28 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
-fn crunch() -> Command {
-    Command::cargo_bin("crunch").unwrap()
+fn mantle() -> Command {
+    Command::cargo_bin("mantle").unwrap()
 }
 
 #[test]
 fn init_creates_project_files() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
+    mantle()
         .arg("init")
         .current_dir(dir.path())
         .assert()
         .success()
-        .stderr(predicate::str::contains("Initialized crunch project"));
+        .stderr(predicate::str::contains("Initialized Mantle project"));
 
-    assert!(dir.path().join("crunch-project.ncl").exists());
-    assert!(dir.path().join("crunch.lock").exists());
-    assert!(dir.path().join(".crunch/inputs.ncl").exists());
+    assert!(dir.path().join("mantle-project.ncl").exists());
+    assert!(dir.path().join("mantle.lock").exists());
+    assert!(dir.path().join(".mantle/inputs.ncl").exists());
 
-    // .gitignore should have .crunch/
+    // .gitignore should have .mantle/
     let gitignore = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
-    assert!(gitignore.contains(".crunch/"));
+    assert!(gitignore.contains(".mantle/"));
 }
 
 #[test]
@@ -33,10 +33,10 @@ fn init_fails_if_already_initialized() {
     let dir = TempDir::new().unwrap();
 
     // First init succeeds
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
     // Second init fails
-    crunch()
+    mantle()
         .arg("init")
         .current_dir(dir.path())
         .assert()
@@ -48,9 +48,9 @@ fn init_fails_if_already_initialized() {
 fn check_passes_on_fresh_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
-    crunch()
+    mantle()
         .arg("check")
         .current_dir(dir.path())
         .assert()
@@ -62,7 +62,7 @@ fn check_passes_on_fresh_project() {
 fn check_fails_without_init() {
     let dir = TempDir::new().unwrap();
 
-    crunch()
+    mantle()
         .arg("check")
         .current_dir(dir.path())
         .assert()
@@ -71,12 +71,32 @@ fn check_fails_without_init() {
 }
 
 #[test]
+fn check_fails_on_conflicting_legacy_project_files() {
+    let dir = TempDir::new().unwrap();
+
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    std::fs::write(dir.path().join("crunch-project.ncl"), "{}\n").unwrap();
+    std::fs::write(dir.path().join("crunch.lock"), "{}\n").unwrap();
+    std::fs::create_dir_all(dir.path().join(".crunch")).unwrap();
+
+    mantle()
+        .arg("check")
+        .current_dir(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("conflicting legacy Crunch project files"))
+        .stderr(predicate::str::contains("crunch-project.ncl conflicts with mantle-project.ncl"))
+        .stderr(predicate::str::contains("crunch.lock conflicts with mantle.lock"))
+        .stderr(predicate::str::contains(".crunch conflicts with .mantle"));
+}
+
+#[test]
 fn show_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
-    crunch()
+    mantle()
         .arg("show")
         .current_dir(dir.path())
         .assert()
@@ -88,9 +108,9 @@ fn show_on_empty_project() {
 fn list_stale_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
-    crunch()
+    mantle()
         .arg("list-stale")
         .current_dir(dir.path())
         .assert()
@@ -102,9 +122,9 @@ fn list_stale_on_empty_project() {
 fn upgrade_on_current_version() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
-    crunch()
+    mantle()
         .arg("upgrade")
         .current_dir(dir.path())
         .assert()
@@ -116,9 +136,9 @@ fn upgrade_on_current_version() {
 fn refresh_on_empty_project() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
-    crunch()
+    mantle()
         .arg("refresh")
         .current_dir(dir.path())
         .assert()
@@ -130,12 +150,12 @@ fn refresh_on_empty_project() {
 fn check_detects_drift() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
     // Corrupt the generated file to create drift
-    std::fs::write(dir.path().join(".crunch/inputs.ncl"), "stale").unwrap();
+    std::fs::write(dir.path().join(".mantle/inputs.ncl"), "stale").unwrap();
 
-    crunch()
+    mantle()
         .arg("check")
         .current_dir(dir.path())
         .assert()
@@ -147,7 +167,7 @@ fn check_detects_drift() {
 fn refresh_hashes_local_patch_relative_to_project_root() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
     std::fs::create_dir_all(dir.path().join("patches")).unwrap();
     std::fs::write(dir.path().join("patches/fix.patch"), "diff --git a/x b/x\n").unwrap();
@@ -175,16 +195,16 @@ fn refresh_hashes_local_patch_relative_to_project_root() {
 "#,
         url
     );
-    std::fs::write(dir.path().join("crunch-project.ncl"), manifest).unwrap();
+    std::fs::write(dir.path().join("mantle-project.ncl"), manifest).unwrap();
 
-    crunch()
+    mantle()
         .arg("refresh")
         .current_dir(dir.path())
         .assert()
         .success()
         .stderr(predicate::str::contains("patch lock data updated"));
 
-    let lock_text = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
+    let lock_text = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
     let lock = crunch_project::Lockfile::from_json(lock_text).unwrap();
     assert_eq!(lock.inputs["pkg"].patches, vec!["mypatch"]);
     assert_eq!(lock.patches["mypatch"].source, crunch_project::LockedPatchSource::Local {
@@ -197,12 +217,12 @@ fn refresh_hashes_local_patch_relative_to_project_root() {
 fn check_detects_missing_inputs_file() {
     let dir = TempDir::new().unwrap();
 
-    crunch().arg("init").current_dir(dir.path()).assert().success();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
 
     // Delete the generated file
-    std::fs::remove_file(dir.path().join(".crunch/inputs.ncl")).unwrap();
+    std::fs::remove_file(dir.path().join(".mantle/inputs.ncl")).unwrap();
 
-    crunch()
+    mantle()
         .arg("check")
         .current_dir(dir.path())
         .assert()

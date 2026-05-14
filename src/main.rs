@@ -251,7 +251,7 @@ enum Command {
         action: ReleaseAction,
     },
 
-    /// Initialize a new crunch project (manifest, lockfile, .crunch/)
+    /// Initialize a new Mantle project (manifest, lockfile, .mantle/)
     Init,
 
     /// Validate project manifest, lockfile, and generated inputs

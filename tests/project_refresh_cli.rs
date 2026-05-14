@@ -36,14 +36,14 @@ fn init_project(dir: &Path) {
 }
 
 fn write_project_files(dir: &Path, manifest: &str, lock: &Lockfile) {
-    std::fs::write(dir.join("crunch-project.ncl"), manifest).unwrap();
-    std::fs::write(dir.join("crunch.lock"), lock.clone().to_json().unwrap()).unwrap();
-    std::fs::create_dir_all(dir.join(".crunch")).unwrap();
-    std::fs::write(dir.join(".crunch/inputs.ncl"), generate_inputs_ncl(lock.clone())).unwrap();
+    std::fs::write(dir.join("mantle-project.ncl"), manifest).unwrap();
+    std::fs::write(dir.join("mantle.lock"), lock.clone().to_json().unwrap()).unwrap();
+    std::fs::create_dir_all(dir.join(".mantle")).unwrap();
+    std::fs::write(dir.join(".mantle/inputs.ncl"), generate_inputs_ncl(lock.clone())).unwrap();
 }
 
 fn read_lock(dir: &Path) -> Lockfile {
-    let text = std::fs::read_to_string(dir.join("crunch.lock")).unwrap();
+    let text = std::fs::read_to_string(dir.join("mantle.lock")).unwrap();
     Lockfile::from_json(text).unwrap()
 }
 
@@ -299,8 +299,8 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
     });
     write_project_files(dir.path(), &manifest, &lock);
 
-    let lock_before = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
-    let inputs_before = std::fs::read_to_string(dir.path().join(".crunch/inputs.ncl")).unwrap();
+    let lock_before = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
+    let inputs_before = std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap();
 
     let assert = crunch().arg("list-stale").current_dir(dir.path()).assert().failure();
     let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
@@ -310,8 +310,8 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
     assert!(stderr.contains("failed: broken:"), "stderr was: {stderr}");
     assert!(stderr.contains("stale check failed for 1 item(s)"), "stderr was: {stderr}");
 
-    let lock_after = std::fs::read_to_string(dir.path().join("crunch.lock")).unwrap();
-    let inputs_after = std::fs::read_to_string(dir.path().join(".crunch/inputs.ncl")).unwrap();
+    let lock_after = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
+    let inputs_after = std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap();
     assert_eq!(lock_after, lock_before);
     assert_eq!(inputs_after, inputs_before);
 }
