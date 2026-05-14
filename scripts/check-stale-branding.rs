@@ -45,7 +45,7 @@ const ALLOWED_PATH_SUBSTRINGS: [&str; 5] = [
     "tests/",
     "crates/crunch-",
     "examples/benchmark_",
-    "openspec/changes/rename-crunch-to-mantle/",
+    "openspec/specs/project-identity/",
     "adr/",
 ];
 

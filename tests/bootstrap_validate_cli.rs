@@ -10,6 +10,11 @@ fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
 }
 
+fn can_build() -> bool {
+    Path::new("/nix/store").exists()
+        && std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
+}
+
 fn write_minimal_derivation(path: &Path) {
     let lib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib").join("lib.ncl");
     fs::write(
@@ -83,6 +88,11 @@ fn bootstrap_validate_preflight_failure_writes_evidence_bundle() {
 
 #[test]
 fn bootstrap_validate_success_writes_logs_and_summary() {
+    if !can_build() {
+        eprintln!("skipping bootstrap validate success test: bwrap or /nix/store not available");
+        return;
+    }
+
     let root = TempDir::new().unwrap();
     let (state_dir, store_dir, evidence_dir, target) = write_success_fixture(root.path());
 

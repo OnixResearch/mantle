@@ -152,7 +152,7 @@ async fn open_http_pull_test_store(dir: &Path) -> crunch_store::StoreHandle {
         output_dir,
         remote_cache_url: None,
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
-        store_dir: "/crunch/store".to_string(),
+        store_dir: "/mantle/store".to_string(),
     })
     .await
     .unwrap()
@@ -213,7 +213,7 @@ async fn make_http_pull_cache_fixture(work_dir: &Path) -> (PathBuf, String, Stri
         &path_info.nar_sha256,
         path_info.nar_size,
         std::iter::empty::<&nix_compat::store_path::StorePathRef>(),
-        "/crunch/store",
+        "/mantle/store",
     );
     path_info.signatures.push(keypair.signing_key.sign(fingerprint.as_bytes()).to_owned());
     store.pathinfo_service().put(path_info.clone()).await.unwrap();
@@ -227,7 +227,7 @@ async fn make_http_pull_cache_fixture(work_dir: &Path) -> (PathBuf, String, Stri
 
     (
         cache_dir,
-        path_info.store_path.to_absolute_path_with_prefix("/crunch/store"),
+        path_info.store_path.to_absolute_path_with_prefix("/mantle/store"),
         keypair.verifying_key.to_string(),
     )
 }

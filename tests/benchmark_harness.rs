@@ -334,7 +334,7 @@ fn benchmark_docs_cover_all_workloads_and_entry_points() {
     assert!(docs.contains("Ordinary development"));
     assert!(docs.contains("Optimization-specific experiments"));
     assert!(docs.contains("/nix/store"));
-    assert!(docs.contains("/crunch/store"));
+    assert!(docs.contains("/mantle/store"));
     assert!(docs.contains("workflow-package-set-eval-build-graph"));
     assert!(docs.contains("store-persist-lookup-blob"));
     assert!(docs.contains("lazy-root-discovery-wide-package-set"));

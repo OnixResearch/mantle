@@ -48,7 +48,7 @@ use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 use snix_store::utils::AsyncIoBridge;
 use tempfile::TempDir;
 
-const STORE_DIR: &str = "/crunch/store";
+const STORE_DIR: &str = "/mantle/store";
 
 fn can_build() -> bool {
     Path::new("/nix/store").exists()
