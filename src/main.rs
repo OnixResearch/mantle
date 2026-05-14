@@ -95,8 +95,8 @@ struct Args {
     nix_compat: bool,
 
     /// State directory for pathinfo.redb, blobs, and logs.
-    /// Default: $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or
-    /// ~/.local/state/crunch.
+    /// Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or
+    /// ~/.local/state/crunch. Use --state-dir for an explicit Mantle path.
     #[arg(long, global = true)]
     state_dir: Option<PathBuf>,
 
@@ -108,9 +108,9 @@ struct Args {
 enum Command {
     /// Evaluate and build derivation(s).
     ///
-    /// With no arguments: builds default package from crunch.ncl.
-    /// With a .ncl file: builds derivations from that file.
-    /// With .#name: builds a named output from crunch.ncl.
+    /// With no arguments: builds the default package from the compatibility-named crunch.ncl
+    /// package root. With a .ncl file: builds derivations from that file.
+    /// With .#name: builds a named output from the compatibility-named crunch.ncl package root.
     Build {
         /// Path to a .ncl file, or .#name selector, or omit for project default
         file: Option<PathBuf>,
@@ -272,7 +272,7 @@ enum Command {
     /// Migrate project files to the current schema version
     Upgrade,
 
-    /// Build crunch from its own source (self-hosting)
+    /// Build Mantle from its own source (self-hosting)
     SelfBuild {
         /// Maximum concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
@@ -327,7 +327,7 @@ enum Command {
         bootstrap_busybox_path: Option<PathBuf>,
     },
 
-    /// Enter a development shell from crunch.ncl devShells
+    /// Enter a development shell from the compatibility-named crunch.ncl devShells
     Shell {
         /// Shell name or .#name selector (default: default.shell or only shell)
         name: Option<String>,

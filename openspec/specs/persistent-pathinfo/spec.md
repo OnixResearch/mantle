@@ -97,9 +97,9 @@ The directory MUST be created automatically if it doesn't exist.
 
 #### Scenario: Custom state dir
 
-- GIVEN `CRUNCH_STATE_DIR=/tmp/crunch-test`
+- GIVEN `CRUNCH_STATE_DIR=/tmp/mantle-test`
 - WHEN `mantle build` runs
-- THEN PathInfo is stored in `/tmp/crunch-test/pathinfo.redb`
+- THEN PathInfo is stored in `/tmp/mantle-test/pathinfo.redb`
 
 ### Requirement: RedbPathInfoService backend
 

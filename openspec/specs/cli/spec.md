@@ -246,7 +246,7 @@ environments.
 
 Required behavior:
 - `mantle shell` enters or executes inside a shell environment resolved from
-  `crunch.ncl` `devShells`
+  the compatibility-named `crunch.ncl` package root's `devShells`
 - `mantle develop` remains as an alias to the same implementation
 - `--command <argv...>` executes a single command in the activated shell
   environment and exits
@@ -311,15 +311,16 @@ package output.
 
 `mantle run` MUST support these targets:
 
-- no target: build and run the current `crunch.ncl` package project's default package
-- a bare name: build and run that package from the current `crunch.ncl` package project
+- no target: build and run the current compatibility-named `crunch.ncl` package project's default package
+- a bare name: build and run that package from the current compatibility-named `crunch.ncl` package project
 - `.#name` or `.#category.name`: build and run a package-project selector
 - an explicit Nickel file path: build and run that expression when it yields exactly one runnable derivation
 
-For this requirement, `crunch.ncl` is the package/build project file consumed by
-`mantle build`, `mantle shell`, `mantle develop`, and `mantle run`. It is
-distinct from the `mantle-project.ncl` dependency-management manifest used by
-`mantle init`, `mantle refresh`, and related project-management commands.
+For this requirement, `crunch.ncl` is the compatibility-named package/build
+project file consumed by `mantle build`, `mantle shell`, `mantle develop`, and
+`mantle run`. It is distinct from the `mantle-project.ncl` dependency-management
+manifest used by `mantle init`, `mantle refresh`, and related
+project-management commands.
 
 Target resolution MUST parse project selectors before filesystem probing, so a
 selector-shaped target such as `.#foo.ncl` remains a selector instead of a file
@@ -328,16 +329,16 @@ resolve as a current-project package name, even if a same-named filesystem entry
 exists in the current directory. A non-selector target that starts with `./`,
 `../`, or `/`, or ends in `.ncl`, MUST resolve as an explicit Nickel file path.
 
-If no `crunch.ncl` package project is found for a project default, bare package
-name, or project selector, the command MUST fail with an error that mentions
-`crunch.ncl`. If a project default package is missing, an unknown selector or
-bare package name is requested, an explicit file path does not exist, or an
-explicit file does not produce exactly one runnable top-level derivation, the
-command MUST fail before launching a package binary and identify the target that
-could not be run. Explicit file targets MAY evaluate directly to one derivation
-or to a singleton record containing one derivation. Records containing multiple
-derivations MUST be rejected for `run`; users must select one derivation through
-a project selector or a single-derivation file.
+If no compatibility-named `crunch.ncl` package project is found for a project
+default, bare package name, or project selector, the command MUST fail with an
+error that mentions `crunch.ncl`. If a project default package is missing, an
+unknown selector or bare package name is requested, an explicit file path does
+not exist, or an explicit file does not produce exactly one runnable top-level
+derivation, the command MUST fail before launching a package binary and identify
+the target that could not be run. Explicit file targets MAY evaluate directly to
+one derivation or to a singleton record containing one derivation. Records
+containing multiple derivations MUST be rejected for `run`; users must select
+one derivation through a project selector or a single-derivation file.
 
 When the selected derivation has multiple outputs, `mantle run` MUST select the
 `out` output if present; otherwise it MUST select the first output name in
@@ -345,21 +346,21 @@ sorted order. Binary discovery then runs inside that selected output.
 
 #### Scenario: Missing package project fails clearly
 
-- GIVEN the current directory has no `crunch.ncl` package project
+- GIVEN the current directory has no compatibility-named `crunch.ncl` package project
 - WHEN `mantle run hello` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error mentions `crunch.ncl`
 
 #### Scenario: Missing default package fails clearly
 
-- GIVEN a project whose `crunch.ncl` has no runnable default package
+- GIVEN a project whose compatibility-named `crunch.ncl` has no runnable default package
 - WHEN bare `mantle run` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies the missing default package selection
 
 #### Scenario: Unknown package target fails clearly
 
-- GIVEN a project whose `crunch.ncl` does not declare `packages.missing`
+- GIVEN a project whose compatibility-named `crunch.ncl` does not declare `packages.missing`
 - WHEN `mantle run missing` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `missing` as the rejected target
@@ -397,21 +398,21 @@ code, `mantle run` MUST exit non-zero.
 
 #### Scenario: Project default package runs
 
-- GIVEN a project whose `crunch.ncl` declares `default.package = "hello"`
+- GIVEN a project whose compatibility-named `crunch.ncl` declares `default.package = "hello"`
 - WHEN `mantle run --no-substitute` runs in that project
 - THEN mantle builds the `hello` package through the normal build pipeline
 - AND executes the selected binary from the built output
 
 #### Scenario: Bare project package name runs
 
-- GIVEN a project whose `crunch.ncl` declares `packages.tool`
+- GIVEN a project whose compatibility-named `crunch.ncl` declares `packages.tool`
 - WHEN `mantle run tool` runs in that project
 - THEN mantle builds `packages.tool`
 - AND executes the selected binary from that output
 
 #### Scenario: Project selector runs
 
-- GIVEN a project whose `crunch.ncl` declares `packages.tool`
+- GIVEN a project whose compatibility-named `crunch.ncl` declares `packages.tool`
 - WHEN `mantle run .#tool -- --help` runs in that project
 - THEN mantle builds `packages.tool`
 - AND passes `--help` unchanged to the selected binary
@@ -426,7 +427,7 @@ code, `mantle run` MUST exit non-zero.
 
 #### Scenario: Same-named path does not shadow bare package
 
-- GIVEN a project whose `crunch.ncl` declares `packages.hello`
+- GIVEN a project whose compatibility-named `crunch.ncl` declares `packages.hello`
 - AND the current directory also contains a filesystem entry named `hello`
 - WHEN `mantle run hello` runs
 - THEN mantle treats `hello` as a project package name
@@ -434,7 +435,7 @@ code, `mantle run` MUST exit non-zero.
 
 #### Scenario: Selector suffix does not become file target
 
-- GIVEN a project whose `crunch.ncl` declares a selector target named `foo.ncl`
+- GIVEN a project whose compatibility-named `crunch.ncl` declares a selector target named `foo.ncl`
 - AND filesystem probing could find a path-like entry for `foo.ncl`
 - WHEN `mantle run .#foo.ncl` runs
 - THEN mantle treats `.#foo.ncl` as a selector
