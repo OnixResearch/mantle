@@ -44,7 +44,7 @@ snix-build           (platform-specific build execution behind BuildService)
 ### Requirement: Configurable store prefix
 
 The store path prefix MUST be configurable. The default SHOULD be
-`/crunch/store` (not `/nix/store`) to avoid conflicts with existing Nix
+`/mantle/store` (not `/nix/store`) to avoid conflicts with existing Nix
 installations and to work on platforms where `/nix` is awkward.
 
 The prefix MUST be set at mantle initialization time and embedded in all
@@ -56,9 +56,9 @@ MUST be replaced with a configurable value.
 
 #### Scenario: Custom store prefix
 
-- GIVEN `mantle --store /opt/crunch/store build hello.ncl`
+- GIVEN `mantle --store /opt/mantle/store build hello.ncl`
 - WHEN the derivation's output path is computed
-- THEN it starts with `/opt/crunch/store/` instead of `/nix/store/`
+- THEN it starts with `/opt/mantle/store/` instead of `/nix/store/`
 
 #### Scenario: Default prefix
 
@@ -69,7 +69,7 @@ MUST be replaced with a configurable value.
 #### Scenario: Seed paths with different prefix
 
 - GIVEN seed paths from a Nix store at `/nix/store/...-bash-5.2`
-- WHEN referenced as `Input::Source` with mantle using `/crunch/store`
+- WHEN referenced as `Input::Source` with mantle using `/mantle/store`
 - THEN the seed paths are used as-is (their prefix is not rewritten).
   The sandbox mounts them at their original location.
 

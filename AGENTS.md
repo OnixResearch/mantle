@@ -267,8 +267,8 @@ Building derivations (not just compiling crunch) requires:
 - **Signed PathInfo invariant**: `StoreHandle::persist_and_export_signed_output()` rejects unsigned `PathInfo`s and store-path mismatches. `crunch store sign --all` is a migration path for unsigned entries only; already-signed entries must be left unchanged.
 - **Store GC state now has three durable pieces**: `state_dir/pathinfo.redb`, `state_dir/directories.redb`, and `state_dir/gc-roots.json`. GC could not safely survive restart while directories lived only in a temporary RedbDirectoryService; reachable directory roots now require the persisted `directories.redb` file.
 - **Store mutation lock**: `state_dir/store-mutation.lock` is the cross-process guard for local store mutation. `crunch_pipeline::build()` acquires it for the full build, `crunch bootstrap --fetch` holds it around fetch + reduction, mutating `crunch store` commands use it, and `crunch store gc` uses a try-lock so it fails fast when another local build/substitution/store mutation is active.
-- **Configurable store prefix**: `--store-prefix /crunch/store` (default) or
-  `--nix-compat` for `/nix/store`. The prefix flows through
+- **Configurable store prefix**: `--store-prefix /mantle/store` (default),
+  explicit `/crunch/store` for legacy compatibility, or `--nix-compat` for `/nix/store`. The prefix flows through
   ConversionCache → DerivationRegistry → StoreConfig → Builder → Worker.
   All ATerm serialization, hash computation, and path formatting use the
   configured prefix. Different prefixes produce different derivation hashes.

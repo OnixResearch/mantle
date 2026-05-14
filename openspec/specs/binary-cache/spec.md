@@ -273,9 +273,9 @@ to the store prefix used by this mantle instance.
 
 #### Scenario: nix-cache-info reflects store prefix
 
-- GIVEN mantle running with default store prefix `/crunch/store`
+- GIVEN mantle running with default store prefix `/mantle/store`
 - WHEN paths are pushed to an empty directory
-- THEN `nix-cache-info` contains `StoreDir: /crunch/store`
+- THEN `nix-cache-info` contains `StoreDir: /mantle/store`
 
 #### Scenario: Existing nix-cache-info is preserved
 
@@ -360,7 +360,7 @@ skipped-missing-nar, skipped-parse-error, and total bytes ingested.
 #### Scenario: Pull rejects store prefix mismatch
 
 - GIVEN a cache directory with narinfos using `StorePath: /nix/store/...`
-- AND the local store uses prefix `/crunch/store`
+- AND the local store uses prefix `/mantle/store`
 - WHEN `import_paths_from_cache_dir` is called
 - THEN those paths are skipped
 - AND the report includes a store prefix mismatch indication
@@ -802,7 +802,7 @@ ID: binary.cache.remotenixcacheinfo.validation.storedirmatch
 ID: binary.cache.remotenixcacheinfo.validation.storedirmismatch
 
 - GIVEN a remote cache with `nix-cache-info` containing `StoreDir: /nix/store`
-- AND the local store uses prefix `/crunch/store`
+- AND the local store uses prefix `/mantle/store`
 - WHEN HTTP pull begins
 - THEN the function returns an error before any narinfo is fetched
 

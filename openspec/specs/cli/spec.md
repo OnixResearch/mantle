@@ -26,13 +26,13 @@ that logic directly in `src/main.rs`.
 
 - GIVEN a directory without mantle project files
 - WHEN `mantle init` runs
-- THEN it creates `crunch-project.ncl`
-- AND it creates `crunch.lock`
-- AND it creates or documents the generated `.crunch/` directory layout
+- THEN it creates `mantle-project.ncl`
+- AND it creates `mantle.lock`
+- AND it creates or documents the generated `.mantle/` directory layout
 
 #### Scenario: Check validates project state
 
-- GIVEN a project with `crunch-project.ncl`, `crunch.lock`, and `.crunch/inputs.ncl`
+- GIVEN a project with `mantle-project.ncl`, `mantle.lock`, and `.mantle/inputs.ncl`
 - WHEN `mantle check` runs
 - THEN it validates the manifest and lockfile
 - AND it reports drift or schema errors with a non-zero exit code
@@ -42,7 +42,7 @@ that logic directly in `src/main.rs`.
 - GIVEN a project with multiple named inputs
 - WHEN `mantle refresh foo bar` runs
 - THEN only those named inputs are refreshed
-- AND `crunch.lock` and `.crunch/inputs.ncl` are rewritten if their resolved
+- AND `mantle.lock` and `.mantle/inputs.ncl` are rewritten if their resolved
   state changes
 
 #### Scenario: Show renders resolved input state
@@ -94,7 +94,7 @@ The top-level README MUST describe the current shipped CLI commands, defaults,
 and safety or integrity controls accurately.
 
 At minimum it MUST stay aligned with:
-- the default logical store prefix `/crunch/store`
+- the default logical store prefix `/mantle/store`
 - the `--nix-compat` shorthand for `/nix/store`
 - planning and diagnostics entry points such as `mantle doctor` and
   `mantle build --plan`
@@ -112,7 +112,7 @@ At minimum it MUST stay aligned with:
 
 - GIVEN a reader follows the README store-path documentation
 - WHEN they read about logical store paths and defaults
-- THEN it states that derivation hashes use `/crunch/store` by default
+- THEN it states that derivation hashes use `/mantle/store` by default
 - AND it explains `--nix-compat` as the compatibility switch for `/nix/store`
 - AND it distinguishes logical `--store-prefix` from physical `--store`
 
@@ -318,7 +318,7 @@ package output.
 
 For this requirement, `crunch.ncl` is the package/build project file consumed by
 `mantle build`, `mantle shell`, `mantle develop`, and `mantle run`. It is
-distinct from the `crunch-project.ncl` dependency-management manifest used by
+distinct from the `mantle-project.ncl` dependency-management manifest used by
 `mantle init`, `mantle refresh`, and related project-management commands.
 
 Target resolution MUST parse project selectors before filesystem probing, so a

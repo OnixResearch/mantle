@@ -158,7 +158,7 @@ artifact or closure attestation.
 
 #### Scenario: Project attestation records locked sources and selected roots
 
-- GIVEN a project with `crunch-project.ncl`, `crunch.lock`, and built roots A and B
+- GIVEN a project with `mantle-project.ncl`, `mantle.lock`, and built roots A and B
 - WHEN mantle materializes the project attestation
 - THEN it records the project node separately from artifacts A and B
 - AND it records the lockfile-resolved source and patch facts in the project scope

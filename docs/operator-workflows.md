@@ -137,7 +137,7 @@ strict mode on the build-entry commands that expose it:
 
 ```bash
 mantle build --strict-hermetic .#hello
-mantle self-build --strict-hermetic --store /tmp/crunch-store -j 4 --no-substitute
+mantle self-build --strict-hermetic --store /tmp/mantle-store -j 4 --no-substitute
 ```
 
 Structured build reports surface the same operator facts in stable fields:

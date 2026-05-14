@@ -133,11 +133,11 @@ could not find crunch-built tools.
 ### Requirement: SNIX_BUILD_SANDBOX_SHELL accepts crunch-built path
 
 The `SNIX_BUILD_SANDBOX_SHELL` environment variable MUST accept a path
-under the mantle store (e.g., `/crunch/store/xxx-busybox/bin/busybox`)
+under the mantle store (e.g., `/mantle/store/xxx-busybox/bin/busybox`)
 in addition to `/nix/store` paths.
 
 #### Scenario: Sandbox shell from mantle store
 
-- GIVEN `SNIX_BUILD_SANDBOX_SHELL=/crunch/store/xxx-busybox/bin/busybox`
+- GIVEN `SNIX_BUILD_SANDBOX_SHELL=/mantle/store/xxx-busybox/bin/busybox`
 - WHEN a derivation is built
 - THEN the sandbox mounts the busybox binary and uses it as `/bin/sh`

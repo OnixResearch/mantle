@@ -34,7 +34,7 @@ The project-management layer MUST stay separate from the eval/build/store
 engine.
 
 `crunch-project` MAY load manifests, compute stale state, rewrite lockfiles,
-and generate `.crunch/inputs.ncl`, but it MUST NOT become a second fetch or
+and generate `.mantle/inputs.ncl`, but it MUST NOT become a second fetch or
 build engine.
 
 Network fetch execution, fixed-output verification, patch application, sandbox
@@ -43,7 +43,7 @@ fetcher/build/store layers.
 
 #### Scenario: Project layer does not duplicate fetch execution
 
-- GIVEN an input described in `crunch-project.ncl`
+- GIVEN an input described in `mantle-project.ncl`
 - WHEN the project layer resolves and materializes that input
 - THEN it records the metadata needed by the build path
 - AND actual fetch/build execution still flows through mantle's existing

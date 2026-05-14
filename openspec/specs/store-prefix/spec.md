@@ -50,7 +50,7 @@ The store prefix MUST be used consistently in:
 #### Scenario: Same derivation, different prefix yields different hash
 
 - GIVEN a derivation spec `{ name = "hello", builder = "/bin/sh", ... }`
-- WHEN built with `--store-prefix /crunch/store`
+- WHEN built with `--store-prefix /mantle/store`
 - THEN the output path hash differs from the same spec built with `--store-prefix /nix/store`
 
 ### Requirement: Prefix length must be consistent

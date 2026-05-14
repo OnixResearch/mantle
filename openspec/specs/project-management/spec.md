@@ -26,7 +26,7 @@ fetch execution, sandboxed builds, and store persistence.
 ### Requirement: Nickel-native project manifest
 
 The system MUST support a human-edited Nickel manifest file named
-`crunch-project.ncl`.
+`mantle-project.ncl`. Legacy `crunch-project.ncl` remains a migration input, not the current default.
 
 The manifest MUST support, at minimum:
 - named inputs
@@ -40,14 +40,14 @@ The system MUST NOT require KDL for project input management.
 
 #### Scenario: Project manifest defines inputs
 
-- GIVEN a `crunch-project.ncl` file with named source inputs
+- GIVEN a `mantle-project.ncl` file with named source inputs
 - WHEN `mantle check` reads the project state
 - THEN the manifest is validated through the project layer
 - AND invalid input shapes are reported before any refresh or build work starts
 
 ### Requirement: Machine-edited JSON lockfile
 
-The system MUST maintain a machine-edited lockfile named `crunch.lock`.
+The system MUST maintain a machine-edited lockfile named `mantle.lock`. Legacy `crunch.lock` remains a migration input, not the current default.
 
 The lockfile MUST use JSON as its on-disk format. It MUST record the resolved
 values needed to build inputs repeatably, including source URLs or revisions,
@@ -57,20 +57,20 @@ selected mirrors, patch locks, and verified hashes.
 
 - GIVEN a valid project manifest
 - WHEN `mantle refresh` updates an input
-- THEN `crunch.lock` is rewritten with the new resolved state
+- THEN `mantle.lock` is rewritten with the new resolved state
 - AND the result is sufficient to reproduce the same input later without
   consulting the network for freshness data
 
 #### Scenario: Lockfile is JSON
 
 - GIVEN a current project state
-- WHEN the project layer writes `crunch.lock`
+- WHEN the project layer writes `mantle.lock`
 - THEN the file is valid JSON
 - AND the project layer can read it back without loss of resolved input data
 
 ### Requirement: Generated inputs file
 
-The system MUST materialize a generated file at `.crunch/inputs.ncl` from the
+The system MUST materialize a generated file at `.mantle/inputs.ncl` from the
 current lockfile.
 
 Package Nickel code MUST be able to import that file to access locked inputs.
@@ -80,15 +80,15 @@ MUST NOT refresh inputs implicitly.
 
 #### Scenario: Package code imports locked inputs
 
-- GIVEN a current `crunch.lock`
-- WHEN the project layer generates `.crunch/inputs.ncl`
-- THEN a package file can `import ".crunch/inputs.ncl"`
+- GIVEN a current `mantle.lock`
+- WHEN the project layer generates `.mantle/inputs.ncl`
+- THEN a package file can `import ".mantle/inputs.ncl"`
 - AND the imported values correspond to the current lock state
 
 #### Scenario: Build does not refresh inputs
 
 - GIVEN a project with an existing manifest, lockfile, and generated inputs file
-- WHEN `mantle build` evaluates a package file that imports `.crunch/inputs.ncl`
+- WHEN `mantle build` evaluates a package file that imports `.mantle/inputs.ncl`
 - THEN the build uses the locked inputs already on disk
 - AND no stale detection or network refresh is triggered implicitly
 
@@ -134,7 +134,7 @@ checked.
 - THEN the resolver calls `git ls-remote <repository> refs/heads/main`
 - AND the lockfile entry is updated with the resolved commit SHA
 - AND the lockfile hash is updated with the recursive hash of the checkout at that SHA
-- AND `.crunch/inputs.ncl` is regenerated
+- AND `.mantle/inputs.ncl` is regenerated
 
 #### Scenario: Git tag reference resolved with peeled tag target
 
@@ -190,7 +190,7 @@ checked.
 - GIVEN a locked git input at rev `aaa...` but upstream `main` now points to `bbb...`
 - WHEN `mantle list-stale` runs
 - THEN the input is reported as stale with the current and new revs
-- AND neither `crunch.lock` nor `.crunch/inputs.ncl` is modified
+- AND neither `mantle.lock` nor `.mantle/inputs.ncl` is modified
 
 #### Scenario: Stale detection reports failures distinctly
 
@@ -218,14 +218,14 @@ pipeline instead of introducing a second fetch implementation.
 #### Scenario: Patch list materialized with input
 
 - GIVEN an input that references named patches
-- WHEN `.crunch/inputs.ncl` is generated
+- WHEN `.mantle/inputs.ncl` is generated
 - THEN the materialized input data preserves the locked patch information
 - AND downstream package code can apply those patches through the existing
   mantle fetch/build mechanisms
 
 ### Requirement: Versioned manifest and lock formats
 
-Both `crunch-project.ncl` and `crunch.lock` MUST carry explicit schema
+Both `mantle-project.ncl` and `mantle.lock` MUST carry explicit schema
 versions. The project layer MUST provide migrations between supported schema
 versions.
 
@@ -238,12 +238,12 @@ versions.
 
 ### Requirement: Drift detection
 
-The project layer MUST detect drift between `crunch.lock` and
-`.crunch/inputs.ncl`.
+The project layer MUST detect drift between `mantle.lock` and
+`.mantle/inputs.ncl`.
 
 #### Scenario: Generated inputs file out of date
 
-- GIVEN `crunch.lock` changed but `.crunch/inputs.ncl` was not regenerated
+- GIVEN `mantle.lock` changed but `.mantle/inputs.ncl` was not regenerated
 - WHEN `mantle check` runs
 - THEN the command reports drift
 - AND exits non-zero until the generated inputs file is refreshed

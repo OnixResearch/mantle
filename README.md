@@ -472,7 +472,7 @@ Contracts catch errors at eval time:
 | Config language | Nix | Nickel |
 | Derivation hash | SHA-256 | BLAKE3 |
 | Default addressing | Input-addressed | Content-addressed |
-| Default store prefix | `/nix/store` | `/crunch/store` (`--nix-compat` for `/nix/store`) |
+| Default store prefix | `/nix/store` | `/mantle/store` (`--nix-compat` for `/nix/store`; explicit `/crunch/store` remains legacy-compatible) |
 | Inputs | String context (implicit) | Explicit `inputs` field |
 | Hash algorithms | sha256/sha512/sha1/md5 | + blake3 (first-class) |
 | Sandbox | Nix sandbox | bwrap (via snix-build) |
@@ -483,7 +483,7 @@ Contracts catch errors at eval time:
 
 mantle separates two concepts:
 
-- **Logical prefix** (`--store-prefix`, default `/crunch/store`): used for
+- **Logical prefix** (`--store-prefix`, default `/mantle/store`): used for
   derivation hash computation, ATerm serialization, and output path names.
   Different prefixes produce different derivation hashes.
 - **Physical directory** (`--store`, default `/nix/store`): where mantle
@@ -491,7 +491,7 @@ mantle separates two concepts:
   read from `/nix/store`.
 
 ```bash
-# Default: logical paths under /crunch/store, outputs written to /nix/store
+# Default: logical paths under /mantle/store, outputs written to /nix/store
 mantle build hello.ncl
 
 # Write outputs to a custom directory
@@ -563,7 +563,7 @@ pull imports into it.
 mantle store push --all --to /srv/cache
 
 # Push specific paths
-mantle store push --to /srv/cache /crunch/store/<hash>-hello
+mantle store push --to /srv/cache /mantle/store/<hash>-hello
 
 # Include unsigned entries (normally skipped)
 mantle store push --all --to /srv/cache --trust-unsigned
@@ -572,15 +572,15 @@ mantle store push --all --to /srv/cache --trust-unsigned
 mantle store pull --all --from /srv/cache
 
 # Pull specific paths from a cache directory
-mantle store pull --from /srv/cache /crunch/store/<hash>-hello
+mantle store pull --from /srv/cache /mantle/store/<hash>-hello
 
 # Pull specific paths from an HTTP cache
-mantle store pull --from https://cache.example.com /crunch/store/<hash>-hello
+mantle store pull --from https://cache.example.com /mantle/store/<hash>-hello
 
 # Pull from HTTP with explicit trust (signature verification)
 mantle store pull --from https://cache.example.com \
   --trusted-public-keys "builder-1:base64pubkey..." \
-  /crunch/store/<hash>-hello
+  /mantle/store/<hash>-hello
 
 # Accept unsigned narinfos
 mantle store pull --all --from /srv/cache --trust-unsigned
@@ -1091,10 +1091,10 @@ Related bootstrap work worth keeping handy:
 ## Project Management
 
 mantle has built-in dependency management for project inputs — git repos,
-tarballs, and files declared in a Nickel manifest (`crunch-project.ncl`).
+tarballs, and files declared in a Nickel manifest (`mantle-project.ncl`).
 
 ```bash
-# Create a new project (manifest, lockfile, .crunch/ directory)
+# Create a new project (manifest, lockfile, .mantle/ directory)
 mantle init
 
 # Validate manifest, lockfile, and generated inputs
@@ -1114,9 +1114,9 @@ mantle list-stale
 mantle upgrade
 ```
 
-The lockfile (`crunch.lock`) stores resolved revisions and NAR hashes.
+The lockfile (`mantle.lock`) stores resolved revisions and NAR hashes.
 `mantle refresh` resolves upstream references (git ls-remote, content
-hashing) and updates both `crunch.lock` and `.crunch/inputs.ncl`
+hashing) and updates both `mantle.lock` and `.mantle/inputs.ncl`
 (generated Nickel bindings).
 
 ## System configuration
@@ -1168,7 +1168,7 @@ mantle attest <subcommand>       Show, verify, diff, or synthesize attestations
 mantle release <subcommand>      Create or verify a release-evidence bundle
 
 # Project workflows
-mantle init                      Initialize crunch-project.ncl, crunch.lock, .crunch/
+mantle init                      Initialize mantle-project.ncl, mantle.lock, .mantle/
 mantle check                     Validate manifest, lockfile, and generated inputs
 mantle show                      Show resolved input state
 mantle refresh [names...]        Refresh selected or all project inputs
@@ -1187,7 +1187,7 @@ mantle system build <inventory>  Build a module inventory through the system pip
 
 ```
 --store <path>              Physical output directory (default: /nix/store)
---store-prefix <prefix>     Logical store prefix (default: /crunch/store)
+--store-prefix <prefix>     Logical store prefix (default: /mantle/store)
 --nix-compat                Shorthand for --store-prefix=/nix/store
 --state-dir <path>          State directory for databases and blobs
                             (default: $CRUNCH_STATE_DIR or ~/.local/state/mantle)

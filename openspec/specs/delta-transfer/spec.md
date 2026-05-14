@@ -49,7 +49,7 @@ MUST NOT require downloading content bytes merely to decide presence.
 
 #### Scenario: Prefix mismatch rejects delta reuse
 
-- GIVEN a sender using logical store prefix `/crunch/store`
+- GIVEN a sender using logical store prefix `/mantle/store`
 - AND a receiver reporting logical store prefix `/nix/store`
 - WHEN delta negotiation begins
 - THEN the peers reject delta reuse for that session
