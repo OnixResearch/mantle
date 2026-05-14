@@ -152,8 +152,9 @@ path for the artifact attestation.
 
 ## Enter a dev shell or run a package
 
-`mantle shell` resolves a `devShells` target from `crunch.ncl`, builds it, then
-reads `$out/.crunch-shell.json` to construct the runtime environment.
+`mantle shell` resolves a `devShells` target from the compatibility-named
+`crunch.ncl` package root, builds it, then reads `$out/.crunch-shell.json` to
+construct the runtime environment.
 `mantle develop` is the deprecated alias for the same implementation.
 
 ```bash
@@ -182,10 +183,11 @@ Notes:
 - `--command` and `--run` are mutually exclusive.
 
 `mantle run` is the package-side entry point. It builds a package target from
-`crunch.ncl` and executes the first program under `bin/`.
+the compatibility-named `crunch.ncl` package root and executes the first program
+under `bin/`.
 
 ```bash
-# Run the default package from crunch.ncl
+# Run the default package from the compatibility-named crunch.ncl package root
 mantle run
 
 # Run a named package

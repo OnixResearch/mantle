@@ -4,6 +4,11 @@
 
 Accepted (2026-04-06)
 
+Rename amendment (2026-05-14): this ADR records the pre-rename Crunch decision.
+The current Mantle default store prefix is `/mantle/store`; explicit
+`/crunch/store` remains a legacy compatibility prefix, and `--nix-compat` still
+selects `/nix/store` for interop testing.
+
 ## Context
 
 crunch hardcoded `/nix/store` as the store path prefix everywhere — in

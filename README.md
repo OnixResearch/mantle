@@ -156,7 +156,7 @@ Current operator loops:
 Short examples:
 
 ```bash
-# Shells and package execution from mantle.ncl
+# Shells and package execution from the compatibility-named crunch.ncl package root
 mantle shell --command env
 mantle develop            # deprecated alias for shell
 mantle run .#hello -- --help

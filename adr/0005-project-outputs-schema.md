@@ -4,6 +4,13 @@
 
 Proposed
 
+Rename amendment (2026-05-14): this ADR records the pre-rename command naming.
+The canonical command surface is now `mantle build`, `mantle shell`, and
+`mantle run`; the package/build project root intentionally remains the
+compatibility-named `crunch.ncl`. Dependency-management defaults are now
+`mantle-project.ncl`, `mantle.lock`, and `.mantle/inputs.ncl`, with the old
+Crunch names retained only as migration inputs.
+
 ## Context
 
 crunch has a project manifest (`crunch-project.ncl`) that pins external

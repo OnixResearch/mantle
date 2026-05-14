@@ -1,5 +1,10 @@
 # Architecture Decision Records
 
+ADRs dated before the 2026-05-14 rename may use the historical Crunch product
+name, `crunch` command examples, and legacy project filenames. Current
+operator-facing docs use Mantle/mantle names unless they are documenting a
+compatibility surface, crate name, or historical decision.
+
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-lazy-goals-vs-eager-dag.md) | Lazy goals vs eager DAG | Proposed |
