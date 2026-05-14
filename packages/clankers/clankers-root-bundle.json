@@ -1,35 +1,26 @@
 {
-  "bundle": {
-    "archive_bytes": 70169792,
-    "archive_hash": "sha256-uMLtEAKljm6oyduquA3EIdzabrc6MX1BlYDRRSQEAvM=",
-    "local_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/artifacts/clankers-root-bundle.tar.zst",
-    "recursive_unpack_hash": "sha256-Kxh6OEdoNRj94tyQZyqGoOEqMFx5QJmpCwCH4V1LQ/o=",
-    "top_level_dir": "clankers-root-bundle",
-    "url": "file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst"
-  },
-  "cargo": {
-    "build_command": "cargo build --locked --offline --bin clankers",
-    "cargo_home": "$TMPDIR/cargo-home",
-    "cargo_target_dir": "$TMPDIR/cargo-target"
-  },
-  "change_id": "build-clankers-root-vendor-bundle",
-  "generated_at": "2026-05-13T13:55:36Z",
-  "notes": [
-    "bundle payload is intentionally not committed to git",
-    "metadata commits the fixed hashes and generation recipe",
-    "source status may include pre-existing Clankers WIP and must not be attributed to this change"
+  "schema": "crunch.clankers.root_bundle.v1",
+  "package": "clankers",
+  "package_version": "0.1.0",
+  "generated_at_utc": "2026-05-13T14:08:27Z",
+  "source_checkout": "/home/brittonr/git/clankers",
+  "source_git_head": "57c3cccccc5ad4f9a987f07e598008c2a0751f82",
+  "bundle_stage_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/stage/clankers-root-bundle",
+  "bundle_archive_path": "/home/brittonr/git/crunch/crunch/.crunch-drain/artifacts/clankers-root-bundle.tar.zst",
+  "bundle_archive_url": "file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst",
+  "bundle_recursive_sha256_sri": "sha256-a6vnNF5mE/E3C7KlyQ9JXM77fdlQ+Yzc7sSlRi9JkAk=",
+  "bundle_archive_sha256_sri": "sha256-+YKDpkxKWXWgLHYSNw4EzmzGQuhuWe36mV/oD9v5heo=",
+  "bundle_unpacked_bytes": 1218220900,
+  "bundle_archive_bytes": 109688082,
+  "vendored_source_directory": "cargo-vendor",
+  "vendored_source_count": 1169,
+  "cargo_vendor_command": "CARGO_NET_OFFLINE=true cargo vendor --locked --offline --versioned-dirs /tmp/clankers-vendor-inspect",
+  "cargo_metadata_check": "CARGO_HOME=/tmp/clankers-root-bundle-cargo-home CARGO_NET_OFFLINE=true cargo metadata --locked --offline --format-version 1 --no-deps",
+  "excludes": [
+    ".git",
+    "target",
+    ".direnv",
+    ".jj"
   ],
-  "schema": "crunch-clankers-root-bundle-v1",
-  "source": {
-    "cargo_lock_sha256": "879e526f9dfbe48432226ba43871d92931998a3674daea4a723e93984bc6a256",
-    "git_head": "57c3cccccc5ad4f9a987f07e598008c2a0751f82",
-    "git_status_short": [],
-    "path": "/home/brittonr/git/clankers"
-  },
-  "vendor": {
-    "bytes": 887236688,
-    "command": "CARGO_NET_OFFLINE=true cargo vendor --locked --offline --versioned-dirs .crunch-drain/stage/clankers-root-bundle/cargo-vendor",
-    "crate_count": 786,
-    "directory": "cargo-vendor"
-  }
+  "note": "Archive is intentionally not committed; this metadata fixes the local external artifact consumed by packages/clankers/clankers.ncl."
 }
