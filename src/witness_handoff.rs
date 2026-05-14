@@ -17,7 +17,7 @@ use crate::release_attestation::validate_witness_identity;
 use crate::release_evidence::ReleaseEvidenceManifest;
 use crate::release_evidence::copy_directory_tree;
 
-pub(crate) const WITNESS_REQUEST_SCHEMA: &str = "crunch-witness-request-v1";
+pub(crate) const WITNESS_REQUEST_SCHEMA: &str = "mantle-witness-request-v1";
 pub(crate) const WITNESS_REQUEST_FILE_NAME: &str = "request.json";
 const REQUEST_LAYOUT_VERSION_V1: u32 = 1;
 const REQUEST_BUNDLE_DIR_NAME: &str = "release-evidence";

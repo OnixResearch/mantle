@@ -1,14 +1,14 @@
 {
-  "schema": "crunch-gcc40-native-boundary-v1",
+  "schema": "mantle-gcc40-native-boundary-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "boundary-only",
   "boundary": "native-gcc-make-to-pass1-bridge",
   "native_attempt": {
     "command_marker": "make -j1 -C \"$dir\"",
-    "diagnostic_marker": "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge"
+    "diagnostic_marker": "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge"
   },
   "installed_bridge_markers": [
-    "gcc (Crunch pass1 bridge) 4.0.4",
+    "gcc (Mantle pass1 bridge) 4.0.4",
     "Crunch GCC 4.0 pass1 cc1 object boundary",
     "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\""
   ],

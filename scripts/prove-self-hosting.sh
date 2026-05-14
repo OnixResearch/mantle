@@ -30,7 +30,7 @@ readonly SCRATCH_CARGO_TARGET_SUBDIR="cargo-target"
 readonly MAX_PATH_SOURCE_DIRS=128
 readonly MAX_PATH_LINKS=8192
 readonly BLOCKED_NIX_BINARIES=(nix-build nix-store nix-shell nix)
-readonly BLOCKED_HOST_TOOL_BINARIES=(git tar cp sh cargo nix-build nix-store nix-shell nix)
+readonly BLOCKED_HOST_TOOL_BINARIES=(bwrap git tar cp sh cargo nix-build nix-store nix-shell nix)
 
 path_prefix=""
 scratch_root=""

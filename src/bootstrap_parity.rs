@@ -340,7 +340,7 @@ fn validate_gcc47_cxx_provider_contract(project_root: &Path, derivation_path: &P
     })?;
     let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
         .map_err(|err| format!("GCC 4.7 C++ provider contract is not valid JSON: {err}"))?;
-    require_gcc47_contract_string(&receipt, "schema", "crunch-gcc47-cxx-provider-contract-v1")?;
+    require_gcc47_contract_string(&receipt, "schema", "mantle-gcc47-cxx-provider-contract-v1")?;
     require_gcc47_contract_string(&receipt, "derivation", "bootstrap/gcc-4.7.ncl")?;
     require_gcc47_contract_string(&receipt, "status", "contract-only")?;
     require_gcc47_contract_string(
@@ -392,7 +392,7 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
     })?;
     let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
         .map_err(|err| format!("GCC 4.0 placeholder inventory is not valid JSON: {err}"))?;
-    require_gcc40_inventory_string(&receipt, "schema", "crunch-gcc40-placeholder-inventory-v1")?;
+    require_gcc40_inventory_string(&receipt, "schema", "mantle-gcc40-placeholder-inventory-v1")?;
     require_gcc40_inventory_string(&receipt, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_inventory_string(&receipt, "status", "inventory-only")?;
     let actual_content = fs::read_to_string(derivation_path)
@@ -456,7 +456,7 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native boundary receipt is not valid JSON: {err}"))?;
-    require_gcc40_boundary_string(&value, "schema", "crunch-gcc40-native-boundary-v1")?;
+    require_gcc40_boundary_string(&value, "schema", "mantle-gcc40-native-boundary-v1")?;
     require_gcc40_boundary_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_boundary_string(&value, "status", "boundary-only")?;
     require_gcc40_boundary_string(&value, "boundary", "native-gcc-make-to-pass1-bridge")?;
@@ -621,7 +621,7 @@ fn validate_stagex_lineage_provider_receipt(project_root: &Path) -> Result<(), S
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("StageX lineage provider receipt is not valid JSON: {err}"))?;
-    require_stagex_json_string(&value, "schema", "crunch-stagex-lineage-provider-receipt-v1")?;
+    require_stagex_json_string(&value, "schema", "mantle-stagex-lineage-provider-receipt-v1")?;
     require_stagex_json_string(&value, "provider_kind", "stagex-lineage")?;
     require_stagex_json_string(&value, "lineage_receipt_status", "scaffold-only")?;
     for field in [
@@ -682,14 +682,14 @@ fn validate_self_build_provider_kind_linkage(project_root: &Path) -> Result<(), 
     let path = project_root.join(SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT);
     let content = fs::read_to_string(&path).map_err(|err| {
         format!(
-            "crunch self-build provider-kind linkage receipt missing `{}` ({err}); expected schema, proof_identity.selected_provider_kind, proof_linkage.selected_provider_kind, and prerequisites.provider_kind",
+            "mantle self-build provider-kind linkage receipt missing `{}` ({err}); expected schema, proof_identity.selected_provider_kind, proof_linkage.selected_provider_kind, and prerequisites.provider_kind",
             SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|err| format!("crunch self-build provider-kind linkage receipt is not valid JSON: {err}"))?;
+        .map_err(|err| format!("mantle self-build provider-kind linkage receipt is not valid JSON: {err}"))?;
 
-    require_self_build_json_string(&value, "schema", "crunch-self-build-provider-kind-linkage-v1")?;
+    require_self_build_json_string(&value, "schema", "mantle-self-build-provider-kind-linkage-v1")?;
     let proof_identity = require_self_build_object(&value, "proof_identity")?;
     let proof_linkage = require_self_build_object(&value, "proof_linkage")?;
     let prerequisites = require_self_build_object(&value, "prerequisites")?;
@@ -801,7 +801,7 @@ fn validate_binutils_tcc_tool_transcript(project_root: &Path) -> Result<(), Stri
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("binutils-tcc tool transcript is not valid JSON: {err}"))?;
-    require_json_string(&value, "schema", "crunch-binutils-tcc-tool-smoke-v1")?;
+    require_json_string(&value, "schema", "mantle-binutils-tcc-tool-smoke-v1")?;
     require_json_string(&value, "derivation", "bootstrap/binutils-tcc.ncl")?;
     require_non_empty_json_string(&value, "output_path")?;
     require_non_empty_json_string(&value, "provider_kind")?;
@@ -1467,7 +1467,7 @@ mod tests {
             path,
             format!(
                 r#"{{
-  "schema": "crunch-stagex-lineage-provider-receipt-v1",
+  "schema": "mantle-stagex-lineage-provider-receipt-v1",
   "provider_kind": "{provider_kind}",
   "lineage_receipt_status": "{status}",
   "audited_seed_digest": "{audited_seed_digest}",
@@ -1493,7 +1493,7 @@ mod tests {
             path,
             format!(
                 r#"{{
-  "schema": "crunch-self-build-provider-kind-linkage-v1",
+  "schema": "mantle-self-build-provider-kind-linkage-v1",
   "derivation": "bootstrap/crunch.ncl",
   "proof_identity": {{ "selected_provider_kind": "{proof_identity}" }},
   "proof_linkage": {{ "selected_provider_kind": "{proof_linkage}" }},
@@ -1511,7 +1511,7 @@ mod tests {
             path,
             format!(
                 r#"{{
-  "schema": "crunch-binutils-tcc-tool-smoke-v1",
+  "schema": "mantle-binutils-tcc-tool-smoke-v1",
   "derivation": "bootstrap/binutils-tcc.ncl",
   "output_path": "/crunch/store/example-binutils-2.30-tcc",
   "provider_kind": "source-root",
@@ -1537,16 +1537,16 @@ mod tests {
         fs::write(
             path,
             r#"{
-  "schema": "crunch-gcc40-native-boundary-v1",
+  "schema": "mantle-gcc40-native-boundary-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "boundary-only",
   "boundary": "native-gcc-make-to-pass1-bridge",
   "native_attempt": {
     "command_marker": "make -j1 -C \"$dir\"",
-    "diagnostic_marker": "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge"
+    "diagnostic_marker": "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge"
   },
   "installed_bridge_markers": [
-    "gcc (Crunch pass1 bridge) 4.0.4",
+    "gcc (Mantle pass1 bridge) 4.0.4",
     "Crunch GCC 4.0 pass1 cc1 object boundary",
     "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\""
   ],
@@ -1593,7 +1593,7 @@ mod tests {
             path,
             format!(
                 r#"{{
-  "schema": "crunch-gcc47-cxx-provider-contract-v1",
+  "schema": "mantle-gcc47-cxx-provider-contract-v1",
   "derivation": "bootstrap/gcc-4.7.ncl",
   "status": "contract-only",
   "required_markers": [
@@ -1646,7 +1646,7 @@ mod tests {
             path,
             format!(
                 r#"{{
-  "schema": "crunch-gcc40-placeholder-inventory-v1",
+  "schema": "mantle-gcc40-placeholder-inventory-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "inventory-only",
   "marker_count": {},
@@ -1727,8 +1727,8 @@ mod tests {
             "# pass1 bridge\n",
             "echo stub\n",
             "make -j1 -C \"$dir\"\n",
-            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
-            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
@@ -1777,8 +1777,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let content = concat!(
             "make -j1 -C \"$dir\"\n",
-            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
-            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
         );
@@ -1796,8 +1796,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let content = concat!(
             "make -j1 -C \"$dir\"\n",
-            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
-            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
@@ -1815,8 +1815,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let content = concat!(
             "make -j1 -C \"$dir\"\n",
-            "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
-            "gcc (Crunch pass1 bridge) 4.0.4\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
@@ -1992,7 +1992,7 @@ mod tests {
         fs::write(
             path,
             r#"{
-              "schema": "crunch-binutils-tcc-tool-smoke-v1",
+              "schema": "mantle-binutils-tcc-tool-smoke-v1",
               "derivation": "bootstrap/binutils-tcc.ncl",
               "output_path": "/crunch/store/example-binutils-2.30-tcc",
               "provider_kind": "source-root",

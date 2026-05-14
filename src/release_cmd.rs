@@ -226,7 +226,7 @@ fn print_release_verify_json(
         })
     });
     let mut rendered = serde_json::json!({
-        "kind": "crunch-release-verify-v1",
+        "kind": "mantle-release-verify-v1",
         "release_id": manifest.release_id,
         "manifest": manifest,
         "reproducibility_status": status.as_str(),
@@ -436,7 +436,7 @@ fn cmd_release_witness_export(
     )?;
     if json {
         let rendered = serde_json::json!({
-            "kind": "crunch-witness-request",
+            "kind": "mantle-witness-request",
             "release_id": created.release_id,
             "layout_version": created.layout_version,
             "request_dir": created.request_dir.display().to_string(),
@@ -597,7 +597,7 @@ fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan
     let audit_path = audit_meta_path(plan);
     if json {
         let rendered = serde_json::json!({
-            "kind": "crunch-witness-rebuild",
+            "kind": "mantle-witness-rebuild",
             "check_only": true,
             "release_id": plan.release_id,
             "request_dir": plan.request_dir.display().to_string(),
@@ -638,7 +638,7 @@ fn print_witness_rebuild_success(
         let rebuilt_outputs =
             success.rebuilt_output_paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
         let rendered = serde_json::json!({
-            "kind": "crunch-witness-rebuild",
+            "kind": "mantle-witness-rebuild",
             "check_only": false,
             "release_id": plan.release_id,
             "request_dir": plan.request_dir.display().to_string(),
@@ -728,7 +728,7 @@ mod tests {
         let proof_dir = bundle_dir.join("proof/self-hosting");
         std::fs::create_dir_all(&proof_dir).unwrap();
         let manifest = crate::release_evidence::ReleaseEvidenceManifest {
-            schema: "crunch-release-evidence-v1".to_string(),
+            schema: "mantle-release-evidence-v1".to_string(),
             release_id: "test-release".to_string(),
             claim_scope: "self-hosting".to_string(),
             workflow: crunch_release_core::ReleaseWorkflowIdentity {
@@ -774,7 +774,7 @@ mod tests {
 
     fn test_manifest() -> crate::release_evidence::ReleaseEvidenceManifest {
         crate::release_evidence::ReleaseEvidenceManifest {
-            schema: "crunch-release-evidence-v1".to_string(),
+            schema: "mantle-release-evidence-v1".to_string(),
             release_id: "test-release".to_string(),
             claim_scope: "self-hosting".to_string(),
             workflow: crunch_release_core::ReleaseWorkflowIdentity {

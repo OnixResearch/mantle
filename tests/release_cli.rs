@@ -36,7 +36,7 @@ use serde::Serialize;
 use sha2::Sha256;
 use tempfile::TempDir;
 
-const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
+const RELEASE_EVIDENCE_SCHEMA: &str = "mantle-release-evidence-v1";
 const BLAKE3_HEX_LEN: usize = 64;
 const TEST_CARGO_SHA256_HEX_LEN: usize = 64;
 const RELEASE_SIGNING_KEY: &str =
@@ -127,10 +127,11 @@ fn write_fake_proof_bundle(proof_dir: &Path) {
 
 fn write_full_proof_bundle(proof_dir: &Path, stage2_digest_blake3: &str, inventory_digest_blake3: &str) {
     let manifest = serde_json::json!({
-        "schema": "crunch-self-hosting-proof-v2",
-        "staged_source": "/tmp/proof-store/abcd-crunch-src",
+        "schema": "mantle-self-hosting-proof-v2",
+        "staged_source": "/tmp/proof-store/abcd-mantle-src",
         "prerequisites": {
             "mode": "fixed-point",
+            "provider_kind": "source-root",
             "inventory_doc": {
                 "path": "/tmp/proof-bundle/stage0-prerequisites/inventory.md",
                 "size_bytes": 9,
@@ -139,12 +140,12 @@ fn write_full_proof_bundle(proof_dir: &Path, stage2_digest_blake3: &str, invento
         },
         "binaries": {
             "stage1": {
-                "path": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                "path": "/tmp/proof-store/stage1-mantle/bin/mantle",
                 "size_bytes": 20,
                 "digest_blake3": sample_digest(1)
             },
             "stage2": {
-                "path": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                "path": "/tmp/proof-store/stage2-mantle/bin/mantle",
                 "size_bytes": 13,
                 "digest_blake3": stage2_digest_blake3
             }
@@ -178,15 +179,15 @@ fn write_full_proof_bundle(proof_dir: &Path, stage2_digest_blake3: &str, invento
         },
         "stage0": {
             "report": {
-                "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                "output_binary": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                "output_binary": "/tmp/proof-store/stage1-mantle/bin/mantle",
                 "busybox_path": "/tmp/proof-store/stage0-busybox/bin/busybox"
             }
         },
         "stage2": {
             "report": {
-                "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                "output_binary": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                "output_binary": "/tmp/proof-store/stage2-mantle/bin/mantle",
                 "busybox_path": "/tmp/proof-store/stage2-busybox/bin/busybox"
             }
         }
@@ -206,7 +207,7 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
 
-    let binary_path = temp.path().join("crunch-bin");
+    let binary_path = temp.path().join("mantle-bin");
     write_file(&binary_path, b"crunch-binary");
     let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
     let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
@@ -219,7 +220,7 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
         .arg("release")
         .arg("create")
         .arg("--release-id")
-        .arg("crunch-0.1.0-rc1")
+        .arg("mantle-0.1.0-rc1")
         .arg("--bundle-dir")
         .arg(&bundle_dir)
         .arg("--binary")
@@ -228,7 +229,7 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
         .arg(&proof_dir)
         .assert()
         .success()
-        .stdout(predicate::str::contains("release id: crunch-0.1.0-rc1"));
+        .stdout(predicate::str::contains("release id: mantle-0.1.0-rc1"));
 
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
@@ -515,10 +516,10 @@ mode="${CRUNCH_TEST_WITNESS_DRIVER_MODE:-match}"
 mkdir -p "$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR"
 printf 'driver mode: %s\n' "$mode"
 sleep "$DRIVER_SLEEP_SECONDS"
-output_path="$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/stage2-crunch"
+output_path="$CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR/stage2-mantle"
 case "$mode" in
   match)
-    cp "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/binaries/01-crunch-bin" "$output_path"
+    cp "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/binaries/01-mantle-bin" "$output_path"
     ;;
   mismatch)
     printf 'wrong-binary\n' > "$output_path"
@@ -592,7 +593,7 @@ fn write_rebuild_copy_script(script_path: &Path, binary_relative_path: &str) {
     write_rebuild_script(
         script_path,
         &format!(
-            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$CRUNCH_REPRODUCE_BUNDLE_DIR/{binary_relative_path}\" \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\n"
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{binary_relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\n"
         ),
     );
 }
@@ -645,7 +646,7 @@ fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
 
-    let binary_path = temp.path().join("crunch-bin");
+    let binary_path = temp.path().join("mantle-bin");
     write_file(&binary_path, b"crunch-binary");
 
     crunch()
@@ -653,7 +654,7 @@ fn release_create_fails_when_proof_bundle_is_missing() {
         .arg("release")
         .arg("create")
         .arg("--release-id")
-        .arg("crunch-0.1.0-rc1")
+        .arg("mantle-0.1.0-rc1")
         .arg("--bundle-dir")
         .arg(temp.path().join("bundle"))
         .arg("--binary")
@@ -670,7 +671,7 @@ fn release_create_rejects_prerequisite_only_proof_bundle() {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
 
-    let binary_path = temp.path().join("crunch-bin");
+    let binary_path = temp.path().join("mantle-bin");
     write_file(&binary_path, b"crunch-binary");
     let proof_dir = temp.path().join("fake-proof");
     write_fake_proof_bundle(&proof_dir);
@@ -680,7 +681,7 @@ fn release_create_rejects_prerequisite_only_proof_bundle() {
         .arg("release")
         .arg("create")
         .arg("--release-id")
-        .arg("crunch-0.1.0-rc1")
+        .arg("mantle-0.1.0-rc1")
         .arg("--bundle-dir")
         .arg(temp.path().join("bundle"))
         .arg("--binary")
@@ -839,7 +840,7 @@ fn release_reproduce_fails_when_rebuilt_artifact_is_missing() {
     let rebuild_script = temp.path().join("missing-rebuild.sh");
     let rebuild_output_dir = temp.path().join("missing-output");
     let report_path = temp.path().join("missing-report.json");
-    write_rebuild_script(&rebuild_script, "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\n");
+    write_rebuild_script(&rebuild_script, "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\n");
 
     crunch()
         .current_dir(temp.path())
@@ -870,7 +871,7 @@ fn release_reproduce_fails_on_byte_length_drift() {
     write_rebuild_script(
         &rebuild_script,
         &format!(
-            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'short' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'short' > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{}\"\n",
             manifest.binaries[0].relative_path
         ),
     );
@@ -904,7 +905,7 @@ fn release_reproduce_fails_on_digest_drift() {
     write_rebuild_script(
         &rebuild_script,
         &format!(
-            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{}\"\n",
             manifest.binaries[0].relative_path
         ),
     );
@@ -937,7 +938,7 @@ fn release_reproduce_fails_on_output_name_drift() {
     let report_path = temp.path().join("name-report.json");
     write_rebuild_script(
         &rebuild_script,
-        "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'crunch-binary' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries/renamed-crunch\"\n",
+        "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'crunch-binary' > \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries/renamed-crunch\"\n",
     );
 
     crunch()
@@ -974,7 +975,7 @@ fn release_create_can_package_optional_reproducibility_report() {
         .arg("--bundle-dir")
         .arg(&packaged_bundle_dir)
         .arg("--binary")
-        .arg(temp.path().join("crunch-bin"))
+        .arg(temp.path().join("mantle-bin"))
         .arg("--proof-bundle")
         .arg(temp.path().join("proof-input"))
         .arg("--reproducibility-report")
@@ -1043,7 +1044,7 @@ fn release_verify_json_reports_absent_reproducibility() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
 
-    assert_eq!(json["kind"], "crunch-release-verify-v1");
+    assert_eq!(json["kind"], "mantle-release-verify-v1");
     assert_eq!(json["reproducibility_status"], "absent");
     assert!(json["reproducibility_report"].is_null());
 }
@@ -1093,7 +1094,7 @@ fn release_verify_json_reports_mismatched_reproducibility() {
     write_rebuild_script(
         &rebuild_script,
         &format!(
-            "mkdir -p \"$CRUNCH_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$CRUNCH_REPRODUCE_OUTPUT_DIR/{}\"\n",
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf 'drift-binary!' > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{}\"\n",
             manifest.binaries[0].relative_path
         ),
     );
@@ -1301,7 +1302,7 @@ fn release_attest_honors_json_output() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(json["release_id"], "crunch-0.1.0-rc1");
+    assert_eq!(json["release_id"], "mantle-0.1.0-rc1");
     assert_eq!(json["attestation_path"], verification_dir.join("release-attestation.json").display().to_string());
     assert_eq!(json["signature_path"], verification_dir.join("release-attestation.json.sig").display().to_string());
 }
@@ -1395,7 +1396,7 @@ fn attest_policy_init_self_proof_only_writes_policy_files() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let created_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(created_json["kind"], "crunch-release-policy-init");
+    assert_eq!(created_json["kind"], "mantle-release-policy-init");
     assert_eq!(created_json["profile"], "self-proof-only");
     assert_eq!(created_json["policy_path"], verification_dir.join("policy.json").display().to_string());
     assert_eq!(created_json["revocations_path"], verification_dir.join("revocations.json").display().to_string());
@@ -1540,9 +1541,9 @@ fn witness_export_writes_request_directory() {
     let export_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let request = read_witness_request(&request_dir);
 
-    assert_eq!(export_json["kind"], "crunch-witness-request");
+    assert_eq!(export_json["kind"], "mantle-witness-request");
     assert_eq!(export_json["release_id"], manifest.release_id);
-    assert_eq!(request.schema, "crunch-witness-request-v1");
+    assert_eq!(request.schema, "mantle-witness-request-v1");
     assert_eq!(request.request_layout_version, 1);
     assert_eq!(request.release_id, manifest.release_id);
     assert_eq!(request.release_bundle_relative_path, format!("release-evidence/{}", manifest.release_id));
@@ -1653,7 +1654,7 @@ fn witness_import_accepts_directory_source_and_skips_exact_duplicates() {
     assert!(duplicate_output.status.success(), "{}", String::from_utf8_lossy(&duplicate_output.stderr));
     let duplicate_json: serde_json::Value = serde_json::from_slice(&duplicate_output.stdout).unwrap();
 
-    assert_eq!(duplicate_json["kind"], "crunch-witness-import");
+    assert_eq!(duplicate_json["kind"], "mantle-witness-import");
     assert_eq!(duplicate_json["imported_witness_identities"], serde_json::json!([]));
     assert_eq!(duplicate_json["skipped_duplicate_identities"], serde_json::json!(["witness-a"]));
 }
@@ -1825,7 +1826,7 @@ fn witness_rebuild_cli_check_is_preflight_only() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["kind"], "mantle-witness-rebuild");
     assert_eq!(rebuild_json["check_only"], true);
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(!scratch_dir.exists(), "check mode must not create scratch root");
@@ -1878,7 +1879,7 @@ fn witness_rebuild_helper_check_is_preflight_only() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["kind"], "mantle-witness-rebuild");
     assert_eq!(rebuild_json["check_only"], true);
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(!scratch_dir.exists(), "helper check mode must stay preflight-only");
@@ -1949,7 +1950,7 @@ fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
     let rebuild_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let audit_path = PathBuf::from(rebuild_json["audit_meta_path"].as_str().unwrap());
 
-    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["kind"], "mantle-witness-rebuild");
     assert_eq!(rebuild_json["check_only"], false);
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
@@ -2303,20 +2304,20 @@ fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
     let returned_verification_dir = PathBuf::from(rebuild_json["verification_dir"].as_str().unwrap());
     let audit = read_witness_rebuild_audit(&audit_path);
 
-    assert_eq!(rebuild_json["kind"], "crunch-witness-rebuild");
+    assert_eq!(rebuild_json["kind"], "mantle-witness-rebuild");
     assert_eq!(rebuild_json["check_only"], false);
     assert_eq!(rebuild_json["release_id"], manifest.release_id);
     assert!(Path::new(rebuild_json["attestation_path"].as_str().unwrap()).exists());
     assert!(Path::new(rebuild_json["signature_path"].as_str().unwrap()).exists());
     assert_fake_witness_driver_launch_signal_present(&launch_signal_path);
-    assert_eq!(audit.schema, "crunch-witness-rebuild-audit-v1");
+    assert_eq!(audit.schema, "mantle-witness-rebuild-audit-v1");
     assert_eq!(audit.status, "success");
     assert!(
         audit.finished_unix_ms > audit.started_unix_ms,
         "audit timestamps must bracket the rebuild subprocess"
     );
     assert_eq!(audit.rebuilt_outputs.len(), 1);
-    assert_eq!(audit.rebuilt_outputs[0].published_name, "binaries/01-crunch-bin");
+    assert_eq!(audit.rebuilt_outputs[0].published_name, "binaries/01-mantle-bin");
     assert_eq!(audit.rebuilt_outputs[0].digest_blake3, manifest.binaries[0].digest_blake3);
     assert_eq!(audit.witness_attestation_path.as_deref(), rebuild_json["attestation_path"].as_str());
     assert_eq!(audit.witness_signature_path.as_deref(), rebuild_json["signature_path"].as_str());
@@ -2387,7 +2388,7 @@ fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
     let audit = read_witness_rebuild_audit(&scratch_dir.join("witness-rebuild-audit/meta.json"));
     assert_eq!(audit.status, "failed");
     assert!(audit.failure_message.unwrap().contains("rebuilt output digest mismatch"));
-    assert!(!scratch_dir.join("release-verification").join("crunch-0.1.0-rc1").join("witnesses").exists());
+    assert!(!scratch_dir.join("release-verification").join("mantle-0.1.0-rc1").join("witnesses").exists());
 }
 
 #[test]
@@ -2563,7 +2564,7 @@ fn cross_machine_witness_handoff_reports_quorum_satisfied() {
         .assert()
         .success();
 
-    let rebuilt_binary_path = witness_bundle_dir.join("binaries/01-crunch-bin");
+    let rebuilt_binary_path = witness_bundle_dir.join("binaries/01-mantle-bin");
     crunch()
         .current_dir(&witness_workspace)
         .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
@@ -2652,7 +2653,7 @@ fn witnessed_self_hosting_release_workflow_with_generated_keys_and_key_show_repo
         .assert()
         .success();
 
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
     crunch()
         .current_dir(temp.path())
         .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
@@ -2729,7 +2730,7 @@ fn witnessed_self_hosting_release_workflow_reports_quorum_satisfied() {
 
     let witness_signing_key_path = temp.path().join("witness.key");
     let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
 
     crunch()
         .arg("attest")
@@ -2790,7 +2791,7 @@ fn attest_witness_create_prints_human_summary_without_json() {
 
     let witness_signing_key_path = temp.path().join("witness.key");
     let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
 
     crunch()
         .arg("attest")
@@ -2836,7 +2837,7 @@ fn attest_witness_create_writes_signed_witness_attestation() {
 
     let witness_signing_key_path = temp.path().join("witness.key");
     let witness_keypair = write_generated_signing_key(&witness_signing_key_path);
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
 
     let create_output = crunch()
         .arg("--json")
@@ -2860,7 +2861,7 @@ fn attest_witness_create_writes_signed_witness_attestation() {
     assert!(create_output.status.success(), "{}", String::from_utf8_lossy(&create_output.stderr));
     let created_json: serde_json::Value = serde_json::from_slice(&create_output.stdout).unwrap();
 
-    assert_eq!(created_json["kind"], "crunch-witness-attestation");
+    assert_eq!(created_json["kind"], "mantle-witness-attestation");
     assert_eq!(created_json["signer"], witness_keypair.verifying_key.name());
     assert_eq!(created_json["stored_path"], verification_dir.join("witnesses/witness-a.json").display().to_string());
     assert_eq!(
@@ -2909,7 +2910,7 @@ fn attest_witness_create_rejects_too_long_identity() {
 
     let witness_signing_key_path = temp.path().join("witness.key");
     let _witness_keypair = write_generated_signing_key(&witness_signing_key_path);
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
     let long_identity = "w".repeat(129);
 
     crunch()
@@ -2954,7 +2955,7 @@ fn attest_witness_create_rejects_rebuilt_binary_count_mismatch() {
 
     let witness_signing_key_path = temp.path().join("witness.key");
     let _witness_keypair = write_generated_signing_key(&witness_signing_key_path);
-    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-crunch-bin");
+    let rebuilt_binary_path = bundle_dir.join("binaries").join("01-mantle-bin");
     let extra_binary_path = temp.path().join("extra-bin");
     write_file(&extra_binary_path, b"extra-binary");
 
@@ -3002,9 +3003,9 @@ fn attest_release_show_prints_release_attestation_envelope() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let show_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    assert_eq!(show_json["kind"], "crunch-release-attestation");
+    assert_eq!(show_json["kind"], "mantle-release-attestation");
     assert_eq!(show_json["stored_path"], verification_dir.join("release-attestation.json").display().to_string());
-    assert_eq!(show_json["attestation"]["release_id"], "crunch-0.1.0-rc1");
+    assert_eq!(show_json["attestation"]["release_id"], "mantle-0.1.0-rc1");
 }
 
 #[test]
@@ -3169,7 +3170,7 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
         crunch().arg("attest").arg("witness-show").arg(&verification_dir).arg("witness-a").output().unwrap();
     assert!(show_output.status.success(), "{}", String::from_utf8_lossy(&show_output.stderr));
     let show_json: serde_json::Value = serde_json::from_slice(&show_output.stdout).unwrap();
-    assert_eq!(show_json["kind"], "crunch-witness-attestation");
+    assert_eq!(show_json["kind"], "mantle-witness-attestation");
     assert_eq!(show_json["attestation"]["witness_identity"], "witness-a");
 
     let verify_output = crunch()
@@ -3825,6 +3826,7 @@ struct ReleaseProofLinkage {
     source_archive_digest_blake3: String,
     proof_bundle_schema: String,
     proof_mode: String,
+    selected_provider_kind: String,
     staged_source: String,
     stage2_binary_digest_blake3: String,
     prerequisite_inventory_digest_blake3: String,
@@ -3846,5 +3848,5 @@ struct ReleaseEvidenceManifest {
 
 #[test]
 fn release_manifest_schema_constant_matches_fixture_expectation() {
-    assert_eq!(RELEASE_EVIDENCE_SCHEMA, "crunch-release-evidence-v1");
+    assert_eq!(RELEASE_EVIDENCE_SCHEMA, "mantle-release-evidence-v1");
 }

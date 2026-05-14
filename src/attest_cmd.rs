@@ -252,7 +252,7 @@ fn cmd_witness_import(current_dir: &Path, json: bool, verification_dir: &Path, s
     let imported = import_witness_material(&resolved_verification_dir, &resolved_source)?;
     if json {
         let rendered = serde_json::json!({
-            "kind": "crunch-witness-import",
+            "kind": "mantle-witness-import",
             "verification_dir": imported.verification_dir.display().to_string(),
             "imported_witness_identities": imported.imported_witness_identities,
             "skipped_duplicate_identities": imported.skipped_duplicate_identities,
@@ -428,7 +428,7 @@ fn print_created_witness_attestation(created: &CreatedWitnessAttestation, json: 
         let attestation = serde_json::to_value(&created.attestation)
             .map_err(|err| RunError::Internal(format!("serializing witness attestation: {err}")))?;
         let rendered = serde_json::json!({
-            "kind": "crunch-witness-attestation",
+            "kind": "mantle-witness-attestation",
             "digest": created.digest_hex,
             "stored_path": created.attestation_path.display().to_string(),
             "signature_path": created.signature_path.display().to_string(),
@@ -458,7 +458,7 @@ fn print_created_policy_files(created: &CreatedPolicyFiles, json: bool) -> Resul
         let revocations = serde_json::to_value(&created.revocations)
             .map_err(|err| RunError::Internal(format!("serializing revocations json: {err}")))?;
         let rendered = serde_json::json!({
-            "kind": "crunch-release-policy-init",
+            "kind": "mantle-release-policy-init",
             "profile": created.profile.as_str(),
             "policy_path": created.policy_path.display().to_string(),
             "revocations_path": created.revocations_path.display().to_string(),
@@ -746,10 +746,10 @@ fn parse_document_value(kind: &str, value: Value) -> Result<AttestationDocument,
         "project" => serde_json::from_value::<ProjectAttestation>(value)
             .map(AttestationDocument::Project)
             .map_err(|e| RunError::Internal(format!("parsing project attestation: {e}"))),
-        "crunch-release-attestation" => serde_json::from_value::<ReleaseAttestation>(value)
+        "mantle-release-attestation" => serde_json::from_value::<ReleaseAttestation>(value)
             .map(AttestationDocument::Release)
             .map_err(|e| RunError::Internal(format!("parsing release attestation: {e}"))),
-        "crunch-witness-attestation" => serde_json::from_value::<WitnessAttestation>(value)
+        "mantle-witness-attestation" => serde_json::from_value::<WitnessAttestation>(value)
             .map(AttestationDocument::Witness)
             .map_err(|e| RunError::Internal(format!("parsing witness attestation: {e}"))),
         other => Err(RunError::Internal(format!("unsupported attestation kind '{other}'"))),
@@ -890,8 +890,8 @@ impl AttestationDocument {
             Self::Artifact(_) => "artifact",
             Self::Closure(_) => "closure",
             Self::Project(_) => "project",
-            Self::Release(_) => "crunch-release-attestation",
-            Self::Witness(_) => "crunch-witness-attestation",
+            Self::Release(_) => "mantle-release-attestation",
+            Self::Witness(_) => "mantle-witness-attestation",
         }
     }
 }

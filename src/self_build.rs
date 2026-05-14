@@ -1,4 +1,4 @@
-//! Self-build: crunch builds itself from source.
+//! Self-build: Mantle builds itself from source.
 //!
 //! Copies the source tree (with vendored Cargo deps) directly into
 //! the output store, generates a Nickel derivation that references it
@@ -7,7 +7,7 @@
 //! No tarball hashing, no NAR serialization, no FOD. The source tree
 //! is just a directory in the store, like any other Nix source path.
 //!
-//! The output is a statically-linked crunch binary compiled inside a
+//! The output is a statically-linked mantle binary compiled inside a
 //! bwrap sandbox using only the bootstrap toolchain.
 
 use std::collections::BTreeMap;
@@ -58,7 +58,7 @@ const MAX_VENDOR_PACKAGE_FILE_COUNT: u32 = 200_000;
 /// Expected lowercase SHA-256 hex digest length in Cargo vendor metadata.
 ///
 /// Cargo.lock and `.cargo-checksum.json` define this digest algorithm as part
-/// of Cargo's interoperability format. Crunch-owned hashes remain BLAKE3.
+/// of Cargo's interoperability format. Mantle-owned hashes remain BLAKE3.
 const CARGO_SHA256_HEX_LEN: usize = 64;
 
 /// One kibibyte in bytes for fixed-size hashing buffers.
@@ -82,12 +82,12 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "vendor-deps",
 ];
 
-/// Maximum number of `*-crunch` output directories to scan before giving up.
+/// Maximum number of `*-mantle` output directories to scan before giving up.
 #[cfg_attr(not(test), allow(dead_code))]
 const MAX_CRUNCH_OUTPUTS: u32 = 4096;
 
 /// Bootstrap tool NCL files that MUST be built as separate roots before
-/// the main crunch derivation. Adding or removing entries here changes
+/// the main mantle derivation. Adding or removing entries here changes
 /// the self-build pipeline.
 const REQUIRED_BOOTSTRAP_TOOLS: &[&str] = &["bwrap.ncl", "busybox.ncl"];
 
@@ -107,7 +107,7 @@ const PROGRESS_KEY: &str = "progress=";
 /// How the bwrap binary was resolved for a self-build stage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BwrapSource {
-    /// Crunch-built bwrap found in the output store.
+    /// Mantle-built bwrap found in the output store.
     CrunchBuilt(PathBuf),
     /// Host-provided bwrap found on PATH.
     HostFallback(PathBuf),
@@ -118,7 +118,7 @@ pub enum BwrapSource {
 impl fmt::Display for BwrapSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BwrapSource::CrunchBuilt(p) => write!(f, "crunch-built:{}", p.display()),
+            BwrapSource::CrunchBuilt(p) => write!(f, "mantle-built:{}", p.display()),
             BwrapSource::HostFallback(p) => write!(f, "host-fallback:{}", p.display()),
             BwrapSource::DeclaredSeed(p) => write!(f, "declared-seed:{}", p.display()),
         }
@@ -129,7 +129,7 @@ impl BwrapSource {
     /// Parse from the stable string format produced by `Display`.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn parse(s: &str) -> Option<Self> {
-        if let Some(rest) = s.strip_prefix("crunch-built:") {
+        if let Some(rest) = s.strip_prefix("mantle-built:") {
             Some(BwrapSource::CrunchBuilt(PathBuf::from(rest)))
         } else if let Some(rest) = s.strip_prefix("host-fallback:") {
             Some(BwrapSource::HostFallback(PathBuf::from(rest)))
@@ -138,9 +138,9 @@ impl BwrapSource {
         }
     }
 
-    /// True when this stage used a crunch-built bwrap.
+    /// True when this stage used a mantle-built bwrap.
     #[cfg_attr(not(test), allow(dead_code))]
-    pub fn is_crunch_built(&self) -> bool {
+    pub fn is_mantle_built(&self) -> bool {
         matches!(self, BwrapSource::CrunchBuilt(_))
     }
 
@@ -148,7 +148,7 @@ impl BwrapSource {
     fn bin_dir(&self) -> Result<PathBuf, RunError> {
         match self {
             BwrapSource::CrunchBuilt(dir) => {
-                assert!(!dir.as_os_str().is_empty(), "crunch-built bwrap dir must not be empty",);
+                assert!(!dir.as_os_str().is_empty(), "mantle-built bwrap dir must not be empty",);
                 Ok(dir.clone())
             }
             BwrapSource::HostFallback(path) => bwrap_executable_parent(path, "host fallback bwrap"),
@@ -248,7 +248,7 @@ pub struct SelfBuildReport {
     pub provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
     /// Hermeticity mode selected for this self-build.
     pub hermeticity_mode: crunch_pipeline::HermeticityMode,
-    /// Path to the crunch binary that drove this self-build.
+    /// Path to the mantle binary that drove this self-build.
     pub invoking_binary: PathBuf,
     /// Exact staged source tree used for this self-build.
     pub staged_source: PathBuf,
@@ -256,12 +256,12 @@ pub struct SelfBuildReport {
     pub bwrap_source: BwrapSource,
     /// Host-fallback events observed earlier in the stage.
     pub fallback_events: Vec<SelfBuildFallbackEvent>,
-    /// Protected-phase transition to crunch-built sandbox tools.
+    /// Protected-phase transition to mantle-built sandbox tools.
     pub protected_transition: Option<ProtectedPhaseTransition>,
     /// Actual protected exec events observed by the stage0 seccomp supervisor.
     pub protected_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     /// Path to the busybox binary that the NCL script will use for
-    /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no crunch-built busybox
+    /// `SNIX_BUILD_SANDBOX_SHELL`. `None` if no mantle-built busybox
     /// was found in the output store (falls back to `/bin/sh`).
     pub busybox_path: Option<PathBuf>,
     /// Path to the produced output binary.
@@ -556,12 +556,12 @@ impl SelfBuildReport {
 /// 1. Copy the selected source tree into staging with Rust filesystem calls
 /// 2. Check the staged vendored Cargo inputs are present and fresh
 /// 3. Compute the staged-tree fingerprint
-/// 4. Copy the staged tree into `$store_dir/$hash-crunch-src/`
+/// 4. Copy the staged tree into `$store_dir/$hash-mantle-src/`
 ///
-/// Returns the store path name (e.g., "abcdef...-crunch-src").
+/// Returns the store path name (e.g., "abcdef...-mantle-src").
 pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError> {
     let staging = tempfile::tempdir().map_err(|e| RunError::Internal(format!("tmpdir: {e}")))?;
-    let stage_root = staging.path().join("crunch-src");
+    let stage_root = staging.path().join("mantle-src");
     std::fs::create_dir_all(&stage_root).map_err(|e| RunError::Internal(format!("mkdir staging: {e}")))?;
 
     eprintln!("  copying selected source tree...");
@@ -619,7 +619,7 @@ let gcc = (import "bootstrap/gcc.ncl") in
 let rust = (import "bootstrap/rust.ncl") in
 
 {
-  name = "crunch",
+  name = "mantle",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -698,10 +698,10 @@ let rust = (import "bootstrap/rust.ncl") in
       BWRAP_BIN="__STORE_PREFIX__/__BWRAP_STORE_PATH__/bin"
       BWRAP_PATH=""
       if [ -x "$BWRAP_BIN/bwrap" ]; then
-        echo "Using crunch-built bwrap: $BWRAP_BIN"
+        echo "Using mantle-built bwrap: $BWRAP_BIN"
         BWRAP_PATH="$BWRAP_BIN:"
       else
-        echo "WARNING: crunch-built bwrap not found at $BWRAP_BIN/bwrap" >&2
+        echo "WARNING: mantle-built bwrap not found at $BWRAP_BIN/bwrap" >&2
       fi
       export PATH="/tmp/tools:${BWRAP_PATH}$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
 
@@ -738,10 +738,10 @@ CARGOEOF
       export CARGO_TARGET_DIR=/tmp/cargo-target
       BUSYBOX_BIN="__STORE_PREFIX__/__BUSYBOX_STORE_PATH__/bin/busybox"
       if [ -x "$BUSYBOX_BIN" ]; then
-        echo "Using crunch-built busybox: $BUSYBOX_BIN"
+        echo "Using mantle-built busybox: $BUSYBOX_BIN"
         export SNIX_BUILD_SANDBOX_SHELL="$BUSYBOX_BIN"
       else
-        echo "WARNING: crunch-built busybox not found at $BUSYBOX_BIN" >&2
+        echo "WARNING: mantle-built busybox not found at $BUSYBOX_BIN" >&2
         export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
       fi
 
@@ -756,18 +756,18 @@ CARGOEOF
         export LIBRARY_PATH="$GCC_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
       fi
 
-      echo "=== Building crunch ==="
-      cargo build --release --locked -j 4 2>&1 || exit 1
+      echo "=== Building mantle ==="
+      cargo build --release --locked --bin mantle -j 4 2>&1 || exit 1
 
       echo "=== Installing ==="
       mkdir -p $out/bin
-      cp /tmp/cargo-target/x86_64-unknown-linux-musl/release/crunch $out/bin/
+      cp /tmp/cargo-target/x86_64-unknown-linux-musl/release/mantle $out/bin/
 
       echo "=== Verify ==="
-      ls -la $out/bin/crunch
-      file $out/bin/crunch 2>/dev/null || true
-      $out/bin/crunch --version 2>&1 | head -3 || \
-        $out/bin/crunch --help 2>&1 | head -3
+      ls -la $out/bin/mantle
+      file $out/bin/mantle 2>/dev/null || true
+      $out/bin/mantle --version 2>&1 | head -3 || \
+        $out/bin/mantle --help 2>&1 | head -3
     "%,
   ],
   inputs = [
@@ -814,7 +814,7 @@ pub fn verify_binary(binary_path: &Path) -> Result<(), RunError> {
     }
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("crunch"), "self-built binary --help doesn't mention 'crunch'");
+    assert!(stdout.contains("mantle"), "self-built binary --help doesn't mention 'mantle'");
 
     eprintln!("  binary OK");
     Ok(())
@@ -1451,7 +1451,7 @@ fn staged_source_store_name_from_fingerprint(fingerprint_hex: &str) -> Result<St
         )));
     }
     let store_hash = nix_compat::nixbase32::encode(&digest_bytes[..20]);
-    Ok(format!("{store_hash}-crunch-src"))
+    Ok(format!("{store_hash}-mantle-src"))
 }
 
 fn expected_staged_source_store_name(source_dir: &Path) -> Result<String, RunError> {
@@ -1603,7 +1603,7 @@ fn strict_later_stage_active(
 fn reject_host_bwrap_fallback(output_dir: &Path, presence: BootstrapToolPresence) -> Result<BwrapSource, RunError> {
     Err(RunError::Internal(format!(
         "strict self-build later stage refuses host bwrap fallback after bootstrap roots already exist in {} \
-         (bwrap_root={}, busybox_root={}). Reuse the crunch-built bwrap output instead.",
+         (bwrap_root={}, busybox_root={}). Reuse the mantle-built bwrap output instead.",
         output_dir.display(),
         presence.has_bwrap_root,
         presence.has_busybox_root,
@@ -1613,7 +1613,7 @@ fn reject_host_bwrap_fallback(output_dir: &Path, presence: BootstrapToolPresence
 /// Locate the best bwrap binary for the self-build pipeline.
 ///
 /// Preference order:
-/// 1. Crunch-built bwrap in `output_dir` (from a prior self-build)
+/// 1. Mantle-built bwrap in `output_dir` (from a prior self-build)
 /// 2. Any bwrap on the host PATH (first bootstrap)
 ///
 /// Strict later stages reject host fallback once bootstrap-tool roots already
@@ -1622,9 +1622,9 @@ fn resolve_bwrap_source(
     output_dir: &Path,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> Result<BwrapSource, RunError> {
-    // 1. Prefer crunch-built bwrap from the output store.
+    // 1. Prefer mantle-built bwrap from the output store.
     if let Some(bwrap_dir) = find_crunch_bwrap(output_dir) {
-        eprintln!("  bwrap: {} (crunch-built)", bwrap_dir.display());
+        eprintln!("  bwrap: {} (mantle-built)", bwrap_dir.display());
         return Ok(BwrapSource::CrunchBuilt(bwrap_dir));
     }
 
@@ -1640,7 +1640,7 @@ fn resolve_bwrap_source(
     match find_host_bwrap() {
         Some(path) => {
             eprintln!(
-                "  WARNING: no crunch-built bwrap in {}; using external bwrap at {}",
+                "  WARNING: no mantle-built bwrap in {}; using external bwrap at {}",
                 output_dir.display(),
                 path.display(),
             );
@@ -1713,7 +1713,7 @@ fn activate_bwrap_source(source: &BwrapSource) -> Result<(), RunError> {
     Ok(())
 }
 
-/// Scan the output store for a crunch-built bwrap.
+/// Scan the output store for a mantle-built bwrap.
 ///
 /// Looks for `<output_dir>/*-bwrap/bin/bwrap` — the naming convention
 /// used by `bootstrap/bwrap.ncl` (derivation name = "bwrap").
@@ -1732,7 +1732,7 @@ fn find_crunch_bwrap(output_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Scan the output store for a crunch-built busybox.
+/// Scan the output store for a mantle-built busybox.
 ///
 /// Looks for `<output_dir>/*-busybox/bin/busybox` — the naming convention
 /// used by `bootstrap/busybox.ncl`.
@@ -1752,10 +1752,10 @@ pub fn find_crunch_busybox(output_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Find all `*-crunch` output directories in the store.
+/// Find all `*-mantle` output directories in the store.
 ///
 /// Returns a list of `(dir_name, binary_path)` pairs where the binary
-/// exists at `<dir>/bin/crunch`.
+/// exists at `<dir>/bin/mantle`.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
     let entries = match std::fs::read_dir(output_dir) {
@@ -1771,8 +1771,8 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
         }
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") {
-            let binary = entry.path().join("bin").join("crunch");
+        if name_str.ends_with("-mantle") {
+            let binary = entry.path().join("bin").join("mantle");
             if binary.exists() {
                 found.push((name_str.into_owned(), binary));
             }
@@ -1781,7 +1781,7 @@ pub fn find_crunch_outputs(output_dir: &Path) -> Vec<(String, PathBuf)> {
     found
 }
 
-/// Remove all `*-crunch` output directories from the store.
+/// Remove all `*-mantle` output directories from the store.
 ///
 /// Returns the number of directories removed. Errors from individual
 /// removals are collected but do not abort the loop.
@@ -1803,7 +1803,7 @@ pub fn invalidate_crunch_outputs(output_dir: &Path) -> Result<u32, RunError> {
     }
     if !errors.is_empty() {
         return Err(RunError::Internal(format!(
-            "failed to remove {} of {} crunch outputs:\n{}",
+            "failed to remove {} of {} mantle outputs:\n{}",
             errors.len(),
             outputs.len(),
             errors.join("\n"),
@@ -1870,13 +1870,13 @@ fn validate_bootstrap_tools(bootstrap_dir: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-/// Verify that crunch-built bwrap and busybox are on disk after building.
+/// Verify that mantle-built bwrap and busybox are on disk after building.
 ///
 /// Returns `Err` if either tool is missing from the output store.
 #[cfg_attr(not(test), allow(dead_code))]
 fn verify_tools_on_disk(output_dir: &Path) -> Result<(BwrapSource, PathBuf), RunError> {
     let bwrap_source = resolve_bwrap_source(output_dir, crunch_pipeline::HermeticityMode::Practical)?;
-    if !bwrap_source.is_crunch_built() {
+    if !bwrap_source.is_mantle_built() {
         return Err(RunError::Internal(
             "bwrap was not found on disk after building bwrap.ncl. \
              The bootstrap tool build may have failed silently."
@@ -1905,7 +1905,7 @@ struct BootstrapTools {
 /// Build all required bootstrap tools and return their resolved paths.
 ///
 /// Each tool is built as a separate root derivation and exported to disk.
-/// After all tools are built, the crunch-built bwrap is activated on PATH.
+/// After all tools are built, the mantle-built bwrap is activated on PATH.
 #[allow(clippy::too_many_arguments)]
 fn build_all_bootstrap_tools(
     bootstrap_dir: &Path,
@@ -1965,13 +1965,13 @@ fn build_all_bootstrap_tools(
         };
         if *tool_name == "bwrap.ncl" {
             let bwrap_path = tool_output_dir.join("bin").join("bwrap");
-            ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+            ensure_executable_file(&bwrap_path, "mantle-built bwrap")?;
             resolve_store_entry_name(&tool_output_dir, output_dir, "bwrap")?;
             built_bwrap_output_dir = Some(tool_output_dir.clone());
         }
         if *tool_name == "busybox.ncl" {
             let busybox_path = tool_output_dir.join("bin").join("busybox");
-            ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+            ensure_executable_file(&busybox_path, "mantle-built busybox")?;
             resolve_store_entry_name(&tool_output_dir, output_dir, "busybox")?;
             built_busybox_output_dir = Some(tool_output_dir.clone());
         }
@@ -1994,12 +1994,12 @@ fn build_all_bootstrap_tools(
     })?;
 
     let bwrap_path = bwrap_output_dir.join("bin").join("bwrap");
-    ensure_executable_file(&bwrap_path, "crunch-built bwrap")?;
+    ensure_executable_file(&bwrap_path, "mantle-built bwrap")?;
     let bwrap_dir = bwrap_path
         .parent()
         .ok_or_else(|| RunError::Internal(format!("bwrap binary has no parent directory: {}", bwrap_path.display())))?;
     let busybox_path = busybox_output_dir.join("bin").join("busybox");
-    ensure_executable_file(&busybox_path, "crunch-built busybox")?;
+    ensure_executable_file(&busybox_path, "mantle-built busybox")?;
 
     let bwrap_store_name = resolve_store_entry_name(&bwrap_output_dir, output_dir, "bwrap")?;
     let busybox_store_name = resolve_store_entry_name(&busybox_output_dir, output_dir, "busybox")?;
@@ -2098,9 +2098,9 @@ fn build_crunch_binary(
     report_build_result(&config, &result, false, crate::build_cmd::BuildOutputMode::Human)?;
     emit_progress_marker("crunch-build-done");
 
-    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, output_dir, "crunch")?;
-    let output_binary = output_root_dir.join("bin").join("crunch");
-    ensure_executable_file(&output_binary, "self-built crunch binary")?;
+    let output_root_dir = resolve_single_root_output_dir(&result, &config.store_dir, output_dir, "mantle")?;
+    let output_binary = output_root_dir.join("bin").join("mantle");
+    ensure_executable_file(&output_binary, "self-built mantle binary")?;
     Ok(output_binary)
 }
 
@@ -2597,7 +2597,7 @@ pub fn validate_stagex_proof_eligibility(report: &SelfBuildReport) -> Result<(),
 
     if report.protected_transition.is_none() {
         failures.push(StagexEligibilityFailure {
-            reason: "protected-phase transition to crunch-built tools is missing".to_string(),
+            reason: "protected-phase transition to mantle-built tools is missing".to_string(),
         });
     }
 
@@ -2699,8 +2699,8 @@ pub fn cmd_self_build(
         setup.bootstrap_busybox_path.as_deref(),
     )?;
 
-    eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building crunch...");
-    emit_progress_marker("crunch-build-start");
+    eprintln!("\n[3/{SELF_BUILD_STEP_COUNT}] Building mantle...");
+    emit_progress_marker("mantle-build-start");
     let output_binary = build_crunch_binary(
         &setup.src_dir,
         &shared.store_name,
@@ -2772,7 +2772,7 @@ mod tests {
     use super::*;
 
     fn test_self_build_ncl() -> String {
-        generate_self_build_ncl("abc123-crunch-src", "bwrap123-bwrap", "busybox123-busybox", "/nix/store")
+        generate_self_build_ncl("abc123-mantle-src", "bwrap123-bwrap", "busybox123-busybox", "/nix/store")
     }
 
     fn test_seed_digest(path: &Path) -> crate::protected_exec::DigestSpec {
@@ -2909,7 +2909,7 @@ mod tests {
     #[test]
     fn generate_ncl_has_source_path() {
         let ncl = test_self_build_ncl();
-        assert!(ncl.contains("/nix/store/abc123-crunch-src"));
+        assert!(ncl.contains("/nix/store/abc123-mantle-src"));
         assert!(ncl.contains("crunch.Derivation"));
     }
 
@@ -2918,8 +2918,8 @@ mod tests {
         // The source tree should be a string input (source path),
         // not a fetchTarball FOD.
         let ncl = test_self_build_ncl();
-        assert!(!ncl.contains("crunch-src\",\n  hash"));
-        assert!(ncl.contains("\"/nix/store/abc123-crunch-src\""));
+        assert!(!ncl.contains("mantle-src\",\n  hash"));
+        assert!(ncl.contains("\"/nix/store/abc123-mantle-src\""));
     }
 
     #[test]
@@ -2942,7 +2942,7 @@ mod tests {
         let ncl = test_self_build_ncl();
         assert!(ncl.contains("cargo build"));
         assert!(ncl.contains("--release"));
-        assert!(ncl.contains("$out/bin/crunch"));
+        assert!(ncl.contains("$out/bin/mantle"));
         assert!(ncl.contains("SNIX_BUILD_SANDBOX_SHELL"));
         assert!(ncl.contains("export RUSTC_BOOTSTRAP=1"));
     }
@@ -3287,7 +3287,7 @@ mod tests {
     #[test]
     fn validate_staged_source_dir_rejects_missing_lib_dir() {
         let output_dir = tempfile::tempdir().unwrap();
-        let staged_source = output_dir.path().join("abc123-crunch-src");
+        let staged_source = output_dir.path().join("abc123-mantle-src");
         std::fs::create_dir_all(staged_source.join("bootstrap")).unwrap();
         std::fs::create_dir_all(staged_source.join(".cargo")).unwrap();
         std::fs::write(staged_source.join("Cargo.toml"), "[package]\nname = \"crunch\"\nversion = \"0.0.0\"\n")
@@ -3340,10 +3340,10 @@ mod tests {
         match source.unwrap() {
             BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, output_dir.path().join("abc123-bwrap").join("bin")),
             BwrapSource::HostFallback(path) => {
-                panic!("expected crunch-built bwrap, got host fallback {}", path.display())
+                panic!("expected mantle-built bwrap, got host fallback {}", path.display())
             }
             BwrapSource::DeclaredSeed(path) => {
-                panic!("expected crunch-built bwrap, got declared seed {}", path.display())
+                panic!("expected mantle-built bwrap, got declared seed {}", path.display())
             }
         }
     }
@@ -3371,10 +3371,10 @@ mod tests {
                 assert_ne!(dir, output_dir.path().join("zzz-stale-bwrap").join("bin"));
             }
             BwrapSource::HostFallback(path) => {
-                panic!("expected crunch-built bwrap, got host fallback {}", path.display())
+                panic!("expected mantle-built bwrap, got host fallback {}", path.display())
             }
             BwrapSource::DeclaredSeed(path) => {
-                panic!("expected crunch-built bwrap, got declared seed {}", path.display())
+                panic!("expected mantle-built bwrap, got declared seed {}", path.display())
             }
         }
     }
@@ -3443,8 +3443,8 @@ mod tests {
         let ncl = test_self_build_ncl();
         assert!(ncl.contains("BWRAP_BIN=\"/nix/store/bwrap123-bwrap/bin\""));
         assert!(ncl.contains("BUSYBOX_BIN=\"/nix/store/busybox123-busybox/bin/busybox\""));
-        assert!(ncl.contains("Using crunch-built bwrap"));
-        assert!(ncl.contains("Using crunch-built busybox"));
+        assert!(ncl.contains("Using mantle-built bwrap"));
+        assert!(ncl.contains("Using mantle-built busybox"));
     }
 
     #[test]
@@ -3532,7 +3532,7 @@ mod tests {
         }
 
         let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical).unwrap();
-        assert!(result.is_crunch_built(), "should prefer crunch-built bwrap",);
+        assert!(result.is_mantle_built(), "should prefer mantle-built bwrap",);
         match result {
             BwrapSource::CrunchBuilt(dir) => assert_eq!(dir, bwrap_dir),
             _ => panic!("expected CrunchBuilt"),
@@ -3552,7 +3552,7 @@ mod tests {
         let store = tempfile::tempdir().unwrap();
         let result = resolve_bwrap_source(store.path(), crunch_pipeline::HermeticityMode::Practical).unwrap();
 
-        assert!(!result.is_crunch_built(), "should be host fallback");
+        assert!(!result.is_mantle_built(), "should be host fallback");
         match result {
             BwrapSource::HostFallback(path) => assert_eq!(path, fake_bwrap_path),
             _ => panic!("expected HostFallback"),
@@ -3901,7 +3901,7 @@ mod tests {
     fn bwrap_source_display_roundtrip_crunch_built() {
         let src = BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin"));
         let s = src.to_string();
-        assert!(s.starts_with("crunch-built:"));
+        assert!(s.starts_with("mantle-built:"));
         let parsed = BwrapSource::parse(&s).unwrap();
         assert_eq!(parsed, src);
     }
@@ -3922,9 +3922,9 @@ mod tests {
     }
 
     #[test]
-    fn bwrap_source_is_crunch_built_predicate() {
-        assert!(BwrapSource::CrunchBuilt(PathBuf::from("/x")).is_crunch_built());
-        assert!(!BwrapSource::HostFallback(PathBuf::from("/x")).is_crunch_built());
+    fn bwrap_source_is_mantle_built_predicate() {
+        assert!(BwrapSource::CrunchBuilt(PathBuf::from("/x")).is_mantle_built());
+        assert!(!BwrapSource::HostFallback(PathBuf::from("/x")).is_mantle_built());
     }
 
     #[test]
@@ -3976,7 +3976,7 @@ mod tests {
             protected_transition: Some(transition.clone()),
             protected_seccomp_events: vec![seccomp_event.clone()],
             busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
-            output_binary: PathBuf::from("/store/out/bin/crunch"),
+            output_binary: PathBuf::from("/store/out/bin/mantle"),
             stagex_metadata: None,
         };
 
@@ -4033,7 +4033,7 @@ mod tests {
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
-            output_binary: PathBuf::from("/store/out/bin/crunch"),
+            output_binary: PathBuf::from("/store/out/bin/mantle"),
             stagex_metadata: None,
         };
 
@@ -4056,7 +4056,7 @@ mod tests {
             provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
             invoking_binary: PathBuf::from("/tmp/checkout/target/debug/crunch"),
-            staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
+            staged_source: PathBuf::from("/tmp/store/src-mantle-src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/tmp/store/abc-bwrap/bin")),
             fallback_events: vec![
                 SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from("/run/wrappers/bin/bwrap")),
@@ -4065,7 +4065,7 @@ mod tests {
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
-            output_binary: PathBuf::from("/tmp/store/def-crunch/bin/crunch"),
+            output_binary: PathBuf::from("/tmp/store/def-mantle/bin/mantle"),
             stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
@@ -4091,8 +4091,8 @@ mod tests {
         let report = SelfBuildReport {
             provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::NixPackages,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
-            invoking_binary: PathBuf::from("/usr/bin/crunch"),
-            staged_source: PathBuf::from("/tmp/store/src-crunch-src"),
+            invoking_binary: PathBuf::from("/usr/bin/mantle"),
+            staged_source: PathBuf::from("/tmp/store/src-mantle-src"),
             bwrap_source: BwrapSource::HostFallback(PathBuf::from("/usr/bin/bwrap")),
             fallback_events: vec![SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from(
                 "/usr/bin/bwrap",
@@ -4100,7 +4100,7 @@ mod tests {
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: None,
-            output_binary: PathBuf::from("/tmp/store/out-crunch/bin/crunch"),
+            output_binary: PathBuf::from("/tmp/store/out-mantle/bin/mantle"),
             stagex_metadata: None,
         };
         let lines = report.format_proof_lines();
@@ -4111,7 +4111,7 @@ mod tests {
         assert_eq!(parsed.provider_mode, crate::bootstrap_source_root::BootstrapProviderMode::NixPackages);
         assert_eq!(parsed.fallback_events, report.fallback_events);
         assert!(parsed.busybox_path.is_none());
-        assert!(!parsed.bwrap_source.is_crunch_built());
+        assert!(!parsed.bwrap_source.is_mantle_built());
     }
 
     #[test]
@@ -4142,14 +4142,14 @@ mod tests {
         let report = SelfBuildReport {
             provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
-            invoking_binary: PathBuf::from("/bin/crunch"),
+            invoking_binary: PathBuf::from("/bin/mantle"),
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
             fallback_events: Vec::new(),
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
-            output_binary: PathBuf::from("/store/crunch/bin/crunch"),
+            output_binary: PathBuf::from("/store/crunch/bin/mantle"),
             stagex_metadata: Some(meta.clone()),
         };
         let lines = report.format_proof_lines();
@@ -4180,8 +4180,8 @@ mod tests {
     fn report_parse_returns_none_for_partial_input() {
         let partial = format!(
             "{PROOF_PREFIX} hermeticity-mode=strict\n\
-             {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
-             {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
+             {PROOF_PREFIX} invoking-binary=/bin/mantle\n\
+             {PROOF_PREFIX} staged-source=/store/src-mantle-src\n\
              {PROOF_PREFIX} bwrap-source=host-fallback:/usr/bin/bwrap\n\
              {PROOF_PREFIX} fallback-event=none\n"
         );
@@ -4196,22 +4196,22 @@ mod tests {
              {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-start:bwrap.ncl\n\
              {PROOF_PREFIX} provider-mode=legacy-fetch\n\
              {PROOF_PREFIX} hermeticity-mode=strict\n\
-             {PROOF_PREFIX} invoking-binary=/bin/crunch\n\
-             {PROOF_PREFIX} staged-source=/store/src-crunch-src\n\
+             {PROOF_PREFIX} invoking-binary=/bin/mantle\n\
+             {PROOF_PREFIX} staged-source=/store/src-mantle-src\n\
              another log line\n\
              {PROOF_PREFIX} {PROGRESS_KEY}bootstrap-tool-done:bwrap.ncl\n\
-             {PROOF_PREFIX} bwrap-source=crunch-built:/store/x-bwrap/bin\n\
+             {PROOF_PREFIX} bwrap-source=mantle-built:/store/x-bwrap/bin\n\
              {PROOF_PREFIX} fallback-event=source-host-discovery:/work/crunch\n\
              {PROOF_PREFIX} busybox-path=/store/y-busybox/bin/busybox\n\
-             {PROOF_PREFIX} output-binary=/store/z-crunch/bin/crunch\n\
+             {PROOF_PREFIX} output-binary=/store/z-mantle/bin/mantle\n\
              {PROOF_PREFIX} stagex-metadata=none\n\
              {PROOF_PREFIX} {PROGRESS_KEY}crunch-build-done\n"
         );
         let parsed = SelfBuildReport::parse_proof_lines(&mixed).expect("should parse despite progress markers");
         assert_eq!(parsed.hermeticity_mode, crunch_pipeline::HermeticityMode::Strict);
-        assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/crunch"));
-        assert_eq!(parsed.staged_source, PathBuf::from("/store/src-crunch-src"));
-        assert!(parsed.bwrap_source.is_crunch_built());
+        assert_eq!(parsed.invoking_binary, PathBuf::from("/bin/mantle"));
+        assert_eq!(parsed.staged_source, PathBuf::from("/store/src-mantle-src"));
+        assert!(parsed.bwrap_source.is_mantle_built());
         assert_eq!(parsed.fallback_events, vec![SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from(
             "/work/crunch"
         ))]);
@@ -4223,14 +4223,14 @@ mod tests {
         SelfBuildReport {
             provider_mode: crate::bootstrap_source_root::BootstrapProviderMode::StagexLineage,
             hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
-            invoking_binary: PathBuf::from("/bin/crunch"),
+            invoking_binary: PathBuf::from("/bin/mantle"),
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
             fallback_events: Vec::new(),
             protected_transition: Some(sample_protected_transition()),
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
-            output_binary: PathBuf::from("/store/crunch/bin/crunch"),
+            output_binary: PathBuf::from("/store/crunch/bin/mantle"),
             stagex_metadata: Some(StagexProofMetadata {
                 seed_class: "hex0-seed".to_string(),
                 audit_seed_max_bytes: 4096,
@@ -4415,17 +4415,17 @@ mod tests {
     #[test]
     fn find_crunch_outputs_finds_matching_dirs() {
         let store = tempfile::tempdir().unwrap();
-        // Create two *-crunch entries and one non-matching entry.
-        for name in ["aaa-crunch", "bbb-crunch", "ccc-notcrunch"] {
+        // Create two *-mantle entries and one non-matching entry.
+        for name in ["aaa-mantle", "bbb-mantle", "ccc-notmantle"] {
             let bin_dir = store.path().join(name).join("bin");
             std::fs::create_dir_all(&bin_dir).unwrap();
-            std::fs::write(bin_dir.join("crunch"), "fake").unwrap();
+            std::fs::write(bin_dir.join("mantle"), "fake").unwrap();
         }
         let found = find_crunch_outputs(store.path());
-        assert_eq!(found.len(), 2, "should find exactly 2 *-crunch dirs");
+        assert_eq!(found.len(), 2, "should find exactly 2 *-mantle dirs");
         let names: Vec<&str> = found.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"aaa-crunch"));
-        assert!(names.contains(&"bbb-crunch"));
+        assert!(names.contains(&"aaa-mantle"));
+        assert!(names.contains(&"bbb-mantle"));
     }
 
     #[test]
@@ -4437,18 +4437,18 @@ mod tests {
     #[test]
     fn find_crunch_outputs_skips_without_binary() {
         let store = tempfile::tempdir().unwrap();
-        // Directory named *-crunch but no bin/crunch file.
-        std::fs::create_dir_all(store.path().join("aaa-crunch")).unwrap();
+        // Directory named *-mantle but no bin/mantle file.
+        std::fs::create_dir_all(store.path().join("aaa-mantle")).unwrap();
         assert!(find_crunch_outputs(store.path()).is_empty());
     }
 
     #[test]
     fn invalidate_crunch_outputs_removes_dirs() {
         let store = tempfile::tempdir().unwrap();
-        let dir = store.path().join("abc-crunch");
+        let dir = store.path().join("abc-mantle");
         let bin_dir = dir.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        std::fs::write(bin_dir.join("crunch"), "fake").unwrap();
+        std::fs::write(bin_dir.join("mantle"), "fake").unwrap();
 
         let removed = invalidate_crunch_outputs(store.path()).unwrap();
         assert_eq!(removed, 1);
@@ -4552,7 +4552,7 @@ mod tests {
         );
     }
 
-    /// When host bwrap exists but store has no crunch-built bwrap,
+    /// When host bwrap exists but store has no mantle-built bwrap,
     /// verify_tools_on_disk must produce the exact bwrap.ncl error.
     /// Uses a fake bwrap on PATH so the test is deterministic.
     #[test]
@@ -4602,7 +4602,7 @@ mod tests {
         let result = verify_tools_on_disk(store.path());
         assert!(result.is_ok(), "must succeed with both tools: {:?}", result.err());
         let (bwrap_source, busybox_path) = result.unwrap();
-        assert!(bwrap_source.is_crunch_built());
+        assert!(bwrap_source.is_mantle_built());
         assert!(busybox_path.ends_with("busybox"));
     }
 

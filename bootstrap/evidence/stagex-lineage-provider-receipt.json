@@ -1,5 +1,5 @@
 {
-  "schema": "crunch-stagex-lineage-provider-receipt-v1",
+  "schema": "mantle-stagex-lineage-provider-receipt-v1",
   "provider_kind": "stagex-lineage",
   "lineage_receipt_status": "scaffold-only",
   "audited_seed_digest": "1111111111111111111111111111111111111111111111111111111111111111",

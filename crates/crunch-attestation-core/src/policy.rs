@@ -19,8 +19,8 @@ use crate::release::WitnessAttestation;
 use crate::release::binary_digests_match;
 use crate::release::release_attestation_canonical_digest;
 
-pub const RELEASE_POLICY_SCHEMA: &str = "crunch-release-policy-v1";
-pub const RELEASE_REVOCATIONS_SCHEMA: &str = "crunch-release-revocations-v1";
+pub const RELEASE_POLICY_SCHEMA: &str = "mantle-release-policy-v1";
+pub const RELEASE_REVOCATIONS_SCHEMA: &str = "mantle-release-revocations-v1";
 
 const MAX_SIGNER_COUNT: u32 = 256;
 const MAX_REVOCATION_COUNT: u32 = 4_096;
@@ -821,7 +821,7 @@ mod tests {
 
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(crate::release::ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),

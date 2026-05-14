@@ -1,5 +1,5 @@
 {
-  "schema": "crunch-gcc40-placeholder-inventory-v1",
+  "schema": "mantle-gcc40-placeholder-inventory-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "inventory-only",
   "marker_count": 4,

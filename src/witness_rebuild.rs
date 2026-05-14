@@ -22,8 +22,8 @@ use crate::witness_handoff::WITNESS_REQUEST_FILE_NAME;
 use crate::witness_handoff::WITNESS_REQUEST_SCHEMA;
 use crate::witness_handoff::WitnessRequestDocument;
 
-pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "crunch-witness-rebuild-audit-v1";
-pub(crate) const WITNESS_SCRATCH_ENV: &str = "CRUNCH_WITNESS_SCRATCH_DIR";
+pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "mantle-witness-rebuild-audit-v1";
+pub(crate) const WITNESS_SCRATCH_ENV: &str = "MANTLE_WITNESS_SCRATCH_DIR";
 const MAX_EXPECTED_OUTPUTS: u32 = 16;
 const SUPPORTED_WORKFLOW_OUTPUT_COUNT: u32 = 1;
 const SCRATCH_REPO_DIR_NAME: &str = "source-tree";
@@ -871,14 +871,14 @@ mod tests {
     #[test]
     fn resolve_proof_bundle_artifact_path_anchors_relative_paths() {
         let proof_bundle = PathBuf::from("/tmp/proof-bundle");
-        let path = resolve_proof_bundle_artifact_path(&proof_bundle, "binaries/stage2-crunch").unwrap();
-        assert_eq!(path, proof_bundle.join("binaries/stage2-crunch"));
+        let path = resolve_proof_bundle_artifact_path(&proof_bundle, "binaries/stage2-mantle").unwrap();
+        assert_eq!(path, proof_bundle.join("binaries/stage2-mantle"));
     }
 
     #[test]
     fn resolve_proof_bundle_artifact_path_rejects_parent_escape() {
         let proof_bundle = PathBuf::from("/tmp/proof-bundle");
-        let err = resolve_proof_bundle_artifact_path(&proof_bundle, "../stage2-crunch").unwrap_err();
+        let err = resolve_proof_bundle_artifact_path(&proof_bundle, "../stage2-mantle").unwrap_err();
         assert!(err.message().contains("must stay inside proof bundle"));
     }
 

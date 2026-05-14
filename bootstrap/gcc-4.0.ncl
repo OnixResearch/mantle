@@ -1252,7 +1252,7 @@ EOF
           STMP_FIXINC= \
           MAKEINFO=true \
           2>&1 || {
-            echo "CRUNCH: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge" >&2
+            echo "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge" >&2
           }
       done
 
@@ -1440,7 +1440,7 @@ GENPREDS_BOUNDARY_SCRIPT
 #!/bin/sh
 case "\$1" in
   --version|-v)
-    echo 'gcc (Crunch pass1 bridge) 4.0.4'
+    echo 'gcc (Mantle pass1 bridge) 4.0.4'
     exit 0
     ;;
   -dumpversion)

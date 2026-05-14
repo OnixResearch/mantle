@@ -1234,20 +1234,20 @@ mod tests {
     fn sample_manifest() -> ReleaseEvidenceManifest {
         ReleaseEvidenceManifest {
             schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
-            release_id: "crunch-0.1.0-rc1".to_string(),
+            release_id: "mantle-0.1.0-rc1".to_string(),
             claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
             workflow: ReleaseWorkflowIdentity {
                 command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
-            source_archive: sample_artifact(BundledArtifactKind::File, "source/crunch-src.tar", 1),
-            binaries: vec![sample_artifact(BundledArtifactKind::File, "binaries/01-crunch", 2)],
+            source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
+            binaries: vec![sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 2)],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 3),
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
-                release_id: "crunch-0.1.0-rc1".to_string(),
+                release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),

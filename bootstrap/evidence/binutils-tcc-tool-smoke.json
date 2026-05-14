@@ -7,7 +7,7 @@
   "output_path": "/crunch/store/59vj0rbxkwj1wdn7kcak0i8zm132b1qn-binutils-2.30-tcc",
   "provider_kind": "source-root",
   "runner_note": "bwrap bound the complete scratch store at /crunch/store; /bin/sh and /bin/busybox were provided only to execute the output shell wrappers during smoke.",
-  "schema": "crunch-binutils-tcc-tool-smoke-v1",
+  "schema": "mantle-binutils-tcc-tool-smoke-v1",
   "scratch_store_root": "/home/brittonr/git/crunch/crunch/.crunch-drain/store-binutils-tcc-transcript",
   "tool_smokes": {
     "ar": {

@@ -1,5 +1,5 @@
 {
-  "schema": "crunch-self-build-provider-kind-linkage-v1",
+  "schema": "mantle-self-build-provider-kind-linkage-v1",
   "derivation": "bootstrap/crunch.ncl",
   "status": "provider-kind-linkage-only",
   "proof_identity": {
@@ -11,5 +11,5 @@
   "prerequisites": {
     "provider_kind": "source-root"
   },
-  "notes": "Checked receipt for parity provider-kind linkage only; this does not prove full crunch self-build, stage1/stage2 identity, or StageX lineage."
+  "notes": "Checked receipt for parity provider-kind linkage only; this does not prove full mantle self-build, stage1/stage2 identity, or StageX lineage."
 }

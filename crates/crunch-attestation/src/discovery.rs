@@ -346,7 +346,7 @@ mod tests {
         let material = vdir.discover().unwrap();
         let validated = to_validated_witnesses(&material.witnesses).unwrap();
 
-        assert_eq!(material.release_attestation.release_id, "crunch-0.1.0");
+        assert_eq!(material.release_attestation.release_id, "mantle-0.1.0");
         assert_eq!(validated.len(), 2);
         assert_eq!(validated[0].signer_key_name, layout.witness_keys[0]);
         assert_eq!(validated[1].signer_key_name, layout.witness_keys[1]);
@@ -360,7 +360,7 @@ mod tests {
         let vdir = VerificationDirectory::new(dir.path().to_path_buf());
         let material = vdir.discover().unwrap();
 
-        assert_eq!(material.release_attestation.release_id, "crunch-0.1.0");
+        assert_eq!(material.release_attestation.release_id, "mantle-0.1.0");
         assert_eq!(material.release_signature.key_name, "release-signer-1");
         assert_eq!(material.witnesses.len(), 2);
         assert_eq!(material.policy.min_matching_witnesses, 2);
@@ -573,7 +573,7 @@ mod tests {
 
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),

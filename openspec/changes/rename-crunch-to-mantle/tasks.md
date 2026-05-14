@@ -13,7 +13,7 @@
 
 ## Phase 3: Evidence, docs, and guards
 
-- [ ] [parallel] Update release, attestation, self-build, and parity evidence schemas/fixtures/docs to use Mantle identity without widening proof claims.
+- [x] [parallel] Update release, attestation, self-build, and parity evidence schemas/fixtures/docs to use Mantle identity without widening proof claims. Evidence: release/self-hosting/reproducibility/attestation schema constants and CLI fixtures now use `mantle-*`; parity evidence receipts use `mantle-*` schemas while preserving `partial`/blocked claims; no-host self-build still blocks host `bwrap`. Verified with `cargo test --bin mantle release_ -- --nocapture`, `cargo test --bin mantle bootstrap_parity::tests -- --nocapture`, `cargo test --test release_cli -- --nocapture`, and `cargo test --test self_hosting -- --nocapture`. ✅ 45m (started: 2026-05-14T17:33:00Z → completed: 2026-05-14T18:18:00Z)
 - [ ] [parallel] Update README, operator docs, bootstrap docs, scripts, examples, and OpenSpec current specs to use Mantle identity where current-facing.
 - [ ] [serial] Add a deterministic stale-branding check with an allowlist for archives, compatibility tests, migration docs, and intentional external names.
 - [ ] [depends:stale-branding-check] Run focused CLI/default-path/project-management/release-evidence tests plus the stale-branding check.

@@ -676,29 +676,29 @@ mod tests {
     }
 
     fn sample_manifest() -> ReleaseEvidenceManifest {
-        let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-crunch", 3);
+        let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
         ReleaseEvidenceManifest {
             schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
-            release_id: "crunch-0.1.0-rc1".to_string(),
+            release_id: "mantle-0.1.0-rc1".to_string(),
             claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
             workflow: ReleaseWorkflowIdentity {
                 command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
-            source_archive: sample_artifact(BundledArtifactKind::File, "source/crunch-src.tar", 1),
+            source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
-                release_id: "crunch-0.1.0-rc1".to_string(),
+                release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),
                 selected_provider_kind: "source-root".to_string(),
-                staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),
+                staged_source: "/tmp/proof-store/abcd-mantle-src".to_string(),
                 stage2_binary_digest_blake3: stage2_binary.digest_blake3,
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
                 proof_manifest_digest_blake3: sample_digest(9),
@@ -709,7 +709,7 @@ mod tests {
     fn write_full_proof_manifest(bundle_dir: &Path, inventory_digest: &str, stage2_digest: &str) {
         let manifest = json!({
             "schema": FULL_SELF_HOSTING_PROOF_SCHEMA,
-            "staged_source": "/tmp/proof-store/abcd-crunch-src",
+            "staged_source": "/tmp/proof-store/abcd-mantle-src",
             "prerequisites": {
                 "mode": "fixed-point",
                 "provider_kind": "source-root",
@@ -721,12 +721,12 @@ mod tests {
             },
             "binaries": {
                 "stage1": {
-                    "path": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "path": "/tmp/proof-store/stage1-mantle/bin/mantle",
                     "size_bytes": 20,
                     "digest_blake3": sample_digest(10)
                 },
                 "stage2": {
-                    "path": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "path": "/tmp/proof-store/stage2-mantle/bin/mantle",
                     "size_bytes": 13,
                     "digest_blake3": stage2_digest
                 }
@@ -760,15 +760,15 @@ mod tests {
             },
             "stage0": {
                 "report": {
-                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                    "output_binary": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                    "output_binary": "/tmp/proof-store/stage1-mantle/bin/mantle",
                     "busybox_path": "/tmp/proof-store/stage0-busybox/bin/busybox"
                 }
             },
             "stage2": {
                 "report": {
-                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                    "output_binary": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                    "output_binary": "/tmp/proof-store/stage2-mantle/bin/mantle",
                     "busybox_path": "/tmp/proof-store/stage2-busybox/bin/busybox"
                 }
             }
@@ -820,7 +820,7 @@ mod tests {
         let identity = load_full_self_hosting_proof_identity(dir.path()).unwrap();
         assert_eq!(identity.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
         assert_eq!(identity.proof_mode, "fixed-point");
-        assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-crunch-src");
+        assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-mantle-src");
         assert_eq!(identity.stage2_binary_digest_blake3, sample_digest(11));
         assert_eq!(identity.prerequisite_inventory_digest_blake3, sample_digest(9));
         assert_eq!(identity.proof_manifest_digest_blake3.len(), BLAKE3_HEX_LEN);
@@ -837,19 +837,19 @@ mod tests {
     #[test]
     fn create_and_verify_release_bundle_round_trip() {
         let temp = tempfile::tempdir().unwrap();
-        let source_archive = temp.path().join("crunch-src.tar");
-        let binary_path = temp.path().join("crunch");
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
         let proof_bundle_dir = temp.path().join("proof-input");
         let output_bundle_dir = temp.path().join("release-bundle");
 
         write_file(&source_archive, b"source-archive");
-        write_file(&binary_path, b"crunch-binary");
+        write_file(&binary_path, b"mantle-binary");
         let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
-        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
         write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
 
         let request = ReleaseBundleCreateRequest::with_defaults(
-            "crunch-0.1.0-rc1".to_string(),
+            "mantle-0.1.0-rc1".to_string(),
             output_bundle_dir.clone(),
             source_archive.clone(),
             vec![binary_path.clone()],
@@ -858,7 +858,7 @@ mod tests {
         let created = create_release_evidence_bundle(&request).unwrap();
         let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
 
-        assert_eq!(created.release_id, "crunch-0.1.0-rc1");
+        assert_eq!(created.release_id, "mantle-0.1.0-rc1");
         assert_eq!(created.proof_linkage.selected_provider_kind, "source-root");
         assert_eq!(created, verified);
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
@@ -869,19 +869,19 @@ mod tests {
     #[test]
     fn verify_rejects_provider_kind_linkage_mismatch() {
         let temp = tempfile::tempdir().unwrap();
-        let source_archive = temp.path().join("crunch-src.tar");
-        let binary_path = temp.path().join("crunch");
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
         let proof_bundle_dir = temp.path().join("proof-input");
         let output_bundle_dir = temp.path().join("release-bundle");
 
         write_file(&source_archive, b"source");
-        write_file(&binary_path, b"crunch-binary");
+        write_file(&binary_path, b"mantle-binary");
         let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
-        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
         write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
 
         let request = ReleaseBundleCreateRequest::with_defaults(
-            "crunch-0.1.0-rc1".to_string(),
+            "mantle-0.1.0-rc1".to_string(),
             output_bundle_dir.clone(),
             source_archive,
             vec![binary_path],
@@ -898,19 +898,19 @@ mod tests {
     #[test]
     fn verify_rejects_non_canonical_manifest_json() {
         let temp = tempfile::tempdir().unwrap();
-        let source_archive = temp.path().join("crunch-src.tar");
-        let binary_path = temp.path().join("crunch");
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
         let proof_bundle_dir = temp.path().join("proof-input");
         let output_bundle_dir = temp.path().join("release-bundle");
 
         write_file(&source_archive, b"source-archive");
-        write_file(&binary_path, b"crunch-binary");
+        write_file(&binary_path, b"mantle-binary");
         let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
-        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
         write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
 
         let request = ReleaseBundleCreateRequest::with_defaults(
-            "crunch-0.1.0-rc1".to_string(),
+            "mantle-0.1.0-rc1".to_string(),
             output_bundle_dir.clone(),
             source_archive,
             vec![binary_path],
@@ -927,26 +927,26 @@ mod tests {
     #[test]
     fn verify_rejects_tampered_binary_artifact() {
         let temp = tempfile::tempdir().unwrap();
-        let source_archive = temp.path().join("crunch-src.tar");
-        let binary_path = temp.path().join("crunch");
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
         let proof_bundle_dir = temp.path().join("proof-input");
         let output_bundle_dir = temp.path().join("release-bundle");
 
         write_file(&source_archive, b"source-archive");
-        write_file(&binary_path, b"crunch-binary");
+        write_file(&binary_path, b"mantle-binary");
         let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
-        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
         write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
 
         let request = ReleaseBundleCreateRequest::with_defaults(
-            "crunch-0.1.0-rc1".to_string(),
+            "mantle-0.1.0-rc1".to_string(),
             output_bundle_dir.clone(),
             source_archive,
             vec![binary_path],
             proof_bundle_dir,
         );
         create_release_evidence_bundle(&request).unwrap();
-        write_file(&output_bundle_dir.join("binaries/01-crunch"), b"tampered-binary");
+        write_file(&output_bundle_dir.join("binaries/01-mantle"), b"tampered-binary");
 
         let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
         assert!(err.to_string().contains("binaries[0] does not match manifest"));

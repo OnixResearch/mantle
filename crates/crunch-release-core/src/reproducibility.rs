@@ -361,7 +361,7 @@ mod tests {
     fn sample_workflow() -> RebuildWorkflowIdentity {
         RebuildWorkflowIdentity {
             command: "./scripts/prove-self-hosting.sh".to_string(),
-            version: "crunch-self-hosting-proof-v2".to_string(),
+            version: "mantle-self-hosting-proof-v2".to_string(),
         }
     }
 

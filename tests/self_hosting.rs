@@ -16,10 +16,10 @@
 //! The test:
 //! 1. Runs `crunch self-build` (stage0) using the checkout binary
 //! 2. Finds the stage1 binary in the output store
-//! 3. Invalidates the prior `*-crunch` output
-//! 4. Runs `stage1/bin/crunch self-build` (stage2) with a fresh state dir
+//! 3. Invalidates the prior `*-mantle` output
+//! 4. Runs `stage1/bin/mantle self-build` (stage2) with a fresh state dir
 //! 5. Verifies stage2 produced a working binary
-//! 6. Checks that stage2 used crunch-built bwrap (not host fallback)
+//! 6. Checks that stage2 used mantle-built bwrap (not host fallback)
 
 mod audit_support;
 
@@ -43,11 +43,11 @@ use std::time::UNIX_EPOCH;
 use assert_cmd::cargo::cargo_bin;
 use audit_support::AuditArtifact;
 use audit_support::write_command_audit;
-use crunch::protected_exec::DigestSpec;
-use crunch::protected_exec::ExecutableSeedEntry;
-use crunch::protected_exec::ProtectedSeccompAuditEvent;
-use crunch::protected_exec::Stage0Inventory;
-use crunch::protected_exec::render_stage0_inventory_nickel;
+use mantle::protected_exec::DigestSpec;
+use mantle::protected_exec::ExecutableSeedEntry;
+use mantle::protected_exec::ProtectedSeccompAuditEvent;
+use mantle::protected_exec::Stage0Inventory;
+use mantle::protected_exec::render_stage0_inventory_nickel;
 use serde::Serialize;
 
 const MAX_DIAGNOSTIC_LINES: u32 = 60;
@@ -71,9 +71,9 @@ const PROOF_STAGE0_INVENTORY_DOC_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTO
 const PROOF_NO_HOST_TOOLS_ENV: &str = "CRUNCH_SELF_HOSTING_NO_HOST_TOOLS";
 const PROOF_STAGE0_INVENTORY_ENV: &str = "CRUNCH_SELF_HOSTING_STAGE0_INVENTORY";
 const PROOF_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
-const PROOF_BUNDLE_SCHEMA: &str = "crunch-self-hosting-proof-v2";
-const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-crunch";
-const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-crunch";
+const PROOF_BUNDLE_SCHEMA: &str = "mantle-self-hosting-proof-v2";
+const PROOF_STAGE1_BINARY_RELATIVE_PATH: &str = "binaries/stage1-mantle";
+const PROOF_STAGE2_BINARY_RELATIVE_PATH: &str = "binaries/stage2-mantle";
 const PROOF_STAGE0_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/stage0-inventory.ncl";
 const PROOF_MODE_FIXED_POINT: &str = "fixed-point";
 const PROOF_MODE_NON_NIX_HOST: &str = "non-nix-host";
@@ -98,7 +98,8 @@ const HELPER_PROOF_TOOL_NAMES: [&str; 13] = [
 ];
 const STAGE0_PROOF_TOOL_NAMES: [&str; 8] = ["bwrap", "git", "cargo", "tar", "xz", "cp", "chmod", "bash"];
 const BLOCKED_NIX_BINARIES: [&str; 4] = ["nix-build", "nix-store", "nix-shell", "nix"];
-const BLOCKED_HOST_TOOL_BINARIES: [&str; 9] = [
+const BLOCKED_HOST_TOOL_BINARIES: [&str; 10] = [
+    "bwrap",
     "git",
     "tar",
     "cp",
@@ -196,7 +197,7 @@ struct ProofResolvedTool {
 
 #[derive(Debug, Serialize)]
 struct ProofStoreInventory {
-    crunch_entries: Vec<String>,
+    mantle_entries: Vec<String>,
     bwrap_entries: Vec<String>,
     busybox_entries: Vec<String>,
 }
@@ -450,14 +451,14 @@ fn self_build_prereq_error() -> Option<String> {
     None
 }
 
-/// Find the crunch binary in an output store (`*-crunch/bin/crunch`).
-fn find_crunch_binary(store: &Path) -> Option<PathBuf> {
+/// Find the mantle binary in an output store (`*-mantle/bin/mantle`).
+fn find_mantle_binary(store: &Path) -> Option<PathBuf> {
     let entries = std::fs::read_dir(store).ok()?;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") {
-            let binary = entry.path().join("bin").join("crunch");
+        if name_str.ends_with("-mantle") {
+            let binary = entry.path().join("bin").join("mantle");
             if binary.exists() {
                 return Some(binary);
             }
@@ -488,7 +489,7 @@ fn make_tree_removable(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Remove all `*-crunch` output directories from a store.
+/// Remove all `*-mantle` output directories from a store.
 fn remove_crunch_outputs(store: &Path) -> u32 {
     let mut removed: u32 = 0;
     let entries = match std::fs::read_dir(store) {
@@ -499,7 +500,7 @@ fn remove_crunch_outputs(store: &Path) -> u32 {
         let path = entry.path();
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.ends_with("-crunch") && make_tree_removable(&path).is_ok() && std::fs::remove_dir_all(path).is_ok()
+        if name_str.ends_with("-mantle") && make_tree_removable(&path).is_ok() && std::fs::remove_dir_all(path).is_ok()
         {
             removed += 1;
         }
@@ -1298,7 +1299,7 @@ fn diff_binary_bytes(left: &Path, right: &Path) -> ProofBinaryDiff {
 }
 
 fn find_embedded_store_path_end(candidate: &str) -> Option<usize> {
-    for marker in ["-busybox/bin/busybox", "-bwrap/bin/bwrap", "-crunch-src"] {
+    for marker in ["-busybox/bin/busybox", "-bwrap/bin/bwrap", "-mantle-src"] {
         if let Some(offset) = candidate.find(marker) {
             return Some(offset + marker.len());
         }
@@ -1359,7 +1360,7 @@ fn collect_store_entries(store_dir: &Path, suffix: &str) -> Vec<String> {
 
 fn collect_store_inventory(store_dir: &Path) -> ProofStoreInventory {
     ProofStoreInventory {
-        crunch_entries: collect_store_entries(store_dir, "-crunch"),
+        mantle_entries: collect_store_entries(store_dir, "-mantle"),
         bwrap_entries: collect_store_entries(store_dir, "-bwrap"),
         busybox_entries: collect_store_entries(store_dir, "-busybox"),
     }
@@ -1543,7 +1544,7 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     ));
     out.push_str(&format!("stage0_state: {}\n", manifest.state_dirs.stage0));
     out.push_str(&format!("stage2_state: {}\n", manifest.state_dirs.stage2));
-    out.push_str(&format!("store_crunch_entries: {:?}\n", manifest.store_inventory.crunch_entries));
+    out.push_str(&format!("store_mantle_entries: {:?}\n", manifest.store_inventory.mantle_entries));
     out.push_str(&format!("store_bwrap_entries: {:?}\n", manifest.store_inventory.bwrap_entries));
     out.push_str(&format!("store_busybox_entries: {:?}\n", manifest.store_inventory.busybox_entries));
     out.push_str(&format!(
@@ -1781,14 +1782,14 @@ fn collect_embedded_store_paths_filters_relevant_entries() {
     let payload = b"prefix /nix/store/aaa-stage0-busybox/bin/busybox\0 \
                     /nix/store/bbb-stage0-bwrap/bin/bwrap\0 \
                     /nix/store/ccc-rust/bin/rustc\0 \
-                    /nix/store/ddd-stage0-crunch-src/Cargo.toml\0";
+                    /nix/store/ddd-stage0-mantle-src/Cargo.toml\0";
     std::fs::write(&binary, payload).unwrap();
 
     let paths = collect_embedded_store_paths(&binary);
     assert_eq!(paths, vec![
         "/nix/store/aaa-stage0-busybox/bin/busybox".to_string(),
         "/nix/store/bbb-stage0-bwrap/bin/bwrap".to_string(),
-        "/nix/store/ddd-stage0-crunch-src".to_string(),
+        "/nix/store/ddd-stage0-mantle-src".to_string(),
     ]);
 }
 
@@ -1956,10 +1957,10 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
     let store = proof_dir.path().join("store");
     let stage0_state = proof_dir.path().join("state0");
     let stage2_state = proof_dir.path().join("state2");
-    let staged_source = store.join("abc-crunch-src");
-    let checkout_binary = proof_dir.path().join("checkout-crunch");
-    let stage1_binary = proof_dir.path().join("stage1-crunch");
-    let stage2_binary = proof_dir.path().join("stage2-crunch");
+    let staged_source = store.join("abc-mantle-src");
+    let checkout_binary = proof_dir.path().join("checkout-mantle");
+    let stage1_binary = proof_dir.path().join("stage1-mantle");
+    let stage2_binary = proof_dir.path().join("stage2-mantle");
     let bwrap_bin_dir = store.join("abc-bwrap").join("bin");
     let busybox_bin = store.join("xyz-busybox").join("bin").join("busybox");
     let bwrap_bin = bwrap_bin_dir.join("bwrap");
@@ -2012,7 +2013,7 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
             "printf 'self-build-proof: hermeticity-mode=practical\\n' >&2; \
              printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
-             printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: bwrap-source=mantle-built:{}\\n' >&2; \
              printf 'self-build-proof: fallback-event=bwrap-host-fallback:/run/wrappers/bin/bwrap\\n' >&2; \
              printf 'self-build-proof: fallback-event=source-host-discovery:/work/crunch\\n' >&2; \
              printf 'self-build-proof: protected-seccomp-event={}\\n' >&2; \
@@ -2033,7 +2034,7 @@ fn write_proof_bundle_copies_stage_artifacts_and_manifest() {
             "printf 'self-build-proof: hermeticity-mode=strict\\n' >&2; \
              printf 'self-build-proof: invoking-binary={}\\n' >&2; \
              printf 'self-build-proof: staged-source={}\\n' >&2; \
-             printf 'self-build-proof: bwrap-source=crunch-built:{}\\n' >&2; \
+             printf 'self-build-proof: bwrap-source=mantle-built:{}\\n' >&2; \
              printf 'self-build-proof: fallback-event=none\\n' >&2; \
              printf 'self-build-proof: busybox-path={}\\n' >&2; \
              printf 'self-build-proof: output-binary={}\\n' >&2",
@@ -3140,7 +3141,7 @@ fn audit_hashing_rejects_excessively_deep_trees() {
 }
 
 #[test]
-fn remove_crunch_outputs_ignores_non_crunch_entries() {
+fn remove_crunch_outputs_ignores_non_mantle_entries() {
     let tempdir = tempfile::tempdir().unwrap();
     let store = tempdir.path();
     let kept = store.join(format!("{FAKE_STORE_HASH}-kept"));
@@ -3157,10 +3158,10 @@ fn remove_crunch_outputs_removes_read_only_crunch_output() {
 
     let tempdir = tempfile::tempdir().unwrap();
     let store = tempdir.path();
-    let output = store.join(format!("{FAKE_STORE_HASH}-crunch"));
+    let output = store.join(format!("{FAKE_STORE_HASH}-mantle"));
     let bin = output.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    std::fs::write(bin.join("crunch"), b"binary").unwrap();
+    std::fs::write(bin.join("mantle"), b"binary").unwrap();
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(PROOF_READ_ONLY_DIR_MODE)).unwrap();
     std::fs::set_permissions(&output, std::fs::Permissions::from_mode(PROOF_READ_ONLY_DIR_MODE)).unwrap();
 
@@ -3297,7 +3298,7 @@ fn self_hosting_stage0_stage1_stage2() {
     // The store starts empty. Verify no stale outputs exist.
     assert!(find_bwrap_on_disk(&store).is_none(), "fresh store must not contain bwrap",);
     assert!(find_busybox_on_disk(&store).is_none(), "fresh store must not contain busybox",);
-    assert!(find_crunch_binary(&store).is_none(), "fresh store must not contain crunch",);
+    assert!(find_mantle_binary(&store).is_none(), "fresh store must not contain crunch",);
 
     // ── Stage 0: checkout binary builds stage1 ──────────────────
 
@@ -3383,10 +3384,10 @@ fn self_hosting_stage0_stage1_stage2() {
     );
 
     // Find the stage1 binary.
-    let stage1_binary = find_crunch_binary(&store);
+    let stage1_binary = find_mantle_binary(&store);
     assert!(
         stage1_binary.is_some(),
-        "stage0 should produce *-crunch/bin/crunch.\n{}",
+        "stage0 should produce *-mantle/bin/mantle.\n{}",
         stage_context(&stage0_evidence),
     );
     let stage1_binary = stage1_binary.unwrap();
@@ -3441,15 +3442,15 @@ fn self_hosting_stage0_stage1_stage2() {
 
     // ── Prepare for Stage 2 ─────────────────────────────────────
 
-    // The store has the root output (*-crunch) on disk.
+    // The store has the root output (*-mantle) on disk.
     // Intermediate bootstrap deps (bwrap, busybox, gcc, etc.) are in
     // castore/PathInfo but NOT exported to the --store directory
     // (only root outputs get exported to disk).
     //
     // Copy the stage1 binary out before invalidation, since it lives
-    // inside the *-crunch directory we're about to remove.
+    // inside the *-mantle directory we're about to remove.
 
-    let stage1_copy = proof_dir.path().join("stage1-crunch");
+    let stage1_copy = proof_dir.path().join("stage1-mantle");
     std::fs::copy(&stage1_binary, &stage1_copy)
         .unwrap_or_else(|err| panic!("copy stage1 binary out of store: {err}\n{}", stage_context(&stage0_evidence)));
     #[cfg(unix)]
@@ -3474,11 +3475,11 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage0_evidence),
     );
 
-    // Remove *-crunch so stage2 must rebuild the final binary.
+    // Remove *-mantle so stage2 must rebuild the final binary.
     // Stage2 reuses the castore/PathInfo cache for intermediate deps.
     let removed = remove_crunch_outputs(&store);
-    assert!(removed >= 1, "should have removed at least 1 *-crunch dir");
-    assert!(find_crunch_binary(&store).is_none(), "crunch output should be gone after invalidation",);
+    assert!(removed >= 1, "should have removed at least 1 *-mantle dir");
+    assert!(find_mantle_binary(&store).is_none(), "mantle output should be gone after invalidation",);
 
     let stale_bwrap_bin = store.join("00000000000000000000000000000000-stale-bwrap").join("bin").join("bwrap");
     write_executable_script(&stale_bwrap_bin, "#!/bin/sh\nset -eu\nexit 97\n");
@@ -3488,7 +3489,7 @@ fn self_hosting_stage0_stage1_stage2() {
     assert_ne!(stale_busybox_bin, busybox_bin, "stale busybox sibling must differ from stage0 busybox");
 
     // Fresh state dir so pathinfo.redb doesn't give a false cache hit
-    // on the final crunch output.
+    // on the final mantle output.
     let stage2_state = proof_dir.path().join("state2");
     std::fs::create_dir_all(&stage2_state).unwrap();
 
@@ -3546,10 +3547,10 @@ fn self_hosting_stage0_stage1_stage2() {
 
     // ── Verify stage2 output ────────────────────────────────────
 
-    let stage2_binary = find_crunch_binary(&store);
+    let stage2_binary = find_mantle_binary(&store);
     assert!(
         stage2_binary.is_some(),
-        "stage2 should produce *-crunch/bin/crunch.\n{}",
+        "stage2 should produce *-mantle/bin/mantle.\n{}",
         stage_context(&stage2_evidence),
     );
     let stage2_binary = stage2_binary.unwrap();
@@ -3600,7 +3601,7 @@ fn self_hosting_stage0_stage1_stage2() {
         stage_context(&stage2_evidence),
     );
 
-    // Stage2 MUST use crunch-built bwrap. The self-build pipeline
+    // Stage2 MUST use mantle-built bwrap. The self-build pipeline
     // now exports bwrap and busybox as separate root builds (step 2/4)
     // so they land on disk in the --store directory.
     let s2_source = extract_proof_field(&stage2_evidence.stderr, "staged-source");
@@ -3637,8 +3638,8 @@ fn self_hosting_stage0_stage1_stage2() {
     );
     let bwrap_val = s2_bwrap.unwrap();
     assert!(
-        bwrap_val.starts_with("crunch-built:"),
-        "stage2 bwrap must be crunch-built, got: {bwrap_val}.\n{}",
+        bwrap_val.starts_with("mantle-built:"),
+        "stage2 bwrap must be mantle-built, got: {bwrap_val}.\n{}",
         stage_context(&stage2_evidence),
     );
     let bwrap_report_path = extract_bwrap_binary_path(&stage2_evidence.stderr).expect("checked proof line above");
@@ -3651,14 +3652,14 @@ fn self_hosting_stage0_stage1_stage2() {
     );
     let bwrap_store_name =
         extract_store_entry_name(&bwrap_report_path).expect("bwrap report path must include store entry");
-    let expected_bwrap_log = format!("Using crunch-built bwrap: {stage2_store_prefix}/{bwrap_store_name}/bin");
+    let expected_bwrap_log = format!("Using mantle-built bwrap: {stage2_store_prefix}/{bwrap_store_name}/bin");
     assert!(
         stage2_evidence.stderr.contains(&expected_bwrap_log),
-        "stage2 build log must use the exact reported crunch-built bwrap.\nexpected: {expected_bwrap_log}\n{}",
+        "stage2 build log must use the exact reported mantle-built bwrap.\nexpected: {expected_bwrap_log}\n{}",
         stage_context(&stage2_evidence),
     );
 
-    // Stage2 MUST find crunch-built busybox on disk and use the exact same one inside the crunch build.
+    // Stage2 MUST find mantle-built busybox on disk and use the exact same one inside the mantle build.
     let s2_fallbacks = extract_proof_fields(&stage2_evidence.stderr, "fallback-event");
     assert_eq!(
         s2_fallbacks,
@@ -3677,7 +3678,7 @@ fn self_hosting_stage0_stage1_stage2() {
     assert_ne!(
         busybox_val,
         "none",
-        "stage2 must have a crunch-built busybox, not none.\n{}",
+        "stage2 must have a mantle-built busybox, not none.\n{}",
         stage_context(&stage2_evidence),
     );
     let busybox_report_path = PathBuf::from(busybox_val);
@@ -3690,10 +3691,10 @@ fn self_hosting_stage0_stage1_stage2() {
     let busybox_store_name =
         extract_store_entry_name(&busybox_report_path).expect("busybox report path must include store entry");
     let expected_busybox_log =
-        format!("Using crunch-built busybox: {stage2_store_prefix}/{busybox_store_name}/bin/busybox");
+        format!("Using mantle-built busybox: {stage2_store_prefix}/{busybox_store_name}/bin/busybox");
     assert!(
         stage2_evidence.stderr.contains(&expected_busybox_log),
-        "stage2 build log must use the exact reported crunch-built busybox.\nexpected: {expected_busybox_log}\n{}",
+        "stage2 build log must use the exact reported mantle-built busybox.\nexpected: {expected_busybox_log}\n{}",
         stage_context(&stage2_evidence),
     );
 

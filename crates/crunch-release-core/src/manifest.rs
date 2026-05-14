@@ -9,11 +9,11 @@ use serde::Serialize;
 
 use crate::ReleaseEvidenceError;
 
-pub const RELEASE_EVIDENCE_SCHEMA: &str = "crunch-release-evidence-v1";
-pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "crunch-self-hosting-proof-v2";
+pub const RELEASE_EVIDENCE_SCHEMA: &str = "mantle-release-evidence-v1";
+pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 pub const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
 pub const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
-pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "crunch-self-hosting-proof-v2";
+pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "mantle-self-hosting-proof-v2";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
@@ -493,29 +493,29 @@ mod tests {
     }
 
     fn sample_manifest() -> ReleaseEvidenceManifest {
-        let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-crunch", 3);
+        let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
         ReleaseEvidenceManifest {
             schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
-            release_id: "crunch-0.1.0-rc1".to_string(),
+            release_id: "mantle-0.1.0-rc1".to_string(),
             claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
             workflow: ReleaseWorkflowIdentity {
                 command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
-            source_archive: sample_artifact(BundledArtifactKind::File, "source/crunch-src.tar", 1),
+            source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
-                release_id: "crunch-0.1.0-rc1".to_string(),
+                release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
                 proof_bundle_schema: FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
                 proof_mode: "fixed-point".to_string(),
                 selected_provider_kind: "source-root".to_string(),
-                staged_source: "/tmp/proof-store/abcd-crunch-src".to_string(),
+                staged_source: "/tmp/proof-store/abcd-mantle-src".to_string(),
                 stage2_binary_digest_blake3: stage2_binary.digest_blake3,
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
                 proof_manifest_digest_blake3: sample_digest(9),
@@ -526,7 +526,7 @@ mod tests {
     fn sample_full_proof_manifest(inventory_digest: &str, stage2_digest: &str) -> Vec<u8> {
         serde_json::to_vec(&json!({
             "schema": FULL_SELF_HOSTING_PROOF_SCHEMA,
-            "staged_source": "/tmp/proof-store/abcd-crunch-src",
+            "staged_source": "/tmp/proof-store/abcd-mantle-src",
             "prerequisites": {
                 "mode": "fixed-point",
                 "provider_kind": "source-root",
@@ -538,12 +538,12 @@ mod tests {
             },
             "binaries": {
                 "stage1": {
-                    "path": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "path": "/tmp/proof-store/stage1-mantle/bin/mantle",
                     "size_bytes": 20,
                     "digest_blake3": sample_digest(10)
                 },
                 "stage2": {
-                    "path": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "path": "/tmp/proof-store/stage2-mantle/bin/mantle",
                     "size_bytes": 13,
                     "digest_blake3": stage2_digest
                 }
@@ -577,15 +577,15 @@ mod tests {
             },
             "stage0": {
                 "report": {
-                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                    "output_binary": "/tmp/proof-store/stage1-crunch/bin/crunch",
+                    "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                    "output_binary": "/tmp/proof-store/stage1-mantle/bin/mantle",
                     "busybox_path": "/tmp/proof-store/stage0-busybox/bin/busybox"
                 }
             },
             "stage2": {
                 "report": {
-                    "staged_source": "/tmp/proof-store/abcd-crunch-src",
-                    "output_binary": "/tmp/proof-store/stage2-crunch/bin/crunch",
+                    "staged_source": "/tmp/proof-store/abcd-mantle-src",
+                    "output_binary": "/tmp/proof-store/stage2-mantle/bin/mantle",
                     "busybox_path": "/tmp/proof-store/stage2-busybox/bin/busybox"
                 }
             }
@@ -633,7 +633,7 @@ mod tests {
         assert_eq!(identity.schema, FULL_SELF_HOSTING_PROOF_SCHEMA);
         assert_eq!(identity.proof_mode, "fixed-point");
         assert_eq!(identity.selected_provider_kind, "source-root");
-        assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-crunch-src");
+        assert_eq!(identity.staged_source, "/tmp/proof-store/abcd-mantle-src");
         assert_eq!(identity.stage2_binary_digest_blake3, sample_digest(11));
         assert_eq!(identity.prerequisite_inventory_digest_blake3, sample_digest(9));
     }

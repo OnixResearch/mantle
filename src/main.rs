@@ -503,7 +503,7 @@ pub enum ReleaseAction {
         workflow_command: String,
 
         /// Workflow version recorded in the manifest
-        #[arg(long, default_value = "crunch-self-hosting-proof-v2")]
+        #[arg(long, default_value = "mantle-self-hosting-proof-v2")]
         workflow_version: String,
     },
     /// Verify a release evidence bundle using bundle-local contents only
@@ -537,7 +537,7 @@ pub enum ReleaseAction {
         rebuild_args: Vec<OsString>,
 
         /// Workflow version recorded in the reproducibility report
-        #[arg(long, default_value = "crunch-release-reproducibility-v1")]
+        #[arg(long, default_value = "mantle-release-reproducibility-v1")]
         workflow_version: String,
 
         /// Output path for the canonical reproducibility report
@@ -577,7 +577,7 @@ pub enum ReleaseAction {
         /// Exported witness request directory produced by `crunch release witness-export`
         request_dir: PathBuf,
 
-        /// Scratch root for the rebuild work area (default: $CRUNCH_WITNESS_SCRATCH_DIR or
+        /// Scratch root for the rebuild work area (default: $MANTLE_WITNESS_SCRATCH_DIR or
         /// <request-dir>.work)
         #[arg(long)]
         scratch_dir: Option<PathBuf>,

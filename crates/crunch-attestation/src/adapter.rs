@@ -119,7 +119,7 @@ mod tests {
 
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(crunch_attestation_core::ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),

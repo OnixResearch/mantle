@@ -9,8 +9,8 @@ use crate::AttestationDigest;
 use crate::Error;
 use crate::canonical::to_canonical_bytes;
 
-pub const RELEASE_ATTESTATION_SCHEMA: &str = "crunch-release-attestation-v1";
-pub const WITNESS_ATTESTATION_SCHEMA: &str = "crunch-witness-attestation-v1";
+pub const RELEASE_ATTESTATION_SCHEMA: &str = "mantle-release-attestation-v1";
+pub const WITNESS_ATTESTATION_SCHEMA: &str = "mantle-witness-attestation-v1";
 
 const MAX_BINARY_DIGEST_COUNT: u32 = 256;
 const MAX_ENV_FIELD_LEN: u32 = 256;
@@ -253,7 +253,7 @@ pub fn witness_attestation_canonical_digest(value: WitnessAttestation) -> Result
     Ok(AttestationDigest::from_canonical_bytes(bytes))
 }
 
-pub const INDEPENDENT_AGREEMENT_REPORT_SCHEMA: &str = "crunch-independent-agreement-report-v1";
+pub const INDEPENDENT_AGREEMENT_REPORT_SCHEMA: &str = "mantle-independent-agreement-report-v1";
 const MAX_AGREEMENT_WITNESS_COUNT: u32 = 1_024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -640,7 +640,7 @@ mod tests {
         let manifest_digest = AttestationDigest::from_canonical_bytes(b"manifest-content".to_vec());
         let proof_digest = AttestationDigest::from_canonical_bytes(b"proof-bundle".to_vec());
         let attestation = ReleaseAttestation::new(ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: manifest_digest,
             proof_bundle_digest_blake3: proof_digest,
             proof_mode: "fixed-point".to_string(),
@@ -1125,7 +1125,7 @@ mod tests {
 
     fn sample_release() -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
@@ -1158,7 +1158,7 @@ mod tests {
 
     fn release_with_digests(digests: Vec<BinaryDigest>) -> ReleaseAttestation {
         ReleaseAttestation::new(ReleaseAttestationInit {
-            release_id: "crunch-0.1.0".to_string(),
+            release_id: "mantle-0.1.0".to_string(),
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),

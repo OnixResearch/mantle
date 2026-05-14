@@ -23,11 +23,11 @@ use crunch_release_core::validate_release_reproducibility_report_linkage;
 use crate::errors::RunError;
 use crate::release_evidence::verify_release_evidence_bundle;
 
-pub(crate) const DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION: &str = "crunch-release-reproducibility-v1";
+pub(crate) const DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION: &str = "mantle-release-reproducibility-v1";
 
-const REPRODUCE_BUNDLE_DIR_ENV: &str = "CRUNCH_REPRODUCE_BUNDLE_DIR";
-const REPRODUCE_OUTPUT_DIR_ENV: &str = "CRUNCH_REPRODUCE_OUTPUT_DIR";
-const REPRODUCE_RELEASE_ID_ENV: &str = "CRUNCH_REPRODUCE_RELEASE_ID";
+const REPRODUCE_BUNDLE_DIR_ENV: &str = "MANTLE_REPRODUCE_BUNDLE_DIR";
+const REPRODUCE_OUTPUT_DIR_ENV: &str = "MANTLE_REPRODUCE_OUTPUT_DIR";
+const REPRODUCE_RELEASE_ID_ENV: &str = "MANTLE_REPRODUCE_RELEASE_ID";
 const DEFAULT_REPORT_RELATIVE_PATH: &str = "reproducibility/reproducibility-report.json";
 const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
@@ -531,7 +531,7 @@ mod tests {
     fn sample_artifact() -> BundledArtifact {
         BundledArtifact {
             kind: crunch_release_core::BundledArtifactKind::File,
-            relative_path: "binaries/01-crunch".to_string(),
+            relative_path: "binaries/01-mantle".to_string(),
             size_bytes: EXPECTED_SIZE_BYTES,
             digest_blake3: sample_digest(1),
         }
@@ -548,7 +548,7 @@ mod tests {
         let comparison = compare_artifact(&artifact, Some(observed));
 
         assert_eq!(comparison.result, ReproducibilityComparisonResult::Matched);
-        assert_eq!(comparison.name, "binaries/01-crunch");
+        assert_eq!(comparison.name, "binaries/01-mantle");
     }
 
     #[test]
