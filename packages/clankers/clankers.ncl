@@ -126,6 +126,8 @@ package=clankers
 cargo_command=cargo build --release --locked --offline --no-default-features --bin clankers --target x86_64-unknown-linux-musl
 bundle_url=file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst
 bundle_recursive_hash=sha256-a6vnNF5mE/E3C7KlyQ9JXM77fdlQ+Yzc7sSlRi9JkAk=
+bundle_archive_blake3=dae16bc6eafc5b5f82aad2d709fd5e27507c2928b79754ae214e6c3c385ec799
+final_proof_hash_blake3=264b66f3389075f84373967f5e79738ac4fbbf91d7ddd530d3bf0f412fb276e1
 artifact=$out/bin/clankers
 RECEIPT
       test -x "$out/bin/clankers"

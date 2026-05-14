@@ -1,0 +1,34 @@
+{
+  "final_proof_hash_blake3": "264b66f3389075f84373967f5e79738ac4fbbf91d7ddd530d3bf0f412fb276e1",
+  "schema": "crunch.clankers.root_proof.v1",
+  "package": "clankers",
+  "package_version": "0.1.0",
+  "source_git_head": "57c3cccccc5ad4f9a987f07e598008c2a0751f82",
+  "bundle": {
+    "url": "file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst",
+    "recursive_sha256_sri": "sha256-a6vnNF5mE/E3C7KlyQ9JXM77fdlQ+Yzc7sSlRi9JkAk=",
+    "archive_sha256_sri": "sha256-+YKDpkxKWXWgLHYSNw4EzmzGQuhuWe36mV/oD9v5heo=",
+    "archive_blake3": "dae16bc6eafc5b5f82aad2d709fd5e27507c2928b79754ae214e6c3c385ec799",
+    "unpacked_bytes": 1218220900,
+    "archive_bytes": 109688082,
+    "vendored_source_count": 1169
+  },
+  "build": {
+    "derivation": "packages/clankers/clankers.ncl",
+    "cargo_command": "cargo build --release --locked --offline --no-default-features --bin clankers --target x86_64-unknown-linux-musl",
+    "features": "no-default-features; clankers-tts default features disabled in sandbox copy; ONNX TTS excluded for root smoke",
+    "native_linkage": "static musl sqlite/openssl",
+    "release_profile": "lto=false; codegen-units=32; debug=0"
+  },
+  "artifact": {
+    "logical_path": "/crunch/store/gkya22mimz0ihj77kc4c17caxnr8qdrc-clankers-0.1.0/bin/clankers",
+    "observed_path": ".crunch-drain/clankers-root-fast-1778743330/store/gkya22mimz0ihj77kc4c17caxnr8qdrc-clankers-0.1.0/bin/clankers",
+    "binary_blake3": "e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff",
+    "binary_file_summary": "105 MiB static-pie ELF, stripped"
+  },
+  "smoke": {
+    "command": "$out/bin/clankers --help",
+    "exit": 0,
+    "output_prefix": "clankers \u2014 a Rust terminal coding agent"
+  }
+}
