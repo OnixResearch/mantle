@@ -85,8 +85,8 @@ struct Args {
 
     /// Logical store path prefix for derivation hashes. All output
     /// paths and ATerm hashes are computed against this prefix.
-    /// Default: /crunch/store. Use --nix-compat for /nix/store.
-    #[arg(long, global = true, default_value = "/crunch/store")]
+    /// Default: /mantle/store. Use --nix-compat for /nix/store.
+    #[arg(long, global = true, default_value = "/mantle/store")]
     store_prefix: String,
 
     /// Shorthand for --store-prefix=/nix/store. For interop testing
@@ -2149,6 +2149,39 @@ mod tests {
     const TEST_EXEC_MODE: u32 = 0o755;
     #[cfg(unix)]
     const TEST_READ_MODE: u32 = 0o644;
+
+    fn args_with_store_prefix(store_prefix: &str, nix_compat: bool) -> Args {
+        Args {
+            verbose: false,
+            log_level: None,
+            json: false,
+            store: PathBuf::from("/nix/store"),
+            store_prefix: store_prefix.to_string(),
+            nix_compat,
+            state_dir: None,
+            command: Command::Doctor {
+                profile: DoctorProfile::Build,
+            },
+        }
+    }
+
+    #[test]
+    fn default_store_prefix_is_mantle() {
+        let args = Args::parse_from(["mantle", "doctor"]);
+        assert_eq!(resolve_store_prefix(&args), "/mantle/store");
+    }
+
+    #[test]
+    fn explicit_legacy_crunch_store_prefix_is_preserved() {
+        let args = args_with_store_prefix("/crunch/store", false);
+        assert_eq!(resolve_store_prefix(&args), "/crunch/store");
+    }
+
+    #[test]
+    fn nix_compat_overrides_store_prefix_to_nix_store() {
+        let args = args_with_store_prefix("/mantle/store", true);
+        assert_eq!(resolve_store_prefix(&args), "/nix/store");
+    }
 
     #[cfg(unix)]
     fn write_file_with_mode(path: &Path, contents: &str, mode: u32) {

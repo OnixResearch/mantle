@@ -10,6 +10,8 @@ fn mantle_help_reports_canonical_identity() {
         .success()
         .stdout(predicate::str::contains("Mantle build system"))
         .stdout(predicate::str::contains("Usage: mantle"))
+        .stdout(predicate::str::contains("/mantle/store"))
+        .stdout(predicate::str::contains("/crunch/store").not())
         .stdout(predicate::str::contains("Usage: crunch").not());
 }
 
