@@ -1196,49 +1196,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
-name = "crunch"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "base64",
- "blake3",
- "clap",
- "crunch-attestation",
- "crunch-bootstrap-core",
- "crunch-build",
- "crunch-delta",
- "crunch-eval",
- "crunch-glue",
- "crunch-pipeline",
- "crunch-project",
- "crunch-release-core",
- "crunch-shell",
- "crunch-store",
- "crunch-system",
- "data-encoding",
- "digest",
- "flate2",
- "futures",
- "libc",
- "nix-compat",
- "predicates",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2",
- "snix-build",
- "snix-castore",
- "snix-store",
- "tar",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "url",
-]
-
-[[package]]
 name = "crunch-attestation"
 version = "0.1.0"
 dependencies = [
@@ -4306,6 +4263,49 @@ dependencies = [
  "malachite-base",
  "malachite-nz",
  "serde",
+]
+
+[[package]]
+name = "mantle"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "base64",
+ "blake3",
+ "clap",
+ "crunch-attestation",
+ "crunch-bootstrap-core",
+ "crunch-build",
+ "crunch-delta",
+ "crunch-eval",
+ "crunch-glue",
+ "crunch-pipeline",
+ "crunch-project",
+ "crunch-release-core",
+ "crunch-shell",
+ "crunch-store",
+ "crunch-system",
+ "data-encoding",
+ "digest",
+ "flate2",
+ "futures",
+ "libc",
+ "nix-compat",
+ "predicates",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2",
+ "snix-build",
+ "snix-castore",
+ "snix-store",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "url",
 ]
 
 [[package]]

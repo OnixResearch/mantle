@@ -6,8 +6,8 @@
 
 ## Phase 2: CLI and defaults
 
-- [ ] [serial] Rename the canonical package/binary/help surface to `mantle` and add/adjust tests for `mantle --help` and `mantle --version`.
-- [ ] [depends:CLI rename] Define the legacy `crunch` command behavior as alias, migration diagnostic, or removal, with tests for the chosen behavior.
+- [x] [serial] Rename the canonical package/binary/help surface to `mantle` and add/adjust tests for `mantle --help` and `mantle --version`. Evidence: root package/bin renamed to `mantle`; `tests/identity_cli.rs` covers `mantle --help` and `mantle --version`; verified with `cargo test --test identity_cli -- --nocapture`. ✅ 7m (started: 2026-05-14T17:15:08Z → completed: 2026-05-14T17:22:00Z)
+- [x] [depends:CLI rename] Define the legacy `crunch` command behavior as alias, migration diagnostic, or removal, with tests for the chosen behavior. Evidence: retained `crunch` as a compatibility alias binary using the same implementation; `tests/identity_cli.rs` covers `crunch --help` reporting canonical Mantle help. ✅ 7m (started: 2026-05-14T17:15:08Z → completed: 2026-05-14T17:22:00Z)
 - [ ] [depends:CLI rename] Update default project-management filenames/directories to Mantle names and add migration/conflict tests.
 - [ ] [depends:CLI rename] Update the default logical store prefix to `/mantle/store` while preserving explicit `--nix-compat` behavior and legacy `/crunch/store` compatibility tests.
 

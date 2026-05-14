@@ -32,7 +32,7 @@ license = "AGPL-3.0-or-later"
 
 [workspace.metadata.tigerstyle]
 default_scope = [
-  "-p", "crunch",
+  "-p", "mantle",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
@@ -52,11 +52,15 @@ default_scope = [
 cargo_check_args = ["--lib"]
 
 [package]
-name = "crunch"
+name = "mantle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 autoexamples = false
+
+[[bin]]
+name = "mantle"
+path = "src/main.rs"
 
 [[bin]]
 name = "crunch"

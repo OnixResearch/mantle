@@ -58,7 +58,12 @@ use system_cmd::SystemEvalOptions;
 use system_cmd::SystemStopAfter;
 
 #[derive(Parser, Debug)]
-#[command(name = "crunch", about = "Nickel build system on the Nix store protocol")]
+#[command(
+    name = "mantle",
+    bin_name = "mantle",
+    version,
+    about = "Mantle build system on the Nix store protocol"
+)]
 struct Args {
     /// Enable verbose logging
     #[arg(short, long, global = true)]
