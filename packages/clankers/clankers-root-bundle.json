@@ -11,7 +11,7 @@
   "bundle_recursive_sha256_sri": "sha256-a6vnNF5mE/E3C7KlyQ9JXM77fdlQ+Yzc7sSlRi9JkAk=",
   "bundle_archive_sha256_sri": "sha256-+YKDpkxKWXWgLHYSNw4EzmzGQuhuWe36mV/oD9v5heo=",
   "bundle_archive_blake3": "dae16bc6eafc5b5f82aad2d709fd5e27507c2928b79754ae214e6c3c385ec799",
-  "final_proof_hash_blake3": "264b66f3389075f84373967f5e79738ac4fbbf91d7ddd530d3bf0f412fb276e1",
+  "final_proof_hash_blake3": "ca024b5c76489cd872fad1eee0e0383a2741cdba49001dd108afc406253dcc8f",
   "final_proof_file": "packages/clankers/clankers-root-proof.json",
   "bundle_unpacked_bytes": 1218220900,
   "bundle_archive_bytes": 109688082,
@@ -25,5 +25,6 @@
     ".direnv",
     ".jj"
   ],
-  "note": "Archive is intentionally not committed; this metadata fixes the local external artifact consumed by packages/clankers/clankers.ncl."
+  "note": "Archive is intentionally not committed; this metadata fixes the local external artifact consumed by packages/clankers/clankers.ncl.",
+  "stable_binary_blake3": "2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef"
 }

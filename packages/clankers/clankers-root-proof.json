@@ -1,5 +1,5 @@
 {
-  "final_proof_hash_blake3": "264b66f3389075f84373967f5e79738ac4fbbf91d7ddd530d3bf0f412fb276e1",
+  "final_proof_hash_blake3": "ca024b5c76489cd872fad1eee0e0383a2741cdba49001dd108afc406253dcc8f",
   "schema": "crunch.clankers.root_proof.v1",
   "package": "clankers",
   "package_version": "0.1.0",
@@ -21,14 +21,40 @@
     "release_profile": "lto=false; codegen-units=32; debug=0"
   },
   "artifact": {
-    "logical_path": "/crunch/store/gkya22mimz0ihj77kc4c17caxnr8qdrc-clankers-0.1.0/bin/clankers",
-    "observed_path": ".crunch-drain/clankers-root-fast-1778743330/store/gkya22mimz0ihj77kc4c17caxnr8qdrc-clankers-0.1.0/bin/clankers",
-    "binary_blake3": "e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff",
-    "binary_file_summary": "105 MiB static-pie ELF, stripped"
+    "logical_path": "/crunch/store/harkklvli5ggzk69w3wks8k3iw1v7zb3-clankers-0.1.0/bin/clankers",
+    "observed_path": ".crunch-drain/clankers-root-remap-fresh-c-1778773346/store/harkklvli5ggzk69w3wks8k3iw1v7zb3-clankers-0.1.0/bin/clankers",
+    "binary_blake3": "2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef",
+    "binary_file_summary": "105 MiB static-pie ELF, stripped; reproducible across fresh remapped Crunch stores"
   },
   "smoke": {
     "command": "$out/bin/clankers --help",
     "exit": 0,
     "output_prefix": "clankers \u2014 a Rust terminal coding agent"
+  },
+  "rebuild_reproducibility": {
+    "schema": "crunch.clankers.rebuild_reproducibility.v2",
+    "verdict": "match",
+    "method": "two fresh --state-dir/--store Crunch rebuilds with --no-substitute after Rust path remapping",
+    "runs": [
+      {
+        "label": "c",
+        "run_dir": ".crunch-drain/clankers-root-remap-fresh-c-1778773346",
+        "path": ".crunch-drain/clankers-root-remap-fresh-c-1778773346/store/harkklvli5ggzk69w3wks8k3iw1v7zb3-clankers-0.1.0/bin/clankers",
+        "binary_blake3": "2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef",
+        "exit_status": 0
+      },
+      {
+        "label": "d",
+        "run_dir": ".crunch-drain/clankers-root-remap-fresh-d-1778774346",
+        "path": ".crunch-drain/clankers-root-remap-fresh-d-1778774346/store/harkklvli5ggzk69w3wks8k3iw1v7zb3-clankers-0.1.0/bin/clankers",
+        "binary_blake3": "2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef",
+        "exit_status": 0
+      }
+    ],
+    "previous_mismatch": {
+      "original_binary_blake3": "e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff",
+      "rebuilt_binary_blake3": "82e569fcb115baf84efba01930b30085f0556d6ec9c3bc7c5ef45379e6aa5863",
+      "receipt_commit": "d225be90"
+    }
   }
 }

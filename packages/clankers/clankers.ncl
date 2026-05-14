@@ -79,7 +79,7 @@ let native_libs = crunch.fetchTarball {
       export PATH="/tmp/tools:$RUST/bin:$TOOLCHAIN/bin"
       export LD_LIBRARY_PATH="$TOOLCHAIN/%{seed_target}/lib"
       export LIBRARY_PATH="$TOOLCHAIN/%{seed_target}/lib"
-      export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/%{seed_target}/lib -C link-arg=-L/tmp/native-sqlite/lib"
+      export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/%{seed_target}/lib -C link-arg=-L/tmp/native-sqlite/lib --remap-path-prefix=/tmp/build=/build/source --remap-path-prefix=/tmp/cargo-target=/build/cargo-target --remap-path-prefix=/tmp/cargo-home=/build/cargo-home --remap-path-prefix=/tmp/native-sqlite=/build/native-sqlite --remap-path-prefix=$NIX_STORE=/crunch/store"
       export CC_x86_64_unknown_linux_musl="%{seed_target}-gcc"
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="%{seed_target}-gcc"
       export OPENSSL_INCLUDE_DIR="$NATIVE_LIBS/openssl/include"
@@ -127,7 +127,8 @@ cargo_command=cargo build --release --locked --offline --no-default-features --b
 bundle_url=file://.crunch-drain/artifacts/clankers-root-bundle.tar.zst
 bundle_recursive_hash=sha256-a6vnNF5mE/E3C7KlyQ9JXM77fdlQ+Yzc7sSlRi9JkAk=
 bundle_archive_blake3=dae16bc6eafc5b5f82aad2d709fd5e27507c2928b79754ae214e6c3c385ec799
-final_proof_hash_blake3=264b66f3389075f84373967f5e79738ac4fbbf91d7ddd530d3bf0f412fb276e1
+final_proof_hash_blake3=ca024b5c76489cd872fad1eee0e0383a2741cdba49001dd108afc406253dcc8f
+stable_binary_blake3=2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef
 artifact=$out/bin/clankers
 RECEIPT
       test -x "$out/bin/clankers"

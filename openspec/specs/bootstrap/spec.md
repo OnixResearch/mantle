@@ -2982,17 +2982,17 @@ The final proof hash MUST be a Crunch-owned BLAKE3 digest over canonical proof m
 
 ### Requirement: Clankers root rebuild reproducibility proof
 
-Crunch MUST record whether the pinned Clankers root derivation rebuilds to the same output binary BLAKE3 digest in a fresh Crunch store.
+Crunch MUST record whether the pinned Clankers root derivation rebuilds to the same output binary BLAKE3 digest in fresh Crunch stores.
 ID: bootstrap.external-fixed-bundle.clankers-rebuild-reproducibility
 
-The proof MUST run `packages/clankers/clankers.ncl` from the committed source/bundle metadata without changing the derivation, compute BLAKE3 for the rebuilt `$out/bin/clankers`, compare it to the recorded original binary BLAKE3, and record a machine-readable receipt with command, store path, original digest, rebuilt digest, and verdict. A mismatch MUST be recorded as a failed reproducibility proof rather than silently updating the final proof hash.
+The proof MUST run `packages/clankers/clankers.ncl` from committed source/bundle metadata, compute BLAKE3 for rebuilt `$out/bin/clankers`, compare at least two fresh `--state-dir`/`--store` rebuilds, and record a machine-readable receipt with commands, store paths, rebuilt digests, previous mismatch evidence when applicable, and verdict. A mismatch MUST be recorded as a failed reproducibility proof rather than silently updating the final proof hash.
 
-#### Scenario: Fresh rebuild matches original binary digest
+#### Scenario: Fresh rebuilds match the stable binary digest
 
 - GIVEN the committed Clankers root bundle and derivation
-- AND the original proof records binary BLAKE3 `e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff`
-- WHEN Crunch rebuilds `packages/clankers/clankers.ncl` in a fresh store
-- THEN the rebuilt `$out/bin/clankers` BLAKE3 equals the original binary BLAKE3
+- AND the proof records stable binary BLAKE3 `2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef`
+- WHEN Crunch rebuilds `packages/clankers/clankers.ncl` in two fresh stores
+- THEN both rebuilt `$out/bin/clankers` BLAKE3 values equal the stable binary BLAKE3
 - AND the receipt records verdict `match`
 
 #### Scenario: Fresh rebuild mismatch fails closed
@@ -3001,4 +3001,26 @@ The proof MUST run `packages/clankers/clankers.ncl` from the committed source/bu
 - WHEN the reproducibility receipt is generated
 - THEN the receipt records verdict `mismatch`
 - AND the final proof hash is not updated to hide the mismatch
+
+### Requirement: Clankers root Cargo paths are reproducibility-stabilized
+
+Crunch MUST normalize or eliminate nondeterministic Cargo build-script output paths from the Clankers root output proof before claiming the Clankers root binary is byte-reproducible.
+ID: bootstrap.external-fixed-bundle.clankers-cargo-path-stability
+
+The Clankers derivation MUST pass deterministic Rust path-remapping controls for sandbox-local build roots, run fresh-store rebuilds after the controls are applied, compare rebuilt output binary BLAKE3 digests, and record either a matching stable digest or a fail-closed mismatch receipt. A successful stability proof MUST update final proof metadata to the stable binary digest produced by the remapped derivation.
+
+#### Scenario: Fresh remapped rebuilds match
+
+- GIVEN the Clankers derivation applies deterministic Rust path remapping
+- WHEN two fresh-store Crunch rebuilds complete
+- THEN both rebuilt `$out/bin/clankers` files have the same BLAKE3 digest
+- AND proof metadata records that digest as the stable binary proof input
+
+#### Scenario: Remaining path mismatch is recorded fail-closed
+
+- GIVEN the remapped derivation still produces differing binary BLAKE3 digests
+- WHEN the rebuild receipt is generated
+- THEN the receipt records verdict `mismatch`
+- AND it records the first bounded observed difference
+- AND final proof metadata is not updated to claim reproducibility
 
